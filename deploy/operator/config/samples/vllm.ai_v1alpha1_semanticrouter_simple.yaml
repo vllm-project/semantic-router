@@ -40,7 +40,7 @@ spec:
   # Semantic router configuration
   config:
     # Semantic cache for better latency/token efficiency
-    semantic_cache:
+    response_cache:
       enabled: true
       similarity_threshold: "0.85"
       max_entries: 1000

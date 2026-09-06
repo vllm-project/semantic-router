@@ -133,8 +133,8 @@ func TestPluginNameNormalization(t *testing.T) {
 	if len(prog.Routes[0].Plugins) != 1 {
 		t.Fatalf("expected 1 plugin, got %d", len(prog.Routes[0].Plugins))
 	}
-	if prog.Routes[0].Plugins[0].Name != "semantic_cache" {
-		t.Errorf("expected normalized plugin name 'semantic_cache', got %q", prog.Routes[0].Plugins[0].Name)
+	if prog.Routes[0].Plugins[0].Name != "response_cache" {
+		t.Errorf("expected normalized plugin name 'response_cache', got %q", prog.Routes[0].Plugins[0].Name)
 	}
 }
 

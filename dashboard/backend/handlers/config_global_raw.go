@@ -57,15 +57,21 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		existingData, err := os.ReadFile(configPath)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
-			return
-		}
-
 		rawBody, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+			return
+		}
+		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
+		if lockErr != nil {
+			writeRuntimeConfigMutationError(w, lockErr)
+			return
+		}
+		defer release()
+
+		existingData, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
 		}
 

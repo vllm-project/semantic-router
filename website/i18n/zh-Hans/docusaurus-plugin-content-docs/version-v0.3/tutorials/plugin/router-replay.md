@@ -11,7 +11,7 @@ translation:
 
 `router_replay` 是路由局部插件：捕获重放/调试产物。
 
-对应 `config/plugin/router-replay/debug.yaml`。
+对应 `config/fragments/plugin/router-replay/debug.yaml`。
 
 ## 主要优势
 

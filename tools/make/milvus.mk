@@ -48,7 +48,7 @@ stop-milvus: ## Stop and remove Milvus container
 	@$(LOG_TARGET)
 	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache || true
 	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache || true
-	@sudo rm -rf /tmp/milvus-data || true
+	@rm -rf /tmp/milvus-data 2>/dev/null || sudo -n rm -rf /tmp/milvus-data || true
 	@echo "Milvus container stopped and removed"
 
 restart-milvus: stop-milvus start-milvus ## Restart Milvus container

@@ -1,0 +1,15 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {"type": "text", "text": "Transcribe this."},
+          {"type": "input_audio", "input_audio": {"data": "UklGRg==", "format": "wav"}}
+        ]
+      }
+    ]
+  }
+}

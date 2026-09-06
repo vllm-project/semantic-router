@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -104,10 +105,16 @@ func telemetrySessionCount() int {
 	return len(store)
 }
 
-// ResponseAPIInput identifies a Response API (/v1/responses) conversation.
+// ResponseAPIInput identifies a Response API (/v1/responses) turn for
+// telemetry. ConversationID is strict OpenAI-spec external membership: empty
+// unless the request explicitly supplied conversation_id. Do not use it as a
+// session/correlation key; grouping and cumulative-state lookups must use
+// SessionTrackingID instead, which is always non-empty, namespaced, and
+// never a real conversation_id or response_id.
 type ResponseAPIInput struct {
-	ConversationID string
-	HistoryLen     int
+	ConversationID    string
+	SessionTrackingID string
+	HistoryLen        int
 }
 
 // ChatInput identifies a Chat Completions session when user id and messages are available.
@@ -124,6 +131,10 @@ type TurnParams struct {
 	RequestID string
 	Model     string
 	Domain    string // VSR category; empty -> "unknown"
+	// RoutingScope namespaces internal cumulative/session state while the
+	// client-visible session identifier remains unchanged in logs.
+	RoutingScope     config.RecipeName
+	SkipRoutingState bool
 
 	PromptTokens                int
 	CachedPromptTokens          int
@@ -160,12 +171,12 @@ func normalizeDomain(d string) string {
 
 func resolve(p TurnParams) (storeKey string, turn int, apiKind string, publicSessionID string, ok bool) {
 	if p.ResponseAPI != nil {
-		if p.ResponseAPI.ConversationID == "" {
+		if p.ResponseAPI.SessionTrackingID == "" {
 			return "", 0, "", "", false
 		}
-		cid := p.ResponseAPI.ConversationID
 		turn = p.ResponseAPI.HistoryLen + 1
-		return "respapi:" + cid, turn, "responses", cid, true
+		sid := p.ResponseAPI.SessionTrackingID
+		return sid, turn, "responses", sid, true
 	}
 	if p.Chat != nil && p.Chat.UserID != "" && len(p.Chat.Messages) > 0 {
 		sid := DeriveChatCompletionsSessionID(p.Chat.Messages, p.Chat.UserID)
@@ -193,8 +204,12 @@ func RecordTurn(p TurnParams) {
 	costThisTurn := computeCost(p.PromptTokens, p.CachedPromptTokens, p.CacheWriteTokens, p.CompletionTokens, p.Pricing)
 
 	t := nowFn()
-	cumulative := recordTurnState(key, p, costThisTurn, t)
-	recordRouterSessionUsage(publicSessionID, model, p, costThisTurn, t)
+	stateKey := scopedTelemetrySessionID(p.RoutingScope, key)
+	stateSessionID := scopedTelemetrySessionID(p.RoutingScope, publicSessionID)
+	cumulative := recordTurnState(stateKey, p, costThisTurn, t)
+	if !p.SkipRoutingState {
+		recordRouterSessionUsage(stateSessionID, model, p, costThisTurn, t)
+	}
 
 	metrics.RecordSessionTurnTokens(model, domain, float64(p.PromptTokens), float64(p.CompletionTokens))
 	currency := pricingCurrency(p.Pricing)
@@ -202,6 +217,10 @@ func RecordTurn(p TurnParams) {
 		metrics.RecordSessionTurnCost(model, domain, currency, costThisTurn)
 	}
 	logSessionTurn(p, publicSessionID, turn, apiKind, model, domain, currency, costThisTurn, cumulative, t)
+}
+
+func scopedTelemetrySessionID(scope config.RecipeName, sessionID string) string {
+	return config.RoutingNamespaceKey(scope, sessionID)
 }
 
 func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time) turnCumulativeState {
@@ -300,6 +319,12 @@ func logSessionTurn(
 		"cumulative_cache_write_tokens":   cumulative.cacheWrite,
 		"cumulative_completion_tokens":    cumulative.completion,
 		"timestamp":                       t.UTC().Format(time.RFC3339Nano),
+	}
+	if p.ResponseAPI != nil && p.ResponseAPI.ConversationID != "" {
+		// Distinct from session_id (the internal SessionTrackingID grouping
+		// key): this is the client-visible OpenAI conversation_id, present
+		// only when the request explicitly used it.
+		fields["conversation_id"] = p.ResponseAPI.ConversationID
 	}
 	if p.CacheAccountingSource != "" {
 		fields["router_cache_accounting_source"] = p.CacheAccountingSource

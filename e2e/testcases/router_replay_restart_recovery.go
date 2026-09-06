@@ -17,6 +17,8 @@ import (
 
 const routerReplayTableName = "router_replay"
 
+const routerReplayManagementToken = "router-replay-e2e-viewer-token"
+
 func init() {
 	pkgtestcases.Register("router-replay-restart-recovery", pkgtestcases.TestCase{
 		Description: "Router Replay records stored in Postgres survive a semantic-router pod restart",
@@ -54,6 +56,11 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 		return "", fmt.Errorf("open session for pre-restart chat: %w", err)
 	}
 	defer session.Close()
+	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return "", fmt.Errorf("open Router management API session: %w", err)
+	}
+	defer apiSession.Close()
 
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
@@ -77,7 +84,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	}
 	time.Sleep(3 * time.Second)
 
-	recordID, err := fetchFirstReplayRecordID(session, opts.Verbose)
+	recordID, err := fetchFirstReplayRecordID(apiSession, opts.Verbose)
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +92,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	if err := assertPostgresReplayRecordStored(ctx, client, recordID, opts); err != nil {
 		return "", fmt.Errorf("replay record not confirmed in Postgres before restart: %w", err)
 	}
-	if err := assertReplayRecordHasSessionMetadata(session, recordID, opts.Verbose); err != nil {
+	if err := assertReplayRecordHasSessionMetadata(apiSession, recordID, opts.Verbose); err != nil {
 		return "", err
 	}
 	return recordID, nil
@@ -107,9 +114,8 @@ type replayRecordSummary struct {
 
 // fetchFirstReplayRecordID calls GET /v1/router_replay?limit=1 and returns the
 // first record's ID. When verbose is true, prints the full JSON response.
-func fetchFirstReplayRecordID(session *fixtures.ServiceSession, verbose bool) (string, error) {
-	httpClient := session.HTTPClient(30 * time.Second)
-	raw, err := fixtures.DoGETRequest(context.Background(), httpClient, session.BaseURL()+"/v1/router_replay?limit=1")
+func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, verbose bool) (string, error) {
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay?limit=1")
 	if err != nil {
 		return "", fmt.Errorf("GET /v1/router_replay failed: %w", err)
 	}
@@ -139,9 +145,8 @@ func fetchFirstReplayRecordID(session *fixtures.ServiceSession, verbose bool) (s
 	return records[0].ID, nil
 }
 
-func assertReplayRecordHasSessionMetadata(session *fixtures.ServiceSession, recordID string, verbose bool) error {
-	httpClient := session.HTTPClient(30 * time.Second)
-	raw, err := fixtures.DoGETRequest(context.Background(), httpClient, session.BaseURL()+"/v1/router_replay/"+recordID)
+func assertReplayRecordHasSessionMetadata(managementSession *fixtures.ServiceSession, recordID string, verbose bool) error {
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay/"+recordID)
 	if err != nil {
 		return fmt.Errorf("GET replay record for session metadata: %w", err)
 	}
@@ -257,14 +262,13 @@ func verifyReplayRecordAfterRestart(ctx context.Context, client *kubernetes.Clie
 // fetchReplayRecordOnce tries a single GET /v1/router_replay/{id} and returns
 // nil when the record is found and valid.
 func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, recordID string) error {
-	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	managementSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer managementSession.Close()
 
-	httpClient := session.HTTPClient(30 * time.Second)
-	raw, err := fixtures.DoGETRequest(ctx, httpClient, session.BaseURL()+"/v1/router_replay/"+recordID)
+	raw, err := doRouterReplayManagementGET(ctx, managementSession, "/v1/router_replay/"+recordID)
 	if err != nil {
 		if opts.Verbose {
 			fmt.Printf("[Test] GET replay %s not ready yet: %v — retrying\n", recordID, err)
@@ -305,4 +309,17 @@ func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, op
 		})
 	}
 	return nil
+}
+
+func doRouterReplayManagementGET(
+	ctx context.Context,
+	managementSession *fixtures.ServiceSession,
+	requestTarget string,
+) (*fixtures.HTTPResponse, error) {
+	return fixtures.DoGETRequestWithHeaders(
+		ctx,
+		managementSession.HTTPClient(30*time.Second),
+		managementSession.BaseURL()+requestTarget,
+		map[string]string{"Authorization": "Bearer " + routerReplayManagementToken},
+	)
 }

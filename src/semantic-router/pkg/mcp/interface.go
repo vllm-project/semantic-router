@@ -2,36 +2,52 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// MCPClient defines the interface that all MCP client implementations must satisfy
-type MCPClient interface {
-	// Connection management
+func toolCallFailureLogMessage(toolName string, err error) string {
+	return fmt.Sprintf("Tool call failed: tool=%s, error_class=%T", toolName, err)
+}
+
+// ClientLifecycle manages an MCP client's connection state.
+type ClientLifecycle interface {
 	Connect() error
 	Close() error
 	IsConnected() bool
 	Ping(ctx context.Context) error
+}
 
-	// Capability management
+// CapabilityProvider exposes and refreshes an MCP server's advertised capabilities.
+type CapabilityProvider interface {
 	GetTools() []mcp.Tool
 	GetResources() []mcp.Resource
 	GetPrompts() []mcp.Prompt
 	RefreshCapabilities(ctx context.Context) error
+}
 
-	// Tool operations
+// RequestExecutor performs MCP tool, resource, and prompt requests.
+type RequestExecutor interface {
 	CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*mcp.CallToolResult, error)
-
-	// Resource operations
 	ReadResource(ctx context.Context, uri string) (*mcp.ReadResourceResult, error)
-
-	// Prompt operations
 	GetPrompt(ctx context.Context, name string, arguments map[string]interface{}) (*mcp.GetPromptResult, error)
+}
 
-	// Logging
+// LogHandlerSetter configures delivery of MCP client log messages.
+type LogHandlerSetter interface {
 	SetLogHandler(handler func(LoggingLevel, string))
+}
+
+// MCPClient defines the complete contract that all MCP client implementations must satisfy.
+// The composed interfaces preserve the original public method set while allowing consumers
+// to depend on a narrower capability when the complete client contract is unnecessary.
+type MCPClient interface {
+	ClientLifecycle
+	CapabilityProvider
+	RequestExecutor
+	LogHandlerSetter
 }
 
 // BaseClient provides common functionality for all client implementations
@@ -91,14 +107,15 @@ func (c *BaseClient) log(level LoggingLevel, message string) {
 
 // ClientConfig represents client configuration
 type ClientConfig struct {
-	Command       string            `json:"command,omitempty"`
-	Args          []string          `json:"args,omitempty"`
-	Env           map[string]string `json:"env,omitempty"`
-	URL           string            `json:"url,omitempty"`
-	Headers       map[string]string `json:"headers,omitempty"`
-	TransportType string            `json:"transportType,omitempty"`
-	Timeout       time.Duration     `json:"timeout,omitempty"`
-	Options       ClientOptions     `json:"options"`
+	Command          string            `json:"command,omitempty"`
+	Args             []string          `json:"args,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	URL              string            `json:"url,omitempty"`
+	Headers          map[string]string `json:"headers,omitempty"`
+	TransportType    string            `json:"transportType,omitempty"`
+	Timeout          time.Duration     `json:"timeout,omitempty"`
+	MaxResponseBytes int64             `json:"maxResponseBytes,omitempty"`
+	Options          ClientOptions     `json:"options"`
 }
 
 // ToolFilter represents tool filtering configuration

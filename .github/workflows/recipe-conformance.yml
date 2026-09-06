@@ -1,0 +1,162 @@
+name: Recipe Conformance
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    name: Static contracts and inventory
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install conformance dependencies
+        run: python -m pip install -r tools/agent/requirements.txt
+
+      - name: Validate maintained recipe contracts
+        run: make recipe-conformance-static
+
+      - id: plan
+        name: Materialize live CPU shards
+        run: |
+          python tools/agent/scripts/recipe_conformance.py \
+            plan \
+            --shards 3 \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Publish static coverage summary
+        run: |
+          if [[ -f .agent-harness/recipe-conformance/coverage.md ]]; then
+            cat .agent-harness/recipe-conformance/coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recipe-conformance-inventory
+          path: .agent-harness/recipe-conformance/
+          retention-days: 30
+
+  live-cpu:
+    name: Live CPU shard ${{ matrix.shard }}
+    needs: inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.inventory.outputs.matrix) }}
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_XET: "1"
+      OPENROUTER_API_KEY: recipe-conformance-placeholder
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache router signal models
+        uses: actions/cache@v4
+        with:
+          path: models/
+          key: >-
+            ${{ runner.os }}-recipe-models-v1-${{
+              hashFiles('tools/make/models.mk', 'config/recipes/**/config.yaml')
+            }}
+          restore-keys: |
+            ${{ runner.os }}-recipe-models-v1-
+        continue-on-error: true
+
+      - name: Install CLI and conformance dependencies
+        run: |
+          python -m pip install -r tools/agent/requirements.txt
+          python -m pip install -e src/vllm-sr
+
+      - name: Run maintained recipe probes
+        env:
+          RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}
+          RECIPE_CONFORMANCE_REPORT_DIR: >-
+            ${{ github.workspace }}/.agent-harness/recipe-conformance
+        run: |
+          make recipe-conformance-live-cpu \
+            RECIPE_CONFORMANCE_RECIPES="$RECIPE_CONFORMANCE_RECIPES" \
+            RECIPE_CONFORMANCE_REPORT_DIR="$RECIPE_CONFORMANCE_REPORT_DIR"
+
+      - name: Add shard summaries
+        if: always()
+        run: |
+          shopt -s globstar nullglob
+          for summary in .agent-harness/recipe-conformance/**/summary.md; do
+            cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+            printf '\n---\n' >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload conformance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipe-conformance-live-${{ matrix.shard }}
+          path: .agent-harness/recipe-conformance/
+          retention-days: 30
+
+      - name: Clean up
+        if: always()
+        run: |
+          vllm-sr stop || true
+          docker system prune -f || true
+
+  report:
+    name: Publish consolidated report
+    if: ${{ always() && needs.inventory.result == 'success' }}
+    needs:
+      - inventory
+      - live-cpu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install report dependencies
+        run: python -m pip install -r tools/agent/requirements.txt
+
+      - name: Download inventory and live reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: recipe-conformance-*
+          path: .agent-harness/recipe-conformance
+          merge-multiple: true
+
+      - name: Assemble consolidated report
+        run: make recipe-conformance-report
+
+      - name: Publish consolidated summary
+        run: |
+          cat .agent-harness/recipe-conformance/conformance-report.md \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: recipe-conformance-report
+          path: .agent-harness/recipe-conformance/
+          retention-days: 30

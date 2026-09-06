@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
-import { withAuthQuery } from '../utils/authFetch'
+import { DOCS_LINKS } from '../utils/docsLinks'
 
 const GRAFANA_SERVICE: ServiceConfig = {
   name: 'Grafana',
   envVar: 'TARGET_GRAFANA_URL',
   description:
     'Connect Grafana to inspect routing health, latency, throughput, and model activity.',
-  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
+  docsUrl: DOCS_LINKS.observability,
   exampleValue: 'http://localhost:3000',
 }
 
@@ -30,8 +30,7 @@ export default function MonitoringPage() {
   }, [])
 
   const src = useMemo(
-    () =>
-      withAuthQuery(`/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`),
+    () => `/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`,
     [theme],
   )
 

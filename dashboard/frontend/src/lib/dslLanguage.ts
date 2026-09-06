@@ -97,14 +97,13 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ],
 
   pluginTypes: [
-    'semantic_cache',
+    'response_cache',
     'memory',
     'system_prompt',
     'header_mutation',
     'hallucination',
     'router_replay',
     'rag',
-    'image_gen',
     'tools',
     'fast_response',
     'request_params',
@@ -164,7 +163,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
         'type.plugin',
       ],
 
@@ -331,14 +330,13 @@ const SIGNAL_TYPE_SUGGESTIONS = [
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [
-  { label: 'semantic_cache', detail: 'Semantic caching plugin' },
+  { label: 'response_cache', detail: 'Response caching plugin' },
   { label: 'memory', detail: 'Conversation memory plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
   { label: 'hallucination', detail: 'Hallucination detection plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
-  { label: 'image_gen', detail: 'Image generation plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
   { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },

@@ -6,54 +6,79 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // ConversationFacts holds request-shape facts extracted from the incoming
 // request for use by the conversation signal evaluator.
 type ConversationFacts struct {
-	HasDeveloperMessage     bool
-	UserMessageCount        int
-	AssistantMessageCount   int
-	SystemMessageCount      int
-	ToolMessageCount        int
-	ToolDefinitionCount     int
-	AssistantToolCallCount  int
-	ToolResultCount         int
-	LastMessageRole         string
-	LastMessageToolResult   bool
-	LastUserAfterToolResult bool
+	HasDeveloperMessage       bool
+	UserMessageCount          int
+	AssistantMessageCount     int
+	SystemMessageCount        int
+	ToolMessageCount          int
+	ToolDefinitionCount       int
+	ToolChoiceRequired        bool
+	ToolChoiceNone            bool
+	AssistantToolCallCount    int
+	ToolResultCount           int
+	ImageContentCount         int
+	LastMessageRole           string
+	LastMessageToolResult     bool
+	LastMessageFlowToolResult bool
+	LastAssistantToolCall     bool
+	LastUserAfterToolResult   bool
 }
 
-func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync.Mutex, facts ConversationFacts) {
+func (c *Classifier) evaluateConversationSignal(
+	results *SignalResults,
+	mu *sync.Mutex,
+	facts ConversationFacts,
+	usedSignals map[string]bool,
+) {
 	rules := c.Config.ConversationRules
 	if len(rules) == 0 {
 		return
 	}
 
 	start := time.Now()
+	matchedAny := false
 
 	for _, rule := range rules {
-		value := resolveConversationValue(rule.Feature, facts)
-		if !conversationPredicateMatches(rule, value) {
+		if !signalRuleUsed(
+			usedSignals,
+			config.SignalTypeConversation,
+			rule.Name,
+		) {
 			continue
 		}
-
+		value := resolveConversationValue(rule.Feature, facts)
+		matched := conversationPredicateMatches(rule, value)
 		elapsed := time.Since(start)
 		mu.Lock()
 		key := signalConfidenceKey(config.SignalTypeConversation, rule.Name)
-		results.MatchedConversationRules = append(results.MatchedConversationRules, rule.Name)
-		results.SignalConfidences[key] = 1.0
 		results.SignalValues[key] = value
+		if matched {
+			matchedAny = true
+			results.SignalConfidences[key] = 1.0
+			results.MatchedConversationRules = append(results.MatchedConversationRules, rule.Name)
+		} else {
+			results.SignalConfidences[key] = 0
+		}
 		mu.Unlock()
 
-		metrics.RecordSignalExtraction(config.SignalTypeConversation, rule.Name, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeConversation, rule.Name)
+		c.recordSignalExtraction(config.SignalTypeConversation, rule.Name, elapsed.Seconds())
+		if matched {
+			c.recordSignalMatch(config.SignalTypeConversation, rule.Name)
+		}
 	}
 
 	elapsed := time.Since(start)
 	results.Metrics.Conversation.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	results.Metrics.Conversation.Confidence = 1.0
+	if matchedAny {
+		results.Metrics.Conversation.Confidence = 1.0
+	} else {
+		results.Metrics.Conversation.Confidence = 0
+	}
 	logging.Debugf("[Signal Computation] Conversation signal evaluation completed in %v", elapsed)
 }
 
@@ -77,22 +102,37 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return countMessagesByRole(feature.Source.Role, facts)
 	case "tool_definition":
 		return facts.ToolDefinitionCount
+	case "tool_choice_required":
+		return conversationBoolCount(facts.ToolChoiceRequired)
+	case "tool_choice_none":
+		return conversationBoolCount(facts.ToolChoiceNone)
 	case "assistant_tool_call":
 		return facts.AssistantToolCallCount
 	case "assistant_tool_cycle":
 		return facts.ToolResultCount
 	case "active_tool_loop":
 		return activeToolLoopCount(facts)
+	case "flow_tool_state":
+		return conversationBoolCount(facts.LastMessageFlowToolResult)
+	case "image_content":
+		return facts.ImageContentCount
 	default:
 		return 0
 	}
+}
+
+func conversationBoolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func activeToolLoopCount(facts ConversationFacts) int {
 	if facts.LastMessageToolResult ||
 		facts.LastMessageRole == "tool" ||
 		facts.LastUserAfterToolResult ||
-		facts.AssistantToolCallCount > facts.ToolResultCount {
+		facts.LastAssistantToolCall {
 		return 1
 	}
 	return 0

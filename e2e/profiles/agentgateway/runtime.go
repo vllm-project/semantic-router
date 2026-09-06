@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
@@ -11,16 +12,36 @@ import (
 )
 
 const (
-	gatewayAPICRDsURL           = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.5.0/standard-install.yaml"
+	gatewayAPICRDsURL           = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
 	timeoutAgentGatewayInstall  = 10 * time.Minute
 	timeoutSemanticRouterDeploy = 20 * time.Minute
 	timeoutDemoLLMDeploy        = 10 * time.Minute
+	gatewayAPIInstallAttempts   = 3
+	gatewayAPIRetryBaseDelay    = 5 * time.Second
 )
 
 func (p *Profile) installGatewayAPICRDs(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.runKubectl(ctx, opts.KubeConfig,
-		"apply", "--server-side", "--force-conflicts", "-f", gatewayAPICRDsURL,
-	)
+	var lastErr error
+	for attempt := 1; attempt <= gatewayAPIInstallAttempts; attempt++ {
+		lastErr = p.runKubectl(
+			ctx,
+			opts.KubeConfig,
+			"apply",
+			"--server-side",
+			"--force-conflicts",
+			"-f",
+			gatewayAPICRDsURL,
+		)
+		if lastErr == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt) * gatewayAPIRetryBaseDelay):
+		}
+	}
+	return fmt.Errorf("apply Gateway API CRDs after retries: %w", lastErr)
 }
 
 func (p *Profile) installAgentGateway(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
@@ -65,6 +86,10 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	release := helm.SemanticRouterRelease.Clone()
 	release.Namespace = agentGatewayNamespace
 	release.ValuesFiles = []string{semanticRouterValuesFile}
+	// The profile owns readiness diagnostics below; avoiding Helm's opaque
+	// release-wide wait keeps failures bounded and surfaces pod state.
+	release.Wait = false
+	release.Timeout = "10m"
 	release.Set = map[string]string{
 		"image.repository": "ghcr.io/vllm-project/semantic-router/extproc",
 		"image.tag":        opts.ImageTag,
@@ -119,5 +144,14 @@ func (p *Profile) deleteManifest(ctx context.Context, kubeConfig, manifest strin
 func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {
 	args = append(args, "--kubeconfig", kubeConfig)
 	cmd := exec.CommandContext(ctx, "kubectl", args...)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf(
+			"kubectl %s: %w: %s",
+			strings.Join(args, " "),
+			err,
+			strings.TrimSpace(string(output)),
+		)
+	}
+	return nil
 }

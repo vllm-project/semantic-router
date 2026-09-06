@@ -1,0 +1,115 @@
+.technicalDisclosure {
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  --evaluation-disclosure-hover-background: rgba(255, 255, 255, 0.025);
+  --evaluation-disclosure-indicator-color: var(--text-secondary);
+}
+
+.technicalDisclosureSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  min-height: var(--control-height);
+  padding: 0.85rem 0;
+}
+
+.technicalSummaryCopy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.technicalSummaryCopy strong {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.technicalSummaryCopy small,
+.technicalSummaryCount {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.technicalSummaryCount {
+  white-space: nowrap;
+}
+
+.technicalBody {
+  display: grid;
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.technicalGroup {
+  display: grid;
+  min-width: 0;
+  gap: 0.7rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.technicalGroup:last-child {
+  border-bottom: 0;
+}
+
+.technicalGroupHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.technicalGroupHeader > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.technicalGroupHeader h4,
+.technicalSubgroup h5 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  letter-spacing: -0.015em;
+}
+
+.technicalGroupHeader p {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.technicalGroupHeader > span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.technicalSubgroup {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.15rem;
+}
+
+.technicalSubgroup h5 {
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 760px) {
+  .technicalGroupHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .technicalDisclosureSummary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+  }
+
+  .technicalSummaryCount {
+    display: none;
+  }
+}

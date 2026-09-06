@@ -1,0 +1,180 @@
+.overlay {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.dialog {
+  width: min(1120px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 16px;
+  outline: none;
+  background: #0d0d0f;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.62);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.header span {
+  color: #ff8d91;
+  font-size: 0.64rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2,
+.header p {
+  margin: 0;
+}
+
+.header h2 {
+  margin-top: 5px;
+  color: #f4f4f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+}
+
+.header p {
+  margin-top: 6px;
+  color: #9da7b3;
+  font-size: 0.75rem;
+}
+
+.header button {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #9da7b3;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.canvas {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 0.9fr) auto minmax(130px, 0.7fr) auto minmax(190px, 1fr)
+    auto minmax(230px, 1.25fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 390px;
+  padding: 30px 24px 34px;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.stage {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.stageLabel {
+  color: #777f89;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.nodeList {
+  display: grid;
+  gap: 7px;
+}
+
+.node {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: #17171a;
+  color: #f4f4f5;
+}
+
+.node code,
+.node strong {
+  overflow: hidden;
+  font-size: 0.69rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node small {
+  color: #8f949c;
+  font-size: 0.62rem;
+}
+
+.entrypointNode {
+  border-color: color-mix(in srgb, var(--brand-amd, #e31b23) 45%, transparent);
+  background: color-mix(in srgb, var(--brand-amd, #e31b23) 8%, #17171a);
+}
+
+.recipeNode {
+  text-align: center;
+}
+
+.decisionNode {
+  border-left: 2px solid #8f949c;
+}
+
+.decisionTargets {
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.decisionTargets code {
+  color: #aeb4bd;
+  font-size: 0.58rem;
+}
+
+.modelNode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modelDot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--brand-amd, #e31b23);
+}
+
+.connector {
+  color: #5f6670;
+  font-size: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 880px) {
+  .canvas {
+    grid-template-columns: 1fr;
+  }
+
+  .connector {
+    transform: rotate(90deg);
+  }
+}

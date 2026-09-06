@@ -73,36 +73,36 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
 
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
-  'semantic-cache': 'SC',
+  response_cache: 'RC',
   memory: 'MEM',
   system_prompt: 'SP',
   header_mutation: 'HM',
   hallucination: 'HAL',
   router_replay: 'RR',
   rag: 'RAG',
-  image_gen: 'IMG',
   fast_response: 'FR',
   request_params: 'RP',
   response_jailbreak: 'RJ',
   tools: 'TL',
   tool_selection: 'TS',
+  context_compression: 'CC',
 }
 
 // ============== Plugin Colors (Graphite Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  'semantic-cache': { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
+  response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   memory: { background: '#3f6b73', border: '#2e4f55' },
   system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
   header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
   router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
   rag: { background: '#2f855a', border: '#276749' },
-  image_gen: { background: '#7b5ea7', border: '#5b3f86' },
   fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   request_params: { background: '#805ad5', border: '#6b46c1' },
   response_jailbreak: { background: '#c05621', border: '#9c4221' },
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
+  context_compression: { background: '#606c7a', border: '#3d4a59' },
 }
 
 // ============== Algorithm Icons ==============
@@ -164,7 +164,7 @@ export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string
   {
     prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
     pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
-    semantic_cache: { icon: 'SC', label: 'Semantic Cache', color: '#8f949c' }, // Graphite Alloy
+    response_cache: { icon: 'RC', label: 'Response Cache', color: '#8f949c' }, // Graphite Alloy
   }
 
 // ============== Node Colors (Gray Nodes, Alloy Paths) ==============
@@ -314,14 +314,13 @@ export const SIGNAL_TYPES: SignalType[] = [
 
 // ============== Plugin Types Array ==============
 export const PLUGIN_TYPES: PluginType[] = [
-  'semantic-cache',
+  'response_cache',
   'memory',
   'system_prompt',
   'header_mutation',
   'hallucination',
   'router_replay',
   'rag',
-  'image_gen',
   'fast_response',
   'request_params',
   'response_jailbreak',

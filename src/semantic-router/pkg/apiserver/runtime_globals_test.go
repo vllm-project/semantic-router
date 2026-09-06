@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -102,10 +103,10 @@ func TestRuntimeRegistrySuppressesLegacyVectorGlobalsUntilPublished(t *testing.T
 
 func TestRuntimeRegistrySuppressesLegacySelectionGlobalUntilPublished(t *testing.T) {
 	globalRegistry := selection.NewRegistry()
-	originalRegistry := selection.GlobalRegistry
-	selection.GlobalRegistry = globalRegistry
+	originalRegistry := selection.GetGlobalRegistry()
+	selection.SetGlobalRegistry(globalRegistry)
 	t.Cleanup(func() {
-		selection.GlobalRegistry = originalRegistry
+		selection.SetGlobalRegistry(originalRegistry)
 	})
 
 	registry := routerruntime.NewRegistry(nil)
@@ -124,7 +125,7 @@ func TestRuntimeRegistrySuppressesLegacySelectionGlobalUntilPublished(t *testing
 
 type fakeRuntimeEmbedder struct{}
 
-func (fakeRuntimeEmbedder) Embed(_ string) ([]float32, error) {
+func (fakeRuntimeEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
 	return []float32{1, 0}, nil
 }
 

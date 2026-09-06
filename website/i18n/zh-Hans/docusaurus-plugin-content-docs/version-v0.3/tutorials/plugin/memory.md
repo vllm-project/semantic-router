@@ -11,7 +11,7 @@ translation:
 
 `memory` 是路由局部插件：检索与存储对话记忆。
 
-对应 `config/plugin/memory/session-memory.yaml`。
+对应 `config/fragments/plugin/memory/session-memory.yaml`。
 
 ## 主要优势
 

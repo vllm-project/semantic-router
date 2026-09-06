@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"fmt"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 
@@ -62,6 +64,40 @@ var (
 		},
 		[]string{"reason"},
 	)
+
+	ResponseCacheOperationDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_response_cache_operation_duration_seconds",
+			Help:    "Response cache operation latency by backend, protocol, hit kind, source, and status",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"backend", "operation", "protocol", "hit_kind", "source", "status"},
+	)
+
+	ResponseCacheEntryAge = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_response_cache_entry_age_seconds",
+			Help:    "Age of reused response cache entries",
+			Buckets: []float64{1, 5, 30, 60, 300, 900, 3600, 21600, 86400},
+		},
+		[]string{"backend", "hit_kind", "source"},
+	)
+
+	ResponseCacheSingleflightWaiters = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_response_cache_singleflight_waiters_total",
+			Help: "Requests that waited for an in-process exact-cache leader",
+		},
+		[]string{"backend", "outcome"},
+	)
+
+	ResponseCacheInvalidations = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_response_cache_invalidations_total",
+			Help: "Response cache invalidation and epoch operations",
+		},
+		[]string{"backend", "operation", "dry_run"},
+	)
 )
 
 // RecordCacheOperation records a cache operation with duration and status
@@ -81,7 +117,7 @@ func RecordCachePluginHit(decisionName, pluginType string) {
 		decisionName = consts.UnknownLabel
 	}
 	if pluginType == "" {
-		pluginType = "semantic-cache"
+		pluginType = "response_cache"
 	}
 	CachePluginHits.WithLabelValues(decisionName, pluginType).Inc()
 }
@@ -92,9 +128,58 @@ func RecordCachePluginMiss(decisionName, pluginType string) {
 		decisionName = consts.UnknownLabel
 	}
 	if pluginType == "" {
-		pluginType = "semantic-cache"
+		pluginType = "response_cache"
 	}
 	CachePluginMisses.WithLabelValues(decisionName, pluginType).Inc()
+}
+
+func RecordResponseCacheOperation(
+	backend string,
+	operation string,
+	protocol string,
+	hitKind string,
+	source string,
+	status string,
+	duration float64,
+) {
+	ResponseCacheOperationDuration.WithLabelValues(
+		normalizeCacheMetricLabel(backend),
+		normalizeCacheMetricLabel(operation),
+		normalizeCacheMetricLabel(protocol),
+		normalizeCacheMetricLabel(hitKind),
+		normalizeCacheMetricLabel(source),
+		normalizeCacheMetricLabel(status),
+	).Observe(duration)
+}
+
+func RecordResponseCacheEntryAge(backend, hitKind, source string, age float64) {
+	ResponseCacheEntryAge.WithLabelValues(
+		normalizeCacheMetricLabel(backend),
+		normalizeCacheMetricLabel(hitKind),
+		normalizeCacheMetricLabel(source),
+	).Observe(age)
+}
+
+func RecordResponseCacheSingleflightWaiter(backend, outcome string) {
+	ResponseCacheSingleflightWaiters.WithLabelValues(
+		normalizeCacheMetricLabel(backend),
+		normalizeCacheMetricLabel(outcome),
+	).Inc()
+}
+
+func RecordResponseCacheInvalidation(backend, operation string, dryRun bool) {
+	ResponseCacheInvalidations.WithLabelValues(
+		normalizeCacheMetricLabel(backend),
+		normalizeCacheMetricLabel(operation),
+		fmt.Sprintf("%t", dryRun),
+	).Inc()
+}
+
+func normalizeCacheMetricLabel(value string) string {
+	if value == "" {
+		return consts.UnknownLabel
+	}
+	return value
 }
 
 // Cache write skip reasons (canonical labels for CacheWriteSkipped metric)

@@ -34,7 +34,8 @@ const (
 	multipartMemoryLimit = 8 * 1024 * 1024
 )
 
-// allowedExtensions defines the file types that can be uploaded.
+// allowedExtensions defines the document types that can be uploaded for
+// vector-store ingestion.
 var allowedExtensions = map[string]bool{
 	".txt":  true,
 	".md":   true,
@@ -42,6 +43,37 @@ var allowedExtensions = map[string]bool{
 	".csv":  true,
 	".html": true,
 	".htm":  true,
+}
+
+// imageExtensions defines the image types accepted for purpose "vision". They
+// exist so Response API input_image parts can reference an uploaded image by
+// file_id; the router inlines the image for the selected backend.
+var imageExtensions = map[string]bool{
+	".png":  true,
+	".jpg":  true,
+	".jpeg": true,
+	".gif":  true,
+	".webp": true,
+}
+
+// purposeVision is the upload purpose for images used as model input, matching
+// the OpenAI Files API value.
+const purposeVision = "vision"
+
+// uploadExtensionAllowed reports whether a file extension may be uploaded for
+// the given purpose: images for vision, documents for everything else.
+func uploadExtensionAllowed(ext, purpose string) bool {
+	if purpose == purposeVision {
+		return imageExtensions[ext]
+	}
+	return allowedExtensions[ext]
+}
+
+func allowedExtensionList(purpose string) string {
+	if purpose == purposeVision {
+		return ".png, .jpg, .jpeg, .gif, .webp"
+	}
+	return ".txt, .md, .json, .csv, .html"
 }
 
 // SetFileStore sets the global file store for the API server.
@@ -98,11 +130,11 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 		purpose = "assistants"
 	}
 
-	// Validate extension.
+	// Validate extension against the purpose.
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !allowedExtensions[ext] {
+	if !uploadExtensionAllowed(ext, purpose) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_FILE_TYPE",
-			fmt.Sprintf("unsupported file type: %s (allowed: .txt, .md, .json, .csv, .html)", ext))
+			fmt.Sprintf("unsupported file type for purpose %q: %s (allowed: %s)", purpose, ext, allowedExtensionList(purpose)))
 		return
 	}
 

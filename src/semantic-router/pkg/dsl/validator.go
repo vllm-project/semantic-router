@@ -121,13 +121,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 		}
 	}
 
-	v := &Validator{
-		prog:        prog,
-		signalNames: make(map[string]map[string]bool),
-		modelNames:  make(map[string]bool),
-		modelLoRAs:  make(map[string]map[string]bool),
-		pluginNames: make(map[string]bool),
-	}
+	v := newValidator(prog)
 
 	// Level 1: Parser errors become Error diagnostics
 	for _, e := range parseErrors {
@@ -149,6 +143,7 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 	// Level 4: Conflict detection
 	v.checkConflicts()
+	v.checkRoutingScopes()
 
 	// Extract symbol table for editor completions
 	symbols := v.extractSymbolTable()
@@ -158,18 +153,23 @@ func ValidateWithSymbols(input string) ([]Diagnostic, *SymbolTable, []error) {
 
 // ValidateAST performs Level 2 and Level 3 validation on an existing AST.
 func ValidateAST(prog *Program) []Diagnostic {
-	v := &Validator{
+	v := newValidator(prog)
+	v.buildSymbolTable()
+	v.checkReferences()
+	v.checkConstraints()
+	v.checkConflicts()
+	v.checkRoutingScopes()
+	return v.diagnostics
+}
+
+func newValidator(prog *Program) *Validator {
+	return &Validator{
 		prog:        prog,
 		signalNames: make(map[string]map[string]bool),
 		modelNames:  make(map[string]bool),
 		modelLoRAs:  make(map[string]map[string]bool),
 		pluginNames: make(map[string]bool),
 	}
-	v.buildSymbolTable()
-	v.checkReferences()
-	v.checkConstraints()
-	v.checkConflicts()
-	return v.diagnostics
 }
 
 // ---------- Symbol Table ----------
@@ -261,7 +261,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, semantic_cache, hallucination, memory, rag, tools, image_gen, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, response_cache, hallucination, memory, rag, tools, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
 				fix,
 			)
 		}
@@ -398,6 +398,7 @@ var constraintRules = []constraintRule{
 	{field: "port", min: &floatMinPort, max: &floatMaxPort},
 	{field: "fuzzy_threshold", min: &floatZero},
 	{field: "ngram_arity", min: &floatOne},
+	{field: "minimum_candidates", min: &floatOne},
 }
 
 func (v *Validator) checkConstraints() {
@@ -450,10 +451,22 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		}
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
+	case "context":
+		v.checkContextSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
+	}
+}
+
+// checkContextSignalConstraints rejects token bands the runtime would refuse:
+// neither limit set, unparsable or negative values, or min_tokens above
+// max_tokens. Equal values are an exact-match band, omitting max_tokens makes
+// the band open-ended, and omitting min_tokens means 0.
+func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string) {
+	if _, err := contextSignalBounds(s); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
@@ -521,6 +534,15 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			&QuickFix{Description: "Set priority to 0", NewText: "0"},
 		)
 	}
+
+	if r.OnUnknown != "" && !config.UnknownPolicy(r.OnUnknown).IsValid() {
+		v.addDiag(DiagConstraint, r.Pos,
+			fmt.Sprintf("%s: on_unknown must be %s, got %q", context, config.UnknownPolicyChoices(), r.OnUnknown),
+			nil,
+		)
+	}
+
+	v.checkRouteAction(r, context)
 
 	// Check algorithm constraints
 	if r.Algorithm != nil {

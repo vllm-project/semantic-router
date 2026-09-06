@@ -166,11 +166,22 @@ func registerSelectionMetrics() {
 
 	ModelSelectionDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "llm_model_selection_duration_seconds",
-			Help:    "Duration of model selection operations in seconds",
-			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+			Name: "llm_model_selection_duration_seconds",
+			Help: "Duration of model selection operations in seconds",
+			Buckets: []float64{
+				0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1,
+				0.25, 0.5, 1, 2.5, 5, 10, 30, 60,
+			},
 		},
 		[]string{"method", "tier"},
+	)
+
+	ModelSelectionFallbackTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_selection_fallback_total",
+			Help: "Total selector fallbacks by method, decision, and bounded reason",
+		},
+		[]string{"method", "decision", "reason"},
 	)
 
 	ModelSelectionScore = promauto.NewHistogramVec(
@@ -374,6 +385,7 @@ func preInitializeMetrics() {
 		"latency_aware",
 		"multi_factor",
 		"session_aware",
+		"prompt",
 	}
 
 	// Initialize selection metrics for all methods
@@ -383,6 +395,7 @@ func preInitializeMetrics() {
 		ModelSelectionScore.WithLabelValues(method, "_init")
 		ModelSelectionConfidence.WithLabelValues(method, "supported")
 		ModelSelectionHistory.WithLabelValues(method, "_init")
+		ModelSelectionFallbackTotal.WithLabelValues(method, "_init", "_init")
 	}
 
 	// Initialize Elo metrics
@@ -423,18 +436,6 @@ func preInitializeMetrics() {
 // IsMetricsEnabled returns true if metrics have been initialized
 func IsMetricsEnabled() bool {
 	return metricsEnabled
-}
-
-// RecordSelection records a basic model selection event with tier label.
-func RecordSelection(method string, decision string, model string, tier AlgorithmTier, score float64) {
-	if !metricsEnabled {
-		return
-	}
-
-	tierStr := string(tier)
-	ModelSelectionTotal.WithLabelValues(method, model, decision, tierStr).Inc()
-	ModelSelectionScore.WithLabelValues(method, model).Observe(score)
-	ModelSelectionHistory.WithLabelValues(method, decision).Inc()
 }
 
 // RecordEloRating records the current Elo rating for a model in a category

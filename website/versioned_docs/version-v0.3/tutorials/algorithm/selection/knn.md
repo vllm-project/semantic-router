@@ -4,7 +4,7 @@
 
 `knn` is a selection algorithm that uses **K-Nearest Neighbors** for example-based model selection. It finds the k most similar historical queries and votes on the best model based on their outcomes.
 
-It aligns to `config/algorithm/selection/knn.yaml`.
+It aligns to `config/fragments/algorithm/selection/knn.yaml`.
 
 **Implementation**: Rust via [Linfa](https://github.com/rust-ml/linfa) (`linfa-nn`) for high-performance nearest-neighbor search.
 

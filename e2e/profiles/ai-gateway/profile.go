@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
@@ -13,34 +14,39 @@ import (
 const valuesFile = "e2e/profiles/ai-gateway/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml",
+	"e2e/profiles/ai-gateway/manifests/mock-sequence-classifier.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
+	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
-// Profile implements the default Kubernetes baseline test profile.
+// Profile implements the Envoy AI Gateway baseline test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
 
-// NewProfile creates the default Kubernetes profile backed by the shared AI Gateway stack.
+// NewProfile creates the baseline profile backed by the shared Envoy AI Gateway stack.
 func NewProfile() *Profile {
 	return &Profile{
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "ai-gateway",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments: []helpers.DeploymentRef{
+				{Namespace: "default", Name: "mock-sequence-classifier"},
+			},
 		}),
 	}
 }
 
 // Name returns the profile name.
 func (p *Profile) Name() string {
-	return "kubernetes"
+	return "envoy-ai-gateway"
 }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Semantic Router through the default Kubernetes baseline powered by Envoy AI Gateway"
+	return "Tests the baseline Semantic Router contract through Envoy AI Gateway"
 }
 
 // Setup deploys the shared gateway stack.

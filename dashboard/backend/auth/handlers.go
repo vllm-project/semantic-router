@@ -50,6 +50,7 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	mux.HandleFunc("/api/auth/logout/", logoutHandler(svc))
 	mux.HandleFunc("/api/auth/me", meHandler(svc))
 	mux.HandleFunc("/api/auth/me/", meHandler(svc))
+	mux.HandleFunc("/api/auth/invitations/", publicInvitationHandler(svc))
 
 	return mux
 }
@@ -60,6 +61,8 @@ func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
 	mux.HandleFunc("/api/admin/permissions", adminPermissionsHandler(svc))
 	mux.HandleFunc("/api/admin/audit-logs", adminAuditLogsHandler(svc))
 	mux.HandleFunc("/api/admin/users/password", adminUserPasswordHandler(svc))
+	mux.HandleFunc("/api/admin/invitations", adminInvitationsHandler(svc))
+	mux.HandleFunc("/api/admin/invitations/", adminInvitationItemHandler(svc))
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {

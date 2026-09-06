@@ -168,6 +168,7 @@ export const FieldEditor: React.FC<{
             className={styles.fieldInput}
             type="number"
             step="any"
+            min={schema.min}
             value={value !== undefined && value !== null ? String(value) : ""}
             onChange={(e) => {
               const v = e.target.value;

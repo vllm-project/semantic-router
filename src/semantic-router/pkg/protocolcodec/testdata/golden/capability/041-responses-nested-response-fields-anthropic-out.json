@@ -1,0 +1,72 @@
+{
+  "cases": [
+    {
+      "name": "text_annotations_and_logprobs",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
+            "field": "output.content.logprobs",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "refusal",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reasoning_and_namespaced_tool",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "upstream_unavailable",
+          "code": "empty_output_item"
+        },
+        "diagnostics": [
+          {
+            "field": "output.encrypted_content",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
+            "field": "output.caller",
+            "action": "dropped"
+          },
+          {
+            "field": "output.namespace",
+            "action": "dropped"
+          },
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

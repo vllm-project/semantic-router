@@ -1095,6 +1095,28 @@ func TestValidateWorkflowPlanRejectsFutureAccessList(t *testing.T) {
 	}
 }
 
+func TestValidateWorkflowPlanRejectsStepBelowConfiguredQuorum(t *testing.T) {
+	plan := &workflowPlan{Steps: []workflowPlanStep{{
+		ID:     "solve",
+		Models: []string{"worker-a"},
+		Prompt: "solve",
+	}}}
+	err := validateWorkflowPlan(
+		plan,
+		[]string{"worker-a", "worker-b"},
+		workflowsExecutionConfig{MaxSteps: 3, MaxParallel: 2, MinSuccessfulResponses: 2},
+	)
+	if err == nil || !strings.Contains(err.Error(), "fewer than min_successful_responses=2") {
+		t.Fatalf("expected workflow quorum error, got %v", err)
+	}
+}
+
+func TestWorkflowRoundMinSuccessfulDoesNotClampImpossibleQuorum(t *testing.T) {
+	if got := workflowRoundMinSuccessful(2, 3); got != 3 {
+		t.Fatalf("minimum successful responses = %d, want configured value 3", got)
+	}
+}
+
 func TestValidateWorkflowPlanAllowsPreviousAgentAccessList(t *testing.T) {
 	plan := &workflowPlan{Steps: []workflowPlanStep{
 		{

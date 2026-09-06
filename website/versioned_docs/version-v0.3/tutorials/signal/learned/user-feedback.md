@@ -2,7 +2,7 @@
 
 ## Overview
 
-`user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. It maps to `config/signal/user-feedback/` and is declared under `routing.signals.user_feedbacks`.
+`user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. It maps to `config/fragments/signal/user-feedback/` and is declared under `routing.signals.user_feedbacks`.
 
 This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`.
 
@@ -30,7 +30,7 @@ Use `user-feedback` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/user-feedback/`
+Source fragment family: `config/fragments/signal/user-feedback/`
 
 ```yaml
 routing:

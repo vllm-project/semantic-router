@@ -27,9 +27,9 @@ description: Modifies the local startup chain including image build, container s
 
 ## Must Read
 
-- [docs/agent/environments.md](../../../../docs/agent/environments.md)
-- [docs/agent/amd-local.md](../../../../docs/agent/amd-local.md)
-- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
+- [tools/agent/docs/environments.md](../../../../tools/agent/docs/environments.md)
+- [tools/agent/docs/amd-local.md](../../../../tools/agent/docs/amd-local.md)
+- [tools/agent/docs/testing-strategy.md](../../../../tools/agent/docs/testing-strategy.md)
 
 ## Standard Commands
 

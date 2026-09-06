@@ -1,10 +1,8 @@
 package extproc
 
 import (
+	"strings"
 	"time"
-
-	"github.com/openai/openai-go"
-	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
@@ -12,81 +10,72 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 type responseUsageMetrics struct {
 	promptTokens               int
+	promptTokensReported       bool
 	cachedPromptTokens         int
 	cachedPromptTokensReported bool
 	cacheWriteTokens           int
 	cacheWriteTokensReported   bool
 	completionTokens           int
+	completionTokensReported   bool
+	totalTokens                int
+	totalTokensReported        bool
+	invalid                    bool
+	invalidReason              string
+}
+
+func responseUsageTotal(usage responseUsageMetrics) int {
+	if usage.totalTokens > 0 {
+		return usage.totalTokens
+	}
+	return usage.promptTokens + usage.completionTokens
+}
+
+func responseUsageHasPricableBreakdown(usage responseUsageMetrics) bool {
+	componentTotal := usage.promptTokens + usage.completionTokens
+	componentsReported := usage.promptTokensReported && usage.completionTokensReported
+	// Preserve the internal metrics seam for older callers that construct a
+	// positive breakdown directly. Wire accounting additionally retains field
+	// presence so an explicit 0/0 is authoritative while omitted fields are not.
+	if !componentsReported && componentTotal <= 0 {
+		return false
+	}
+	return !usage.totalTokensReported || usage.totalTokens == componentTotal
+}
+
+func recordModelUsageTokens(model string, usage responseUsageMetrics) {
+	if model == "" {
+		return
+	}
+	if responseUsageHasPricableBreakdown(usage) {
+		metrics.RecordModelTokensDetailed(
+			model,
+			float64(usage.promptTokens),
+			float64(usage.completionTokens),
+		)
+		return
+	}
+	if totalTokens := responseUsageTotal(usage); totalTokens > 0 {
+		metrics.RecordModelTokens(model, float64(totalTokens))
+	}
 }
 
 // =====================================================================
 // NON-STREAMING
 // =====================================================================
 
-func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics {
-	if !gjson.ValidBytes(responseBody) {
-		logging.Errorf("Error parsing tokens from response: invalid JSON")
-		metrics.RecordRequestError(model, "parse_error")
-		return responseUsageMetrics{}
-	}
-
-	promptTokens := firstExistingGJSON(
-		gjson.GetBytes(responseBody, "usage.prompt_tokens"),
-		gjson.GetBytes(responseBody, "usage.input_tokens"),
-	)
-	completionTokens := firstExistingGJSON(
-		gjson.GetBytes(responseBody, "usage.completion_tokens"),
-		gjson.GetBytes(responseBody, "usage.output_tokens"),
-	)
-	cachedPromptTokens := firstExistingGJSON(
-		gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cached_tokens"),
-		gjson.GetBytes(responseBody, "usage.input_tokens_details.cached_tokens"),
-	)
-	cacheWriteTokens := firstExistingGJSON(
-		gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cache_write_tokens"),
-		gjson.GetBytes(responseBody, "usage.input_tokens_details.cache_write_tokens"),
-	)
-	cachedPromptTokensReported := cachedPromptTokens.Exists()
-	cacheWriteTokensReported := cacheWriteTokens.Exists()
-	if (promptTokens.Exists() && promptTokens.Type != gjson.Number) ||
-		(completionTokens.Exists() && completionTokens.Type != gjson.Number) ||
-		(cachedPromptTokensReported && cachedPromptTokens.Type != gjson.Number) ||
-		(cacheWriteTokensReported && cacheWriteTokens.Type != gjson.Number) {
-		logging.Errorf("Error parsing tokens from response: usage fields must be numbers")
-		metrics.RecordRequestError(model, "parse_error")
-		return responseUsageMetrics{}
-	}
-
-	return normalizeResponseUsage(responseUsageMetrics{
-		promptTokens:               int(promptTokens.Int()),
-		cachedPromptTokens:         int(cachedPromptTokens.Int()),
-		cachedPromptTokensReported: cachedPromptTokensReported,
-		cacheWriteTokens:           int(cacheWriteTokens.Int()),
-		cacheWriteTokensReported:   cacheWriteTokensReported,
-		completionTokens:           int(completionTokens.Int()),
-	})
-}
-
-func firstExistingGJSON(values ...gjson.Result) gjson.Result {
-	for _, value := range values {
-		if value.Exists() {
-			return value
-		}
-	}
-	return gjson.Result{}
-}
-
 func (r *OpenAIRouter) reportNonStreamingUsage(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	totalTokens := usage.promptTokens + usage.completionTokens
+	if usage.invalid {
+		usage = responseUsageMetrics{}
+	}
+	totalTokens := responseUsageTotal(usage)
 
 	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
@@ -104,11 +93,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		return
 	}
 
-	metrics.RecordModelTokensDetailed(
-		ctx.RequestModel,
-		float64(usage.promptTokens),
-		float64(usage.completionTokens),
-	)
+	recordModelUsageTokens(ctx.RequestModel, usage)
 	metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 	inflight.End(ctx.RequestModel, ctx.InflightToken)
 	ctx.InflightToken = 0
@@ -134,7 +119,11 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 }
 
 func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
-	if r == nil || r.Classifier == nil || ctx == nil || actualPromptTokens <= 0 {
+	if r == nil || ctx == nil || actualPromptTokens <= 0 {
+		return
+	}
+	classifier := r.classifierForRequest(ctx)
+	if classifier == nil {
 		return
 	}
 	byteLen := tokenCalibrationByteLen(ctx)
@@ -142,14 +131,41 @@ func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPrompt
 		return
 	}
 
-	r.Classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
+	classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
 	if category := tokenCalibrationCategory(ctx); category != "" {
-		r.Classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
+		classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
 	}
+	if compressionCategory := contextCompressionTokenCalibrationCategory(ctx); compressionCategory != "" {
+		classifier.ObserveTokenUsage(
+			compressionCategory,
+			len(cacheRequestBodyForContext(ctx)),
+			actualPromptTokens,
+		)
+	}
+}
+
+func contextCompressionTokenCalibrationCategory(ctx *RequestContext) string {
+	if ctx == nil || ctx.ContextCompressionRevision == "" {
+		return ""
+	}
+	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.RequestModel)
+	}
+	if model == "" {
+		return ""
+	}
+	return "context_compression:" + model
 }
 
 func tokenCalibrationByteLen(ctx *RequestContext) int {
 	if ctx == nil {
+		return 0
+	}
+	// Structured JSON uses a separate dense-token floor and images use a fixed
+	// reserve. Treating either as prose bytes would poison the online 4B/token
+	// calibrator with provider-specific schema/vision costs.
+	if ctx.VSRContextHasNonText {
 		return 0
 	}
 	if ctx.VSRContextTextBytes > 0 {
@@ -158,7 +174,7 @@ func tokenCalibrationByteLen(ctx *RequestContext) int {
 	if ctx.RequestQuery != "" {
 		return len(ctx.RequestQuery)
 	}
-	return len(ctx.OriginalRequestBody)
+	return ctx.IngressBodyBytes
 }
 
 func tokenCalibrationCategory(ctx *RequestContext) string {
@@ -176,7 +192,7 @@ func (r *OpenAIRouter) recordResponseCost(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) routerreplay.UsageCost {
-	totalTokens := usage.promptTokens + usage.completionTokens
+	totalTokens := responseUsageTotal(usage)
 	replayUsage := r.buildReplayUsageCost(ctx, usage)
 	eventFields := map[string]interface{}{
 		"request_id":            ctx.RequestID,
@@ -192,6 +208,11 @@ func (r *OpenAIRouter) recordResponseCost(
 	if r.Config != nil {
 		pricing, ok := r.Config.GetFullModelPricing(ctx.RequestModel)
 		if ok {
+			if !responseUsageHasPricableBreakdown(usage) {
+				eventFields["pricing"] = "usage_breakdown_unavailable"
+				logging.LogEvent("llm_usage", eventFields)
+				return replayUsage
+			}
 			costAmount := costForResponseUsage(usage, pricing)
 			currency := pricing.Currency
 			metrics.RecordModelCost(ctx.RequestModel, currency, costAmount)
@@ -211,155 +232,6 @@ func (r *OpenAIRouter) recordResponseCost(
 	eventFields["pricing"] = "not_configured"
 	logging.LogEvent("llm_usage", eventFields)
 	return replayUsage
-}
-
-// =====================================================================
-// STREAMING
-// =====================================================================
-
-func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
-	usage := openai.CompletionUsage{
-		PromptTokens:     0,
-		CompletionTokens: 0,
-		TotalTokens:      0,
-	}
-	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
-	if !ok {
-		return usage
-	}
-
-	if promptTokens, ok := usageMap["prompt_tokens"].(float64); ok {
-		usage.PromptTokens = int64(promptTokens)
-	}
-	if completionTokens, ok := usageMap["completion_tokens"].(float64); ok {
-		usage.CompletionTokens = int64(completionTokens)
-	}
-	if totalTokens, ok := usageMap["total_tokens"].(float64); ok {
-		usage.TotalTokens = int64(totalTokens)
-	}
-	return usage
-}
-
-func streamingPromptTokenDetails(ctx *RequestContext, promptTokens int) (cached int, cachedReported bool, cacheWrite int, cacheWriteReported bool) {
-	if ctx == nil || ctx.StreamingMetadata == nil {
-		return 0, false, 0, false
-	}
-	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
-	if !ok {
-		return 0, false, 0, false
-	}
-	for _, key := range []string{"prompt_tokens_details", "input_tokens_details"} {
-		details, ok := usageMap[key].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if !cachedReported {
-			if value, ok := details["cached_tokens"].(float64); ok {
-				cached = int(value)
-				cachedReported = true
-			}
-		}
-		if !cacheWriteReported {
-			if value, ok := details["cache_write_tokens"].(float64); ok {
-				cacheWrite = int(value)
-				cacheWriteReported = true
-			}
-		}
-	}
-	normalized := normalizeResponseUsage(responseUsageMetrics{
-		promptTokens:       promptTokens,
-		cachedPromptTokens: cached,
-		cacheWriteTokens:   cacheWrite,
-	})
-	return normalized.cachedPromptTokens, cachedReported, normalized.cacheWriteTokens, cacheWriteReported
-}
-
-func recordSessionTurnFromStreamingUsage(
-	ctx *RequestContext,
-	usage openai.CompletionUsage,
-	cachedPromptTokens int,
-	cachedPromptTokensReported bool,
-	cacheWriteTokens int,
-	cacheWriteTokensReported bool,
-	pricing sessiontelemetry.TurnPricing,
-) {
-	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
-		return
-	}
-	recordSessionTurn(ctx, responseUsageMetrics{
-		promptTokens:               int(usage.PromptTokens),
-		cachedPromptTokens:         cachedPromptTokens,
-		cachedPromptTokensReported: cachedPromptTokensReported,
-		cacheWriteTokens:           cacheWriteTokens,
-		cacheWriteTokensReported:   cacheWriteTokensReported,
-		completionTokens:           int(usage.CompletionTokens),
-	}, pricing)
-}
-
-func (r *OpenAIRouter) reportStreamingUsageMetrics(
-	ctx *RequestContext,
-	usage openai.CompletionUsage,
-) {
-	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && (usage.PromptTokens > 0 || usage.CompletionTokens > 0) {
-		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
-			InputTokens:  int(usage.PromptTokens),
-			OutputTokens: int(usage.CompletionTokens),
-			TotalTokens:  int(usage.TotalTokens),
-		})
-	}
-
-	cachedPromptTokens, cachedPromptTokensReported, cacheWriteTokens, cacheWriteTokensReported := streamingPromptTokenDetails(ctx, int(usage.PromptTokens))
-	responseUsage := responseUsageMetrics{
-		promptTokens:               int(usage.PromptTokens),
-		cachedPromptTokens:         cachedPromptTokens,
-		cachedPromptTokensReported: cachedPromptTokensReported,
-		cacheWriteTokens:           cacheWriteTokens,
-		cacheWriteTokensReported:   cacheWriteTokensReported,
-		completionTokens:           int(usage.CompletionTokens),
-	}
-	recordSessionTurnFromStreamingUsage(
-		ctx,
-		usage,
-		cachedPromptTokens,
-		cachedPromptTokensReported,
-		cacheWriteTokens,
-		cacheWriteTokensReported,
-		r.sessionTurnPricing(ctx.RequestModel),
-	)
-
-	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
-		return
-	}
-
-	metrics.RecordModelTokensDetailed(
-		ctx.RequestModel,
-		float64(usage.PromptTokens),
-		float64(usage.CompletionTokens),
-	)
-	logging.ComponentDebugEvent("extproc", "streaming_token_metrics_recorded", map[string]interface{}{
-		"model":             ctx.RequestModel,
-		"prompt_tokens":     usage.PromptTokens,
-		"completion_tokens": usage.CompletionTokens,
-	})
-
-	if usage.CompletionTokens > 0 && !ctx.StartTime.IsZero() {
-		completionLatency := time.Since(ctx.StartTime).Seconds()
-		timePerToken := completionLatency / float64(usage.CompletionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
-		logging.ComponentDebugEvent("extproc", "streaming_tpot_recorded", map[string]interface{}{
-			"model": ctx.RequestModel,
-			"tpot":  timePerToken,
-		})
-		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
-	}
-
-	completionLatency := time.Duration(0)
-	if !ctx.StartTime.IsZero() {
-		completionLatency = time.Since(ctx.StartTime)
-	}
-	replayUsage := r.recordResponseCost(ctx, completionLatency, responseUsage)
-	r.updateRouterReplayUsageCost(ctx, replayUsage)
-	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, responseUsage, replayUsage)
 }
 
 func clampCachedPromptTokensInt(promptTokens, cachedPromptTokens int) int {

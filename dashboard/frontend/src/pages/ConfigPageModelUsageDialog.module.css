@@ -1,0 +1,220 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(3, 3, 4, 0.56);
+  backdrop-filter: blur(16px);
+}
+
+.dialog {
+  width: min(var(--product-dialog-content-width), 100%);
+  max-height: min(780px, calc(100dvh - 3rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background: var(--product-dialog-surface);
+  box-shadow: var(--product-dialog-shadow);
+  backdrop-filter: blur(28px) saturate(140%);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.5rem 1.1rem;
+}
+
+.header span,
+.endpoint span {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.64rem;
+  font-weight: 740;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0.32rem 0 0;
+  color: #f7f7f8;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  letter-spacing: -0.025em;
+}
+
+.header p {
+  margin: 0.42rem 0 0;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.76rem;
+}
+
+.header > button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.header > button svg,
+.copyButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.endpoint {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 0 1.5rem 1rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.endpoint code {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endpoint small {
+  padding: 0.28rem 0.48rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 1.15rem;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tabs button {
+  position: relative;
+  padding: 0.72rem 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.tabs button[aria-selected='true'] {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.tabs button[aria-selected='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: #f3f3f4;
+  content: '';
+}
+
+.codeShell {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  margin: 1.2rem 1.5rem 1.5rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 11px;
+  background: rgba(6, 7, 9, 0.72);
+}
+
+.codeViewport {
+  max-width: 100%;
+  max-height: min(430px, 50vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.codeViewport pre {
+  width: max-content;
+  min-width: 100%;
+  min-height: 300px;
+  margin: 0;
+  padding: 1.2rem;
+  background: transparent !important;
+}
+
+.codeViewport code {
+  color: rgba(255, 255, 255, 0.74);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  white-space: pre;
+}
+
+.codeViewport :global(.hljs) {
+  background: transparent;
+}
+
+.copyButton {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 32px;
+  padding: 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(17, 18, 21, 0.9);
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.68rem;
+}
+
+.copyError {
+  margin: -0.8rem 1.5rem 1.2rem;
+  color: #fca5a5;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 640px) {
+  .backdrop {
+    padding: 0.4rem;
+  }
+  .dialog {
+    max-height: calc(100dvh - 0.8rem);
+  }
+  .header,
+  .tabs {
+    padding-inline: 1rem;
+  }
+  .endpoint,
+  .codeShell {
+    margin-inline: 1rem;
+  }
+  .endpoint {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .endpoint small {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .codeViewport pre {
+    min-height: 240px;
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "cases": [
+    {
+      "name": "message_legacy_function_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_legacy_function_call"
+        }
+      }
+    },
+    {
+      "name": "file_data",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": [
+                {
+                  "file": {
+                    "file_data": "data:text/plain;base64,aGVsbG8=",
+                    "filename": "brief.txt"
+                  },
+                  "type": "file"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "file_id",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": [
+                {
+                  "file": {
+                    "file_id": "file_1"
+                  },
+                  "type": "file"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "image_detail",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": [
+                {
+                  "image_url": {
+                    "detail": "high",
+                    "url": "https://example.com/image.png"
+                  },
+                  "type": "image_url"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "input_audio",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": [
+                {
+                  "input_audio": {
+                    "data": "UklGRg==",
+                    "format": "wav"
+                  },
+                  "type": "input_audio"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "prompt_cache_breakpoint",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_messages_content_prompt_cache_breakpoint"
+        }
+      }
+    },
+    {
+      "name": "tool_cache_control",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "cache_control": {
+                "ttl": "1h",
+                "type": "ephemeral"
+              },
+              "function": {
+                "description": "Look up a value",
+                "name": "lookup",
+                "parameters": {
+                  "type": "object"
+                },
+                "strict": true
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "custom_tool_call",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_tool_call"
+        }
+      }
+    },
+    {
+      "name": "assistant_refusal",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "refusal": "declined",
+              "role": "assistant"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    }
+  ]
+}

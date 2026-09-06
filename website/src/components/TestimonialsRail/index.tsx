@@ -138,7 +138,7 @@ export default function TestimonialsRail(): JSX.Element {
             <Translate id="homepage.testimonials.label">Industry voices</Translate>
           </SectionLabel>
           <h2 className={styles.title} id="testimonials-heading">
-            <Translate id="homepage.testimonials.title">The shift is already underway.</Translate>
+            <Translate id="homepage.testimonials.title">The shift is already underway</Translate>
           </h2>
         </header>
       </div>

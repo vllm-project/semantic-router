@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [
+      {"role": "tool", "tool_call_id": "missing_call", "content": "orphaned result"}
+    ]
+  }
+}

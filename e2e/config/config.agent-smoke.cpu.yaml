@@ -35,7 +35,7 @@ routing:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:
@@ -51,7 +51,6 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""

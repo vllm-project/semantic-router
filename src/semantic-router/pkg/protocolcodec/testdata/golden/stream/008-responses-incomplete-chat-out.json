@@ -1,0 +1,66 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "incomplete_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "incomplete_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "partial"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "incomplete_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "error": {
+          "code": "stream_incomplete",
+          "message": "upstream stream ended before completion",
+          "param": null,
+          "type": "server_error"
+        }
+      }
+    }
+  ]
+}

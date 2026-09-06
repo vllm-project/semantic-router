@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from './DataTable.module.css'
+import ProductIcon from './ProductIcon'
 import { getPageWindow, paginateRows, updatePageSelection } from './dataTableSupport'
 
 export interface Column<T> {
   key: string
   header: string
   width?: string
+  minWidth?: string
   align?: 'left' | 'center' | 'right'
   render?: (row: T) => React.ReactNode
   sortable?: boolean
@@ -105,7 +107,8 @@ function compareColumnValues(aValue: unknown, bValue: unknown): number {
 
 function renderColumnValue(value: unknown): React.ReactNode {
   if (value === null || typeof value === 'undefined') return ''
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    return value
   if (React.isValidElement(value)) return value
   return String(value)
 }
@@ -131,8 +134,9 @@ export function DataTable<T>({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const pageSizeOptions = useMemo(() => {
     const requested = pagination?.pageSizeOptions ?? [25, 50, 100]
-    return [...new Set(requested.filter((value) => Number.isFinite(value) && value > 0).map(Math.floor))]
-      .sort((left, right) => left - right)
+    return [
+      ...new Set(requested.filter((value) => Number.isFinite(value) && value > 0).map(Math.floor)),
+    ].sort((left, right) => left - right)
   }, [pagination?.pageSizeOptions])
   const [pageSize, setPageSize] = useState(pagination?.pageSize ?? pageSizeOptions[0] ?? 25)
   const [currentPage, setCurrentPage] = useState(1)
@@ -180,14 +184,13 @@ export function DataTable<T>({
   }, [paginationEnabled, paginationResetKey, sortColumn, sortDirection])
 
   const selectablePageKeys = selection
-    ? visibleData
-        .filter((row) => !selection.isRowDisabled?.(row))
-        .map(keyExtractor)
+    ? visibleData.filter((row) => !selection.isRowDisabled?.(row)).map(keyExtractor)
     : []
   const selectedPageCount = selection
     ? selectablePageKeys.filter((key) => selection.selectedKeys.has(key)).length
     : 0
-  const allPageRowsSelected = selectablePageKeys.length > 0 && selectedPageCount === selectablePageKeys.length
+  const allPageRowsSelected =
+    selectablePageKeys.length > 0 && selectedPageCount === selectablePageKeys.length
   const somePageRowsSelected = selectedPageCount > 0 && !allPageRowsSelected
   const auxiliaryColumnCount = (expandable ? 1 : 0) + (selection ? 1 : 0) + (hasActions ? 1 : 0)
 
@@ -195,6 +198,14 @@ export function DataTable<T>({
     <div className={`${styles.tableContainer} ${className}`}>
       <div className={styles.tableViewport}>
         <table className={styles.table}>
+          <colgroup>
+            {selection ? <col className={styles.selectionColumn} /> : null}
+            {expandable ? <col className={styles.expandColumn} /> : null}
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            {hasActions ? <col className={styles.actionsColumn} /> : null}
+          </colgroup>
           <thead className={styles.thead}>
             <tr>
               {selection ? (
@@ -204,9 +215,11 @@ export function DataTable<T>({
                     indeterminate={somePageRowsSelected}
                     disabled={selectablePageKeys.length === 0}
                     label={`Select all ${selection.label ?? 'rows'} on this page`}
-                    onChange={(checked) => selection.onChange(
-                      updatePageSelection(selection.selectedKeys, selectablePageKeys, checked),
-                    )}
+                    onChange={(checked) =>
+                      selection.onChange(
+                        updatePageSelection(selection.selectedKeys, selectablePageKeys, checked),
+                      )
+                    }
                   />
                 </th>
               ) : null}
@@ -217,8 +230,18 @@ export function DataTable<T>({
                   <th
                     key={column.key}
                     className={`${styles.th} ${column.sortable ? styles.sortable : ''}`}
-                    style={{ width: column.width, textAlign: column.align || 'left' }}
-                    aria-sort={activeSort ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
+                    style={{
+                      width: column.width,
+                      minWidth: column.minWidth,
+                      textAlign: column.align || 'left',
+                    }}
+                    aria-sort={
+                      activeSort
+                        ? sortDirection === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : undefined
+                    }
                   >
                     {column.sortable ? (
                       <button
@@ -233,11 +256,15 @@ export function DataTable<T>({
                           </span>
                         ) : null}
                       </button>
-                    ) : column.header}
+                    ) : (
+                      column.header
+                    )}
                   </th>
                 )
               })}
-              {hasActions ? <th className={`${styles.th} ${styles.actionsColumn}`}>Actions</th> : null}
+              {hasActions ? (
+                <th className={`${styles.th} ${styles.actionsColumn}`}>Actions</th>
+              ) : null}
             </tr>
           </thead>
           <tbody className={styles.tbody}>
@@ -247,103 +274,128 @@ export function DataTable<T>({
                   {emptyMessage}
                 </td>
               </tr>
-            ) : visibleData.map((row) => {
-              const key = keyExtractor(row)
-              const expanded = isRowExpanded?.(row) || false
-              const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
+            ) : (
+              visibleData.map((row) => {
+                const key = keyExtractor(row)
+                const expanded = isRowExpanded?.(row) || false
+                const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
 
-              return (
-                <React.Fragment key={key}>
-                  <tr className={`${styles.tr} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}>
-                    {selection ? (
-                      <td className={styles.selectionCell}>
-                        <SelectionCheckbox
-                          checked={selection.selectedKeys.has(key)}
-                          disabled={selectionDisabled}
-                          label={`Select ${selection.label ?? 'row'} ${key}`}
-                          onChange={(checked) => selection.onChange(
-                            updatePageSelection(selection.selectedKeys, [key], checked),
-                          )}
-                        />
-                      </td>
-                    ) : null}
-                    {expandable ? (
-                      <td className={styles.expandCell}>
-                        <button
-                          type="button"
-                          className={styles.expandButton}
-                          onClick={() => onToggleExpand?.(row)}
-                          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${key}`}
-                          aria-expanded={expanded}
+                return (
+                  <React.Fragment key={key}>
+                    <tr
+                      className={`${styles.tr} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+                    >
+                      {selection ? (
+                        <td className={styles.selectionCell}>
+                          <SelectionCheckbox
+                            checked={selection.selectedKeys.has(key)}
+                            disabled={selectionDisabled}
+                            label={`Select ${selection.label ?? 'row'} ${key}`}
+                            onChange={(checked) =>
+                              selection.onChange(
+                                updatePageSelection(selection.selectedKeys, [key], checked),
+                              )
+                            }
+                          />
+                        </td>
+                      ) : null}
+                      {expandable ? (
+                        <td className={styles.expandCell}>
+                          <button
+                            type="button"
+                            className={styles.expandButton}
+                            onClick={() => onToggleExpand?.(row)}
+                            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${key}`}
+                            aria-expanded={expanded}
+                          >
+                            <span
+                              className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`}
+                              aria-hidden="true"
+                            >
+                              <ProductIcon name="chevron-right" />
+                            </span>
+                          </button>
+                        </td>
+                      ) : null}
+                      {columns.map((column) => (
+                        <td
+                          key={column.key}
+                          className={styles.td}
+                          style={{
+                            width: column.width,
+                            minWidth: column.minWidth,
+                            textAlign: column.align || 'left',
+                          }}
                         >
-                          <span className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`} aria-hidden="true">
-                            ▶
-                          </span>
-                        </button>
-                      </td>
-                    ) : null}
-                    {columns.map((column) => (
-                      <td key={column.key} className={styles.td} style={{ textAlign: column.align || 'left' }}>
-                        {column.render
-                          ? column.render(row)
-                          : renderColumnValue(getColumnValue(row, column.key))}
-                      </td>
-                    ))}
-                    {hasActions ? (
-                      <td className={`${styles.td} ${styles.actionsCell}`}>
-                        <div className={styles.actionButtons}>
-                          {onView ? (
-                            <button
-                              type="button"
-                              className={`${styles.actionButton} ${styles.viewButton}`}
-                              onClick={() => onView(row)}
-                              aria-label={`View ${key}`}
-                            >
-                              View
-                            </button>
-                          ) : null}
-                          {effectiveOnEdit ? (
-                            <button
-                              type="button"
-                              className={`${styles.actionButton} ${styles.editButton}`}
-                              onClick={() => effectiveOnEdit(row)}
-                              aria-label={`Edit ${key}`}
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {effectiveOnDelete ? (
-                            <button
-                              type="button"
-                              className={`${styles.actionButton} ${styles.deleteButton}`}
-                              onClick={() => effectiveOnDelete(row)}
-                              aria-label={`Delete ${key}`}
-                            >
-                              Delete
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                  {expandable && expanded && renderExpandedRow ? (
-                    <tr className={styles.expandedRow}>
-                      <td colSpan={columns.length + auxiliaryColumnCount}>
-                        {renderExpandedRow(row)}
-                      </td>
+                          {column.render
+                            ? column.render(row)
+                            : renderColumnValue(getColumnValue(row, column.key))}
+                        </td>
+                      ))}
+                      {hasActions ? (
+                        <td className={`${styles.td} ${styles.actionsCell}`}>
+                          <div className={styles.actionButtons}>
+                            {onView ? (
+                              <button
+                                type="button"
+                                className={`${styles.actionButton} ${styles.viewButton}`}
+                                onClick={() => onView(row)}
+                                aria-label={`View ${key}`}
+                              >
+                                <ProductIcon name="eye" />
+                                View
+                              </button>
+                            ) : null}
+                            {effectiveOnEdit ? (
+                              <button
+                                type="button"
+                                className={`${styles.actionButton} ${styles.editButton}`}
+                                onClick={() => effectiveOnEdit(row)}
+                                aria-label={`Edit ${key}`}
+                              >
+                                <ProductIcon name="edit" />
+                                Edit
+                              </button>
+                            ) : null}
+                            {effectiveOnDelete ? (
+                              <button
+                                type="button"
+                                className={`${styles.actionButton} ${styles.deleteButton}`}
+                                onClick={() => effectiveOnDelete(row)}
+                                aria-label={`Delete ${key}`}
+                              >
+                                <ProductIcon name="trash" />
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
-                  ) : null}
-                </React.Fragment>
-              )
-            })}
+                    {expandable && expanded && renderExpandedRow ? (
+                      <tr className={styles.expandedRow}>
+                        <td colSpan={columns.length + auxiliaryColumnCount}>
+                          {renderExpandedRow(row)}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </React.Fragment>
+                )
+              })
+            )}
           </tbody>
         </table>
       </div>
 
       {pagination && sortedData.length > 0 ? (
-        <div className={styles.pagination} aria-label="Table pagination">
+        <div
+          className={styles.pagination}
+          role="group"
+          aria-label={`${pagination.itemLabel ?? 'items'} pagination`}
+        >
           <span className={styles.paginationSummary}>
-            {pageWindow.start + 1}–{pageWindow.end} of {sortedData.length} {pagination.itemLabel ?? 'items'}
+            {pageWindow.start + 1}–{pageWindow.end} of {sortedData.length}{' '}
+            {pagination.itemLabel ?? 'items'}
           </span>
           <label className={styles.pageSizeControl}>
             Rows
@@ -354,15 +406,49 @@ export function DataTable<T>({
                 setCurrentPage(1)
               }}
             >
-              {pageSizeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+              {pageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </label>
           <div className={styles.paginationControls}>
-            <button type="button" onClick={() => setCurrentPage(1)} disabled={pageWindow.page === 1} aria-label="First page">«</button>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={pageWindow.page === 1} aria-label="Previous page">‹</button>
-            <span>Page {pageWindow.page} of {pageWindow.totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage((page) => Math.min(pageWindow.totalPages, page + 1))} disabled={pageWindow.page === pageWindow.totalPages} aria-label="Next page">›</button>
-            <button type="button" onClick={() => setCurrentPage(pageWindow.totalPages)} disabled={pageWindow.page === pageWindow.totalPages} aria-label="Last page">»</button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              disabled={pageWindow.page === 1}
+              aria-label="First page"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={pageWindow.page === 1}
+              aria-label="Previous page"
+            >
+              ‹
+            </button>
+            <span>
+              Page {pageWindow.page} of {pageWindow.totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(pageWindow.totalPages, page + 1))}
+              disabled={pageWindow.page === pageWindow.totalPages}
+              aria-label="Next page"
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(pageWindow.totalPages)}
+              disabled={pageWindow.page === pageWindow.totalPages}
+              aria-label="Last page"
+            >
+              »
+            </button>
           </div>
         </div>
       ) : null}

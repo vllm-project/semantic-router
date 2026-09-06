@@ -1,0 +1,57 @@
+name: Set up Kind for Kubernetes tests
+description: Reclaim runner space, install the pinned Kind release, and pre-pull its node image.
+
+inputs:
+  show-usage:
+    description: Print disk usage before and after cleanup.
+    required: false
+    default: "false"
+  relocate-docker:
+    description: Move Docker's data root and temporary files to /mnt.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Reclaim disk space
+      uses: ./.github/actions/free-disk-space
+      with:
+        show-usage: ${{ inputs.show-usage }}
+        relocate-docker: ${{ inputs.relocate-docker }}
+
+    - name: Install Kind
+      shell: bash
+      env:
+        KIND_VERSION: v0.31.0
+      run: |
+        ARCH="$(uname -m)"
+        case "$ARCH" in
+          x86_64) KIND_ARCH="amd64" ;;
+          aarch64) KIND_ARCH="arm64" ;;
+          *) echo "unsupported arch: $ARCH" && exit 1 ;;
+        esac
+        curl --retry 5 --retry-delay 5 --retry-all-errors \
+          -Lo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${KIND_ARCH}"
+        chmod +x ./kind
+        sudo mv ./kind /usr/local/bin/kind
+
+    - name: Pre-pull Kind node image
+      shell: bash
+      env:
+        KIND_NODE_IMAGE: kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040
+      run: |
+        echo "KIND_NODE_IMAGE=${KIND_NODE_IMAGE}" >> "$GITHUB_ENV"
+        echo "Pre-pulling ${KIND_NODE_IMAGE} with retries..."
+        for attempt in 1 2 3 4 5; do
+          if docker pull "${KIND_NODE_IMAGE}"; then
+            echo "Successfully pulled ${KIND_NODE_IMAGE}"
+            break
+          fi
+          if [ "$attempt" -eq 5 ]; then
+            echo "ERROR: Failed to pull ${KIND_NODE_IMAGE} after 5 attempts"
+            exit 1
+          fi
+          echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+          sleep $((attempt * 15))
+        done

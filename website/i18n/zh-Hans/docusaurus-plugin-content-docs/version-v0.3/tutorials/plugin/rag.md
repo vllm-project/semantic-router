@@ -11,7 +11,7 @@ translation:
 
 `rag` 是路由局部插件：检索增强生成。
 
-对应 `config/plugin/rag/milvus.yaml`。
+对应 `config/fragments/plugin/rag/milvus.yaml`。
 
 ## 主要优势
 

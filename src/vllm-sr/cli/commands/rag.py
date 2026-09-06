@@ -17,9 +17,8 @@ from urllib.parse import urljoin
 import requests
 
 from cli.consts import DEFAULT_API_PORT
-from cli.utils import get_logger
-
-log = get_logger(__name__)
+from cli.terminal import echo, fields, heading
+from cli.url_display import redact_url
 
 VECTOR_STORES_PATH = "/v1/vector_stores"
 _HTTP_FORBIDDEN = 403
@@ -58,21 +57,23 @@ def rag_list_command(endpoint: str | None = None, timeout: int = 15) -> None:
         timeout: HTTP request timeout in seconds.
     """
     url = _normalize_endpoint(endpoint or "")
+    display_url = redact_url(url)
 
     try:
         resp = requests.get(url, timeout=timeout)
     except requests.ConnectionError as exc:
         raise ValueError(
-            f"Router is not running at {url}. Start the router with "
+            f"Router is not running at {display_url}. Start the router with "
             "'vllm-sr serve' and retry."
         ) from exc
     except requests.Timeout as exc:
         raise ValueError(
-            f"Request to {url} timed out after {timeout}s. Is the router healthy?"
+            f"Request to {display_url} timed out after {timeout}s. "
+            "Is the router healthy?"
         ) from exc
     except requests.RequestException as exc:
         raise ValueError(
-            f"Failed to call router vector stores endpoint {url}: {exc}"
+            f"Failed to call router vector stores endpoint {display_url}"
         ) from exc
 
     if resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE:
@@ -81,7 +82,7 @@ def rag_list_command(endpoint: str | None = None, timeout: int = 15) -> None:
             "store backend in your config to use RAG ingestion and retrieval."
         )
     if resp.status_code != requests.codes.ok:
-        raise ValueError(_format_error_response(resp, url))
+        raise ValueError(_format_error_response(resp, display_url))
 
     try:
         data = resp.json()
@@ -92,11 +93,9 @@ def rag_list_command(endpoint: str | None = None, timeout: int = 15) -> None:
     if not isinstance(stores, list):
         stores = []
 
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router - Vector Stores")
-    log.info("=" * 60)
-    log.info(f"Endpoint: {url}")
-    log.info("")
+    heading(f"Vector stores ({len(stores)})")
+    fields((("Endpoint", display_url),))
+    echo()
     _print_vector_stores(stores)
 
 
@@ -125,25 +124,26 @@ def _format_error_response(resp: Any, url: str) -> str:
 
 
 def _print_vector_stores(stores: list) -> None:
-    log.info(f"Vector stores ({len(stores)}):")
     if not stores:
-        log.info("  (none created)")
+        echo("No vector stores have been created.")
         return
 
-    for store in stores:
+    for index, store in enumerate(stores):
         if not isinstance(store, dict):
             continue
+        if index:
+            echo()
         name = str(store.get("name") or "(unnamed)")
         store_id = str(store.get("id") or "-")
-        log.info(f"  - {name}  ({store_id})")
-
+        heading(name)
+        details: list[tuple[str, object]] = [("ID", store_id)]
         status = store.get("status")
         if status:
-            log.info(f"      status:       {status}")
+            details.append(("Status", status))
 
         backend = store.get("backend_type")
         if backend:
-            log.info(f"      backend:      {backend}")
+            details.append(("Backend", backend))
 
         counts = store.get("file_counts")
         if isinstance(counts, dict):
@@ -151,7 +151,11 @@ def _print_vector_stores(stores: list) -> None:
             completed = counts.get("completed", 0)
             in_progress = counts.get("in_progress", 0)
             failed = counts.get("failed", 0)
-            log.info(
-                f"      files:        {total} total "
-                f"({completed} completed, {in_progress} in progress, {failed} failed)"
+            details.append(
+                (
+                    "Files",
+                    f"{total} total ({completed} completed, "
+                    f"{in_progress} in progress, {failed} failed)",
+                )
             )
+        fields(details)

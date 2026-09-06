@@ -1,0 +1,9 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "messages": [{"role": "user", "content": "hello"}],
+    "max_tokens": 64,
+    "max_completion_tokens": 128
+  }
+}

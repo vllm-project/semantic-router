@@ -42,7 +42,7 @@ spec:
       use_cpu: true
 
     # Semantic cache with Redis backend
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: redis
       similarity_threshold: "0.85"

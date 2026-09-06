@@ -163,7 +163,7 @@ func TestRegistry_AllSelectors_HaveTier(t *testing.T) {
 
 func TestSelect_PopulatesTier(t *testing.T) {
 	factory := NewFactory(DefaultModelSelectionConfig())
-	GlobalRegistry = factory.CreateAll()
+	SetGlobalRegistry(factory.CreateAll())
 
 	candidates := createCandidateModels("model-a", "model-b")
 	selCtx := &SelectionContext{
