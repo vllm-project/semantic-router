@@ -124,7 +124,7 @@ curl -i http://localhost:8080/api/v1/config \
 | Method | Path | Use |
 | --- | --- | --- |
 | `GET` | `/api/v1/config` | Read the active canonical configuration |
-| `POST` | `/api/v1/config/validate` | Validate and normalize without writing |
+| `POST` | `/api/v1/config/validate` | Validate and normalize without writing; returns v1 diagnostics and an optional redacted diff |
 | `POST` | `/api/v1/config/plan` | Plan the exact candidate and return the current/candidate ETags without writing |
 | `PATCH` | `/api/v1/config` | Merge, validate, persist, and hot-reload an update |
 | `PUT` | `/api/v1/config` | Replace, validate, persist, and hot-reload the document |

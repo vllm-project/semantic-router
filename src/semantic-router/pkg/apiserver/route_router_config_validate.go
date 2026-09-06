@@ -3,23 +3,33 @@
 package apiserver
 
 import (
-	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// RouterConfigValidateRequest is the JSON body for POST /api/v1/config/validate.
+type RouterConfigValidateRequest struct {
+	YAML            string `json:"yaml"`
+	CompareToActive bool   `json:"compare_to_active,omitempty"`
+}
+
 type RouterConfigValidateResponse struct {
-	Valid          bool   `json:"valid"`
-	NormalizedYAML string `json:"normalized_yaml"`
+	Valid           bool                `json:"valid"`
+	ContractVersion string              `json:"contract_version"`
+	NormalizedYAML  string              `json:"normalized_yaml"`
+	Errors          []config.Diagnostic `json:"errors"`
+	Warnings        []config.Diagnostic `json:"warnings"`
+	Diff            *config.ConfigDiff  `json:"diff,omitempty"`
 }
 
 func (s *ClassificationAPIServer) handleConfigValidate(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	var req RouterConfigUpdateRequest
+	var req RouterConfigValidateRequest
 	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
@@ -28,56 +38,42 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "YAML content is required")
 		return
 	}
-	doc, err := decodeYAMLDocument([]byte(req.YAML))
-	if err != nil {
-		s.writeErrorResponse(
-			w,
-			http.StatusBadRequest,
-			"YAML_PARSE_ERROR",
-			scrubSecretsInErrorMessage(err.Error()),
-		)
-		return
+
+	opts := config.EvaluateOptions{CompareToActive: req.CompareToActive}
+	if req.CompareToActive {
+		opts.ActiveYAML = s.activeConfigSnapshotYAML()
 	}
-	normalized, err := normalizeRouterConfigDocumentWithoutEnv(doc)
-	if err != nil {
-		s.writeErrorResponse(
-			w,
-			http.StatusUnprocessableEntity,
-			"CONFIG_VALIDATION_ERROR",
-			scrubSecretsInErrorMessage(err.Error()),
-		)
-		return
-	}
-	normalized, err = redactNormalizedConfigYAML(normalized)
-	if err != nil {
-		s.writeErrorResponse(
-			w,
-			http.StatusInternalServerError,
-			"REDACTION_ERROR",
-			err.Error(),
-		)
-		return
-	}
+	result := config.Evaluate([]byte(req.YAML), opts)
 	s.writeJSONResponse(w, http.StatusOK, RouterConfigValidateResponse{
-		Valid:          true,
-		NormalizedYAML: string(normalized),
+		Valid:           result.Valid,
+		ContractVersion: result.ContractVersion,
+		NormalizedYAML:  result.NormalizedYAML,
+		Errors:          scrubValidateDiagnostics(result.Errors),
+		Warnings:        scrubValidateDiagnostics(result.Warnings),
+		Diff:            result.Diff,
 	})
 }
 
-func redactNormalizedConfigYAML(
-	normalized []byte,
-) ([]byte, error) {
-	var value interface{}
-	if err := yaml.Unmarshal(normalized, &value); err != nil {
-		return nil, fmt.Errorf("failed to decode normalized config: %w", err)
+func (s *ClassificationAPIServer) activeConfigSnapshotYAML() []byte {
+	if s == nil || s.configPath == "" {
+		return nil
 	}
-	// Validation accepts caller-controlled api_key_env names. Never return
-	// resolved process credentials, even to principals that can view the active
-	// config's secrets.
-	redacted := redactSensitiveConfigValue(value)
-	result, err := yaml.Marshal(redacted)
+	paths := resolveConfigPersistencePaths(s.configPath)
+	data, err := os.ReadFile(paths.sourcePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode redacted config: %w", err)
+		return nil
 	}
-	return result, nil
+	return data
+}
+
+func scrubValidateDiagnostics(diagnostics []config.Diagnostic) []config.Diagnostic {
+	if diagnostics == nil {
+		return []config.Diagnostic{}
+	}
+	out := make([]config.Diagnostic, len(diagnostics))
+	for i, diagnostic := range diagnostics {
+		diagnostic.Message = scrubSecretsInErrorMessage(diagnostic.Message)
+		out[i] = diagnostic
+	}
+	return out
 }

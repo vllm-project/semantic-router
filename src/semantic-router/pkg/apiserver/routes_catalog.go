@@ -355,10 +355,10 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleConfigGet,
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config without writing it"},
+			EndpointMetadata{Path: apiConfigValidatePath, Method: "POST", Description: "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigValidate,
-			strictJSONBodyFor[RouterConfigUpdateRequest](),
+			strictJSONBodyFor[RouterConfigValidateRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiConfigPlanPath, Method: "POST", Description: "Plan an exact merge or replace mutation, including hot-reload compatibility, without writing it"},

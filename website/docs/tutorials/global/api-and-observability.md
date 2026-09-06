@@ -39,14 +39,20 @@ it:
 POST /api/v1/config/validate
 Content-Type: application/json
 
-{"yaml":"version: v0.3\n..."}
+{"yaml":"version: v0.3\n...","compare_to_active":true}
 ```
 
-Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
-and `PUT /api/v1/config`, but preserves `${ENV_VAR}` references verbatim rather
-than reading process secrets. The endpoint requires `config.read`; plaintext
-secret viewing is not implied.
+Successful and invalid candidate evaluations both return HTTP 200 with
+`contract_version: v1`. Existing fields `valid` and `normalized_yaml` keep their
+meaning. The response also includes field-addressable `errors` and `warnings`
+(`code`, `severity`, `resource`, `recipe`, `stage`, `field`, `message`). Set
+`compare_to_active: true` to include a bounded, schema-aware, redacted
+active-versus-candidate `diff`. Secrets are always `[REDACTED]`; `${ENV_VAR}`
+references and `*_env` names stay visible. Validation uses the same parser and
+semantic checks as `PATCH /api/v1/config` and `PUT /api/v1/config`. The path
+does not write desired config, the active snapshot, runtime state, persistence,
+or version history. The endpoint requires `config.read`; plaintext secret
+viewing is not implied.
 
 ### API
 
