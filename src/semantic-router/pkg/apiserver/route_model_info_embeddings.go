@@ -19,7 +19,11 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 	var models []ModelInfo
 
 	for _, adapter := range native.Registry.List() {
-		info, err := adapter.Info()
+		discoverer, ok := adapter.(native.BackendDiscoverer)
+		if !ok {
+			continue
+		}
+		info, err := discoverer.Info()
 		if err != nil {
 			logging.Warnf(context.Background(), "Failed to discover models for backend %s: %v", adapter.Name(), err)
 			continue
@@ -46,7 +50,7 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 			}
 
 			isMatryoshka := "false"
-			if model.Features["matryoshka_2d"] {
+			if model.Features != nil && model.Features["matryoshka_2d"] {
 				isMatryoshka = "true"
 			}
 
