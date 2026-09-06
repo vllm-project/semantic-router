@@ -46,7 +46,7 @@ const collapsibleHeaders: ReadonlyArray<{
     name: 'global settings safety section',
     source: './builderPageGlobalSettingsSafetySection.tsx',
     className: 'styles.gsSectionHeader',
-    expandedState: "!collapsedSections['safety']",
+    expandedState: 'expanded',
   },
   {
     name: 'topology decision node rules',

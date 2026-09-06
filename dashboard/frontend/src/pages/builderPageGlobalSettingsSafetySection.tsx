@@ -15,6 +15,37 @@ interface GlobalSettingsSafetySectionProps {
   onSetDeepField: (p1: string, p2: string, p3: string, value: DSLFieldValue) => void
 }
 
+interface SafetySectionHeaderProps {
+  expanded: boolean
+  bodyId: string
+  onToggle: () => void
+}
+
+/** Toggle for the Safety section. Extracted to keep the section body on its own seam. */
+const SafetySectionHeader: React.FC<SafetySectionHeaderProps> = ({ expanded, bodyId, onToggle }) => (
+  <button
+    type="button"
+    className={styles.gsSectionHeader}
+    onClick={onToggle}
+    aria-expanded={expanded}
+    aria-controls={bodyId}
+  >
+    <svg
+      className={styles.gsSectionChevron}
+      data-open={expanded}
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <path d="M3 2l4 3-4 3" />
+    </svg>
+    <span className={styles.gsSectionTitle}>Safety</span>
+  </button>
+)
+
 const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = ({
   local,
   collapsedSections,
@@ -29,27 +60,11 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
 
   return (
     <div className={styles.gsSection}>
-      <button
-        type="button"
-        className={styles.gsSectionHeader}
-        onClick={() => onToggleSection('safety')}
-        aria-expanded={!collapsedSections['safety']}
-        aria-controls={bodyId}
-      >
-        <svg
-          className={styles.gsSectionChevron}
-          data-open={!collapsedSections['safety']}
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path d="M3 2l4 3-4 3" />
-        </svg>
-        <span className={styles.gsSectionTitle}>Safety</span>
-      </button>
+      <SafetySectionHeader
+        expanded={!collapsedSections['safety']}
+        bodyId={bodyId}
+        onToggle={() => onToggleSection('safety')}
+      />
       {!collapsedSections['safety'] && (
         <div id={bodyId} className={styles.gsSectionBody}>
           <div className={styles.gsSubSection}>

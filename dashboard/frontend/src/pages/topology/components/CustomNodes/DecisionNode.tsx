@@ -21,6 +21,98 @@ interface DecisionNodeData {
   onFocusDecision?: (decisionName: string) => void
 }
 
+interface RulesHeaderProps {
+  rulesCollapsed: boolean
+  hasRuleDetail: boolean
+  conditionsId: string
+  label: string
+  count: string
+  onToggle?: () => void
+}
+
+/** Toggle for a decision node rules list. Extracted to keep the node body on its own seam. */
+const RulesHeader: React.FC<RulesHeaderProps> = ({
+  rulesCollapsed,
+  hasRuleDetail,
+  conditionsId,
+  label,
+  count,
+  onToggle,
+}) => (
+  <button
+    type="button"
+    className={styles.rulesHeader}
+    onClick={onToggle}
+    aria-expanded={hasRuleDetail ? !rulesCollapsed : undefined}
+    aria-controls={hasRuleDetail ? conditionsId : undefined}
+  >
+    <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
+    <span className={styles.rulesOperator}>{label}</span>
+    <span className={styles.rulesCount}>
+      {count}
+    </span>
+  </button>
+)
+
+interface RulesConditionListProps {
+  conditionsId: string
+  previewConditions: ReadonlyArray<{
+    key: string
+    title: string
+    lines: ReturnType<typeof buildRulePreviewLines>
+  }>
+  totalConditions: number
+}
+
+/** Rendered rule preview for a decision node. Extracted to keep the node body readable. */
+const RulesConditionList: React.FC<RulesConditionListProps> = ({
+  conditionsId,
+  previewConditions,
+  totalConditions,
+}) => (
+  <div id={conditionsId} className={styles.conditionsList}>
+    {previewConditions.map((condition) => {
+      return (
+        <div key={condition.key} className={styles.conditionTree} title={condition.title}>
+          {condition.lines.map((line) => {
+            const rowClassName =
+              line.kind === 'operator'
+                ? styles.conditionOperatorRow
+                : line.kind === 'more'
+                  ? styles.conditionMoreRow
+                  : styles.conditionLeafRow
+
+            return (
+              <div
+                key={line.key}
+                className={`${styles.conditionRow} ${rowClassName}`}
+                style={{ paddingInlineStart: `${Math.min(line.depth, 2) * 10}px` }}
+              >
+                <span
+                  className={
+                    line.kind === 'operator'
+                      ? styles.conditionOperatorBadge
+                      : styles.conditionText
+                  }
+                >
+                  {line.text}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )
+    })}
+    {totalConditions > 4 && (
+      <div className={styles.conditionTree}>
+        <div className={`${styles.conditionRow} ${styles.conditionMoreRow}`}>
+          <span className={styles.conditionText}>+{totalConditions - 4} more</span>
+        </div>
+      </div>
+    )}
+  </div>
+)
+
 export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
   const {
     decision,
@@ -100,62 +192,21 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
 
       {/* Rules Section */}
       <div className={styles.rulesSection}>
-        <button
-          type="button"
-          className={styles.rulesHeader}
-          onClick={onToggleRulesCollapse}
-          aria-expanded={hasRuleDetail ? !rulesCollapsed : undefined}
-          aria-controls={hasRuleDetail ? conditionsId : undefined}
-        >
-          <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
-          <span className={styles.rulesOperator}>{isFallback ? 'FALLBACK' : rules.operator}</span>
-          <span className={styles.rulesCount}>
-            {isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
-          </span>
-        </button>
+        <RulesHeader
+          rulesCollapsed={rulesCollapsed}
+          hasRuleDetail={hasRuleDetail}
+          conditionsId={conditionsId}
+          label={isFallback ? 'FALLBACK' : rules.operator}
+          count={isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
+          onToggle={onToggleRulesCollapse}
+        />
 
         {!rulesCollapsed && hasRuleDetail && (
-          <div id={conditionsId} className={styles.conditionsList}>
-            {previewConditions.map((condition) => {
-              return (
-                <div key={condition.key} className={styles.conditionTree} title={condition.title}>
-                  {condition.lines.map((line) => {
-                    const rowClassName =
-                      line.kind === 'operator'
-                        ? styles.conditionOperatorRow
-                        : line.kind === 'more'
-                          ? styles.conditionMoreRow
-                          : styles.conditionLeafRow
-
-                    return (
-                      <div
-                        key={line.key}
-                        className={`${styles.conditionRow} ${rowClassName}`}
-                        style={{ paddingInlineStart: `${Math.min(line.depth, 2) * 10}px` }}
-                      >
-                        <span
-                          className={
-                            line.kind === 'operator'
-                              ? styles.conditionOperatorBadge
-                              : styles.conditionText
-                          }
-                        >
-                          {line.text}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )
-            })}
-            {rules.conditions.length > 4 && (
-              <div className={styles.conditionTree}>
-                <div className={`${styles.conditionRow} ${styles.conditionMoreRow}`}>
-                  <span className={styles.conditionText}>+{rules.conditions.length - 4} more</span>
-                </div>
-              </div>
-            )}
-          </div>
+          <RulesConditionList
+            conditionsId={conditionsId}
+            previewConditions={previewConditions}
+            totalConditions={rules.conditions.length}
+          />
         )}
       </div>
 
