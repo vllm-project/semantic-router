@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useId, useMemo } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
 
 import type { ToolCall, ToolResult } from '../tools'
@@ -26,6 +26,8 @@ export function WebSearchCard({
     query = (match && match[1]) || 'Searching...'
   }
 
+  const resultsId = useId()
+
   const results = useMemo(() => {
     if (!toolResult?.content) return undefined
     if (Array.isArray(toolResult.content)) {
@@ -36,7 +38,13 @@ export function WebSearchCard({
 
   return (
     <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.webSearchHeader}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-controls={resultsId}
+      >
         <div className={styles.webSearchIcon}>
           {toolCall.status === 'running' ? (
             <ThinkingOrb state="working" size={20} theme="dark" />
@@ -70,10 +78,10 @@ export function WebSearchCard({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
 
       {isExpanded && toolCall.status === 'completed' && results && results.length > 0 && (
-        <div className={styles.webSearchResults}>
+        <div id={resultsId} className={styles.webSearchResults}>
           <div className={styles.sourcePills}>
             {results.map((result, idx) => (
               <a
@@ -149,6 +157,8 @@ export function OpenWebCard({
     }
   }, [url])
 
+  const detailsId = useId()
+
   const resultData = useMemo(() => {
     if (!toolResult?.content) return null
     if (typeof toolResult.content === 'object' && toolResult.content !== null) {
@@ -164,7 +174,13 @@ export function OpenWebCard({
 
   return (
     <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.webSearchHeader}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-controls={detailsId}
+      >
         <div className={styles.webSearchIcon}>
           {toolCall.status === 'running' ? (
             <ThinkingOrb state="working" size={20} theme="dark" />
@@ -206,10 +222,10 @@ export function OpenWebCard({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
 
       {isExpanded && toolCall.status === 'completed' && resultData && (
-        <div className={styles.webSearchResults}>
+        <div id={detailsId} className={styles.webSearchResults}>
           <div className={styles.sourceDetails}>
             <div className={styles.sourceItem}>
               <div className={styles.sourceItemHeader}>

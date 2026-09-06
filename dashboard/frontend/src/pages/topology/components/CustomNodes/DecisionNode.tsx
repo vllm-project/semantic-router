@@ -1,6 +1,6 @@
 // CustomNodes/DecisionNode.tsx - Decision node with collapsible rules
 
-import { memo } from 'react'
+import { memo, useId } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { DecisionConfig } from '../../types'
 import { NODE_COLORS } from '../../constants'
@@ -40,6 +40,8 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
   const hasReasoning = modelRefs.some((m) => m.use_reasoning)
   const hasPlugins = plugins && plugins.length > 0
   const hasAlgorithm = algorithm && algorithm.type !== 'static'
+  const conditionsId = useId()
+
   const previewConditions = rules.conditions.slice(0, 4).map((condition, index) => ({
     key: `condition-${index}`,
     title: summarizeRuleNode(condition),
@@ -48,6 +50,8 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       maxLines: 3,
     }),
   }))
+
+  const hasRuleDetail = previewConditions.length > 0
 
   // Use warning colors for unreachable decisions
   const colors = isUnreachable
@@ -96,16 +100,22 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
 
       {/* Rules Section */}
       <div className={styles.rulesSection}>
-        <div className={styles.rulesHeader} onClick={onToggleRulesCollapse}>
+        <button
+          type="button"
+          className={styles.rulesHeader}
+          onClick={onToggleRulesCollapse}
+          aria-expanded={hasRuleDetail ? !rulesCollapsed : undefined}
+          aria-controls={hasRuleDetail ? conditionsId : undefined}
+        >
           <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
           <span className={styles.rulesOperator}>{isFallback ? 'FALLBACK' : rules.operator}</span>
           <span className={styles.rulesCount}>
             {isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
           </span>
-        </div>
+        </button>
 
-        {!rulesCollapsed && previewConditions.length > 0 && (
-          <div className={styles.conditionsList}>
+        {!rulesCollapsed && hasRuleDetail && (
+          <div id={conditionsId} className={styles.conditionsList}>
             {previewConditions.map((condition) => {
               return (
                 <div key={condition.key} className={styles.conditionTree} title={condition.title}>

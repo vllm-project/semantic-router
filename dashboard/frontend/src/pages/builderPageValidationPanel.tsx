@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 import type { Diagnostic } from "@/types/dsl";
 
@@ -23,13 +23,21 @@ const BuilderValidationPanel: React.FC<BuilderValidationPanelProps> = ({
   onToggle,
   onApplyFix,
 }) => {
+  const bodyId = useId();
+
   if (diagnostics.length === 0) {
     return null;
   }
 
   return (
     <div className={styles.validationPanel}>
-      <div className={styles.validationHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.validationHeader}
+        onClick={onToggle}
+        aria-expanded={validationOpen}
+        aria-controls={bodyId}
+      >
         <span className={styles.validationTitle}>
           <svg
             width="14"
@@ -78,9 +86,9 @@ const BuilderValidationPanel: React.FC<BuilderValidationPanelProps> = ({
             strokeLinejoin="round"
           />
         </svg>
-      </div>
+      </button>
       {validationOpen && (
-        <div className={styles.validationBody}>
+        <div id={bodyId} className={styles.validationBody}>
           {errorDiags.length > 0 && (
             <div className={styles.valGroup}>
               <div className={styles.valGroupTitle}>

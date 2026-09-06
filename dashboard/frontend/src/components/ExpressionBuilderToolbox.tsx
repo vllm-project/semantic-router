@@ -1,3 +1,5 @@
+import { useId } from 'react'
+
 import styles from './ExpressionBuilder.module.css'
 import { DRAG_MIME, encodeDrag, type SignalDescriptor } from './ExpressionBuilderSupport'
 import { OPERATOR_META, OPERATOR_ORDER } from './ExpressionBuilderNodes'
@@ -25,15 +27,23 @@ export default function ExpressionBuilderToolbox({
   onToggleCollapsed,
   onToggleGroup,
 }: ExpressionBuilderToolboxProps) {
+  const contentId = useId()
+
   return (
     <div className={`${styles.toolbox} ${toolboxCollapsed ? styles.toolboxCollapsed : ''}`}>
-      <div className={styles.toolboxHeader} onClick={onToggleCollapsed}>
+      <button
+        type="button"
+        className={styles.toolboxHeader}
+        onClick={onToggleCollapsed}
+        aria-expanded={!toolboxCollapsed}
+        aria-controls={contentId}
+      >
         <span className={styles.toolboxHeaderTitle}>{toolboxCollapsed ? '▶' : '▼'} Toolbox</span>
         <span className={styles.toolboxHeaderCount}>{signalCount} signals</span>
-      </div>
+      </button>
 
       {!toolboxCollapsed ? (
-        <div className={styles.toolboxContent}>
+        <div id={contentId} className={styles.toolboxContent}>
           <div className={styles.toolboxOperators}>
             {OPERATOR_ORDER.map(operator => {
               const meta = OPERATOR_META[operator]

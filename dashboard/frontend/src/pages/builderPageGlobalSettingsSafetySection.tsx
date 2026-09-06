@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useId } from 'react'
 
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 import styles from './BuilderPage.module.css'
@@ -25,9 +25,17 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
   onSetNestedField,
   onSetDeepField,
 }) => {
+  const bodyId = useId()
+
   return (
     <div className={styles.gsSection}>
-      <div className={styles.gsSectionHeader} onClick={() => onToggleSection('safety')}>
+      <button
+        type="button"
+        className={styles.gsSectionHeader}
+        onClick={() => onToggleSection('safety')}
+        aria-expanded={!collapsedSections['safety']}
+        aria-controls={bodyId}
+      >
         <svg
           className={styles.gsSectionChevron}
           data-open={!collapsedSections['safety']}
@@ -41,9 +49,9 @@ const GlobalSettingsSafetySection: React.FC<GlobalSettingsSafetySectionProps> = 
           <path d="M3 2l4 3-4 3" />
         </svg>
         <span className={styles.gsSectionTitle}>Safety</span>
-      </div>
+      </button>
       {!collapsedSections['safety'] && (
-        <div className={styles.gsSectionBody}>
+        <div id={bodyId} className={styles.gsSectionBody}>
           <div className={styles.gsSubSection}>
             <div className={styles.gsSubHeader}>
               <label className={styles.gsCheckbox}>
