@@ -84,6 +84,7 @@ def _artifact(root: Path, role: SuiteArtifactRole) -> SuiteArtifactInstall:
 def _request(root: Path) -> BenchmarkSuiteInstallRequest:
     descriptor = get_benchmark_adapter("routerarena")
     receipt = BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=descriptor.id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,

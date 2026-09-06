@@ -115,6 +115,7 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
+- **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
@@ -142,6 +143,7 @@ until the selected cases are known to be isolated.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
+- **response-jailbreak**: manual response_jailbreak coverage for LLM output carrying jailbreak content past the classifier's sequence window.
 
 ### Coverage Ownership Matrix
 

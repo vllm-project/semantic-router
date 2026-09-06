@@ -6,13 +6,14 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.execution_contract import EvaluationInputs
 from cli.evaluation.method_contract_v2 import (
-    R2_COMPOUND_MODEL_BUDGET_PLUGIN,
-    EvaluationMethodPlugin,
+    R2_COMPOUND_MODEL_BUDGET_METHOD,
+    EvaluationMethodDefinition,
 )
-from cli.evaluation.method_registry_v2 import method_plugin_for_benchmark
+from cli.evaluation.method_registry_v2 import method_for_benchmark
 from cli.evaluation.normalized_suite_behavior_records import (
     agentic_records,
     multimodal_records,
@@ -37,7 +38,6 @@ from cli.evaluation.normalized_suite_routing_records import (
 )
 from cli.evaluation.suite_contract import BenchmarkSuiteManifest
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 TrackRecordBuilder = Callable[[SelectedCase, SuiteEvidence], list[ExecutionRecord]]
 
@@ -46,7 +46,7 @@ TrackRecordBuilder = Callable[[SelectedCase, SuiteEvidence], list[ExecutionRecor
 class NormalizedMethodRecordBuilder:
     """Bind one exact v2 method contract to one normalized record reducer."""
 
-    method: EvaluationMethodPlugin
+    method: EvaluationMethodDefinition
     track_id: str
     build_records: TrackRecordBuilder
 
@@ -66,7 +66,7 @@ TRACK_RECORD_BUILDERS: Mapping[str, TrackRecordBuilder] = MappingProxyType(
 
 METHOD_RECORD_BUILDERS = (
     NormalizedMethodRecordBuilder(
-        method=R2_COMPOUND_MODEL_BUDGET_PLUGIN,
+        method=R2_COMPOUND_MODEL_BUDGET_METHOD,
         track_id="model_pool",
         build_records=r2_compound_model_budget_records,
     ),
@@ -104,7 +104,7 @@ def _method_record_builder(
         or not qualification.parser_verified
     ):
         return None
-    method = method_plugin_for_benchmark(manifest.adapter_id)
+    method = method_for_benchmark(manifest.adapter_id)
     matches = tuple(
         contract.build_records
         for contract in METHOD_RECORD_BUILDERS

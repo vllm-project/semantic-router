@@ -8,4 +8,5 @@ tree-sitter==0.25.2
 tree-sitter-go==0.25.0
 tree-sitter-python==0.25.0
 tree-sitter-rust==0.24.0
+tree-sitter-typescript==0.23.2
 yamllint==1.38.0

@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from cli.evaluation.artifact_store_error import StoreError
+from cli.evaluation.errors import StoreError
 from cli.evaluation.private_filesystem_descriptor import (
     read_descriptor,
     same_inode,
@@ -15,8 +15,8 @@ from cli.evaluation.private_filesystem_mutation import (
 )
 
 
-class PrivateFilesystemPublicationPrimitives(PrivateFilesystemMutationPrimitives):
-    """Publish immutable files after verifying source and destination identity."""
+class DurablePrivateFilesystem(PrivateFilesystemMutationPrimitives):
+    """Own descriptor-anchored storage and verified immutable publication."""
 
     @classmethod
     def _read_optional_file_at(

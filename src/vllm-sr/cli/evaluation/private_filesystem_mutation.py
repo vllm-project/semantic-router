@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from cli.evaluation.artifact_store_error import StoreError
+from cli.evaluation.errors import StoreError
 from cli.evaluation.private_filesystem_descriptor import (
     DIRECTORY_OPEN_FLAGS,
     PRIVATE_DIRECTORY_MODE,

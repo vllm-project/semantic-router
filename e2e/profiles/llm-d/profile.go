@@ -27,7 +27,7 @@ const (
 	gatewayNamespace  = "istio-system"
 	istioVersion      = "1.28.0"
 	gatewayCRDURL     = "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
-	inferenceCRDURL   = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.1.0/manifests.yaml"
+	inferenceCRDURL   = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.5.0/manifests.yaml"
 )
 
 type Profile struct {

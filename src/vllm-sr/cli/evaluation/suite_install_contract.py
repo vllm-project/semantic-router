@@ -192,6 +192,16 @@ class BenchmarkSuiteInstallRequest(StrictModel):
     def coherent_bundle(self) -> BenchmarkSuiteInstallRequest:
         if self.source_receipt.adapter_id != self.adapter_id:
             raise ValueError("source receipt belongs to a different adapter")
+        if (
+            self.source_receipt.source_kind == "benchmark_pack"
+            and self.normalization_origin != "user_provided_import"
+        ):
+            raise ValueError("benchmark packs cannot claim registered normalization")
+        if (
+            self.normalization_origin == "registered_parser_import"
+            and self.source_receipt.source_kind != "registered_adapter"
+        ):
+            raise ValueError("registered normalization requires a registered adapter")
         if len(self.track_ids) != len(set(self.track_ids)):
             raise ValueError("track ids must be unique")
         canonical_tracks = tuple(

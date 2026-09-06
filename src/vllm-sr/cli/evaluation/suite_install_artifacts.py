@@ -8,13 +8,13 @@ from pathlib import Path
 from cli.evaluation.case_plan import applicable_track_ids
 from cli.evaluation.contract_primitives import ArtifactRef, StrictModel
 from cli.evaluation.contracts import CaseVisible
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.suite_contract import SuiteArtifactSet
 from cli.evaluation.suite_install_contract import (
     BenchmarkSuiteInstallRequest,
     SuiteArtifactRole,
 )
 from cli.evaluation.suite_store_cas import SuiteCAS
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.suite_store_records import (
     SuiteRecordReader,
     validate_artifact_descriptor,

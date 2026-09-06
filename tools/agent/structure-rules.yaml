@@ -51,7 +51,8 @@ languages:
       - nlp-binding/src/**/*.rs
       - onnx-binding/src/**/*.rs
   typescript:
-    parser: none
+    parser: typescript
+    ratchet_existing_violations: true
     globs:
       - dashboard/frontend/src/**/*.ts
       - dashboard/frontend/src/**/*.tsx
@@ -290,3 +291,76 @@ dependency_rules:
       - dashboard/backend/**/*.go
     forbidden_literals:
       - dashboard/frontend/src/
+  - name: evaluation-backend-must-not-depend-on-http-handlers
+    policy: no-new
+    applies_to:
+      - dashboard/backend/evaluationplane/*.go
+      - dashboard/backend/evaluationplane/**/*.go
+    forbidden_literals:
+      - github.com/vllm-project/semantic-router/dashboard/backend/handlers
+
+architecture:
+  dependency_graphs:
+    - name: evaluation-python
+      language: python
+      root: src/vllm-sr/cli
+      module_root: src/vllm-sr
+      include:
+        - src/vllm-sr/cli/*.py
+        - src/vllm-sr/cli/**/*.py
+      focus:
+        - src/vllm-sr/cli/evaluation/*.py
+        - src/vllm-sr/cli/evaluation/**/*.py
+      test_patterns:
+        - '**/test_*.py'
+        - '**/*_test.py'
+      cycle_policy: no-new
+      forbidden_edges:
+        - name: evaluation-python-must-not-depend-on-command-entrypoints
+          policy: no-new
+          from:
+            - src/vllm-sr/cli/evaluation/*.py
+            - src/vllm-sr/cli/evaluation/**/*.py
+          to:
+            - src/vllm-sr/cli/commands/*.py
+            - src/vllm-sr/cli/commands/**/*.py
+    - name: evaluation-frontend
+      language: typescript
+      root: dashboard/frontend/src
+      include:
+        - dashboard/frontend/src/*.ts
+        - dashboard/frontend/src/*.tsx
+        - dashboard/frontend/src/**/*.ts
+        - dashboard/frontend/src/**/*.tsx
+      focus:
+        - dashboard/frontend/src/components/evaluation-plane/*.ts
+        - dashboard/frontend/src/components/evaluation-plane/*.tsx
+        - dashboard/frontend/src/components/evaluation-plane/**/*.ts
+        - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
+      test_patterns:
+        - '**/*.test.ts'
+        - '**/*.test.tsx'
+      aliases:
+        '@/': dashboard/frontend/src/
+      cycle_policy: no-new
+      forbidden_edges:
+        - name: evaluation-frontend-must-not-depend-on-page-routing
+          policy: no-new
+          from:
+            - dashboard/frontend/src/components/evaluation-plane/*.ts
+            - dashboard/frontend/src/components/evaluation-plane/*.tsx
+            - dashboard/frontend/src/components/evaluation-plane/**/*.ts
+            - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
+          to:
+            - dashboard/frontend/src/pages/*.ts
+            - dashboard/frontend/src/pages/*.tsx
+            - dashboard/frontend/src/pages/**/*.ts
+            - dashboard/frontend/src/pages/**/*.tsx
+  health_scopes:
+    - name: evaluation-go
+      root: dashboard/backend/evaluationplane
+      include:
+        - dashboard/backend/evaluationplane/*.go
+        - dashboard/backend/evaluationplane/**/*.go
+      test_patterns:
+        - '**/*_test.go'

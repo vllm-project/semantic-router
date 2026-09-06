@@ -14,6 +14,7 @@ import (
 const (
 	normalizedSuiteSchemaVersion      = "evaluation-suite.v1"
 	adapterContractVersion            = "benchmark-adapter.v1"
+	benchmarkSourceContractVersion    = "benchmark-source.v1"
 	suiteQualificationContractVersion = "evaluation-suite-qualification.v2"
 	normalizedSuiteExecutorID         = "normalized-suite-replay.v1"
 	normalizedSuiteLiveExecutorID     = "normalized-suite-live.v1"
@@ -219,18 +220,14 @@ func validateInstalledSuiteManifest(root string, data []byte, index suiteIndexRe
 }
 
 func installedCatalogMethods(root string, manifest suiteManifestProjection) ([]CatalogMethod, error) {
-	plugin, known := InstalledMethodPlugin(manifest.AdapterID)
-	if !known {
-		return nil, fmt.Errorf("%w: benchmark %q has no v2 method declaration", ErrInvalid, manifest.AdapterID)
-	}
 	methods := make([]CatalogMethod, 0, len(manifest.TrackIDs)+2)
 	for _, trackID := range manifest.TrackIDs {
 		methods = append(methods, CatalogMethod{
-			ID: plugin.ID + "." + string(trackID), TrackID: trackID,
+			ID: "normalized." + manifest.AdapterID + "." + string(trackID) + ".v1", TrackID: trackID,
 			QualifiedGateIDs: []string{}, EvidenceSource: CatalogMethodEvidenceSourceNormalizedImport, Status: "configured",
 		})
 	}
-	liveMethods, err := installedFirstPartyNormalizedLiveMethods(root, manifest)
+	liveMethods, err := installedNormalizedLiveMethods(root, manifest)
 	if err != nil {
 		return nil, err
 	}

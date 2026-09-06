@@ -749,11 +749,10 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
             ):
                 explainer["model_ref"] = "hallucination_explainer"
             hallucination.setdefault("explainer", explainer)
-        for nested_key in ("enabled", "on_hallucination_detected"):
-            if nested_key in hallucination_value:
-                hallucination.setdefault(
-                    nested_key, deepcopy(hallucination_value[nested_key])
-                )
+        if "enabled" in hallucination_value:
+            hallucination.setdefault(
+                "enabled", deepcopy(hallucination_value["enabled"])
+            )
         global_config.pop(key, None)
         return
     if key == "feedback_detector":

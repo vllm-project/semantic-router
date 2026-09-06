@@ -15,10 +15,14 @@ reproducible reports and fail-closed promotion decisions.
 - Deterministic fixture replay, exact-pinned normalized benchmark replay,
   normalized live execution, and bounded runtime probes.
 - Thirteen benchmark research descriptors, eleven executable safe-export
-  normalizers, and two diagnostic-only source entries with explicit blockers;
+  normalization definitions, and two diagnostic-only source entries with explicit blockers;
   one canonical thirteen-item research inventory keeps these descriptors
   separate from additional installed adapters and publishes an honest
   readiness/native-parity boundary for every benchmark.
+- One declarative third-party Benchmark Pack contract that installs normalized
+  data from an exact clean Git revision without loading or executing pack code,
+  reuses the existing replay/live executors, and admits live tracks only when
+  their hidden-label and media contracts are complete.
 - Per-track evidence levels, weakest-track run level, G0-G9 gate dispositions,
   strict unavailable semantics, paired statistics, and architecture feedback.
 - A server-owned Promotion Campaign whose change-profile catalog declares one
@@ -40,9 +44,9 @@ reproducible reports and fail-closed promotion decisions.
   Plane consumes one authenticated, sealed assignment/exposure ledger through
   its registered online-evidence provider and fails closed when that evidence
   is absent.
-- Executing arbitrary upstream benchmark code or claiming native leaderboard
-  parity from normalized imports. Maintained first-party adapters and live
-  executors are the only executable benchmark boundary.
+- Executing arbitrary upstream or Benchmark Pack code, or claiming native
+  leaderboard parity from normalized imports. Maintained platform executors
+  remain the only executable benchmark boundary.
 - Treating the Dashboard worker as a general-purpose, multi-tenant sandbox for
   untrusted code. It executes only registered first-party Evaluation
   executors; public reports remain typed and server-owned.
@@ -84,6 +88,11 @@ reproducible reports and fail-closed promotion decisions.
   source pins and parser re-derivation authenticate the parser and submitted
   bytes, not an upstream native benchmark run; imports cannot publish a
   qualified method or promotion gate.
+- Third-party Benchmark Packs require a tracked `benchmark.yaml` and closed
+  normalized `bundle/` at one clean Git commit. They need no static source-code
+  registration and cannot contribute executable hooks. Complete supported
+  tracks can run against the frozen Mixture through the same broker, hidden
+  grading, attestation, and server reduction used by built-in workloads.
 - G4 is published only by the registered `declared-shift.server-live.v1`
   method: the server binds an exact source revision, immutable parser-verified
   CAS inputs, complete native source/target pairs, broker receipts, execution
@@ -149,15 +158,18 @@ reproducible reports and fail-closed promotion decisions.
   behavior.
 - [ ] `TASK-10` Publish final reproducibility receipts, refresh the Evaluation
   Atlas, complete review, and keep required CI green.
+- [ ] `TASK-11` Replace misleading static `Plugin` terminology with definition
+  catalogs, remove mechanical facade/error modules, and ship the declarative
+  Benchmark Pack install plus supported live execution contract.
 
 ## Next Action
 
-Finish the integrated source review, mirror that exact state to a dynamically
-discovered AMD validation host, and run the selected gates there before
-creating the fresh evidence root. Execute the representative live and replay
-matrix, retain its reports, and exercise lifecycle recovery during restart and
-multi-principal validation. Do not represent data-dependent production gates
-as completed evidence.
+Validate the two follow-up changes independently: architecture boundary
+ratchets in their own PR, then the Evaluation definition/catalog cleanup and
+Benchmark Pack flow in a focused feature PR. Mirror each exact revision to a
+dynamically discovered AMD host, run its selected gates, and retain a
+representative pack replay/live report before marking the work complete. Do not
+represent data-dependent production gates as completed evidence.
 
 ## Operating Rules
 
@@ -177,8 +189,10 @@ as completed evidence.
   host inventory.
 - Run the smallest selected gate first, repair it, and expand only after it is
   green.
-- Admit new capabilities only through versioned normalizer, executor, target,
-  load, online-evidence, or reducer registries with exact tests.
+- Admit new execution capabilities only through versioned normalization,
+  executor, target, load, online-evidence, or reducer contracts with exact
+  tests. Admit normalized third-party datasets through the non-executable
+  Benchmark Pack contract.
 - Resolve execution from the manifest-frozen executor identity and target
   capability contract; never infer an executor from a suite class or a live
   track from a built-in target ID. Server-owned ledger features exist only when

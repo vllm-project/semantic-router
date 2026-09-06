@@ -19,11 +19,6 @@ type ModalityDetectorConfig struct {
 	// Enabled activates the modality detector. When false, modality signals are not evaluated.
 	Enabled bool `yaml:"enabled" json:"enabled"`
 
-	// PromptPrefixes are prefix strings stripped from the user prompt before
-	// sending it to the generation backend (e.g. "generate an image of ", "draw ").
-	// Matched case-insensitively; the first match is stripped. Optional.
-	PromptPrefixes []string `yaml:"prompt_prefixes,omitempty" json:"prompt_prefixes,omitempty"`
-
 	// Detection configuration (inlined from ModalityDetectionConfig)
 	ModalityDetectionConfig `yaml:",inline"`
 }

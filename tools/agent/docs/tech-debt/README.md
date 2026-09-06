@@ -61,6 +61,7 @@ Every entry uses these sections:
 - [TD045: Reviewed content moderation](td-045-reviewed-content-moderation.md)
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
 - [TD047: Response-cache polarity guard surface mirrors](td-047-response-cache-polarity-guard-surface-mirrors.md)
+- [TD057: Backend-target producer parity](td-057-backend-target-producer-parity-gap.md)
 
 ### PL-0039: Evaluation Plane
 

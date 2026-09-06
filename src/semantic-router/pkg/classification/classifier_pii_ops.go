@@ -2,6 +2,7 @@ package classification
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -73,34 +74,9 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 		return []PIIDetection{}, nil
 	}
 
-	// Use PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
+	detections, err := c.scanPIIChunks(text, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("PII token classification error: %w", err)
-	}
-
-	if len(tokenResult.Entities) > 0 {
-		logging.Infof("PII token classification found %d entities", len(tokenResult.Entities))
-	}
-
-	// Convert token entities to PII detections, filtering by threshold
-	// Translate class_X format to named types using PII mapping
-	var detections []PIIDetection
-	for _, entity := range tokenResult.Entities {
-		if entity.Confidence >= threshold {
-			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
-			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
-			detection := PIIDetection{
-				EntityType: translatedType,
-				Start:      entity.Start,
-				End:        entity.End,
-				Text:       entity.Text,
-				Confidence: entity.Confidence,
-			}
-			detections = append(detections, detection)
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
-		}
+		return nil, err
 	}
 
 	if len(detections) > 0 {
@@ -117,6 +93,81 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 	}
 
 	return detections, nil
+}
+
+// scanPIIChunks runs PII token classification over the whole text.
+//
+// The classifier truncates at MAX_CLASSIFICATION_SEQ_LEN, so one call over a
+// long text only ever scores its start. The PII routing signal already scans in
+// bounded overlapping chunks (evaluatePIISignal); this does the same, and maps
+// every entity back onto the original text because this surface reports
+// positions and the routing signal does not.
+func (c *Classifier) scanPIIChunks(text string, threshold float32) ([]PIIDetection, error) {
+	var detections []PIIDetection
+	seen := make(map[piiDetectionKey]int)
+	classified := 0
+
+	for _, span := range piiSignalChunkSpans(text) {
+		tokenResult, err := c.piiInference.ClassifyTokens(span.Text)
+		if err != nil {
+			return nil, fmt.Errorf("PII token classification error: %w", err)
+		}
+
+		classified += len(tokenResult.Entities)
+
+		for _, entity := range tokenResult.Entities {
+			if entity.Confidence < threshold {
+				continue
+			}
+
+			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
+			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+			detection := PIIDetection{
+				EntityType: translatedType,
+				Start:      span.StartByte + entity.Start,
+				End:        span.StartByte + entity.End,
+				Text:       entity.Text,
+				Confidence: entity.Confidence,
+			}
+
+			// Chunks overlap, so an entity inside the overlap window is reported
+			// by both chunks. Keep one detection at the higher confidence.
+			key := piiDetectionKey{translatedType, detection.Start, detection.End}
+			if existing, reported := seen[key]; reported {
+				if detection.Confidence > detections[existing].Confidence {
+					detections[existing].Confidence = detection.Confidence
+				}
+				continue
+			}
+			seen[key] = len(detections)
+			detections = append(detections, detection)
+
+			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Text, detection.Start, detection.End, entity.Confidence)
+		}
+	}
+
+	if classified > 0 {
+		logging.Infof("PII token classification found %d entities", classified)
+	}
+
+	// A single call returned entities in ascending position; keep that contract
+	// now that they arrive chunk by chunk.
+	sort.SliceStable(detections, func(i, j int) bool {
+		if detections[i].Start != detections[j].Start {
+			return detections[i].Start < detections[j].Start
+		}
+		return detections[i].End < detections[j].End
+	})
+
+	return detections, nil
+}
+
+// piiDetectionKey identifies one entity occurrence in the original text.
+type piiDetectionKey struct {
+	entityType string
+	start      int
+	end        int
 }
 
 // DetectPIIInContent performs PII classification on all provided content

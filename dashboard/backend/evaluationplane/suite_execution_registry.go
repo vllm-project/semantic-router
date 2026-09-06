@@ -23,6 +23,11 @@ func (r *Registry) registerSuite(suite CatalogSuite) error {
 			return fmt.Errorf("invalid evaluation suite registration %q: normalized imports must remain E0", suite.ID)
 		}
 	}
+	for _, trackID := range suite.TrackIDs {
+		if _, known := r.tracks[trackID]; !known {
+			return fmt.Errorf("evaluation suite %q declares unknown track %q", suite.ID, trackID)
+		}
+	}
 	seenModes := make(map[Mode]struct{}, len(suite.Modes))
 	for _, mode := range suite.Modes {
 		executorID, present := suite.Executors[mode]
@@ -30,14 +35,15 @@ func (r *Registry) registerSuite(suite CatalogSuite) error {
 		if _, duplicate := seenModes[mode]; duplicate || !present || !registered || executor.Mode != mode {
 			return fmt.Errorf("evaluation suite %q declares an incompatible executor for mode %q", suite.ID, mode)
 		}
-		for _, trackID := range suite.TrackIDs {
+		modeTrackIDs := suiteExecutableTrackIDs(suite, mode, executorID)
+		if len(modeTrackIDs) == 0 {
+			return fmt.Errorf("evaluation suite %q has no executable tracks for mode %q", suite.ID, mode)
+		}
+		for _, trackID := range modeTrackIDs {
 			if !containsTrack(executor.TrackIDs, trackID) {
 				return fmt.Errorf("evaluation suite %q declares track %q unsupported by executor %q", suite.ID, trackID, executorID)
 			}
-			track, known := r.tracks[trackID]
-			if !known {
-				return fmt.Errorf("evaluation suite %q declares unknown track %q", suite.ID, trackID)
-			}
+			track := r.tracks[trackID]
 			if !containsMode(track.Modes, mode) {
 				track.Modes = canonicalModes(append(track.Modes, mode))
 				r.tracks[trackID] = track
@@ -51,6 +57,20 @@ func (r *Registry) registerSuite(suite CatalogSuite) error {
 	r.suites[suite.ID] = copyCatalogSuite(suite)
 	r.suiteOrder = append(r.suiteOrder, suite.ID)
 	return nil
+}
+
+func suiteExecutableTrackIDs(suite CatalogSuite, mode Mode, executorID string) []TrackID {
+	if mode != ModeLive || executorID != normalizedSuiteLiveExecutorID {
+		return suite.TrackIDs
+	}
+	liveTracks := normalizedSuiteLiveMethodTracks(suite)
+	trackIDs := make([]TrackID, 0, len(liveTracks))
+	for _, trackID := range suite.TrackIDs {
+		if _, admitted := liveTracks[trackID]; admitted {
+			trackIDs = append(trackIDs, trackID)
+		}
+	}
+	return trackIDs
 }
 
 func validateCatalogMethods(suite CatalogSuite) error {

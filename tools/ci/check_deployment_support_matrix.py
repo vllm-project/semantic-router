@@ -38,6 +38,7 @@ ASSET_LABELS = {
     "deploy/kubernetes/llmd-base/": "llm-d",
     "deploy/kubernetes/observability/": "Observability demo",
     "deploy/kubernetes/response-api/": "Responses API Kubernetes demo",
+    "deploy/kubernetes/response-jailbreak/": "Response jailbreak demo",
     "deploy/kubernetes/route-action/": "Route action demo",
     "deploy/kubernetes/router-replay/": "Router replay recovery demo",
     "deploy/kubernetes/routing-strategies/": "Routing strategy demos",

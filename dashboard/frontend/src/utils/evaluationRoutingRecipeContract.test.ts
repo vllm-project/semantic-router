@@ -216,6 +216,24 @@ describe('routing recipe plan contract', () => {
     ).toBe(false)
   })
 
+  it('accepts labeled complexity and classifier signal IDs', () => {
+    for (const id of ['complexity:balance_difficulty:easy', 'classifier:intent:code']) {
+      const labeledPlan = buildEvaluationRoutingRecipePlan(
+        mixtureBase,
+        [{ id, value_kind: 'numeric' }],
+        [],
+      )
+      expect(isEvaluationRoutingRecipePlan(labeledPlan, mixtureBase)).toBe(true)
+    }
+
+    const invalidPlan = buildEvaluationRoutingRecipePlan(
+      mixtureBase,
+      [{ id: 'metadata:source:trusted', value_kind: 'numeric' }],
+      [],
+    )
+    expect(isEvaluationRoutingRecipePlan(invalidPlan, mixtureBase)).toBe(false)
+  })
+
   it('requires the Mixture producer top-k schedule rather than an arbitrary increasing subset', () => {
     const incomplete = { ...plan, top_k: [1] }
     expect(isEvaluationRoutingRecipePlan(incomplete, mixtureBase)).toBe(false)

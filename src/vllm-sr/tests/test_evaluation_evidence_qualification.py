@@ -92,6 +92,20 @@ def test_builtin_live_source_registry_is_exact_and_complete() -> None:
         ),
     }
     assert _registered_contracts(NORMALIZED_LIVE_EVIDENCE_QUALIFICATIONS) == {
+        LIVE_ROUTING_EVIDENCE_SOURCE_ID: (("routing",), "E3", "E3", "record"),
+        LIVE_MODEL_POOL_EVIDENCE_SOURCE_ID: (
+            ("model_pool",),
+            "E4",
+            "E4",
+            "record",
+        ),
+        LIVE_JOINT_EVIDENCE_SOURCE_ID: (("joint",), "E5", "E5", "record"),
+        LIVE_CAPACITY_EVIDENCE_SOURCE_ID: (
+            ("capacity",),
+            "E5",
+            "E5",
+            "record",
+        ),
         NORMALIZED_LIVE_MULTIMODAL_EVIDENCE_SOURCE_ID: (
             ("multimodal",),
             "E4",

@@ -9,16 +9,16 @@ import pytest
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.method_contract_v2 import (
     EVALUATION_METHOD_CONTRACT_VERSION,
-    R2_COMPOUND_MODEL_BUDGET_PLUGIN,
+    R2_COMPOUND_MODEL_BUDGET_METHOD,
     ActionRef,
     CompoundModelBudgetOutcome,
-    EvaluationMethodPlugin,
+    EvaluationMethodDefinition,
     SliceRef,
     reduce_compound_model_budget,
 )
 from cli.evaluation.method_registry_v2 import (
-    METHOD_PLUGINS,
-    method_plugin_for_benchmark,
+    BUILTIN_METHODS,
+    method_for_benchmark,
 )
 from cli.evaluation.metric_compound_model_budget import r2_compound_metrics
 from cli.evaluation.research_benchmark_inventory import RESEARCH_BENCHMARKS
@@ -183,7 +183,7 @@ def _outcomes() -> tuple[CompoundModelBudgetOutcome, ...]:
 def test_r2_compound_model_budget_preserves_action_identity_and_shared_curve() -> None:
     report = reduce_compound_model_budget(_outcomes())
 
-    assert report.method == R2_COMPOUND_MODEL_BUDGET_PLUGIN
+    assert report.method == R2_COMPOUND_MODEL_BUDGET_METHOD
     assert tuple(action.id for action in report.action_refs) == ("large", "small")
     assert [
         (point.action.id, point.budget) for point in report.raw_shared_domain_curve
@@ -239,23 +239,23 @@ def test_r2_execution_records_reduce_without_generic_model_pool_semantics() -> N
 
 
 def test_all_benchmark_methods_have_one_explicit_v2_declaration() -> None:
-    assert len(METHOD_PLUGINS) == 13
+    assert len(BUILTIN_METHODS) == 13
     assert len(RESEARCH_BENCHMARKS) == 13
-    assert method_plugin_for_benchmark("routejudge-orbit").status == "blocked"
-    assert method_plugin_for_benchmark("routereval").status == "blocked"
-    assert sum(plugin.status == "exploratory-import" for plugin in METHOD_PLUGINS) == 8
-    assert sum(plugin.status == "data-required" for plugin in METHOD_PLUGINS) == 3
-    assert all(plugin.evidence_ceiling == "E0" for plugin in METHOD_PLUGINS)
-    assert all(plugin.native_parity != "native" for plugin in METHOD_PLUGINS)
-    assert method_plugin_for_benchmark("r2-router") == R2_COMPOUND_MODEL_BUDGET_PLUGIN
-    assert R2_COMPOUND_MODEL_BUDGET_PLUGIN.applicable_tracks == (
+    assert method_for_benchmark("routejudge-orbit").status == "blocked"
+    assert method_for_benchmark("routereval").status == "blocked"
+    assert sum(method.status == "exploratory-import" for method in BUILTIN_METHODS) == 8
+    assert sum(method.status == "data-required" for method in BUILTIN_METHODS) == 3
+    assert all(method.evidence_ceiling == "E0" for method in BUILTIN_METHODS)
+    assert all(method.native_parity != "native" for method in BUILTIN_METHODS)
+    assert method_for_benchmark("r2-router") == R2_COMPOUND_MODEL_BUDGET_METHOD
+    assert R2_COMPOUND_MODEL_BUDGET_METHOD.applicable_tracks == (
         "routing",
         "model_pool",
         "joint",
         "capacity",
     )
-    assert R2_COMPOUND_MODEL_BUDGET_PLUGIN.live_tracks == ()
-    assert method_plugin_for_benchmark("routerarena").applicable_tracks == (
+    assert R2_COMPOUND_MODEL_BUDGET_METHOD.live_tracks == ()
+    assert method_for_benchmark("routerarena").applicable_tracks == (
         "routing",
         "model_pool",
         "joint",
@@ -291,7 +291,7 @@ def test_method_v2_admission_matches_shared_cross_language_conformance() -> None
             _remove_json_pointer(descriptor, pointer)
         descriptor.update(deepcopy(case["overrides"]))
         try:
-            EvaluationMethodPlugin.model_validate(descriptor)
+            EvaluationMethodDefinition.model_validate(descriptor)
             accepted = True
         except ValidationError:
             accepted = False

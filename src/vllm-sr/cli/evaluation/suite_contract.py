@@ -18,6 +18,7 @@ from cli.evaluation.suite_qualification import (
 )
 
 SUITE_CONTRACT_VERSION = "evaluation-suite.v1"
+BENCHMARK_SOURCE_CONTRACT_VERSION = "benchmark-source.v1"
 
 
 def _subject_field(value: object, name: str) -> Any:
@@ -281,7 +282,10 @@ class SuiteArtifactSet(StrictModel):
 
 
 class BenchmarkSourceReceipt(StrictModel):
-    schema_version: Literal[ADAPTER_CONTRACT_VERSION] = ADAPTER_CONTRACT_VERSION
+    schema_version: Literal[BENCHMARK_SOURCE_CONTRACT_VERSION] = (
+        BENCHMARK_SOURCE_CONTRACT_VERSION
+    )
+    source_kind: Literal["registered_adapter", "benchmark_pack"]
     adapter_id: str
     expected_source_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
     observed_source_revision: str = Field(pattern=r"^[0-9a-f]{40}$")
@@ -294,6 +298,22 @@ class BenchmarkSourceReceipt(StrictModel):
     source_clean: bool
     dataset_clean: bool | None = None
     verified: bool
+
+    @model_validator(mode="after")
+    def verified_source_is_coherent(self) -> BenchmarkSourceReceipt:
+        if self.verified and not self.source_clean:
+            raise ValueError("verified benchmark source must be clean")
+        if self.source_kind != "benchmark_pack":
+            return self
+        if (
+            self.expected_source_revision != self.observed_source_revision
+            or self.expected_dataset_revision is not None
+            or self.observed_dataset_revision is not None
+            or self.dataset_clean is not None
+            or self.verified != self.source_clean
+        ):
+            raise ValueError("benchmark pack source must describe one Git revision")
+        return self
 
 
 class BenchmarkSuiteManifest(StrictModel):
@@ -326,6 +346,11 @@ class BenchmarkSuiteManifest(StrictModel):
             raise ValueError("source receipt belongs to a different adapter")
         if not self.source_receipt.verified:
             raise ValueError("suite source receipt must be verified")
+        if (
+            self.source_receipt.source_kind == "benchmark_pack"
+            and self.qualification_receipt.qualification.parser_verified
+        ):
+            raise ValueError("benchmark packs cannot claim a registered parser")
         if len(self.track_ids) != len(set(self.track_ids)):
             raise ValueError("suite track ids must be unique")
         canonical_tracks = tuple(

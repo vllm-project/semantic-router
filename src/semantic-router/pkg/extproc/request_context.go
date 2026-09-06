@@ -126,6 +126,7 @@ type RequestContext struct {
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper

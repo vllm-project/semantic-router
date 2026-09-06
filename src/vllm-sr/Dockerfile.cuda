@@ -207,7 +207,8 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://deb.debian.org/debian-security|https://security.debian.org/debian-security|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
       build-essential \
       pkg-config \
       libssl-dev && \

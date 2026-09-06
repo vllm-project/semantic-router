@@ -10,7 +10,7 @@ from pathlib import Path
 
 from typing_extensions import Self
 
-from cli.evaluation.artifact_store_error import StoreError
+from cli.evaluation.errors import StoreError
 
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600

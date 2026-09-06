@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.normalized_suite_inputs import (
     SelectedCase,
@@ -12,7 +13,6 @@ from cli.evaluation.normalized_suite_inputs import (
     opaque_arm_id,
 )
 from cli.evaluation.suite_contract import NormalizedDecision, NormalizedOutcome
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 _ModelT = TypeVar("_ModelT")
 

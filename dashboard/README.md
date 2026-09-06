@@ -157,9 +157,11 @@ Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
 embed it in the runtime image. The Dockerfile default is `unavailable`, which
 keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
 release and CI builds must pass an immutable full commit or source-tree digest.
-Repository Make targets derive the full commit only from a clean checkout; a
-dirty checkout resolves to `unavailable` unless the caller explicitly supplies
-a canonical `sha256:` source-tree digest.
+Repository Make targets derive the full commit from a clean checkout and a
+deterministic `sha256:` source-tree digest from tracked or untracked local
+changes. Git-ignored caches and environments are excluded. Callers may still
+override the value with `VLLM_SR_SOURCE_REVISION` when reproducing a separately
+attested source tree.
 
 ## Authentication and write safety
 

@@ -298,6 +298,24 @@ func TestSealedLiveMoMEvidenceQualifiesSelectedAspectsIndependently(t *testing.T
 	}
 }
 
+func TestSealedNormalizedLiveMoMEvidenceUsesTheSameBrokeredProof(t *testing.T) {
+	manifest, records, attestation := sealedLiveMoMEvidenceFixture()
+	for suiteID := range manifest.SuiteExecutors {
+		manifest.SuiteExecutors[suiteID] = normalizedSuiteLiveExecutorID
+	}
+	levels, err := deriveSealedEvidenceLevels(
+		t.TempDir(), manifest, records, suiteGateQualification{},
+		builtinExecutorContractForTest(t, normalizedSuiteLiveExecutorID), nil, &attestation,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if levels.Run != "E3" || levels.ByTrack["routing"] != "E3" ||
+		levels.ByTrack["model_pool"] != "E4" || levels.ByTrack["joint"] != "E5" {
+		t.Fatalf("normalized live Mixture levels=%+v, want E3/E4/E5", levels)
+	}
+}
+
 func TestSealedNormalizedLiveMultimodalEvidenceRequiresCompleteBrokeredCohort(t *testing.T) {
 	manifest, records, attestation := sealedLiveMultimodalEvidenceFixture()
 	derive := func(candidate recordAttestation, execution *executionAttestation) sealedEvidenceLevels {

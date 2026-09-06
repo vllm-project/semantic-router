@@ -24,7 +24,6 @@ MAX_PROVENANCE_BYTES = 64 * 1024
 _SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRIVATE_STATE_DIRECTORY = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PRIVATE_DIRECTORY_MODE = 0o700
-_RECIPE_ASSET_MODE = 0o644
 STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
 PRIVATE_STATE_FILE_MODE = 0o600
 CONTAINER_READABLE_STATE_FILE_MODE = 0o644
@@ -284,22 +283,6 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
             f"Runtime config parent must be an owned directory: {path.parent}"
         )
     _atomic_write_private_bytes(path, data)
-    return path
-
-
-def write_runtime_recipe_asset_bytes(path: Path, data: bytes) -> Path:
-    """Atomically write an embedded Recipe asset inside a private directory.
-
-    The containing runtime-state directories remain owner-only. Files use the
-    read-only asset mode expected by the non-root Dashboard after bind mount.
-    """
-
-    path = path.expanduser().absolute()
-    if path.parent.is_symlink() or not path.parent.is_dir():
-        raise ValueError(
-            f"Runtime Recipe parent must be an owned directory: {path.parent}"
-        )
-    _atomic_write_bytes(path, data, _RECIPE_ASSET_MODE)
     return path
 
 
