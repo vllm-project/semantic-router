@@ -57,7 +57,7 @@ func (a *Adapter) Inference(ctx context.Context, handle native.ModelHandle, req 
 	return nil, errors.New("openvino native adapter inference is not yet wired (Phase 3)")
 }
 
-func (a *Adapter) Info() []native.ModelInfo {
-	return nil
+func (a *Adapter) Info() ([]native.ModelInfo, error) {
+	return nil, nil
 }
 
