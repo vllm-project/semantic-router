@@ -866,7 +866,6 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}, nil
 }
 
-
 func SupportsBatchedEmbedding(modelType string) bool {
 	normalized := strings.TrimSpace(strings.ToLower(modelType))
 	return normalized == "qwen3"

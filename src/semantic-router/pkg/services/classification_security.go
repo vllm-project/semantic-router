@@ -55,6 +55,10 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 		}, nil
 	}
 
+	if !s.classifier.IsJailbreakModelReady() {
+		return nil, ErrModelNotReady
+	}
+
 	isJailbreak, jailbreakType, confidence, riskScore, err := classifier.CheckForJailbreakWithRisk(ctx, req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("security detection failed: %w", err)
