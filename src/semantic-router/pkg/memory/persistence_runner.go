@@ -27,7 +27,8 @@ type PersistenceOutcome struct {
 }
 
 type PersistenceJob struct {
-	Run    func(ctx context.Context) (PersistenceOutcome, error)
+	Run func(ctx context.Context) (PersistenceOutcome, error)
+	// Report must only record local metrics or submit events without waiting for I/O.
 	Report func(status, reason string, failOpen bool, cause error)
 }
 
@@ -99,7 +100,7 @@ func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob)
 	r.mu.Lock()
 	if r.retired {
 		r.mu.Unlock()
-		reportSafely(job, "rejected", "shutting_down", false, nil)
+		reportSafely(job, "rejected", "shutting_down", true, nil)
 		return
 	}
 
@@ -107,13 +108,11 @@ func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob)
 	select {
 	case r.jobs <- queuedJob{traceCtx: traceCtx, job: job, scheduledDone: scheduledDone}:
 		r.mu.Unlock()
-		go func() {
-			defer close(scheduledDone)
-			reportSafely(job, "scheduled", "queue_accepted", false, nil)
-		}()
+		reportSafely(job, "scheduled", "queue_accepted", false, nil)
+		close(scheduledDone)
 	default:
 		r.mu.Unlock()
-		reportSafely(job, "rejected", "queue_full", false, nil)
+		reportSafely(job, "rejected", "queue_full", true, nil)
 	}
 }
 

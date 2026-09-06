@@ -50,6 +50,22 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
         ):
             self.case._wait_for_terminal_receipt({"_replay_id": "request-replay"})
 
+    def test_disabled_receipt_can_arrive_after_response_without_scheduled(self):
+        terminal = outcome("disabled", reason="auto_store_off")
+        terminal["metadata"]["fail_open"] = "false"
+        pending = Mock(status_code=receipts.HTTP_OK)
+        pending.json.return_value = {"id": "request-replay", "outcomes": []}
+        ready = Mock(status_code=receipts.HTTP_OK)
+        ready.json.return_value = {"id": "request-replay", "outcomes": [terminal]}
+        with (
+            patch.object(receipts.requests, "get", side_effect=[pending, ready]),
+            patch.object(receipts.time, "sleep"),
+        ):
+            actual = self.case._wait_for_terminal_receipt(
+                {"_replay_id": "request-replay"}, scheduled=False
+            )
+        self.assertEqual(actual, terminal)
+
     def test_missing_or_duplicate_terminal_receipts_do_not_pass(self):
         with self.assertRaises(AssertionError):
             self.case._wait_for_terminal_receipt({})

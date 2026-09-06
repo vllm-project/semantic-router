@@ -167,6 +167,7 @@ func TestScheduleResponseMemoryStore_AppendsScheduledAndTerminalReplayOutcomes(t
 
 	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("Use a bounded queue and report completion after the store write."))
 	require.NoError(t, runner.RetireAndWait(time.Second))
+	require.NoError(t, recorder.DrainOutcomes())
 
 	record, found := recorder.GetRecord(replayID)
 	require.True(t, found)
