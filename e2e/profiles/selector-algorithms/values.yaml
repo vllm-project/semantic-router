@@ -1,0 +1,73 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: static-first
+    models:
+      - name: static-first
+        backend_refs:
+          - name: selector-mock-vllm
+            endpoint: selector-mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+      - name: static-second
+        backend_refs:
+          - name: selector-mock-vllm
+            endpoint: selector-mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: selector_static
+        description: Deterministic static-selector contract
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: selector_static_marker
+        algorithm:
+          type: static
+        modelRefs:
+          - model: static-first
+            use_reasoning: false
+          - model: static-second
+            use_reasoning: false
+      - name: default_decision
+        description: Catch-all route outside selector contract requests
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: static-first
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: selector_static_marker
+          operator: OR
+          keywords: [selector-static-contract]
+          case_sensitive: true
+    modelCards:
+      - name: static-first
+      - name: static-second
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+
+resources:
+  limits:
+    memory: 2Gi
+    cpu: "2"
+  requests:
+    memory: 512Mi
+    cpu: 250m
+
+persistence:
+  enabled: false

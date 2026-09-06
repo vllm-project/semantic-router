@@ -1,6 +1,16 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"testing"
+)
+
+type selectorCoverageEntry struct {
+	Algorithm string `json:"algorithm"`
+	Tier      string `json:"tier"`
+	Status    string `json:"status"`
+}
 
 func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 	catalog := DecisionAlgorithmCatalog()
@@ -96,5 +106,51 @@ func TestGetAlgorithmTier(t *testing.T) {
 				t.Errorf("GetAlgorithmTier(%q) = %q, want %q", tt.algType, tier, tt.expectedTier)
 			}
 		})
+	}
+}
+
+func TestSelectorAlgorithmCoverageTracksRuntimeCatalog(t *testing.T) {
+	raw, err := os.ReadFile("../../../../e2e/pkg/testcases/testdata/selector_algorithm_coverage.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var coverage []selectorCoverageEntry
+	if err := json.Unmarshal(raw, &coverage); err != nil {
+		t.Fatal(err)
+	}
+
+	byAlgorithm := make(map[string]selectorCoverageEntry, len(coverage))
+	for _, entry := range coverage {
+		if entry.Algorithm == "" {
+			t.Fatal("selector coverage entry has empty algorithm")
+		}
+		if _, exists := byAlgorithm[entry.Algorithm]; exists {
+			t.Errorf("selector coverage has duplicate entry for %q", entry.Algorithm)
+		}
+		byAlgorithm[entry.Algorithm] = entry
+	}
+
+	selectorCount := 0
+	for _, algorithm := range DecisionAlgorithmCatalog() {
+		if algorithm.Execution != AlgorithmExecutionSelector {
+			continue
+		}
+		selectorCount++
+		entry, ok := byAlgorithm[algorithm.Type]
+		if !ok {
+			t.Errorf("selector algorithm %q has no E2E coverage entry", algorithm.Type)
+			continue
+		}
+		if entry.Tier != algorithm.Tier {
+			t.Errorf("selector algorithm %q coverage tier = %q, runtime tier = %q", algorithm.Type, entry.Tier, algorithm.Tier)
+		}
+		delete(byAlgorithm, algorithm.Type)
+	}
+
+	if len(coverage) != selectorCount {
+		t.Errorf("selector coverage has %d entries, runtime catalog has %d selectors", len(coverage), selectorCount)
+	}
+	for algorithm := range byAlgorithm {
+		t.Errorf("selector coverage entry %q is absent from the runtime selector catalog", algorithm)
 	}
 }

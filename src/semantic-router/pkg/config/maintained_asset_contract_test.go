@@ -78,6 +78,7 @@ var maintainedValuesConfigAssets = []string{
 	repoRel("e2e", "profiles", "response-api", "values.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "values-mcp.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "values.yaml"),
+	repoRel("e2e", "profiles", "selector-algorithms", "values.yaml"),
 	repoRel("e2e", "profiles", "streaming", "values.yaml"),
 }
 
