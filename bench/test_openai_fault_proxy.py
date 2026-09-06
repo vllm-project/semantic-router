@@ -9,6 +9,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import ClassVar
 
+import pytest
+
 HTTP_OK = 200
 HTTP_UNAVAILABLE = 503
 DELAY_MS = 100
@@ -318,3 +320,96 @@ def test_fault_proxy_paces_and_shapes_sse_frames():
     assert terminal[-1] == b"data: [DONE]\n\n"
     assert first_frame_seconds >= MIN_DELAY_SECONDS
     assert elapsed >= MIN_DELAY_SECONDS + STREAM_INTERVAL_MS * 5 / 1000
+
+
+@pytest.mark.parametrize("content_frames", [0, STREAM_CONTENT_FRAMES])
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"])
+def test_fault_proxy_forwards_each_event_before_upstream_continues(
+    content_frames, line_ending
+):
+    fault = load_fault_proxy_module()
+    release_frames = [threading.Event(), threading.Event()]
+    frames = [
+        b'data: {"choices":[{"delta":{"content":"one"},"finish_reason":null}]}',
+        b'data: {"choices":[{"delta":{"content":"two"},"finish_reason":null}]}',
+        b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+        b"data: [DONE]",
+    ]
+    frames = [frame + line_ending * 2 for frame in frames]
+
+    class GatedUpstream(UpstreamSSEHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send_response(HTTP_OK)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            for index, frame in enumerate(frames):
+                # Fragment event data across HTTP chunks to exercise framing.
+                for part in (frame[:7], frame[7:]):
+                    self.wfile.write(fault.encode_http_chunk(part))
+                    self.wfile.flush()
+                if index < len(release_frames) and not release_frames[index].wait(
+                    timeout=10
+                ):
+                    self.close_connection = True
+                    return
+            self.wfile.write(fault.HTTP_CHUNKED_BODY_END)
+            self.wfile.flush()
+
+    upstream, upstream_thread = start_server(GatedUpstream)
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        stream_frames=content_frames,
+    )
+    proxy, proxy_thread = start_server(
+        fault.make_handler(f"http://127.0.0.1:{upstream.server_port}", policy)
+    )
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{proxy.server_port}/v1/chat/completions",
+        data=b'{"stream": true}',
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            assert response.headers["Transfer-Encoding"] == "chunked"
+            assert response.headers.get("Content-Length") is None
+            received = []
+            for index, release in enumerate(release_frames):
+                # The upstream cannot send its next event until the client has
+                # received this one. Whole-response buffering deadlocks here.
+                received.append(response.readline() + response.readline())
+                assert received[-1] == frames[index]
+                release.set()
+            body = b"".join(received) + response.read()
+    finally:
+        for release in release_frames:
+            release.set()
+        stop_server(proxy, proxy_thread)
+        stop_server(upstream, upstream_thread)
+
+    expected_content = frames[:2]
+    if content_frames:
+        expected_content = [frames[i % 2] for i in range(content_frames)]
+    assert body == b"".join(expected_content + frames[2:])
+
+
+def test_sse_shaping_truncates_content_but_preserves_terminal_and_usage_events():
+    fault = load_fault_proxy_module()
+    content = b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+    terminal = b'data: {"choices":[{"finish_reason":"stop"}]}\n\n'
+    usage = b'data: {"choices":[],"usage":{"completion_tokens":2}}\n\n'
+    done = b"data: [DONE]\n\n"
+    assert list(
+        fault.shape_sse_frames([content, content, terminal, usage, done], 1)
+    ) == [
+        content,
+        terminal,
+        usage,
+        done,
+    ]

@@ -12,7 +12,9 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from http.client import HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, ClassVar
@@ -172,14 +174,16 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             headers=headers,
             method=self.command,
         )
+        streaming_started = False
         try:
             with urllib.request.urlopen(request, timeout=120) as response:
-                payload = response.read()
                 if is_sse_response(response.headers):
-                    self.send_sse(response.status, dict(response.headers), payload)
+                    streaming_started = True
+                    self.send_sse(response.status, dict(response.headers), response)
                     if shape is not None:
                         self.record_event("forwarded", shape, response.status)
                     return
+                payload = response.read()
                 self.send_response(response.status)
                 self.forward_headers(dict(response.headers), len(payload))
                 self.end_headers()
@@ -200,6 +204,10 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
         except Exception as exc:  # pragma: no cover - network errors vary
             if shape is not None:
                 self.record_event("proxy_error", shape, HTTP_BAD_GATEWAY)
+            if streaming_started:
+                # Headers are committed: close the incomplete chunked response.
+                self.close_connection = True
+                return
             self.send_json(
                 HTTP_BAD_GATEWAY,
                 {"error": {"message": str(exc), "type": "fault_proxy_error"}},
@@ -211,8 +219,12 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
                 self.send_header(name, value)
         self.send_header("Content-Length", str(length))
 
-    def send_sse(self, status: int, headers: dict[str, str], payload: bytes) -> None:
-        frames = shape_sse_frames(payload, self.fault_policy.stream_frames)
+    def send_sse(
+        self, status: int, headers: dict[str, str], response: HTTPResponse
+    ) -> None:
+        frames = shape_sse_frames(
+            iter_sse_frames(response), self.fault_policy.stream_frames
+        )
         self.send_response(status)
         for name, value in headers.items():
             if name.lower() not in HOP_BY_HOP_HEADERS:
@@ -331,19 +343,39 @@ def is_terminal_sse_frame(frame: bytes) -> bool:
     )
 
 
-def shape_sse_frames(payload: bytes, content_frames: int) -> list[bytes]:
-    """Return complete SSE frames, optionally fixing the content-frame count."""
-    frames = split_sse_frames(payload)
-    if content_frames <= 0:
-        return frames
+def iter_sse_frames(response: HTTPResponse) -> Iterator[bytes]:
+    """Read one event at a time without waiting for upstream EOF."""
+    lines: list[bytes] = []
+    for line in response:
+        lines.append(line)
+        if line in (b"\n", b"\r\n"):
+            yield b"".join(lines)
+            lines.clear()
+    if lines:
+        yield b"".join(lines)
 
-    content = [frame for frame in frames if not is_terminal_sse_frame(frame)]
-    terminal = [frame for frame in frames if is_terminal_sse_frame(frame)]
-    if not content or not terminal:
-        return frames
 
-    repeated = list(itertools.islice(itertools.cycle(content), content_frames))
-    return repeated + terminal
+def shape_sse_frames(frames: Iterable[bytes], content_frames: int) -> Iterator[bytes]:
+    """Forward live events, optionally padding/truncating before the terminal event.
+
+    Shaping retains at most the requested number of content events for replay.
+    With shaping disabled, neither the response nor previous events are retained.
+    """
+    content: list[bytes] = []
+    terminal_seen = False
+    for frame in frames:
+        if content_frames <= 0 or terminal_seen:
+            yield frame
+        elif is_terminal_sse_frame(frame):
+            if content:
+                yield from itertools.islice(
+                    itertools.cycle(content), content_frames - len(content)
+                )
+            terminal_seen = True
+            yield frame
+        elif len(content) < content_frames:
+            content.append(frame)
+            yield frame
 
 
 def join_url(upstream_base_url: str, path: str) -> str:
