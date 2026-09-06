@@ -160,7 +160,8 @@ static_resources:
               # The response-side protocol boundary needs the identity of the
               # endpoint Envoy actually selected, including after retries.
               response_attributes:
-              - xds.upstream_host_metadata
+              - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]'
+              - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]'
               # Unlike route/idle timeouts, zero expires immediately here.
               # Bound each Router processing step independently of chat duration.
               message_timeout: 1200s
