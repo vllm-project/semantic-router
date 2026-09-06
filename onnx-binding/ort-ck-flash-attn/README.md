@@ -42,6 +42,24 @@ python3 scripts/rewrite_graph.py \
 Use `--hdim` and `--local-attention` only when they match the source model's
 architecture. Keep the original SDPA model for correctness comparison.
 
+The input decides the output precision, read from its weight tensors. The
+rewriter keeps the weights as it finds them and, for an FP32 graph, adds fp32↔fp16 casts around each
+`CKFlashAttention` node. A rewrite of the FP32 `model.onnx` must therefore be
+named `model_fa.onnx`; `model_fa_fp16.onnx` needs an FP16 input graph. The
+script refuses an fp16 name for an FP32 graph, because `find_onnx_models`
+ranks candidates by name alone. `make ck-rewrite-test` runs the rewriter's
+unit tests (`scripts/test_rewrite_graph.py`); the changed-file gate runs them
+for any change under this directory.
+
+The matcher expects the attention subgraph of the FP32 `model.onnx` export:
+`Softmax` fed by `Add(MatMul(Mul(q), Mul(k)), mask)` and consumed directly by
+the AV `MatMul`. The published `model_sdpa_fp16.onnx` graphs differ (a NaN
+guard of `IsNaN` and `Where` between `Softmax` and the AV `MatMul`, or the
+scale applied after the QK `MatMul`) and are reported as
+`No attention blocks found`, so an FP16 FA artifact cannot be produced from
+them until the matcher covers that shape
+(vllm-project/semantic-router#3256).
+
 ## Load the custom op
 
 The Semantic Router ONNX binding reads `ORT_CK_FLASH_ATTN_LIB`:
