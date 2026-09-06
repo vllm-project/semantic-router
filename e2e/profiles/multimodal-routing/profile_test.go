@@ -27,6 +27,17 @@ type profileValues struct {
 	} `json:"config"`
 }
 
+type intelligentRouteManifest struct {
+	Spec struct {
+		Signals struct {
+			Embeddings []struct {
+				Name      string  `json:"name"`
+				Threshold float64 `json:"threshold"`
+			} `json:"embeddings"`
+		} `json:"signals"`
+	} `json:"spec"`
+}
+
 func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	chartDefaults := loadProfileValues(t, "../../../deploy/helm/semantic-router/values.yaml")
 	profile := loadProfileValues(t, "values.yaml")
@@ -55,6 +66,30 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	targetLayer := embeddingConfig.TargetLayer
 	if targetLayer == nil || *targetLayer != 6 {
 		t.Fatalf("multimodal profile target_layer = %v, want explicit 6", targetLayer)
+	}
+}
+
+func TestImageRulesKeepCalibratedDiscriminationThreshold(t *testing.T) {
+	raw, err := os.ReadFile("crds/intelligentroute.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonDocument, err := utilyaml.ToJSON(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest intelligentRouteManifest
+	if err := json.Unmarshal(jsonDocument, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	rules := manifest.Spec.Signals.Embeddings
+	if len(rules) != 3 {
+		t.Fatalf("embedding rules = %d, want 3", len(rules))
+	}
+	for _, rule := range rules {
+		if rule.Name == "" || rule.Threshold != 0.42 {
+			t.Fatalf("uncalibrated image rule: %+v", rule)
+		}
 	}
 }
 

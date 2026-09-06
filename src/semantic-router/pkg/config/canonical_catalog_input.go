@@ -297,7 +297,7 @@ func catalogCardOverlay(
 	applyCatalogCardLists(card, &overlay)
 	applyCatalogCardReasoning(model, &overlay)
 	overlay.Evaluations = cloneUserEvaluations(card.Evaluations)
-	records, err := catalogEvaluationRecords(card, modelIndex, builtIn)
+	records, err := catalogIndexableEvaluationRecords(card, modelIndex, builtIn)
 	if err != nil {
 		return overlay, nil, err
 	}

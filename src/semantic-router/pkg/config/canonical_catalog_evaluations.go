@@ -15,7 +15,12 @@ var (
 	operatorMetricID    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 )
 
-func catalogEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelcatalog.Registry) ([]modelcatalog.EvaluationRecord, error) {
+// catalogIndexableEvaluationRecords adapts operator measurements whose
+// benchmark semantics are known by this release into the typed scoring graph.
+// Unknown namespaced benchmarks remain on EffectiveModelCard.Evaluations and
+// round-trip through canonical export, but cannot safely enter an index until
+// the repository defines their metric range, direction, and profiles.
+func catalogIndexableEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelcatalog.Registry) ([]modelcatalog.EvaluationRecord, error) {
 	records := make([]modelcatalog.EvaluationRecord, 0, len(card.Evaluations))
 	for evaluationIndex, evaluation := range card.Evaluations {
 		path := fmt.Sprintf("routing.modelCards[%s].evaluations[%d]", card.Name, evaluationIndex)
