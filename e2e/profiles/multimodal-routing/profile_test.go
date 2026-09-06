@@ -9,34 +9,56 @@ import (
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-type environmentValues struct {
+type profileValues struct {
 	Env      []corev1.EnvVar `json:"env"`
 	ExtraEnv []corev1.EnvVar `json:"extraEnv"`
+	Config   struct {
+		Global struct {
+			ModelCatalog struct {
+				Embeddings struct {
+					Semantic struct {
+						EmbeddingConfig struct {
+							TargetLayer *int `json:"target_layer"`
+						} `json:"embedding_config"`
+					} `json:"semantic"`
+				} `json:"embeddings"`
+			} `json:"model_catalog"`
+		} `json:"global"`
+	} `json:"config"`
 }
 
 func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
-	chartDefaults := loadEnvironmentValues(t, "../../../deploy/helm/semantic-router/values.yaml")
-	profileValues := loadEnvironmentValues(t, "values.yaml")
+	chartDefaults := loadProfileValues(t, "../../../deploy/helm/semantic-router/values.yaml")
+	profile := loadProfileValues(t, "values.yaml")
 
 	// Helm replaces lists supplied by a values overlay. Profile-only entries must
 	// therefore use extraEnv so the chart-owned runtime defaults remain intact.
-	if len(profileValues.Env) != 0 {
+	if len(profile.Env) != 0 {
 		t.Fatal("multimodal profile must not replace the chart-owned env list; use extraEnv")
 	}
-	if len(profileValues.ExtraEnv) != 1 {
-		t.Fatalf("profile extraEnv has %d entries, want 1", len(profileValues.ExtraEnv))
+	if len(profile.ExtraEnv) != 1 {
+		t.Fatalf("profile extraEnv has %d entries, want 1", len(profile.ExtraEnv))
 	}
 
-	effective := append(append([]corev1.EnvVar{}, chartDefaults.Env...), profileValues.ExtraEnv...)
+	effective := append(append([]corev1.EnvVar{}, chartDefaults.Env...), profile.ExtraEnv...)
 	environment := environmentByName(t, effective)
 
 	requireLiteralEnvironment(t, environment, "HF_HOME", "/app/models/.cache/huggingface")
 	requireSecretEnvironment(t, environment, "HF_TOKEN")
 	requireSecretEnvironment(t, environment, "HUGGINGFACE_HUB_TOKEN")
 	requireLiteralEnvironment(t, environment, "EMBEDDING_MODEL_OVERRIDE", "multimodal")
+
+	// Helm deep-merges embedding_config maps. The profile must explicitly clear
+	// the chart's mmBERT layer-22 early-exit value; omitting this field leaves an
+	// invalid layer on the six-layer multimodal text encoder.
+	embeddingConfig := profile.Config.Global.ModelCatalog.Embeddings.Semantic.EmbeddingConfig
+	targetLayer := embeddingConfig.TargetLayer
+	if targetLayer == nil || *targetLayer != 0 {
+		t.Fatalf("multimodal profile target_layer = %v, want explicit 0", targetLayer)
+	}
 }
 
-func loadEnvironmentValues(t *testing.T, path string) environmentValues {
+func loadProfileValues(t *testing.T, path string) profileValues {
 	t.Helper()
 
 	raw, err := os.ReadFile(path)
@@ -47,7 +69,7 @@ func loadEnvironmentValues(t *testing.T, path string) environmentValues {
 	if err != nil {
 		t.Fatalf("convert %s to JSON: %v", path, err)
 	}
-	var values environmentValues
+	var values profileValues
 	if err := json.Unmarshal(jsonDocument, &values); err != nil {
 		t.Fatalf("decode %s: %v", path, err)
 	}
