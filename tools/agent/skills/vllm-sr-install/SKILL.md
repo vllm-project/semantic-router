@@ -133,12 +133,19 @@ Plan:
 Do not proceed until the user confirms, unless the user already gave explicit
 instructions to install.
 
-The installer also sets up shell completions by default, which may edit the
-user's shell rc files (for example `~/.bashrc`, `~/.zshrc`, or equivalent).
-Disclose this side effect in the plan so the user can approve it explicitly.
-If the user wants to avoid shell rc changes, they can run the installer
-interactively and skip the completion step when prompted, or set up
-completions manually later via `vllm-sr completion install`.
+The installer **always** attempts shell completion setup as part of
+installation and exposes no completion opt-out. Completion setup may modify
+the user's shell rc files, such as `~/.bashrc`, `~/.zshrc`, or the
+platform-equivalent configuration. These rc changes are therefore part of the
+installation mutation boundary.
+
+Before running the installer, the agent MUST explicitly disclose this side
+effect to the user and obtain approval for the shell rc changes, unless the
+user's prior instruction already clearly authorizes the complete installation
+including shell completion setup. If the user declines the shell rc /
+completion changes, the agent MUST STOP without invoking the installer. The
+current maintained installer provides no completion-free installation path,
+so the agent must not claim one exists or proceed with a partial install.
 
 ## Workflow
 
@@ -173,8 +180,17 @@ completions manually later via `vllm-sr completion install`.
    official vLLM-SR CLI, which is outside the supported installation path.
    The value may embed credentials such as private index tokens, so it
    must never be echoed, logged, or included in the report.
-3. **Present the plan** and wait for confirmation if the user has not already
-   approved.
+3. **Present the plan and obtain completion approval.** Present the bounded
+   plan and wait for confirmation. The plan MUST explicitly disclose that the
+   installer always attempts shell completion setup, that the current installer
+   exposes no completion opt-out, and that this may modify shell rc files such
+   as `~/.bashrc` or `~/.zshrc`. Do not proceed to install unless the user
+   has approved the shell rc / completion changes — either in response to this
+   plan or through a prior instruction that already clearly authorizes the
+   complete installation including shell completion setup. If the user declines
+   the shell rc / completion changes, STOP: do not invoke the installer, and
+   report that the current maintained installer provides no completion-free
+   installation path.
 4. **Install** using the one-line installer in agent-safe mode, explicitly
    unsetting the installer's entire documented `VLLM_SR_*` override surface
    so no inherited value can change what gets installed or how:
@@ -337,9 +353,12 @@ explicit user direction — those are separate workflows.
   platform, auto-launch). Always run the installer with that surface
   cleared (see Workflow step 4) so an inherited value cannot silently
   change the install.
-- The installer unconditionally sets up shell completions, which may edit
-  `~/.bashrc`, `~/.zshrc`, or equivalent shell rc files. Disclose this in
-  the plan so the user can approve the change.
+- The installer unconditionally sets up shell completions and exposes no
+  opt-out, which may edit `~/.bashrc`, `~/.zshrc`, or equivalent shell rc
+  files. The agent must disclose this before install and obtain explicit user
+  approval for the rc changes; if the user declines, stop and do not invoke the
+  installer. The current installer provides no completion-free installation
+  path — do not claim one exists.
 
 ## Must Read
 
@@ -367,5 +386,10 @@ explicit user direction — those are separate workflows.
 - `runtime.env` is reported as runtime state, not conflated with an active
   deployment.
 - No credentials, private endpoints, or secret values appear in skill output.
+- The installer always attempts shell completion setup and exposes no
+  opt-out. The skill discloses this before install, obtains explicit user
+  approval for the shell rc changes, and stops without invoking the installer
+  if the user declines. The skill does not claim a completion-free
+  installation path.
 - The skill stops before configuration generation, evaluation, tuning,
   activation, or rollback.

@@ -313,6 +313,109 @@ test('Plan discloses shell completion setup as a side effect', () => {
   )
 })
 
+test('Completion setup requires explicit approval before installer execution', () => {
+  const content = readSkill(canonicalPath)
+  const planMatch = content.match(/## Plan Before Mutation\n([\s\S]*?)\n## /)
+  assert.ok(planMatch, '## Plan Before Mutation section must exist')
+  const plan = planMatch[1]
+
+  // The current installer always attempts completion setup and exposes no
+  // opt-out. The skill must state this fact so the agent cannot assume a
+  // completion-free path exists.
+  assert.ok(
+    /always.*attempts.*completion/i.test(plan),
+    'Plan must state the installer always attempts completion setup',
+  )
+  assert.ok(
+    /no completion opt-out/i.test(plan),
+    'Plan must state the installer exposes no completion opt-out',
+  )
+  assert.ok(
+    /shell rc/i.test(plan),
+    'Plan must mention shell rc files as what completion modifies',
+  )
+
+  // Completion changes are part of the mutation boundary: the agent must
+  // obtain approval before running the installer, not merely disclose.
+  assert.ok(
+    /MUST.*disclose|explicitly disclose/i.test(plan),
+    'Plan must require the agent to explicitly disclose the completion side effect',
+  )
+  assert.ok(
+    /obtain.*approval/i.test(plan),
+    'Plan must require obtaining user approval for the shell rc changes',
+  )
+
+  // The approval must happen before the installer runs, not after.
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+  // Workflow step 3 (plan + approval) must come before step 4 (install).
+  const approvalIdx = workflow.search(/completion approval|obtain.*completion.*approval|approved.*shell rc/i)
+  const installIdx = workflow.search(/\*\*Install\*\*/)
+  assert.ok(approvalIdx !== -1, 'Workflow must reference completion approval')
+  assert.ok(installIdx !== -1, 'Workflow must have an Install step')
+  assert.ok(
+    approvalIdx < installIdx,
+    'Completion approval must appear before the Install step in Workflow',
+  )
+})
+
+test('Declining completion changes stops the installer', () => {
+  const content = readSkill(canonicalPath)
+  const planMatch = content.match(/## Plan Before Mutation\n([\s\S]*?)\n## /)
+  assert.ok(planMatch, '## Plan Before Mutation section must exist')
+  const plan = planMatch[1]
+
+  // If the user does not approve the shell rc / completion changes, the
+  // agent must stop and must not invoke the installer.
+  assert.ok(
+    /user declines[\s\S]*STOP/i.test(plan),
+    'Plan must state the agent stops when the user declines completion changes',
+  )
+  assert.ok(
+    /without invoking the installer/i.test(plan),
+    'Plan must state the installer is not invoked when the user declines',
+  )
+
+  // The skill must not claim a completion-free installation path exists.
+  assert.ok(
+    /no completion-free installation path/i.test(plan),
+    'Plan must state no completion-free installation path exists',
+  )
+  assert.ok(
+    /must not claim one exists/i.test(plan),
+    'Plan must instruct the agent not to claim a completion-free path',
+  )
+
+  // The Workflow must mirror the same stop condition.
+  const workflowMatch = content.match(/## Workflow\n([\s\S]*?)\n## /)
+  assert.ok(workflowMatch, '## Workflow section must exist')
+  const workflow = workflowMatch[1]
+  assert.ok(
+    /declines[\s\S]*STOP/i.test(workflow),
+    'Workflow must stop when the user declines completion changes',
+  )
+  assert.ok(
+    /do not invoke the installer/i.test(workflow),
+    'Workflow must state the installer is not invoked on decline',
+  )
+  assert.ok(
+    /no completion-free[\s\S]*?installation path/i.test(workflow),
+    'Workflow must state no completion-free installation path exists',
+  )
+
+  // The skill must not reference a non-existent interactive completion skip.
+  assert.ok(
+    !/interactively and skip the completion/i.test(content),
+    'Skill must not claim the installer offers an interactive completion skip',
+  )
+  assert.ok(
+    !/skip the completion step when prompted/i.test(content),
+    'Skill must not claim the installer prompts to skip completion',
+  )
+})
+
 test('Existing CLI installation section detects all default signals and override paths', () => {
   const content = readSkill(canonicalPath)
   const sectionMatch = content.match(/### Existing CLI installation\n([\s\S]*?)\n### /)
