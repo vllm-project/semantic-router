@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`kb` 将路由信号绑定到命名知识库实例的输出。映射到 `config/signal/kb/`，在 `routing.signals.kb` 中声明。
+`kb` 将路由信号绑定到命名知识库实例的输出。映射到 `config/fragments/signal/kb/`，在 `routing.signals.kb` 中声明。
 
 该信号族面向**维护型**、启动时加载的嵌入知识库，并在多条路由间复用。
 
@@ -41,7 +41,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/kb/`
+源片段族：`config/fragments/signal/kb/`
 
 ```yaml
 global:

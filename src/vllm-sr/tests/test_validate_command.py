@@ -1,6 +1,11 @@
 from types import SimpleNamespace
 
-from cli.commands.validate import _projection_summary_lines, _signal_summary_lines
+from cli.commands.validate import (
+    _aggregate_projection_summary_lines,
+    _aggregate_signal_summary_lines,
+    _projection_summary_lines,
+    _signal_summary_lines,
+)
 
 
 def test_signal_summary_lines_cover_v03_signal_surface():
@@ -56,6 +61,24 @@ def test_projection_summary_lines_cover_v03_projection_surface():
 
     assert _projection_summary_lines(projections) == [
         "  Projection partitions: 1",
+        "  Projection scores: 1",
+        "  Projection mappings: 1",
+    ]
+
+
+def test_aggregate_summary_lines_include_recipe_owned_routing():
+    default = SimpleNamespace(
+        signals=SimpleNamespace(keywords=[]),
+        projections=SimpleNamespace(scores=[], mappings=[]),
+    )
+    recipe = SimpleNamespace(
+        signals=SimpleNamespace(keywords=[object(), object()]),
+        projections=SimpleNamespace(scores=[object()], mappings=[object()]),
+    )
+    profiles = [("default", default), ("accuracy-first", recipe)]
+
+    assert _aggregate_signal_summary_lines(profiles) == ["  Keyword signals: 2"]
+    assert _aggregate_projection_summary_lines(profiles) == [
         "  Projection scores: 1",
         "  Projection mappings: 1",
     ]

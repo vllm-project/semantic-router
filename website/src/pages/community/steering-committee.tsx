@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import React from 'react'
+import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import CommunityMemberCard from '@site/src/components/community/CommunityMemberCard'
 import {
   academicTrackMembers,
@@ -52,39 +52,26 @@ export default function SteeringCommittee(): ReactNode {
       title="Steering Committee"
       description="The Industry and Academic tracks of the vLLM Semantic Router Steering Committee"
     >
-      <div className={styles.container}>
-        <header className={styles.hero}>
-          <span className={styles.eyebrow}>Community / Governance</span>
-          <div className={styles.heroGrid}>
-            <div>
-              <h1>Steering Committee</h1>
-              <p className={styles.lede}>
-                One committee, two complementary tracks. The committee aligns
-                long-range project direction across engineering practice and
-                academic research.
-              </p>
-            </div>
-            <aside className={styles.mandate}>
-              <span>Mandate</span>
-              <p>
-                Set project-level direction, resolve cross-track questions,
-                and maintain a productive boundary between research and
-                engineering.
-              </p>
-              <Link to="/community/governance">
-                Read the governance model
-                <span aria-hidden="true">→</span>
-              </Link>
-            </aside>
-          </div>
-        </header>
+      <CommunityLayout
+        activeKey="steering-committee"
+        title="Steering Committee"
+        description="One committee, two complementary tracks. The committee aligns long-range project direction across engineering practice and academic research."
+      >
+        <aside className={styles.mandate}>
+          <span>Mandate</span>
+          <p>
+            Set project-level direction, resolve cross-track questions,
+            and maintain a productive boundary between research and
+            engineering.
+          </p>
+        </aside>
 
-        <main className={styles.tracks}>
+        <div className={styles.tracks}>
           {tracks.map(track => (
             <TrackSection key={track.index} {...track} />
           ))}
-        </main>
-      </div>
+        </div>
+      </CommunityLayout>
     </Layout>
   )
 }

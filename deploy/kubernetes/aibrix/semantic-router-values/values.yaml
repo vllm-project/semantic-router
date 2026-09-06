@@ -73,7 +73,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -145,7 +145,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -166,7 +166,7 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -388,7 +388,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

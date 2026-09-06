@@ -1,0 +1,49 @@
+{
+  "operation": "stream",
+  "cases": [
+    {
+      "name": "citation_and_obfuscation",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n",
+          "event: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\",\"annotations\":[],\"logprobs\":[]}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"delta\":\"source\",\"logprobs\":[],\"obfuscation\":\"padding\"}\n\nevent: response.output_text.annotation.added\ndata: {\"type\":\"response.output_text.annotation.added\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"annotation_index\":0,\"annotation\":{\"type\":\"url_citation\",\"url\":\"https://example.com/source\",\"title\":\"Source\",\"start_index\":0,\"end_index\":6}}\n\n",
+          "event: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"sequence_number\":5,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"text\":\"source\",\"logprobs\":[]}\n\nevent: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":6,\"output_index\":0,\"item_id\":\"msg_1\",\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"source\",\"annotations\":[{\"type\":\"url_citation\",\"url\":\"https://example.com/source\",\"title\":\"Source\",\"start_index\":0,\"end_index\":6}],\"logprobs\":[]}}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":7,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"source\",\"annotations\":[{\"type\":\"url_citation\",\"url\":\"https://example.com/source\",\"title\":\"Source\",\"start_index\":0,\"end_index\":6}],\"logprobs\":[]}]}}\n\n",
+          "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":8,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"source\",\"annotations\":[{\"type\":\"url_citation\",\"url\":\"https://example.com/source\",\"title\":\"Source\",\"start_index\":0,\"end_index\":6}],\"logprobs\":[]}]}],\"usage\":{\"input_tokens\":2,\"input_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":0},\"output_tokens\":1,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":3}}}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "reasoning_summary",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_2\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"reasoning\",\"id\":\"reasoning_1\",\"status\":\"in_progress\",\"summary\":[]}}\n\n",
+          "event: response.reasoning_summary_part.added\ndata: {\"type\":\"response.reasoning_summary_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"reasoning_1\",\"summary_index\":0,\"part\":{\"type\":\"summary_text\",\"text\":\"\"}}\n\nevent: response.reasoning_summary_text.delta\ndata: {\"type\":\"response.reasoning_summary_text.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"reasoning_1\",\"summary_index\":0,\"delta\":\"summary\"}\n\nevent: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_text.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"reasoning_1\",\"summary_index\":0,\"text\":\"summary\"}\n\nevent: response.reasoning_summary_part.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"sequence_number\":5,\"output_index\":0,\"item_id\":\"reasoning_1\",\"summary_index\":0,\"status\":\"completed\",\"part\":{\"type\":\"summary_text\",\"text\":\"summary\"}}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "refusal",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_3\",\"object\":\"response\",\"created_at\":100,\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"msg_3\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"msg_3\",\"content_index\":0,\"part\":{\"type\":\"refusal\",\"refusal\":\"\"}}\n\nevent: response.refusal.delta\ndata: {\"type\":\"response.refusal.delta\",\"sequence_number\":3,\"output_index\":0,\"item_id\":\"msg_3\",\"content_index\":0,\"delta\":\"cannot comply\"}\n\nevent: response.refusal.done\ndata: {\"type\":\"response.refusal.done\",\"sequence_number\":4,\"output_index\":0,\"item_id\":\"msg_3\",\"content_index\":0,\"refusal\":\"cannot comply\"}\n\n"
+        ]
+      }
+    },
+    {
+      "name": "transport_error_param",
+      "stream": {
+        "public_model": "public-model",
+        "provider_model": "provider-model",
+        "chunks": [
+          "event: error\ndata: {\"type\":\"error\",\"sequence_number\":0,\"code\":\"rate_limit_exceeded\",\"message\":\"slow down\",\"param\":\"model\"}\n\n"
+        ]
+      }
+    }
+  ]
+}

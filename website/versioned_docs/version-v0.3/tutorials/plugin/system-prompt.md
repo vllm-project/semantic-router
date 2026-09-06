@@ -4,7 +4,7 @@
 
 `system_prompt` is a route-local plugin for inserting or modifying the system prompt on matched traffic.
 
-It aligns to `config/plugin/system-prompt/expert.yaml`.
+It aligns to `config/fragments/plugin/system-prompt/expert.yaml`.
 
 ## Key Advantages
 

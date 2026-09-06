@@ -1,53 +1,25 @@
-name: Content Moderation
+name: Moderation Quarantine
 
+# Automatic moderation is intentionally disabled. The previous implementation
+# evaluated hidden JavaScript from a secret with write permissions. See TD045.
 on:
-  issues:
-    types: [opened, edited]
-  pull_request:
-    types: [opened, edited]
-  issue_comment:
-    types: [created, edited]
-  pull_request_review_comment:
-    types: [created, edited]
+  workflow_dispatch:
 
 permissions:
-  issues: write
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
-  moderate:
-    if: ${{ github.event.action == 'created' || github.event.action == 'edited' || github.event.action == 'opened' }}
+  quarantine:
+    name: Reviewed moderation implementation required
     runs-on: ubuntu-latest
     steps:
-      - name: Run spam filter
-        uses: actions/github-script@v7
-        env:
-          # The entire spam detection logic is stored here
-          SPAM_DETECTION_SCRIPT: ${{ secrets.SPAM_DETECTION_SCRIPT }}
-        with:
-          script: |
-            // Load and execute the spam detection script from secret
-            const detectionScript = process.env.SPAM_DETECTION_SCRIPT;
-
-            if (!detectionScript) {
-              core.warning("SPAM_DETECTION_SCRIPT secret not configured - skipping spam detection");
-              core.info("To enable spam filtering, set up the SPAM_DETECTION_SCRIPT secret.");
-              core.info("See documentation for setup instructions.");
-              return;
-            }
-
-            try {
-              // Execute the hidden script
-              // The script has access to: github, context, core
-              const detectSpam = eval(detectionScript);
-
-              // Run the detection
-              await detectSpam(github, context, core);
-
-            } catch (err) {
-              core.error(`Spam filter error: ${err.message}`);
-              core.warning(`Filter execution failed - continuing without spam check`);
-              // Don't fail the workflow, just log the error
-            }
-
+      - name: Report safe boundary
+        run: |
+          {
+            echo "## Moderation is quarantined"
+            echo
+            echo "No content was analyzed or mutated."
+            echo "A reviewed detector or GitHub App is required before re-enabling automation."
+            echo "See tools/agent/docs/tech-debt/td-045-reviewed-content-moderation.md."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Moderation remains disabled pending TD045."

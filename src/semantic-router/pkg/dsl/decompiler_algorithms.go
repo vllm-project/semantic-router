@@ -35,6 +35,23 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"multi_factor": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		multiFactorAlgorithmToFields(algo.MultiFactor, fields)
 	},
+	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		promptAlgorithmToFields(algo.Prompt, fields)
+	},
+}
+
+func promptAlgorithmToFields(
+	prompt *config.PromptSelectionConfig,
+	fields map[string]Value,
+) {
+	if prompt == nil {
+		return
+	}
+	promptFields := map[string]Value{}
+	setStringValue(promptFields, "model", prompt.Model)
+	setStringValue(promptFields, "instructions", prompt.Instructions)
+	setIntValue(promptFields, "timeout_seconds", prompt.TimeoutSeconds)
+	fields["prompt"] = ObjectValue{Fields: promptFields}
 }
 
 func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]Value {
@@ -42,6 +59,7 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 	if algo == nil {
 		return fields
 	}
+	setIntValue(fields, "minimum_candidates", algo.MinimumCandidates)
 	algorithmOnErrorToFields(algo, fields)
 	if export, ok := algorithmFieldExporters[algo.Type]; ok {
 		export(algo, fields)
@@ -72,6 +90,7 @@ func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map
 	setStringValue(fields, "token_filter", c.TokenFilter)
 	setStringValue(fields, "verifier_server_url", c.VerifierServerURL)
 	setIntValue(fields, "verifier_timeout_seconds", c.VerifierTimeoutSeconds)
+	setIntValue(fields, "max_response_bytes", int(c.MaxResponseBytes))
 	if c.HybridWeights != nil {
 		weights := map[string]Value{}
 		setFloatValue(weights, "logprob_weight", c.HybridWeights.LogprobWeight)
@@ -101,6 +120,9 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	setStringValue(fields, "synthesis_template", r.SynthesisTemplate)
 	setStringValue(fields, "synthesis_model", r.SynthesisModel)
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
+	if r.MaxCompletionTokens != nil {
+		setIntValue(fields, "max_completion_tokens", *r.MaxCompletionTokens)
+	}
 	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
 	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
 	setStringValue(fields, "on_error", r.OnError)
@@ -148,10 +170,11 @@ func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[s
 	if !w.Final.IsZero() {
 		fields["final"] = workflowFinalValue(w.Final)
 	}
-	if w.Planner.Model != "" {
-		fields["planner"] = ObjectValue{Fields: map[string]Value{
-			"model": StringValue{V: w.Planner.Model},
-		}}
+	plannerFields := make(map[string]Value)
+	setStringValue(plannerFields, "model", w.Planner.Model)
+	setIntValue(plannerFields, "max_completion_tokens", w.Planner.MaxCompletionTokens)
+	if len(plannerFields) > 0 {
+		fields["planner"] = ObjectValue{Fields: plannerFields}
 	}
 	setIntValue(fields, "max_steps", w.MaxSteps)
 	setIntValue(fields, "max_parallel", w.MaxParallel)

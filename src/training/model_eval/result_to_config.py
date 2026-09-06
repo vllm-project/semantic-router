@@ -24,7 +24,7 @@ DEFAULT_EMBEDDINGS = {
     }
 }
 
-DEFAULT_SEMANTIC_CACHE = {
+DEFAULT_RESPONSE_CACHE = {
     "enabled": True,
     "embedding_model": "mmbert",
     "max_entries": 1000,
@@ -35,7 +35,7 @@ DEFAULT_TOOLS = {
     "enabled": True,
     "top_k": 3,
     "similarity_threshold": 0.2,
-    "tools_db_path": "deploy/examples/runtime/tools/tools_db.json",
+    "tools_db_path": "config/runtime/tools/tools_db.json",
     "fallback_to_empty": True,
 }
 
@@ -313,8 +313,8 @@ def generate_config_yaml(
         },
         "global": {
             "stores": {
-                "semantic_cache": {
-                    **DEFAULT_SEMANTIC_CACHE,
+                "response_cache": {
+                    **DEFAULT_RESPONSE_CACHE,
                     "similarity_threshold": similarity_threshold,
                 }
             },

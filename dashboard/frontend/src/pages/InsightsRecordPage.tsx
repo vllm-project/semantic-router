@@ -1,28 +1,29 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import ViewPanel, { type ViewPanelAction } from '../components/ViewPanel'
-import { useAuth } from '../contexts/AuthContext'
+import ProductLoadingState from '../components/ProductLoadingState'
+import ProductIcon from '../components/ProductIcon'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessReplayFlowDetails } from '../utils/accessControl'
 
-import configStyles from './ConfigPage.module.css'
-import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
-import { fetchInsightsRecord } from './insightsPageApi'
+import { fetchInsightsRecord, fetchInsightsTrajectory } from './insightsPageApi'
 import {
   buildInsightsRecordSections,
   buildInsightsRecordTitle,
+  getInsightsLifecyclePresentation,
   getInsightsRecordPath,
 } from './insightsPageSupport'
-import type { InsightsRecord } from './insightsPageTypes'
+import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
+import InsightsRecordSection from './InsightsRecordSection'
+import InsightsRecordTrace from './InsightsRecordTrace'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
   const { recordId } = useParams<{ recordId: string }>()
-  const { user } = useAuth()
   const { isReadonly } = useReadonly()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
+  const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
+  const [traceError, setTraceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
@@ -36,11 +37,20 @@ export default function InsightsRecordPage() {
     }
 
     setLoading(true)
+    setTrajectory(null)
+    setTraceError(null)
 
     try {
       const nextRecord = await fetchInsightsRecord(recordId)
       setRecord(nextRecord)
       setError(null)
+      if (nextRecord.session_id) {
+        try {
+          setTrajectory(await fetchInsightsTrajectory(nextRecord.session_id))
+        } catch (traceCause) {
+          setTraceError(traceCause instanceof Error ? traceCause.message : 'Unknown error')
+        }
+      }
     } catch (err) {
       setRecord(null)
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -86,78 +96,93 @@ export default function InsightsRecordPage() {
     }
   }, [shareUrl])
 
-  const panelActions = useMemo<ViewPanelAction[]>(
-    () => [
-      {
-        label: copyState === 'copied' ? 'Link Copied' : 'Copy Link',
-        onClick: () => {
-          void handleCopyLink()
-        },
-        tone: 'primary',
-      },
-    ],
-    [copyState, handleCopyLink],
+  const sections = useMemo(
+    () => (record ? buildInsightsRecordSections(record, { isReadonly }) : []),
+    [isReadonly, record],
   )
+  const hasProjectionTrace = sections.some((section) => section.title === 'Projection Trace')
+
+  const lifecycle = record ? getInsightsLifecyclePresentation(record) : null
 
   return (
-    <ConfigPageManagerLayout
-      eyebrow="Insights"
-      title="Insight Record"
-      description="Open, review, and share a single replay-backed request record."
-      configArea="Analysis"
-      scope="Shareable request detail"
-      panelTitle="Semantic Router Record"
-      panelDescription="A standalone deep-link view of one replay event, with the same detail body used in the in-page modal."
-      pills={[
-        { label: 'Record Detail', active: true },
-        { label: 'Shareable Link' },
-        { label: 'Replay Event' },
-      ]}
-    >
+    <main className={styles.recordPage}>
+      <div className={styles.recordToolbar}>
+        <button type="button" className={styles.recordBack} onClick={() => navigate('/insights')}>
+          <ProductIcon name="arrow-left" width={16} height={16} />
+          Insights
+        </button>
+        <div className={styles.recordActions}>
+          <button type="button" onClick={() => void loadRecord()} className={styles.recordAction}>
+            <ProductIcon name="refresh" width={15} height={15} />
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCopyLink()}
+            className={styles.recordActionPrimary}
+          >
+            <ProductIcon name={copyState === 'copied' ? 'check' : 'copy'} width={15} height={15} />
+            {copyState === 'copied' ? 'Copied' : 'Copy link'}
+          </button>
+        </div>
+      </div>
+
       {error ? (
         <div className={styles.error}>
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Record Detail</h2>
-              <p className={styles.sectionSubtitle}>
-                Share this page directly when you need a stable URL for a single request replay.
-              </p>
+      {loading ? <ProductLoadingState label="Loading insight" compact /> : null}
+
+      {!loading && !error && record ? (
+        <>
+          <header className={styles.recordHero}>
+            <div className={styles.recordHeroCopy}>
+              <span className={styles.recordEyebrow}>Request insight</span>
+              <h1>{buildInsightsRecordTitle(record)}</h1>
+              <div className={styles.recordRoute} aria-label="Selected route">
+                <span>{record.original_model || 'Requested model'}</span>
+                <ProductIcon name="arrow-right" width={15} height={15} />
+                <strong>
+                  {record.decision
+                    ? record.decision.replace(/_/g, ' ')
+                    : record.selection_method || 'Route'}
+                </strong>
+                <ProductIcon name="arrow-right" width={15} height={15} />
+                <span>{record.selected_model || 'Selected model'}</span>
+              </div>
             </div>
-            <div className={styles.toolbarActions}>
-              <button type="button" onClick={() => void loadRecord()} className={styles.refreshButton}>
-                Refresh
-              </button>
-            </div>
+            {lifecycle ? (
+              <span
+                className={`${styles.recordStatus} ${
+                  lifecycle.successful
+                    ? styles.recordStatusSuccess
+                    : lifecycle.errored
+                      ? styles.recordStatusError
+                      : styles.recordStatusNeutral
+                }`}
+              >
+                {lifecycle.label}
+              </span>
+            ) : null}
+          </header>
+
+          <div className={styles.recordSections}>
+            {sections.map((section, sectionIndex) => (
+              <Fragment key={`${section.title ?? 'details'}-${sectionIndex}`}>
+                <InsightsRecordSection section={section} sectionIndex={sectionIndex} />
+                {section.title === 'Projection Trace' ? (
+                  <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
+                ) : null}
+              </Fragment>
+            ))}
+            {!hasProjectionTrace ? (
+              <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
+            ) : null}
           </div>
-
-          {loading ? (
-            <div className={styles.loading}>
-              <div className={styles.spinner} />
-              <p>Loading insight record...</p>
-            </div>
-          ) : null}
-
-          {!loading && !error && record ? (
-            <ViewPanel
-              title={buildInsightsRecordTitle(record)}
-              sections={buildInsightsRecordSections(record, {
-                isReadonly,
-                canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
-              })}
-              onClose={() => navigate('/insights')}
-              closeLabel="Back to Insights"
-              actions={panelActions}
-              variant="page"
-            />
-          ) : null}
-        </section>
-      </div>
-    </ConfigPageManagerLayout>
+        </>
+      ) : null}
+    </main>
   )
 }

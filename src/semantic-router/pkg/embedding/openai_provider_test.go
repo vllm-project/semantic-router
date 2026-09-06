@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestOpenAICompatibleProviderEmbedBatch(t *testing.T) {
@@ -180,11 +182,66 @@ func TestOpenAICompatibleProviderDimensionMismatch(t *testing.T) {
 	}
 }
 
+func TestOpenAICompatibleProviderResponseLimit(t *testing.T) {
+	responseBody, err := json.Marshal(embeddingsResponse{
+		Data: []embeddingDatum{{Index: 0, Embedding: []float64{0.1, 0.2}}},
+	})
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(responseBody)
+	}))
+	defer server.Close()
+
+	tests := []struct {
+		name             string
+		maxResponseBytes int64
+		wantErr          bool
+	}{
+		{name: "at limit", maxResponseBytes: int64(len(responseBody))},
+		{name: "one byte over", maxResponseBytes: int64(len(responseBody)) - 1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider, err := NewProvider(config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{
+					Backend:         config.EmbeddingBackendOpenAICompatible,
+					TargetDimension: 2,
+				},
+				Endpoint: config.EmbeddingEndpointConfig{
+					BaseURL:          server.URL,
+					Model:            "embedding-model",
+					MaxResponseBytes: tt.maxResponseBytes,
+				},
+			}, ProviderOptions{})
+			if err != nil {
+				t.Fatalf("NewProvider() error = %v", err)
+			}
+
+			embedding, err := provider.Embed(context.Background(), "hello")
+			if tt.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "response body exceeds limit") {
+					t.Fatalf("Embed() error = %v, want response limit error", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Embed() error = %v", err)
+			}
+			if len(embedding) != 2 {
+				t.Fatalf("embedding length = %d, want 2", len(embedding))
+			}
+		})
+	}
+}
+
 func TestNewOpenAICompatibleProviderValidatesConfig(t *testing.T) {
 	cases := []OpenAICompatibleConfig{
 		{Model: "embedding-model"},
 		{BaseURL: "localhost:8000", Model: "embedding-model"},
 		{BaseURL: "http://localhost:8000", Dimensions: 2, ExpectedDimension: 3},
+		{BaseURL: "http://localhost:8000", Model: "embedding-model", MaxResponseBytes: -1},
 		{BaseURL: "http://localhost:8000"},
 	}
 	for _, cfg := range cases {

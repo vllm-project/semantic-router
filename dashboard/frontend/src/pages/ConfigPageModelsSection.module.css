@@ -1,7 +1,31 @@
 .modelIdentity {
+  display: flex;
+  align-items: center;
+  min-width: 250px;
+  gap: 0.75rem;
+}
+
+.modelIdentityCopy {
+  min-width: 0;
   display: grid;
-  min-width: 220px;
   gap: 0.32rem;
+}
+
+.modelProviderMark {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 8px;
+}
+
+.modelProviderMark img {
+  width: 23px;
+  height: 23px;
+  object-fit: contain;
 }
 
 .modelIdentityPrimary {
@@ -61,6 +85,151 @@
 .unusedLabel {
   color: rgba(255, 255, 255, 0.34);
   font-size: 0.72rem;
+}
+
+.liveVerification {
+  display: flex;
+  min-width: 145px;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.liveVerificationHeading {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
+.liveVerificationDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.liveVerificationDotSuccess {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.liveVerificationDotError {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.liveVerificationDotPending {
+  border-color: rgba(250, 204, 21, 0.7);
+  background: #eab308;
+  animation: live-verification-pulse 1.2s ease-in-out infinite;
+}
+
+.liveVerificationLabel {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
+  font-weight: 690;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationEvidence {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.liveVerificationEvidence > span,
+.liveVerificationError {
+  overflow: hidden;
+  max-width: 220px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationEvidence > span {
+  color: #bbf7d0;
+}
+
+.liveVerificationEvidence small {
+  overflow: hidden;
+  max-width: 220px;
+  color: rgba(255, 255, 255, 0.4);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveVerificationError {
+  color: #fecaca;
+}
+
+.liveVerificationButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  min-height: 28px;
+  padding: 0.28rem 0.58rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.68rem;
+  font-weight: 680;
+}
+
+.liveVerificationButton:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.reasoningFamilyName {
+  color: #f5f5f7;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+}
+
+.reasoningFamilyType {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.32rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 0.72rem;
+  font-weight: 680;
+}
+
+.reasoningFamilyParameter {
+  color: rgba(255, 255, 255, 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.liveVerificationButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+@keyframes live-verification-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .inventoryToolbar {
@@ -257,6 +426,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .liveVerificationDotPending {
+    animation: none;
+  }
+
   .clearFiltersButton,
   .clearSelectionButton,
   .bulkDeleteButton {

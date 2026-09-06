@@ -187,12 +187,13 @@ func TestValidateNoArgs(t *testing.T) {
 func TestDecompileValidYAML(t *testing.T) {
 	yamlInput := js.ValueOf(`version: v0.3
 providers:
-  default_model: qwen
+  defaults:
+    default_model: qwen
   models:
     - name: qwen
       backend_refs:
         - name: primary
-          endpoint: http://localhost:8000/v1
+          endpoint: localhost:8000
           protocol: http
 routing:
   modelCards:
@@ -212,7 +213,28 @@ routing:
           - type: keyword
             name: s1
       modelRefs:
-        - model: qwen`)
+        - model: qwen
+entrypoints:
+  - model_names: [vllm-sr/private]
+    recipe: private
+recipes:
+  - name: private
+    routing:
+      signals:
+        keywords:
+          - name: private-signal
+            operator: any
+            keywords: ["private"]
+      decisions:
+        - name: private-route
+          priority: 10
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: private-signal
+          modelRefs:
+            - model: qwen`)
 
 	result := decompile(js.Undefined(), []js.Value{yamlInput})
 	str := result.(string)
@@ -227,6 +249,9 @@ routing:
 	}
 	if !strings.Contains(dr.DSL, "MODEL qwen") {
 		t.Errorf("expected routing model catalog in decompiled DSL, got:\n%s", dr.DSL)
+	}
+	if !strings.Contains(dr.DSL, "ENTRYPOINT {") || !strings.Contains(dr.DSL, "RECIPE private") {
+		t.Errorf("expected entrypoints and recipes in decompiled DSL, got:\n%s", dr.DSL)
 	}
 }
 

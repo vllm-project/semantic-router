@@ -6,17 +6,11 @@ name: Router Learning Eval
 # "Router Learning architecture eval" for details.
 
 on:
-  pull_request:
-    paths:
-      - 'bench/agentic_routing_experiment.py'
-      - 'bench/profiles/router_learning/**'
-      - 'bench/test_agentic_routing_experiment.py'
-      - 'src/semantic-router/pkg/**'
-      - '.github/workflows/router-learning-eval.yml'
-  workflow_dispatch:
+  workflow_call:
     inputs:
       profile:
         description: 'Profile to gate against (pr/release)'
+        type: string
         default: 'pr'
 
 permissions:
@@ -38,7 +32,7 @@ jobs:
         run: |
           python bench/agentic_routing_experiment.py \
             --learning-architecture \
-            --profile "${{ github.event.inputs.profile || 'pr' }}" \
+            --profile "${{ inputs.profile }}" \
             --output-dir "$GITHUB_WORKSPACE/.rl-eval"
       - name: Attach verdict + summary to job summary
         if: always()

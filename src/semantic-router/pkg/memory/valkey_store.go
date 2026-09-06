@@ -377,8 +377,8 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		return nil, err
 	}
 
-	logging.Debugf("ValkeyStore.Retrieve: query='%s', user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
-		opts.Query, opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
+	logging.Debugf("ValkeyStore.Retrieve: query=%s, user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
+		logging.ContentDescriptor(opts.Query), opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
 
 	embedding, err := GenerateEmbedding(opts.Query, v.embeddingConfig)
 	if err != nil {

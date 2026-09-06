@@ -2,21 +2,18 @@ import { useMemo } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
-import { withAuthQuery } from '../utils/authFetch'
+import { DOCS_LINKS } from '../utils/docsLinks'
 
 const JAEGER_SERVICE: ServiceConfig = {
   name: 'Jaeger',
   envVar: 'TARGET_JAEGER_URL',
   description: 'Connect Jaeger to investigate request paths across the router and model backends.',
-  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
+  docsUrl: DOCS_LINKS.observability,
   exampleValue: 'http://localhost:16686',
 }
 
 export default function TracingPage() {
-  const src = useMemo(
-    () => withAuthQuery('/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr'),
-    [],
-  )
+  const src = useMemo(() => '/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr', [])
 
   return (
     <EmbeddedServicePage

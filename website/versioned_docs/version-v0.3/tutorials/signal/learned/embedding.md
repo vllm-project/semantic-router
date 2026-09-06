@@ -2,7 +2,7 @@
 
 ## Overview
 
-`embedding` matches requests by semantic similarity to representative examples. It maps to `config/signal/embedding/` and is declared under `routing.signals.embeddings`.
+`embedding` matches requests by semantic similarity to representative examples. It maps to `config/fragments/signal/embedding/` and is declared under `routing.signals.embeddings`.
 
 This family is learned: it depends on the semantic embedding assets in `global.model_catalog.embeddings`.
 
@@ -30,7 +30,7 @@ Use `embedding` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/embedding/`
+Source fragment family: `config/fragments/signal/embedding/`
 
 ```yaml
 routing:
@@ -155,7 +155,7 @@ routing:
 
 ### Default opt-in pack
 
-The repo ships an opt-in image-modality embedding pack at `config/signal/embedding/image-routing.yaml`. It contains three illustrative rules - `identifier_document_imagery` (for privacy-routing), `code_or_terminal_imagery` (for IP-routing), and `ambient_office_imagery` (the negative-space anchor that the authoring tips below recommend) - that operators can inline into their recipe. The pack uses `0.10` as a default threshold, calibrated against the bundled `multi-modal-embed-small` embedding model. Image-text cosines for this model land in roughly the 0.04 to 0.17 range, so the text-modality default of `0.70` would block all rules. Tune against your own evaluation corpus before relying on it in production, and replace the `ambient_office_imagery` anchors with content specific to your deployment surface.
+The repo ships an opt-in image-modality embedding pack at `config/fragments/signal/embedding/image-routing.yaml`. It contains three illustrative rules - `identifier_document_imagery` (for privacy-routing), `code_or_terminal_imagery` (for IP-routing), and `ambient_office_imagery` (the negative-space anchor that the authoring tips below recommend) - that operators can inline into their recipe. The pack uses `0.10` as a default threshold, calibrated against the bundled `multi-modal-embed-small` embedding model. Image-text cosines for this model land in roughly the 0.04 to 0.17 range, so the text-modality default of `0.70` would block all rules. Tune against your own evaluation corpus before relying on it in production, and replace the `ambient_office_imagery` anchors with content specific to your deployment surface.
 
 ### Authoring tips for image anchors
 

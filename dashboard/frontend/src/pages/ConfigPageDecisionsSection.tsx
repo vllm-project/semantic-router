@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import styles from './ConfigPage.module.css'
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfirmDialog from '../components/ConfirmDialog'
+import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
-import { DataTable, type Column } from '../components/DataTable'
+import { DataTable } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
 import type { ViewSection } from '../components/ViewModal'
 import type {
@@ -16,10 +17,17 @@ import type {
   DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
-import { TABLE_COLUMN_WIDTH } from './configPageSupport'
+import {
+  cloneDecisionConditions,
+  conditionHasNestedRules,
+  decisionRulesForSave,
+  mergeDecisionForSave,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
+import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import { decisionColumns } from './configPageDecisionTable'
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
@@ -33,6 +41,8 @@ interface ConfigPageDecisionsSectionProps {
   removeDecisionByName: (cfg: ConfigData, targetName: string) => void
   models: NormalizedModel[]
 }
+
+type DecisionRow = DecisionConfig
 
 export default function ConfigPageDecisionsSection({
   config,
@@ -49,61 +59,24 @@ export default function ConfigPageDecisionsSection({
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
-  const decisions = config?.decisions || []
+  const {
+    applyScopedConfig,
+    routingScopes,
+    scopedConfig,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useRoutingScopeManager(config)
+  useEffect(() => {
+    setDecisionPendingDelete(null)
+    setDecisionDeleteError(null)
+  }, [selectedScopeId])
+  const decisions = scopedConfig?.decisions || []
 
   const filteredDecisions = decisions.filter(
     (decision) =>
       decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
       decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase()),
   )
-
-  type DecisionRow = NonNullable<ConfigData['decisions']>[number]
-  const decisionsColumns: Column<DecisionRow>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'priority',
-      header: 'Priority',
-      width: TABLE_COLUMN_WIDTH.compact,
-      align: 'center',
-      sortable: true,
-      render: (row) => (
-        <span className={`${styles.tableMetaBadge} ${styles.tableMetaBadgeMono}`}>
-          P{row.priority}
-        </span>
-      ),
-    },
-    {
-      key: 'conditions',
-      header: 'Conditions',
-      width: TABLE_COLUMN_WIDTH.medium,
-      render: (row) => {
-        const count = row.rules?.conditions?.length || 0
-        return (
-          <span>
-            {count} {count === 1 ? 'condition' : 'conditions'}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'models',
-      header: 'Models',
-      width: TABLE_COLUMN_WIDTH.medium,
-      render: (row) => {
-        const count = row.modelRefs?.length || 0
-        return (
-          <span>
-            {count} {count === 1 ? 'model' : 'models'}
-          </span>
-        )
-      },
-    },
-  ]
 
   const renderDecisionModelRefSummary = (
     ref: DecisionConfig['modelRefs'][number],
@@ -164,6 +137,7 @@ export default function ConfigPageDecisionsSection({
         title: 'Rules',
         fields: [
           { label: 'Operator', value: decision.rules?.operator || 'N/A' },
+          { label: 'On unknown', value: decision.rules?.on_unknown || 'Legacy default' },
           {
             label: 'Conditions',
             value: decision.rules?.conditions?.length ? (
@@ -270,6 +244,7 @@ export default function ConfigPageDecisionsSection({
       'authz',
       'jailbreak',
       'pii',
+      'conversation',
       'projection',
     ] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
@@ -312,6 +287,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'conversation':
+          return config?.signals?.conversation?.map((c) => c.name) || []
         case 'projection':
           return projectionOutputs
         default:
@@ -324,6 +301,7 @@ export default function ConfigPageDecisionsSection({
       description: '',
       priority: 1,
       operator: 'AND',
+      on_unknown: '',
       conditions: [{ type: 'keyword', name: '' }],
       modelRefs: [
         {
@@ -344,10 +322,8 @@ export default function ConfigPageDecisionsSection({
             description: decision.description || '',
             priority: decision.priority ?? 1,
             operator: decision.rules?.operator || 'AND',
-            conditions: (decision.rules?.conditions || []).map((cond) => ({
-              type: cond.type,
-              name: cond.name,
-            })),
+            on_unknown: decision.rules?.on_unknown || '',
+            conditions: cloneDecisionConditions(decision.rules?.conditions),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
               use_reasoning: !!ref.use_reasoning,
@@ -370,6 +346,13 @@ export default function ConfigPageDecisionsSection({
       const rows = (Array.isArray(value) ? value : []).length
         ? value
         : [{ type: 'keyword', name: '' }]
+      if (rows.some(conditionHasNestedRules)) {
+        return (
+          <p className={decisionStyles.editorHelp} role="note">
+            Nested boolean rules are preserved unchanged. Use DSL mode to edit this rule tree.
+          </p>
+        )
+      }
 
       const updateItem = (index: number, key: 'type' | 'name', val: string) => {
         const next = rows.map((item, idx) => {
@@ -644,6 +627,14 @@ export default function ConfigPageDecisionsSection({
         required: true,
       },
       {
+        name: 'on_unknown',
+        label: 'On Unknown',
+        type: 'select',
+        options: ['', 'no_match', 'match', 'fail_request'],
+        description:
+          'When a signal evaluator fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
+      },
+      {
         name: 'conditions',
         label: 'Conditions',
         type: 'custom',
@@ -704,7 +695,13 @@ export default function ConfigPageDecisionsSection({
         if (!type || !conditionName) {
           throw new Error(`Condition #${idx + 1} needs both type and name.`)
         }
-        return { type, name: conditionName }
+        return {
+          type,
+          name: conditionName,
+          ...(condition.label ? { label: condition.label } : {}),
+          ...(condition.predicate ? { predicate: condition.predicate } : {}),
+          ...(condition.on_error ? { on_error: condition.on_error } : {}),
+        }
       })
 
       const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
@@ -766,19 +763,23 @@ export default function ConfigPageDecisionsSection({
         return { type, configuration }
       })
 
-      const newDecision: DecisionConfig = {
+      const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
         description: formData.description,
         priority: priority || 0,
-        rules: {
+        rules: decisionRulesForSave(decision?.rules, {
           operator: formData.operator,
           conditions,
-        },
+          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
+        }),
         modelRefs,
         plugins,
-      }
+      })
 
-      const newConfig: ConfigData = cloneConfigData(config)
+      if (!scopedConfig) {
+        throw new Error('Routing profile not loaded yet.')
+      }
+      const newConfig: ConfigData = cloneConfigData(scopedConfig)
       newConfig.decisions = [...(newConfig.decisions || [])]
 
       if (mode === 'edit' && decision) {
@@ -786,7 +787,7 @@ export default function ConfigPageDecisionsSection({
       }
 
       newConfig.decisions.push(newDecision)
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
     }
 
     openEditModal<DecisionFormState>(
@@ -817,9 +818,12 @@ export default function ConfigPageDecisionsSection({
     setDecisionDeletePending(true)
     setDecisionDeleteError(null)
     try {
-      const newConfig: ConfigData = cloneConfigData(config)
+      if (!scopedConfig) {
+        throw new Error('Routing profile not loaded yet.')
+      }
+      const newConfig: ConfigData = cloneConfigData(scopedConfig)
       removeDecisionByName(newConfig, decisionPendingDelete.name)
-      await saveConfig(newConfig)
+      await saveConfig(applyScopedConfig(newConfig))
       setDecisionPendingDelete(null)
     } catch (error) {
       setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')
@@ -835,6 +839,11 @@ export default function ConfigPageDecisionsSection({
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>
+          <RoutingScopeSelector
+            scopes={routingScopes}
+            value={selectedScopeId}
+            onChange={setSelectedScopeId}
+          />
           <TableHeader
             title="Routing Decisions"
             count={decisions.length}
@@ -847,7 +856,7 @@ export default function ConfigPageDecisionsSection({
             variant="embedded"
           />
           <DataTable
-            columns={decisionsColumns}
+            columns={decisionColumns}
             data={filteredDecisions}
             keyExtractor={(row) => row.name}
             onView={handleViewDecision}

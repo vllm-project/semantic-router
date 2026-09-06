@@ -1,3 +1,9 @@
+//go:build !windows && cgo && (amd64 || arm64)
+
+// This suite exercises the native Candle backend's behavioral contract and only
+// runs under the CGO build. The non-CGO stub's fail-closed contract is verified
+// separately in semantic-router_mock_test.go.
+
 package candle_binding
 
 import (
@@ -451,6 +457,55 @@ func TestBERTClassifiers(t *testing.T) {
 		}
 
 		t.Logf("BERT jailbreak classification: Class=%d, Confidence=%.4f", result.Class, result.Confidence)
+	})
+
+	t.Run("BERTJailbreakClassifierWithProbs", func(t *testing.T) {
+		// ClassifyJailbreakTextWithProbs must agree with ClassifyJailbreakText's
+		// top-1 prediction and return a full, normalized distribution.
+		numClasses := 2
+		err := InitJailbreakClassifier(JailbreakClassifierModelPath, numClasses, true)
+		if err != nil {
+			if isModelInitializationError(err) {
+				t.Skipf("Skipping BERT jailbreak with-probs test due to model initialization error: %v", err)
+			}
+			t.Skipf("BERT jailbreak classifier not available: %v", err)
+		}
+
+		top1, err := ClassifyJailbreakText(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with BERT: %v", err)
+		}
+
+		withProbs, err := ClassifyJailbreakTextWithProbs(JailbreakText)
+		if err != nil {
+			t.Fatalf("Failed to classify jailbreak with probabilities: %v", err)
+		}
+
+		if withProbs.Class != top1.Class {
+			t.Errorf("argmax class mismatch: ClassifyJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+		}
+		if withProbs.Confidence != top1.Confidence {
+			t.Errorf("confidence mismatch: ClassifyJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+		}
+		if withProbs.NumClasses != numClasses || len(withProbs.Probabilities) != numClasses {
+			t.Errorf("expected %d probabilities, got NumClasses=%d len=%d", numClasses, withProbs.NumClasses, len(withProbs.Probabilities))
+		}
+
+		var sum float32
+		for _, p := range withProbs.Probabilities {
+			sum += p
+		}
+		if sum < 0.99 || sum > 1.01 {
+			t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+		}
+		if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+			if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+				t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+			}
+		}
+
+		t.Logf("BERT jailbreak with-probs classification: Class=%d, Confidence=%.4f, Probabilities=%v",
+			withProbs.Class, withProbs.Confidence, withProbs.Probabilities)
 	})
 }
 
@@ -3366,6 +3421,54 @@ func TestDebertaComparison(t *testing.T) {
 	}
 }
 
+// TestModernBertJailbreakClassifierWithProbs verifies that
+// ClassifyModernBertJailbreakTextWithProbs agrees with
+// ClassifyModernBertJailbreakText's top-1 prediction and returns a full,
+// normalized distribution.
+func TestModernBertJailbreakClassifierWithProbs(t *testing.T) {
+	numClasses := 2
+	err := InitModernBertJailbreakClassifier(JailbreakClassifierModelPath, true)
+	if err != nil {
+		if isModelInitializationError(err) {
+			t.Skipf("Skipping ModernBERT jailbreak with-probs test due to model initialization error: %v", err)
+		}
+		t.Skipf("ModernBERT jailbreak classifier not available: %v", err)
+	}
+
+	top1, err := ClassifyModernBertJailbreakText(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with ModernBERT: %v", err)
+	}
+
+	withProbs, err := ClassifyModernBertJailbreakTextWithProbs(JailbreakText)
+	if err != nil {
+		t.Fatalf("Failed to classify jailbreak with probabilities using ModernBERT: %v", err)
+	}
+
+	if withProbs.Class != top1.Class {
+		t.Errorf("argmax class mismatch: ClassifyModernBertJailbreakText=%d, WithProbs=%d", top1.Class, withProbs.Class)
+	}
+	if withProbs.Confidence != top1.Confidence {
+		t.Errorf("confidence mismatch: ClassifyModernBertJailbreakText=%.6f, WithProbs=%.6f", top1.Confidence, withProbs.Confidence)
+	}
+	if len(withProbs.Probabilities) != numClasses {
+		t.Errorf("expected %d probabilities, got %d", numClasses, len(withProbs.Probabilities))
+	}
+
+	var sum float32
+	for _, p := range withProbs.Probabilities {
+		sum += p
+	}
+	if sum < 0.99 || sum > 1.01 {
+		t.Errorf("probabilities should sum to ~1.0, got %f", sum)
+	}
+	if withProbs.Class >= 0 && withProbs.Class < len(withProbs.Probabilities) {
+		if p := withProbs.Probabilities[withProbs.Class]; p != withProbs.Confidence {
+			t.Errorf("probability at predicted class (%.6f) should equal reported confidence (%.6f)", p, withProbs.Confidence)
+		}
+	}
+}
+
 // BenchmarkDebertaJailbreakClassifier benchmarks DeBERTa v3 classification performance
 func BenchmarkDebertaJailbreakClassifier(b *testing.B) {
 	err := InitDebertaJailbreakClassifier(DebertaJailbreakModelPath, true)
@@ -3948,7 +4051,9 @@ func TestMmBert32KModelConstants(t *testing.T) {
 //   - 1Cute-doggy.jpg      : CC0 1.0 Universal (author: X posid)
 //   - 1908_Ford_Model_T.jpg: Public Domain (published 1908, pre-1930)
 const (
-	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg"
+	// Direct (non-thumbnail) URL: the 512px thumbnail rendition of this file
+	// started returning HTTP 400 from Wikimedia's thumbor service.
+	wikiCatURL = "https://upload.wikimedia.org/wikipedia/commons/6/6f/Tuxedo_kitten.jpg"
 	wikiDogURL = "https://upload.wikimedia.org/wikipedia/commons/a/a7/1Cute-doggy.jpg"
 	wikiCarURL = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/1908_Ford_Model_T.jpg/960px-1908_Ford_Model_T.jpg"
 )
@@ -3957,10 +4062,20 @@ func getMultiModalModelPath() string {
 	return os.Getenv("MULTIMODAL_MODEL_PATH")
 }
 
+// wikimediaUserAgent identifies these tests per Wikimedia's User-Agent policy
+// (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
+// Wikimedia returns HTTP 403 for default library User-Agent strings.
+const wikimediaUserAgent = "semantic-router-tests/1.0 (https://github.com/vllm-project/semantic-router)"
+
 func downloadImageBytes(t *testing.T, url string) []byte {
 	t.Helper()
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("Failed to build request for %s: %v", url, err)
+	}
+	req.Header.Set("User-Agent", wikimediaUserAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("Failed to download %s: %v", url, err)
 	}
@@ -4420,6 +4535,27 @@ func TestMultiModalCrossModalRetrieval(t *testing.T) {
 
 // TestMultiModalInputValidation tests error handling for invalid inputs
 func TestMultiModalInputValidation(t *testing.T) {
+	// Run against a verified-working model (the TestMultiModalEmbeddingInit
+	// init-then-probe pattern) so the rejections below are attributable to
+	// the pure-Go validation layer rather than a missing or broken model:
+	// if a validation check regressed, the call falls through to a working
+	// encode instead of passing vacuously because the model is not loaded.
+	// Also removes the dependence on TestMultiModalEmbeddingInit running
+	// first in source order.
+	modelPath := getMultiModalModelPath()
+	if modelPath == "" {
+		t.Skip("MULTIMODAL_MODEL_PATH environment variable not set")
+	}
+	if err := InitMultiModalEmbeddingModel(modelPath, true); err != nil {
+		// Init may error if the model is already initialized; probe an
+		// encode to distinguish that from a genuinely broken model path,
+		// which must fail the test rather than let the negative subtests
+		// below pass vacuously.
+		if _, probeErr := MultiModalEncodeText("probe", 0); probeErr != nil {
+			t.Fatalf("multi-modal model not functional: %v", err)
+		}
+	}
+
 	t.Run("EmptyText", func(t *testing.T) {
 		_, err := MultiModalEncodeText("", 0)
 		if err == nil {
@@ -4686,4 +4822,27 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	}
 	t.Run("modality", func(t *testing.T) { runModalityLongPrompt(t, longText) })
 	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
+}
+
+// TestSupportsBatchedEmbedding verifies that only qwen3 reports batched support;
+// all other model types (including the default mmbert) use the single-text path.
+func TestSupportsBatchedEmbedding(t *testing.T) {
+	cases := []struct {
+		modelType string
+		want      bool
+	}{
+		{"qwen3", true},
+		{"Qwen3", true},
+		{"  qwen3  ", true},
+		{"mmbert", false},
+		{"gemma", false},
+		{"bert", false},
+		{"modernbert", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := SupportsBatchedEmbedding(tc.modelType); got != tc.want {
+			t.Errorf("SupportsBatchedEmbedding(%q) = %v, want %v", tc.modelType, got, tc.want)
+		}
+	}
 }

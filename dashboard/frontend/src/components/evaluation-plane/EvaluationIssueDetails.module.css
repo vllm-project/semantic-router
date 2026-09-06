@@ -1,0 +1,45 @@
+.details {
+  width: min(38rem, 100%);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.summary {
+  width: fit-content;
+  color: inherit;
+  font-weight: 650;
+}
+
+.details dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.55rem 0 0;
+}
+
+.details dl > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.35fr) minmax(0, 1fr);
+  gap: 0.65rem;
+}
+
+.details dt {
+  color: var(--text-secondary);
+  font-weight: 650;
+}
+
+.details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .details {
+    width: 100%;
+  }
+
+  .details dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}

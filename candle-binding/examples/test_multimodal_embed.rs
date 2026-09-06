@@ -21,8 +21,10 @@ use tokenizers::Tokenizer;
 ///   - 1908_Ford_Model_T.jpg : Public Domain (published 1908, pre-1930)
 const IMAGE_URLS: &[(&str, &str)] = &[
     (
+        // Direct (non-thumbnail) URL: the 512px thumbnail rendition of this
+        // file started returning HTTP 400 from Wikimedia's thumbor service.
         "cat",
-        "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Tuxedo_kitten.jpg/512px-Tuxedo_kitten.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/6/6f/Tuxedo_kitten.jpg",
     ),
     (
         "dog",
@@ -34,9 +36,17 @@ const IMAGE_URLS: &[(&str, &str)] = &[
     ),
 ];
 
+/// Wikimedia returns HTTP 403 for default library User-Agent strings, so
+/// identify this example per Wikimedia's User-Agent policy.
+const WIKIMEDIA_USER_AGENT: &str =
+    "semantic-router-tests/1.0 (https://github.com/vllm-project/semantic-router)";
+
 fn download_image(url: &str) -> Vec<u8> {
     println!("  Downloading {}...", url);
-    let resp = ureq::get(url).call().expect("HTTP request failed");
+    let resp = ureq::get(url)
+        .set("User-Agent", WIKIMEDIA_USER_AGENT)
+        .call()
+        .expect("HTTP request failed");
     let len: usize = resp
         .header("Content-Length")
         .and_then(|v| v.parse().ok())

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -20,9 +21,9 @@ type CanonicalGlobal struct {
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
 	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  string                `yaml:"strategy,omitempty"`
+	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
 	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string              `yaml:"auto_model_names,omitempty"`
+	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
@@ -45,15 +46,16 @@ type CanonicalServiceGlobal struct {
 	Observability ObservabilityConfig `yaml:"observability"`
 	Authz         AuthzConfig         `yaml:"authz"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
+	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
 	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
 	StartupStatus StartupStatusConfig `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
 type CanonicalStoreGlobal struct {
-	SemanticCache SemanticCache      `yaml:"semantic_cache"`
-	Memory        MemoryConfig       `yaml:"memory"`
-	VectorStore   *VectorStoreConfig `yaml:"vector_store,omitempty"`
+	ResponseCache ResponseCacheStoreConfig `yaml:"response_cache"`
+	Memory        MemoryConfig             `yaml:"memory"`
+	VectorStore   *VectorStoreConfig       `yaml:"vector_store,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -65,11 +67,12 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels `yaml:"embeddings"`
-	System     CanonicalSystemModels    `yaml:"system"`
-	External   []ExternalModelConfig    `yaml:"external,omitempty"`
-	KBs        []KnowledgeBaseConfig    `yaml:"kbs,omitempty"`
-	Modules    CanonicalModelModules    `yaml:"modules"`
+	Embeddings CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System     CanonicalSystemModels      `yaml:"system"`
+	External   []ExternalModelConfig      `yaml:"external,omitempty"`
+	KBs        []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
+	Modules    CanonicalModelModules      `yaml:"modules"`
+	Admission  map[string]AdmissionConfig `yaml:"admission,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -128,11 +131,10 @@ type CanonicalPIIModule struct {
 // CanonicalHallucinationModule keeps the mitigation block readable by splitting
 // fact-check, detector, and explainer responsibilities.
 type CanonicalHallucinationModule struct {
-	Enabled                 bool                           `yaml:"enabled,omitempty"`
-	OnHallucinationDetected string                         `yaml:"on_hallucination_detected,omitempty"`
-	FactCheck               CanonicalFactCheckModule       `yaml:"fact_check"`
-	Detector                CanonicalHallucinationDetector `yaml:"detector"`
-	Explainer               CanonicalExplainerModule       `yaml:"explainer"`
+	Enabled   bool                           `yaml:"enabled,omitempty"`
+	FactCheck CanonicalFactCheckModule       `yaml:"fact_check"`
+	Detector  CanonicalHallucinationDetector `yaml:"detector"`
+	Explainer CanonicalExplainerModule       `yaml:"explainer"`
 }
 
 type CanonicalFactCheckModule struct {
@@ -166,11 +168,10 @@ func (m CanonicalClassifierModule) runtimeConfig() Classifier {
 
 func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationConfig {
 	return HallucinationMitigationConfig{
-		Enabled:                 m.Enabled,
-		FactCheckModel:          m.FactCheck.FactCheckModelConfig,
-		HallucinationModel:      m.Detector.HallucinationModelConfig,
-		NLIModel:                m.Explainer.NLIModelConfig,
-		OnHallucinationDetected: m.OnHallucinationDetected,
+		Enabled:            m.Enabled,
+		FactCheckModel:     m.FactCheck.FactCheckModelConfig,
+		HallucinationModel: m.Detector.HallucinationModelConfig,
+		NLIModel:           m.Explainer.NLIModelConfig,
 	}
 }
 
@@ -196,10 +197,88 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
+	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
+	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
+		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
+			// The canonical default is a local mmBERT variant. A remote backend
+			// supplied by a sparse override must replace that inherited local
+			// selector, otherwise the merged value is rejected as a mixed local /
+			// remote configuration. Do this only when backend is present in the
+			// raw override: an unrelated sparse module override must preserve the
+			// inherited local default.
+			categoryModel.Variant = ""
+			categoryModel.UseModernBERT = false
+			categoryModel.UseMmBERT32K = false
+		}
+		if !hasRawKey(rawDomain, "variant") &&
+			(hasRawKey(rawDomain, "use_modernbert") || hasRawKey(rawDomain, "use_mmbert_32k")) {
+			// A sparse legacy override must be able to replace the canonical
+			// default variant, including the explicit false/false form used to
+			// clear it.
+			categoryModel.Variant = ""
+		}
+	}
+	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
+		return CanonicalGlobal{}, err
+	}
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
+// canonical override has been merged onto defaults. A legacy key in that
+// override is allowed to replace an inherited default variant; an explicitly
+// configured variant alongside a legacy selector remains an error.
+func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
+	if model == nil {
+		return nil
+	}
+	if err := model.ValidateLocalVariant(); err != nil {
+		return err
+	}
+	variant, err := model.EffectiveVariant()
+	if err != nil {
+		return err
+	}
+	if variant != "" {
+		model.Variant = variant
+		model.UseModernBERT = false
+		model.UseMmBERT32K = false
+	}
+	return nil
+}
+
+func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
+	if rawOverride == nil || rawOverride.IsEmpty() {
+		return nil
+	}
+	var global map[string]interface{}
+	if err := rawOverride.DecodeInto(&global); err != nil {
+		return nil
+	}
+	modelCatalog := nestedStringMap(global["model_catalog"])
+	modules := nestedStringMap(modelCatalog["modules"])
+	classifier := nestedStringMap(modules["classifier"])
+	return nestedStringMap(classifier["domain"])
+}
+
+func hasRawKey(raw map[string]interface{}, key string) bool {
+	_, ok := raw[key]
+	return ok
+}
+
+func hasActiveRawCategoryLocalSelector(raw map[string]interface{}) bool {
+	if variant, ok := raw["variant"].(string); ok && strings.TrimSpace(variant) != "" {
+		return true
+	}
+	return rawBoolValue(raw, "use_modernbert") || rawBoolValue(raw, "use_mmbert_32k")
+}
+
+func rawBoolValue(raw map[string]interface{}, key string) bool {
+	value, ok := raw[key].(bool)
+	return ok && value
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
@@ -210,7 +289,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ConfigSource = global.Router.ConfigSource
 	cfg.Strategy = global.Router.Strategy
 	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = append([]string(nil), global.Router.AutoModelNames...)
+	cfg.AutoModelNames = nil
+	if global.Router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
+	}
 	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
@@ -225,10 +307,11 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.Observability = global.Services.Observability
 	cfg.Authz = global.Services.Authz
 	cfg.RateLimit = global.Services.RateLimit
+	cfg.ManagementAPI = global.Services.ManagementAPI
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 
-	cfg.SemanticCache = global.Stores.SemanticCache
+	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
 
@@ -246,8 +329,20 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.HallucinationMitigation = global.ModelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
+	cfg.ModelAdmission = cloneAdmissionMap(global.ModelCatalog.Admission)
 
 	return nil
+}
+
+func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
+	if len(admission) == 0 {
+		return nil
+	}
+	cloned := make(map[string]AdmissionConfig, len(admission))
+	for key, value := range admission {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func resolveModuleModelRefs(global *CanonicalGlobal) error {

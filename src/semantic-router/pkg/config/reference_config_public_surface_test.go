@@ -32,6 +32,21 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 	)
 }
 
+func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, root, "entrypoints"),
+		reflect.TypeOf(CanonicalEntrypoint{}),
+		"entrypoints",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, root, "recipes"),
+		reflect.TypeOf(CanonicalRecipe{}),
+		"recipes",
+	)
+}
+
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
 	routing := mustMapAt(t, root, "routing")
 
@@ -79,6 +94,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "events"), reflect.TypeOf(EventRule{}), "routing.signals.events")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "routing.signals.input_modality")
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {

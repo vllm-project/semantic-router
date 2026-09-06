@@ -29,6 +29,17 @@ func DoGETRequest(ctx context.Context, httpClient *http.Client, url string) (*HT
 	return doJSONRequest(ctx, httpClient, http.MethodGet, url, nil, nil)
 }
 
+// DoGETRequestWithHeaders sends an authenticated or otherwise header-scoped
+// GET request and returns the raw HTTP response.
+func DoGETRequestWithHeaders(
+	ctx context.Context,
+	httpClient *http.Client,
+	url string,
+	headers map[string]string,
+) (*HTTPResponse, error) {
+	return doJSONRequest(ctx, httpClient, http.MethodGet, url, nil, headers)
+}
+
 // DoPOSTRequest sends a POST request with a JSON payload and returns the raw HTTP response.
 func DoPOSTRequest(ctx context.Context, httpClient *http.Client, url string, payload any) (*HTTPResponse, error) {
 	return doJSONRequest(ctx, httpClient, http.MethodPost, url, payload, nil)

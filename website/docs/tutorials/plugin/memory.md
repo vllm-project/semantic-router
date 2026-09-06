@@ -4,8 +4,6 @@
 
 `memory` is a route-local plugin for retrieving and storing conversation memory.
 
-It aligns to `config/plugin/memory/session-memory.yaml`.
-
 ## Key Advantages
 
 - Keeps memory behavior local to the routes that benefit from it.
@@ -30,16 +28,22 @@ The memory plugin requires a backing store configured under `global.stores.memor
 - **Valkey** — lightweight single-binary option using the Search module, best for dev/test or existing Valkey infra
 - **Qdrant** — single-binary with gRPC, simpler ops than Milvus, good for small-to-large workloads
 
-See the [Stores and Tools](../global/stores-and-tools.md) tutorial for global memory configuration, the [Valkey Memory deployment guide](../../installation/valkey-memory.md) for Valkey-specific setup, or the [Qdrant deployment guide](../../installation/qdrant.md) for Qdrant-specific setup.
+See the [Stores and Tools](../global/stores-and-tools) tutorial for global memory configuration, the [Valkey Memory deployment guide](../../installation/valkey-memory) for Valkey-specific setup, or the [Qdrant deployment guide](../../installation/qdrant) for Qdrant-specific setup.
 
-Use this fragment under `routing.decisions[].plugins`:
+Add the plugin under `routing.decisions[].plugins`:
 
 ```yaml
-plugin:
-  type: memory
-  configuration:
-    enabled: true
-    retrieval_limit: 5
-    similarity_threshold: 0.72
-    auto_store: true
+plugins:
+  - type: memory
+    configuration:
+      enabled: true
+      retrieval_limit: 5
+      similarity_threshold: 0.72
+      auto_store: true
 ```
+
+Memory can persist request-derived content and send retrieved memories to the
+selected model. Choose user/tenant isolation, retention, authentication, and
+transport security appropriate for that data. Thresholds depend on the
+embedding model. See a complete example:
+[`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).

@@ -97,9 +97,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.92
           - type: system_prompt
             configuration:
@@ -169,9 +170,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.75
           - type: system_prompt
             configuration:
@@ -190,9 +192,10 @@ config:
           - model: vllm-llama3-8b-instruct
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.95
           - type: system_prompt
             configuration:
@@ -424,7 +427,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

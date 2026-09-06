@@ -26,7 +26,7 @@ export default function CommunityMemberCard({
         [styles.muted]: variant === 'muted',
       })}
     >
-      <header className={styles.header}>
+      <div className={styles.row}>
         <img
           src={member.avatar}
           alt=""
@@ -34,18 +34,34 @@ export default function CommunityMemberCard({
           loading="lazy"
         />
         <div className={styles.identity}>
-          <div className={styles.nameLine}>
-            <h3>{member.name}</h3>
-            <span
-              className={clsx(
-                styles.badge,
-                styles[badgeContext === 'steering' ? 'steering' : member.memberType],
-              )}
-            >
-              {getTeamMemberBadge(member, badgeContext)}
-            </span>
+          <h3>{member.name}</h3>
+          <span
+            className={clsx(
+              styles.badge,
+              styles[badgeContext === 'steering' ? 'steering' : member.memberType],
+            )}
+          >
+            {getTeamMemberBadge(member, badgeContext)}
+          </span>
+
+          <div className={styles.links}>
+            {member.github && member.github !== '#' && (
+              <MemberLink href={member.github} label="GitHub" icon={<FaGithub />} />
+            )}
+            {member.linkedin && (
+              <MemberLink href={member.linkedin} label="LinkedIn" icon={<FaLinkedin />} />
+            )}
+            {member.externalLinks?.map(link => (
+              <MemberLink
+                key={link.href}
+                href={link.href}
+                label={link.label}
+                icon={<FaExternalLinkAlt />}
+              />
+            ))}
           </div>
-          <p>
+
+          <span className={styles.role}>
             {member.role}
             {member.company && (
               <span>
@@ -53,41 +69,11 @@ export default function CommunityMemberCard({
                 {member.company}
               </span>
             )}
-          </p>
+          </span>
         </div>
-      </header>
+      </div>
 
       <p className={styles.bio}>{member.bio}</p>
-
-      {member.expertise && (
-        <ul className={styles.expertise} aria-label="Areas of expertise">
-          {member.expertise.map((expertise, index) => (
-            <li key={index}>{expertise}</li>
-          ))}
-        </ul>
-      )}
-
-      <div className={styles.links}>
-        {member.github && member.github !== '#' && (
-          <MemberLink href={member.github} icon={<FaGithub />}>
-            GitHub
-          </MemberLink>
-        )}
-        {member.linkedin && (
-          <MemberLink href={member.linkedin} icon={<FaLinkedin />}>
-            LinkedIn
-          </MemberLink>
-        )}
-        {member.externalLinks?.map(link => (
-          <MemberLink
-            key={link.href}
-            href={link.href}
-            icon={<FaExternalLinkAlt />}
-          >
-            {link.label}
-          </MemberLink>
-        ))}
-      </div>
     </article>
   )
 }
@@ -95,17 +81,15 @@ export default function CommunityMemberCard({
 function MemberLink({
   href,
   icon,
-  children,
+  label,
 }: {
   href: string
   icon: ReactNode
-  children: ReactNode
+  label: string
 }): ReactNode {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer">
+    <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}>
       {icon}
-      <span>{children}</span>
-      <span aria-hidden="true">↗</span>
     </a>
   )
 }

@@ -203,35 +203,40 @@ For `routing.signals.structure`, `feature.type: density` now uses built-in multi
 The repository now separates the exhaustive canonical reference config from reusable routing fragments:
 
 - `config/config.yaml`: exhaustive canonical reference config
-- `config/signal/`: reusable `routing.signals` fragments
-- `config/decision/`: reusable `routing.decisions` rule-shape fragments
-- `config/algorithm/`: reusable `decision.algorithm` snippets
-- `config/plugin/`: reusable route-plugin snippets
+- `config/fragments/signal/`: reusable `routing.signals` fragments
+- `config/fragments/decision/`: reusable `routing.decisions` rule-shape fragments
+- `config/fragments/algorithm/`: reusable `decision.algorithm` snippets
+- `config/fragments/plugin/`: reusable route-plugin snippets
 
-`config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
-`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`.
-`config/plugin/` is organized one plugin or reusable bundle per directory.
+`config/fragments/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
+`config/fragments/algorithm/` is organized by routing policy family: `looper/` and `selection/`.
+`config/fragments/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
+
+The four fragment families previously lived directly under `config/`. Update
+repository links and automation to use `config/fragments/...`. This is an asset
+path migration only; the YAML configuration schema and runtime field names do
+not change.
 
 Latest tutorials follow the same taxonomy:
 
-- `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/signal/`
-- `tutorials/decision/` for `config/decision/`
-- `tutorials/algorithm/` for `config/algorithm/`, with one page per algorithm
-- `tutorials/plugin/` for `config/plugin/`, with one page per plugin
+- `tutorials/signal/overview` plus `tutorials/signal/heuristic/` and `tutorials/signal/learned/` for `config/fragments/signal/`
+- `tutorials/decision/` for `config/fragments/decision/`
+- `tutorials/algorithm/` for `config/fragments/algorithm/`, with one page per algorithm
+- `tutorials/plugin/` for `config/fragments/plugin/`, with one page per plugin
 - `tutorials/global/` for sparse router-wide overrides under `global:`
 
 Repo-owned runtime and harness assets now live outside `config/`:
 
-- `deploy/examples/runtime/semantic-cache/`
-- `deploy/examples/runtime/response-api/`
-- `deploy/examples/runtime/tools/`
+- `config/runtime/semantic-cache/`
+- `config/runtime/response-api/`
+- `config/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 Test-only ONNX binding assets now live under `e2e/config/onnx-binding/`.
 
-Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `deploy/examples/runtime/tools/tools_db.json` for local development.
+Those directories are support assets, not the main user-facing config contract. For hand-authored config, start from `config/config.yaml` or the fragment directories above. In this repository, the exhaustive reference config points `global.integrations.tools.tools_db_path` at `config/runtime/tools/tools_db.json` for local development.
 
 `config/config.yaml` is not just a sample anymore. The repository enforces it as the exhaustive public-contract reference:
 
@@ -257,8 +262,8 @@ The dashboard mirrors the same contract:
 
 For a focused tutorial, read [Projections](../tutorials/projection/overview). For a maintained end-to-end example, use:
 
-- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+- [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+- [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 ## How to use it
 
@@ -436,4 +441,4 @@ When `--source` is omitted, the importer checks `OPENCLAW_CONFIG_PATH`, `./openc
 1. Use DSL for `routing.modelCards`, `routing.signals`, and `routing.decisions`.
 2. Importing a full YAML file still works, but only `routing` is decompiled into DSL.
 3. Keep endpoints, API keys, listeners, and `global` in YAML.
-4. Reusable routing fragments now live under `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/`.
+4. Reusable routing fragments now live under `config/fragments/signal/`, `config/fragments/decision/`, `config/fragments/algorithm/`, and `config/fragments/plugin/`.

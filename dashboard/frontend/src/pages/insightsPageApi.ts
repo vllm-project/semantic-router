@@ -1,4 +1,4 @@
-import type { InsightsRecord } from './insightsPageTypes'
+import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 
 export class InsightsRequestError extends Error {
   readonly status: number
@@ -19,7 +19,18 @@ export async function fetchInsightsJSON<T>(url: string, label: string): Promise<
 }
 
 export function fetchInsightsRecord(recordId: string) {
-  return fetchInsightsJSON<InsightsRecord>(`/api/router/v1/router_replay/${recordId}`, 'insight record')
+  return fetchInsightsJSON<InsightsRecord>(
+    `/api/router/v1/router_replay/${recordId}`,
+    'insight record',
+  )
+}
+
+export function fetchInsightsTrajectory(sessionId: string) {
+  const query = new URLSearchParams({ session_id: sessionId })
+  return fetchInsightsJSON<InsightsTrajectory>(
+    `/api/router/v1/router_replay/trajectory?${query.toString()}`,
+    'record trace',
+  )
 }
 
 export function isInsightsReplayUnavailableError(error: unknown) {

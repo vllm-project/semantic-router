@@ -4,7 +4,7 @@
 
 `automix` is a selection algorithm that optimizes cost-quality tradeoff using **POMDP (Partially Observable Markov Decision Process)** based cascaded routing with self-verification.
 
-It aligns to `config/algorithm/selection/automix.yaml`.
+It aligns to `config/fragments/algorithm/selection/automix.yaml`.
 
 **Paper**: [Automatically Mixing Language Models](https://arxiv.org/abs/2310.12963) (NeurIPS 2024)
 

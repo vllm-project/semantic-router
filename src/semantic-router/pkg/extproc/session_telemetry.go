@@ -4,6 +4,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -43,7 +44,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
-	sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
+	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 
 	domain := consts.UnknownLabel
@@ -63,26 +64,29 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		CacheAccountingSource:       accounting.source,
 		CacheAccountingConfidence:   accounting.confidence,
 		Pricing:                     pricing,
+		RoutingScope:                ctx.Routing.RecipeName(),
+		SkipRoutingState:            requestBypassesRouting(ctx),
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		if ctx.ResponseAPICtx.ConversationID == "" {
+	if state := ctx.ResponseObjectState; state != nil {
+		if state.SessionTrackingID == "" {
 			return
 		}
 		p.ResponseAPI = &sessiontelemetry.ResponseAPIInput{
-			ConversationID: ctx.ResponseAPICtx.ConversationID,
-			HistoryLen:     len(ctx.ResponseAPICtx.ConversationHistory),
+			ConversationID:    state.ConversationID,
+			SessionTrackingID: state.SessionTrackingID,
+			HistoryLen:        len(state.ConversationHistory),
 		}
 	} else {
 		userID := extractUserID(ctx)
-		if userID == "" || len(ctx.ChatCompletionMessages) == 0 {
+		if userID == "" || ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
 			recordRouterSessionUsageFromContext(ctx, usage, pricing, accounting)
 			return
 		}
-		msgs := make([]sessiontelemetry.ChatMessage, len(ctx.ChatCompletionMessages))
-		for i := range ctx.ChatCompletionMessages {
+		msgs := make([]sessiontelemetry.ChatMessage, len(ctx.SemanticRequest.Messages))
+		for i := range ctx.SemanticRequest.Messages {
 			msgs[i] = sessiontelemetry.ChatMessage{
-				Role:    ctx.ChatCompletionMessages[i].Role,
-				Content: ctx.ChatCompletionMessages[i].Content,
+				Role:    string(ctx.SemanticRequest.Messages[i].Role),
+				Content: semanticText(ctx.SemanticRequest.Messages[i].Content),
 			}
 		}
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
@@ -97,12 +101,12 @@ func recordRouterSessionUsageFromContext(
 	pricing sessiontelemetry.TurnPricing,
 	accounting routerCacheAccounting,
 ) {
-	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" || requestBypassesRouting(ctx) {
 		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
-		SessionID:                   ctx.SessionID,
+		SessionID:                   routingSessionStateKey(ctx),
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
@@ -127,7 +131,7 @@ func recordRouterLearningUsageFromContext(
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
-		SessionID:                   ctx.VSRLearningSessionID,
+		SessionID:                   config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.VSRLearningSessionID),
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
@@ -231,11 +235,6 @@ func maybeEmitTransitionEvent(ctx *RequestContext) {
 		return
 	}
 
-	previousResponseID := ""
-	if ctx.ResponseAPICtx != nil {
-		previousResponseID = ctx.ResponseAPICtx.PreviousResponseID
-	}
-
 	evt := sessiontelemetry.ModelTransitionEvent{
 		SessionID:           ctx.SessionID,
 		TurnIndex:           ctx.TurnIndex,
@@ -243,7 +242,7 @@ func maybeEmitTransitionEvent(ctx *RequestContext) {
 		ToModel:             ctx.RequestModel,
 		TTFTMs:              ctx.TTFTSeconds * 1000,
 		CacheWarmthEstimate: ctx.CacheWarmthEstimate,
-		PreviousResponseID:  previousResponseID,
+		PreviousResponseID:  ctx.PreviousResponseID,
 		Timestamp:           time.Now(),
 	}
 	sessiontelemetry.RecordTransition(evt)

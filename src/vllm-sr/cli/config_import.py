@@ -15,10 +15,8 @@ from cli.config_migration import migrate_config_data
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, load_config_file
-from cli.utils import get_logger
+from cli.terminal import fields, heading, success
 from cli.validator import validate_user_config
-
-log = get_logger(__name__)
 
 OPENCLAW_CONFIG_ENV = "OPENCLAW_CONFIG_PATH"
 SUPPORTED_OPENCLAW_API_PREFIXES = ("openai",)
@@ -105,17 +103,25 @@ def import_config_command(
         encoding="utf-8",
     )
 
-    log.info("Imported OpenClaw configuration written successfully")
-    log.info(f"  Source: {resolved_source}")
-    log.info(f"  Source backup: {source_backup_path}")
-    log.info(f"  Target: {resolved_target}")
+    success("Configuration imported")
+    heading("Files")
+    output_fields: list[tuple[str, object]] = [
+        ("Source", resolved_source),
+        ("Source backup", source_backup_path),
+        ("Target", resolved_target),
+    ]
     if target_backup_path is not None:
-        log.info(f"  Target backup: {target_backup_path}")
-    log.info(f"  Rewritten OpenClaw base URL: {rewritten_base_url}")
-    log.info(
-        "  Imported models: %s",
-        ", ".join(model.logical_name for model in imported_models),
+        output_fields.append(("Target backup", target_backup_path))
+    output_fields.extend(
+        (
+            ("Base URL", rewritten_base_url),
+            (
+                "Models",
+                ", ".join(model.logical_name for model in imported_models),
+            ),
+        )
     )
+    fields(output_fields)
 
     return ImportResult(
         source_path=resolved_source,

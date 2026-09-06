@@ -1,0 +1,93 @@
+.eventHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 0.6rem;
+}
+
+.eventHeader h4 {
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.live,
+.offline {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.live {
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #a5f3c1;
+}
+
+.eventList {
+  max-height: 270px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.eventItems {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eventList li {
+  display: grid;
+  grid-template-columns: 145px minmax(0, 1fr);
+  gap: 0.8rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.eventList li:last-child {
+  border-bottom: 0;
+}
+
+.eventList time {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.eventList li > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.eventList strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.eventList span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.timelineTechnicalDetails {
+  flex: 0 1 auto;
+  width: 100%;
+  margin-top: 0.65rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 520px) {
+  .eventList li {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}

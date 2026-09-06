@@ -819,6 +819,7 @@ fn generate_multimodal_text_embedding(
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = token_ids.len();
+    check_position_limit(seq_len, model.config().text_max_position_embeddings)?;
 
     let device = model.device();
     let input_ids = Tensor::from_vec(token_ids, (1, seq_len), device)
@@ -2296,6 +2297,21 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 }
 
+/// Reject a tokenized sequence longer than the text encoder's position-embedding
+/// limit.
+///
+/// The encoder holds a fixed number of position embeddings, so a longer sequence
+/// fails inside the position lookup with an index error that names neither the
+/// limit nor the input length. This names both and discards nothing.
+pub(crate) fn check_position_limit(seq_len: usize, max_position: usize) -> Result<(), String> {
+    if seq_len > max_position {
+        return Err(format!(
+            "text tokenizes to {seq_len} tokens, over the text encoder's {max_position}-position limit"
+        ));
+    }
+    Ok(())
+}
+
 /// Encode text using the multi-modal embedding model
 ///
 /// # Parameters
@@ -2364,6 +2380,13 @@ pub extern "C" fn multimodal_encode_text(
     let ids: Vec<u32> = encoding.get_ids().to_vec();
     let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = ids.len();
+    if let Err(e) = check_position_limit(seq_len, model.config().text_max_position_embeddings) {
+        eprintln!("Error: {}", e);
+        unsafe {
+            (*result) = MultiModalEmbeddingResult::default();
+        }
+        return -1;
+    }
 
     let device = model.device();
     let input_ids = match candle_core::Tensor::from_vec(ids, (1, seq_len), device) {
@@ -2438,9 +2461,9 @@ pub extern "C" fn multimodal_encode_text(
 /// Filter: `image::imageops::FilterType::CatmullRom` (cubic B-spline, B=0, C=0.5),
 /// applied via `image::imageops::resize` which is support-window-weighted -
 /// approximates PIL's `Image.BICUBIC` resampling with similar antialias
-/// behavior on downscale. Empirical equivalence against PIL bicubic+antialias=True
-/// is validated end-to-end in `docs/probe-2026-05-25-image-drift-isolation/`
-/// (cosine >= 0.999 vs PyTorch reference across a 20-image corpus).
+/// behavior on downscale. Keep preprocessing equivalence covered by the
+/// multimodal embedding regression tests instead of relying on generated
+/// one-off probe artifacts.
 ///
 /// Known limitations: RGBA inputs have alpha discarded via `to_rgb8` (not
 /// composited against any background; PIL's `convert("RGB")` composites against
@@ -2505,10 +2528,9 @@ fn decode_resize_to_chw_f32(
 /// Preferred entry point for image embedding from raw JPEG/PNG bytes. All
 /// preprocessing happens in Rust via `decode_resize_to_chw_f32`, which
 /// approximates PIL's `Image.BICUBIC` + `antialias=True` behavior used by
-/// `SiglipProcessor`. Validated end-to-end against the PyTorch reference in
-/// `docs/probe-2026-05-25-image-drift-isolation/`: cosine >= 0.999 across a
-/// 20-image corpus; the prior Go-side 4-tap bilinear path averaged cosine
-/// 0.99 on the same fixtures.
+/// `SiglipProcessor`. The multimodal embedding regression suite owns the
+/// cross-runtime equivalence contract; generated experiment reports are not a
+/// source dependency.
 ///
 /// See `decode_resize_to_chw_f32` for the resize-filter discussion, known
 /// limitations (RGBA alpha discard, no EXIF auto-apply), and rationale.

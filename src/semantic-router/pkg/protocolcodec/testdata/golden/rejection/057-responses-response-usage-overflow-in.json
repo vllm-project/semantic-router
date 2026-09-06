@@ -1,0 +1,15 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "resp_1",
+    "object": "response",
+    "model": "provider-model",
+    "status": "completed",
+    "output": [],
+    "usage": {
+      "input_tokens": 9223372036854775807,
+      "output_tokens": 1,
+      "total_tokens": 0
+    }
+  }
+}

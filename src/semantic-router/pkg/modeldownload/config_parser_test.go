@@ -158,6 +158,23 @@ func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
 	}
 }
 
+func TestExtractModelPathsIncludesLocalClassifierSignals(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
+				Name:      "risk",
+				Type:      "local",
+				ModelPath: "models/risk-classifier",
+				Labels:    []string{"SAFE", "RISKY"},
+			}}},
+		},
+	}
+
+	if got := ExtractModelPaths(cfg); !slices.Contains(got, "models/risk-classifier") {
+		t.Fatalf("ExtractModelPaths() = %v, want local classifier model path", got)
+	}
+}
+
 func TestExtractRequiredFilesByModel(t *testing.T) {
 	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
@@ -268,6 +285,10 @@ func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testi
 					{Name: "needs_fact_check"},
 				},
 			},
+			Decisions: []config.Decision{{
+				Name:  "verified-route",
+				Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+			}},
 		},
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
@@ -601,7 +622,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatal("failed to resolve amd config path")
 	}
 
-	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
+	configPath := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/recipes/balance/config.yaml"))
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", configPath, err)

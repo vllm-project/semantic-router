@@ -80,13 +80,15 @@ func buildModelsInfoSummary(runtimeState *startupstatus.State, models []ModelInf
 }
 
 func enrichModelInfo(model ModelInfo, runtimeState *startupstatus.State) ModelInfo {
-	resolvedPath := canonicalModelPath(model.ModelPath)
-	if resolvedPath != "" && resolvedPath != model.ModelPath {
-		model.ResolvedModelPath = resolvedPath
-	}
+	if model.Metadata["lifecycle"] != "external" {
+		resolvedPath := canonicalModelPath(model.ModelPath)
+		if resolvedPath != "" && resolvedPath != model.ModelPath {
+			model.ResolvedModelPath = resolvedPath
+		}
 
-	if registry := lookupModelRegistryInfo(model.ModelPath); registry != nil {
-		model.Registry = registry
+		if registry := lookupModelRegistryInfo(model.ModelPath); registry != nil {
+			model.Registry = registry
+		}
 	}
 
 	model.State = resolveModelState(model, runtimeState)

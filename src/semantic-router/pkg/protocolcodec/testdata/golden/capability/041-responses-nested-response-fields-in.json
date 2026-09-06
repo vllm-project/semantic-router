@@ -1,0 +1,97 @@
+{
+  "operation": "response",
+  "cases": [
+    {
+      "name": "text_annotations_and_logprobs",
+      "body": {
+        "id": "resp_1",
+        "object": "response",
+        "created_at": 100,
+        "model": "provider-model",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_1",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "source",
+                "annotations": [
+                  {
+                    "type": "url_citation",
+                    "url": "https://example.com/source",
+                    "title": "Source",
+                    "start_index": 0,
+                    "end_index": 6
+                  }
+                ],
+                "logprobs": []
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "input_tokens": 2,
+          "output_tokens": 1,
+          "total_tokens": 3
+        }
+      }
+    },
+    {
+      "name": "refusal",
+      "body": {
+        "id": "resp_refusal",
+        "object": "response",
+        "created_at": 100,
+        "model": "provider-model",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_refusal",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "refusal",
+                "refusal": "cannot comply"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "reasoning_and_namespaced_tool",
+      "body": {
+        "id": "resp_tool",
+        "object": "response",
+        "created_at": 100,
+        "model": "provider-model",
+        "status": "completed",
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "reasoning_1",
+            "status": "completed",
+            "summary": [],
+            "encrypted_content": "encrypted"
+          },
+          {
+            "type": "function_call",
+            "id": "fc_1",
+            "status": "completed",
+            "call_id": "call_1",
+            "name": "lookup",
+            "namespace": "weather",
+            "caller": "model",
+            "arguments": "{\"q\":\"weather\"}"
+          }
+        ]
+      }
+    }
+  ]
+}

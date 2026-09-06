@@ -40,10 +40,11 @@ func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionCo
 		cfg.JudgePromptVersion = config.DefaultFusionJudgePromptVersion
 	}
 	cfg.AnalysisModels = normalizeModelNames(cfg.AnalysisModels)
+	cfg.AnalysisOverrides = normalizeFusionAnalysisOverrides(cfg.AnalysisModels, cfg.AnalysisOverrides)
 	if cfg.MaxConcurrent <= 0 || cfg.MaxConcurrent > len(cfg.AnalysisModels) {
 		cfg.MaxConcurrent = len(cfg.AnalysisModels)
 	}
-	if cfg.MinSuccessfulResponses <= 0 || cfg.MinSuccessfulResponses > len(cfg.AnalysisModels) {
+	if cfg.MinSuccessfulResponses <= 0 {
 		cfg.MinSuccessfulResponses = len(cfg.AnalysisModels)
 	}
 	applyGroundingDefaults(&cfg)
@@ -77,6 +78,13 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 }
 
 func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
+	if cfg.MinSuccessfulResponses > len(cfg.AnalysisModels) {
+		return fmt.Errorf(
+			"fusion min_successful_responses=%d exceeds panel size %d",
+			cfg.MinSuccessfulResponses,
+			len(cfg.AnalysisModels),
+		)
+	}
 	switch cfg.OnError {
 	case config.FusionOnErrorSkip, config.FusionOnErrorFail:
 		return nil
@@ -87,6 +95,7 @@ func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
 
 func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAlgorithmConfig) {
 	mergeFusionModels(dst, src.Model, src.AnalysisModels)
+	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
@@ -176,6 +185,7 @@ func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGr
 
 func mergeFusionRequestConfig(dst *fusionExecutionConfig, src *config.FusionRequestConfig) {
 	mergeFusionModels(dst, src.Model, src.AnalysisModels)
+	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
@@ -210,4 +220,55 @@ func normalizeModelNames(names []string) []string {
 		result = append(result, trimmed)
 	}
 	return result
+}
+
+// mergeFusionAnalysisOverrides layers per-model overrides field-wise, so a
+// request that sets only one sampling field keeps the decision-level value for
+// every other field of the same model.
+func mergeFusionAnalysisOverrides(dst *fusionExecutionConfig, overrides []config.FusionModelOverride) {
+	if len(overrides) == 0 {
+		return
+	}
+	if dst.AnalysisOverrides == nil {
+		dst.AnalysisOverrides = make(map[string]config.FusionModelOverride, len(overrides))
+	}
+	for _, override := range overrides {
+		name := strings.TrimSpace(override.Model)
+		if name == "" {
+			continue
+		}
+		merged := dst.AnalysisOverrides[name]
+		merged.Model = name
+		if override.Temperature != nil {
+			merged.Temperature = override.Temperature
+		}
+		if override.MaxCompletionTokens > 0 {
+			merged.MaxCompletionTokens = override.MaxCompletionTokens
+		}
+		dst.AnalysisOverrides[name] = merged
+	}
+}
+
+func normalizeFusionAnalysisOverrides(
+	analysisModels []string,
+	overrides map[string]config.FusionModelOverride,
+) map[string]config.FusionModelOverride {
+	if len(overrides) == 0 || len(analysisModels) == 0 {
+		return nil
+	}
+	allowed := make(map[string]bool, len(analysisModels))
+	for _, model := range analysisModels {
+		allowed[model] = true
+	}
+	filtered := make(map[string]config.FusionModelOverride, len(overrides))
+	for model, override := range overrides {
+		if !allowed[model] {
+			continue
+		}
+		filtered[model] = override
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return filtered
 }

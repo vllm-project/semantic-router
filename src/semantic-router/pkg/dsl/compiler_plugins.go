@@ -92,6 +92,9 @@ func (c *Compiler) compileToolsPlugin(fields map[string]Value) config.ToolsPlugi
 	if values, ok := getStringArrayField(fields, "block_tools"); ok {
 		cfg.BlockTools = values
 	}
+	if v, ok := getBoolField(fields, "strip_tool_history"); ok {
+		cfg.StripToolHistory = v
+	}
 	if v, ok := getStringField(fields, "strategy"); ok {
 		cfg.Strategy = v
 	}

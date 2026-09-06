@@ -119,6 +119,11 @@
   font-size: 0.95rem;
 }
 
+.select option {
+  background-color: var(--surface-raised, #18181b);
+  color: var(--color-text, #f5f5f7);
+}
+
 .input:focus,
 .select:focus {
   outline: none;

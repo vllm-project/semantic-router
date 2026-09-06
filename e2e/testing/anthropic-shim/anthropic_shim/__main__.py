@@ -9,7 +9,7 @@ import uvicorn
 
 def main() -> None:
     host = os.environ.get("ANTHROPIC_SHIM_HOST", "0.0.0.0")
-    port = int(os.environ.get("ANTHROPIC_SHIM_PORT", "9080"))
+    port = int(os.environ.get("ANTHROPIC_SHIM_PORT", "8080"))
     uvicorn.run("anthropic_shim.app:app", host=host, port=port, log_level="info")
 
 

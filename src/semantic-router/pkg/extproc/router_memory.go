@@ -20,13 +20,13 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 		return nil, nil
 	}
 
+	// publishRouterState publishes the store after the candidate commits.
 	memoryStore, err := createMemoryStore(cfg)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
 		return nil, nil
 	}
 
-	memory.SetGlobalMemoryStore(memoryStore)
 	backend := cfg.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
@@ -50,7 +50,7 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 		return true
 	}
 
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if decision.HasPlugin("memory") {
 			logging.Infof("Memory auto-enabled: decision '%s' uses memory plugin", decision.Name)
 			return true

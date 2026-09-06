@@ -191,6 +191,65 @@ func TestNormalizeBatchSimilarityLimitCapsTopKAtCandidateCount(t *testing.T) {
 	}
 }
 
+func TestValidateSimilarityRequest(t *testing.T) {
+	cases := []struct {
+		name     string
+		req      SimilarityRequest
+		wantOK   bool
+		wantCode string
+	}{
+		{"valid", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension}, true, ""},
+		{"empty_text1", SimilarityRequest{Text1: "", Text2: "b", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
+		{"whitespace_text2", SimilarityRequest{Text1: "a", Text2: "   ", Dimension: defaultEmbeddingDimension}, false, "INVALID_INPUT"},
+		{"bad_dimension", SimilarityRequest{Text1: "a", Text2: "b", Dimension: 999}, false, "INVALID_DIMENSION"},
+		{"dimension_64_allowed", SimilarityRequest{Text1: "a", Text2: "b", Dimension: 64}, true, ""},
+		{"quality_priority_too_high", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, QualityPriority: 1.5}, false, "INVALID_PARAMETER"},
+		{"latency_priority_negative", SimilarityRequest{Text1: "a", Text2: "b", Dimension: defaultEmbeddingDimension, LatencyPriority: -0.1}, false, "INVALID_PARAMETER"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, _, ok := validateSimilarityRequest(tc.req)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if code != tc.wantCode {
+				t.Fatalf("code = %q, want %q", code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestValidateBatchSimilarityRequestRejectsBlankAndOutOfRange(t *testing.T) {
+	base := func() BatchSimilarityRequest {
+		return BatchSimilarityRequest{Query: "q", Candidates: []string{"a", "b"}, Dimension: defaultEmbeddingDimension}
+	}
+	cases := []struct {
+		name     string
+		mutate   func(*BatchSimilarityRequest)
+		wantOK   bool
+		wantCode string
+	}{
+		{"valid", func(*BatchSimilarityRequest) {}, true, ""},
+		{"whitespace_query", func(r *BatchSimilarityRequest) { r.Query = "  " }, false, "INVALID_INPUT"},
+		{"blank_candidate", func(r *BatchSimilarityRequest) { r.Candidates = []string{"a", " "} }, false, "INVALID_INPUT"},
+		{"quality_priority_too_high", func(r *BatchSimilarityRequest) { r.QualityPriority = 2 }, false, "INVALID_PARAMETER"},
+		{"latency_priority_negative", func(r *BatchSimilarityRequest) { r.LatencyPriority = -1 }, false, "INVALID_PARAMETER"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := base()
+			tc.mutate(&req)
+			code, _, ok := validateBatchSimilarityRequest(req)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tc.wantOK)
+			}
+			if code != tc.wantCode {
+				t.Fatalf("code = %q, want %q", code, tc.wantCode)
+			}
+		})
+	}
+}
+
 func TestValidateBatchSimilarityRequestRejectsNegativeTopK(t *testing.T) {
 	req := BatchSimilarityRequest{
 		Query:      "query",
