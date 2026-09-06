@@ -81,7 +81,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 	if status == "scheduled" {
 		phase = "scheduled"
 	}
-	if err := recorder.AppendOutcome(receipt.replayID, routerreplay.Outcome{
+	if !recorder.TryAppendOutcome(receipt.replayID, routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
 		Source:    "router",
 		Target:    "router",
@@ -93,14 +93,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 			"phase":     phase,
 			"fail_open": fmt.Sprintf("%t", failOpen),
 		},
-	}); err != nil {
-		logging.ComponentWarnEvent("extproc", "memory_persistence_replay_outcome_failed", map[string]interface{}{
-			"request_id": receipt.requestID,
-			"replay_id":  receipt.replayID,
-			"status":     status,
-			"reason":     reason,
-			"phase":      phase,
-			"error":      err.Error(),
-		})
+	}) {
+		metrics.RecordPluginExecution("memory_persistence_receipt", receipt.decisionKey, "dropped", 0)
 	}
 }

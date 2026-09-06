@@ -80,7 +80,9 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
             time.sleep(2)
         return latest
 
-    def _wait_for_terminal_receipt(self, result: dict, timeout: int = 60) -> dict:
+    def _wait_for_terminal_receipt(
+        self, result: dict, timeout: int = 60, scheduled: bool = True
+    ) -> dict:
         replay_id = result.get("_replay_id")
         self.assertTrue(replay_id, "response is missing x-vsr-replay-id")
         deadline = time.monotonic() + timeout
@@ -105,7 +107,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 self.assertEqual(len(terminal), 1, outcomes)
                 self.assertEqual(
                     [outcome.get("verdict") for outcome in outcomes],
-                    ["scheduled", terminal[0]["verdict"]],
+                    (["scheduled"] if scheduled else []) + [terminal[0]["verdict"]],
                     outcomes,
                 )
                 return terminal[0]
@@ -155,6 +157,19 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
             "auto-stored turn produced no completed persistence receipt",
         )
         self.print_test_result(True, f"completed receipts {baseline} -> {observed}")
+
+    def test_03_disabled_store_reports_terminal_receipt_after_response(self):
+        """An explicit opt-out still delivers output and an asynchronous receipt."""
+        result = self.send_memory_request(
+            message=f"{RECEIPT_MARKER} Explain how to deploy a regional service.",
+            auto_store=False,
+        )
+        self.assertIsNotNone(result)
+        self.assertTrue(result.get("_output_text"), "response must carry model output")
+        receipt = self._wait_for_terminal_receipt(result, scheduled=False)
+        self.assertEqual(receipt["verdict"], "disabled", receipt)
+        self.assertEqual(receipt["reason"], "auto_store_off", receipt)
+        self.assertEqual(receipt["metadata"].get("fail_open"), "false", receipt)
 
     def test_02_store_failure_keeps_response_fail_open(self):
         """A dead backend returns model output and a request-correlated failure receipt."""

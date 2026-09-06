@@ -95,7 +95,9 @@ func TestPersistenceRunner_WaitsForScheduledReceiptBeforeRunning(t *testing.T) {
 	releaseScheduled := make(chan struct{})
 	runStarted := make(chan struct{})
 
-	runner.Submit(context.Background(), PersistenceJob{
+	// Deliberately pause the callback to verify publication order. Production
+	// callbacks only enqueue receipts and must not perform blocking I/O.
+	go runner.Submit(context.Background(), PersistenceJob{
 		Run: func(context.Context) (PersistenceOutcome, error) {
 			close(runStarted)
 			return PersistenceOutcome{}, nil
@@ -220,8 +222,8 @@ func TestPersistenceRunner_ShedsWhenQueueIsFull(t *testing.T) {
 	runner.Submit(context.Background(), succeedingJob(recorder))
 
 	assert.Equal(t, 1, recorder.count("rejected/queue_full"), recorder.snapshot())
-	assert.False(t, recorder.failedOpen("rejected/queue_full"),
-		"shedding is a capacity policy, not a swallowed failure")
+	assert.True(t, recorder.failedOpen("rejected/queue_full"),
+		"persistence was dropped while the response remains successful")
 
 	close(release)
 	require.NoError(t, runner.RetireAndWait(2*time.Second))
@@ -301,6 +303,7 @@ func TestPersistenceRunner_RejectsSubmitAfterRetire(t *testing.T) {
 	runner.Submit(context.Background(), succeedingJob(recorder))
 
 	assert.Equal(t, 1, recorder.count("rejected/shutting_down"), recorder.snapshot())
+	assert.True(t, recorder.failedOpen("rejected/shutting_down"))
 	assert.Equal(t, []string{"rejected/shutting_down"}, recorder.eventSnapshot())
 }
 

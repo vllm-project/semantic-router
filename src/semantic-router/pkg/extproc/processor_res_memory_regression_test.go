@@ -75,6 +75,7 @@ func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.
 	mutatePersistenceRequest(reqCtx, replacement)
 	unblock()
 	require.NoError(t, runner.RetireAndWait(5*time.Second))
+	require.NoError(t, recorder.DrainOutcomes())
 
 	stored, err := backend.List(context.Background(), memory.ListOptions{UserID: "original-user", Limit: 10})
 	require.NoError(t, err)
@@ -120,6 +121,7 @@ func TestScheduleResponseMemoryStore_PartialWriteReportsFailure(t *testing.T) {
 
 	router.scheduleResponseMemoryStoreText(reqCtx, "Deploy the service using a regional cluster and a load balancer.")
 	require.NoError(t, runner.RetireAndWait(5*time.Second))
+	require.NoError(t, recorder.DrainOutcomes())
 
 	stored, err := backend.List(context.Background(), memory.ListOptions{UserID: "original-user", Limit: 10})
 	require.NoError(t, err)
