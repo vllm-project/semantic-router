@@ -370,3 +370,4 @@ skills:
 - tools/agent/skills/routing-policy-change/SKILL.md
 - tools/agent/skills/signal-end-to-end/SKILL.md
 - tools/agent/skills/startup-chain-change/SKILL.md
+- tools/agent/skills/vllm-sr-install/SKILL.md

@@ -131,6 +131,7 @@ example_prd.txt
 website/build
 .docusaurus
 website/static/install.sh
+website/static/install/agent/
 spec/
 results/
 reports/
