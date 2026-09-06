@@ -64526,8 +64526,8 @@
       "id": "amd-atom",
       "presentation": {
         "featured": true,
-        "logo": "public:/amd.png",
-        "monochrome": false,
+        "logo": "public:/img/amd-logo.svg",
+        "monochrome": true,
         "monogram": "A"
       },
       "protocols": [
@@ -65767,8 +65767,8 @@
       "display_name": "Lemonade",
       "id": "lemonade",
       "presentation": {
-        "logo": "public:/amd.png",
-        "monochrome": false,
+        "logo": "public:/img/amd-logo.svg",
+        "monochrome": true,
         "monogram": "L"
       },
       "protocols": [

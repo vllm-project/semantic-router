@@ -42,10 +42,10 @@ config:
           embedding_config:
             model_type: multimodal
             target_dimension: 384
-            # Helm deep-merges this map with the chart's mmBERT defaults. Clear
-            # its layer-22 early-exit setting so the multimodal encoder uses
-            # its complete six-layer text tower.
-            target_layer: 0
+            # Helm deep-merges this map with the chart's mmBERT defaults. Use
+            # the multimodal text tower's final layer explicitly so the value
+            # also survives the Kubernetes canonical YAML round trip.
+            target_layer: 6
             preload_embeddings: true
             enable_soft_matching: false
             top_k: 1

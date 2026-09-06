@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:b462f6109de7d146d263807aaeeb9977463b1f14ccacb90ed23f1f630d864db4"
+const builtInCatalogDigest = "sha256:fad28f9f6ce28d9e015fcfbdde25232b1aa1f1dcff681363f642d66531885777"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -64532,8 +64532,8 @@ const builtInCatalogJSON = `{
       "id": "amd-atom",
       "presentation": {
         "featured": true,
-        "logo": "public:/amd.png",
-        "monochrome": false,
+        "logo": "public:/img/amd-logo.svg",
+        "monochrome": true,
         "monogram": "A"
       },
       "protocols": [
@@ -65773,8 +65773,8 @@ const builtInCatalogJSON = `{
       "display_name": "Lemonade",
       "id": "lemonade",
       "presentation": {
-        "logo": "public:/amd.png",
-        "monochrome": false,
+        "logo": "public:/img/amd-logo.svg",
+        "monochrome": true,
         "monogram": "L"
       },
       "protocols": [

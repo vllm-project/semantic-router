@@ -143,9 +143,9 @@ providers:
     header: Authorization
     prefix: Bearer
   presentation:
-    logo: public:/amd.png
+    logo: public:/img/amd-logo.svg
     monogram: A
-    monochrome: false
+    monochrome: true
     featured: true
   conformance:
     status: unverified
@@ -1071,9 +1071,9 @@ providers:
     header: ''
     prefix: ''
   presentation:
-    logo: public:/amd.png
+    logo: public:/img/amd-logo.svg
     monogram: L
-    monochrome: false
+    monochrome: true
   conformance:
     status: unverified
 - id: lm-studio

@@ -48,13 +48,13 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	requireSecretEnvironment(t, environment, "HUGGINGFACE_HUB_TOKEN")
 	requireLiteralEnvironment(t, environment, "EMBEDDING_MODEL_OVERRIDE", "multimodal")
 
-	// Helm deep-merges embedding_config maps. The profile must explicitly clear
-	// the chart's mmBERT layer-22 early-exit value; omitting this field leaves an
-	// invalid layer on the six-layer multimodal text encoder.
+	// Helm deep-merges embedding_config maps. The profile must explicitly select
+	// the final multimodal text-encoder layer; omitting it leaves the chart's
+	// invalid mmBERT layer-22 default, while zero is lost on canonical marshal.
 	embeddingConfig := profile.Config.Global.ModelCatalog.Embeddings.Semantic.EmbeddingConfig
 	targetLayer := embeddingConfig.TargetLayer
-	if targetLayer == nil || *targetLayer != 0 {
-		t.Fatalf("multimodal profile target_layer = %v, want explicit 0", targetLayer)
+	if targetLayer == nil || *targetLayer != 6 {
+		t.Fatalf("multimodal profile target_layer = %v, want explicit 6", targetLayer)
 	}
 }
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
@@ -63,4 +63,25 @@ test('model hub resolves creator marks only from catalog presentation', () => {
   assert.match(page, /directLogo && !logoFailed/)
   assert.match(page, /onError=\{\(\) => setLogoFailed\(true\)\}/)
   assert.match(page, /presentation\.monogram/)
+})
+
+test('catalog public logos exist in both application public roots', () => {
+  const publicLogos = [...catalog.models, ...catalog.providers]
+    .map(entry => entry.presentation?.logo)
+    .filter(logo => logo?.startsWith('public:/'))
+
+  assert.ok(publicLogos.length > 0)
+  for (const logo of new Set(publicLogos)) {
+    const relativePath = logo.slice('public:/'.length)
+    assert.ok(
+      existsSync(resolve(repositoryRoot, 'website/static', relativePath)),
+      `${logo} is missing from the website public root`,
+    )
+    assert.ok(
+      existsSync(
+        resolve(repositoryRoot, 'dashboard/frontend/public', relativePath),
+      ),
+      `${logo} is missing from the Dashboard public root`,
+    )
+  }
 })

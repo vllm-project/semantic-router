@@ -13,9 +13,9 @@ auth:
   header: Authorization
   prefix: Bearer
 presentation:
-  logo: public:/amd.png
+  logo: public:/img/amd-logo.svg
   monogram: A
-  monochrome: false
+  monochrome: true
   featured: true
 conformance:
   status: unverified
