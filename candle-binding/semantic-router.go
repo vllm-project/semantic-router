@@ -866,6 +866,12 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}, nil
 }
 
+
+func SupportsBatchedEmbedding(modelType string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(modelType))
+	return normalized == "qwen3"
+}
+
 // InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
 //
 // Note: For high-concurrency workloads, use InitEmbeddingModelsBatched instead for 2-5x better throughput.
