@@ -75,17 +75,7 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
-	// Build huggingface-cli command
-	args := []string{
-		"download",
-		spec.RepoID,
-		"--local-dir", spec.LocalPath,
-	}
-
-	// Add revision if specified
-	if spec.Revision != "" && spec.Revision != "main" {
-		args = append(args, "--revision", spec.Revision)
-	}
+	args := buildDownloadArgs(spec)
 
 	// Use detected CLI command, default to "hf"
 	cliCmd := hfCommand
@@ -125,6 +115,29 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil
+}
+
+// buildDownloadArgs assembles the huggingface-cli argument list for spec.
+// Exclude patterns are appended last because `--exclude` consumes every
+// positional value that follows it.
+func buildDownloadArgs(spec ModelSpec) []string {
+	args := []string{
+		"download",
+		spec.RepoID,
+		"--local-dir", spec.LocalPath,
+	}
+
+	// Add revision if specified
+	if spec.Revision != "" && spec.Revision != "main" {
+		args = append(args, "--revision", spec.Revision)
+	}
+
+	if len(spec.ExcludePatterns) > 0 {
+		args = append(args, "--exclude")
+		args = append(args, spec.ExcludePatterns...)
+	}
+
+	return args
 }
 
 // EnsureModels ensures all required models are downloaded
