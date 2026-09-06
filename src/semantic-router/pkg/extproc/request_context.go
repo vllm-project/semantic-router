@@ -309,6 +309,10 @@ type RequestContext struct {
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
 
+	// RequestAutoStore snapshots the client's memory persistence override before
+	// provider preparation removes router controls. Nil uses configured defaults.
+	RequestAutoStore *bool
+
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string
 	ContextCompressionStrategy     string

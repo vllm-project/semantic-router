@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -299,6 +300,79 @@ func TestScheduleResponseMemoryStore_RejectedWriteIsItsOwnMetricStatus(t *testin
 		"a refused write must be countable on its own status label")
 	assert.Equal(t, beforeSkipped, testutil.ToFloat64(skipped),
 		"a refused write must not be counted as a content-level skip")
+}
+
+func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		control         string
+		configAutoStore bool
+		mutateRequest   bool
+		wantStored      bool
+	}{
+		{"explicit_false", `,"auto_store":false`, true, false, false},
+		{"explicit_true", `,"auto_store":true`, false, false, true},
+		{"omitted_enabled", "", true, false, true},
+		{"omitted_disabled", "", false, false, false},
+		{"false_snapshot", `,"auto_store":false`, true, true, false},
+		{"true_snapshot", `,"auto_store":true`, false, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
+			recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: tc.name})
+			require.NoError(t, err)
+			runner := memory.NewPersistenceRunner(5*time.Second, 1, 1)
+			t.Cleanup(func() {
+				assert.NoError(t, runner.RetireAndWait(5*time.Second))
+				assert.NoError(t, recorder.DrainOutcomes())
+			})
+			router := &OpenAIRouter{
+				Config:            &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: tc.configAutoStore}},
+				MemoryExtractor:   memory.NewMemoryChunkStore(backend),
+				ReplayRecorder:    recorder,
+				memoryPersistence: runner,
+			}
+			ctx := persistenceRegressionContext(tc.name)
+			ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+			ctx.RouterReplayID = tc.name
+			body := []byte(fmt.Sprintf(`{"model":"test-model","input":"Explain how to deploy a backend service in eu-central-1."%s}`, tc.control))
+			request, immediate := router.prepareProtocolRequest(body, ctx)
+			require.Nil(t, immediate)
+			require.NotNil(t, request)
+			if tc.mutateRequest {
+				// Routing mutations must not alter the original client preference.
+				require.NotNil(t, request.AutoStore)
+				*request.AutoStore = !*request.AutoStore
+			}
+			_, err = router.materializeResponseObjectContext(request, ctx)
+			require.NoError(t, err)
+			require.Nil(t, request.AutoStore, "router controls must be removed from the provider request")
+
+			router.scheduleResponseMemoryStoreText(ctx, "Deploy the service using a regional cluster and a load balancer.")
+			require.NoError(t, runner.RetireAndWait(5*time.Second))
+			require.NoError(t, recorder.DrainOutcomes())
+			record, found := recorder.GetRecord(tc.name)
+			require.True(t, found)
+			stored, err := backend.List(t.Context(), memory.ListOptions{UserID: "original-user", Limit: 10})
+			require.NoError(t, err)
+			if tc.wantStored {
+				require.Len(t, stored.Memories, 1)
+				require.Len(t, record.Outcomes, 2)
+				assert.Equal(t, "scheduled", record.Outcomes[0].Verdict)
+				assert.Equal(t, "completed", record.Outcomes[1].Verdict)
+				assert.Equal(t, "persisted", record.Outcomes[1].Reason)
+			} else {
+				assert.Empty(t, stored.Memories, "disabled requests must not persist memory")
+				require.Len(t, record.Outcomes, 1)
+				assert.Equal(t, "disabled", record.Outcomes[0].Verdict)
+				assert.Equal(t, "auto_store_off", record.Outcomes[0].Reason)
+			}
+			terminal := record.Outcomes[len(record.Outcomes)-1]
+			assert.Equal(t, "terminal", terminal.Metadata["phase"])
+			assert.Equal(t, "false", terminal.Metadata["fail_open"])
+		})
+	}
 }
 
 func memoryTestResponse(text string) *llmprotocol.Response {

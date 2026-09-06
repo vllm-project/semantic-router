@@ -123,6 +123,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
