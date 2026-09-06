@@ -168,7 +168,8 @@ static_resources:
               # The response-side protocol boundary needs the identity of the
               # endpoint Envoy actually selected, including after retries.
               response_attributes:
-              - xds.upstream_host_metadata
+              - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]'
+              - 'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]'
               message_timeout: {{ listener.timeout | default('1200s') }}
           - name: envoy.filters.http.router
             typed_config:
