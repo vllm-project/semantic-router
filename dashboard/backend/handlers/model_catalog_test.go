@@ -78,6 +78,24 @@ func TestModelCatalogHandlerReturnsCLIContractAndCachesSuccess(t *testing.T) {
 	}
 }
 
+func TestNormalizeModelCatalogOmitsUndefinedReasoningDefault(t *testing.T) {
+	t.Parallel()
+
+	payload := strings.Replace(
+		validModelCatalogPayload(""),
+		`"reasoning_families":[]`,
+		`"reasoning_families":[{"id":"switch-only","type":"reasoning_mode","parameter":"thinking","modes":["enabled","disabled"],"default_mode":"enabled"}]`,
+		1,
+	)
+	normalized, err := normalizeModelCatalogDocument([]byte(payload))
+	if err != nil {
+		t.Fatalf("normalize catalog: %v", err)
+	}
+	if strings.Contains(string(normalized), `"default":""`) {
+		t.Fatalf("normalized catalog invented an empty reasoning default: %s", normalized)
+	}
+}
+
 func TestModelCatalogHandlerFailsClosedWithoutLeakingSourceErrors(t *testing.T) {
 	t.Parallel()
 

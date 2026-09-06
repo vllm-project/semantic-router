@@ -231,7 +231,7 @@ type ReasoningFamilyDefinition struct {
 	// reasoning_effort field.
 	EffortFlags map[string]string `json:"effort_flags,omitempty" yaml:"effort_flags,omitempty"`
 	Levels      []string          `json:"levels,omitempty" yaml:"levels,omitempty"`
-	Default     string            `json:"default" yaml:"default,omitempty"`
+	Default     string            `json:"default,omitempty" yaml:"default,omitempty"`
 	// Modes describes whether reasoning can be enabled, disabled, or selected
 	// adaptively independently from an effort ladder.
 	Modes       []string `json:"modes,omitempty" yaml:"modes,omitempty"`
