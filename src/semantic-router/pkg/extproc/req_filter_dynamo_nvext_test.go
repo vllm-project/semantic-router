@@ -6,9 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -177,9 +175,9 @@ func TestCaptureUpstreamBackendIdentityDisallowsNonDynamoExtensions(t *testing.T
 	}
 }
 
-func TestCaptureUpstreamBackendIdentityFailsClosedForMalformedMetadata(t *testing.T) {
+func TestCaptureUpstreamBackendIdentityFailsClosedForMissingScalarAttributes(t *testing.T) {
 	identity, err := structpb.NewStruct(map[string]any{
-		upstreamHostMetadataAttribute: "not valid metadata textproto",
+		upstreamBackendNameAttribute: "dynamo-a",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -199,27 +197,15 @@ func TestCaptureUpstreamBackendIdentityFailsClosedForMalformedMetadata(t *testin
 	captureUpstreamBackendIdentity(req, ctx)
 
 	if ctx.UpstreamBackendName != "" || ctx.UpstreamBackendType != "" || ctx.AllowDynamoExtensions {
-		t.Fatalf("malformed metadata retained backend identity: %+v", ctx)
+		t.Fatalf("incomplete scalar attributes retained backend identity: %+v", ctx)
 	}
 }
 
 func upstreamBackendIdentityAttributes(t *testing.T, name, backendType string) *structpb.Struct {
 	t.Helper()
-	identity, err := structpb.NewStruct(map[string]any{
-		"backend_name": name,
-		"backend_type": backendType,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	metadataText, err := prototext.Marshal(&corev3.Metadata{
-		FilterMetadata: map[string]*structpb.Struct{backendIdentityNamespace: identity},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	attributes, err := structpb.NewStruct(map[string]any{
-		upstreamHostMetadataAttribute: string(metadataText),
+		upstreamBackendNameAttribute: name,
+		upstreamBackendTypeAttribute: backendType,
 	})
 	if err != nil {
 		t.Fatal(err)

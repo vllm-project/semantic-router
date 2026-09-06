@@ -3,16 +3,13 @@ package extproc
 import (
 	"strings"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"google.golang.org/protobuf/encoding/prototext"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
-	extProcAttributesNamespace    = "envoy.filters.http.ext_proc"
-	upstreamHostMetadataAttribute = "xds.upstream_host_metadata"
-	backendIdentityNamespace      = "semantic-router"
+	extProcAttributesNamespace   = "envoy.filters.http.ext_proc"
+	upstreamBackendNameAttribute = `xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]`
+	upstreamBackendTypeAttribute = `xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]`
 )
 
 // captureUpstreamBackendIdentity records trusted metadata for the endpoint
@@ -34,26 +31,16 @@ func captureUpstreamBackendIdentity(req *ext_proc.ProcessingRequest, ctx *Reques
 	if attributes == nil {
 		return
 	}
-	metadataText := attributes.GetFields()[upstreamHostMetadataAttribute].GetStringValue()
-	if metadataText == "" {
+	backendName := strings.TrimSpace(
+		attributes.GetFields()[upstreamBackendNameAttribute].GetStringValue(),
+	)
+	backendType := strings.ToLower(strings.TrimSpace(
+		attributes.GetFields()[upstreamBackendTypeAttribute].GetStringValue(),
+	))
+	if backendName == "" || backendType == "" {
 		return
 	}
-	var metadata corev3.Metadata
-	if err := prototext.Unmarshal([]byte(metadataText), &metadata); err != nil {
-		return
-	}
-	identity := metadata.GetFilterMetadata()[backendIdentityNamespace]
-	if identity == nil {
-		return
-	}
-	ctx.UpstreamBackendName = strings.TrimSpace(stringField(identity, "backend_name"))
-	ctx.UpstreamBackendType = strings.ToLower(strings.TrimSpace(stringField(identity, "backend_type")))
-	ctx.AllowDynamoExtensions = ctx.UpstreamBackendType == "dynamo"
-}
-
-func stringField(value *structpb.Struct, name string) string {
-	if value == nil {
-		return ""
-	}
-	return value.GetFields()[name].GetStringValue()
+	ctx.UpstreamBackendName = backendName
+	ctx.UpstreamBackendType = backendType
+	ctx.AllowDynamoExtensions = backendType == "dynamo"
 }

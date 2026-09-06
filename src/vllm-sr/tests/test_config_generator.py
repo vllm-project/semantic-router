@@ -104,7 +104,10 @@ routing:
     )
 
     ext_proc = _ext_proc_config(rendered)
-    assert ext_proc["response_attributes"] == ["xds.upstream_host_metadata"]
+    assert ext_proc["response_attributes"] == [
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]',
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
+    ]
 
     cluster = _cluster_by_name(rendered, "mixed_model_cluster")
     endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
