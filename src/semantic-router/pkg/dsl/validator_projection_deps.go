@@ -55,7 +55,7 @@ func buildDSLScoreCycleAdj(
 				continue
 			}
 			dep := input.SignalName
-			if strings.EqualFold(input.ValueSource, "confidence") {
+			if strings.EqualFold(input.ValueSource, config.ProjectionValueSourceConfidence) {
 				if src, ok := outputToSource[dep]; ok {
 					dep = src
 				}

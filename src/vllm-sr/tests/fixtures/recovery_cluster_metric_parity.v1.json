@@ -1,0 +1,62 @@
+{
+  "schema_version": "recovery-cluster-metric-parity.v1",
+  "minimum_pair_count": 20,
+  "minimum_cluster_count": 20,
+  "maximum_recovery_latency_ms": 500.0,
+  "maximum_retry_amplification": 2.0,
+  "rows": [
+    {
+      "cluster_id": "cluster-a",
+      "baseline_latency_ms": 10.0,
+      "treatment_latency_ms": 20.0,
+      "baseline_retry_count": 0,
+      "treatment_retry_count": 0,
+      "passed": true
+    },
+    {
+      "cluster_id": "cluster-a",
+      "baseline_latency_ms": 10.0,
+      "treatment_latency_ms": 40.0,
+      "baseline_retry_count": 1,
+      "treatment_retry_count": 1,
+      "passed": true
+    },
+    {
+      "cluster_id": "cluster-b",
+      "baseline_latency_ms": 20.0,
+      "treatment_latency_ms": 40.0,
+      "baseline_retry_count": 0,
+      "treatment_retry_count": 0,
+      "passed": true
+    },
+    {
+      "cluster_id": "cluster-b",
+      "baseline_latency_ms": 10.0,
+      "treatment_latency_ms": 600.0,
+      "baseline_retry_count": 0,
+      "treatment_retry_count": 0,
+      "passed": false
+    },
+    {
+      "cluster_id": "cluster-c",
+      "baseline_latency_ms": 50.0,
+      "treatment_latency_ms": 55.0,
+      "baseline_retry_count": 0,
+      "treatment_retry_count": 1,
+      "passed": true
+    }
+  ],
+  "expected": {
+    "pair_count": 5,
+    "cluster_count": 3,
+    "cluster_pass_rate": 0.6666666666666666,
+    "cluster_pass_rate_lower_95": 0.2535338682812242,
+    "cluster_pass_rate_upper_95": 0.9217342736662717,
+    "baseline_success_rate": 1.0,
+    "treatment_success_rate": 1.0,
+    "success_delta": 0.0,
+    "mean_cluster_worst_latency_delta_ms": 208.33333333333334,
+    "maximum_retry_amplification": 2.0,
+    "passed": null
+  }
+}

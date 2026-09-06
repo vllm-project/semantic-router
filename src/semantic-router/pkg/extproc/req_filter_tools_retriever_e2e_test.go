@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -90,8 +91,8 @@ func TestRetrieverE2E_RegisteredStrategyToolsReachRequest(t *testing.T) {
 	router := makeToolsRouter(t, reg)
 	toolsCfg := makeToolsPluginConfig("custom")
 
-	req := &openai.ChatCompletionNewParams{}
-	req.ToolChoice.OfAuto.Value = "auto"
+	req := testNeutralRequest("model", "find the weather in Paris")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "find the weather in Paris", nil, &resp, &RequestContext{
@@ -108,8 +109,8 @@ func TestRetrieverE2E_RegisteredStrategyToolsReachRequest(t *testing.T) {
 	if len(req.Tools) != 2 {
 		t.Fatalf("expected 2 tools, got %d", len(req.Tools))
 	}
-	if req.Tools[0].Function.Name != "search" {
-		t.Errorf("expected first tool to be 'search', got %q", req.Tools[0].Function.Name)
+	if req.Tools[0].Name != "search" {
+		t.Errorf("expected first tool to be 'search', got %q", req.Tools[0].Name)
 	}
 }
 
@@ -125,8 +126,8 @@ func TestRetrieverE2E_UnknownStrategyFallsBackToDBWithSuffix(t *testing.T) {
 	router := makeToolsRouter(t, reg)
 	toolsCfg := makeToolsPluginConfig("bm25")
 
-	req := &openai.ChatCompletionNewParams{}
-	req.ToolChoice.OfAuto.Value = "auto"
+	req := testNeutralRequest("model", "some query")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "some query", nil, &resp, &RequestContext{
@@ -152,8 +153,8 @@ func TestRetrieverE2E_NilRegistryFallsBackWithSuffix(t *testing.T) {
 	router := makeToolsRouter(t, nil) // nil registry
 	toolsCfg := makeToolsPluginConfig("embedding")
 
-	req := &openai.ChatCompletionNewParams{}
-	req.ToolChoice.OfAuto.Value = "auto"
+	req := testNeutralRequest("model", "some query")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "some query", nil, &resp, &RequestContext{
@@ -185,8 +186,8 @@ func TestToolSelectionAddModeE2E_InjectsToolsFromRetriever(t *testing.T) {
 
 	router := makeToolsRouter(t, reg)
 
-	req := &openai.ChatCompletionNewParams{}
-	req.ToolChoice.OfAuto.Value = "auto"
+	req := testNeutralRequest("model", "Will it rain in Seattle tomorrow?")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.handleToolSelection(req, "Will it rain in Seattle tomorrow?", nil, &resp, &RequestContext{
@@ -209,8 +210,8 @@ func TestToolSelectionAddModeE2E_InjectsToolsFromRetriever(t *testing.T) {
 	if len(req.Tools) != 1 {
 		t.Fatalf("expected add mode to inject 1 tool, got %d", len(req.Tools))
 	}
-	if req.Tools[0].Function.Name != "get_weather" {
-		t.Fatalf("expected injected tool to be get_weather, got %q", req.Tools[0].Function.Name)
+	if req.Tools[0].Name != "get_weather" {
+		t.Fatalf("expected injected tool to be get_weather, got %q", req.Tools[0].Name)
 	}
 
 	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
@@ -222,13 +223,14 @@ func TestToolSelectionAddModeE2E_InjectsToolsFromRetriever(t *testing.T) {
 func TestToolSelectionFilterModeE2E_KeepsToolsForEmptyQuery(t *testing.T) {
 	router := makeToolsRouter(t, nil)
 
-	req := &openai.ChatCompletionNewParams{
-		Tools: []openai.ChatCompletionToolParam{
-			{Function: openai.FunctionDefinitionParam{Name: "get_weather"}},
-			{Function: openai.FunctionDefinitionParam{Name: "calculate"}},
+	req := &llmprotocol.Request{
+		Model: "model",
+		Tools: []llmprotocol.Tool{
+			{Name: "get_weather", InputSchema: []byte(`{"type":"object"}`)},
+			{Name: "calculate", InputSchema: []byte(`{"type":"object"}`)},
 		},
 	}
-	req.ToolChoice.OfAuto.Value = "auto"
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 	resp := &ext_proc.ProcessingResponse{}
 
 	err := router.runToolSelectionPluginFilter(
@@ -252,8 +254,8 @@ func TestToolSelectionFilterModeE2E_KeepsToolsForEmptyQuery(t *testing.T) {
 	if len(req.Tools) != 2 {
 		t.Fatalf("expected filter mode to keep 2 tools for empty query, got %d", len(req.Tools))
 	}
-	if req.Tools[0].Function.Name != "get_weather" || req.Tools[1].Function.Name != "calculate" {
-		t.Fatalf("expected original tools to be preserved, got %q and %q", req.Tools[0].Function.Name, req.Tools[1].Function.Name)
+	if req.Tools[0].Name != "get_weather" || req.Tools[1].Name != "calculate" {
+		t.Fatalf("expected original tools to be preserved, got %q and %q", req.Tools[0].Name, req.Tools[1].Name)
 	}
 
 	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
@@ -296,7 +298,7 @@ func getHeaderValue(resp *ext_proc.ProcessingResponse, key string) string {
 	}
 	for _, h := range rb.GetResponse().HeaderMutation.SetHeaders {
 		if h.Header != nil && h.Header.Key == key {
-			return h.Header.Value
+			return extractHeaderValue(h.Header)
 		}
 	}
 	return ""

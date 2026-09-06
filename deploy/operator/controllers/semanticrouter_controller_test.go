@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
+func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = scheme.AddToScheme(s)
 	_ = vllmv1alpha1.AddToScheme(s)
@@ -89,6 +89,8 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 	if len(parsed.Routing.ModelCards) != 1 {
 		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
 	}
+	assertGeneratedBackendTarget(t, parsed)
+
 	modelCard := parsed.Routing.ModelCards[0]
 	if len(modelCard.LoRAs) != 1 {
 		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
@@ -99,6 +101,27 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 	}
 	if lora.Description != "Adapter for advanced computer science prompts" {
 		t.Fatalf("unexpected LoRA description: %#v", lora)
+	}
+}
+
+func assertGeneratedBackendTarget(t *testing.T, parsed routerconfig.CanonicalConfig) {
+	t.Helper()
+
+	if len(parsed.Providers.Models) != 1 {
+		t.Fatalf("expected one generated provider model, got %#v", parsed.Providers.Models)
+	}
+	providerModel := parsed.Providers.Models[0]
+	if providerModel.Name != "qwen3-32b" {
+		t.Fatalf("unexpected provider model name: %#v", providerModel)
+	}
+	if len(providerModel.BackendRefs) != 1 {
+		t.Fatalf("expected one generated backend ref, got %#v", providerModel.BackendRefs)
+	}
+	backendRef := providerModel.BackendRefs[0]
+	if backendRef.Name != "qwen3-primary" ||
+		backendRef.Endpoint != "qwen3-svc.default.svc.cluster.local:8000" ||
+		backendRef.Protocol != "http" || backendRef.Weight != 100 {
+		t.Fatalf("unexpected generated backend ref: %#v", backendRef)
 	}
 }
 
@@ -269,6 +292,15 @@ func TestGenerateDeployment(t *testing.T) {
 
 	if deployment.Namespace != "default" {
 		t.Errorf("expected namespace 'default', got '%s'", deployment.Namespace)
+	}
+
+	// The Router starts directly and has no supervisor-directory dependency,
+	// so the Operator must not inject the obsolete setup-dirs initContainer.
+	// Helm renders the same runtime requirement without an initContainer.
+	for _, initContainer := range deployment.Spec.Template.Spec.InitContainers {
+		if initContainer.Name == "setup-dirs" {
+			t.Errorf("unexpected setup-dirs initContainer in rendered PodSpec")
+		}
 	}
 }
 

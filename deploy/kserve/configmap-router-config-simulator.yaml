@@ -86,7 +86,7 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a helpful assistant.
-            - type: semantic-cache
+            - type: response_cache
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
@@ -189,7 +189,7 @@ data:
                 - 100
                 - 200
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: memory
           similarity_threshold: 0.8

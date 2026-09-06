@@ -257,8 +257,8 @@ download-export-upload-onnx-factcheck-feedback: ## Download merged factcheck/fee
 
 export-onnx-factcheck-feedback: ## Export factcheck and feedback merged models to ONNX (requires models in models/, run: make download-mmbert-32k-merged first; needs optimum: pip install optimum[onnxruntime])
 	@echo "📤 Exporting factcheck and feedback to ONNX..."
-	@python3 scripts/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
-	@python3 scripts/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
+	@python3 tools/models/export_classifiers_to_onnx.py --model factcheck --output-dir $(MODELS_DIR)
+	@python3 tools/models/export_classifiers_to_onnx.py --model feedback --output-dir $(MODELS_DIR)
 	@echo "ONNX export done: $(MODELS_DIR)/mmbert32k-factcheck-classifier-merged-onnx, $(MODELS_DIR)/mmbert32k-feedback-detector-merged-onnx"
 
 upload-onnx-factcheck-feedback: export-onnx-factcheck-feedback ## Export and upload factcheck/feedback ONNX to Hugging Face (requires login)
@@ -572,15 +572,15 @@ ROCM_IMAGE ?= rocm/vllm:v0.14.0_amd_dev
 
 train-mmbert32k-gpu: ## Train all mmBERT-32K models on GPU (ROCm Docker)
 	@echo "🚀 Training mmBERT-32K models on GPU..."
-	@./scripts/train-mmbert32k-gpu.sh
+	@./tools/models/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-quick: ## Quick GPU training (fewer samples, 3 epochs)
 	@echo "🚀 Quick GPU training (3 epochs, 2000 samples)..."
-	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./scripts/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./tools/models/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-full: ## Full GPU training (more samples, 10 epochs)
 	@echo "🚀 Full GPU training (10 epochs, 20000 samples)..."
-	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./scripts/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./tools/models/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-shell: ## Open interactive shell in GPU training container
 	@echo "🐚 Opening interactive shell in ROCm container..."

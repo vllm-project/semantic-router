@@ -5,6 +5,7 @@ import { Handle, Position, NodeProps } from 'reactflow'
 import { DecisionConfig } from '../../types'
 import { NODE_COLORS } from '../../constants'
 import { buildRulePreviewLines, summarizeRuleNode } from '../../utils/ruleTree'
+import { formatRoutingMetadataValue } from '../../../../components/routingMetadataDisplay'
 import styles from './CustomNodes.module.css'
 
 interface DecisionNodeData {
@@ -13,6 +14,7 @@ interface DecisionNodeData {
   isHighlighted?: boolean
   isFocusTarget?: boolean
   focusModeEnabled?: boolean
+  isFallback?: boolean
   isUnreachable?: boolean
   unreachableReason?: string
   onToggleRulesCollapse?: () => void
@@ -20,20 +22,22 @@ interface DecisionNodeData {
 }
 
 export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
-  const { 
-    decision, 
-    rulesCollapsed = false, 
-    isHighlighted, 
+  const {
+    decision,
+    rulesCollapsed = false,
+    isHighlighted,
     isFocusTarget = false,
     focusModeEnabled = false,
+    isFallback = false,
     isUnreachable = false,
     unreachableReason,
     onToggleRulesCollapse,
     onFocusDecision,
   } = data
   const { name, priority, rules, modelRefs, algorithm, plugins } = decision
+  const displayName = formatRoutingMetadataValue('x-vsr-selected-decision', name)
 
-  const hasReasoning = modelRefs.some(m => m.use_reasoning)
+  const hasReasoning = modelRefs.some((m) => m.use_reasoning)
   const hasPlugins = plugins && plugins.length > 0
   const hasAlgorithm = algorithm && algorithm.type !== 'static'
   const previewConditions = rules.conditions.slice(0, 4).map((condition, index) => ({
@@ -44,12 +48,12 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       maxLines: 3,
     }),
   }))
-  
+
   // Use warning colors for unreachable decisions
-  const colors = isUnreachable 
-    ? NODE_COLORS.decision.unreachable 
-    : hasReasoning 
-      ? NODE_COLORS.decision.reasoning 
+  const colors = isUnreachable
+    ? NODE_COLORS.decision.unreachable
+    : hasReasoning
+      ? NODE_COLORS.decision.reasoning
       : NODE_COLORS.decision.normal
 
   return (
@@ -60,7 +64,13 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
         border: `2px solid ${colors.border}`,
         cursor: focusModeEnabled ? 'pointer' : undefined,
       }}
-      title={isUnreachable ? `⚠️ Unreachable: ${unreachableReason}` : undefined}
+      title={
+        isUnreachable
+          ? `⚠️ Unreachable: ${unreachableReason}`
+          : isFallback
+            ? 'Fallback route: matches when no earlier decision wins'
+            : undefined
+      }
       onClick={() => {
         if (focusModeEnabled) {
           onFocusDecision?.(name)
@@ -70,28 +80,27 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.decisionHeader}>
-        <span className={styles.decisionIcon}>{isUnreachable ? '⚠️' : '🔀'}</span>
-        <span className={styles.decisionName} title={name}>{name}</span>
+        <span className={styles.decisionIcon}>
+          {isUnreachable ? '⚠️' : isFallback ? '↪' : '🔀'}
+        </span>
+        <span className={styles.decisionName} title={name}>
+          {displayName}
+        </span>
         <span className={styles.decisionPriority}>P{priority}</span>
       </div>
 
       {/* Unreachable Warning Banner */}
       {isUnreachable && (
-        <div className={styles.unreachableBanner}>
-          ⚠️ {unreachableReason || 'Unreachable'}
-        </div>
+        <div className={styles.unreachableBanner}>⚠️ {unreachableReason || 'Unreachable'}</div>
       )}
 
       {/* Rules Section */}
       <div className={styles.rulesSection}>
-        <div
-          className={styles.rulesHeader}
-          onClick={onToggleRulesCollapse}
-        >
+        <div className={styles.rulesHeader} onClick={onToggleRulesCollapse}>
           <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
-          <span className={styles.rulesOperator}>{rules.operator}</span>
+          <span className={styles.rulesOperator}>{isFallback ? 'FALLBACK' : rules.operator}</span>
           <span className={styles.rulesCount}>
-            {rules.conditions.length === 0 ? '0 rules ⚠️' : `${rules.conditions.length} rules`}
+            {isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
           </span>
         </div>
 
@@ -99,17 +108,14 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
           <div className={styles.conditionsList}>
             {previewConditions.map((condition) => {
               return (
-                <div
-                  key={condition.key}
-                  className={styles.conditionTree}
-                  title={condition.title}
-                >
+                <div key={condition.key} className={styles.conditionTree} title={condition.title}>
                   {condition.lines.map((line) => {
-                    const rowClassName = line.kind === 'operator'
-                      ? styles.conditionOperatorRow
-                      : line.kind === 'more'
-                        ? styles.conditionMoreRow
-                        : styles.conditionLeafRow
+                    const rowClassName =
+                      line.kind === 'operator'
+                        ? styles.conditionOperatorRow
+                        : line.kind === 'more'
+                          ? styles.conditionMoreRow
+                          : styles.conditionLeafRow
 
                     return (
                       <div
@@ -117,7 +123,13 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
                         className={`${styles.conditionRow} ${rowClassName}`}
                         style={{ paddingInlineStart: `${Math.min(line.depth, 2) * 10}px` }}
                       >
-                        <span className={line.kind === 'operator' ? styles.conditionOperatorBadge : styles.conditionText}>
+                        <span
+                          className={
+                            line.kind === 'operator'
+                              ? styles.conditionOperatorBadge
+                              : styles.conditionText
+                          }
+                        >
                           {line.text}
                         </span>
                       </div>
@@ -163,9 +175,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
             {ref.model.split('/').pop()}
           </span>
         ))}
-        {modelRefs.length > 2 && (
-          <span className={styles.moreModels}>+{modelRefs.length - 2}</span>
-        )}
+        {modelRefs.length > 2 && <span className={styles.moreModels}>+{modelRefs.length - 2}</span>}
       </div>
 
       <Handle type="source" position={Position.Right} />

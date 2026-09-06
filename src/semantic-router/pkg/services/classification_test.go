@@ -235,7 +235,16 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 		Confidence: 0.91,
 	}
 
-	response := service.buildIntentResponseFromSignals(signals, decisionResult, "projection_route", 0.91, 12, req)
+	response := service.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		"projection_route",
+		0.91,
+		12,
+		req,
+		service.classifier,
+		service.config,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.MatchedSignals)
 
@@ -267,6 +276,13 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 			Decisions: []config.Decision{
 				{
 					Name: "reasoning_route",
+					Algorithm: &config.AlgorithmConfig{
+						Type: "remom",
+					},
+					Plugins: []config.DecisionPlugin{
+						{Type: "semantic_cache"},
+						{Type: "system_prompt"},
+					},
 					Rules: config.RuleCombination{
 						Operator: "AND",
 						Conditions: []config.RuleNode{{
@@ -291,7 +307,12 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 		Decision: &routerConfig.Decisions[0],
 	}
 
-	response := service.buildEvalResponse("reason carefully", signals, decisionResult)
+	response := service.buildEvalResponse(
+		"reason carefully",
+		signals,
+		decisionResult,
+		service.classifier,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.DecisionResult)
 	require.NotNil(t, response.DecisionResult.UsedSignals)
@@ -301,6 +322,8 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.UsedSignals.Projection)
 	assert.Equal(t, []string{"balance_reasoning"}, response.DecisionResult.MatchedSignals.Projection)
 	assert.Equal(t, []string{"balance_medium"}, response.DecisionResult.UnmatchedSignals.Projection)
+	assert.Equal(t, "remom", response.DecisionResult.Algorithm)
+	assert.Equal(t, []string{"response_cache", "system_prompt"}, response.DecisionResult.Plugins)
 }
 
 func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
@@ -310,12 +333,19 @@ func TestBuildEvalResponse_IncludesSignalValues(t *testing.T) {
 		Metrics:               &classification.SignalMetricsCollection{},
 		SignalConfidences:     map[string]float64{"structure:many_questions": 1},
 		SignalValues:          map[string]float64{"structure:many_questions": 4},
+		SignalErrors:          map[string]string{"classifier:risk": "timeout"},
 	}
 
-	response := service.buildEvalResponse("why? why? why? why?", signals, nil)
+	response := service.buildEvalResponse(
+		"why? why? why? why?",
+		signals,
+		nil,
+		nil,
+	)
 	require.NotNil(t, response)
 	require.NotNil(t, response.SignalValues)
 	assert.Equal(t, 4.0, response.SignalValues["structure:many_questions"])
+	assert.Equal(t, "timeout", response.SignalErrors["classifier:risk"])
 }
 
 // Benchmark tests for performance validation
@@ -564,8 +594,8 @@ func TestBuildPIIResponse_DefaultOptions(t *testing.T) {
 	assert.Len(t, resp.Entities, 2)
 	assert.Equal(t, "[DETECTED]", resp.Entities[0].Value)
 	assert.Equal(t, "[DETECTED]", resp.Entities[1].Value)
-	assert.Equal(t, 0, resp.Entities[0].StartPos)
-	assert.Equal(t, 0, resp.Entities[0].EndPos)
+	assert.Nil(t, resp.Entities[0].StartPos)
+	assert.Nil(t, resp.Entities[0].EndPos)
 	assert.Empty(t, resp.MaskedText)
 	assert.Equal(t, "block", resp.SecurityRecommendation)
 }
@@ -601,8 +631,9 @@ func TestBuildPIIResponse_ReturnPositionsOption(t *testing.T) {
 			detections[:1],
 			&PIIOptions{ReturnPositions: true},
 		)
-		assert.Equal(t, 13, resp.Entities[0].StartPos)
-		assert.Equal(t, 29, resp.Entities[0].EndPos)
+		require.NotNil(t, resp.Entities[0].StartPos)
+		assert.Equal(t, 13, *resp.Entities[0].StartPos)
+		assert.Equal(t, 29, *resp.Entities[0].EndPos)
 	})
 
 	t.Run("disabled", func(t *testing.T) {
@@ -611,8 +642,8 @@ func TestBuildPIIResponse_ReturnPositionsOption(t *testing.T) {
 			detections[:1],
 			&PIIOptions{ReturnPositions: false},
 		)
-		assert.Equal(t, 0, resp.Entities[0].StartPos)
-		assert.Equal(t, 0, resp.Entities[0].EndPos)
+		assert.Nil(t, resp.Entities[0].StartPos)
+		assert.Nil(t, resp.Entities[0].EndPos)
 	})
 }
 
@@ -704,8 +735,9 @@ func TestBuildPIIResponse_CombinedOptions(t *testing.T) {
 	entity := resp.Entities[0]
 	assert.Equal(t, "EMAIL", entity.Type)
 	assert.Equal(t, "alice@test.com", entity.Value)
-	assert.Equal(t, 6, entity.StartPos)
-	assert.Equal(t, 20, entity.EndPos)
+	require.NotNil(t, entity.StartPos)
+	assert.Equal(t, 6, *entity.StartPos)
+	assert.Equal(t, 20, *entity.EndPos)
 	assert.Equal(t, "[EMAIL_0]", entity.MaskedValue)
 	assert.Equal(t, "Alice [EMAIL_0]", resp.MaskedText)
 }

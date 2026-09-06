@@ -17,7 +17,7 @@ metadata:
                 "enabled": true,
                 "threshold": "0.7"
               },
-              "semantic_cache": {
+              "response_cache": {
                 "enabled": true,
                 "max_entries": 1000,
                 "similarity_threshold": "0.85",

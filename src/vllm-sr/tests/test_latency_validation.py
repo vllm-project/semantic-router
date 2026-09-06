@@ -1,4 +1,4 @@
-"""Tests for legacy latency validation behavior."""
+"""Tests for latency-aware algorithm validation behavior."""
 
 import os
 import tempfile
@@ -30,7 +30,7 @@ def _parse_config(config_yaml: str):
         os.unlink(temp_path)
 
 
-def test_validate_rejects_legacy_latency_condition():
+def test_validate_rejects_unsupported_signal_condition():
     config_yaml = """
 version: v0.1
 listeners:
@@ -72,7 +72,7 @@ providers:
     errors = validate_user_config(config)
 
     assert any(
-        "legacy latency config is no longer supported" in str(error) for error in errors
+        "uses unsupported signal type 'latency'" in str(error) for error in errors
     )
 
 

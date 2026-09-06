@@ -1,0 +1,24 @@
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: openai
+        model_role: classification
+        llm_endpoint:
+          address: classifier.example.com
+          port: 443
+          protocol: https
+          use_chat_template: true
+        llm_model_name: gpt-4.1-mini
+        llm_timeout_seconds: 5
+
+routing:
+  signals:
+    classifiers:
+      - name: tool-risk
+        type: llm
+        model: risk-judge
+        labels: [SAFE, RISKY]
+        instructions: >-
+          Choose RISKY only for destructive, privileged, or irreversible tool
+          operations.

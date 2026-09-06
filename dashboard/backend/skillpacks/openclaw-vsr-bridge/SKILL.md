@@ -47,7 +47,7 @@ user-invocable: true
 7. Suggest the next validation commands:
 
    ```bash
-   vllm-sr validate config.yaml
+   vllm-sr validate --config config.yaml
    vllm-sr config router --config config.yaml
    ```
 

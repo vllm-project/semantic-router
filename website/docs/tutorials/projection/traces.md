@@ -48,6 +48,13 @@ The trace is versioned for forward-compatible consumers.
 ## Where to inspect
 
 - **Dashboard → Insights**: open a replay-backed record. The **Projection trace** section shows tables for partition winners (with contender breakdown when present), score inputs, and mapping decisions (including boundary distance and a per-output threshold step list), plus collapsible raw JSON.
-- **Storage**: the same object is persisted on the replay `Record` (memory, Redis, or PostgreSQL column `projection_trace` JSONB).
+- **Storage**: the same object is persisted on the replay `Record` through the
+  configured Router Replay backend. PostgreSQL stores it in the
+  `projection_trace` JSONB column.
 
 Traces are derived only from the projection contract and evaluated signal results—there is no opaque sidecar model.
+
+Projection traces contain rule names, scores, contenders, and selected outputs.
+Treat them as policy and traffic metadata even when body capture is disabled,
+and restrict replay access accordingly. The trace schema is implemented in
+[`projectiontrace/trace.go`](https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/projectiontrace/trace.go).

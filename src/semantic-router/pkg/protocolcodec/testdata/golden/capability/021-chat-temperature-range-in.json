@@ -1,0 +1,8 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "provider-model",
+    "temperature": 1.5,
+    "messages": [{"role": "user", "content": "Use the wider sampling range."}]
+  }
+}

@@ -20,7 +20,6 @@ from cli.container_cli import (
     container_network_connect,
     container_remove_container,
     container_start_container,
-    container_start_fleet_sim,
     container_start_grafana,
     container_start_jaeger,
     container_start_prometheus,
@@ -29,6 +28,7 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.runtime_stack import RuntimeStackLayout
+from cli.terminal import echo, fields, heading, progress, success
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -66,9 +66,22 @@ def ensure_clean_runtime_container(container_name: str) -> None:
 
 def ensure_shared_network(shared_network_name: str) -> None:
     """Create the shared OpenClaw bridge network used by local stacks."""
-    return_code, _stdout, stderr = container_create_network(shared_network_name)
+    _ensure_network(shared_network_name, "shared OpenClaw")
+
+
+def ensure_data_network(data_network_name: str) -> None:
+    """Create the bridge network reserved for this stack's storage services.
+
+    It exists so that joining the application network is not enough to reach
+    Redis, Postgres, or Milvus. Only those three and Router are attached to it.
+    """
+    _ensure_network(data_network_name, "storage data")
+
+
+def _ensure_network(network_name: str, description: str) -> None:
+    return_code, _stdout, stderr = container_create_network(network_name)
     if return_code != 0:
-        log.error(f"Failed to create shared OpenClaw network: {stderr}")
+        log.error(f"Failed to create {description} network: {stderr}")
         raise SystemExit(1)
 
 
@@ -110,44 +123,6 @@ def start_observability_stack(
         }
     )
     return shared_network_name
-
-
-def start_fleet_sim_sidecar(
-    config_dir: str,
-    env_vars: dict[str, str],
-    stack_layout: RuntimeStackLayout,
-    sim_image: str | None = None,
-    pull_policy: str | None = None,
-) -> bool:
-    """Start the local simulator sidecar unless an external URL is configured."""
-    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
-        "TARGET_FLEET_SIM_URL"
-    )
-    if external_url:
-        env_vars["TARGET_FLEET_SIM_URL"] = external_url
-        log.info(f"Using external vllm-sr-sim service: {external_url}")
-        return False
-
-    raw_enabled = env_vars.get(
-        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
-    )
-    if str(raw_enabled).lower() == "false":
-        log.info("vllm-sr-sim sidecar disabled via VLLM_SR_SIM_ENABLED=false")
-        return False
-
-    log.info("Starting vllm-sr-sim sidecar...")
-    _start_named_service(
-        "vllm-sr-sim",
-        lambda: container_start_fleet_sim(
-            image=sim_image,
-            network_name=stack_layout.network_name,
-            config_dir=config_dir,
-            stack_layout=stack_layout,
-            pull_policy=pull_policy,
-        ),
-    )
-    env_vars["TARGET_FLEET_SIM_URL"] = stack_layout.fleet_sim_service_url
-    return True
 
 
 def connect_runtime_container(
@@ -194,19 +169,25 @@ def maybe_finish_setup_mode(
     _wait_for_setup_dashboard(dashboard_container)
     ensure_runtime_container_not_exited(dashboard_container, phase="during setup mode")
 
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router setup mode is running!")
-    log.info("")
-    log.info("Next steps:")
-    log.info(f"  - Open {stack_layout.dashboard_url}")
-    log.info("  - Configure your first model in the dashboard")
-    log.info("  - Activate a runnable config to enable routing")
-    _log_runtime_commands(dashboard_disabled=False, fleet_sim_enabled=False)
-    log.info("=" * 60)
+    success("vLLM Semantic Router setup mode is running")
+    echo()
+    heading("Next steps")
+    fields(
+        (
+            ("Dashboard", stack_layout.dashboard_url),
+            ("Configure", "Add your first model in the dashboard"),
+            ("Activate", "Activate a runnable config to enable routing"),
+        )
+    )
+    _log_runtime_commands(dashboard_disabled=False)
     return True
 
 
-def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
+def wait_for_router_health(
+    stack_layout: RuntimeStackLayout,
+    management_port: int = DEFAULT_API_PORT,
+    readiness_token_env: str | None = None,
+) -> None:
     """Block until the router readiness endpoint responds or the timeout elapses."""
     log.info("Waiting for Router to become ready...")
     log.info(f"Health check timeout: {HEALTH_CHECK_TIMEOUT}s")
@@ -234,7 +215,7 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
 
         return_code, _stdout, _stderr = container_exec(
             router_container,
-            ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/ready"],
+            _router_readiness_command(management_port, readiness_token_env),
         )
         if return_code == 0:
             elapsed = int(time.time() - start_time)
@@ -256,6 +237,40 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
     log.info("Showing full container logs:")
     container_logs(router_container, follow=False, tail=100)
     raise SystemExit(1)
+
+
+def _router_readiness_command(
+    management_port: int, readiness_token_env: str | None
+) -> list[str]:
+    endpoint = f"http://localhost:{management_port}/ready"
+    if readiness_token_env is None:
+        return ["curl", "-f", "-s", endpoint]
+    script = (
+        'set -eu; token="$(printenv "$1")"; test -n "$token"; '
+        "printf 'Authorization: Bearer %s\\n' \"$token\" | "
+        'curl -f -s -H @- "$2"'
+    )
+    return ["sh", "-c", script, "vllm-sr-readiness", readiness_token_env, endpoint]
+
+
+def wait_and_verify_runtime(
+    stack_layout: RuntimeStackLayout,
+    dashboard_disabled: bool,
+    management_port: int = DEFAULT_API_PORT,
+    readiness_token_env: str | None = None,
+) -> None:
+    """Wait for readiness and verify every required runtime container."""
+    wait_for_router_health(
+        stack_layout,
+        management_port=management_port,
+        readiness_token_env=readiness_token_env,
+    )
+    for service in ("router", "envoy"):
+        ensure_runtime_container_not_exited(
+            stack_layout.service_container_name(service)
+        )
+    if not dashboard_disabled:
+        ensure_runtime_container_not_exited(stack_layout.dashboard_container_name)
 
 
 def ensure_runtime_container_not_exited(
@@ -330,42 +345,47 @@ def log_runtime_summary(
     stack_layout: RuntimeStackLayout,
     dashboard_disabled: bool,
     enable_observability: bool,
-    fleet_sim_enabled: bool,
     started_backends: set[str] | None = None,
 ) -> None:
     """Print the local endpoints and common follow-up commands."""
-    log.info("=" * 60)
-    log.info("vLLM Semantic Router is running!")
-    log.info("")
-    log.info("Endpoints:")
+    success("vLLM Semantic Router is running")
+    echo()
+    heading("Endpoints")
+    endpoints = []
     if not dashboard_disabled:
-        log.info(f"  - Dashboard: {stack_layout.dashboard_url}")
+        endpoints.append(("Dashboard", stack_layout.dashboard_url))
     for listener in listeners:
         name = listener.get("name", "unknown")
         port = listener.get("port", "unknown")
         if isinstance(port, int):
             port += stack_layout.port_offset
-        log.info(f"  - {name}: http://localhost:{port}")
-    log.info(f"  - Metrics: {stack_layout.metrics_url}")
-    if fleet_sim_enabled:
-        log.info(f"  - Fleet Sim: {stack_layout.fleet_sim_url}")
+        endpoints.append((name, f"http://localhost:{port}"))
+    endpoints.append(("Metrics", stack_layout.metrics_url))
+    fields(endpoints)
 
     if started_backends:
-        log.info("")
-        log.info("Storage:")
+        storage = []
         if "redis" in started_backends:
-            log.info(f"  - Redis: {stack_layout.redis_url}")
+            storage.append(("Redis", stack_layout.redis_url))
         if "postgres" in started_backends:
-            log.info(f"  - Postgres: {stack_layout.postgres_url}")
+            storage.append(("Postgres", stack_layout.postgres_url))
+        if storage:
+            echo()
+            heading("Storage")
+            fields(storage)
 
     if enable_observability:
-        log.info("")
-        log.info("Observability:")
-        log.info(f"  - Jaeger UI: {stack_layout.jaeger_ui_url}")
-        log.info(f"  - Grafana: {stack_layout.grafana_url} (admin/admin)")
-        log.info(f"  - Prometheus: {stack_layout.prometheus_url}")
+        echo()
+        heading("Observability")
+        fields(
+            (
+                ("Jaeger UI", stack_layout.jaeger_ui_url),
+                ("Grafana", f"{stack_layout.grafana_url} (admin/admin)"),
+                ("Prometheus", stack_layout.prometheus_url),
+            )
+        )
 
-    _log_runtime_commands(dashboard_disabled, fleet_sim_enabled)
+    _log_runtime_commands(dashboard_disabled)
     _print_curl_example(listeners, stack_layout)
 
 
@@ -406,21 +426,23 @@ def _print_matching_lines(text: str) -> None:
         return
     for line in text.strip().split("\n"):
         if line.strip() and "caller" in line.lower():
-            print(f"  {line}")
+            progress(f"  {line}")
 
 
-def _log_runtime_commands(dashboard_disabled: bool, fleet_sim_enabled: bool) -> None:
-    log.info("")
-    log.info("Commands:")
+def _log_runtime_commands(dashboard_disabled: bool) -> None:
+    commands = []
     if not dashboard_disabled:
-        log.info("  - vllm-sr dashboard              Open dashboard in browser")
-    if fleet_sim_enabled:
-        log.info("  - vllm-sr logs <envoy|router|dashboard|simulator> [-f]")
-        log.info("  - vllm-sr status [envoy|router|dashboard|simulator|all]")
-    else:
-        log.info("  - vllm-sr logs <envoy|router|dashboard> [-f]")
-        log.info("  - vllm-sr status [envoy|router|dashboard|all]")
-    log.info("  - vllm-sr stop")
+        commands.append(("Dashboard", "vllm-sr dashboard"))
+    commands.extend(
+        (
+            ("Logs", "vllm-sr logs <envoy|router|dashboard> [-f]"),
+            ("Status", "vllm-sr status [envoy|router|dashboard|all]"),
+        )
+    )
+    commands.append(("Stop", "vllm-sr stop"))
+    echo()
+    heading("Commands")
+    fields(commands)
 
 
 def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
@@ -430,15 +452,13 @@ def _print_curl_example(listeners, stack_layout: RuntimeStackLayout) -> None:
     if isinstance(first_port, int):
         first_port += stack_layout.port_offset
 
-    print()
-    print("Test with curl:")
-    print()
-    print(f"curl -v http://localhost:{first_port}/v1/chat/completions \\")
-    print('  -H "Content-Type: application/json" \\')
-    print("  -d '{")
-    print('    "model": "vllm-sr/auto",')
-    print('    "messages": [')
-    print('      {"role": "user", "content": "What is the derivative of x^2?"}')
-    print("    ]")
-    print("  }'")
-    print()
+    echo()
+    heading("Try it")
+    echo(f"  curl -v http://localhost:{first_port}/v1/chat/completions \\")
+    echo('    -H "Content-Type: application/json" \\')
+    echo("    -d '{")
+    echo('      "model": "vllm-sr/auto",')
+    echo('      "messages": [')
+    echo('        {"role": "user", "content": "What is the derivative of x^2?"}')
+    echo("      ]")
+    echo("    }'")

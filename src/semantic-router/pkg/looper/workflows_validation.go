@@ -51,6 +51,14 @@ func validateWorkflowPlanStep(
 	if len(step.Models) > cfg.MaxParallel {
 		return fmt.Errorf("workflows plan step %q has %d models, exceeding max_parallel=%d", step.ID, len(step.Models), cfg.MaxParallel)
 	}
+	if cfg.MinSuccessfulResponses > len(step.Models) {
+		return fmt.Errorf(
+			"workflows plan step %q has %d models, fewer than min_successful_responses=%d",
+			step.ID,
+			len(step.Models),
+			cfg.MinSuccessfulResponses,
+		)
+	}
 	for _, model := range step.Models {
 		if !allowed[model] {
 			return fmt.Errorf("workflows plan step %q references model %q outside decision modelRefs", step.ID, model)

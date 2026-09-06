@@ -5,14 +5,16 @@ package classification
 import "fmt"
 
 var nativeBackendCapabilities = NativeBackendCapabilities{
-	Name:                       "stub",
-	UnifiedBatchClassification: false,
-	LoRABatchClassification:    false,
-	BatchedEmbedding:           false,
-	MultimodalEmbedding:        false,
-	ModalityRouting:            false,
-	MLPSelector:                false,
-	ExplicitReset:              false,
+	Name:                        "stub",
+	UnifiedBatchClassification:  false,
+	LoRABatchClassification:     false,
+	BatchedEmbedding:            false,
+	MultimodalEmbedding:         false,
+	ModalityRouting:             false,
+	MLPSelector:                 false,
+	LocalHallucinationDetection: false,
+	LocalHallucinationNLI:       false,
+	ExplicitReset:               false,
 }
 
 // Initialize initializes the unified classifier.

@@ -16,6 +16,7 @@ export const ALGORITHM_TYPES = [
   'svm',
   'mlp',
   'multi_factor',
+  'prompt',
 ] as const
 
 export type AlgorithmType = (typeof ALGORITHM_TYPES)[number]
@@ -36,9 +37,25 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   svm: 'Support Vector Machine for model classification (no extra fields)',
   mlp: 'Neural model-selection classifier using shared ML settings (no extra fields)',
   multi_factor: 'Combine quality, latency, cost, and load into one SLO-aware score',
+  prompt: 'Use a concrete helper model to select one declared candidate',
 }
 
+const COMMON_ALGORITHM_FIELDS: FieldSchema[] = [
+  {
+    key: 'minimum_candidates',
+    label: 'Minimum Candidates',
+    type: 'number',
+    min: 1,
+    placeholder: '1',
+    description: 'Minimum distinct decision candidates required after model assignment',
+  },
+]
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
+  return [...COMMON_ALGORITHM_FIELDS, ...getAlgorithmSpecificFieldSchema(algoType)]
+}
+
+function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
   switch (algoType) {
     case 'confidence':
       return [
@@ -83,6 +100,12 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'Verifier Timeout',
           type: 'number',
           placeholder: '60',
+        },
+        {
+          key: 'max_response_bytes',
+          label: 'Max Response Bytes',
+          type: 'number',
+          placeholder: '33554432',
         },
       ]
     case 'ratings':
@@ -144,6 +167,14 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'Max Concurrent',
           type: 'number',
           placeholder: '0 (no limit)',
+        },
+        {
+          key: 'max_completion_tokens',
+          label: 'Max Completion Tokens',
+          type: 'number',
+          min: 1,
+          placeholder: '1024',
+          description: 'Apply a completion limit to every ReMoM subrequest',
         },
         {
           key: 'round_timeout_seconds',
@@ -328,7 +359,8 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'Round Timeout',
           type: 'number',
           placeholder: '0 (wait for all)',
-          description: 'Stop waiting for a workflow step or final synthesis after this many seconds',
+          description:
+            'Stop waiting for a workflow step or final synthesis after this many seconds',
         },
         {
           key: 'min_successful_responses',
@@ -389,7 +421,12 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
       ]
     case 'hybrid':
       return [
-        { key: 'experience_weight', label: 'Experience Weight', type: 'number', placeholder: '0.3' },
+        {
+          key: 'experience_weight',
+          label: 'Experience Weight',
+          type: 'number',
+          placeholder: '0.3',
+        },
         { key: 'router_dc_weight', label: 'RouterDC Weight', type: 'number', placeholder: '0.3' },
         { key: 'automix_weight', label: 'AutoMix Weight', type: 'number', placeholder: '0.2' },
         { key: 'cost_weight', label: 'Cost Weight', type: 'number', placeholder: '0.2' },
@@ -463,6 +500,41 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'No Candidates Policy',
           type: 'select',
           options: ['', 'cheapest', 'first', 'fail'],
+        },
+      ]
+    case 'prompt':
+      return [
+        {
+          key: 'prompt',
+          label: 'Prompt Selector',
+          type: 'object',
+          required: true,
+          fields: [
+            {
+              key: 'model',
+              label: 'Helper Model',
+              type: 'string',
+              required: true,
+            },
+            {
+              key: 'instructions',
+              label: 'Instructions',
+              type: 'string',
+              required: true,
+            },
+            {
+              key: 'timeout_seconds',
+              label: 'Timeout Seconds',
+              type: 'number',
+              placeholder: '5',
+            },
+          ],
+        },
+        {
+          key: 'on_error',
+          label: 'On Error',
+          type: 'select',
+          options: ['', 'fallback'],
         },
       ]
     default:

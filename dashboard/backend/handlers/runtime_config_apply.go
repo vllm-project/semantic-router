@@ -110,7 +110,9 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 }
 
 func isManagedContainerConfigPath(configPath string) bool {
-	return filepath.Clean(configPath) == "/app/config.yaml"
+	cleaned := filepath.Clean(configPath)
+	configured := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
+	return cleaned == configured || cleaned == legacyManagedContainerConfigPath
 }
 
 func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {

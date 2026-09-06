@@ -2,7 +2,7 @@
 
 ## Overview
 
-`context` detects requests that need a larger effective context window. It maps to `config/signal/context/` and is declared under `routing.signals.context`.
+`context` detects requests that need a larger effective context window. It maps to `config/fragments/signal/context/` and is declared under `routing.signals.context`.
 
 This family is heuristic: it routes from token-window requirements rather than classifier inference.
 
@@ -30,7 +30,7 @@ Use `context` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/context/`
+Source fragment family: `config/fragments/signal/context/`
 
 ```yaml
 routing:

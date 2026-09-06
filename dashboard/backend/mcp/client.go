@@ -47,7 +47,7 @@ func NewClient(config *ServerConfig) (*Client, error) {
 
 // Connect establishes connection
 func (c *Client) Connect(ctx context.Context) error {
-	log.Printf("[MCP-Client] Connect() called for server: %s (transport: %s)", c.config.Name, c.config.Transport)
+	log.Printf("[MCP-Client] Connect() called: transport=%s", c.config.Transport)
 
 	c.mu.Lock()
 	c.status = StatusConnecting
@@ -67,7 +67,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	if err != nil {
-		log.Printf("[MCP-Client] Failed to create client: %v", err)
+		log.Printf("[MCP-Client] Failed to create client: error_class=%T", err)
 		c.mu.Lock()
 		c.status = StatusError
 		c.err = err
@@ -90,7 +90,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 	_, err = mcpClient.Initialize(ctx, initReq)
 	if err != nil {
-		log.Printf("[MCP-Client] Initialize failed: %v", err)
+		log.Printf("[MCP-Client] Initialize failed: error_class=%T", err)
 		_ = mcpClient.Close()
 		c.mu.Lock()
 		c.status = StatusError
@@ -105,7 +105,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	log.Printf("[MCP-Client] Listing tools...")
 	tools, err := c.ListTools(ctx)
 	if err != nil {
-		log.Printf("[MCP-Client] Warning: failed to list tools: %v", err)
+		log.Printf("[MCP-Client] Warning: failed to list tools: error_class=%T", err)
 	} else {
 		log.Printf("[MCP-Client] Got %d tools", len(tools))
 	}
@@ -124,7 +124,7 @@ func (c *Client) Connect(ctx context.Context) error {
 
 // createStdioClient creates a Stdio client
 func (c *Client) createStdioClient(ctx context.Context) (client.MCPClient, error) {
-	log.Printf("[MCP-Client] Creating Stdio client: command=%s, args=%v", c.config.Connection.Command, c.config.Connection.Args)
+	log.Printf("[MCP-Client] Creating Stdio client: argument_count=%d", len(c.config.Connection.Args))
 
 	// Build environment variables
 	env := os.Environ()
@@ -162,7 +162,7 @@ func (c *Client) createStdioClient(ctx context.Context) (client.MCPClient, error
 
 // createStreamableHTTPClient creates a Streamable HTTP client
 func (c *Client) createStreamableHTTPClient(ctx context.Context) (client.MCPClient, error) {
-	log.Printf("[MCP-Client] Creating Streamable HTTP client: url=%s", c.config.Connection.URL)
+	log.Printf("[MCP-Client] Creating Streamable HTTP client")
 
 	opts := []transport.StreamableHTTPCOption{}
 
@@ -229,7 +229,7 @@ func (c *Client) Disconnect() error {
 
 	if c.mcpClient != nil {
 		if err := c.mcpClient.Close(); err != nil {
-			log.Printf("[MCP-Client] Error closing client: %v", err)
+			log.Printf("[MCP-Client] Error closing client: error_class=%T", err)
 		}
 		c.mcpClient = nil
 	}
@@ -277,7 +277,6 @@ func transformInputSchema(schema map[string]interface{}) map[string]interface{} 
 		if propSchema, ok := properties[paramName].(map[string]interface{}); ok {
 			if _, hasDefault := propSchema["default"]; hasDefault {
 				// Has default value, don't mark as required
-				log.Printf("[MCP-Client] transformInputSchema: param '%s' has default value, removing from required", paramName)
 				continue
 			}
 		}
@@ -314,79 +313,101 @@ func coerceArgumentTypes(args map[string]interface{}, schema map[string]interfac
 			continue
 		}
 
-		expectedType, _ := propSchema["type"].(string)
-
-		switch expectedType {
-		case "array":
-			// If expecting array but received string, try to convert
-			switch v := value.(type) {
-			case string:
-				if v == "" {
-					// Convert empty string to empty array
-					args[paramName] = []interface{}{}
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted empty string to empty array for '%s'", paramName)
-				} else {
-					// Convert non-empty string to single-element array
-					args[paramName] = []interface{}{v}
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted string '%s' to array for '%s'", v, paramName)
-				}
-			case nil:
-				// Convert nil to empty array
-				args[paramName] = []interface{}{}
-				log.Printf("[MCP-Client] coerceArgumentTypes: converted nil to empty array for '%s'", paramName)
-			}
-		case "object":
-			// Recursively process nested objects
-			if nestedMap, ok := value.(map[string]interface{}); ok {
-				args[paramName] = coerceArgumentTypes(nestedMap, propSchema)
-			}
-		case "string":
-			// If expecting string but received other types, try to convert
-			switch v := value.(type) {
-			case []interface{}:
-				if len(v) == 0 {
-					args[paramName] = ""
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted empty array to empty string for '%s'", paramName)
-				} else if len(v) == 1 {
-					if str, ok := v[0].(string); ok {
-						args[paramName] = str
-						log.Printf("[MCP-Client] coerceArgumentTypes: converted single-element array to string for '%s'", paramName)
-					}
-				}
-			case float64:
-				args[paramName] = fmt.Sprintf("%v", v)
-				log.Printf("[MCP-Client] coerceArgumentTypes: converted number to string for '%s'", paramName)
-			case int:
-				args[paramName] = fmt.Sprintf("%d", v)
-				log.Printf("[MCP-Client] coerceArgumentTypes: converted int to string for '%s'", paramName)
-			case bool:
-				args[paramName] = fmt.Sprintf("%v", v)
-				log.Printf("[MCP-Client] coerceArgumentTypes: converted bool to string for '%s'", paramName)
-			}
-		case "number", "integer":
-			// If expecting number but received string, try to convert
-			if str, ok := value.(string); ok {
-				if f, err := strconv.ParseFloat(str, 64); err == nil {
-					args[paramName] = f
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted string to number for '%s'", paramName)
-				}
-			}
-		case "boolean":
-			// If expecting boolean but received string, try to convert
-			if str, ok := value.(string); ok {
-				switch strings.ToLower(str) {
-				case "true", "1", "yes":
-					args[paramName] = true
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted string '%s' to true for '%s'", str, paramName)
-				case "false", "0", "no", "":
-					args[paramName] = false
-					log.Printf("[MCP-Client] coerceArgumentTypes: converted string '%s' to false for '%s'", str, paramName)
-				}
-			}
-		}
+		args[paramName] = coerceArgumentValue(value, propSchema)
 	}
 
 	return args
+}
+
+func coerceArgumentValue(value interface{}, schema map[string]interface{}) interface{} {
+	expectedType, _ := schema["type"].(string)
+
+	switch expectedType {
+	case "array":
+		return coerceArrayArgument(value)
+	case "object":
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			return coerceArgumentTypes(nestedMap, schema)
+		}
+	case "string":
+		return coerceStringArgument(value)
+	case "number", "integer":
+		return coerceNumberArgument(value)
+	case "boolean":
+		return coerceBooleanArgument(value)
+	}
+
+	return value
+}
+
+func coerceArrayArgument(value interface{}) interface{} {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return []interface{}{}
+		}
+		return []interface{}{v}
+	case nil:
+		return []interface{}{}
+	default:
+		return value
+	}
+}
+
+func coerceStringArgument(value interface{}) interface{} {
+	switch v := value.(type) {
+	case []interface{}:
+		return coerceStringArrayArgument(v)
+	case float64:
+		return fmt.Sprintf("%v", v)
+	case int:
+		return fmt.Sprintf("%d", v)
+	case bool:
+		return fmt.Sprintf("%v", v)
+	default:
+		return value
+	}
+}
+
+func coerceStringArrayArgument(value []interface{}) interface{} {
+	if len(value) == 0 {
+		return ""
+	}
+	if len(value) == 1 {
+		if str, ok := value[0].(string); ok {
+			return str
+		}
+	}
+	return value
+}
+
+func coerceNumberArgument(value interface{}) interface{} {
+	str, ok := value.(string)
+	if !ok {
+		return value
+	}
+
+	number, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return value
+	}
+	return number
+}
+
+func coerceBooleanArgument(value interface{}) interface{} {
+	str, ok := value.(string)
+	if !ok {
+		return value
+	}
+
+	switch strings.ToLower(str) {
+	case "true", "1", "yes":
+		return true
+	case "false", "0", "no", "":
+		return false
+	default:
+		return value
+	}
 }
 
 // fillDefaultValues fills missing parameters with default values based on original Schema
@@ -426,7 +447,6 @@ func fillDefaultValues(args map[string]interface{}, schema map[string]interface{
 		// Only fill parameters with explicit default values
 		if defaultValue, hasDefault := propSchema["default"]; hasDefault {
 			args[paramName] = defaultValue
-			log.Printf("[MCP-Client] fillDefaultValues: filled param '%s' with default value: %v", paramName, defaultValue)
 		}
 		// Note: No longer generate empty values for parameters without default
 		// This avoids sending parameters that API doesn't recognize
@@ -448,7 +468,7 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 	log.Printf("[MCP-Client] Calling tools/list...")
 	result, err := mcpClient.ListTools(ctx, mcp.ListToolsRequest{})
 	if err != nil {
-		log.Printf("[MCP-Client] tools/list failed: %v", err)
+		log.Printf("[MCP-Client] tools/list failed: error_class=%T", err)
 		return nil, err
 	}
 
@@ -457,24 +477,12 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 	for _, t := range result.Tools {
 		inputSchema, _ := json.Marshal(t.InputSchema)
 
-		// Print tool details including full InputSchema
-		log.Printf("[MCP-Client] Tool discovered: name=%s", t.Name)
-		log.Printf("[MCP-Client]   description: %s", t.Description)
-		log.Printf("[MCP-Client]   inputSchema: %s", string(inputSchema))
-
 		// Parse original schema
 		var schemaMap map[string]interface{}
 		if err := json.Unmarshal(inputSchema, &schemaMap); err == nil {
-			if required, ok := schemaMap["required"]; ok {
-				log.Printf("[MCP-Client]   required params: %v", required)
-			}
 			if properties, ok := schemaMap["properties"]; ok {
 				if propsMap, ok := properties.(map[string]interface{}); ok {
 					log.Printf("[MCP-Client]   properties count: %d", len(propsMap))
-					for propName, propSchema := range propsMap {
-						propJSON, _ := json.Marshal(propSchema)
-						log.Printf("[MCP-Client]     - %s: %s", propName, string(propJSON))
-					}
 				}
 			}
 
@@ -493,12 +501,6 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 			// Use transformed schema
 			inputSchema = transformedJSON
 
-			// Print transformed required
-			if newRequired, ok := transformedSchema["required"]; ok {
-				log.Printf("[MCP-Client]   transformed required: %v", newRequired)
-			} else {
-				log.Printf("[MCP-Client]   transformed required: [] (all params have defaults)")
-			}
 		}
 
 		tools = append(tools, ToolDefinition{
@@ -514,8 +516,7 @@ func (c *Client) ListTools(ctx context.Context) ([]ToolDefinition, error) {
 
 // CallTool calls a tool
 func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMessage) (*CallToolResult, error) {
-	log.Printf("[MCP-Client] CallTool() called: tool=%s, server=%s", name, c.config.Name)
-	log.Printf("[MCP-Client] CallTool() arguments: %s", string(arguments))
+	log.Printf("[MCP-Client] CallTool() called: argument_bytes=%d", len(arguments))
 
 	c.mu.RLock()
 	mcpClient := c.mcpClient
@@ -531,21 +532,17 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 	var args map[string]interface{}
 	if len(arguments) > 0 {
 		if err := json.Unmarshal(arguments, &args); err != nil {
-			log.Printf("[MCP-Client] CallTool() error: failed to parse arguments: %v", err)
+			log.Printf("[MCP-Client] CallTool() error: failed to parse arguments: error_class=%T", err)
 			return nil, fmt.Errorf("failed to parse arguments: %w", err)
 		}
 	}
-	log.Printf("[MCP-Client] CallTool() parsed args (before coerce): %+v", args)
-
 	// Perform type conversion and fill default values based on original schema
 	if originalSchema != nil {
 		// First convert argument types to schema-required types
 		args = coerceArgumentTypes(args, originalSchema)
-		log.Printf("[MCP-Client] CallTool() args (after coerce): %+v", args)
 
 		// Then fill missing parameters with default values
 		args = fillDefaultValues(args, originalSchema)
-		log.Printf("[MCP-Client] CallTool() args (after fill): %+v", args)
 	}
 
 	// Build request
@@ -556,7 +553,7 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 	log.Printf("[MCP-Client] CallTool() sending request to MCP server...")
 	result, err := mcpClient.CallTool(ctx, req)
 	if err != nil {
-		log.Printf("[MCP-Client] CallTool() MCP server error: %v", err)
+		log.Print(mcpCallFailureLogMessage(err))
 		return nil, err
 	}
 	log.Printf("[MCP-Client] CallTool() success, content items: %d, isError: %v", len(result.Content), result.IsError)
@@ -584,6 +581,13 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 	}, nil
 }
 
+func mcpCallFailureLogMessage(err error) string {
+	return fmt.Sprintf(
+		"[MCP-Client] CallTool() failed: error_class=%T",
+		err,
+	)
+}
+
 // CallToolStreaming calls a tool with streaming
 // Note: SDK may not fully support streaming yet, providing compatible implementation here
 func (c *Client) CallToolStreaming(ctx context.Context, name string, arguments json.RawMessage, onChunk func(StreamChunk) error) error {
@@ -591,7 +595,7 @@ func (c *Client) CallToolStreaming(ctx context.Context, name string, arguments j
 	// Using synchronous call simulation
 	result, err := c.CallTool(ctx, name, arguments)
 	if err != nil {
-		return onChunk(StreamChunk{Type: "error", Data: err.Error()})
+		return onChunk(StreamChunk{Type: "error", Data: "Tool execution failed"})
 	}
 
 	// Send completion event
@@ -619,7 +623,7 @@ func (c *Client) GetState() *ServerState {
 
 	errMsg := ""
 	if c.err != nil {
-		errMsg = c.err.Error()
+		errMsg = "Connection unavailable"
 	}
 
 	return &ServerState{

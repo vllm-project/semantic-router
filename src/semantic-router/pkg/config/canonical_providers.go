@@ -22,8 +22,22 @@ type CanonicalProviderModel struct {
 	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
 	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
 	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
+	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
 	APIFormat        string                `yaml:"api_format,omitempty"`
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
+}
+
+// ProviderReliability controls generated data-plane load balancing and retry behavior.
+type ProviderReliability struct {
+	LBPolicy            string `yaml:"lb_policy,omitempty"`
+	RetryCount          int    `yaml:"retry_count,omitempty"`
+	RetryOn             string `yaml:"retry_on,omitempty"`
+	Consecutive5xx      int    `yaml:"consecutive_5xx,omitempty"`
+	BaseEjectionTime    string `yaml:"base_ejection_time,omitempty"`
+	MaxEjectionPercent  int    `yaml:"max_ejection_percent,omitempty"`
+	HealthCheckPath     string `yaml:"health_check_path,omitempty"`
+	HealthCheckInterval string `yaml:"health_check_interval,omitempty"`
+	HealthCheckTimeout  string `yaml:"health_check_timeout,omitempty"`
 }
 
 // CanonicalBackendRef defines one physical backend target for a provider model.

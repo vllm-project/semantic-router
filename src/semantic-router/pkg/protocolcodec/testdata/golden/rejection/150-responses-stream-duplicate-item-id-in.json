@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_duplicate_items\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"item_same\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":1,\"item\":{\"type\":\"message\",\"id\":\"item_same\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n"
+  ]
+}

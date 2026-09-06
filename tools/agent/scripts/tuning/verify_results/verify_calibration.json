@@ -4,7 +4,7 @@
   "pipeline": "engine.py \u2014 observe \u2192 diagnose \u2192 fix \u2192 verify",
   "timestamp": "2026-03-26T02:28:12",
   "router_endpoint": "http://localhost:8080",
-  "config_path": "/data/semantic-router.bak/deploy/recipes/privacy/config.yaml",
+  "config_path": "/data/semantic-router.bak/config/recipes/privacy/config.yaml",
   "num_probes": 140,
   "iterations": [
     {

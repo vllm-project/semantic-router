@@ -1,0 +1,207 @@
+.runInspector {
+  min-width: 0;
+  padding: 0.15rem 0 1rem;
+}
+
+.inspectorHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.inspectorHeader h3 {
+  margin: 0.25rem 0 0;
+  color: var(--text-primary);
+  font-size: 1.15rem;
+}
+
+.inspectorState {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.inspectorRefreshing {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.inspectorNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+  padding: 0.55rem 0 0.55rem 0.7rem;
+  border-left: 2px solid var(--color-danger);
+  color: #ffb0b3;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.inspectorNotice button {
+  flex: 0 0 auto;
+}
+
+.inspectorNoticeCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
+}
+
+.definitionGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem clamp(1.5rem, 3vw, 2.5rem);
+  margin: 1rem 0;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.definitionGrid > div {
+  min-width: 0;
+}
+
+.definitionGrid dt {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.definitionGrid dd {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+
+.definitionWide {
+  grid-column: 1 / -1;
+}
+
+.runTechnicalDetails {
+  margin: 0 0 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.runTechnicalSummary {
+  padding: 0.75rem 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.runTechnicalGrid {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0 0 0.9rem;
+}
+
+.runTechnicalGrid > div {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.28fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.runTechnicalGrid dt {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.runTechnicalGrid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.runTechnicalGrid code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.inspectorActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pairControlStatus {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.inspectorEmpty {
+  display: flex;
+  align-content: center;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 180px;
+  padding: 1rem 0;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.inspectorEmpty p {
+  margin: 0.2rem 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1160px) {
+  .runInspector {
+    padding: 1.25rem 0 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+@media (max-width: 760px) {
+  .definitionGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .definitionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .definitionWide {
+    grid-column: auto;
+  }
+
+  .runTechnicalGrid > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .runInspector {
+    padding-inline: 0;
+  }
+
+  .inspectorHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inspectorState {
+    justify-content: flex-start;
+  }
+
+  .inspectorNotice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

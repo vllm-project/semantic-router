@@ -221,7 +221,6 @@ prompt_guard:
   model_id: "test-jailbreak-model"
   threshold: 0.5
   use_cpu: false
-  use_modernbert: true
   jailbreak_mapping_path: "/path/to/jailbreak.json"
 
 vllm_endpoints:
@@ -290,7 +289,6 @@ tools:
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
 				Expect(cfg.PromptGuard.ModelID).To(Equal("test-jailbreak-model"))
-				Expect(cfg.PromptGuard.UseModernBERT).To(BeTrue())
 
 				// Verify model config
 				Expect(cfg.ModelConfig).To(HaveKey("model-a"))
@@ -3069,7 +3067,6 @@ hallucination_mitigation:
     model_id: "models/hallucination_detect_modernbert"
     threshold: 0.6
     use_cpu: true
-  on_hallucination_detected: "block"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -3086,7 +3083,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.HallucinationModel.ModelID).To(Equal("models/hallucination_detect_modernbert"))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0.6)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.UseCPU).To(BeTrue())
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(Equal("block"))
 			})
 		})
 
@@ -3112,7 +3108,6 @@ hallucination_mitigation:
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
 				Expect(cfg.HallucinationMitigation.FactCheckModel.Threshold).To(Equal(float32(0)))
 				Expect(cfg.HallucinationMitigation.HallucinationModel.Threshold).To(Equal(float32(0)))
-				Expect(cfg.HallucinationMitigation.OnHallucinationDetected).To(BeEmpty())
 			})
 		})
 
@@ -3177,15 +3172,19 @@ default_model: "test-model"
 	})
 
 	Describe("IsFactCheckClassifierEnabled", func() {
-		It("should return true when fully configured with legacy config", func() {
+		It("should return true when routing uses the configured model", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
+			cfg.FactCheckRules = []FactCheckRule{{Name: "needs_fact_check"}}
+			cfg.Decisions = []Decision{{
+				Name:  "verified-route",
+				Rules: RuleNode{Type: SignalTypeFactCheck, Name: "needs_fact_check"},
+			}}
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
 
-		It("should return true when fact_check_rules are configured", func() {
+		It("should return true for default API rules even when routing does not reference them", func() {
 			cfg := &RouterConfig{}
 			cfg.FactCheckRules = []FactCheckRule{
 				{Name: "needs_fact_check", Description: "Query needs fact verification"},
@@ -3218,6 +3217,10 @@ default_model: "test-model"
 			cfg.FeedbackDetector.Enabled = true
 			cfg.FeedbackDetector.ModelID = "models/feedback"
 			cfg.UserFeedbackRules = []UserFeedbackRule{{Name: "satisfied"}}
+			cfg.Decisions = []Decision{{
+				Name:  "feedback-route",
+				Rules: RuleNode{Type: SignalTypeUserFeedback, Name: "satisfied"},
+			}}
 
 			Expect(cfg.IsFeedbackDetectorEnabled()).To(BeTrue())
 		})
@@ -3254,17 +3257,24 @@ default_model: "test-model"
 	})
 
 	Describe("IsHallucinationModelEnabled", func() {
-		It("should return true when fully configured", func() {
+		It("should return true when a decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeTrue())
 		})
 
-		It("should return false when hallucination mitigation is disabled", func() {
+		It("should return false when no decision enables the plugin", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = false
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
@@ -3272,7 +3282,15 @@ default_model: "test-model"
 
 		It("should return false when model_id is missing", func() {
 			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.Enabled = true
+			cfg.Decisions = []Decision{{
+				Name: "verified-route",
+				Plugins: []DecisionPlugin{{
+					Type: DecisionPluginHallucination,
+					Configuration: MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			}}
 
 			Expect(cfg.IsHallucinationModelEnabled()).To(BeFalse())
 		})
@@ -3319,37 +3337,6 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.HallucinationModel.Threshold = 0
 
 			Expect(cfg.GetHallucinationModelThreshold()).To(Equal(float32(0.5)))
-		})
-	})
-
-	Describe("GetHallucinationAction", func() {
-		It("should return 'warn' when action is 'warn'", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "warn"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return 'warn' when action is 'block' (only warn is supported for global config)", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "block"
-
-			// Global config only supports "warn" action
-			// Per-decision plugin config supports "header", "body", "none", "block"
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is empty", func() {
-			cfg := &RouterConfig{}
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
-		})
-
-		It("should return default 'warn' when action is invalid", func() {
-			cfg := &RouterConfig{}
-			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
-
-			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
 		})
 	})
 
@@ -3628,6 +3615,27 @@ model_config:
 				Expect(path).To(Equal("/v1/chat/completions"))
 			})
 
+			It("should not double the version segment for a versioned base_url", func() {
+				for _, tc := range []struct {
+					providerType string
+					baseURL      string
+					expected     string
+				}{
+					{"anthropic", "https://api.anthropic.com/v1", "/v1/messages"},
+					{"anthropic", "https://api.anthropic.com", "/v1/messages"},
+					{"minimax", "https://api.minimax.io/v1", "/v1/chat/completions"},
+					{"minimax", "https://api.minimax.io", "/v1/chat/completions"},
+					{"openai", "https://api.openai.com/v1", "/v1/chat/completions"},
+					{"anthropic", "https://gateway.example.com/openai/v1", "/openai/v1/messages"},
+					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
+					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
+				} {
+					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveChatPath()
+					Expect(err).NotTo(HaveOccurred(), "%s %s", tc.providerType, tc.baseURL)
+					Expect(path).To(Equal(tc.expected), "%s %s", tc.providerType, tc.baseURL)
+				}
+			})
+
 			It("should append api-version for azure-openai", func() {
 				profile := &ProviderProfile{
 					Type:       "azure-openai",
@@ -3786,7 +3794,7 @@ model_config:
 						},
 					},
 				}
-				err := validateConfigContracts(cfg, configValidationScopeFile)
+				err := validateConfigContracts(cfg)
 				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
 				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
 			})
@@ -3801,7 +3809,7 @@ model_config:
 						},
 					},
 				}
-				Expect(validateConfigContracts(cfg, configValidationScopeFile)).To(Succeed())
+				Expect(validateConfigContracts(cfg)).To(Succeed())
 			})
 		})
 

@@ -52,6 +52,7 @@ type FileStorage struct {
 
 	dirty           atomic.Bool
 	autoSaveStarted atomic.Bool
+	closeOnce       sync.Once
 	stopChan        chan struct{}
 	doneChan        chan struct{}
 }
@@ -154,12 +155,23 @@ func (f *FileStorage) MarkDirty() {
 	f.dirty.Store(true)
 }
 
+// defaultAutoSaveInterval is the fallback cadence used when StartAutoSave is
+// given a non-positive interval, so a misconfigured value can neither panic
+// time.NewTicker nor silently disable periodic persistence.
+const defaultAutoSaveInterval = 30 * time.Second
+
 // StartAutoSave launches a background goroutine that saves whenever the dirty
 // flag is set, on the given interval. Call Close() to stop it.
-// Subsequent calls after the first are no-ops.
+// Subsequent calls after the first are no-ops. A non-positive interval is
+// defensively replaced with defaultAutoSaveInterval (time.NewTicker panics on
+// a non-positive duration).
 func (f *FileStorage) StartAutoSave(interval time.Duration) {
 	if !f.autoSaveStarted.CompareAndSwap(false, true) {
 		return
+	}
+	if interval <= 0 {
+		logging.Warnf("[LookupTableStorage] Non-positive auto-save interval %s; using default %s", interval, defaultAutoSaveInterval)
+		interval = defaultAutoSaveInterval
 	}
 	go func() {
 		defer close(f.doneChan)
@@ -198,19 +210,17 @@ func (f *FileStorage) autoSaveTick() {
 }
 
 // Close stops the auto-save goroutine (if running) and releases resources.
+// It is idempotent and safe to call concurrently: the first call performs the
+// shutdown and subsequent calls are no-ops.
 func (f *FileStorage) Close() error {
-	select {
-	case <-f.stopChan:
-		// Already closed.
-		return nil
-	default:
+	f.closeOnce.Do(func() {
 		close(f.stopChan)
-	}
-	// Wait for the goroutine only if StartAutoSave was called.
-	if f.autoSaveStarted.Load() {
-		<-f.doneChan
-	}
-	logging.Infof("[LookupTableStorage] Closed file storage: %s", f.path)
+		// Wait for the goroutine only if StartAutoSave was called.
+		if f.autoSaveStarted.Load() {
+			<-f.doneChan
+		}
+		logging.Infof("[LookupTableStorage] Closed file storage: %s", f.path)
+	})
 	return nil
 }
 

@@ -29,6 +29,24 @@ export interface ServiceStatus {
   component?: string
 }
 
+export type StatusHistoryState = 'operational' | 'starting' | 'unavailable' | 'unknown'
+
+export interface StatusHistoryHour {
+  observedAt: string
+  status: StatusHistoryState
+}
+
+export interface ServiceStatusHistory {
+  name: string
+  hours: StatusHistoryHour[]
+}
+
+export interface StatusHistory {
+  windowHours: number
+  through: string
+  services: ServiceStatusHistory[]
+}
+
 export interface RouterModelRegistryInfo {
   local_path?: string
   repo_id?: string
@@ -83,7 +101,7 @@ export interface RouterModelsSystemInfo {
 }
 
 export interface RouterModelsInfo {
-  models: RouterModelInfo[]
+  models: RouterModelInfo[] | null
   summary?: RouterModelsSummary
   system?: RouterModelsSystemInfo
 }
@@ -100,6 +118,7 @@ export interface SystemStatus {
   version?: string
   router_runtime?: RouterRuntimeStatus
   models?: RouterModelsInfo
+  history?: StatusHistory
 }
 
 export type ModelStatusTone = 'ok' | 'warn' | 'down'
@@ -186,7 +205,7 @@ export function getLoadedModelCount(modelsInfo?: RouterModelsInfo | null): numbe
   if (typeof modelsInfo.summary?.loaded_models === 'number') {
     return modelsInfo.summary.loaded_models
   }
-  return modelsInfo.models.filter((model) => model.loaded).length
+  return (modelsInfo.models ?? []).filter((model) => model.loaded).length
 }
 
 export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): number {
@@ -194,7 +213,7 @@ export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): n
   if (typeof modelsInfo.summary?.total_models === 'number') {
     return modelsInfo.summary.total_models
   }
-  return modelsInfo.models.length
+  return modelsInfo.models?.length ?? 0
 }
 
 export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
@@ -236,9 +255,7 @@ export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name'>): stri
   return `model-${slug || 'unknown'}`
 }
 
-export function getModelStatusSummary(
-  status?: StatusWithRouterRuntime | null,
-): ModelStatusSummary {
+export function getModelStatusSummary(status?: StatusWithRouterRuntime | null): ModelStatusSummary {
   if (!status) {
     return {
       value: 'Unknown',

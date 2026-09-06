@@ -69,6 +69,10 @@ func LookupProfileRegistration(name string) (ProfileRegistration, bool) {
 
 // NewProfileByName constructs a registered profile by name.
 func NewProfileByName(name string) (Profile, error) {
+	// Preserve the former generic name without advertising a duplicate profile.
+	if name == "kubernetes" {
+		name = "envoy-ai-gateway"
+	}
 	reg, ok := LookupProfileRegistration(name)
 	if !ok {
 		return nil, fmt.Errorf("unknown profile: %s (available: %v)", name, RegisteredProfileNames())

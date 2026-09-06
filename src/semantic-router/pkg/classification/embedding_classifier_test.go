@@ -368,13 +368,13 @@ func newTestEmbeddingClassifier(
 
 func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 	calls := 0
-	originalFunc := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalFunc := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		calls++
 		return nil, errors.New("constructor must not call embedding backend")
 	}
 	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalFunc
+		getEmbedding2DMatryoshka = originalFunc
 	})
 
 	classifier, err := NewEmbeddingClassifier(topicRules(), config.HNSWConfig{PreloadEmbeddings: true})
@@ -391,15 +391,15 @@ func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 
 func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *testing.T) {
 	failBadCandidate := true
-	originalFunc := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalFunc := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		if text == "bad" && failBadCandidate {
 			return nil, errors.New("synthetic embedding failure")
 		}
 		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalFunc
+		getEmbedding2DMatryoshka = originalFunc
 	})
 
 	classifier, err := NewEmbeddingClassifier([]config.EmbeddingRule{{
@@ -431,15 +431,23 @@ func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *test
 func stubEmbeddingLookup(t *testing.T, mockEmbeddings map[string][]float32) {
 	t.Helper()
 
-	originalFunc := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalLegacyFunc := getEmbeddingWithModelType
+	originalMatryoshkaFunc := getEmbedding2DMatryoshka
+	lookup := func(text string) *candle_binding.EmbeddingOutput {
 		if emb, ok := mockEmbeddings[text]; ok {
-			return &candle_binding.EmbeddingOutput{Embedding: emb}, nil
+			return &candle_binding.EmbeddingOutput{Embedding: emb}
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0)}, nil
+		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0)}
+	}
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		return lookup(text), nil
+	}
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		return lookup(text), nil
 	}
 	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalFunc
+		getEmbeddingWithModelType = originalLegacyFunc
+		getEmbedding2DMatryoshka = originalMatryoshkaFunc
 	})
 }
 
@@ -506,10 +514,15 @@ func chipFabImageRules() []config.EmbeddingRule {
 // multimodalHNSWConfig returns the HNSWConfig every multimodal test needs.
 // Image and audio rules are init-rejected unless ModelType is "multimodal",
 // so this helper centralizes that pairing for the test fixtures below.
+// TargetDimension must be set explicitly: WithDefaults() falls back to 768,
+// which the 384-dim multi-modal-embed-small model rejects at encode time
+// (target_dim validation in the candle-binding FFI), so leaving it unset
+// makes every model-backed test fail as soon as it actually runs.
 func multimodalHNSWConfig(preload bool) config.HNSWConfig {
 	return config.HNSWConfig{
 		ModelType:         "multimodal",
 		PreloadEmbeddings: preload,
+		TargetDimension:   384,
 	}
 }
 
@@ -541,7 +554,7 @@ func TestEmbeddingClassifier_ClassifyDetailedMultimodalImageHardMatch(t *testing
 	})
 	stubEmbeddingLookup(t, map[string][]float32{
 		// Text candidates are embedded the same way as for the text-query path
-		// because preloading goes through getEmbeddingWithModelType regardless
+		// because preloading goes through getEmbedding2DMatryoshka regardless
 		// of the rule's query modality. The multimodal model emits text and
 		// image embeddings in the same shared space, so this is a valid stub.
 		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),

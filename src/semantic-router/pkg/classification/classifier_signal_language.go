@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -28,7 +27,7 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 	}
 
 	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
+	c.recordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -53,7 +52,7 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 				break
 			}
 			// Record signal match
-			metrics.RecordSignalMatch(config.SignalTypeLanguage, rule.Name)
+			c.recordSignalMatch(config.SignalTypeLanguage, rule.Name)
 
 			mu.Lock()
 			results.MatchedLanguageRules = append(results.MatchedLanguageRules, rule.Name)

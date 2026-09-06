@@ -20,12 +20,44 @@ type MCPHandler struct {
 	readonlyMode bool
 }
 
+func writeMCPInternalError(w http.ResponseWriter, operation string, err error) {
+	log.Printf("[MCP-Handler] %s failed: error_class=%T", operation, err)
+	http.Error(w, operation+" failed", http.StatusInternalServerError)
+}
+
 // NewMCPHandler creates an MCP Handler
 func NewMCPHandler(manager *mcp.Manager, readonlyMode bool) *MCPHandler {
 	return &MCPHandler{
 		manager:      manager,
 		readonlyMode: readonlyMode,
 	}
+}
+
+func prepareMCPServerConfig(w http.ResponseWriter, config *mcp.ServerConfig) bool {
+	if config.ID == "" {
+		config.ID = uuid.New().String()
+	}
+	if config.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return false
+	}
+	if config.Transport == "" {
+		http.Error(w, "Transport is required", http.StatusBadRequest)
+		return false
+	}
+	if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
+		http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
+		return false
+	}
+	if config.Transport == mcp.TransportStdio && config.Connection.Command == "" {
+		http.Error(w, "Command is required for stdio transport", http.StatusBadRequest)
+		return false
+	}
+	if config.Transport == mcp.TransportStreamableHTTP && config.Connection.URL == "" {
+		http.Error(w, "URL is required for streamable-http transport", http.StatusBadRequest)
+		return false
+	}
+	return true
 }
 
 // ========== Server Config Handlers ==========
@@ -43,10 +75,14 @@ func (h *MCPHandler) ListServersHandler() http.HandlerFunc {
 		}
 
 		states := h.manager.GetAllServerStates()
+		redactedStates := make([]*mcp.ServerState, 0, len(states))
+		for _, state := range states {
+			redactedStates = append(redactedStates, mcp.RedactedServerState(state))
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"servers": states,
+			"servers": redactedStates,
 		})
 	}
 }
@@ -74,50 +110,18 @@ func (h *MCPHandler) CreateServerHandler() http.HandlerFunc {
 			return
 		}
 
-		// Generate ID
-		if config.ID == "" {
-			config.ID = uuid.New().String()
-		}
-
-		// Validate required fields
-		if config.Name == "" {
-			http.Error(w, "Name is required", http.StatusBadRequest)
+		if !prepareMCPServerConfig(w, &config) {
 			return
-		}
-
-		if config.Transport == "" {
-			http.Error(w, "Transport is required", http.StatusBadRequest)
-			return
-		}
-
-		// Validate transport type
-		if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
-			http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
-			return
-		}
-
-		// Validate connection configuration
-		switch config.Transport {
-		case mcp.TransportStdio:
-			if config.Connection.Command == "" {
-				http.Error(w, "Command is required for stdio transport", http.StatusBadRequest)
-				return
-			}
-		case mcp.TransportStreamableHTTP:
-			if config.Connection.URL == "" {
-				http.Error(w, "URL is required for streamable-http transport", http.StatusBadRequest)
-				return
-			}
 		}
 
 		if err := h.manager.AddServer(&config); err != nil {
-			http.Error(w, "Failed to add server: "+err.Error(), http.StatusInternalServerError)
+			writeMCPInternalError(w, "Add server", err)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(config)
+		_ = json.NewEncoder(w).Encode(mcp.RedactedServerConfig(&config))
 	}
 }
 
@@ -154,12 +158,17 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 		config.ID = id
 
 		if err := h.manager.UpdateServer(&config); err != nil {
-			http.Error(w, "Failed to update server: "+err.Error(), http.StatusInternalServerError)
+			writeMCPInternalError(w, "Update server", err)
 			return
 		}
 
+		stored, ok := h.manager.GetServer(id)
+		if !ok {
+			http.Error(w, "Server not found", http.StatusNotFound)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(config)
+		_ = json.NewEncoder(w).Encode(mcp.RedactedServerConfig(stored))
 	}
 }
 
@@ -188,7 +197,7 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 		}
 
 		if err := h.manager.DeleteServer(id); err != nil {
-			http.Error(w, "Failed to delete server: "+err.Error(), http.StatusInternalServerError)
+			writeMCPInternalError(w, "Delete server", err)
 			return
 		}
 
@@ -209,6 +218,10 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
+			return
+		}
 
 		// Extract ID from URL
 		path := strings.TrimPrefix(r.URL.Path, "/api/mcp/servers/")
@@ -224,13 +237,13 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 		defer cancel()
 
 		if err := h.manager.Connect(ctx, id); err != nil {
-			http.Error(w, "Failed to connect: "+err.Error(), http.StatusInternalServerError)
+			writeMCPInternalError(w, "Connect server", err)
 			return
 		}
 
 		state, _ := h.manager.GetServerStatus(id)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(state)
+		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
 	}
 }
 
@@ -245,6 +258,10 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
+			return
+		}
 
 		// Extract ID from URL
 		path := strings.TrimPrefix(r.URL.Path, "/api/mcp/servers/")
@@ -255,13 +272,13 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 		}
 
 		if err := h.manager.Disconnect(id); err != nil {
-			http.Error(w, "Failed to disconnect: "+err.Error(), http.StatusInternalServerError)
+			writeMCPInternalError(w, "Disconnect server", err)
 			return
 		}
 
 		state, _ := h.manager.GetServerStatus(id)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(state)
+		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
 	}
 }
 
@@ -287,12 +304,12 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 
 		state, err := h.manager.GetServerStatus(id)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, "Server not found", http.StatusNotFound)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(state)
+		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
 	}
 }
 
@@ -307,6 +324,10 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if h.readonlyMode {
+			http.Error(w, "Operation not allowed in readonly mode", http.StatusForbidden)
+			return
+		}
 
 		var config mcp.ServerConfig
 		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
@@ -319,11 +340,12 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		defer cancel()
 
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
+			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"success": false,
-				"error":   err.Error(),
+				"error":   "Connection test failed",
 			})
 			return
 		}
@@ -377,8 +399,8 @@ func (h *MCPHandler) ExecuteToolHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("[MCP-Handler] ExecuteTool: server_id=%s, tool_name=%s, arguments=%s",
-			req.ServerID, req.ToolName, string(req.Arguments))
+		log.Printf("[MCP-Handler] ExecuteTool: server_id=%s, tool_name=%s, argument_bytes=%d",
+			req.ServerID, req.ToolName, len(req.Arguments))
 
 		if req.ServerID == "" {
 			http.Error(w, "server_id is required", http.StatusBadRequest)
@@ -392,8 +414,13 @@ func (h *MCPHandler) ExecuteToolHandler() http.HandlerFunc {
 
 		result, err := h.manager.ExecuteTool(r.Context(), req.ServerID, req.ToolName, req.Arguments)
 		if err != nil {
-			log.Printf("[MCP-Handler] ExecuteTool: failed: %v", err)
-			http.Error(w, "Failed to execute tool: "+err.Error(), http.StatusInternalServerError)
+			log.Printf(
+				"[MCP-Handler] ExecuteTool: failed: server_id=%s, tool_name=%s, error_class=%T",
+				req.ServerID,
+				req.ToolName,
+				err,
+			)
+			http.Error(w, "Tool execution failed", http.StatusInternalServerError)
 			return
 		}
 
@@ -457,7 +484,8 @@ func (h *MCPHandler) ExecuteToolStreamHandler() http.HandlerFunc {
 		})
 		if err != nil {
 			// Send error event
-			errData, _ := json.Marshal(map[string]string{"error": err.Error()})
+			log.Printf("[MCP-Handler] ExecuteToolStream failed: error_class=%T", err)
+			errData, _ := json.Marshal(map[string]string{"error": "Tool execution failed"})
 			_, _ = w.Write([]byte("event: error\n"))
 			_, _ = w.Write([]byte("data: " + string(errData) + "\n\n"))
 			flusher.Flush()

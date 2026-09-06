@@ -13,24 +13,24 @@ Anthropic behaviour without forking llama.cpp.
 | `tool_result.content` as `TextBlockParam[]` | Same flattening issue inside tool results | Joins text fields with `\n` before forwarding |
 | Prompt-cache token counters | `cache_creation_input_tokens` and `cache_read_input_tokens` are never populated | Tracks per-session request-prefix hashes; sets `cache_creation_input_tokens` on first request and `cache_read_input_tokens` on subsequent repeats |
 
-Everything else (image blocks, `top_k`, `metadata.user_id`,
-`tool_result.is_error`, headers like `anthropic-version` and
-`anthropic-beta`, streaming SSE) is forwarded verbatim.
+The inbound boundary is closed against the pinned Messages schema revision in
+`schema_contract.json`. Published fields and nested unions are retained, while an
+unknown top-level field fails with a native Anthropic error envelope. The three
+llama-server adaptations above happen only after that provider contract is recorded.
 
 ## Debug endpoint
 
-`GET /debug/last-request` returns the most recent translated Anthropic
-Messages body that the shim forwarded to llama-server for a given
-session, plus the original inbound headers. This allows e2e tests to
-assert on request-side preservation (header forwarding, field
-translation) without log-scraping.
+`GET /debug/last-request` returns the most recent native Anthropic Messages body
+received for a given session, before the llama-server adapter runs, plus the inbound
+headers. This lets E2E tests assert the exact provider contract emitted by ExtProc
+without log-scraping.
 
 The session is identified by the `x-vsr-test-session-id` request
 header or the same-named query parameter. Returns 404 when no request
 has been seen for that session yet.
 
 ```bash
-curl -s 'http://127.0.0.1:9080/debug/last-request' \
+curl -s 'http://127.0.0.1:8080/debug/last-request' \
   -H 'x-vsr-test-session-id: my-session' | jq .
 ```
 
@@ -44,33 +44,36 @@ e2e/testing/anthropic-shim/
 │   ├── __init__.py
 │   ├── __main__.py     # python -m anthropic_shim entry point
 │   ├── app.py          # FastAPI proxy
+│   ├── provider_contract.py
 │   └── translate.py    # pure translation helpers
 ├── tests/
 │   ├── test_app.py
+│   ├── test_provider_contract.py
 │   └── test_translate.py
 ├── Dockerfile
 ├── pyproject.toml
 ├── requirements.txt
+├── schema_contract.json
 └── README.md
 ```
 
 ## Running locally
 
 ```bash
-# Start llama-server with a tiny GGUF model on port 8080
-docker run --rm -p 8080:8080 \
+# Start llama-server with a tiny GGUF model on port 8081
+docker run --rm -p 8081:8081 \
   -v /path/to/models:/models:ro \
   ghcr.io/ggml-org/llama.cpp:server \
   -m /models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf \
-  --jinja --host 0.0.0.0 --port 8080 -c 4096
+  --jinja --host 0.0.0.0 --port 8081 -c 4096
 
-# In another terminal, start the shim on port 9080
+# In another terminal, start the shim on port 8080
 pip install -e .
-ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8080 \
+ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8081 \
   python -m anthropic_shim
 
 # Hit the shim with an Anthropic Messages request
-curl -s http://127.0.0.1:9080/v1/messages \
+curl -s http://127.0.0.1:8080/v1/messages \
   -H 'content-type: application/json' \
   -d '{
     "model": "qwen-test",
@@ -90,9 +93,9 @@ reused across overlays:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ANTHROPIC_SHIM_UPSTREAM_URL` | `http://127.0.0.1:8080` | llama-server base URL |
+| `ANTHROPIC_SHIM_UPSTREAM_URL` | `http://127.0.0.1:8081` | llama-server base URL |
 | `ANTHROPIC_SHIM_HOST` | `0.0.0.0` | bind address |
-| `ANTHROPIC_SHIM_PORT` | `9080` | bind port |
+| `ANTHROPIC_SHIM_PORT` | `8080` | bind port |
 | `ANTHROPIC_SHIM_SESSION_HEADER` | `x-vsr-test-session-id` | request header used to scope prompt-cache state |
 | `ANTHROPIC_SHIM_REQUEST_TIMEOUT` | `300` | upstream request timeout (seconds) |
 

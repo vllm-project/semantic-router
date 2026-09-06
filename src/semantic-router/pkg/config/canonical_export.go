@@ -23,17 +23,21 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
-		Routing: CanonicalRoutingFromRouterConfig(cfg),
-		Global:  CanonicalGlobalFromRouterConfig(cfg),
+		Routing:     CanonicalRoutingFromRouterConfig(cfg),
+		Entrypoints: canonicalEntrypointsFromRouterConfig(cfg),
+		Recipes:     canonicalRecipesFromRouterConfig(cfg),
+		Global:      CanonicalGlobalFromRouterConfig(cfg),
 	}
 }
 
 // CanonicalStaticConfigFromRouterConfig exports the static canonical base used
 // by K8s CRD reconciliation. Dynamic routing state is expected to come from the
-// CRDs, so the routing block is intentionally left empty.
+// CRDs, so the routing block, entrypoints, and recipes are left empty.
 func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	canonical := CanonicalConfigFromRouterConfig(cfg)
 	canonical.Routing = CanonicalRouting{}
+	canonical.Entrypoints = nil
+	canonical.Recipes = nil
 	return canonical
 }
 
@@ -47,40 +51,44 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 
 	return CanonicalRouting{
 		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:   copyDecisions(cfg.Decisions),
+		Strategy:    cfg.Strategy,
 	}
 }
 
-func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
+func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 	return CanonicalSignals{
-		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
-		Domains:       append([]Category(nil), cfg.Categories...),
-		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
-		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
-		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
-		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
-		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
-		Context:       append([]ContextRule(nil), cfg.ContextRules...),
-		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
-		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
-		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
-		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
-		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
-		PII:           append([]PIIRule(nil), cfg.PIIRules...),
-		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
-		Conversation:  append([]ConversationRule(nil), cfg.ConversationRules...),
-		EventRules:    append([]EventRule(nil), cfg.EventRules...),
+		Keywords:      append([]KeywordRule(nil), signals.KeywordRules...),
+		Embeddings:    append([]EmbeddingRule(nil), signals.EmbeddingRules...),
+		Domains:       append([]Category(nil), signals.Categories...),
+		FactCheck:     append([]FactCheckRule(nil), signals.FactCheckRules...),
+		UserFeedbacks: append([]UserFeedbackRule(nil), signals.UserFeedbackRules...),
+		Reasks:        append([]ReaskRule(nil), signals.ReaskRules...),
+		Preferences:   append([]PreferenceRule(nil), signals.PreferenceRules...),
+		Language:      append([]LanguageRule(nil), signals.LanguageRules...),
+		Context:       append([]ContextRule(nil), signals.ContextRules...),
+		Structure:     append([]StructureRule(nil), signals.StructureRules...),
+		Complexity:    append([]ComplexityRule(nil), signals.ComplexityRules...),
+		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
+		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
+		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		PII:           append([]PIIRule(nil), signals.PIIRules...),
+		KB:            append([]KBSignalRule(nil), signals.KBRules...),
+		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
+		EventRules:    append([]EventRule(nil), signals.EventRules...),
+		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
+		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
+		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 	}
 }
 
-func canonicalProjectionsFromRouterConfig(cfg *RouterConfig) CanonicalProjections {
+func canonicalProjectionsFromProjections(projections Projections) CanonicalProjections {
 	return CanonicalProjections{
-		Partitions: append([]ProjectionPartition(nil), cfg.Projections.Partitions...),
-		Scores:     append([]ProjectionScore(nil), cfg.Projections.Scores...),
-		Mappings:   append([]ProjectionMapping(nil), cfg.Projections.Mappings...),
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
 	}
 }
 
@@ -137,7 +145,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
 			Strategy:                  cfg.Strategy,
 			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            append([]string(nil), cfg.AutoModelNames...),
+			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
 			ClearRouteCache:           cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
@@ -155,11 +163,12 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Observability: cfg.Observability,
 			Authz:         cfg.Authz,
 			RateLimit:     cfg.RateLimit,
+			ManagementAPI: cfg.ManagementAPI,
 			RouterReplay:  cfg.RouterReplay,
 			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
-			SemanticCache: cfg.SemanticCache,
+			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 		},
@@ -173,7 +182,23 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	return global
 }
 
+func canonicalAutoModelNames(names []string) *[]string {
+	if names == nil {
+		return nil
+	}
+	cloned := append([]string{}, names...)
+	return &cloned
+}
+
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
+	categoryModel := cfg.CategoryModel
+	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
+		// Export is intentionally non-validating. Preserve an invalid runtime
+		// value so the normal configuration validator reports the actionable
+		// error instead of silently changing it during serialization.
+		categoryModel = cfg.CategoryModel
+	}
+
 	return CanonicalModelCatalog{
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
@@ -187,8 +212,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
 			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 		},
-		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
@@ -197,7 +223,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Classifier: CanonicalClassifierModule{
 				Domain: CanonicalCategoryModule{
-					CategoryModel: cfg.CategoryModel,
+					CategoryModel: categoryModel,
 					ModelRef:      "domain_classifier",
 				},
 				MCP: cfg.MCPCategoryModel,
@@ -209,8 +235,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Complexity: cfg.ComplexityModel.WithDefaults(),
 			HallucinationMitigation: CanonicalHallucinationModule{
-				Enabled:                 cfg.HallucinationMitigation.Enabled,
-				OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
+				Enabled: cfg.HallucinationMitigation.Enabled,
 				FactCheck: CanonicalFactCheckModule{
 					FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
 					ModelRef:             "fact_check_classifier",
@@ -312,6 +337,7 @@ func canonicalProviderModelFromRuntime(
 		ReasoningFamily:  params.ReasoningFamily,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
+		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
 		BackendRefs: canonicalProviderBackendRefs(
 			name,

@@ -377,14 +377,9 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 				})
 			}
 
-			// Start auto-save
-			interval := 30 * time.Second
-			if cfg.AutoSaveInterval != "" {
-				if parsed, err := time.ParseDuration(cfg.AutoSaveInterval); err == nil {
-					interval = parsed
-				}
-			}
-
+			// Start auto-save with a validated interval (positive and below
+			// the documented maximum; falls back to the default otherwise).
+			interval := resolveAutoSaveInterval(cfg.AutoSaveInterval)
 			storage.StartAutoSave(interval, selector.getAllPreferencesForStorage)
 			logging.ComponentEvent("selection", "rl_driven_storage_initialized", map[string]interface{}{
 				"storage_path":            cfg.StoragePath,

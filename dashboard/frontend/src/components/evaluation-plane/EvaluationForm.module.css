@@ -1,0 +1,149 @@
+.form {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.formFields {
+  display: grid;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.form[aria-busy='true'] {
+  cursor: wait;
+}
+
+.intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.intro h2,
+.permissionState h2 {
+  margin: 0.3rem 0 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  letter-spacing: -0.025em;
+}
+
+.intro p,
+.permissionState p {
+  max-width: 52rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.eyebrow {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.introBadges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.permissionState {
+  display: grid;
+  min-height: 280px;
+  place-items: center;
+  align-content: center;
+  padding: 2rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: center;
+}
+
+.permissionState > span {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.error,
+.deepLinkWarning {
+  padding: 0.8rem 0.9rem;
+  border: 0;
+  border-left: 2px solid rgba(248, 113, 113, 0.58);
+  border-radius: 0;
+  background: transparent;
+  color: #ffb0b3;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.deepLinkWarning {
+  display: grid;
+  gap: 0.25rem;
+  border-color: rgba(251, 191, 36, 0.54);
+  color: var(--text-secondary);
+}
+
+.deepLinkWarning > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.deepLinkWarning strong {
+  color: #f9d38b;
+  font-size: var(--text-sm);
+}
+
+.deepLinkWarning code {
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.actions span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.formFields:disabled,
+.formFields[aria-busy='true'] {
+  cursor: wait;
+}
+
+@media (max-width: 680px) {
+  .intro,
+  .actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .introBadges {
+    justify-content: flex-start;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}

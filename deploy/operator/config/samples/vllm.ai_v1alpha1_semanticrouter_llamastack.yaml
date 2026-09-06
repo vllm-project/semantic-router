@@ -101,7 +101,7 @@ spec:
   # ====================
   config:
     # Semantic cache for performance optimization
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: "0.85"

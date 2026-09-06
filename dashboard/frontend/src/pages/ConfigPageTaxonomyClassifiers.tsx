@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { FieldConfig } from '../components/EditModal'
 import { DataTable } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { StringListEditor } from '../components/StringListEditor'
 import TableHeader from '../components/TableHeader'
 import pageStyles from './ConfigPage.module.css'
@@ -26,7 +27,6 @@ import {
   buildGroupColumns,
   buildGroupRows,
   buildKnowledgeBaseColumns,
-  buildKnowledgeBaseCounts,
   buildKnowledgeBaseRows,
   buildLabelColumns,
   buildLabelRows,
@@ -39,7 +39,6 @@ import {
   renameGroupInDraft,
   renameLabelInDraft,
 } from './configPageKnowledgeBaseManagerSupport'
-import { buildTaxonomySummaryCards } from './configPageTaxonomySummarySupport'
 
 interface ConfigPageTaxonomyClassifiersProps {
   isReadonly: boolean
@@ -120,8 +119,6 @@ export default function ConfigPageTaxonomyClassifiers({
     () => buildLabelRows(selectedKnowledgeBase, labelSearch),
     [labelSearch, selectedKnowledgeBase],
   )
-
-  const counts = useMemo(() => buildKnowledgeBaseCounts(knowledgeBases), [knowledgeBases])
 
   const knowledgeBaseEditorField = useCallback(
     (disableName: boolean): FieldConfig[] => [
@@ -546,35 +543,6 @@ export default function ConfigPageTaxonomyClassifiers({
     [handleDeleteLabel, isReadonly, openEditLabelModal, selectedKnowledgeBase?.editable],
   )
 
-  const groupOverview = useMemo(
-    () => ({
-      total: groupRows.length,
-      referenced: groupRows.filter((group) => group.signal_count > 0).length,
-      metricBacked: groupRows.filter((group) => group.metric_count > 0).length,
-    }),
-    [groupRows],
-  )
-
-  const labelOverview = useMemo(
-    () => ({
-      total: labelRows.length,
-      referenced: labelRows.filter((label) => label.signal_count > 0).length,
-      overrides: labelRows.filter((label) => typeof label.threshold_value === 'number').length,
-    }),
-    [labelRows],
-  )
-
-  const activeSummaryCards = useMemo(
-    () =>
-      buildTaxonomySummaryCards({
-        activeView,
-        counts: { total: counts.total, builtin: counts.builtin, custom: counts.custom },
-        groupOverview,
-        labelOverview,
-      }),
-    [activeView, counts.builtin, counts.custom, counts.total, groupOverview, labelOverview],
-  )
-
   const deleteTargetName =
     deleteTarget?.kind === 'knowledge-base'
       ? deleteTarget.knowledgeBase.name
@@ -588,17 +556,7 @@ export default function ConfigPageTaxonomyClassifiers({
 
   return (
     <section id="knowledge-bases" className={styles.section}>
-      <div className={styles.summaryGrid}>
-        {activeSummaryCards.map((card) => (
-          <article key={card.label} className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>{card.label}</span>
-            <strong className={styles.summaryValue}>{card.value}</strong>
-            <span className={styles.summaryHint}>{card.hint}</span>
-          </article>
-        ))}
-      </div>
-
-      {loading ? <div className={styles.notice}>Loading knowledge base catalog...</div> : null}
+      {loading ? <ProductLoadingState compact label="Loading knowledge bases" /> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
       {activeView === 'bases' ? (

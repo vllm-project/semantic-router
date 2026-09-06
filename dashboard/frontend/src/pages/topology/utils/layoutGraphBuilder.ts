@@ -23,6 +23,7 @@ import {
   DecisionDensityMode,
   DENSITY_VISIBLE_DECISION_LIMIT,
   getDecisionNodeHeight,
+  getDecisionReachability,
   getModelConfigKey,
   getPhysicalModelKey,
   getPluginChainHeight,
@@ -239,12 +240,8 @@ export function buildLayoutGraph(
 
     nodeDimensions.set(decisionId, { width: 200, height: nodeHeight })
 
+    const reachability = getDecisionReachability(decision, configuredSignals)
     const leafConditions = collectRuleConditions(decision.rules)
-    const hasConditions = leafConditions.length > 0
-    const hasValidConditions = hasConditions && leafConditions.some(
-      condition => configuredSignals.has(`${condition.type}:${condition.name}`)
-    )
-    const isUnreachable = !hasValidConditions
 
     nodes.push({
       id: decisionId,
@@ -257,10 +254,9 @@ export function buildLayoutGraph(
         isFocusTarget: layoutOptions?.focusMode && layoutOptions?.focusedDecisionName === decision.name,
         focusModeEnabled: layoutOptions?.focusMode ?? false,
         onFocusDecision: layoutOptions?.onFocusDecision,
-        isUnreachable,
-        unreachableReason: !hasConditions
-          ? 'No conditions defined'
-          : 'Referenced signals not configured',
+        isFallback: reachability.isFallback,
+        isUnreachable: reachability.isUnreachable,
+        unreachableReason: reachability.unreachableReason,
       },
     })
 
@@ -378,7 +374,7 @@ export function buildLayoutGraph(
 
       nodeDimensions.set(pluginChainId, { width: 160, height: pluginHeight })
 
-      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'semantic_cache')
+      const globalCachePlugin = topology.globalPlugins.find(plugin => plugin.type === 'response_cache')
 
       nodes.push({
         id: pluginChainId,

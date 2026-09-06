@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -26,6 +27,23 @@ func managedContainerNameForService(service string) string {
 	default:
 		return defaultRouterContainerName
 	}
+}
+
+func managedContainerNameForStorage(backend string) string {
+	stack := normalizedManagedStackName(os.Getenv("VLLM_SR_STACK_NAME"))
+	if stack == "" || stack == "vllm-sr" {
+		return "vllm-sr-" + backend
+	}
+	return stack + "-vllm-sr-" + backend
+}
+
+func normalizedManagedStackName(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "vllm-sr"
+	}
+	value = regexp.MustCompile(`[^A-Za-z0-9_.-]+`).ReplaceAllString(value, "-")
+	return strings.Trim(value, "._-")
 }
 
 func managedDashboardContainerName() string {

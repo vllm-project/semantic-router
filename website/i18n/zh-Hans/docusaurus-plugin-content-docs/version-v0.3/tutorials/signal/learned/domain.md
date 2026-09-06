@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`domain` 对请求主题族分类。映射到 `config/signal/domain/`，在 `routing.signals.domains` 中声明。
+`domain` 对请求主题族分类。映射到 `config/fragments/signal/domain/`，在 `routing.signals.domains` 中声明。
 
 该族为学习型：路由器使用 `global.model_catalog.modules.classifier` 下的领域分类路径，以及 `global.model_catalog.system` 中稳定的领域系统模型绑定。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/domain/`
+源片段族：`config/fragments/signal/domain/`
 
 ```yaml
 routing:

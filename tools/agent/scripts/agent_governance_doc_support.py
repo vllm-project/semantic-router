@@ -23,14 +23,14 @@ PLAN_FILENAME_PATTERN = re.compile(r"^pl-(\d{4})-[a-z0-9-]+\.md$")
 def validate_plan_inventory_and_template(
     repo_manifest: dict, errors: list[str]
 ) -> None:
-    plan_dir = REPO_ROOT / "docs" / "agent" / "plans"
+    plan_dir = REPO_ROOT / "tools" / "agent" / "docs" / "plans"
     if not plan_dir.exists():
-        errors.append("Missing docs/agent/plans directory")
+        errors.append("Missing tools/agent/docs/plans directory")
         return
 
     plan_readme = plan_dir / "README.md"
     if not plan_readme.exists():
-        errors.append("Missing docs/agent/plans/README.md")
+        errors.append("Missing tools/agent/docs/plans/README.md")
         return
 
     plan_readme_text = plan_readme.read_text(encoding="utf-8")
@@ -54,7 +54,7 @@ def validate_plan_inventory_and_template(
     )
     if duplicate_plan_indices:
         errors.append(
-            "docs/agent/plans has duplicate execution plan indices: "
+            "tools/agent/docs/plans has duplicate execution plan indices: "
             + ", ".join(duplicate_plan_indices)
         )
 
@@ -74,7 +74,7 @@ def validate_single_plan_doc(
     filename_index = filename_match.group(1) if filename_match else ""
     if f"({plan_name})" not in plan_readme_text:
         errors.append(
-            f"docs/agent/plans/README.md must link to execution plan '{plan_doc}'"
+            f"tools/agent/docs/plans/README.md must link to execution plan '{plan_doc}'"
         )
 
     plan_text = (REPO_ROOT / plan_doc).read_text(encoding="utf-8")

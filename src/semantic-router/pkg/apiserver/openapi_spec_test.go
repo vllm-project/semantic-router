@@ -84,10 +84,29 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 	assertOpenAPISpecBasics(t, spec)
 	assertOpenAPIPaths(t, spec, documentedOpenAPIPaths())
 	assertRouterConfigOpenAPIPath(t, spec)
+	assertRecipeConfigOpenAPIPaths(t, spec)
 	assertOpenAPIPathsAbsent(t, spec, []string{
 		"/config/classification",
 		"/config/system-prompts",
 	})
+}
+
+func assertRecipeConfigOpenAPIPaths(t *testing.T, spec OpenAPISpec) {
+	t.Helper()
+
+	collection := spec.Paths["/config/router/recipes"]
+	if collection.Get == nil {
+		t.Fatal("expected /config/router/recipes GET to be documented")
+	}
+	validation := spec.Paths["/config/router/recipes/validate"]
+	if validation.Post == nil || validation.Post.RequestBody == nil {
+		t.Fatal("expected recipe validation POST body to be documented")
+	}
+	item := spec.Paths["/config/router/recipes/{name}"]
+	if item.Get == nil || item.Put == nil || item.Delete == nil {
+		t.Fatalf("expected recipe item GET, PUT, and DELETE operations, got %+v", item)
+	}
+	requireOpenAPIPathParameter(t, item.Put.Parameters, "name")
 }
 
 func assertOpenAPISpecBasics(t *testing.T, spec OpenAPISpec) {
@@ -183,6 +202,9 @@ func documentedOpenAPIPaths() []string {
 		"/config/router",
 		"/config/router/rollback",
 		"/config/router/versions",
+		"/config/router/recipes",
+		"/config/router/recipes/validate",
+		"/config/router/recipes/{name}",
 		"/config/hash",
 		"/v1/memory",
 		"/v1/vector_stores",

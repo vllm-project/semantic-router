@@ -2,7 +2,7 @@
 
 ## Overview
 
-`complexity` estimates whether a prompt needs a harder reasoning path or a cheaper easy path. It maps to `config/signal/complexity/` and is declared under `routing.signals.complexity`.
+`complexity` estimates whether a prompt needs a harder reasoning path or a cheaper easy path. It maps to `config/fragments/signal/complexity/` and is declared under `routing.signals.complexity`.
 
 This family is learned: the classifier compares requests against hard and easy examples using embedding similarity, and can optionally use multimodal candidates.
 
@@ -30,7 +30,7 @@ Use `complexity` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/complexity/`
+Source fragment family: `config/fragments/signal/complexity/`
 
 ```yaml
 global:

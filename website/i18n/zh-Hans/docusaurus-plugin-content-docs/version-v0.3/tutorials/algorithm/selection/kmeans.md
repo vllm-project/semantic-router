@@ -11,7 +11,7 @@ translation:
 
 `kmeans` 用于依赖**基于聚类**选择器的路由。
 
-对应 `config/algorithm/selection/kmeans.yaml`。
+对应 `config/fragments/algorithm/selection/kmeans.yaml`。
 
 ## 主要优势
 
