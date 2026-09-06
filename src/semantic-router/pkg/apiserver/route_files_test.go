@@ -233,6 +233,7 @@ func TestHandleUploadFileHonorsPublishedConfigMutation(t *testing.T) {
 	}
 	close(done)
 	wg.Wait()
+	apiServer.publishConfigMutation(vectorStoreUploadConfig(1, ".txt"))
 
 	rr := uploadFile(t, apiServer, "notes.txt", []byte("text"), "assistants")
 	if rr.Code != http.StatusOK {
