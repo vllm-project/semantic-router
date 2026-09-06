@@ -133,12 +133,36 @@ spec:
                         Reasoning optionally selects a built-in family or defines the request
                         projection for a custom model. Catalog-backed models normally omit it.
                       properties:
+                        activationParameter:
+                          type: string
                         default:
                           type: string
+                        defaultMode:
+                          enum:
+                          - enabled
+                          - disabled
+                          - adaptive
+                          type: string
+                        disabled:
+                          type: string
+                        effortFlags:
+                          additionalProperties:
+                            type: string
+                          description: EffortFlags maps a logical effort to a boolean
+                            chat-template parameter.
+                          type: object
                         family:
                           type: string
                         levels:
                           items:
+                            type: string
+                          type: array
+                        modes:
+                          items:
+                            enum:
+                            - enabled
+                            - disabled
+                            - adaptive
                             type: string
                           type: array
                         parameter:
@@ -147,6 +171,7 @@ spec:
                           enum:
                           - chat_template_kwargs
                           - reasoning_effort
+                          - reasoning_mode
                           - top_level_reasoning_effort
                           type: string
                       type: object
