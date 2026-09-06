@@ -94,6 +94,11 @@ type OpenAIRouter struct {
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections. Closed with the rest of the generation resources.
+	WorkflowStateService *looper.WorkflowStateService
+
 	resources *resourceScope
 }
 

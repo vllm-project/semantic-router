@@ -66,7 +66,12 @@ async def health() -> dict[str, str]:
 
 @router.get("/v1/models")
 async def models() -> dict[str, list[dict[str, str]]]:
-    return {"data": [{"id": "openai/gpt-oss-20b", "object": "model"}]}
+    return {
+        "data": [
+            {"id": "openai/gpt-oss-20b", "object": "model"},
+            {"id": "openai/workflow-planner", "object": "model"},
+        ]
+    }
 
 
 @router.get("/debug/last-request")

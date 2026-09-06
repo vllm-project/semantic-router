@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -631,13 +632,15 @@ func (l *WorkflowsLooper) resumeWorkflowToolCall(
 	cfg workflowsExecutionConfig,
 	workerModels []string,
 	stateID string,
-) (*Response, error) {
+) (out *Response, err error) {
 	state, err := l.takeWorkflowToolState(ctx, stateID)
 	if err != nil {
 		return nil, err
 	}
 	restoreState := true
-	defer l.restoreWorkflowToolState(ctx, state, &restoreState)
+	defer func() {
+		err = errors.Join(err, l.restoreWorkflowToolState(state, &restoreState))
+	}()
 
 	out, consumed, err := l.resumeWorkflowToolCallWithState(ctx, req, cfg, workerModels, state)
 	if err != nil {
@@ -656,12 +659,6 @@ func (l *WorkflowsLooper) takeWorkflowToolState(ctx context.Context, stateID str
 		return nil, fmt.Errorf("workflow tool state %q not found or expired", stateID)
 	}
 	return state, nil
-}
-
-func (l *WorkflowsLooper) restoreWorkflowToolState(ctx context.Context, state *workflowPendingToolState, restore *bool) {
-	if *restore {
-		_, _ = l.toolStates.Put(ctx, state)
-	}
 }
 
 func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(

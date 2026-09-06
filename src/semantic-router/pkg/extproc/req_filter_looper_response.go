@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -91,7 +92,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		translated, translateErr := engine.TranslateResponse(
 			llmprotocol.OpenAIChatV1,
 			target,
-			resp.Body,
+			looperClientResponseBody(resp.Body),
 			func(response *llmprotocol.Response) error {
 				if response.Model != resp.Model {
 					response.Model = resp.Model
@@ -295,4 +296,24 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 			RawValue: []byte(value),
 		},
 	}
+}
+
+// looperClientResponseBody drops looper-private JSON extensions before the
+// protocol codec translates a buffered result. Workflow pause responses attach
+// a top-level "flow" trace that is not part of Chat Completions, and the
+// codec rejects unknown fields.
+func looperClientResponseBody(body []byte) []byte {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return body
+	}
+	if _, ok := obj["flow"]; !ok {
+		return body
+	}
+	delete(obj, "flow")
+	stripped, err := json.Marshal(obj)
+	if err != nil {
+		return body
+	}
+	return stripped
 }
