@@ -100,7 +100,7 @@
   background: rgba(255, 152, 0, 0.1);
   border-bottom: 1px solid rgba(255, 152, 0, 0.3);
   font-size: 11px;
-  color: #FF9800;
+  color: #ff9800;
 }
 
 .content {
@@ -161,6 +161,21 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.candidateList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.candidateBadge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(51, 51, 51, 0.4);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10px;
+  color: var(--text-primary, #e8e8e8);
 }
 
 .signalCard {
@@ -224,7 +239,7 @@
   background: rgba(255, 152, 0, 0.1);
   border-radius: 6px;
   font-size: 10px;
-  color: #FF9800;
+  color: #ff9800;
   border: 1px solid rgba(255, 152, 0, 0.2);
 }
 

@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react'
 import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
+import type { DecisionTrace } from './decisionTraceTypes'
 
 // ============== Signal Types ==============
 export type SignalType =
@@ -352,17 +353,23 @@ export type TestQueryMode = 'simulate' | 'dry-run'
 export interface TestQueryResult {
   query: string
   mode: TestQueryMode
+  requestedModel?: string
+  recipe?: string
   matchedSignals: MatchedSignal[]
   matchedDecision: string | null
+  algorithm?: string
   matchedModels: string[]
   highlightedPath: string[]
   isAccurate: boolean
+  evalTrace?: DecisionTrace[]
   evaluatedRules?: EvaluatedRule[]
   routingLatency?: number
   warning?: string
   isFallbackDecision?: boolean // True if matched decision is a system fallback
   fallbackReason?: string // Reason for fallback (e.g., "low_confidence", "no_match")
 }
+
+export type { TraceNode, DecisionTrace } from './decisionTraceTypes'
 
 export interface MatchedSignal {
   type: SignalType
