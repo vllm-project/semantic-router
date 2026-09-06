@@ -158,9 +158,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
-      # Domain checks may invoke dashboard tests that shell out to the CLI.
-      - name: Install vllm-sr CLI
-        run: pip install -e src/vllm-sr
+      # Domain checks invoke CLI-backed dashboard tests and pytest replay tests.
+      - name: Install vllm-sr CLI and evaluation test dependencies
+        run: python -m pip install -e src/vllm-sr pytest
 
       - name: Run changed-file checks
         run: |
