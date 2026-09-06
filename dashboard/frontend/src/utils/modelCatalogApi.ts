@@ -40,6 +40,14 @@ function isNumberRecord(value: unknown): value is Record<string, number> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'number')
 }
 
+function isNonEmptyStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length > 0 &&
+    Object.entries(value).every(([key, item]) => isNonEmptyString(key) && isNonEmptyString(item))
+  )
+}
+
 function isISOCalendarDate(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const parsed = new Date(`${value}T00:00:00Z`)
@@ -132,6 +140,8 @@ function isCatalogProtocol(value: unknown): value is CatalogProtocol {
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.display_name) &&
     isNonEmptyString(value.wire_format) &&
+    isNonEmptyString(value.default_base_path) &&
+    value.default_base_path.startsWith('/') &&
     Array.isArray(value.operations) &&
     value.operations.length > 0 &&
     value.operations.every(
@@ -163,8 +173,11 @@ function isCatalogProvider(value: unknown): value is CatalogProvider {
         'chat_template_kwargs',
         'top_level_effort',
         'top_level_boolean',
+        'top_level_effort_template_switch',
+        'top_level_effort_boolean_switch',
         'reasoning_object',
         'thinking_object',
+        'thinking_object_effort',
         'output_config_effort',
         'deepseek_thinking',
       ].includes(String(value.reasoning_transport))) &&
@@ -191,16 +204,57 @@ function isReasoningFamily(value: unknown): value is CatalogReasoningFamily {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
-    ['chat_template_kwargs', 'reasoning_effort', 'top_level_reasoning_effort'].includes(
+    [
+      'chat_template_kwargs',
+      'reasoning_effort',
+      'reasoning_mode',
+      'top_level_reasoning_effort',
+    ].includes(
       String(value.type),
     ) &&
     isNonEmptyString(value.parameter) &&
     (value.activation_parameter === undefined ||
       (isNonEmptyString(value.activation_parameter) &&
         value.activation_parameter !== value.parameter)) &&
-    isStringArray(value.levels) &&
-    isNonEmptyString(value.default) &&
-    value.levels.includes(value.default)
+    (value.effort_flags === undefined ||
+      isValidReasoningEffortFlags(value)) &&
+    ((['reasoning_effort', 'top_level_reasoning_effort'].includes(String(value.type)) &&
+      isStringArray(value.levels)) ||
+      (!['reasoning_effort', 'top_level_reasoning_effort'].includes(String(value.type)) &&
+        (value.levels === undefined || isStringArray(value.levels, true)))) &&
+    (value.default === undefined ||
+      (isNonEmptyString(value.default) &&
+        isStringArray(value.levels) &&
+        value.levels.includes(value.default))) &&
+    isStringArray(value.modes) &&
+    value.modes.length > 0 &&
+    value.modes.every((mode) => ['enabled', 'disabled', 'adaptive'].includes(mode)) &&
+    isNonEmptyString(value.default_mode) &&
+    value.modes.includes(value.default_mode)
+  )
+}
+
+function isValidReasoningEffortFlags(value: Record<string, unknown>): boolean {
+  if (
+    String(value.type) !== 'reasoning_effort' ||
+    !isNonEmptyString(value.parameter) ||
+    !isNonEmptyString(value.activation_parameter) ||
+    !isNonEmptyStringRecord(value.effort_flags) ||
+    !isStringArray(value.levels)
+  ) {
+    return false
+  }
+
+  const flags = value.effort_flags
+  const levels = value.levels
+  const parameters = Object.values(flags)
+  const activeLevels = levels.filter((level) => level !== value.disabled)
+  return (
+    Object.keys(flags).every((effort) => levels.includes(effort)) &&
+    new Set(parameters).size === parameters.length &&
+    !parameters.includes(value.parameter) &&
+    !parameters.includes(value.activation_parameter) &&
+    activeLevels.length - Object.keys(flags).length <= 1
   )
 }
 
@@ -213,6 +267,25 @@ function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
       String(value.relationship),
     ) &&
     isStringArray(value.protocols) &&
+    (value.reasoning_transport === undefined ||
+      [
+        'chat_template_kwargs',
+        'top_level_effort',
+        'top_level_boolean',
+        'top_level_effort_template_switch',
+        'top_level_effort_boolean_switch',
+        'reasoning_object',
+        'thinking_object',
+        'thinking_object_effort',
+        'output_config_effort',
+        'deepseek_thinking',
+      ].includes(String(value.reasoning_transport))) &&
+    (value.reasoning_modes === undefined ||
+      (isStringArray(value.reasoning_modes) &&
+        value.reasoning_modes.every((mode) =>
+          ['enabled', 'disabled', 'adaptive'].includes(mode),
+        ))) &&
+    (value.reasoning_efforts === undefined || isStringArray(value.reasoning_efforts)) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isRecord(value.verification) &&
     ['claimed', 'imported', 'reproduced'].includes(String(value.verification.status))

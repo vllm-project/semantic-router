@@ -3,7 +3,7 @@ display_name: Novita AI
 description: Serverless access to open model families.
 category: model_api
 support_tier: compatible
-default_base_url: https://api.novita.ai/v3/openai
+default_base_url: https://api.novita.ai/openai/v1
 protocols:
 - openai/chat-completions@1
 default_protocol: openai/chat-completions@1
@@ -26,8 +26,10 @@ models:
   id: xiaomimimo/mimo-v2-flash
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: top_level_boolean
+  reasoning_modes: [enabled, disabled]
   lifecycle: active
   verification:
     status: claimed
-    verified_at: 2026-09-05
-    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    verified_at: 2026-09-07
+    source: https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion

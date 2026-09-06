@@ -193,7 +193,12 @@ func modelReasoningEfforts(
 ) []string {
 	efforts := []string{"default"}
 	if family, ok := reasoning[card.Card.ReasoningFamily]; ok {
-		efforts = append([]string(nil), family.Levels...)
+		switch {
+		case len(family.Levels) > 0:
+			efforts = append([]string(nil), family.Levels...)
+		case len(family.Modes) > 0:
+			efforts = append([]string(nil), family.Modes...)
+		}
 	}
 	seen := make(map[string]struct{}, len(efforts))
 	for _, effort := range efforts {

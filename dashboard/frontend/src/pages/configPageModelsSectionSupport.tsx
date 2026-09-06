@@ -68,7 +68,12 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     name: 'reasoning_type',
     label: 'Inline Reasoning Type',
     type: 'select',
-    options: ['reasoning_effort', 'chat_template_kwargs', 'top_level_reasoning_effort'],
+    options: [
+      'reasoning_effort',
+      'reasoning_mode',
+      'chat_template_kwargs',
+      'top_level_reasoning_effort',
+    ],
     description: 'Use only when no built-in family matches a custom model.',
   },
   {
@@ -85,6 +90,13 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     description: 'Optional activation flag used alongside a reasoning-effort parameter.',
   },
   {
+    name: 'reasoning_effort_flags',
+    label: 'Inline Effort Flags',
+    type: 'text',
+    placeholder: 'low=low_effort, medium=medium_effort',
+    description: 'Advanced: map effort names to boolean chat-template flags.',
+  },
+  {
     name: 'reasoning_levels',
     label: 'Inline Reasoning Levels',
     type: 'text',
@@ -95,6 +107,19 @@ const reasoningFields = (reasoningFamilyNames: string[]): FieldConfig[] => [
     label: 'Inline Reasoning Default',
     type: 'text',
     placeholder: 'medium',
+  },
+  {
+    name: 'reasoning_modes',
+    label: 'Supported Reasoning Modes',
+    type: 'text',
+    placeholder: 'adaptive, disabled',
+    description: 'Optional mode controls independent from the effort ladder.',
+  },
+  {
+    name: 'reasoning_default_mode',
+    label: 'Default Reasoning Mode',
+    type: 'select',
+    options: ['enabled', 'adaptive', 'disabled'],
   },
   {
     name: 'reasoning_disabled',
@@ -187,12 +212,6 @@ export const newModelFormData = (): Record<string, unknown> => ({
       provider: 'vllm',
     },
   ],
-  pricing: {
-    currency: 'USD',
-    prompt_per_1m: 0,
-    cached_input_per_1m: 0,
-    completion_per_1m: 0,
-  },
 })
 
 export const editModelFormData = (model: NormalizedModel): Record<string, unknown> => ({

@@ -73,8 +73,15 @@
           "items": {"$ref": "#/$defs/protocolID"}
         },
         "reasoning_transport": {
-          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking"]
+          "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "top_level_effort_template_switch", "top_level_effort_boolean_switch", "reasoning_object", "thinking_object", "thinking_object_effort", "output_config_effort", "deepseek_thinking"]
         },
+        "reasoning_modes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["enabled", "disabled", "adaptive"]}
+        },
+        "reasoning_efforts": {"$ref": "#/$defs/stringSet"},
         "pricing": {
           "type": "object",
           "additionalProperties": {"type": ["number", "string", "boolean"]}
@@ -202,7 +209,7 @@
             "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
           },
           "reasoning_transport": {
-            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking"]
+            "enum": ["chat_template_kwargs", "top_level_effort", "top_level_boolean", "top_level_effort_template_switch", "top_level_effort_boolean_switch", "reasoning_object", "thinking_object", "thinking_object_effort", "output_config_effort", "deepseek_thinking"]
           },
           "api_version_query": {"type": "boolean"},
           "auth": {
@@ -239,16 +246,38 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "type", "parameter", "levels", "default"],
+        "required": ["id", "type", "parameter", "modes", "default_mode"],
         "properties": {
           "id": {"$ref": "#/$defs/slug"},
-          "type": {"enum": ["chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort"]},
+          "type": {"enum": ["chat_template_kwargs", "reasoning_effort", "reasoning_mode", "top_level_reasoning_effort"]},
           "parameter": {"$ref": "#/$defs/nonEmptyString"},
           "activation_parameter": {"$ref": "#/$defs/nonEmptyString"},
+          "effort_flags": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {"$ref": "#/$defs/nonEmptyString"}
+          },
           "levels": {"$ref": "#/$defs/stringSet"},
           "default": {"$ref": "#/$defs/nonEmptyString"},
+          "modes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"enum": ["enabled", "disabled", "adaptive"]}
+          },
+          "default_mode": {"enum": ["enabled", "disabled", "adaptive"]},
           "disabled": {"$ref": "#/$defs/nonEmptyString"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {"enum": ["reasoning_mode", "chat_template_kwargs"]}
+              }
+            },
+            "else": {"required": ["levels"]}
+          }
+        ]
       }
     },
     "models": {

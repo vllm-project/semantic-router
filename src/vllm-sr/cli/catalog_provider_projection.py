@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
+from urllib.parse import urlsplit
 
+from cli.envoy_backend_pool import project_envoy_backend_group
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import BackendRef, Model, UserConfig
@@ -30,6 +33,9 @@ _PROTOCOL_TO_API_FORMAT = {
     protocol: api_format for api_format, protocol in _API_FORMAT_TO_PROTOCOL.items()
 }
 _PROVIDER_MODEL_ID_KIND_DEPLOYMENT_NAME = "deployment_name"
+_ENDPOINT_TEMPLATE_TOKEN = re.compile(
+    r"\{\{[A-Za-z_][A-Za-z0-9_.-]*\}\}|\$\{[A-Za-z_][A-Za-z0-9_]*\}"
+)
 
 
 def resolve_builtin_provider_id(
@@ -76,12 +82,54 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
     snapshot consumed by the Router and Dashboard.
     """
 
+    return _project_provider_models(
+        user_config,
+        allow_backendless_physical=False,
+    )
+
+
+def validate_provider_model_configuration(
+    user_config: UserConfig,
+    *,
+    allow_backendless_physical: bool,
+) -> None:
+    """Validate provider materialization without mutating authored config.
+
+    Explicit external-gateway metadata may describe physical models without a
+    Router-owned backend. Any authored backend still goes through the exact
+    provider, protocol, model-ID, and endpoint checks used by Envoy rendering.
+    """
+
+    projected_models = _project_provider_models(
+        user_config,
+        allow_backendless_physical=allow_backendless_physical,
+    )
+    for model in projected_models:
+        try:
+            project_envoy_backend_group(model)
+        except ValueError as backend_error:
+            raise CatalogProviderProjectionError(str(backend_error)) from backend_error
+
+
+def _project_provider_models(
+    user_config: UserConfig,
+    *,
+    allow_backendless_physical: bool,
+) -> tuple[Model, ...]:
     catalog = _catalog_provider_index()
     projected_models: list[Model] = []
     for model_index, authored_model in enumerate(user_config.providers.models):
         projected = authored_model.model_copy(deep=True)
         card = _resolve_model_card(catalog, authored_model, model_index)
-        _validate_envoy_physical_backend(projected, card, model_index)
+        model_path = f"providers.models[{model_index}]"
+        if projected.api_format:
+            _protocol_for_api_format(projected.api_format, model_path)
+        _validate_physical_backend_requirement(
+            projected,
+            card,
+            model_index,
+            allow_backendless_physical=allow_backendless_physical,
+        )
         selected_protocol = ""
         for backend_index, backend in enumerate(projected.backend_refs):
             path = f"providers.models[{model_index}].backend_refs[{backend_index}]"
@@ -115,14 +163,20 @@ def project_provider_models_for_envoy(user_config: UserConfig) -> tuple[Model, .
     return tuple(projected_models)
 
 
-def _validate_envoy_physical_backend(
+def _validate_physical_backend_requirement(
     model: Model,
     card: dict[str, Any],
     model_index: int,
+    *,
+    allow_backendless_physical: bool,
 ) -> None:
     """Require an explicit provider whenever the CLI is building Envoy transport."""
 
-    if model.backend_refs or card.get("kind") == "virtual":
+    if (
+        model.backend_refs
+        or card.get("kind") == "virtual"
+        or allow_backendless_physical
+    ):
         return
     raise CatalogProviderProjectionError(
         f"providers.models[{model_index}] {model.name!r} is a physical model used "
@@ -358,6 +412,15 @@ def _apply_provider_defaults(
     path: str,
 ) -> None:
     provider_id = _required_string(provider, "id", f"{path}.provider")
+    backend.protocol = (backend.protocol or "http").strip().lower() or "http"
+    base_url = (backend.base_url or "").strip()
+    endpoint = (backend.endpoint or "").strip()
+    if base_url and endpoint:
+        raise CatalogProviderProjectionError(
+            f"{path} cannot set both base_url and endpoint"
+        )
+    backend.base_url = base_url or None
+    backend.endpoint = endpoint or None
     if not backend.endpoint and not backend.base_url:
         default_base_url = str(provider.get("default_base_url") or "").strip()
         if not default_base_url:
@@ -366,6 +429,8 @@ def _apply_provider_defaults(
                 f"{provider_id!r} has no default"
             )
         backend.base_url = default_base_url
+
+    _validate_backend_url(backend, path)
 
     default_headers = _string_mapping(provider.get("default_headers"), path)
     extra_headers = {**default_headers, **(backend.extra_headers or {})}
@@ -380,6 +445,41 @@ def _apply_provider_defaults(
         backend.auth_header = str(auth.get("header") or "").strip() or None
     if backend.auth_prefix is None:
         backend.auth_prefix = str(auth.get("prefix") or "").strip()
+
+
+def _validate_backend_url(backend: BackendRef, path: str) -> None:
+    field_name = "base_url" if backend.base_url else "endpoint"
+    raw_url = backend.base_url or backend.endpoint or ""
+    if field_name == "endpoint" and "://" not in raw_url:
+        raw_url = f"{(backend.protocol or 'http').lower()}://{raw_url}"
+    candidate = _ENDPOINT_TEMPLATE_TOKEN.sub(
+        "catalog-placeholder.invalid",
+        raw_url.strip(),
+    )
+    try:
+        parsed = urlsplit(candidate)
+        hostname = parsed.hostname
+    except ValueError as parse_error:
+        raise CatalogProviderProjectionError(
+            f"{path}.{field_name} must be an absolute http(s) URL"
+        ) from parse_error
+    if not parsed.scheme or not hostname:
+        raise CatalogProviderProjectionError(
+            f"{path}.{field_name} must be an absolute http(s) URL"
+        )
+    if parsed.scheme not in {"http", "https"}:
+        raise CatalogProviderProjectionError(
+            f"{path}.{field_name} scheme {parsed.scheme!r} is unsupported"
+        )
+    if parsed.username is not None or parsed.password is not None or parsed.fragment:
+        raise CatalogProviderProjectionError(
+            f"{path}.{field_name} userinfo and fragments are not allowed"
+        )
+    if parsed.query:
+        raise CatalogProviderProjectionError(
+            f"{path}.{field_name} query parameters are not supported by Envoy "
+            "routing; use api_version for provider API-version queries"
+        )
 
 
 def _protocol_for_api_format(api_format: str, path: str) -> str:

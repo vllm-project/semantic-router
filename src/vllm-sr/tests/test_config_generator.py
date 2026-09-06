@@ -676,8 +676,6 @@ providers:
       api_format: "anthropic"
       backend_refs:
         - name: "anthropic-primary"
-          endpoint: "domain.com:443"
-          protocol: "https"
           weight: 100
           base_url: "https://domain.com/Anthropic"
           provider: "anthropic"

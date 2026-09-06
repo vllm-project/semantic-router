@@ -1224,7 +1224,13 @@ type ModelRefConfig struct {
 	// +optional
 	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
 
-	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// ReasoningMode selects the model's reasoning activation mode when the
+	// family supports more than a boolean switch.
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	ReasoningMode string `json:"reasoning_mode,omitempty" yaml:"reasoning_mode,omitempty"`
+
+	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
@@ -1626,7 +1632,7 @@ type ModelReasoningSpec struct {
 	// +optional
 	Family string `json:"family,omitempty"`
 
-	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;top_level_reasoning_effort
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;reasoning_mode;top_level_reasoning_effort
 	// +optional
 	Type string `json:"type,omitempty"`
 
@@ -1634,10 +1640,28 @@ type ModelReasoningSpec struct {
 	Parameter string `json:"parameter,omitempty"`
 
 	// +optional
+	ActivationParameter string `json:"activationParameter,omitempty"`
+
+	// EffortFlags maps a logical effort to a boolean chat-template parameter.
+	// +optional
+	EffortFlags map[string]string `json:"effortFlags,omitempty"`
+
+	// +optional
 	Levels []string `json:"levels,omitempty"`
 
 	// +optional
 	Default string `json:"default,omitempty"`
+
+	// +kubebuilder:validation:items:Enum=enabled;disabled;adaptive
+	// +optional
+	Modes []string `json:"modes,omitempty"`
+
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	DefaultMode string `json:"defaultMode,omitempty"`
+
+	// +optional
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.

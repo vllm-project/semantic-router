@@ -118,6 +118,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         return {
           model: ref.model,
           use_reasoning: ref.use_reasoning,
+          reasoning_mode: ref.reasoning_mode,
           reasoning_effort: ref.reasoning_effort,
           lora_name: ref.lora_name,
           reasoning_family: modelConfig?.reasoning?.family,

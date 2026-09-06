@@ -108,6 +108,10 @@ silently entering this version of the default index.
    Reuse `output_config_effort` when the provider carries the selected level as
    `output_config.effort`. Use `activation_parameter` only when activation is a
    separate boolean control from the model's effort ladder.
+   For mixed-thinking Chat APIs, select `top_level_effort_template_switch`
+   when the switch belongs in local `chat_template_kwargs`, or
+   `top_level_effort_boolean_switch` when both fields are top-level provider
+   extensions. Responses keeps the standard `reasoning.effort` shape.
 4. Add display name, category, logo source or monogram fallback, and
    conformance status. A missing image must never block configuration.
 5. Add code only when generic protocol, URL, and auth handling cannot represent
@@ -122,6 +126,42 @@ verification resolve paths, auth, and non-secret headers from these same
 definitions. Provider-specific reasoning placement reuses one of the catalog's
 validated transport modes; endpoint hostnames are never used as provider
 identity.
+
+### Reasoning wire contract
+
+Operators use one protocol-neutral decision surface:
+`use_reasoning`, optional `reasoning_mode`, and optional `reasoning_effort`.
+The built-in model family limits the selectable values, and a provider-model
+mapping may narrow them further. The selected protocol and catalog transport
+then produce exactly one provider-native shape:
+
+| Provider/runtime surface | Final request control |
+| --- | --- |
+| Local vLLM/SGLang boolean mode | `chat_template_kwargs.<parameter>: true\|false` |
+| Local vLLM/SGLang effort plus switch | both values inside `chat_template_kwargs` |
+| Local template effort flags | activation boolean plus one mutually exclusive effort flag; default/full may be omission |
+| OpenAI-compatible Chat effort | top-level `reasoning_effort` |
+| OpenAI Responses effort | `reasoning.effort` |
+| Provider boolean switch | top-level `<parameter>: true\|false` |
+| Gateway-normalized reasoning | `reasoning.effort` or `reasoning.enabled` |
+| Thinking-object API | `thinking.type: enabled\|disabled\|adaptive` |
+| Thinking object plus effort | `thinking.type` plus top-level `reasoning_effort` |
+| DeepSeek Chat | `thinking.type` plus top-level `reasoning_effort` when enabled |
+| Anthropic Messages | `thinking.type` plus `output_config.effort` when enabled |
+
+DeepSeek Responses remains a standard Responses request and therefore uses
+`reasoning.effort`, rather than the Chat-specific two-field shape. Provider
+adaptation removes competing `reasoning`, `thinking`, top-level effort,
+`output_config.effort`, and local template controls before writing the selected
+shape. A Day-0 contribution that changes reasoning semantics must add a final
+encoded-request fixture for every claimed protocol, including enabled,
+disabled, adaptive, and effort variants that the model actually exposes.
+
+For a custom model whose template uses boolean effort flags, keep the public
+decision on `reasoning_effort` and map only the wire names in its inline
+`reasoning.effort_flags`. One active level may be intentionally unmapped to
+mean “all effort flags omitted”; every other active level must have a unique
+flag. Built-in models already carry this mapping and require no user YAML.
 
 Dashboard discovery applies a stricter network boundary than ordinary runtime
 dispatch. A cloud Model API must use the exact built-in origin. A self-hosted

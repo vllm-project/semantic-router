@@ -438,20 +438,23 @@
   border-radius: 12px;
 }
 .modelOption {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 42px;
-  padding: 0.55rem 0.625rem;
+  padding: 0.25rem 0.625rem;
   border-radius: 8px;
 }
 .modelOption:hover {
   background: rgba(255, 255, 255, 0.045);
 }
-.modelOption input {
+.modelChoice {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+.modelChoice input {
   accent-color: #fff;
 }
-.modelOption > span {
+.modelChoice > span {
   min-width: 0;
   display: flex;
   flex: 1;
@@ -468,6 +471,34 @@
 }
 .modelOption small {
   color: var(--text-muted);
+}
+.providerModelIDField {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0 0.5rem 1.9rem;
+}
+.providerModelIDField > span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+.providerModelIDField input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0.5rem 0.65rem;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.providerModelIDField input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.07);
+}
+.providerModelIDField input:disabled {
+  opacity: 0.5;
 }
 .disabled {
   opacity: 0.45;
@@ -660,6 +691,10 @@
   }
   .modelSearch {
     min-width: 0;
+  }
+  .providerModelIDField {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
   }
   .advancedSection,
   .advancedGrid {

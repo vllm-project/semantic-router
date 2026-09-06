@@ -69,8 +69,11 @@ def _validate_provider_identity(
         "chat_template_kwargs",
         "top_level_effort",
         "top_level_boolean",
+        "top_level_effort_template_switch",
+        "top_level_effort_boolean_switch",
         "reasoning_object",
         "thinking_object",
+        "thinking_object_effort",
         "output_config_effort",
         "deepseek_thinking",
     }:

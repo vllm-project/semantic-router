@@ -31,13 +31,16 @@ type CanonicalProviderModel struct {
 // request projection for a private/custom model inline. Family is mutually
 // exclusive with the inline fields.
 type CanonicalReasoning struct {
-	Family              string   `yaml:"family,omitempty"`
-	Type                string   `yaml:"type,omitempty"`
-	Parameter           string   `yaml:"parameter,omitempty"`
-	ActivationParameter string   `yaml:"activation_parameter,omitempty"`
-	Levels              []string `yaml:"levels,omitempty"`
-	Default             string   `yaml:"default,omitempty"`
-	Disabled            string   `yaml:"disabled,omitempty"`
+	Family              string            `yaml:"family,omitempty"`
+	Type                string            `yaml:"type,omitempty"`
+	Parameter           string            `yaml:"parameter,omitempty"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
 // ProviderReliability controls generated data-plane load balancing and retry behavior.

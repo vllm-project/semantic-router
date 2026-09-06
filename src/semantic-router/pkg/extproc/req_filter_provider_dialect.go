@@ -22,12 +22,25 @@ func resolveProviderReasoningTransport(profile *config.ProviderProfile) modelcat
 
 func usesTopLevelReasoningEffort(transport modelcatalog.ReasoningTransport) bool {
 	return transport == modelcatalog.ReasoningTransportTopLevelEffort ||
+		transport == modelcatalog.ReasoningTransportEffortTemplateSwitch ||
+		transport == modelcatalog.ReasoningTransportEffortBooleanSwitch ||
+		transport == modelcatalog.ReasoningTransportThinkingEffort ||
 		transport == modelcatalog.ReasoningTransportDeepSeekThinking
+}
+
+func usesIndependentEffortSwitch(transport modelcatalog.ReasoningTransport) bool {
+	return transport == modelcatalog.ReasoningTransportEffortTemplateSwitch ||
+		transport == modelcatalog.ReasoningTransportEffortBooleanSwitch
 }
 
 func usesThinkingObjectTransport(transport modelcatalog.ReasoningTransport) bool {
 	return transport == modelcatalog.ReasoningTransportThinkingObject ||
+		transport == modelcatalog.ReasoningTransportThinkingEffort ||
 		transport == modelcatalog.ReasoningTransportDeepSeekThinking
+}
+
+func usesThinkingObjectEffortTransport(transport modelcatalog.ReasoningTransport) bool {
+	return transport == modelcatalog.ReasoningTransportThinkingEffort
 }
 
 func usesReasoningObjectTransport(transport modelcatalog.ReasoningTransport) bool {

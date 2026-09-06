@@ -38,6 +38,31 @@ class ModelCatalogValidationTests(unittest.TestCase):
             "models[0].roles[0]",
         )
 
+    def test_physical_chat_models_require_routing_metadata(self) -> None:
+        model = {
+            "distribution": {"type": "open_weights"},
+            "verification": {"source": "https://models.example/model"},
+            "capabilities": ["chat"],
+            "parameter_size": "7B",
+            "limits": {},
+        }
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "limits.context_window_size is required for chat models",
+        ):
+            catalog._validate_physical_model(model, "models[0]")
+
+        model["limits"] = {"context_window_size": 131072}
+        model["parameter_size"] = ""
+        with self.assertRaisesRegex(
+            catalog.CatalogBuildError,
+            "parameter_size is required for open-weight models",
+        ):
+            catalog._validate_physical_model(model, "models[0]")
+
+        model["parameter_size"] = "7B"
+        catalog._validate_physical_model(model, "models[0]")
+
     def test_creator_inventory_policy_ignores_virtual_recipe_publishers(self) -> None:
         manifest = {
             "inventory": {

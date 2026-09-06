@@ -22,14 +22,35 @@ presentation:
 conformance:
   status: unverified
 models:
-- catalog: mistral/mistral-medium-3.5
+- catalog: mistral/mistral-small-4
   relationship: first_party
-  id: mistral-medium-3.5
+  id: mistral-small-2603
   protocols:
   - openai/chat-completions@1
   reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
+    verified_at: 2026-09-07
+    source: https://docs.mistral.ai/models/mistral-small-4-0-26-03
+- catalog: mistral/mistral-medium-3.5
+  relationship: first_party
+  id: mistral-medium-3-5
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://docs.mistral.ai/studio/conversations/reasoning
+- catalog: mistral/mistral-large-3
+  relationship: first_party
+  id: mistral-large-2512
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://docs.mistral.ai/models/mistral-large-3-25-12

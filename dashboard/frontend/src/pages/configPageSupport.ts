@@ -61,6 +61,7 @@ export interface ModelScore {
   score: number
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
 }
 
@@ -102,8 +103,11 @@ export interface ReasoningFamily {
   type: string
   parameter: string
   activation_parameter?: string
+  effort_flags?: Record<string, string>
   levels?: string[]
   default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
   disabled?: string
 }
 
@@ -171,8 +175,11 @@ export interface ModelReasoningConfig {
   type?: string
   parameter?: string
   activation_parameter?: string
+  effort_flags?: Record<string, string>
   levels?: string[]
   default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
   disabled?: string
 }
 
@@ -270,6 +277,7 @@ export interface DecisionModelRef {
   model: string
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: '' | 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
   lora_name?: string
   weight?: number
@@ -329,6 +337,8 @@ export interface NormalizedModel {
   catalog?: string
   reasoning?: ModelReasoningConfig
   reasoning_family?: string
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -1575,8 +1585,11 @@ export const getReasoningFamiliesMap = (
           type: family.type,
           parameter: family.parameter,
           activation_parameter: family.activation_parameter,
-          levels: [...family.levels],
+          effort_flags: family.effort_flags ? { ...family.effort_flags } : undefined,
+          levels: [...(family.levels ?? [])],
           default: family.default,
+          modes: family.modes ? [...family.modes] : undefined,
+          default_mode: family.default_mode,
           disabled: family.disabled,
         },
       ]),

@@ -54,7 +54,8 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
         for card in config.routing.model_cards
         for adapter in (card.loras or [])
     }
-    errors = _duplicate_identity_errors(config, aliases, cards)
+    errors = _blank_identity_errors(config)
+    errors.extend(_duplicate_identity_errors(config, aliases, cards))
     errors.extend(
         _provider_model_errors(
             config,
@@ -72,7 +73,28 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
         )
     )
     errors.extend(_decision_errors(config, aliases, cards, catalogs_by_alias))
-    errors.extend(_default_model_errors(config, aliases, lora_aliases))
+    errors.extend(_default_model_errors(config, aliases, cards, lora_aliases))
+    return errors
+
+
+def _blank_identity_errors(config: UserConfig) -> list[ValidationError]:
+    errors: list[ValidationError] = []
+    for index, model in enumerate(config.providers.models):
+        if not model.name.strip():
+            errors.append(
+                ValidationError(
+                    "Provider model name cannot be empty",
+                    field=f"providers.models[{index}].name",
+                )
+            )
+    for index, card in enumerate(config.routing.model_cards):
+        if not card.name.strip():
+            errors.append(
+                ValidationError(
+                    "Model card name cannot be empty",
+                    field=f"routing.modelCards[{index}].name",
+                )
+            )
     return errors
 
 
@@ -109,6 +131,14 @@ def _provider_model_errors(
     errors: list[ValidationError] = []
     for model in config.providers.models:
         catalog = catalogs_by_alias[model.name]
+        if not model.backend_refs and not _provider_model_has_metadata(model):
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' must define backend_refs or model metadata",
+                    field=f"providers.models.{model.name}",
+                )
+            )
+            continue
         if model.catalog and catalog not in built_in_models:
             errors.append(
                 ValidationError(
@@ -165,12 +195,37 @@ def _provider_model_errors(
     return errors
 
 
+def _provider_model_has_metadata(model: Any) -> bool:
+    if (
+        model.catalog
+        or model.reasoning is not None
+        or model.provider_model_id
+        or model.api_format
+        or model.external_model_ids
+    ):
+        return True
+    return _has_meaningful_authored_fields(
+        model.pricing
+    ) or _has_meaningful_authored_fields(model.reliability)
+
+
+def _has_meaningful_authored_fields(value: Any) -> bool:
+    if value is None:
+        return False
+    return any(
+        getattr(value, field_name) not in (None, "", [], {})
+        for field_name in value.model_fields_set
+    )
+
+
 def _model_card_errors(
     cards: dict[str, Any],
     referenced_cards: set[str],
     aliases: set[str],
     lora_aliases: set[str],
 ) -> list[ValidationError]:
+    if not aliases:
+        return []
     errors: list[ValidationError] = []
     for card_name in cards:
         if (
@@ -193,6 +248,10 @@ def _decision_errors(
     cards: dict[str, Any],
     catalogs_by_alias: dict[str, str],
 ) -> list[ValidationError]:
+    # Match the canonical Go contract: routing-only metadata can describe
+    # external-gateway targets before any Router-owned provider alias exists.
+    if not aliases:
+        return []
     errors: list[ValidationError] = []
     for field_prefix, decision in _all_decisions(config):
         for model_ref in decision.modelRefs:
@@ -221,13 +280,17 @@ def _decision_errors(
 
 
 def _default_model_errors(
-    config: UserConfig, aliases: set[str], lora_aliases: set[str]
+    config: UserConfig,
+    aliases: set[str],
+    cards: dict[str, Any],
+    lora_aliases: set[str],
 ) -> list[ValidationError]:
     default_model = config.providers.defaults.model
     if (
         default_model
         and default_model not in aliases
         and default_model not in lora_aliases
+        and (aliases or default_model not in cards)
     ):
         return [
             ValidationError(

@@ -144,8 +144,11 @@ func validReasoningTransport(transport modelcatalog.ReasoningTransport) bool {
 	case modelcatalog.ReasoningTransportChatTemplate,
 		modelcatalog.ReasoningTransportTopLevelEffort,
 		modelcatalog.ReasoningTransportTopLevelBoolean,
+		modelcatalog.ReasoningTransportEffortTemplateSwitch,
+		modelcatalog.ReasoningTransportEffortBooleanSwitch,
 		modelcatalog.ReasoningTransportReasoningObject,
 		modelcatalog.ReasoningTransportThinkingObject,
+		modelcatalog.ReasoningTransportThinkingEffort,
 		modelcatalog.ReasoningTransportOutputConfig,
 		modelcatalog.ReasoningTransportDeepSeekThinking:
 		return true

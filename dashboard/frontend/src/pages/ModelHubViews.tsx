@@ -2,24 +2,44 @@ import React from 'react'
 
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import {
-  formatContextWindow,
+  modelHubContextLabel,
   modelHubDistributionLabel as distributionLabel,
   readableModelHubValue as readable,
   type ModelHubRow,
 } from './modelHubSupport'
-import { HubPagination, ModelMark } from './ModelHubComponents'
+import { ModelMark } from './ModelHubComponents'
 import { ModelHubBenchmarkChart, ModelHubBenchmarkControls } from './ModelHubBenchmarkViews'
 import { OpenModelButton } from './ModelHubOpenModelButton'
 import { useModelHubBenchmarkController } from './modelHubBenchmarkController'
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubViews.module.css'
 
 const EvaluationSummary: React.FC<{ row: ModelHubRow }> = ({ row }) => (
   <span className={styles.evaluationSummary}>
-    <small>Benchmarks</small>
-    <strong>{row.benchmarkCount || '—'}</strong>
-    <small>{row.evaluationCount ? `${row.evaluationCount} records` : 'Evidence pending'}</small>
+    <small>Results</small>
+    <strong>{row.evaluationCount || '—'}</strong>
+    <small>{row.benchmarkCount ? `${row.benchmarkCount} benchmarks` : 'Pending'}</small>
   </span>
 )
+
+const virtualPool = (row: ModelHubRow): string[] => [
+  ...new Set(row.model.roles?.flatMap((role) => role.recommended_pool) ?? []),
+]
+
+const VirtualPoolPreview: React.FC<{ row: ModelHubRow }> = ({ row }) => {
+  const candidates = virtualPool(row)
+  if (row.model.kind !== 'virtual') return null
+  return (
+    <span className={styles.listPool}>
+      <small>Pool</small>
+      <span>
+        {candidates.slice(0, 3).map((candidate) => (
+          <code key={candidate}>{candidate.split('/').slice(-1)[0]}</code>
+        ))}
+        {candidates.length > 3 ? <i>+{candidates.length - 3}</i> : null}
+      </span>
+    </span>
+  )
+}
 
 export const ModelTable: React.FC<{
   rows: ModelHubRow[]
@@ -41,7 +61,7 @@ export const ModelTable: React.FC<{
           <th scope="col">Distribution</th>
           <th scope="col">Context</th>
           <th scope="col">Providers</th>
-          <th scope="col">Benchmarks</th>
+          <th scope="col">Results</th>
         </tr>
       </thead>
       <tbody>
@@ -68,9 +88,7 @@ export const ModelTable: React.FC<{
               </OpenModelButton>
             </td>
             <td className={styles.tableMeta}>{distributionLabel[row.model.distribution.type]}</td>
-            <td className={styles.tableMeta}>
-              {formatContextWindow(row.model.limits?.context_window_size)}
-            </td>
+            <td className={styles.tableMeta}>{modelHubContextLabel(row.model)}</td>
             <td>
               <span className={styles.providerCount}>
                 <strong>{row.providers.length || '—'}</strong>
@@ -87,41 +105,58 @@ export const ModelTable: React.FC<{
   </div>
 )
 
-export const ModelCards: React.FC<{
+export const ModelList: React.FC<{
   rows: ModelHubRow[]
   selected: ModelHubRow | null
   select: (id: string) => void
 }> = ({ rows, selected, select }) => (
-  <div className={styles.cardGrid} role="list" aria-label="Model catalog results">
+  <div className={styles.modelList} role="list" aria-label="Model catalog results">
     {rows.map((row) => (
-      <article className={styles.cardListItem} role="listitem" key={row.model.id}>
-        <OpenModelButton row={row} selected={selected} select={select} className={styles.modelCard}>
-          <span className={styles.cardTopline}>
-            <ModelMark model={row.model} large />
-            <span className={styles.lifecycleDot} data-lifecycle={row.model.lifecycle}>
-              {row.model.lifecycle}
+      <article className={styles.modelListItem} role="listitem" key={row.model.id}>
+        <OpenModelButton row={row} selected={selected} select={select} className={styles.modelRow}>
+          <span className={styles.listIdentity}>
+            <ModelMark model={row.model} />
+            <span>
+              <span className={styles.listTitle}>
+                <strong title={row.model.display_name}>{row.model.display_name}</strong>
+                <i className={styles.lifecycleDot} data-lifecycle={row.model.lifecycle}>
+                  {row.model.lifecycle}
+                </i>
+              </span>
+              <code>{row.model.id}</code>
+              <small>{row.model.description}</small>
             </span>
           </span>
-          <span className={styles.cardTitle}>
-            <strong>{row.model.display_name}</strong>
-            <small>{row.model.publisher}</small>
-          </span>
-          <span className={styles.cardDescription}>{row.model.description}</span>
-          <span className={styles.cardTags}>
-            {row.model.capabilities.slice(0, 3).map((capability) => (
-              <i key={capability}>{readable(capability)}</i>
-            ))}
-          </span>
-          <span className={styles.cardMetrics}>
+          <span className={styles.listFacts}>
+            <span>
+              <small>Creator</small>
+              <strong title={row.model.publisher}>{row.model.publisher}</strong>
+            </span>
             <span>
               <small>Context</small>
-              <strong>{formatContextWindow(row.model.limits?.context_window_size)}</strong>
+              <strong>{modelHubContextLabel(row.model)}</strong>
             </span>
             <span>
-              <small>Providers</small>
-              <strong>{row.providers.length || 'Recipe'}</strong>
+              <small>{row.model.kind === 'virtual' ? 'Roles' : 'Providers'}</small>
+              <strong>
+                {row.model.kind === 'virtual'
+                  ? row.model.roles?.length || '—'
+                  : row.providers.length || '—'}
+              </strong>
             </span>
             <EvaluationSummary row={row} />
+          </span>
+          <span className={styles.listFooter}>
+            <span className={styles.cardTags}>
+              <i>{distributionLabel[row.model.distribution.type]}</i>
+              {row.model.capabilities.slice(0, 2).map((capability) => (
+                <i key={capability}>{readable(capability)}</i>
+              ))}
+            </span>
+            <VirtualPoolPreview row={row} />
+            <span className={styles.inspectHint}>
+              Inspect <b aria-hidden="true">→</b>
+            </span>
           </span>
         </OpenModelButton>
       </article>
@@ -134,21 +169,13 @@ export const BenchmarkExplorer: React.FC<{
   rows: ModelHubRow[]
   selected: ModelHubRow | null
   select: (id: string) => void
-  compact?: boolean
-}> = ({ catalog, rows, selected, select, compact = false }) => {
-  const controller = useModelHubBenchmarkController(catalog, rows, compact)
+}> = ({ catalog, rows, selected, select }) => {
+  const controller = useModelHubBenchmarkController(catalog, rows)
 
   return (
     <section className={styles.benchmarkExplorer} aria-label="Benchmark explorer">
       <div className={styles.benchmarkHeading}>
-        <div>
-          <span>Benchmark explorer</span>
-          <h2>Compare like with like</h2>
-          <p>
-            Choose one benchmark setup. Every bar is a published model and evaluation-condition
-            result for that exact metric and profile.
-          </p>
-        </div>
+        <h2>{controller.benchmark?.display_name ?? 'Benchmarks'}</h2>
         {controller.benchmark?.source ? (
           <a href={controller.benchmark.source} target="_blank" rel="noreferrer">
             Benchmark source ↗
@@ -157,14 +184,14 @@ export const BenchmarkExplorer: React.FC<{
       </div>
       <ModelHubBenchmarkControls catalog={catalog} controller={controller} />
       <div className={styles.chartMeta}>
-        <span>{controller.points.length} comparable results</span>
+        <span>{controller.points.length} published results · all current model filters</span>
         <span>
           {controller.metric?.direction === 'lower_is_better'
             ? 'Lower is better'
             : 'Higher is better'}
         </span>
       </div>
-      {controller.pagination.items.length ? (
+      {controller.points.length ? (
         <ModelHubBenchmarkChart
           rows={rows}
           selected={selected}
@@ -172,23 +199,15 @@ export const BenchmarkExplorer: React.FC<{
           controller={controller}
         />
       ) : (
-        <EmptyResults
-          title="No available scores"
-          body="The current catalog filters do not contain an available result for this benchmark setup."
-        />
+        <EmptyResults title="No available scores" body="Change the benchmark or model filters." />
       )}
-      <HubPagination
-        pagination={controller.pagination}
-        setPage={controller.setPage}
-        setPageSize={controller.setPageSize}
-      />
     </section>
   )
 }
 
 export const EmptyResults: React.FC<{ title?: string; body?: string }> = ({
   title = 'No matching models',
-  body = 'Adjust or reset the filters to restore the catalog.',
+  body = 'Try another filter.',
 }) => (
   <div className={styles.emptyState}>
     <span aria-hidden="true">⌁</span>

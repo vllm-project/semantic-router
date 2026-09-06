@@ -16,7 +16,7 @@
   revision: DeepSeek-V4-Pro-0813
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
     max_output_tokens: 384000
   capabilities:
   - chat
@@ -59,7 +59,7 @@
   revision: DeepSeek-V4-Flash-0731
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
     max_output_tokens: 384000
   capabilities:
   - chat

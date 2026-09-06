@@ -54,8 +54,8 @@
   family: nova-1
   lifecycle: active
   limits:
-    context_window_size: 1048576
-    max_output_tokens: 10240
+    context_window_size: 1000000
+    max_output_tokens: 10000
   capabilities:
   - chat
   - tools
@@ -95,8 +95,8 @@
   family: nova-1
   lifecycle: active
   limits:
-    context_window_size: 307200
-    max_output_tokens: 10240
+    context_window_size: 300000
+    max_output_tokens: 10000
   capabilities:
   - chat
   - tools

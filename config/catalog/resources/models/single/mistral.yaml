@@ -50,10 +50,14 @@
     monogram: M
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    license: Modified-MIT
   family: mistral-medium
+  parameter_size: 128B
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning
@@ -72,9 +76,9 @@
     authority: Mistral AI
     status: claimed
     verified_at: 2026-09-05
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
   tags:
-  - proprietary
+  - open_weights
   - multimodal
   - enterprise
   released_at: '2026-04-29'
@@ -94,6 +98,8 @@
   family: mistral-large-3
   parameter_size: 675B
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - tools

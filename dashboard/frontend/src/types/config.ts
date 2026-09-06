@@ -59,11 +59,18 @@ export interface ProviderDefaults {
 }
 
 export interface ReasoningFamily {
-  type: 'reasoning_effort' | 'chat_template_kwargs' | 'top_level_reasoning_effort'
+  type:
+    | 'reasoning_effort'
+    | 'reasoning_mode'
+    | 'chat_template_kwargs'
+    | 'top_level_reasoning_effort'
   parameter: string // e.g., "reasoning_effort", "enable_thinking"
   activation_parameter?: string
+  effort_flags?: Record<string, string>
   levels?: string[]
   default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
   disabled?: string
 }
 
@@ -330,6 +337,7 @@ export interface ModelRef {
   model: string
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
   lora_name?: string
   weight?: number

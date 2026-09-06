@@ -56,6 +56,7 @@
     source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
     license: Modified-MIT
   family: kimi-k2
+  reasoning_family: kimi-k2-always-on
   parameter_size: 1T (32B active)
   lifecycle: active
   limits:
@@ -104,6 +105,8 @@
   reasoning_family: kimi-k2
   parameter_size: 1T
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning
@@ -146,6 +149,8 @@
   reasoning_family: kimi-k2
   parameter_size: 1T (32B active)
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning

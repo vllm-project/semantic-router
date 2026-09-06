@@ -129,6 +129,13 @@ describe('built-in model catalog API nested metadata', () => {
       },
     ],
     [
+      'protocol default base path',
+      (payload: Record<string, unknown>) => {
+        const protocols = payload.protocols as Array<Record<string, unknown>>
+        delete protocols[0].default_base_path
+      },
+    ],
+    [
       'reasoning levels',
       (payload: Record<string, unknown>) => {
         const families = payload.reasoning_families as Array<Record<string, unknown>>
@@ -140,6 +147,14 @@ describe('built-in model catalog API nested metadata', () => {
       (payload: Record<string, unknown>) => {
         const families = payload.reasoning_families as Array<Record<string, unknown>>
         families[0].activation_parameter = families[0].parameter
+      },
+    ],
+    [
+      'reasoning effort flags',
+      (payload: Record<string, unknown>) => {
+        const families = payload.reasoning_families as Array<Record<string, unknown>>
+        const family = families.find((candidate) => candidate.effort_flags !== undefined)
+        family!.effort_flags = { invented: 'low_effort' }
       },
     ],
     [

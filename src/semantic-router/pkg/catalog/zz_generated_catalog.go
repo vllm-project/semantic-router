@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:fad28f9f6ce28d9e015fcfbdde25232b1aa1f1dcff681363f642d66531885777"
+const builtInCatalogDigest = "sha256:64648a176a64a85d7824ff37f180c5a6f1c159bdcac470ed2975fb24b33af60a"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -4462,7 +4462,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -4470,7 +4470,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -4478,7 +4478,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -4486,7 +4486,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -4494,7 +4494,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -4502,7 +4502,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -4510,7 +4510,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -4518,7 +4518,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -4526,7 +4526,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -4534,7 +4534,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "deepseek/deepseek-v3.2",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -4975,46 +4975,6 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "google/gemini-3.6-flash",
       "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "google/gemma-4-31b-it",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "google/gemma-4-31b-it",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "google/gemma-4-31b-it",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "google/gemma-4-31b-it",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "google/gemma-4-31b-it",
-      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -5061,6 +5021,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "google/gemma-4-31b-it",
       "reasoning_effort": "enabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "google/gemma-4-31b-it",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "google/gemma-4-31b-it",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "google/gemma-4-31b-it",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "google/gemma-4-31b-it",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "google/gemma-4-31b-it",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -5506,46 +5506,6 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "xhigh",
       "status": "available",
       "value": 0.829
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "meta/muse-spark-1.2",
-      "reasoning_effort": "max",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "meta/muse-spark-1.2",
-      "reasoning_effort": "max",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "meta/muse-spark-1.2",
-      "reasoning_effort": "max",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "meta/muse-spark-1.2",
-      "reasoning_effort": "max",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "meta/muse-spark-1.2",
-      "reasoning_effort": "max",
-      "status": "missing"
     },
     {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
@@ -6454,46 +6414,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "mistral/mistral-small-4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "mistral/mistral-small-4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "mistral/mistral-small-4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "mistral/mistral-small-4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "mistral/mistral-small-4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "mistral/mistral-small-4",
       "reasoning_effort": "high",
       "status": "missing"
     },
@@ -6533,7 +6453,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "mistral/mistral-medium-3.5",
+      "model": "mistral/mistral-small-4",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -6541,7 +6461,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "mistral/mistral-medium-3.5",
+      "model": "mistral/mistral-small-4",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -6549,7 +6469,7 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "mistral/mistral-medium-3.5",
+      "model": "mistral/mistral-small-4",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -6557,7 +6477,7 @@ const builtInCatalogJSON = `{
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "mistral/mistral-medium-3.5",
+      "model": "mistral/mistral-small-4",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -6565,7 +6485,7 @@ const builtInCatalogJSON = `{
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "mistral/mistral-medium-3.5",
+      "model": "mistral/mistral-small-4",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -6607,6 +6527,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "mistral/mistral-medium-3.5",
       "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "mistral/mistral-medium-3.5",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "mistral/mistral-medium-3.5",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "mistral/mistral-medium-3.5",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "mistral/mistral-medium-3.5",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "mistral/mistral-medium-3.5",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -6780,46 +6740,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "moonshot/kimi-k2.7-code",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.7-code",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.7-code",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "moonshot/kimi-k2.7-code",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "moonshot/kimi-k2.7-code",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.7-code",
       "reasoning_effort": "enabled",
       "status": "missing"
     },
@@ -6853,46 +6773,6 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "moonshot/kimi-k2.7-code",
       "reasoning_effort": "enabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.6",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.6",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "moonshot/kimi-k2.6",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "moonshot/kimi-k2.6",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "moonshot/kimi-k2.6",
-      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -6945,7 +6825,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "moonshot/kimi-k2.5",
+      "model": "moonshot/kimi-k2.6",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -6953,7 +6833,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "moonshot/kimi-k2.5",
+      "model": "moonshot/kimi-k2.6",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -6961,25 +6841,23 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "moonshot/kimi-k2.5",
+      "model": "moonshot/kimi-k2.6",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
-      "evaluation": "moonshot/kimi-k2.5-model-card-verified@1.0.0",
       "metric": "resolved",
-      "model": "moonshot/kimi-k2.5",
+      "model": "moonshot/kimi-k2.6",
       "reasoning_effort": "disabled",
-      "status": "available",
-      "value": 0.768
+      "status": "missing"
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "moonshot/kimi-k2.5",
+      "model": "moonshot/kimi-k2.6",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -7033,7 +6911,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "nvidia/nemotron-3.5-lightning",
+      "model": "moonshot/kimi-k2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -7041,7 +6919,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "nvidia/nemotron-3.5-lightning",
+      "model": "moonshot/kimi-k2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -7049,23 +6927,25 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "nvidia/nemotron-3.5-lightning",
+      "model": "moonshot/kimi-k2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
+      "evaluation": "moonshot/kimi-k2.5-model-card-verified@1.0.0",
       "metric": "resolved",
-      "model": "nvidia/nemotron-3.5-lightning",
+      "model": "moonshot/kimi-k2.5",
       "reasoning_effort": "disabled",
-      "status": "missing"
+      "status": "available",
+      "value": 0.768
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "nvidia/nemotron-3.5-lightning",
+      "model": "moonshot/kimi-k2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -7123,8 +7003,88 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
       "model": "nvidia/nemotron-3-ultra",
-      "reasoning_effort": "default",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-ultra",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-ultra",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-ultra",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-ultra",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-ultra",
+      "reasoning_effort": "high",
       "status": "missing"
     },
     {
@@ -7133,7 +7093,7 @@ const builtInCatalogJSON = `{
       "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-ultra",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "value": 0.879
     },
@@ -7143,7 +7103,7 @@ const builtInCatalogJSON = `{
       "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-ultra",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "value": 0.261
     },
@@ -7153,7 +7113,7 @@ const builtInCatalogJSON = `{
       "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0",
       "metric": "resolved",
       "model": "nvidia/nemotron-3-ultra",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "value": 0.695
     },
@@ -7163,7 +7123,7 @@ const builtInCatalogJSON = `{
       "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0",
       "metric": "resolved",
       "model": "nvidia/nemotron-3-ultra",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "value": 0.539
     },
@@ -7212,7 +7172,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-super",
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
@@ -7220,7 +7180,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-super",
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
@@ -7228,7 +7188,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-super",
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
@@ -7236,7 +7196,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "nvidia/nemotron-3-super",
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
@@ -7244,7 +7204,47 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "nvidia/nemotron-3-super",
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-super",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-super",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-super",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-super",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-super",
+      "reasoning_effort": "high",
       "status": "missing"
     },
     {
@@ -7292,46 +7292,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-      "reasoning_effort": "default",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "reasoning_effort": "enabled",
       "status": "missing"
     },
@@ -7371,8 +7331,48 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -7380,7 +7380,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -7388,7 +7388,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -7396,7 +7396,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -7404,7 +7404,47 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -7460,46 +7500,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.6-sol",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-sol",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-sol",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-sol",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-sol",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-sol",
       "reasoning_effort": "low",
       "status": "missing"
     },
@@ -7693,6 +7693,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "openai/gpt-5.6-sol",
       "reasoning_effort": "max",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-sol",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-sol",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-sol",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-sol",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-sol",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -7744,46 +7784,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.6-terra",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-terra",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-terra",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-terra",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-terra",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-terra",
       "reasoning_effort": "low",
       "status": "missing"
     },
@@ -7977,6 +7977,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "openai/gpt-5.6-terra",
       "reasoning_effort": "max",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-terra",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-terra",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-terra",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-terra",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-terra",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8028,46 +8068,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.6-luna",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-luna",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-luna",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-luna",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.6-luna",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.6-luna",
       "reasoning_effort": "low",
       "status": "missing"
     },
@@ -8261,6 +8261,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "openai/gpt-5.6-luna",
       "reasoning_effort": "max",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-luna",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-luna",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.6-luna",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-luna",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.6-luna",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8312,46 +8352,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.5",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.5",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.5",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.5",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.5",
       "reasoning_effort": "low",
       "status": "missing"
     },
@@ -8512,7 +8512,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8520,7 +8520,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8528,7 +8528,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8536,7 +8536,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8544,7 +8544,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "openai/gpt-5.5",
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -8598,46 +8598,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "openai/gpt-5.4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "openai/gpt-5.4",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "openai/gpt-5.4",
       "reasoning_effort": "low",
       "status": "missing"
     },
@@ -8791,6 +8751,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "openai/gpt-5.4",
       "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.4",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.4",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "openai/gpt-5.4",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.4",
+      "reasoning_effort": "none",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "openai/gpt-5.4",
+      "reasoning_effort": "none",
       "status": "missing"
     },
     {
@@ -9466,46 +9466,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.7-max",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "qwen/qwen3.7-max",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "qwen/qwen3.7-max",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "qwen/qwen3.7-max",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "qwen/qwen3.7-max",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "qwen/qwen3.7-max",
       "reasoning_effort": "enabled",
       "status": "missing"
     },
@@ -9546,6 +9506,46 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.7-max",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "qwen/qwen3.7-max",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "qwen/qwen3.7-max",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "qwen/qwen3.7-max",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "qwen/qwen3.7-max",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "qwen/qwen3.7-max",
       "reasoning_effort": "unspecified",
       "status": "missing"
     },
@@ -9586,7 +9586,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9594,7 +9594,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9602,7 +9602,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9610,7 +9610,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9618,7 +9618,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9626,7 +9626,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9634,7 +9634,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9642,7 +9642,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9650,7 +9650,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9658,7 +9658,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-27b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9712,7 +9712,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9720,7 +9720,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9728,7 +9728,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9736,7 +9736,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9744,7 +9744,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -9752,7 +9752,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9760,7 +9760,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9768,7 +9768,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9776,7 +9776,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -9784,7 +9784,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "qwen/qwen3.6-35b-a3b",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10116,46 +10116,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "tencent/hy4-preview",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "tencent/hy4-preview",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "tencent/hy4-preview",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "tencent/hy4-preview",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "tencent/hy4-preview",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "tencent/hy4-preview",
       "reasoning_effort": "high",
       "status": "missing"
     },
@@ -10196,46 +10156,6 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "high",
       "status": "available",
       "value": 0.854
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "tencent/hy3",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "tencent/hy3",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "tencent/hy3",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "tencent/hy3",
-      "reasoning_effort": "no_think",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "tencent/hy3",
-      "reasoning_effort": "no_think",
-      "status": "missing"
     },
     {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
@@ -10330,7 +10250,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -10338,7 +10258,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -10346,7 +10266,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -10354,7 +10274,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -10362,7 +10282,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -10370,7 +10290,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10378,7 +10298,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10386,7 +10306,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10394,7 +10314,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10402,7 +10322,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "tencent/hunyuan-a13b-instruct",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -10454,46 +10374,6 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "thinking-machines/inkling",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "thinking-machines/inkling",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "thinking-machines/inkling",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "thinking-machines/inkling",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "thinking-machines/inkling",
-      "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "thinking-machines/inkling",
       "reasoning_effort": "minimal",
       "status": "missing"
     },
@@ -10655,6 +10535,46 @@ const builtInCatalogJSON = `{
       "metric": "accuracy",
       "model": "thinking-machines/inkling",
       "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "thinking-machines/inkling",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "thinking-machines/inkling",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling",
+      "reasoning_effort": "max",
       "status": "missing"
     },
     {
@@ -10663,7 +10583,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-model-card-gpqa-diamond@1.0.0",
       "metric": "accuracy",
       "model": "thinking-machines/inkling",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.872
     },
@@ -10673,7 +10593,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0",
       "metric": "accuracy",
       "model": "thinking-machines/inkling",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.297
     },
@@ -10683,7 +10603,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-model-card-swe-bench-verified@1.0.0",
       "metric": "resolved",
       "model": "thinking-machines/inkling",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.776
     },
@@ -10693,7 +10613,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-model-card-terminal-bench@1.0.0",
       "metric": "resolved",
       "model": "thinking-machines/inkling",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.638
     },
@@ -10701,7 +10621,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -10709,7 +10629,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -10717,7 +10637,7 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -10725,7 +10645,7 @@ const builtInCatalogJSON = `{
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -10733,7 +10653,7 @@ const builtInCatalogJSON = `{
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -10903,6 +10823,46 @@ const builtInCatalogJSON = `{
       "metric": "accuracy",
       "model": "thinking-machines/inkling-small",
       "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling-small",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling-small",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "thinking-machines/inkling-small",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "thinking-machines/inkling-small",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "thinking-machines/inkling-small",
+      "reasoning_effort": "max",
       "status": "missing"
     },
     {
@@ -10911,7 +10871,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0",
       "metric": "accuracy",
       "model": "thinking-machines/inkling-small",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.895
     },
@@ -10921,7 +10881,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0",
       "metric": "accuracy",
       "model": "thinking-machines/inkling-small",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.316
     },
@@ -10931,7 +10891,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0",
       "metric": "resolved",
       "model": "thinking-machines/inkling-small",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.802
     },
@@ -10941,7 +10901,7 @@ const builtInCatalogJSON = `{
       "evaluation": "thinking-machines/inkling-small-model-card-terminal-bench@1.0.0",
       "metric": "resolved",
       "model": "thinking-machines/inkling-small",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "value": 0.647
     },
@@ -10949,167 +10909,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.6",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -11117,7 +10917,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -11125,7 +10925,7 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -11133,7 +10933,7 @@ const builtInCatalogJSON = `{
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -11141,7 +10941,7 @@ const builtInCatalogJSON = `{
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "reasoning_effort": "none",
       "status": "missing"
     },
@@ -11149,6 +10949,166 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "low",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.6",
+      "reasoning_effort": "xhigh",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
       "model": "xai/grok-4.5",
       "reasoning_effort": "low",
       "status": "missing"
@@ -11269,80 +11229,120 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "xhigh",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "xhigh",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "xhigh",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "xhigh",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "xhigh",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "low",
       "status": "missing"
     },
     {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "max",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "medium",
       "status": "missing"
     },
     {
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "max",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "medium",
       "status": "missing"
     },
     {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "max",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "medium",
       "status": "missing"
     },
     {
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "max",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "medium",
       "status": "missing"
     },
     {
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xai/grok-4.5",
-      "reasoning_effort": "max",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "medium",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "high",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xai/grok-4.3",
+      "reasoning_effort": "high",
       "status": "missing"
     },
     {
@@ -11383,206 +11383,6 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "xai/grok-4.3",
       "reasoning_effort": "none",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "low",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "medium",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "high",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xai/grok-4.3",
-      "reasoning_effort": "xhigh",
-      "status": "missing"
-    },
-    {
-      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-      "benchmark_profile": "published-standard",
-      "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "cais/humanitys-last-exam@1.0.0",
-      "benchmark_profile": "no-tools",
-      "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "swe-bench/verified@1.0.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "reasoning_effort": "disabled",
-      "status": "missing"
-    },
-    {
-      "benchmark": "harbor/terminal-bench@2.1.0",
-      "benchmark_profile": "published-agent",
-      "metric": "resolved",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -11633,7 +11433,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11641,7 +11441,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11649,7 +11449,7 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11657,7 +11457,7 @@ const builtInCatalogJSON = `{
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11665,7 +11465,7 @@ const builtInCatalogJSON = `{
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11713,7 +11513,7 @@ const builtInCatalogJSON = `{
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11721,7 +11521,7 @@ const builtInCatalogJSON = `{
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11729,7 +11529,7 @@ const builtInCatalogJSON = `{
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11737,7 +11537,7 @@ const builtInCatalogJSON = `{
       "benchmark": "swe-bench/verified@1.0.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11745,7 +11545,7 @@ const builtInCatalogJSON = `{
       "benchmark": "harbor/terminal-bench@2.1.0",
       "benchmark_profile": "published-agent",
       "metric": "resolved",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "reasoning_effort": "disabled",
       "status": "missing"
     },
@@ -11795,6 +11595,46 @@ const builtInCatalogJSON = `{
       "metric": "resolved",
       "model": "xiaomi/mimo-v2-flash",
       "reasoning_effort": "enabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xiaomi/mimo-v2-flash",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "metric": "accuracy",
+      "model": "xiaomi/mimo-v2-flash",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "no-tools",
+      "metric": "accuracy",
+      "model": "xiaomi/mimo-v2-flash",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xiaomi/mimo-v2-flash",
+      "reasoning_effort": "disabled",
+      "status": "missing"
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "metric": "resolved",
+      "model": "xiaomi/mimo-v2-flash",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -12254,7 +12094,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -12262,7 +12102,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -12270,7 +12110,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -12278,7 +12118,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -12286,7 +12126,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "status": "missing"
     },
     {
@@ -12294,7 +12134,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -12302,7 +12142,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-standard",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -12310,7 +12150,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "no-tools",
       "metric": "accuracy",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -12318,7 +12158,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -12326,7 +12166,7 @@ const builtInCatalogJSON = `{
       "benchmark_profile": "published-agent",
       "metric": "resolved",
       "model": "zai/glm-5.1",
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "status": "missing"
     },
     {
@@ -28714,7 +28554,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "evaluation_unit": "prompt",
@@ -28737,7 +28577,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "hle_mode": "no_tools",
@@ -28760,7 +28600,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "source_kind": "official_model_card",
@@ -28782,7 +28622,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "source_kind": "official_model_card",
@@ -28805,7 +28645,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "evaluation_unit": "subtask",
@@ -28829,7 +28669,7 @@ const builtInCatalogJSON = `{
       },
       "model": "nvidia/nemotron-3-ultra",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "status": "available",
       "subject": {
         "source_kind": "official_model_card",
@@ -39424,7 +39264,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39447,7 +39287,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39470,7 +39310,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39495,7 +39335,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39518,7 +39358,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39541,7 +39381,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39564,7 +39404,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39587,7 +39427,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "renderer_effort": 0.99,
@@ -39610,7 +39450,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39633,7 +39473,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "harness": "internal-coding-agent",
@@ -39657,7 +39497,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39680,7 +39520,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "renderer_effort": 0.99,
@@ -39703,7 +39543,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39726,7 +39566,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "renderer_effort": 0.99,
@@ -39749,7 +39589,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "harness": "bash-only",
@@ -39773,7 +39613,7 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "run_kind": "independent",
@@ -39796,10 +39636,10 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling-small",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
-        "reasoning_effort": "xhigh",
+        "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
       }
@@ -39819,11 +39659,11 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling-small",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "harness": "internal-coding-agent",
-        "reasoning_effort": "xhigh",
+        "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
       }
@@ -39843,10 +39683,10 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling-small",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
-        "reasoning_effort": "xhigh",
+        "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
       }
@@ -39866,10 +39706,10 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling-small",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
-        "reasoning_effort": "xhigh",
+        "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
       }
@@ -39889,11 +39729,11 @@ const builtInCatalogJSON = `{
       },
       "model": "thinking-machines/inkling-small",
       "observed_at": "2026-09-06",
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "status": "available",
       "subject": {
         "harness": "bash-only",
-        "reasoning_effort": "xhigh",
+        "reasoning_effort": "max",
         "source_kind": "official_model_card",
         "variant": "Inkling Small"
       }
@@ -43193,7 +43033,6 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
-        "measurement_origin": "Artificial Analysis",
         "reasoning_effort": "max",
         "source_kind": "official_vendor_republication",
         "variant": "GLM-5.3-Flash"
@@ -43424,7 +43263,6 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
-        "measurement_origin": "Artificial Analysis",
         "reasoning_effort": "max",
         "source_kind": "official_vendor_republication",
         "variant": "GLM-5.3-Flash"
@@ -48120,7 +47958,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "deepseek/deepseek-v3.2",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -48176,7 +48014,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "deepseek/deepseek-v3.2",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -48801,62 +48639,6 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "google/gemma-4-31b-it",
-      "provenance": [],
-      "reasoning_effort": "disabled",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
           "evaluation": "google/gemma-4-31b-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
           "normalized": 0.852,
@@ -48919,6 +48701,62 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "enabled",
       "score": 62.999999999999986,
       "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-31b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -49539,62 +49377,6 @@ const builtInCatalogJSON = `{
         "meta/muse-spark-1.2-release-terminal-bench@1.0.0"
       ],
       "reasoning_effort": "xhigh",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "meta/muse-spark-1.2",
-      "provenance": [],
-      "reasoning_effort": "max",
       "score": null,
       "status": "missing"
     },
@@ -50924,7 +50706,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "mistral/mistral-small-4",
       "provenance": [],
-      "reasoning_effort": "none",
+      "reasoning_effort": "high",
       "score": null,
       "status": "missing"
     },
@@ -50980,62 +50762,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "mistral/mistral-small-4",
       "provenance": [],
-      "reasoning_effort": "high",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "mistral/mistral-medium-3.5",
-      "provenance": [],
       "reasoning_effort": "none",
       "score": null,
       "status": "missing"
@@ -51093,6 +50819,62 @@ const builtInCatalogJSON = `{
       "model": "mistral/mistral-medium-3.5",
       "provenance": [],
       "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "mistral/mistral-medium-3.5",
+      "provenance": [],
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -51384,119 +51166,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "moonshot/kimi-k2.7-code",
       "provenance": [],
-      "reasoning_effort": "default",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "moonshot/kimi-k2.7-code",
-      "provenance": [],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "moonshot/kimi-k2.6",
-      "provenance": [],
-      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -51600,11 +51270,10 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "swe-bench/verified@1.0.0",
           "benchmark_profile": "published-agent",
-          "evaluation": "moonshot/kimi-k2.5-model-card-verified@1.0.0",
           "metric": "resolved",
-          "normalized": 0.768,
-          "status": "available",
-          "value": 0.768,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.2
         },
         {
@@ -51617,12 +51286,10 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.2,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "moonshot/kimi-k2.5",
-      "provenance": [
-        "moonshot/kimi-k2.5-model-card-verified@1.0.0"
-      ],
+      "model": "moonshot/kimi-k2.6",
+      "provenance": [],
       "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
@@ -51727,10 +51394,11 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "swe-bench/verified@1.0.0",
           "benchmark_profile": "published-agent",
+          "evaluation": "moonshot/kimi-k2.5-model-card-verified@1.0.0",
           "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.768,
+          "status": "available",
+          "value": 0.768,
           "weight": 0.2
         },
         {
@@ -51743,10 +51411,12 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.2,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "nvidia/nemotron-3.5-lightning",
-      "provenance": [],
+      "model": "moonshot/kimi-k2.5",
+      "provenance": [
+        "moonshot/kimi-k2.5-model-card-verified@1.0.0"
+      ],
       "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
@@ -51839,6 +51509,118 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-lightning",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3-ultra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
           "evaluation": "nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0",
           "metric": "accuracy",
           "normalized": 0.879,
@@ -51892,7 +51674,7 @@ const builtInCatalogJSON = `{
         "nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0",
         "nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0"
       ],
-      "reasoning_effort": "default",
+      "reasoning_effort": "high",
       "score": 59.349999999999994,
       "status": "available"
     },
@@ -52004,7 +51786,63 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-super",
       "provenance": [],
-      "reasoning_effort": "default",
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3-super",
+      "provenance": [],
+      "reasoning_effort": "high",
       "score": null,
       "status": "missing"
     },
@@ -52116,7 +51954,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "provenance": [],
-      "reasoning_effort": "default",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -52171,6 +52009,62 @@ const builtInCatalogJSON = `{
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-cascade-2-30b-a3b",
       "provenance": [],
       "reasoning_effort": "enabled",
       "score": null,
@@ -52228,7 +52122,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-cascade-2-30b-a3b",
       "provenance": [],
-      "reasoning_effort": "default",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -52355,62 +52249,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.6-sol",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "openai/gpt-5.6-sol",
-      "provenance": [],
       "reasoning_effort": "low",
       "score": null,
       "status": "missing"
@@ -52636,6 +52474,62 @@ const builtInCatalogJSON = `{
       "model": "openai/gpt-5.6-sol",
       "provenance": [],
       "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.6-sol",
+      "provenance": [],
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -52752,62 +52646,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.6-terra",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "openai/gpt-5.6-terra",
-      "provenance": [],
       "reasoning_effort": "low",
       "score": null,
       "status": "missing"
@@ -53033,6 +52871,62 @@ const builtInCatalogJSON = `{
       "model": "openai/gpt-5.6-terra",
       "provenance": [],
       "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.6-terra",
+      "provenance": [],
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -53149,62 +53043,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.6-luna",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "openai/gpt-5.6-luna",
-      "provenance": [],
       "reasoning_effort": "low",
       "score": null,
       "status": "missing"
@@ -53430,6 +53268,62 @@ const builtInCatalogJSON = `{
       "model": "openai/gpt-5.6-luna",
       "provenance": [],
       "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.6-luna",
+      "provenance": [],
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -53546,62 +53440,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.5",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "openai/gpt-5.5",
-      "provenance": [],
       "reasoning_effort": "low",
       "score": null,
       "status": "missing"
@@ -53826,7 +53664,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.5",
       "provenance": [],
-      "reasoning_effort": "max",
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -53950,62 +53788,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-5.4",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "openai/gpt-5.4",
-      "provenance": [],
       "reasoning_effort": "low",
       "score": null,
       "status": "missing"
@@ -54175,6 +53957,62 @@ const builtInCatalogJSON = `{
       "model": "openai/gpt-5.4",
       "provenance": [],
       "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-5.4",
+      "provenance": [],
+      "reasoning_effort": "none",
       "score": null,
       "status": "missing"
     },
@@ -55179,7 +55017,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.7-max",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -55235,7 +55073,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.7-max",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -55347,7 +55185,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.6-27b",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -55403,7 +55241,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.6-27b",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -55527,7 +55365,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.6-35b-a3b",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -55583,7 +55421,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "qwen/qwen3.6-35b-a3b",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -56054,62 +55892,6 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "tencent/hy4-preview",
-      "provenance": [],
-      "reasoning_effort": "no_think",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
           "evaluation": "tencent/hy4-preview-model-card-gpqa-diamond@1.0.0",
           "metric": "accuracy",
           "normalized": 0.923,
@@ -56163,62 +55945,6 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "high",
       "score": 73.7,
       "status": "available"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "tencent/hy3",
-      "provenance": [],
-      "reasoning_effort": "no_think",
-      "score": null,
-      "status": "missing"
     },
     {
       "components": [
@@ -56399,7 +56125,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "tencent/hunyuan-a13b-instruct",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -56455,7 +56181,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "tencent/hunyuan-a13b-instruct",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -56572,62 +56298,6 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "thinking-machines/inkling",
       "provenance": [],
-      "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "thinking-machines/inkling",
-      "provenance": [],
       "reasoning_effort": "minimal",
       "score": null,
       "status": "missing"
@@ -56797,6 +56467,62 @@ const builtInCatalogJSON = `{
       "model": "thinking-machines/inkling",
       "provenance": [],
       "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
       "score": null,
       "status": "missing"
     },
@@ -56867,7 +56593,7 @@ const builtInCatalogJSON = `{
         "thinking-machines/inkling-model-card-swe-bench-verified@1.0.0",
         "thinking-machines/inkling-model-card-terminal-bench@1.0.0"
       ],
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "score": 64.575,
       "status": "available"
     },
@@ -56921,7 +56647,7 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "thinking-machines/inkling-small",
+      "model": "thinking-machines/inkling",
       "provenance": [],
       "reasoning_effort": "none",
       "score": null,
@@ -57165,6 +56891,62 @@ const builtInCatalogJSON = `{
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling-small",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
           "evaluation": "thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0",
           "metric": "accuracy",
           "normalized": 0.895,
@@ -57218,7 +57000,7 @@ const builtInCatalogJSON = `{
         "thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0",
         "thinking-machines/inkling-small-model-card-terminal-bench@1.0.0"
       ],
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "max",
       "score": 66.5,
       "status": "available"
     },
@@ -57272,231 +57054,7 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.6",
-      "provenance": [],
-      "reasoning_effort": "low",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.6",
-      "provenance": [],
-      "reasoning_effort": "medium",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.6",
-      "provenance": [],
-      "reasoning_effort": "high",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.6",
-      "provenance": [],
-      "reasoning_effort": "xhigh",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.5",
+      "model": "thinking-machines/inkling-small",
       "provenance": [],
       "reasoning_effort": "none",
       "score": null,
@@ -57552,6 +57110,230 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xai/grok-4.6",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xai/grok-4.6",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xai/grok-4.6",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xai/grok-4.6",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
       "model": "xai/grok-4.5",
       "provenance": [],
       "reasoning_effort": "low",
@@ -57720,9 +57502,9 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.5",
+      "model": "xai/grok-4.3",
       "provenance": [],
-      "reasoning_effort": "xhigh",
+      "reasoning_effort": "low",
       "score": null,
       "status": "missing"
     },
@@ -57776,9 +57558,65 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.5",
+      "model": "xai/grok-4.3",
       "provenance": [],
-      "reasoning_effort": "max",
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xai/grok-4.3",
+      "provenance": [],
+      "reasoning_effort": "high",
       "score": null,
       "status": "missing"
     },
@@ -57835,286 +57673,6 @@ const builtInCatalogJSON = `{
       "model": "xai/grok-4.3",
       "provenance": [],
       "reasoning_effort": "none",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.3",
-      "provenance": [],
-      "reasoning_effort": "low",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.3",
-      "provenance": [],
-      "reasoning_effort": "medium",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.3",
-      "provenance": [],
-      "reasoning_effort": "high",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xai/grok-4.3",
-      "provenance": [],
-      "reasoning_effort": "xhigh",
-      "score": null,
-      "status": "missing"
-    },
-    {
-      "components": [
-        {
-          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "published-standard",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "no-tools",
-          "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "swe-bench/verified@1.0.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        },
-        {
-          "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "published-agent",
-          "metric": "resolved",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
-          "weight": 0.2
-        }
-      ],
-      "coverage": 0.0,
-      "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xiaomi/mimo-v2.5-pro",
-      "provenance": [],
-      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -58229,7 +57787,7 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xiaomi/mimo-v2.5",
+      "model": "xiaomi/mimo-v2.5-pro",
       "provenance": [],
       "reasoning_effort": "disabled",
       "score": null,
@@ -58341,7 +57899,7 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
-      "model": "xiaomi/mimo-v2-flash",
+      "model": "xiaomi/mimo-v2.5",
       "provenance": [],
       "reasoning_effort": "disabled",
       "score": null,
@@ -58417,6 +57975,62 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "enabled",
       "score": 66.025,
       "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "no-tools",
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "swe-bench/verified@1.0.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -59106,7 +58720,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "zai/glm-5.1",
       "provenance": [],
-      "reasoning_effort": "disabled",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -59162,7 +58776,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "zai/glm-5.1",
       "provenance": [],
-      "reasoning_effort": "enabled",
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -59548,6 +59162,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
+      "parameter_size": "52B (12B active)",
       "presentation": {
         "logo": "package:ai21",
         "monochrome": false,
@@ -59737,8 +59352,8 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1048576,
-        "max_output_tokens": 10240
+        "context_window_size": 1000000,
+        "max_output_tokens": 10000
       },
       "modalities": {
         "input": [
@@ -59789,8 +59404,8 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 307200,
-        "max_output_tokens": 10240
+        "context_window_size": 300000,
+        "max_output_tokens": 10000
       },
       "modalities": {
         "input": [
@@ -59858,7 +59473,7 @@ const builtInCatalogJSON = `{
         "monogram": "A"
       },
       "publisher": "Anthropic",
-      "reasoning_family": "claude-effort-xhigh-max",
+      "reasoning_family": "claude-effort-always-on",
       "released_at": "2026-09-01",
       "tags": [
         "frontier",
@@ -59909,7 +59524,7 @@ const builtInCatalogJSON = `{
         "monogram": "A"
       },
       "publisher": "Anthropic",
-      "reasoning_family": "claude-effort-xhigh-max",
+      "reasoning_family": "claude-effort-adaptive",
       "released_at": "2026-07-24",
       "tags": [
         "frontier",
@@ -59941,6 +59556,10 @@ const builtInCatalogJSON = `{
       "id": "anthropic/claude-sonnet-5",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000
+      },
       "modalities": {
         "input": [
           "text",
@@ -59956,7 +59575,7 @@ const builtInCatalogJSON = `{
         "monogram": "A"
       },
       "publisher": "Anthropic",
-      "reasoning_family": "claude-effort-xhigh-max",
+      "reasoning_family": "claude-effort-adaptive",
       "released_at": "2026-06-30",
       "tags": [
         "frontier",
@@ -59988,6 +59607,10 @@ const builtInCatalogJSON = `{
       "id": "anthropic/claude-fable-5",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 128000
+      },
       "modalities": {
         "input": [
           "text",
@@ -60003,7 +59626,7 @@ const builtInCatalogJSON = `{
         "monogram": "A"
       },
       "publisher": "Anthropic",
-      "reasoning_family": "claude-effort-xhigh-max",
+      "reasoning_family": "claude-effort-always-on",
       "released_at": "2026-06-09",
       "tags": [
         "frontier",
@@ -60054,7 +59677,7 @@ const builtInCatalogJSON = `{
         "monogram": "A"
       },
       "publisher": "Anthropic",
-      "reasoning_family": "claude-effort-xhigh-max",
+      "reasoning_family": "claude-effort-opt-in",
       "released_at": "2026-05-28",
       "tags": [
         "frontier",
@@ -60606,7 +60229,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1000000,
+        "context_window_size": 1048576,
         "max_output_tokens": 384000
       },
       "modalities": {
@@ -60660,7 +60283,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1000000,
+        "context_window_size": 1048576,
         "max_output_tokens": 384000
       },
       "modalities": {
@@ -60810,13 +60433,17 @@ const builtInCatalogJSON = `{
       "description": "Google's current Flash model for long-horizon coding, autonomous agents, and multimodal work.",
       "display_name": "Gemini 3.8 Flash",
       "distribution": {
-        "source": "https://ai.google.dev/gemini-api/docs/models",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
         "type": "proprietary_api"
       },
       "family": "gemini-3",
       "id": "google/gemini-3.8-flash",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536
+      },
       "modalities": {
         "input": [
           "text",
@@ -60844,7 +60471,7 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Google",
-        "source": "https://ai.google.dev/gemini-api/docs/models",
+        "source": "https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -61057,7 +60684,7 @@ const builtInCatalogJSON = `{
         "monogram": "M"
       },
       "publisher": "Meta",
-      "reasoning_family": "muse",
+      "reasoning_family": "muse-spark-1.3",
       "released_at": "2026-09-02",
       "tags": [
         "proprietary",
@@ -61115,7 +60742,7 @@ const builtInCatalogJSON = `{
         "monogram": "M"
       },
       "publisher": "Meta",
-      "reasoning_family": "muse",
+      "reasoning_family": "muse-spark",
       "released_at": "2026-08-05",
       "tags": [
         "proprietary",
@@ -61458,7 +61085,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1000000
+        "context_window_size": 1048576
       },
       "modalities": {
         "input": [
@@ -61511,6 +61138,9 @@ const builtInCatalogJSON = `{
       "id": "minimax/minimax-m2.7",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 204800
+      },
       "modalities": {
         "input": [
           "text"
@@ -61658,13 +61288,17 @@ const builtInCatalogJSON = `{
       "description": "Mistral's current balanced model for reasoning and production agents.",
       "display_name": "Mistral Medium 3.5",
       "distribution": {
-        "source": "https://docs.mistral.ai/getting-started/models/models_overview/",
-        "type": "proprietary_api"
+        "license": "Modified-MIT",
+        "source": "https://huggingface.co/mistralai/Mistral-Medium-3.5-128B",
+        "type": "open_weights"
       },
       "family": "mistral-medium",
       "id": "mistral/mistral-medium-3.5",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
       "modalities": {
         "input": [
           "text",
@@ -61674,6 +61308,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
+      "parameter_size": "128B",
       "presentation": {
         "logo": "package:mistral",
         "monochrome": false,
@@ -61683,13 +61318,13 @@ const builtInCatalogJSON = `{
       "reasoning_family": "mistral-none-high",
       "released_at": "2026-04-29",
       "tags": [
-        "proprietary",
+        "open_weights",
         "multimodal",
         "enterprise"
       ],
       "verification": {
         "authority": "Mistral AI",
-        "source": "https://docs.mistral.ai/getting-started/models/models_overview/",
+        "source": "https://huggingface.co/mistralai/Mistral-Medium-3.5-128B",
         "status": "claimed",
         "verified_at": "2026-09-05"
       }
@@ -61713,6 +61348,9 @@ const builtInCatalogJSON = `{
       "id": "mistral/mistral-large-3",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
       "modalities": {
         "input": [
           "text",
@@ -61838,6 +61476,7 @@ const builtInCatalogJSON = `{
         "monogram": "K"
       },
       "publisher": "Moonshot / Kimi",
+      "reasoning_family": "kimi-k2-always-on",
       "released_at": "2026-06-12",
       "tags": [
         "open_weights",
@@ -61874,6 +61513,9 @@ const builtInCatalogJSON = `{
       "id": "moonshot/kimi-k2.6",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
       "modalities": {
         "input": [
           "text",
@@ -61926,6 +61568,9 @@ const builtInCatalogJSON = `{
       "id": "moonshot/kimi-k2.5",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
       "modalities": {
         "input": [
           "text",
@@ -61977,6 +61622,9 @@ const builtInCatalogJSON = `{
       "id": "nvidia/nemotron-3.5-lightning",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
       "modalities": {
         "input": [
           "text"
@@ -61992,7 +61640,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "NVIDIA",
-      "reasoning_family": "nemotron-3.5-lightning",
+      "reasoning_family": "nemotron-thinking-toggle",
       "released_at": "2026-08-11",
       "tags": [
         "open_weights",
@@ -62028,7 +61676,7 @@ const builtInCatalogJSON = `{
       "knowledge_cutoff": "May 2026 post-training; September 2025 pre-training",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1000000
+        "context_window_size": 1048576
       },
       "modalities": {
         "input": [
@@ -62045,6 +61693,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-ultra",
       "released_at": "2026-06-04",
       "tags": [
         "open_weights",
@@ -62078,6 +61727,9 @@ const builtInCatalogJSON = `{
       "id": "nvidia/nemotron-3-super",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
       "modalities": {
         "input": [
           "text"
@@ -62093,6 +61745,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-super",
       "released_at": "2026-03-11",
       "tags": [
         "open_weights",
@@ -62148,6 +61801,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-thinking-toggle",
       "released_at": "2026-04-29",
       "tags": [
         "open_weights",
@@ -62200,6 +61854,7 @@ const builtInCatalogJSON = `{
         "monogram": "N"
       },
       "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-thinking-toggle",
       "released_at": "2026-03-19",
       "tags": [
         "open_weights",
@@ -62254,7 +61909,7 @@ const builtInCatalogJSON = `{
         "monogram": "O"
       },
       "publisher": "OpenAI",
-      "reasoning_family": "gpt",
+      "reasoning_family": "gpt-5.6",
       "released_at": "2026-07-09",
       "tags": [
         "frontier",
@@ -62306,7 +61961,7 @@ const builtInCatalogJSON = `{
         "monogram": "O"
       },
       "publisher": "OpenAI",
-      "reasoning_family": "gpt",
+      "reasoning_family": "gpt-5.6",
       "released_at": "2026-07-09",
       "tags": [
         "frontier",
@@ -62358,7 +62013,7 @@ const builtInCatalogJSON = `{
         "monogram": "O"
       },
       "publisher": "OpenAI",
-      "reasoning_family": "gpt",
+      "reasoning_family": "gpt-5.6",
       "released_at": "2026-07-09",
       "tags": [
         "efficient",
@@ -62410,7 +62065,7 @@ const builtInCatalogJSON = `{
         "monogram": "O"
       },
       "publisher": "OpenAI",
-      "reasoning_family": "gpt",
+      "reasoning_family": "gpt-5.5",
       "released_at": "2026-04-23",
       "tags": [
         "frontier",
@@ -62598,7 +62253,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1048576,
+        "context_window_size": 1000000,
         "max_output_tokens": 65536
       },
       "modalities": {
@@ -62725,7 +62380,7 @@ const builtInCatalogJSON = `{
         "monogram": "Q"
       },
       "publisher": "Alibaba / Qwen",
-      "reasoning_family": "qwen3.8",
+      "reasoning_family": "qwen3.8-always-on",
       "released_at": "2026-08-13",
       "tags": [
         "open_weights",
@@ -62761,7 +62416,7 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1048576,
+        "context_window_size": 1000000,
         "max_output_tokens": 65536
       },
       "modalities": {
@@ -63406,6 +63061,9 @@ const builtInCatalogJSON = `{
       "id": "xai/grok-4.5",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 500000
+      },
       "modalities": {
         "input": [
           "text",
@@ -63421,7 +63079,7 @@ const builtInCatalogJSON = `{
         "monogram": "x"
       },
       "publisher": "xAI",
-      "reasoning_family": "gpt",
+      "reasoning_family": "grok-4.5",
       "released_at": "2026-07-08",
       "tags": [
         "frontier",
@@ -63454,6 +63112,9 @@ const builtInCatalogJSON = `{
       "id": "xai/grok-4.3",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000
+      },
       "modalities": {
         "input": [
           "text",
@@ -63665,6 +63326,10 @@ const builtInCatalogJSON = `{
       "id": "zai/glm-5.3",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 131072
+      },
       "modalities": {
         "input": [
           "text"
@@ -63716,7 +63381,8 @@ const builtInCatalogJSON = `{
       "kind": "physical",
       "lifecycle": "active",
       "limits": {
-        "context_window_size": 1048576
+        "context_window_size": 1048576,
+        "max_output_tokens": 131072
       },
       "modalities": {
         "input": [
@@ -63768,6 +63434,10 @@ const builtInCatalogJSON = `{
       "id": "zai/glm-5.2",
       "kind": "physical",
       "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 131072
+      },
       "modalities": {
         "input": [
           "text"
@@ -63819,7 +63489,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 200000,
-        "max_output_tokens": 128000
+        "max_output_tokens": 131072
       },
       "modalities": {
         "input": [
@@ -64838,6 +64508,11 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_efforts": [
+            "high",
+            "max"
+          ],
+          "reasoning_transport": "thinking_object_effort",
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en",
@@ -64852,6 +64527,11 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_efforts": [
+            "high",
+            "max"
+          ],
+          "reasoning_transport": "thinking_object_effort",
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en",
@@ -64875,21 +64555,6 @@ const builtInCatalogJSON = `{
           }
         },
         {
-          "catalog": "zai/glm-5.2",
-          "id": "glm-5.2",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "reasoning_transport": "thinking_object",
-          "relationship": "managed_cloud",
-          "verification": {
-            "source": "https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
           "catalog": "zai/glm-5.1",
           "id": "glm-5.1",
           "lifecycle": "active",
@@ -64897,20 +64562,6 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1"
           ],
           "reasoning_transport": "thinking_object",
-          "relationship": "managed_cloud",
-          "verification": {
-            "source": "https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
-          "catalog": "moonshot/kimi-k2.6",
-          "id": "kimi-k2.6",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en",
@@ -65203,6 +64854,15 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_efforts": [
+            "high",
+            "max"
+          ],
+          "reasoning_modes": [
+            "enabled",
+            "disabled"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
           "relationship": "gateway",
           "verification": {
             "source": "https://docs.compactif.ai/models/",
@@ -65222,6 +64882,11 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "high",
+            "max"
           ],
           "relationship": "gateway",
           "verification": {
@@ -65243,6 +64908,16 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "xhigh"
+          ],
+          "reasoning_modes": [
+            "enabled",
+            "disabled"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
           "relationship": "gateway",
           "verification": {
             "source": "https://docs.compactif.ai/models/",
@@ -65263,6 +64938,11 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_modes": [
+            "enabled",
+            "disabled"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
           "relationship": "gateway",
           "verification": {
             "source": "https://docs.compactif.ai/models/",
@@ -65324,8 +65004,10 @@ const builtInCatalogJSON = `{
           "id": "qwen3.8-max",
           "lifecycle": "active",
           "protocols": [
-            "openai/chat-completions@1"
+            "openai/chat-completions@1",
+            "openai/responses@1"
           ],
+          "reasoning_transport": "top_level_effort_boolean_switch",
           "relationship": "first_party",
           "verification": {
             "source": "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
@@ -65341,13 +65023,16 @@ const builtInCatalogJSON = `{
         "monogram": "Q"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
-        "openai/chat-completions@1#list_models"
+        "openai/chat-completions@1#list_models",
+        "openai/responses@1#create",
+        "openai/responses@1#list_models"
       ]
     },
     {
@@ -65375,9 +65060,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "gateway",
           "verification": {
-            "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5",
+            "source": "https://docs.deepinfra.com/chat/reasoning",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-07"
           }
         },
         {
@@ -65389,9 +65074,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "gateway",
           "verification": {
-            "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro",
+            "source": "https://docs.deepinfra.com/chat/reasoning",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-07"
           }
         }
       ],
@@ -65403,6 +65088,7 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1"
       ],
+      "reasoning_transport": "reasoning_object",
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
@@ -65983,7 +65669,12 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
-          "reasoning_transport": "top_level_effort",
+          "reasoning_modes": [
+            "disabled",
+            "adaptive",
+            "enabled"
+          ],
+          "reasoning_transport": "thinking_object",
           "relationship": "first_party",
           "verification": {
             "source": "https://platform.minimax.io/docs/guides/models-intro",
@@ -66023,8 +65714,8 @@ const builtInCatalogJSON = `{
       "id": "mistral",
       "models": [
         {
-          "catalog": "mistral/mistral-medium-3.5",
-          "id": "mistral-medium-3.5",
+          "catalog": "mistral/mistral-small-4",
+          "id": "mistral-small-2603",
           "lifecycle": "active",
           "protocols": [
             "openai/chat-completions@1"
@@ -66032,9 +65723,38 @@ const builtInCatalogJSON = `{
           "reasoning_transport": "top_level_effort",
           "relationship": "first_party",
           "verification": {
-            "source": "https://docs.mistral.ai/getting-started/models/models_overview/",
+            "source": "https://docs.mistral.ai/models/mistral-small-4-0-26-03",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-07"
+          }
+        },
+        {
+          "catalog": "mistral/mistral-medium-3.5",
+          "id": "mistral-medium-3-5",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://docs.mistral.ai/studio/conversations/reasoning",
+            "status": "claimed",
+            "verified_at": "2026-09-07"
+          }
+        },
+        {
+          "catalog": "mistral/mistral-large-3",
+          "id": "mistral-large-2512",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://docs.mistral.ai/models/mistral-large-3-25-12",
+            "status": "claimed",
+            "verified_at": "2026-09-07"
           }
         }
       ],
@@ -66106,6 +65826,7 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_transport": "thinking_object",
           "relationship": "first_party",
           "verification": {
             "source": "https://huggingface.co/moonshotai/Kimi-K2.7-Code",
@@ -66183,7 +65904,7 @@ const builtInCatalogJSON = `{
       "conformance": {
         "status": "unverified"
       },
-      "default_base_url": "https://api.novita.ai/v3/openai",
+      "default_base_url": "https://api.novita.ai/openai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Serverless access to open model families.",
       "display_name": "Novita AI",
@@ -66196,11 +65917,16 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_modes": [
+            "enabled",
+            "disabled"
+          ],
+          "reasoning_transport": "top_level_boolean",
           "relationship": "gateway",
           "verification": {
-            "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash",
+            "source": "https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-07"
           }
         }
       ],
@@ -67374,6 +67100,38 @@ const builtInCatalogJSON = `{
       "id": "sglang",
       "models": [
         {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "Qwen/Qwen3.8-27B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3.8-27B",
+            "status": "claimed",
+            "verified_at": "2026-09-07"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-2.4t-a95b",
+          "id": "Qwen/Qwen3.8-2.4T-A95B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B",
+            "status": "claimed",
+            "verified_at": "2026-09-07"
+          }
+        },
+        {
           "catalog": "baidu/ernie-4.5-300b-a47b",
           "id": "baidu/ERNIE-4.5-300B-A47B-PT",
           "lifecycle": "active",
@@ -67914,6 +67672,7 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_transport": "top_level_effort",
           "relationship": "self_hosted",
           "verification": {
             "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
@@ -67929,6 +67688,7 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_transport": "top_level_effort",
           "relationship": "self_hosted",
           "verification": {
             "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
@@ -68214,6 +67974,7 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_transport": "top_level_effort_template_switch",
           "relationship": "self_hosted",
           "verification": {
             "source": "https://huggingface.co/Qwen/Qwen3.8-27B",
@@ -68229,6 +67990,7 @@ const builtInCatalogJSON = `{
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
+          "reasoning_transport": "top_level_effort_template_switch",
           "relationship": "self_hosted",
           "verification": {
             "source": "https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B",
@@ -68853,6 +68615,7 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_transport": "thinking_object_effort",
           "relationship": "first_party",
           "verification": {
             "source": "https://huggingface.co/zai-org/GLM-5.2",
@@ -68867,6 +68630,7 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_transport": "thinking_object_effort",
           "relationship": "first_party",
           "verification": {
             "source": "https://huggingface.co/zai-org/GLM-5.3",
@@ -68881,6 +68645,7 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_transport": "thinking_object_effort",
           "relationship": "first_party",
           "verification": {
             "source": "https://huggingface.co/zai-org/GLM-5.3-Flash",
@@ -68909,33 +68674,36 @@ const builtInCatalogJSON = `{
   "reasoning_families": [
     {
       "default": "high",
+      "default_mode": "enabled",
       "id": "deepseek",
       "levels": [
         "low",
         "high",
         "max"
       ],
-      "parameter": "thinking",
-      "type": "chat_template_kwargs"
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
+      "default_mode": "enabled",
       "id": "deepseek-v3.2",
-      "levels": [
-        "disabled",
-        "enabled"
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "thinking",
       "type": "chat_template_kwargs"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
+      "default_mode": "enabled",
       "id": "qwen3",
-      "levels": [
-        "disabled",
-        "enabled"
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "enable_thinking",
       "type": "chat_template_kwargs"
@@ -68943,22 +68711,42 @@ const builtInCatalogJSON = `{
     {
       "activation_parameter": "enable_thinking",
       "default": "xhigh",
+      "default_mode": "enabled",
       "id": "qwen3.8",
       "levels": [
         "low",
         "medium",
         "xhigh"
       ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "glm",
+      "activation_parameter": "enable_thinking",
+      "default": "xhigh",
+      "default_mode": "enabled",
+      "id": "qwen3.8-always-on",
       "levels": [
-        "disabled",
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "modes": [
         "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "glm",
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "enable_thinking",
       "type": "chat_template_kwargs"
@@ -68966,147 +68754,200 @@ const builtInCatalogJSON = `{
     {
       "activation_parameter": "enable_thinking",
       "default": "max",
+      "default_mode": "enabled",
       "id": "glm-5.2",
       "levels": [
         "high",
         "max"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "max",
+      "default_mode": "enabled",
       "id": "glm-5.3",
       "levels": [
         "low",
         "high",
         "max"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
+      "default_mode": "enabled",
       "id": "hunyuan",
-      "levels": [
-        "disabled",
-        "enabled"
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "enable_thinking",
       "type": "chat_template_kwargs"
     },
     {
-      "default": "no_think",
+      "default": "high",
+      "default_mode": "disabled",
       "disabled": "no_think",
       "id": "hunyuan-hy3",
       "levels": [
-        "no_think",
         "low",
         "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "high",
+      "default_mode": "enabled",
       "disabled": "no_think",
       "id": "hunyuan-hy4",
       "levels": [
-        "no_think",
         "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "longcat-2",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "exaone",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "smollm3",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
       "default": "medium",
+      "default_mode": "enabled",
       "id": "gpt-oss",
       "levels": [
         "low",
         "medium",
         "high"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "medium",
+      "default_mode": "enabled",
+      "disabled": "none",
       "id": "gpt",
       "levels": [
-        "none",
+        "minimal",
         "low",
         "medium",
         "high",
         "xhigh",
         "max"
       ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "none",
+      "default": "medium",
+      "default_mode": "enabled",
       "disabled": "none",
-      "id": "gpt-5.4",
+      "id": "gpt-5.6",
       "levels": [
-        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "medium",
+      "default_mode": "enabled",
+      "disabled": "none",
+      "id": "gpt-5.5",
+      "levels": [
         "low",
         "medium",
         "high",
         "xhigh"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "medium",
+      "default_mode": "disabled",
+      "disabled": "none",
+      "id": "gpt-5.4",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "low",
+      "default_mode": "enabled",
       "disabled": "none",
       "id": "grok-4.3",
       "levels": [
-        "none",
         "low",
         "medium",
-        "high",
-        "xhigh"
+        "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "high",
+      "default_mode": "enabled",
+      "id": "grok-4.5",
+      "levels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "high",
+      "default_mode": "enabled",
       "id": "grok-4.6",
       "levels": [
         "low",
@@ -69114,35 +68955,16 @@ const builtInCatalogJSON = `{
         "high",
         "xhigh"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
       "default": "high",
-      "id": "claude-effort",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "claude-effort-max",
-      "levels": [
-        "low",
-        "medium",
-        "high",
-        "max"
-      ],
-      "parameter": "effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "claude-effort-xhigh-max",
+      "default_mode": "adaptive",
+      "id": "claude-effort-always-on",
       "levels": [
         "low",
         "medium",
@@ -69150,26 +68972,77 @@ const builtInCatalogJSON = `{
         "xhigh",
         "max"
       ],
+      "modes": [
+        "adaptive"
+      ],
+      "parameter": "effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "high",
+      "default_mode": "adaptive",
+      "id": "claude-effort-adaptive",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "adaptive",
+        "disabled"
+      ],
+      "parameter": "effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "high",
+      "default_mode": "disabled",
+      "id": "claude-effort-opt-in",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "adaptive",
+        "disabled"
+      ],
       "parameter": "effort",
       "type": "reasoning_effort"
     },
     {
       "default": "max",
+      "default_mode": "enabled",
       "id": "kimi-k3",
       "levels": [
         "low",
         "high",
         "max"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "enabled",
-      "disabled": "disabled",
+      "default_mode": "enabled",
       "id": "kimi-k2",
-      "levels": [
-        "disabled",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "kimi-k2-always-on",
+      "modes": [
         "enabled"
       ],
       "parameter": "thinking",
@@ -69177,29 +69050,33 @@ const builtInCatalogJSON = `{
     },
     {
       "default": "medium",
+      "default_mode": "enabled",
       "id": "step-3.7",
       "levels": [
         "low",
         "medium",
         "high"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "adaptive",
-      "disabled": "disabled",
+      "default_mode": "adaptive",
       "id": "minimax-m3",
-      "levels": [
+      "modes": [
         "disabled",
         "adaptive",
         "enabled"
       ],
-      "parameter": "thinking",
-      "type": "reasoning_effort"
+      "parameter": "thinking_mode",
+      "type": "reasoning_mode"
     },
     {
       "default": "high",
+      "default_mode": "enabled",
       "id": "muse-glimmer",
       "levels": [
         "low",
@@ -69207,82 +69084,42 @@ const builtInCatalogJSON = `{
         "high",
         "xhigh"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_strength",
       "type": "reasoning_effort"
     },
     {
-      "default": "none",
+      "default": "high",
+      "default_mode": "disabled",
       "disabled": "none",
       "id": "mistral-none-high",
       "levels": [
-        "none",
         "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "medium",
-      "id": "mistral",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "celeris",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "medium",
-      "id": "inception",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
+      "default_mode": "enabled",
       "id": "mimo",
-      "levels": [
-        "disabled",
-        "enabled"
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "enable_thinking",
       "type": "chat_template_kwargs"
     },
     {
       "default": "high",
+      "default_mode": "enabled",
       "disabled": "none",
       "id": "inkling",
-      "levels": [
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "muse",
       "levels": [
         "minimal",
         "low",
@@ -69291,155 +69128,107 @@ const builtInCatalogJSON = `{
         "xhigh",
         "max"
       ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "k2-horizon",
-      "levels": [
-        "high"
+      "modes": [
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
     },
     {
-      "default": "high",
-      "disabled": "none",
-      "id": "solar-open2",
-      "levels": [
-        "none",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "gemma4",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "nemotron-3.5-lightning",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "ling3",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "high",
-      "id": "ring2.6",
-      "levels": [
-        "high",
-        "xhigh"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "medium",
-      "id": "solar-pro",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "gemini-2.5-pro",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "medium",
-      "disabled": "none",
-      "id": "gemini-2.5-flash",
-      "levels": [
-        "none",
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "none",
-      "disabled": "none",
-      "id": "gemini-2.5-flash-lite",
-      "levels": [
-        "none",
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "gemini-pro-two-level-high",
-      "levels": [
-        "low",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "gemini-pro-three-level-high",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "gemini-flash-four-level-high",
+      "default_mode": "enabled",
+      "id": "muse-spark",
       "levels": [
         "minimal",
         "low",
         "medium",
-        "high"
+        "high",
+        "xhigh"
+      ],
+      "modes": [
+        "enabled"
       ],
       "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
+      "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "muse-spark-1.3",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "disabled",
+      "id": "gemma4",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "nemotron-thinking-toggle",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "activation_parameter": "enable_thinking",
+      "default": "high",
+      "default_mode": "enabled",
+      "effort_flags": {
+        "low": "low_effort"
+      },
+      "id": "nemotron-super",
+      "levels": [
+        "low",
+        "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "activation_parameter": "enable_thinking",
+      "default": "high",
+      "default_mode": "enabled",
+      "effort_flags": {
+        "medium": "medium_effort"
+      },
+      "id": "nemotron-ultra",
+      "levels": [
+        "medium",
+        "high"
+      ],
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
     },
     {
       "default": "medium",
+      "default_mode": "enabled",
       "id": "gemini-flash-four-level-medium",
       "levels": [
         "minimal",
@@ -69447,230 +69236,26 @@ const builtInCatalogJSON = `{
         "medium",
         "high"
       ],
+      "modes": [
+        "enabled"
+      ],
       "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
+      "type": "reasoning_effort"
     },
     {
       "default": "medium",
+      "default_mode": "enabled",
       "id": "gemini-flash-three-level-medium",
       "levels": [
         "low",
         "medium",
         "high"
       ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "minimal",
-      "id": "gemini-flash-four-level-minimal",
-      "levels": [
-        "minimal",
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "laguna",
-      "levels": [
-        "disabled",
+      "modes": [
         "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "kat-coder",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "medium",
-      "disabled": "none",
-      "id": "aion",
-      "levels": [
-        "none",
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "sakana-fugu",
-      "levels": [
-        "high",
-        "xhigh"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "high",
-      "id": "sakana-fugu-ultra",
-      "levels": [
-        "high",
-        "xhigh",
-        "max"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "top_level_reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "ax-k2",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "dots3",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "g9v3",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "high",
-      "id": "k2-think-v2",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "high",
-      "id": "hypernova",
-      "levels": [
-        "low",
-        "medium",
-        "high"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
-    },
-    {
-      "default": "medium",
-      "id": "sarvam",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "cogito",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "ernie5-preview",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "disabled",
-      "disabled": "disabled",
-      "id": "hyperclovax-seed",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "disabled",
-      "disabled": "disabled",
-      "id": "apertus-v1.5",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "medium",
-      "id": "perplexity-deep-research",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "enabled",
-      "disabled": "disabled",
-      "id": "nanbeige4.2",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "enable_thinking",
-      "type": "chat_template_kwargs"
-    },
-    {
-      "default": "disabled",
-      "disabled": "disabled",
-      "id": "hermes4",
-      "levels": [
-        "disabled",
-        "enabled"
-      ],
-      "parameter": "thinking",
-      "type": "chat_template_kwargs"
     }
   ],
   "schema_version": "vllm-sr/model-catalog/v2"

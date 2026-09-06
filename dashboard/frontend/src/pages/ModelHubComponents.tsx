@@ -1,81 +1,60 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 
-import type { BuiltInModelMetadata } from '../types/modelCatalog'
+import type { BuiltInModelMetadata, CatalogProvider } from '../types/modelCatalog'
 import { resolveModelCatalogIcon } from './modelProviderIcons'
 import { type ModelHubPagination, type ModelHubStats } from './modelHubSupport'
 import styles from './ModelHubPage.module.css'
 
-export const ModelMark: React.FC<{ model: BuiltInModelMetadata; large?: boolean }> = ({
-  model,
-  large = false,
-}) => {
-  const icon = resolveModelCatalogIcon(model.presentation.logo)
+const CatalogMark: React.FC<{
+  presentation: BuiltInModelMetadata['presentation']
+  large?: boolean
+}> = ({ presentation, large = false }) => {
+  const icon = resolveModelCatalogIcon(presentation.logo)
   return (
     <span
       className={`${styles.modelMark} ${large ? styles.modelMarkLarge : ''} ${
-        model.presentation.monochrome ? styles.modelMarkMonochrome : ''
+        presentation.monochrome ? styles.modelMarkMonochrome : ''
       }`}
       aria-hidden="true"
     >
-      {icon ? <img src={icon} alt="" /> : model.presentation.monogram}
+      {icon ? <img src={icon} alt="" /> : presentation.monogram}
     </span>
   )
 }
 
-const Stat: React.FC<{ label: string; value: number; hint: string }> = ({ label, value, hint }) => (
-  <div className={styles.statCard}>
-    <dt>{label}</dt>
+export const ModelMark: React.FC<{ model: BuiltInModelMetadata; large?: boolean }> = ({
+  model,
+  large = false,
+}) => <CatalogMark presentation={model.presentation} large={large} />
+
+export const ProviderMark: React.FC<{ provider: CatalogProvider }> = ({ provider }) => (
+  <CatalogMark presentation={provider.presentation} />
+)
+
+const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+  <div className={styles.statFact}>
     <dd>{value.toLocaleString()}</dd>
-    <span>{hint}</span>
+    <dt>{label}</dt>
   </div>
 )
 
 export const HubHero: React.FC<{ stats: ModelHubStats }> = ({ stats }) => (
   <header className={styles.hero}>
     <div className={styles.heroCopy}>
-      <span className={styles.eyebrow}>
-        <i /> Built into this release
-      </span>
-      <h1>Find the right model for every route.</h1>
-      <p>
-        Explore {stats.physicalModels} single models from {stats.creators} mainstream creators,
-        centered on recent generations and representative lines. Runtime access, reasoning, and
-        sourced benchmark evidence come from the same catalog.
-      </p>
-      <div className={styles.heroActions}>
-        <Link className={styles.primaryAction} to="/config/models">
-          Add a model
-          <span aria-hidden="true">→</span>
-        </Link>
-        <a className={styles.secondaryAction} href="#catalog-explorer">
-          Explore catalog
-        </a>
-      </div>
-    </div>
-    <div className={styles.heroSignal} aria-hidden="true">
-      <div className={styles.signalOrb}>
-        <span>{stats.models}</span>
-        <small>built-in models</small>
-      </div>
-      <div className={styles.signalTrack} />
-      <div className={styles.signalTrackAlt} />
+      <h1>Model Hub</h1>
+      <p>Models, ready to route.</p>
     </div>
     <dl className={styles.stats}>
-      <Stat label="Single models" value={stats.physicalModels} hint="Canonical checkpoints" />
-      <Stat label="Virtual models" value={stats.virtualModels} hint="Composable recipes" />
-      <Stat
-        label="Mapped providers"
-        value={stats.mappedProviders}
-        hint={`${stats.providerContracts} runtime contracts in Add Model`}
-      />
-      <Stat label="Model creators" value={stats.creators} hint="Mainstream model companies" />
-      <Stat
-        label="Evaluated models"
-        value={stats.evaluatedModels}
-        hint={`${stats.evaluations} records`}
-      />
+      <Stat label="models" value={stats.models} />
+      <Stat label="creators" value={stats.creators} />
+      <Stat label="mapped providers" value={stats.mappedProviders} />
+      <Stat label="evaluations" value={stats.evaluations} />
     </dl>
+    <Link className={styles.primaryAction} to="/config/models">
+      Add model
+      <span aria-hidden="true">→</span>
+    </Link>
   </header>
 )
 
@@ -139,7 +118,7 @@ export const HubPagination: React.FC<{
     <label className={styles.pageSize}>
       <span>Per page</span>
       <select value={pagination.pageSize} onChange={(event) => setPageSize(+event.target.value)}>
-        {[12, 24, 48, 96].map((size) => (
+        {[10, 20, 50].map((size) => (
           <option value={size} key={size}>
             {size}
           </option>

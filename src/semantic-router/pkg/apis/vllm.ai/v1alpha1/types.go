@@ -86,7 +86,7 @@ type ModelReasoning struct {
 	// +optional
 	Family string `json:"family,omitempty" yaml:"family,omitempty"`
 
-	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;top_level_reasoning_effort
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;reasoning_mode;top_level_reasoning_effort
 	// +optional
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 
@@ -94,10 +94,28 @@ type ModelReasoning struct {
 	Parameter string `json:"parameter,omitempty" yaml:"parameter,omitempty"`
 
 	// +optional
+	ActivationParameter string `json:"activationParameter,omitempty" yaml:"activation_parameter,omitempty"`
+
+	// EffortFlags maps a logical effort to a boolean chat-template parameter.
+	// +optional
+	EffortFlags map[string]string `json:"effortFlags,omitempty" yaml:"effort_flags,omitempty"`
+
+	// +optional
 	Levels []string `json:"levels,omitempty" yaml:"levels,omitempty"`
 
 	// +optional
 	Default string `json:"default,omitempty" yaml:"default,omitempty"`
+
+	// +kubebuilder:validation:items:Enum=enabled;disabled;adaptive
+	// +optional
+	Modes []string `json:"modes,omitempty" yaml:"modes,omitempty"`
+
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	DefaultMode string `json:"defaultMode,omitempty" yaml:"default_mode,omitempty"`
+
+	// +optional
+	Disabled string `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
 // ModelPricing defines the pricing structure for a model

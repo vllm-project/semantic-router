@@ -23,6 +23,10 @@ from generate_model_catalog import (  # noqa: E402
 DEFAULT_MIN_EVALUATIONS = 5
 
 
+def _family_evaluation_conditions(family: dict[str, Any]) -> list[str]:
+    return list(family.get("levels") or family.get("modes") or [])
+
+
 def _selected_values(values: Iterable[str] | None) -> set[str]:
     selected: set[str] = set()
     for value in values or ():
@@ -38,7 +42,7 @@ def _evaluation_efforts(
     family_id = model.get("reasoning_family")
     if family_id is None:
         return sorted(observed_efforts) if observed_efforts else ["default"]
-    declared = list(reasoning_families[str(family_id)]["levels"])
+    declared = _family_evaluation_conditions(reasoning_families[str(family_id)])
     return declared + sorted(observed_efforts.difference(declared))
 
 
@@ -49,7 +53,7 @@ def _declared_efforts(
     family_id = model.get("reasoning_family")
     if family_id is None:
         return ["default"]
-    return list(reasoning_families[str(family_id)]["levels"])
+    return _family_evaluation_conditions(reasoning_families[str(family_id)])
 
 
 def _default_slots(
@@ -166,7 +170,7 @@ def _model_effort_rows(
         model_id = str(model["id"])
         family_id = model.get("reasoning_family")
         declared_efforts = (
-            set(reasoning_families[str(family_id)]["levels"])
+            set(_family_evaluation_conditions(reasoning_families[str(family_id)]))
             if family_id is not None
             else set()
         )

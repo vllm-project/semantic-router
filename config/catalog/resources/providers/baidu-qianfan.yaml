@@ -35,6 +35,10 @@ models:
   id: deepseek-v4-pro
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
+  reasoning_efforts:
+  - high
+  - max
   lifecycle: active
   verification:
     status: claimed
@@ -45,6 +49,10 @@ models:
   id: deepseek-v4-flash
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
+  reasoning_efforts:
+  - high
+  - max
   lifecycle: active
   verification:
     status: claimed
@@ -61,33 +69,12 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://api.baiduqianfan.ai/v1/models
-- catalog: zai/glm-5.2
-  relationship: managed_cloud
-  id: glm-5.2
-  protocols:
-  - openai/chat-completions@1
-  reasoning_transport: thinking_object
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
 - catalog: zai/glm-5.1
   relationship: managed_cloud
   id: glm-5.1
   protocols:
   - openai/chat-completions@1
   reasoning_transport: thinking_object
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
-- catalog: moonshot/kimi-k2.6
-  relationship: managed_cloud
-  id: kimi-k2.6
-  protocols:
-  - openai/chat-completions@1
   lifecycle: active
   verification:
     status: claimed

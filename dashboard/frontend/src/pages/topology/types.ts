@@ -279,7 +279,8 @@ export interface PluginConfig {
 export interface ModelRefConfig {
   model: string
   use_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+  reasoning_effort?: string
   lora_name?: string
   reasoning_family?: string
 }
@@ -714,7 +715,8 @@ export interface ConfigData {
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean
-      reasoning_effort?: 'low' | 'medium' | 'high'
+      reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+      reasoning_effort?: string
       lora_name?: string
     }>
     plugins?: Array<{

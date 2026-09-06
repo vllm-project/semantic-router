@@ -97,6 +97,50 @@ def test_catalog_model_cannot_override_reasoning_binding():
     )
 
 
+def test_inline_reasoning_allows_an_implicit_mode_contract():
+    reasoning = Reasoning(
+        type="chat_template_kwargs",
+        parameter="enable_thinking",
+    )
+
+    assert reasoning.modes == []
+    assert reasoning.default_mode is None
+
+
+def test_inline_reasoning_keeps_disable_sentinel_separate_from_effort_levels():
+    reasoning = Reasoning(
+        type="reasoning_effort",
+        parameter="reasoning_effort",
+        levels=["low", "high"],
+        default="high",
+        disabled="none",
+        modes=["enabled", "disabled"],
+        default_mode="enabled",
+    )
+
+    assert reasoning.disabled == "none"
+    assert reasoning.levels == ["low", "high"]
+
+
+def test_inline_effort_flags_ignore_a_disabled_sentinel_level():
+    reasoning = Reasoning(
+        type="reasoning_effort",
+        parameter="reasoning_effort",
+        activation_parameter="enable_thinking",
+        effort_flags={"low": "low_effort", "medium": "medium_effort"},
+        levels=["none", "low", "medium", "high"],
+        default="high",
+        disabled="none",
+        modes=["enabled", "disabled"],
+        default_mode="enabled",
+    )
+
+    assert reasoning.effort_flags == {
+        "low": "low_effort",
+        "medium": "medium_effort",
+    }
+
+
 def test_declared_lora_alias_can_have_metadata_only_model_card():
     config = recipe_config()
     config.routing.model_cards[0].loras = [LoRAAdapter(name="general-expert")]
@@ -107,6 +151,136 @@ def test_declared_lora_alias_can_have_metadata_only_model_card():
     assert not any(
         error.field == "routing.modelCards.general-expert.name" for error in errors
     )
+
+
+def test_routing_only_model_card_can_supply_default_model():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {"defaults": {"model": "private-model"}},
+            "routing": {
+                "modelCards": [
+                    {
+                        "name": "private-model",
+                        "description": "Metadata-only routing model",
+                    }
+                ]
+            },
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
+
+
+def test_routing_only_decision_refs_remain_external_gateway_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {},
+            "routing": {
+                "modelCards": [{"name": "private-model"}],
+                "decisions": [
+                    {
+                        "name": "external-route",
+                        "priority": 100,
+                        "modelRefs": [{"model": "private-model"}],
+                    }
+                ],
+            },
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
+
+
+def test_blank_routing_model_card_identity_is_rejected():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {},
+            "routing": {"modelCards": [{"name": " "}]},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "routing.modelCards[0].name"
+        and error.message == "Model card name cannot be empty"
+        for error in errors
+    )
+
+
+def test_routing_only_exception_does_not_allow_unbound_card_with_provider_models():
+    config = recipe_config()
+    config.routing.model_cards.append(RoutingModel(name="unbound-metadata"))
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "routing.modelCards.unbound-metadata.name" for error in errors
+    )
+
+
+def test_empty_provider_model_requires_backend_or_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {"models": [{"name": "bare"}]},
+            "routing": {},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "providers.models.bare"
+        and "must define backend_refs or model metadata" in error.message
+        for error in errors
+    )
+
+
+def test_empty_pricing_block_does_not_count_as_provider_model_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {"models": [{"name": "bare", "pricing": {}}]},
+            "routing": {},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "providers.models.bare"
+        and "must define backend_refs or model metadata" in error.message
+        for error in errors
+    )
+
+
+def test_explicit_zero_pricing_counts_as_provider_model_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {
+                "models": [
+                    {
+                        "name": "free-model",
+                        "pricing": {
+                            "prompt_per_1m": 0,
+                            "completion_per_1m": 0,
+                        },
+                    }
+                ]
+            },
+            "routing": {},
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
 
 
 def test_operator_evaluation_requires_versioned_identity_and_finite_metrics():

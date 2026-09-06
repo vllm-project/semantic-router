@@ -29,8 +29,11 @@ func applyEffectiveModelRegistry(
 			Type:                family.Type,
 			Parameter:           family.Parameter,
 			ActivationParameter: family.ActivationParameter,
+			EffortFlags:         copyStringMap(family.EffortFlags),
 			Levels:              append([]string(nil), family.Levels...),
 			Default:             family.Default,
+			Modes:               append([]string(nil), family.Modes...),
+			DefaultMode:         family.DefaultMode,
 			Disabled:            family.Disabled,
 		}
 	}
@@ -243,12 +246,19 @@ func materializedProviderProfile(
 ) ProviderProfile {
 	provider := effective.Provider
 	reasoningTransport := provider.Definition.ReasoningTransport
+	var reasoningModes, reasoningEfforts []string
 	if effective.CatalogBinding != nil && effective.CatalogBinding.ReasoningTransport != "" {
 		reasoningTransport = effective.CatalogBinding.ReasoningTransport
+	}
+	if effective.CatalogBinding != nil {
+		reasoningModes = append([]string(nil), effective.CatalogBinding.ReasoningModes...)
+		reasoningEfforts = append([]string(nil), effective.CatalogBinding.ReasoningEfforts...)
 	}
 	return ProviderProfile{
 		Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,
 		ReasoningTransport: reasoningTransport,
+		ReasoningModes:     reasoningModes,
+		ReasoningEfforts:   reasoningEfforts,
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,

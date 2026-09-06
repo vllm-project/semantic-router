@@ -45,6 +45,8 @@ describe('config page model normalization', () => {
             reasoning: {
               type: 'chat_template_kwargs',
               parameter: 'think_mode',
+              modes: ['enabled', 'disabled'],
+              default_mode: 'enabled',
             },
           },
         ],
@@ -57,8 +59,32 @@ describe('config page model normalization', () => {
         reasoning: {
           type: 'chat_template_kwargs',
           parameter: 'think_mode',
+          modes: ['enabled', 'disabled'],
+          default_mode: 'enabled',
         },
         endpoints: [],
+      }),
+    ])
+  })
+
+  it('narrows a model reasoning contract to the selected provider binding', () => {
+    const builtIn = catalog.models.find((model) => model.id === 'minimax/minimax-m3')
+    expect(builtIn).toBeDefined()
+    const config: ConfigData = {
+      providers: {
+        models: [
+          {
+            name: 'minimax-production',
+            catalog: builtIn!.id,
+            backend_refs: [{ name: 'official', provider: 'minimax' }],
+          },
+        ],
+      },
+    }
+
+    expect(getNormalizedModels(config, true, catalog)).toEqual([
+      expect.objectContaining({
+        reasoning_modes: ['disabled', 'adaptive', 'enabled'],
       }),
     ])
   })

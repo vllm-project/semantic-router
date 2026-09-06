@@ -5,12 +5,14 @@ import type { ModelHubBenchmarkController } from './modelHubBenchmarkController'
 import { ModelMark } from './ModelHubComponents'
 import { OpenModelButton } from './ModelHubOpenModelButton'
 import {
+  modelHubBenchmarkBarHeight,
+  modelHubChartColorToken,
   modelHubEvaluationConditionLabel,
   readableModelHubValue as readable,
   type ModelHubBenchmarkPoint,
   type ModelHubRow,
 } from './modelHubSupport'
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubViews.module.css'
 
 const benchmarkLabel = (benchmark: CatalogBenchmark | undefined, fallback: string): string =>
   benchmark?.display_name ?? fallback
@@ -73,48 +75,54 @@ export const ModelHubBenchmarkControls: React.FC<{
   </div>
 )
 
-const BenchmarkRow: React.FC<{
+const BenchmarkColumn: React.FC<{
   point: ModelHubBenchmarkPoint
   row: ModelHubRow
   selected: ModelHubRow | null
   select: (id: string) => void
-  rank: number
   controller: ModelHubBenchmarkController
-}> = ({ point, row, selected, select, rank, controller }) => {
+}> = ({ point, row, selected, select, controller }) => {
   const conditionLabel = modelHubEvaluationConditionLabel(point.model, point.reasoningEffort)
-  const rawPosition = (point.value - controller.minimum) / controller.span
-  const performance =
-    controller.metric?.direction === 'lower_is_better' ? 1 - rawPosition : rawPosition
-  const width = Math.max(8, Math.min(100, 8 + performance * 92))
+  const height = modelHubBenchmarkBarHeight(
+    point.value,
+    controller.minimum,
+    controller.minimum + controller.span,
+    controller.metric?.direction ?? 'higher_is_better',
+  )
   const value = formatMetric(point.value, controller.benchmark, controller.selection?.metric ?? '')
+  const color = controller.chartColors.get(point.model.id) ?? {
+    lightness: 0.62,
+    chroma: 0.16,
+    hue: 0,
+  }
+  const colorToken = modelHubChartColorToken(color)
 
   return (
     <OpenModelButton
       row={row}
       selected={selected}
       select={select}
-      className={styles.benchmarkRow}
-      ariaLabel={`Rank ${rank}, ${point.model.display_name}, ${conditionLabel}, ${value}`}
+      className={styles.benchmarkColumn}
+      ariaLabel={`${point.model.display_name}, ${conditionLabel}, ${value}. Open evidence.`}
+      style={
+        {
+          '--column-height': `${height}%`,
+          '--column-color': colorToken,
+          '--column-soft': `color-mix(in oklab, ${colorToken} 16%, transparent)`,
+        } as React.CSSProperties
+      }
     >
-      <span className={styles.chartRank} aria-label={`Rank ${rank}`}>
-        {String(rank).padStart(2, '0')}
+      <strong className={styles.columnValue}>{value}</strong>
+      <span className={styles.columnTrack} aria-hidden="true">
+        <i />
       </span>
-      <span className={styles.chartIdentity}>
+      <span className={styles.columnIdentity}>
         <ModelMark model={point.model} />
         <span>
-          <strong>{point.model.display_name}</strong>
+          <strong title={point.model.display_name}>{point.model.display_name}</strong>
           <small>{conditionLabel}</small>
         </span>
       </span>
-      <span className={styles.chartTrack}>
-        <i
-          style={{
-            width: `${width}%`,
-            background: `hsl(${controller.chartHues.get(point.model.id) ?? 0} 62% 65%)`,
-          }}
-        />
-      </span>
-      <strong className={styles.chartValue}>{value}</strong>
     </OpenModelButton>
   )
 }
@@ -125,21 +133,36 @@ export const ModelHubBenchmarkChart: React.FC<{
   select: (id: string) => void
   controller: ModelHubBenchmarkController
 }> = ({ rows, selected, select, controller }) => (
-  <div className={styles.benchmarkChart}>
-    {controller.pagination.items.map((point, index) => {
-      const row = rows.find((candidate) => candidate.model.id === point.model.id)
-      if (!row) return null
-      return (
-        <BenchmarkRow
-          key={`${point.model.id}/${point.reasoningEffort}`}
-          point={point}
-          row={row}
-          selected={selected}
-          select={select}
-          rank={controller.pagination.start + index}
-          controller={controller}
-        />
-      )
-    })}
+  <div
+    className={styles.benchmarkViewport}
+    tabIndex={0}
+    aria-label="Benchmark comparison with all filtered results"
+  >
+    <div
+      className={styles.benchmarkChart}
+      role="list"
+      style={{ '--column-count': controller.points.length } as React.CSSProperties}
+    >
+      <span className={styles.chartGrid} aria-hidden="true" />
+      {controller.points.map((point) => {
+        const row = rows.find((candidate) => candidate.model.id === point.model.id)
+        if (!row) return null
+        return (
+          <span
+            role="listitem"
+            className={styles.benchmarkColumnItem}
+            key={`${point.model.id}/${point.reasoningEffort}`}
+          >
+            <BenchmarkColumn
+              point={point}
+              row={row}
+              selected={selected}
+              select={select}
+              controller={controller}
+            />
+          </span>
+        )
+      })}
+    </div>
   </div>
 )

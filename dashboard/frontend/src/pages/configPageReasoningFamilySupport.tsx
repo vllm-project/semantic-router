@@ -31,7 +31,7 @@ export const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
     sortable: true,
     render: (row) => <code className={styles.reasoningFamilyParameter}>{row.parameter}</code>,
   },
-  { key: 'levels', header: 'Levels', render: (row) => row.levels || 'N/A' },
+  { key: 'levels', header: 'Controls', render: (row) => row.levels || 'N/A' },
   {
     key: 'defaultLevel',
     header: 'Default',
@@ -47,8 +47,8 @@ export const reasoningFamilyRows = (
     name,
     type: config.type,
     parameter: config.parameter,
-    levels: config.levels?.join(', ') || '',
-    defaultLevel: config.default || '',
+    levels: [...(config.levels || []), ...(config.modes || [])].join(', '),
+    defaultLevel: config.default || config.default_mode || '',
   }))
 
 export const filterReasoningFamilyRows = (
@@ -77,7 +77,8 @@ export const reasoningFamilyViewSections = (
       { label: 'Type', value: family.type },
       { label: 'Parameter', value: family.parameter },
       { label: 'Levels', value: family.levels?.join(', ') || 'N/A' },
-      { label: 'Default', value: family.default || 'N/A' },
+      { label: 'Modes', value: family.modes?.join(', ') || 'N/A' },
+      { label: 'Default', value: family.default || family.default_mode || 'N/A' },
     ],
   },
 ]

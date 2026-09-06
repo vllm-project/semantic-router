@@ -1641,25 +1641,37 @@ class Reasoning(BaseModel):
     family: Optional[str] = None
     type: Optional[
         Literal[
-            "chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort"
+            "chat_template_kwargs",
+            "reasoning_effort",
+            "reasoning_mode",
+            "top_level_reasoning_effort",
         ]
     ] = None
     parameter: Optional[str] = None
     activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
     levels: List[str] = Field(default_factory=list)
     default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]] = Field(
+        default_factory=list
+    )
+    default_mode: Optional[Literal["enabled", "disabled", "adaptive"]] = None
     disabled: Optional[str] = None
 
-    @model_validator(mode="after")
-    def validate_shape(self):
-        inline = bool(
+    def _has_inline_fields(self) -> bool:
+        return bool(
             self.type
             or self.parameter
             or self.activation_parameter
+            or self.effort_flags
             or self.levels
             or self.default
+            or self.modes
+            or self.default_mode
             or self.disabled
         )
+
+    def _validate_reference_shape(self, inline: bool) -> None:
         if self.family and inline:
             raise ValueError(
                 "family and inline reasoning fields are mutually exclusive"
@@ -1670,6 +1682,8 @@ class Reasoning(BaseModel):
             )
         if inline and (not self.type or not self.parameter):
             raise ValueError("inline reasoning requires type and parameter")
+
+    def _validate_activation_parameter(self) -> None:
         if self.activation_parameter:
             if not self.activation_parameter.strip():
                 raise ValueError(
@@ -1683,10 +1697,78 @@ class Reasoning(BaseModel):
                 raise ValueError(
                     "inline reasoning activation_parameter requires reasoning_effort type"
                 )
-        if inline and self.levels and self.default not in self.levels:
+
+    def _validate_effort_flags(self) -> None:
+        if self.effort_flags:
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning effort_flags requires reasoning_effort type"
+                )
+            if not self.activation_parameter:
+                raise ValueError(
+                    "inline reasoning effort_flags requires activation_parameter"
+                )
+            if any(effort not in self.levels for effort in self.effort_flags):
+                raise ValueError(
+                    "inline reasoning effort_flags keys must be listed in levels"
+                )
+            parameters = list(self.effort_flags.values())
+            if any(not parameter.strip() for parameter in parameters):
+                raise ValueError("inline reasoning effort_flags values cannot be blank")
+            if len(parameters) != len(set(parameters)):
+                raise ValueError("inline reasoning effort_flags values must be unique")
+            if self.parameter in parameters or self.activation_parameter in parameters:
+                raise ValueError(
+                    "inline reasoning effort_flags values must differ from parameter and activation_parameter"
+                )
+            active_levels = [level for level in self.levels if level != self.disabled]
+            if len(active_levels) - len(self.effort_flags) > 1:
+                raise ValueError(
+                    "inline reasoning effort_flags cannot leave multiple levels indistinguishable by omission"
+                )
+
+    def _validate_effort_levels(self) -> None:
+        if self.levels and self.default is not None and self.default not in self.levels:
             raise ValueError("inline reasoning default must be listed in levels")
-        if inline and self.disabled and self.disabled not in self.levels:
-            raise ValueError("inline reasoning disabled value must be listed in levels")
+        if (
+            self.type
+            in {
+                "reasoning_effort",
+                "top_level_reasoning_effort",
+            }
+            and not self.levels
+        ):
+            raise ValueError("inline effort-based reasoning requires levels")
+        # Operator-authored families may omit the mode contract entirely. This
+        # keeps the user-facing custom-model form small for the common cases
+        # where a boolean activation flag or an effort value already describes
+        # the complete wire behavior. Built-in families are validated strictly
+        # by the catalog generator.
+
+    def _validate_modes(self) -> None:
+        if not self.modes and self.default_mode is not None:
+            raise ValueError(
+                "inline reasoning modes are required when default_mode is set"
+            )
+        if self.modes and self.default_mode is None:
+            raise ValueError(
+                "inline reasoning default_mode is required when modes are set"
+            )
+        if self.default_mode is not None and self.default_mode not in self.modes:
+            raise ValueError("inline reasoning default_mode must be listed in modes")
+        if self.disabled and self.modes and "disabled" not in self.modes:
+            raise ValueError("inline reasoning disabled value requires disabled mode")
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        inline = self._has_inline_fields()
+        self._validate_reference_shape(inline)
+        if not inline:
+            return self
+        self._validate_activation_parameter()
+        self._validate_effort_flags()
+        self._validate_effort_levels()
+        self._validate_modes()
         return self
 
 
@@ -1816,8 +1898,11 @@ class ReasoningFamily(BaseModel):
     type: str
     parameter: str
     activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
     levels: List[str] = Field(default_factory=list)
     default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]]
+    default_mode: Literal["enabled", "disabled", "adaptive"]
     disabled: Optional[str] = None
 
 

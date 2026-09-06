@@ -15,6 +15,25 @@ const catalog = JSON.parse(
   ),
 )
 
+test('built-in chat models publish the routing limits needed by model cards', () => {
+  const physicalChatModels = catalog.models.filter(
+    model => model.kind === 'physical' && model.capabilities.includes('chat'),
+  )
+  const openWeightModels = physicalChatModels.filter(
+    model => model.distribution.type === 'open_weights',
+  )
+  const gemini = physicalChatModels.find(
+    model => model.id === 'google/gemini-3.8-flash',
+  )
+
+  assert.ok(
+    physicalChatModels.every(model => model.limits?.context_window_size > 0),
+  )
+  assert.ok(openWeightModels.every(model => model.parameter_size))
+  assert.equal(gemini?.limits?.context_window_size, 1_048_576)
+  assert.equal(gemini?.limits?.max_output_tokens, 65_536)
+})
+
 test('website catalog exposes every model access relationship explicitly', () => {
   const allowed = new Set([
     'first_party',
@@ -36,7 +55,7 @@ test('website catalog exposes every model access relationship explicitly', () =>
 
 test('model details present human-readable access relationship labels', () => {
   const page = readFileSync(
-    resolve(repositoryRoot, 'website/src/pages/models.tsx'),
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubDetail.tsx'),
     'utf8',
   )
 
@@ -53,7 +72,7 @@ test('model details present human-readable access relationship labels', () => {
 
 test('model hub resolves creator marks only from catalog presentation', () => {
   const page = readFileSync(
-    resolve(repositoryRoot, 'website/src/pages/models.tsx'),
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubMark.tsx'),
     'utf8',
   )
 

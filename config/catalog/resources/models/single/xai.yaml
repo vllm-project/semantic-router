@@ -52,6 +52,8 @@
     source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
+  limits:
+    context_window_size: 500000
   capabilities:
   - chat
   - reasoning
@@ -65,7 +67,7 @@
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: grok-4.5
   verification:
     authority: xAI
     status: claimed
@@ -90,6 +92,8 @@
     source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
+  limits:
+    context_window_size: 1000000
   capabilities:
   - chat
   - reasoning

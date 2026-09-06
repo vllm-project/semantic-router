@@ -158,6 +158,7 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed
@@ -169,6 +170,7 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort
   lifecycle: active
   verification:
     status: claimed
@@ -378,6 +380,7 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
   lifecycle: experimental
   verification:
     status: claimed
@@ -389,6 +392,7 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
   lifecycle: experimental
   verification:
     status: claimed

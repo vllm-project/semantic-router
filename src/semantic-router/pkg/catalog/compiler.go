@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -210,8 +211,23 @@ func validateEndpointURL(raw string) error {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return fmt.Errorf("scheme %q is unsupported", parsed.Scheme)
 	}
-	if parsed.User != nil || parsed.Fragment != "" {
-		return fmt.Errorf("userinfo and fragments are not allowed")
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("userinfo, query parameters, and fragments are not allowed")
+	}
+	if err := validateEndpointPort(parsed); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateEndpointPort(parsed *url.URL) error {
+	rawPort := parsed.Port()
+	if rawPort == "" {
+		return nil
+	}
+	port, err := strconv.Atoi(rawPort)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
 	}
 	return nil
 }
@@ -253,12 +269,71 @@ func validateReasoningFamily(definition ReasoningFamilyDefinition, path string) 
 	if err := validateReasoningActivationParameter(definition, path); err != nil {
 		return err
 	}
+	if err := validateReasoningEffortFlags(definition, path); err != nil {
+		return err
+	}
 	return validateReasoningLevels(definition, path)
+}
+
+func validateReasoningEffortFlags(definition ReasoningFamilyDefinition, path string) error {
+	if len(definition.EffortFlags) == 0 {
+		return nil
+	}
+	if definition.Type != "reasoning_effort" {
+		return fmt.Errorf("%s.effort_flags requires reasoning_effort type", path)
+	}
+	if definition.ActivationParameter == "" {
+		return fmt.Errorf("%s.effort_flags requires activation_parameter", path)
+	}
+	levels := make(map[string]struct{}, len(definition.Levels))
+	for _, level := range definition.Levels {
+		levels[level] = struct{}{}
+	}
+	seenParameters := make(map[string]struct{}, len(definition.EffortFlags))
+	for effort, parameter := range definition.EffortFlags {
+		if err := validateReasoningEffortFlag(definition, levels, seenParameters, effort, parameter, path); err != nil {
+			return err
+		}
+		seenParameters[parameter] = struct{}{}
+	}
+	activeLevelCount := len(definition.Levels)
+	if definition.Disabled != "" {
+		if _, ok := levels[definition.Disabled]; ok {
+			activeLevelCount--
+		}
+	}
+	if activeLevelCount-len(definition.EffortFlags) > 1 {
+		return fmt.Errorf("%s.effort_flags leaves multiple levels indistinguishable by omission", path)
+	}
+	return nil
+}
+
+func validateReasoningEffortFlag(
+	definition ReasoningFamilyDefinition,
+	levels map[string]struct{},
+	seenParameters map[string]struct{},
+	effort string,
+	parameter string,
+	path string,
+) error {
+	if _, ok := levels[effort]; !ok {
+		return fmt.Errorf("%s.effort_flags key %q is not listed in levels", path, effort)
+	}
+	if strings.TrimSpace(parameter) == "" {
+		return fmt.Errorf("%s.effort_flags[%q] cannot be blank", path, effort)
+	}
+	if parameter == definition.Parameter || parameter == definition.ActivationParameter {
+		return fmt.Errorf("%s.effort_flags[%q] must differ from parameter and activation_parameter", path, effort)
+	}
+	if _, exists := seenParameters[parameter]; exists {
+		return fmt.Errorf("%s.effort_flags contains duplicate parameter %q", path, parameter)
+	}
+	return nil
 }
 
 func validateReasoningFamilyType(familyType, path string) error {
 	switch familyType {
-	case "chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort":
+	case "chat_template_kwargs", "reasoning_effort", "reasoning_mode", "top_level_reasoning_effort":
 		return nil
 	default:
 		return fmt.Errorf("%s.type %q is unsupported", path, familyType)
@@ -283,12 +358,10 @@ func validateReasoningActivationParameter(definition ReasoningFamilyDefinition, 
 
 func validateReasoningLevels(definition ReasoningFamilyDefinition, path string) error {
 	if len(definition.Levels) == 0 {
-		if definition.Default != "" || definition.Disabled != "" {
-			return fmt.Errorf("%s.levels must be set when default or disabled is set", path)
+		if definition.Type == "reasoning_effort" || definition.Type == "top_level_reasoning_effort" {
+			return fmt.Errorf("%s.levels must be set for effort-based reasoning", path)
 		}
-		// Legacy and operator-defined reasoning controls may accept an open
-		// value set. Built-in families still publish their complete ladder.
-		return nil
+		return validateReasoningModes(definition, path)
 	}
 	seen := map[string]struct{}{}
 	for _, level := range definition.Levels {
@@ -300,12 +373,46 @@ func validateReasoningLevels(definition ReasoningFamilyDefinition, path string) 
 		}
 		seen[level] = struct{}{}
 	}
-	if _, ok := seen[definition.Default]; !ok {
-		return fmt.Errorf("%s.default %q is not listed in levels", path, definition.Default)
+	if definition.Default != "" {
+		if _, ok := seen[definition.Default]; !ok {
+			return fmt.Errorf("%s.default %q is not listed in levels", path, definition.Default)
+		}
+	}
+	return validateReasoningModes(definition, path)
+}
+
+func validateReasoningModes(definition ReasoningFamilyDefinition, path string) error {
+	if len(definition.Modes) == 0 {
+		// Operator-authored families predate the explicit mode contract. Keep an
+		// entirely omitted mode set open-ended; a partially authored contract is
+		// still rejected. Built-in resources are validated strictly by the
+		// catalog generator before this compiler ever sees them.
+		if definition.DefaultMode == "" {
+			return nil
+		}
+		return fmt.Errorf("%s.modes cannot be empty when default_mode is set", path)
+	}
+	seen := make(map[string]struct{}, len(definition.Modes))
+	for _, mode := range definition.Modes {
+		switch mode {
+		case "enabled", "disabled", "adaptive":
+		default:
+			return fmt.Errorf("%s.modes contains unsupported mode %q", path, mode)
+		}
+		if _, exists := seen[mode]; exists {
+			return fmt.Errorf("%s.modes contains duplicate %q", path, mode)
+		}
+		seen[mode] = struct{}{}
+	}
+	if definition.DefaultMode == "" {
+		return fmt.Errorf("%s.default_mode cannot be empty", path)
+	}
+	if _, ok := seen[definition.DefaultMode]; !ok {
+		return fmt.Errorf("%s.default_mode %q is not listed in modes", path, definition.DefaultMode)
 	}
 	if definition.Disabled != "" {
-		if _, ok := seen[definition.Disabled]; !ok {
-			return fmt.Errorf("%s.disabled %q is not listed in levels", path, definition.Disabled)
+		if _, ok := seen["disabled"]; !ok {
+			return fmt.Errorf("%s.disabled requires disabled to be listed in modes", path)
 		}
 	}
 	return nil

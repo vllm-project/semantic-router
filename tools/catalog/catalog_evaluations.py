@@ -672,7 +672,8 @@ def _model_reasoning_efforts(
     if family_id is None:
         efforts = ["default"]
     else:
-        efforts = list(reasoning_families[str(family_id)]["levels"])
+        family = reasoning_families[str(family_id)]
+        efforts = list(family.get("levels") or family.get("modes") or [])
     for effort in sorted(measurements):
         if effort not in efforts:
             efforts.append(effort)

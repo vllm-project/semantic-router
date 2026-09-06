@@ -38,6 +38,7 @@ models:
   id: glm-5.2
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
   lifecycle: active
   verification:
     status: claimed
@@ -48,6 +49,7 @@ models:
   id: glm-5.3
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
   lifecycle: active
   verification:
     status: claimed
@@ -58,6 +60,7 @@ models:
   id: glm-5.3-flash
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object_effort
   lifecycle: active
   verification:
     status: claimed

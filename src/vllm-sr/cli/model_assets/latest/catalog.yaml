@@ -378,6 +378,10 @@ providers:
     id: deepseek-v4-pro
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object_effort
+    reasoning_efforts:
+    - high
+    - max
     lifecycle: active
     verification:
       status: claimed
@@ -388,6 +392,10 @@ providers:
     id: deepseek-v4-flash
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object_effort
+    reasoning_efforts:
+    - high
+    - max
     lifecycle: active
     verification:
       status: claimed
@@ -404,33 +412,12 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://api.baiduqianfan.ai/v1/models
-  - catalog: zai/glm-5.2
-    relationship: managed_cloud
-    id: glm-5.2
-    protocols:
-    - openai/chat-completions@1
-    reasoning_transport: thinking_object
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
   - catalog: zai/glm-5.1
     relationship: managed_cloud
     id: glm-5.1
     protocols:
     - openai/chat-completions@1
     reasoning_transport: thinking_object
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
-  - catalog: moonshot/kimi-k2.6
-    relationship: managed_cloud
-    id: kimi-k2.6
-    protocols:
-    - openai/chat-completions@1
     lifecycle: active
     verification:
       status: claimed
@@ -648,6 +635,13 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
+    reasoning_modes:
+    - enabled
+    - disabled
+    reasoning_efforts:
+    - high
+    - max
     pricing:
       currency: USD
       prompt_per_1m: 1.1
@@ -663,6 +657,10 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_efforts:
+    - low
+    - high
+    - max
     pricing:
       currency: USD
       prompt_per_1m: 1.1
@@ -678,6 +676,14 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
+    reasoning_modes:
+    - enabled
+    - disabled
+    reasoning_efforts:
+    - low
+    - medium
+    - xhigh
     pricing:
       currency: USD
       prompt_per_1m: 0.4
@@ -693,6 +699,10 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: chat_template_kwargs
+    reasoning_modes:
+    - enabled
+    - disabled
     pricing:
       currency: USD
       prompt_per_1m: 0.2
@@ -710,10 +720,13 @@ providers:
   default_base_url: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
   reasoning_transport: top_level_effort
   auth:
     strategy: bearer
@@ -743,6 +756,8 @@ providers:
     id: qwen3.8-max
     protocols:
     - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_transport: top_level_effort_boolean_switch
     lifecycle: active
     verification:
       status: claimed
@@ -760,6 +775,7 @@ providers:
   supported_operations:
   - openai/chat-completions@1#create
   - openai/chat-completions@1#list_models
+  reasoning_transport: reasoning_object
   auth:
     strategy: bearer
     header: Authorization
@@ -779,8 +795,8 @@ providers:
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5
+      verified_at: '2026-09-07'
+      source: https://docs.deepinfra.com/chat/reasoning
   - catalog: xiaomi/mimo-v2.5-pro
     relationship: gateway
     id: XiaomiMiMo/MiMo-V2.5-Pro
@@ -789,8 +805,8 @@ providers:
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+      verified_at: '2026-09-07'
+      source: https://docs.deepinfra.com/chat/reasoning
 - id: deepseek
   display_name: DeepSeek
   description: DeepSeek chat and reasoning models.
@@ -1233,7 +1249,11 @@ providers:
     id: MiniMax-M3
     protocols:
     - openai/chat-completions@1
-    reasoning_transport: top_level_effort
+    reasoning_transport: thinking_object
+    reasoning_modes:
+    - disabled
+    - adaptive
+    - enabled
     lifecycle: active
     verification:
       status: claimed
@@ -1263,17 +1283,38 @@ providers:
   conformance:
     status: unverified
   models:
-  - catalog: mistral/mistral-medium-3.5
+  - catalog: mistral/mistral-small-4
     relationship: first_party
-    id: mistral-medium-3.5
+    id: mistral-small-2603
     protocols:
     - openai/chat-completions@1
     reasoning_transport: top_level_effort
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.mistral.ai/getting-started/models/models_overview/
+      verified_at: '2026-09-07'
+      source: https://docs.mistral.ai/models/mistral-small-4-0-26-03
+  - catalog: mistral/mistral-medium-3.5
+    relationship: first_party
+    id: mistral-medium-3-5
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-07'
+      source: https://docs.mistral.ai/studio/conversations/reasoning
+  - catalog: mistral/mistral-large-3
+    relationship: first_party
+    id: mistral-large-2512
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-07'
+      source: https://docs.mistral.ai/models/mistral-large-3-25-12
 - id: moonshot
   display_name: Moonshot AI
   description: Kimi models through an OpenAI-style API.
@@ -1325,6 +1366,7 @@ providers:
     id: kimi-k2.7-code
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object
     lifecycle: active
     verification:
       status: claimed
@@ -1368,7 +1410,7 @@ providers:
   description: Serverless access to open model families.
   category: model_api
   support_tier: compatible
-  default_base_url: https://api.novita.ai/v3/openai
+  default_base_url: https://api.novita.ai/openai/v1
   protocols:
   - openai/chat-completions@1
   default_protocol: openai/chat-completions@1
@@ -1391,11 +1433,15 @@ providers:
     id: xiaomimimo/mimo-v2-flash
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: top_level_boolean
+    reasoning_modes:
+    - enabled
+    - disabled
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+      verified_at: '2026-09-07'
+      source: https://docs.novita.ai/api-reference/model-apis-llm-create-chat-completion
 - id: nvidia-nim
   display_name: NVIDIA NIM
   description: Hosted models from the NIM catalog.
@@ -2270,6 +2316,30 @@ providers:
   conformance:
     status: unverified
   models:
+  - catalog: qwen/qwen3.8-27b
+    relationship: self_hosted
+    id: Qwen/Qwen3.8-27B
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-07'
+      source: https://huggingface.co/Qwen/Qwen3.8-27B
+  - catalog: qwen/qwen3.8-2.4t-a95b
+    relationship: self_hosted
+    id: Qwen/Qwen3.8-2.4T-A95B
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-07'
+      source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
   - catalog: baidu/ernie-4.5-300b-a47b
     relationship: self_hosted
     id: baidu/ERNIE-4.5-300B-A47B-PT
@@ -2672,6 +2742,7 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort
     lifecycle: active
     verification:
       status: claimed
@@ -2683,6 +2754,7 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort
     lifecycle: active
     verification:
       status: claimed
@@ -2892,6 +2964,7 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
     lifecycle: experimental
     verification:
       status: claimed
@@ -2903,6 +2976,7 @@ providers:
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
+    reasoning_transport: top_level_effort_template_switch
     lifecycle: experimental
     verification:
       status: claimed
@@ -3361,6 +3435,7 @@ providers:
     id: glm-5.2
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object_effort
     lifecycle: active
     verification:
       status: claimed
@@ -3371,6 +3446,7 @@ providers:
     id: glm-5.3
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object_effort
     lifecycle: active
     verification:
       status: claimed
@@ -3381,6 +3457,7 @@ providers:
     id: glm-5.3-flash
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: thinking_object_effort
     lifecycle: active
     verification:
       status: claimed
@@ -3388,29 +3465,31 @@ providers:
       source: https://huggingface.co/zai-org/GLM-5.3-Flash
 reasoning_families:
 - id: deepseek
-  type: chat_template_kwargs
-  parameter: thinking
+  type: reasoning_effort
+  parameter: reasoning_effort
   levels:
   - low
   - high
   - max
   default: high
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
 - id: deepseek-v3.2
   type: chat_template_kwargs
   parameter: thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
 - id: qwen3
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
 - id: qwen3.8
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3420,14 +3499,29 @@ reasoning_families:
   - medium
   - xhigh
   default: xhigh
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: qwen3.8-always-on
+  type: reasoning_effort
+  parameter: reasoning_effort
+  activation_parameter: enable_thinking
+  levels:
+  - low
+  - medium
+  - xhigh
+  default: xhigh
+  modes:
+  - enabled
+  default_mode: enabled
 - id: glm
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
 - id: glm-5.2
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3436,6 +3530,10 @@ reasoning_families:
   - high
   - max
   default: max
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
 - id: glm-5.3
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3444,55 +3542,39 @@ reasoning_families:
   - high
   - max
   default: max
+  modes:
+  - enabled
+  default_mode: enabled
 - id: hunyuan
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
 - id: hunyuan-hy3
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - no_think
   - low
   - high
-  default: no_think
+  default: high
   disabled: no_think
+  modes:
+  - enabled
+  - disabled
+  default_mode: disabled
 - id: hunyuan-hy4
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - no_think
   - high
   default: high
   disabled: no_think
-- id: longcat-2
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
-- id: exaone
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
   - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: smollm3
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
+  default_mode: enabled
 - id: gpt-oss
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3501,39 +3583,92 @@ reasoning_families:
   - medium
   - high
   default: medium
+  modes:
+  - enabled
+  default_mode: enabled
 - id: gpt
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - none
+  - minimal
   - low
   - medium
   - high
   - xhigh
   - max
   default: medium
+  disabled: none
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: gpt-5.6
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: medium
+  disabled: none
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: gpt-5.5
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  default: medium
+  disabled: none
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
 - id: gpt-5.4
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - none
   - low
   - medium
   - high
   - xhigh
-  default: none
+  default: medium
   disabled: none
+  modes:
+  - enabled
+  - disabled
+  default_mode: disabled
 - id: grok-4.3
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - none
   - low
   - medium
   - high
-  - xhigh
   default: low
   disabled: none
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: grok-4.5
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  default: high
+  modes:
+  - enabled
+  default_mode: enabled
 - id: grok-4.6
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3543,24 +3678,10 @@ reasoning_families:
   - high
   - xhigh
   default: high
-- id: claude-effort
-  type: reasoning_effort
-  parameter: effort
-  levels:
-  - low
-  - medium
-  - high
-  default: high
-- id: claude-effort-max
-  type: reasoning_effort
-  parameter: effort
-  levels:
-  - low
-  - medium
-  - high
-  - max
-  default: high
-- id: claude-effort-xhigh-max
+  modes:
+  - enabled
+  default_mode: enabled
+- id: claude-effort-always-on
   type: reasoning_effort
   parameter: effort
   levels:
@@ -3570,6 +3691,37 @@ reasoning_families:
   - xhigh
   - max
   default: high
+  modes:
+  - adaptive
+  default_mode: adaptive
+- id: claude-effort-adaptive
+  type: reasoning_effort
+  parameter: effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: high
+  modes:
+  - adaptive
+  - disabled
+  default_mode: adaptive
+- id: claude-effort-opt-in
+  type: reasoning_effort
+  parameter: effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  default: high
+  modes:
+  - adaptive
+  - disabled
+  default_mode: disabled
 - id: kimi-k3
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3578,14 +3730,22 @@ reasoning_families:
   - high
   - max
   default: max
+  modes:
+  - enabled
+  default_mode: enabled
 - id: kimi-k2
   type: chat_template_kwargs
   parameter: thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
+- id: kimi-k2-always-on
+  type: chat_template_kwargs
+  parameter: thinking
+  modes:
+  - enabled
+  default_mode: enabled
 - id: step-3.7
   type: reasoning_effort
   parameter: reasoning_effort
@@ -3594,15 +3754,17 @@ reasoning_families:
   - medium
   - high
   default: medium
+  modes:
+  - enabled
+  default_mode: enabled
 - id: minimax-m3
-  type: reasoning_effort
-  parameter: thinking
-  levels:
+  type: reasoning_mode
+  parameter: thinking_mode
+  modes:
   - disabled
   - adaptive
   - enabled
-  default: adaptive
-  disabled: disabled
+  default_mode: adaptive
 - id: muse-glimmer
   type: reasoning_effort
   parameter: reasoning_strength
@@ -3612,59 +3774,56 @@ reasoning_families:
   - high
   - xhigh
   default: high
+  modes:
+  - enabled
+  default_mode: enabled
 - id: mistral-none-high
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - none
   - high
-  default: none
+  default: high
   disabled: none
-- id: mistral
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
-- id: celeris
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
-- id: inception
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
+  - disabled
+  default_mode: disabled
 - id: mimo
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
+  - disabled
+  default_mode: enabled
 - id: inkling
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
-  - none
   - minimal
   - low
   - medium
   - high
   - xhigh
+  - max
   default: high
   disabled: none
-- id: muse
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: muse-spark
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - minimal
+  - low
+  - medium
+  - high
+  - xhigh
+  modes:
+  - enabled
+  default_mode: enabled
+- id: muse-spark-1.3
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
@@ -3674,114 +3833,53 @@ reasoning_families:
   - high
   - xhigh
   - max
-  default: high
-- id: k2-horizon
-  type: reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - high
-  default: high
-- id: solar-open2
-  type: reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - none
-  - high
-  default: high
-  disabled: none
+  modes:
+  - enabled
+  default_mode: enabled
 - id: gemma4
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
-- id: nemotron-3.5-lightning
+  - disabled
+  default_mode: disabled
+- id: nemotron-thinking-toggle
   type: chat_template_kwargs
   parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
-- id: ling3
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
   - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: ring2.6
+  default_mode: enabled
+- id: nemotron-super
   type: reasoning_effort
   parameter: reasoning_effort
-  levels:
-  - high
-  - xhigh
-  default: high
-- id: solar-pro
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
-- id: gemini-2.5-pro
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: high
-- id: gemini-2.5-flash
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - none
-  - low
-  - medium
-  - high
-  default: medium
-  disabled: none
-- id: gemini-2.5-flash-lite
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - none
-  - low
-  - medium
-  - high
-  default: none
-  disabled: none
-- id: gemini-pro-two-level-high
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
+  activation_parameter: enable_thinking
+  effort_flags:
+    low: low_effort
   levels:
   - low
   - high
   default: high
-- id: gemini-pro-three-level-high
-  type: top_level_reasoning_effort
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: nemotron-ultra
+  type: reasoning_effort
   parameter: reasoning_effort
+  activation_parameter: enable_thinking
+  effort_flags:
+    medium: medium_effort
   levels:
-  - low
   - medium
   - high
   default: high
-- id: gemini-flash-four-level-high
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - minimal
-  - low
-  - medium
-  - high
-  default: high
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
 - id: gemini-flash-four-level-medium
-  type: top_level_reasoning_effort
+  type: reasoning_effort
   parameter: reasoning_effort
   levels:
   - minimal
@@ -3789,105 +3887,10 @@ reasoning_families:
   - medium
   - high
   default: medium
+  modes:
+  - enabled
+  default_mode: enabled
 - id: gemini-flash-three-level-medium
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
-- id: gemini-flash-four-level-minimal
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - minimal
-  - low
-  - medium
-  - high
-  default: minimal
-- id: laguna
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: kat-coder
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: aion
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - none
-  - low
-  - medium
-  - high
-  default: medium
-  disabled: none
-- id: sakana-fugu
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - high
-  - xhigh
-  default: high
-- id: sakana-fugu-ultra
-  type: top_level_reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - high
-  - xhigh
-  - max
-  default: high
-- id: ax-k2
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: dots3
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: g9v3
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: k2-think-v2
-  type: chat_template_kwargs
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: high
-- id: hypernova
-  type: reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: high
-- id: sarvam
   type: reasoning_effort
   parameter: reasoning_effort
   levels:
@@ -3895,62 +3898,9 @@ reasoning_families:
   - medium
   - high
   default: medium
-- id: cogito
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
+  modes:
   - enabled
-  default: enabled
-  disabled: disabled
-- id: ernie5-preview
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: hyperclovax-seed
-  type: chat_template_kwargs
-  parameter: thinking
-  levels:
-  - disabled
-  - enabled
-  default: disabled
-  disabled: disabled
-- id: apertus-v1.5
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: disabled
-  disabled: disabled
-- id: perplexity-deep-research
-  type: reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
-- id: nanbeige4.2
-  type: chat_template_kwargs
-  parameter: enable_thinking
-  levels:
-  - disabled
-  - enabled
-  default: enabled
-  disabled: disabled
-- id: hermes4
-  type: chat_template_kwargs
-  parameter: thinking
-  levels:
-  - disabled
-  - enabled
-  default: disabled
-  disabled: disabled
+  default_mode: enabled
 models:
 - id: ai21/jamba2-mini
   display_name: Jamba2 Mini
@@ -3966,6 +3916,7 @@ models:
     source: https://huggingface.co/ai21labs/AI21-Jamba2-Mini
     license: Apache-2.0
   family: jamba2
+  parameter_size: 52B (12B active)
   lifecycle: active
   limits:
     context_window_size: 256000
@@ -4122,8 +4073,8 @@ models:
   family: nova-1
   lifecycle: active
   limits:
-    context_window_size: 1048576
-    max_output_tokens: 10240
+    context_window_size: 1000000
+    max_output_tokens: 10000
   capabilities:
   - chat
   - tools
@@ -4163,8 +4114,8 @@ models:
   family: nova-1
   lifecycle: active
   limits:
-    context_window_size: 307200
-    max_output_tokens: 10240
+    context_window_size: 300000
+    max_output_tokens: 10000
   capabilities:
   - chat
   - tools
@@ -4201,7 +4152,7 @@ models:
     type: proprietary_api
     source: https://www.anthropic.com/claude/fable
   family: claude-fable
-  reasoning_family: claude-effort-xhigh-max
+  reasoning_family: claude-effort-always-on
   lifecycle: active
   limits:
     context_window_size: 1000000
@@ -4241,7 +4192,7 @@ models:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
-  reasoning_family: claude-effort-xhigh-max
+  reasoning_family: claude-effort-adaptive
   lifecycle: active
   limits:
     context_window_size: 1000000
@@ -4281,8 +4232,11 @@ models:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-sonnet
-  reasoning_family: claude-effort-xhigh-max
+  reasoning_family: claude-effort-adaptive
   lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
   capabilities:
   - chat
   - reasoning
@@ -4318,8 +4272,11 @@ models:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-fable
-  reasoning_family: claude-effort-xhigh-max
+  reasoning_family: claude-effort-always-on
   lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 128000
   capabilities:
   - chat
   - reasoning
@@ -4355,7 +4312,7 @@ models:
     type: proprietary_api
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
   family: claude-opus
-  reasoning_family: claude-effort-xhigh-max
+  reasoning_family: claude-effort-opt-in
   lifecycle: active
   limits:
     context_window_size: 1000000
@@ -4808,7 +4765,7 @@ models:
   revision: DeepSeek-V4-Pro-0813
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
     max_output_tokens: 384000
   capabilities:
   - chat
@@ -4851,7 +4808,7 @@ models:
   revision: DeepSeek-V4-Flash-0731
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
     max_output_tokens: 384000
   capabilities:
   - chat
@@ -4967,10 +4924,13 @@ models:
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://ai.google.dev/gemini-api/docs/models
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
   family: gemini-3
   reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
   capabilities:
   - chat
   - reasoning
@@ -4993,7 +4953,7 @@ models:
     authority: Google
     status: claimed
     verified_at: '2026-09-05'
-    source: https://ai.google.dev/gemini-api/docs/models
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
   tags:
   - proprietary
   - multimodal
@@ -5146,7 +5106,7 @@ models:
     source: https://research.meta.ai/blog/introducing-muse-spark-1-3
   family: muse-spark
   released_at: '2026-09-02'
-  reasoning_family: muse
+  reasoning_family: muse-spark-1.3
   lifecycle: active
   limits:
     context_window_size: 1048576
@@ -5193,7 +5153,7 @@ models:
     source: https://research.meta.ai/blog/introducing-muse-code-and-muse-spark-1-2
   family: muse-spark
   released_at: '2026-08-05'
-  reasoning_family: muse
+  reasoning_family: muse-spark
   lifecycle: active
   limits:
     context_window_size: 1048576
@@ -5484,7 +5444,7 @@ models:
   parameter_size: 428B (23B active)
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -5527,6 +5487,8 @@ models:
   family: minimax-m2
   parameter_size: 230B
   lifecycle: active
+  limits:
+    context_window_size: 204800
   capabilities:
   - chat
   - reasoning
@@ -5643,10 +5605,14 @@ models:
     monogram: M
     monochrome: false
   distribution:
-    type: proprietary_api
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    license: Modified-MIT
   family: mistral-medium
+  parameter_size: 128B
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning
@@ -5665,9 +5631,9 @@ models:
     authority: Mistral AI
     status: claimed
     verified_at: '2026-09-05'
-    source: https://docs.mistral.ai/getting-started/models/models_overview/
+    source: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
   tags:
-  - proprietary
+  - open_weights
   - multimodal
   - enterprise
   released_at: '2026-04-29'
@@ -5687,6 +5653,8 @@ models:
   family: mistral-large-3
   parameter_size: 675B
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - tools
@@ -5768,6 +5736,7 @@ models:
     source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
     license: Modified-MIT
   family: kimi-k2
+  reasoning_family: kimi-k2-always-on
   parameter_size: 1T (32B active)
   lifecycle: active
   limits:
@@ -5816,6 +5785,8 @@ models:
   reasoning_family: kimi-k2
   parameter_size: 1T
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning
@@ -5858,6 +5829,8 @@ models:
   reasoning_family: kimi-k2
   parameter_size: 1T (32B active)
   lifecycle: active
+  limits:
+    context_window_size: 262144
   capabilities:
   - chat
   - reasoning
@@ -5897,9 +5870,11 @@ models:
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
     license: OpenMDW-1.1
   family: nemotron-3.5
-  reasoning_family: nemotron-3.5-lightning
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
+  limits:
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -5936,12 +5911,13 @@ models:
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     license: OpenMDW-1.1
   family: nemotron-3
+  reasoning_family: nemotron-ultra
   parameter_size: 550B (55B active)
   released_at: '2026-06-04'
   knowledge_cutoff: May 2026 post-training; September 2025 pre-training
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -5977,8 +5953,11 @@ models:
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16
     license: NVIDIA-Nemotron-Open-Model-License
   family: nemotron-3
+  reasoning_family: nemotron-super
   parameter_size: 120B (12B active)
   lifecycle: active
+  limits:
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -6015,6 +5994,7 @@ models:
     source: https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
     license: NVIDIA-Open-Model-Agreement
   family: nemotron-3-omni
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
   limits:
@@ -6059,6 +6039,7 @@ models:
     source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
     license: NVIDIA-Open-Model-License
   family: nemotron-cascade-2
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
   limits:
@@ -6118,7 +6099,7 @@ models:
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -6159,7 +6140,7 @@ models:
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -6200,7 +6181,7 @@ models:
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -6241,7 +6222,7 @@ models:
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.5
   verification:
     authority: OpenAI
     status: claimed
@@ -6388,7 +6369,7 @@ models:
   family: qwen3.8
   lifecycle: active
   limits:
-    context_window_size: 1048576
+    context_window_size: 1000000
     max_output_tokens: 65536
   capabilities:
   - chat
@@ -6490,7 +6471,7 @@ models:
     - text
     output:
     - text
-  reasoning_family: qwen3.8
+  reasoning_family: qwen3.8-always-on
   verification:
     authority: Qwen Team
     status: claimed
@@ -6518,7 +6499,7 @@ models:
   family: qwen3.7
   lifecycle: active
   limits:
-    context_window_size: 1048576
+    context_window_size: 1000000
     max_output_tokens: 65536
   capabilities:
   - chat
@@ -7031,6 +7012,8 @@ models:
     source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
+  limits:
+    context_window_size: 500000
   capabilities:
   - chat
   - reasoning
@@ -7044,7 +7027,7 @@ models:
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: grok-4.5
   verification:
     authority: xAI
     status: claimed
@@ -7069,6 +7052,8 @@ models:
     source: https://docs.x.ai/developers/models
   family: grok-4
   lifecycle: active
+  limits:
+    context_window_size: 1000000
   capabilities:
   - chat
   - reasoning
@@ -7240,6 +7225,9 @@ models:
   parameter_size: 753B
   reasoning_family: glm-5.3
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -7281,6 +7269,7 @@ models:
   lifecycle: active
   limits:
     context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -7322,6 +7311,9 @@ models:
   parameter_size: 753B
   reasoning_family: glm-5.2
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -7363,7 +7355,7 @@ models:
   lifecycle: active
   limits:
     context_window_size: 200000
-    max_output_tokens: 128000
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -21646,7 +21638,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: allenai/ifbench@1.0.0
   benchmark_profile: prompt-loose
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     evaluation_unit: prompt
@@ -21664,7 +21656,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     hle_mode: no_tools
@@ -21682,7 +21674,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     source_kind: official_model_card
@@ -21699,7 +21691,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     tool_policy: none
@@ -21717,7 +21709,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: scicode-bench/scicode@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     tool_policy: none
@@ -21736,7 +21728,7 @@ evaluations:
   model: nvidia/nemotron-3-ultra
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     source_kind: official_model_card
@@ -30034,7 +30026,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/briefcase@1.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30054,7 +30046,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/critpt@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30072,7 +30064,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/gdp-pdf@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30090,7 +30082,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/gdpval-aa@2.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30110,7 +30102,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/lcr@1.1.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30128,7 +30120,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: artificial-analysis/omniscience@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling
     source_model_slug: inkling
@@ -30146,7 +30138,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30164,7 +30156,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -30182,7 +30174,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30200,7 +30192,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -30219,7 +30211,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30237,7 +30229,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -30255,7 +30247,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: scicode-bench/scicode@1.0.0
   benchmark_profile: independent-test-288
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30273,7 +30265,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: swe-bench/pro@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -30291,7 +30283,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -30310,7 +30302,7 @@ evaluations:
   model: thinking-machines/inkling
   benchmark: tau-bench/tau3-banking@1.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -30328,10 +30320,10 @@ evaluations:
   model: thinking-machines/inkling-small
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     accuracy: 0.316
@@ -30346,10 +30338,10 @@ evaluations:
   model: thinking-machines/inkling-small
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
     harness: internal-coding-agent
   metrics:
@@ -30365,10 +30357,10 @@ evaluations:
   model: thinking-machines/inkling-small
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     accuracy: 0.895
@@ -30383,10 +30375,10 @@ evaluations:
   model: thinking-machines/inkling-small
   benchmark: swe-bench/pro@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     resolved: 0.559
@@ -30401,10 +30393,10 @@ evaluations:
   model: thinking-machines/inkling-small
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
     harness: bash-only
   metrics:
@@ -32997,7 +32989,6 @@ evaluations:
     variant: GLM-5.3-Flash
     reasoning_effort: max
     source_kind: official_vendor_republication
-    measurement_origin: Artificial Analysis
   metrics:
     elo: 1773
   status: available
@@ -33178,7 +33169,6 @@ evaluations:
     variant: GLM-5.3-Flash
     reasoning_effort: max
     source_kind: official_vendor_republication
-    measurement_origin: Artificial Analysis
   metrics:
     accuracy: 0.912
   status: available
@@ -35893,61 +35883,61 @@ evaluation_coverage:
   value: 0.827
   evaluation: deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -36278,36 +36268,6 @@ evaluation_coverage:
   status: missing
 - model: google/gemini-3.6-flash
   reasoning_effort: high
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: google/gemma-4-31b-it
-  reasoning_effort: disabled
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: google/gemma-4-31b-it
-  reasoning_effort: disabled
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: google/gemma-4-31b-it
-  reasoning_effort: disabled
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: google/gemma-4-31b-it
-  reasoning_effort: disabled
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: google/gemma-4-31b-it
-  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -36344,6 +36304,36 @@ evaluation_coverage:
   status: missing
 - model: google/gemma-4-31b-it
   reasoning_effort: enabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -36682,36 +36672,6 @@ evaluation_coverage:
   status: available
   value: 0.829
   evaluation: meta/muse-spark-1.2-release-terminal-bench@1.0.0
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
 - model: meta/muse-glimmer-30b
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -37395,36 +37355,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: mistral/mistral-small-4
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: mistral/mistral-small-4
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: mistral/mistral-small-4
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: mistral/mistral-small-4
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: mistral/mistral-small-4
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: mistral/mistral-small-4
   reasoning_effort: high
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -37454,31 +37384,31 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: mistral/mistral-medium-3.5
+- model: mistral/mistral-small-4
   reasoning_effort: none
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: mistral/mistral-medium-3.5
+- model: mistral/mistral-small-4
   reasoning_effort: none
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: mistral/mistral-medium-3.5
+- model: mistral/mistral-small-4
   reasoning_effort: none
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: mistral/mistral-medium-3.5
+- model: mistral/mistral-small-4
   reasoning_effort: none
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: mistral/mistral-medium-3.5
+- model: mistral/mistral-small-4
   reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -37510,6 +37440,36 @@ evaluation_coverage:
   status: missing
 - model: mistral/mistral-medium-3.5
   reasoning_effort: high
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -37641,36 +37601,6 @@ evaluation_coverage:
   value: 0.883
   evaluation: moonshot/kimi-k3-model-card-terminal-bench@1.0.0
 - model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: moonshot/kimi-k2.7-code
   reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -37696,36 +37626,6 @@ evaluation_coverage:
   status: missing
 - model: moonshot/kimi-k2.7-code
   reasoning_effort: enabled
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -37766,33 +37666,31 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: moonshot/kimi-k2.5
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: moonshot/kimi-k2.5
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: moonshot/kimi-k2.5
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: moonshot/kimi-k2.5
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
-  status: available
-  value: 0.768
-  evaluation: moonshot/kimi-k2.5-model-card-verified@1.0.0
-- model: moonshot/kimi-k2.5
+  status: missing
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -37834,31 +37732,33 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: nvidia/nemotron-3.5-lightning
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: nvidia/nemotron-3.5-lightning
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: nvidia/nemotron-3.5-lightning
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: nvidia/nemotron-3.5-lightning
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
-  status: missing
-- model: nvidia/nemotron-3.5-lightning
+  status: available
+  value: 0.768
+  evaluation: moonshot/kimi-k2.5-model-card-verified@1.0.0
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -37904,14 +37804,74 @@ evaluation_coverage:
   status: available
   value: 0.2458
   evaluation: nvidia/nemotron-3.5-lightning-model-card-terminal-bench-2-1@1.0.0
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: medium
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: medium
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: medium
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: medium
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: medium
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: high
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: high
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
@@ -37919,7 +37879,7 @@ evaluation_coverage:
   value: 0.879
   evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: high
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
@@ -37927,7 +37887,7 @@ evaluation_coverage:
   value: 0.261
   evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: high
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
@@ -37935,7 +37895,7 @@ evaluation_coverage:
   value: 0.695
   evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: high
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -37973,31 +37933,61 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -38033,36 +38023,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
   reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -38092,32 +38052,92 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
+- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: enabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-cascade-2-30b-a3b
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-cascade-2-30b-a3b
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-cascade-2-30b-a3b
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: nvidia/nemotron-cascade-2-30b-a3b
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: nvidia/nemotron-cascade-2-30b-a3b
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -38161,36 +38181,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-sol
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -38336,6 +38326,36 @@ evaluation_coverage:
   status: missing
 - model: openai/gpt-5.6-sol
   reasoning_effort: max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -38375,36 +38395,6 @@ evaluation_coverage:
   value: 0.888
   evaluation: openai/gpt-5.6-sol-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-terra
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -38550,6 +38540,36 @@ evaluation_coverage:
   status: missing
 - model: openai/gpt-5.6-terra
   reasoning_effort: max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -38589,36 +38609,6 @@ evaluation_coverage:
   value: 0.874
   evaluation: openai/gpt-5.6-terra-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.6-luna
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -38764,6 +38754,36 @@ evaluation_coverage:
   status: missing
 - model: openai/gpt-5.6-luna
   reasoning_effort: max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -38803,36 +38823,6 @@ evaluation_coverage:
   value: 0.847
   evaluation: openai/gpt-5.6-luna-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.5
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.5
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.5
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.5
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.5
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.5
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -38953,31 +38943,31 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -39019,36 +39009,6 @@ evaluation_coverage:
   value: 0.856
   evaluation: openai/gpt-5.5-later-comparison-terminal-bench@1.0.0
 - model: openai/gpt-5.4
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.4
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.4
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: openai/gpt-5.4
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.4
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: openai/gpt-5.4
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -39164,6 +39124,36 @@ evaluation_coverage:
   status: missing
 - model: openai/gpt-5.4
   reasoning_effort: xhigh
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.4
+  reasoning_effort: none
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.4
+  reasoning_effort: none
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.4
+  reasoning_effort: none
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: openai/gpt-5.4
+  reasoning_effort: none
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: openai/gpt-5.4
+  reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -39677,36 +39667,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: qwen/qwen3.7-max
-  reasoning_effort: disabled
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: qwen/qwen3.7-max
-  reasoning_effort: disabled
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: qwen/qwen3.7-max
-  reasoning_effort: disabled
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: qwen/qwen3.7-max
-  reasoning_effort: disabled
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: qwen/qwen3.7-max
-  reasoning_effort: disabled
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: qwen/qwen3.7-max
   reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -39737,6 +39697,36 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: qwen/qwen3.7-max
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: qwen/qwen3.7-max
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: qwen/qwen3.7-max
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: qwen/qwen3.7-max
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: qwen/qwen3.7-max
+  reasoning_effort: disabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: qwen/qwen3.7-max
   reasoning_effort: unspecified
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -39767,61 +39757,61 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -39863,61 +39853,61 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -40167,36 +40157,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: tencent/hy4-preview
-  reasoning_effort: no_think
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: tencent/hy4-preview
-  reasoning_effort: no_think
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: tencent/hy4-preview
-  reasoning_effort: no_think
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: tencent/hy4-preview
-  reasoning_effort: no_think
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: tencent/hy4-preview
-  reasoning_effort: no_think
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: tencent/hy4-preview
   reasoning_effort: high
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -40232,36 +40192,6 @@ evaluation_coverage:
   status: available
   value: 0.854
   evaluation: tencent/hy4-preview-model-card-terminal-bench@1.0.0
-- model: tencent/hy3
-  reasoning_effort: no_think
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: tencent/hy3
-  reasoning_effort: no_think
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: tencent/hy3
-  reasoning_effort: no_think
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: tencent/hy3
-  reasoning_effort: no_think
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: tencent/hy3
-  reasoning_effort: no_think
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
 - model: tencent/hy3
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -40331,61 +40261,61 @@ evaluation_coverage:
   value: 0.717
   evaluation: tencent/hy3-model-card-terminal-bench@1.0.0
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -40425,36 +40355,6 @@ evaluation_coverage:
   metric: resolved
   status: missing
 - model: thinking-machines/inkling
-  reasoning_effort: none
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: thinking-machines/inkling
-  reasoning_effort: none
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: thinking-machines/inkling
-  reasoning_effort: none
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: thinking-machines/inkling
-  reasoning_effort: none
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: thinking-machines/inkling
-  reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: thinking-machines/inkling
   reasoning_effort: minimal
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
@@ -40582,6 +40482,36 @@ evaluation_coverage:
   status: missing
 - model: thinking-machines/inkling
   reasoning_effort: xhigh
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling
+  reasoning_effort: xhigh
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling
+  reasoning_effort: xhigh
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: thinking-machines/inkling
+  reasoning_effort: xhigh
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: thinking-machines/inkling
+  reasoning_effort: max
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling
+  reasoning_effort: max
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
@@ -40589,7 +40519,7 @@ evaluation_coverage:
   value: 0.872
   evaluation: thinking-machines/inkling-model-card-gpqa-diamond@1.0.0
 - model: thinking-machines/inkling
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
@@ -40597,7 +40527,7 @@ evaluation_coverage:
   value: 0.297
   evaluation: thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0
 - model: thinking-machines/inkling
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
@@ -40605,38 +40535,38 @@ evaluation_coverage:
   value: 0.776
   evaluation: thinking-machines/inkling-model-card-swe-bench-verified@1.0.0
 - model: thinking-machines/inkling
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: available
   value: 0.638
   evaluation: thinking-machines/inkling-model-card-terminal-bench@1.0.0
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -40770,6 +40700,36 @@ evaluation_coverage:
   status: missing
 - model: thinking-machines/inkling-small
   reasoning_effort: xhigh
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling-small
+  reasoning_effort: xhigh
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling-small
+  reasoning_effort: xhigh
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: thinking-machines/inkling-small
+  reasoning_effort: xhigh
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: thinking-machines/inkling-small
+  reasoning_effort: max
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: thinking-machines/inkling-small
+  reasoning_effort: max
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
@@ -40777,7 +40737,7 @@ evaluation_coverage:
   value: 0.895
   evaluation: thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
 - model: thinking-machines/inkling-small
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
@@ -40785,7 +40745,7 @@ evaluation_coverage:
   value: 0.316
   evaluation: thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
 - model: thinking-machines/inkling-small
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
@@ -40793,163 +40753,163 @@ evaluation_coverage:
   value: 0.802
   evaluation: thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0
 - model: thinking-machines/inkling-small
-  reasoning_effort: xhigh
+  reasoning_effort: max
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: available
   value: 0.647
   evaluation: thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
-- model: xai/grok-4.6
-  reasoning_effort: low
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: low
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: low
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: low
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: low
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: high
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: high
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: high
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: high
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: high
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
+- model: xai/grok-4.6
+  reasoning_effort: low
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: low
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: low
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: low
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: low
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: high
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: high
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: high
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: high
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: high
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
 - model: xai/grok-4.5
   reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -41040,62 +41000,92 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.3
+  reasoning_effort: high
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.3
+  reasoning_effort: high
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.3
+  reasoning_effort: high
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xai/grok-4.3
+  reasoning_effort: high
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xai/grok-4.3
+  reasoning_effort: high
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -41126,156 +41116,6 @@ evaluation_coverage:
   status: missing
 - model: xai/grok-4.3
   reasoning_effort: none
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: low
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: low
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: low
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: low
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: low
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: high
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: high
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: high
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: high
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: high
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  benchmark: harbor/terminal-bench@2.1.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
-  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
-  benchmark: idavidrein/gpqa-diamond@1.0.0
-  benchmark_profile: published-standard
-  metric: accuracy
-  status: missing
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
-  metric: accuracy
-  status: missing
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
-  benchmark: swe-bench/verified@1.0.0
-  benchmark_profile: published-agent
-  metric: resolved
-  status: missing
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -41314,31 +41154,31 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -41374,31 +41214,31 @@ evaluation_coverage:
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
@@ -41438,6 +41278,36 @@ evaluation_coverage:
   evaluation: xiaomi/mimo-v2-flash-model-card-swe-bench-verified@1.0.0
 - model: xiaomi/mimo-v2-flash
   reasoning_effort: enabled
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  metric: accuracy
+  status: missing
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  metric: accuracy
+  status: missing
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  metric: resolved
+  status: missing
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -41785,61 +41655,61 @@ evaluation_coverage:
   value: 0.81
   evaluation: zai/glm-5.2-model-card-terminal-bench@1.0.0
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
   metric: accuracy
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
   metric: resolved
   status: missing
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
   metric: resolved
@@ -44955,7 +44825,7 @@ index_results:
     scientific_reasoning: 88.10000000000001
     software_engineering: 79.00000000000001
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -44998,7 +44868,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: deepseek/deepseek-v3.2
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -45514,49 +45384,6 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: google/gemma-4-31b-it
-  reasoning_effort: disabled
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: google/gemma-4-31b-it
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: available
@@ -45609,6 +45436,49 @@ index_results:
     frontier_reasoning: 19.500000000000004
     general_reasoning: 85.2
     scientific_reasoning: 84.3
+- model: google/gemma-4-31b-it
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
 - model: meta/muse-spark-1.3
   reasoning_effort: minimal
   index: vllm-sr/intelligence@1.0.0
@@ -46086,49 +45956,6 @@ index_results:
     evaluation: meta/muse-spark-1.2-release-terminal-bench@1.0.0
   provenance:
   - meta/muse-spark-1.2-release-terminal-bench@1.0.0
-- model: meta/muse-spark-1.2
-  reasoning_effort: max
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
 - model: meta/muse-glimmer-30b
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
@@ -47111,7 +46938,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: mistral/mistral-small-4
-  reasoning_effort: none
+  reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -47154,49 +46981,6 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: mistral/mistral-small-4
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: mistral/mistral-medium-3.5
   reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -47241,6 +47025,49 @@ index_results:
   provenance: []
 - model: mistral/mistral-medium-3.5
   reasoning_effort: high
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: mistral/mistral-medium-3.5
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -47465,93 +47292,7 @@ index_results:
     frontier_reasoning: 43.5
     scientific_reasoning: 93.5
 - model: moonshot/kimi-k2.7-code
-  reasoning_effort: default
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: moonshot/kimi-k2.7-code
   reasoning_effort: enabled
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: moonshot/kimi-k2.6
-  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -47646,12 +47387,12 @@ index_results:
     frontier_reasoning: 34.699999999999996
     scientific_reasoning: 90.5
     software_engineering: 80.2
-- model: moonshot/kimi-k2.5
+- model: moonshot/kimi-k2.6
   reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
-  coverage: 0.2
+  coverage: 0.0
   components:
   - weight: 0.2
     status: missing
@@ -47675,13 +47416,12 @@ index_results:
     metric: accuracy
     benchmark_profile: no-tools
   - weight: 0.2
-    status: available
-    value: 0.768
-    normalized: 0.768
+    status: missing
+    value: null
+    normalized: null
     benchmark: swe-bench/verified@1.0.0
     metric: resolved
     benchmark_profile: published-agent
-    evaluation: moonshot/kimi-k2.5-model-card-verified@1.0.0
   - weight: 0.2
     status: missing
     value: null
@@ -47689,8 +47429,7 @@ index_results:
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
     benchmark_profile: published-agent
-  provenance:
-  - moonshot/kimi-k2.5-model-card-verified@1.0.0
+  provenance: []
 - model: moonshot/kimi-k2.5
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
@@ -47744,12 +47483,12 @@ index_results:
     frontier_reasoning: 30.099999999999998
     general_reasoning: 87.10000000000001
     scientific_reasoning: 87.60000000000001
-- model: nvidia/nemotron-3.5-lightning
+- model: moonshot/kimi-k2.5
   reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
-  coverage: 0.0
+  coverage: 0.2
   components:
   - weight: 0.2
     status: missing
@@ -47773,12 +47512,13 @@ index_results:
     metric: accuracy
     benchmark_profile: no-tools
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.768
+    normalized: 0.768
     benchmark: swe-bench/verified@1.0.0
     metric: resolved
     benchmark_profile: published-agent
+    evaluation: moonshot/kimi-k2.5-model-card-verified@1.0.0
   - weight: 0.2
     status: missing
     value: null
@@ -47786,7 +47526,8 @@ index_results:
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
     benchmark_profile: published-agent
-  provenance: []
+  provenance:
+  - moonshot/kimi-k2.5-model-card-verified@1.0.0
 - model: nvidia/nemotron-3.5-lightning
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
@@ -47846,8 +47587,94 @@ index_results:
     general_reasoning: 81.94000000000001
     scientific_reasoning: 75.44000000000001
     software_engineering: 51.559999999999995
+- model: nvidia/nemotron-3.5-lightning
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
 - model: nvidia/nemotron-3-ultra
-  reasoning_effort: default
+  reasoning_effort: medium
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: nvidia/nemotron-3-ultra
+  reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: available
   score: 59.349999999999994
@@ -47946,7 +47773,50 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: nvidia/nemotron-3-super
-  reasoning_effort: default
+  reasoning_effort: low
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: nvidia/nemotron-3-super
+  reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -48032,7 +47902,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-  reasoning_effort: default
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -48075,6 +47945,49 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: nvidia/nemotron-cascade-2-30b-a3b
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -48118,7 +48031,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: default
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -48217,49 +48130,6 @@ index_results:
     scientific_reasoning: 76.1
     software_engineering: 50.2
 - model: openai/gpt-5.6-sol
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: openai/gpt-5.6-sol
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -48433,6 +48303,49 @@ index_results:
   provenance: []
 - model: openai/gpt-5.6-sol
   reasoning_effort: max
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: openai/gpt-5.6-sol
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -48522,49 +48435,6 @@ index_results:
   - openai/gpt-5.6-sol-launch-evals-gpqa-diamond@1.0.0
   - openai/gpt-5.6-sol-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.6-terra
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: openai/gpt-5.6-terra
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -48738,6 +48608,49 @@ index_results:
   provenance: []
 - model: openai/gpt-5.6-terra
   reasoning_effort: max
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: openai/gpt-5.6-terra
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -48827,49 +48740,6 @@ index_results:
   - openai/gpt-5.6-terra-launch-evals-gpqa-diamond@1.0.0
   - openai/gpt-5.6-terra-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.6-luna
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: openai/gpt-5.6-luna
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -49043,6 +48913,49 @@ index_results:
   provenance: []
 - model: openai/gpt-5.6-luna
   reasoning_effort: max
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: openai/gpt-5.6-luna
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -49132,49 +49045,6 @@ index_results:
   - openai/gpt-5.6-luna-launch-evals-gpqa-diamond@1.0.0
   - openai/gpt-5.6-luna-launch-evals-terminal-bench@1.0.0
 - model: openai/gpt-5.5
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: openai/gpt-5.5
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -49347,7 +49217,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: openai/gpt-5.5
-  reasoning_effort: max
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -49443,49 +49313,6 @@ index_results:
     frontier_reasoning: 41.4
     scientific_reasoning: 93.60000000000002
 - model: openai/gpt-5.4
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: openai/gpt-5.4
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -49616,6 +49443,49 @@ index_results:
   provenance: []
 - model: openai/gpt-5.4
   reasoning_effort: xhigh
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: openai/gpt-5.4
+  reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50390,7 +50260,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: qwen/qwen3.7-max
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50433,7 +50303,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: qwen/qwen3.7-max
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50519,7 +50389,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: qwen/qwen3.6-27b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50562,7 +50432,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: qwen/qwen3.6-27b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50658,7 +50528,7 @@ index_results:
     scientific_reasoning: 87.8
     software_engineering: 77.2
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -50701,7 +50571,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: qwen/qwen3.6-35b-a3b
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -51092,49 +50962,6 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: tencent/hy4-preview
-  reasoning_effort: no_think
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: tencent/hy4-preview
   reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: available
@@ -51187,49 +51014,6 @@ index_results:
     agentic_systems: 85.39999999999999
     frontier_reasoning: 43.4
     scientific_reasoning: 92.30000000000001
-- model: tencent/hy3
-  reasoning_effort: no_think
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
 - model: tencent/hy3
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
@@ -51330,7 +51114,7 @@ index_results:
     scientific_reasoning: 90.4
     software_engineering: 78.00000000000001
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -51373,7 +51157,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: tencent/hunyuan-a13b-instruct
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -51463,49 +51247,6 @@ index_results:
   - tencent/hunyuan-a13b-instruct-model-card-gpqa-diamond@1.0.0
   - tencent/hunyuan-a13b-instruct-model-card-mmlu-pro@1.0.0
 - model: thinking-machines/inkling
-  reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: thinking-machines/inkling
   reasoning_effort: minimal
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -51679,6 +51420,49 @@ index_results:
   provenance: []
 - model: thinking-machines/inkling
   reasoning_effort: xhigh
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: thinking-machines/inkling
+  reasoning_effort: max
   index: vllm-sr/intelligence@1.0.0
   status: available
   score: 64.575
@@ -51733,7 +51517,7 @@ index_results:
     frontier_reasoning: 29.7
     scientific_reasoning: 87.2
     software_engineering: 77.60000000000001
-- model: thinking-machines/inkling-small
+- model: thinking-machines/inkling
   reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -51951,6 +51735,49 @@ index_results:
 - model: thinking-machines/inkling-small
   reasoning_effort: xhigh
   index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: thinking-machines/inkling-small
+  reasoning_effort: max
+  index: vllm-sr/intelligence@1.0.0
   status: available
   score: 66.5
   coverage: 0.8
@@ -52004,179 +51831,7 @@ index_results:
     frontier_reasoning: 31.6
     scientific_reasoning: 89.5
     software_engineering: 80.2
-- model: xai/grok-4.6
-  reasoning_effort: low
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.6
-  reasoning_effort: medium
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.6
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.6
-  reasoning_effort: xhigh
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.5
+- model: thinking-machines/inkling-small
   reasoning_effort: none
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -52219,6 +51874,178 @@ index_results:
     metric: resolved
     benchmark_profile: published-agent
   provenance: []
+- model: xai/grok-4.6
+  reasoning_effort: low
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: xai/grok-4.6
+  reasoning_effort: medium
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: xai/grok-4.6
+  reasoning_effort: high
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: xai/grok-4.6
+  reasoning_effort: xhigh
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
 - model: xai/grok-4.5
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
@@ -52348,8 +52175,8 @@ index_results:
     metric: resolved
     benchmark_profile: published-agent
   provenance: []
-- model: xai/grok-4.5
-  reasoning_effort: xhigh
+- model: xai/grok-4.3
+  reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -52391,8 +52218,51 @@ index_results:
     metric: resolved
     benchmark_profile: published-agent
   provenance: []
-- model: xai/grok-4.5
-  reasoning_effort: max
+- model: xai/grok-4.3
+  reasoning_effort: medium
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
+- model: xai/grok-4.3
+  reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -52436,221 +52306,6 @@ index_results:
   provenance: []
 - model: xai/grok-4.3
   reasoning_effort: none
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.3
-  reasoning_effort: low
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.3
-  reasoning_effort: medium
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.3
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xai/grok-4.3
-  reasoning_effort: xhigh
-  index: vllm-sr/intelligence@1.0.0
-  status: missing
-  score: null
-  coverage: 0.0
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance: []
-- model: xiaomi/mimo-v2.5-pro
-  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -52739,7 +52394,7 @@ index_results:
   provenance:
   - xiaomi/mimo-v2.5-pro-model-card-humanitys-last-exam@1.0.0
   - xiaomi/mimo-v2.5-pro-model-card-swe-bench-verified@1.0.0
-- model: xiaomi/mimo-v2.5
+- model: xiaomi/mimo-v2.5-pro
   reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -52825,7 +52480,7 @@ index_results:
     metric: resolved
     benchmark_profile: published-agent
   provenance: []
-- model: xiaomi/mimo-v2-flash
+- model: xiaomi/mimo-v2.5
   reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
@@ -52924,6 +52579,49 @@ index_results:
     general_reasoning: 84.89999999999999
     scientific_reasoning: 83.7
     software_engineering: 73.4
+- model: xiaomi/mimo-v2-flash
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: missing
+  score: null
+  coverage: 0.0
+  components:
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profile: no-tools
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: swe-bench/verified@1.0.0
+    metric: resolved
+    benchmark_profile: published-agent
+  - weight: 0.2
+    status: missing
+    value: null
+    normalized: null
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profile: published-agent
+  provenance: []
 - model: zai/glm-5.3
   reasoning_effort: low
   index: vllm-sr/intelligence@1.0.0
@@ -53414,7 +53112,7 @@ index_results:
     frontier_reasoning: 40.50000000000001
     scientific_reasoning: 91.2
 - model: zai/glm-5.1
-  reasoning_effort: disabled
+  reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null
@@ -53457,7 +53155,7 @@ index_results:
     benchmark_profile: published-agent
   provenance: []
 - model: zai/glm-5.1
-  reasoning_effort: enabled
+  reasoning_effort: disabled
   index: vllm-sr/intelligence@1.0.0
   status: missing
   score: null

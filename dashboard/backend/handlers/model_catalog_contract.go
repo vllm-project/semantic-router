@@ -102,6 +102,7 @@ func validateModelCatalogEnvelope(envelope modelCatalogEnvelope) error {
 		models,
 		protocols,
 		envelope.Models,
+		reasoning,
 	); err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func validateCatalogProviders(
 			len(provider.SupportedOperations) == 0 ||
 			provider.Presentation.Logo == "" || provider.Presentation.Monogram == "" ||
 			!oneOf(provider.Auth.Strategy, "none", "bearer", "api_key_header") ||
-			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking")) ||
+			(provider.ReasoningTransport != "" && !oneOf(string(provider.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "top_level_effort_template_switch", "top_level_effort_boolean_switch", "reasoning_object", "thinking_object", "thinking_object_effort", "output_config_effort", "deepseek_thinking")) ||
 			!oneOf(provider.Conformance.Status, "unverified", "fixture_verified", "live_verified") {
 			return nil, fmt.Errorf("malformed provider")
 		}
@@ -292,25 +293,28 @@ func validCatalogHeaderValue(value string) bool {
 
 func validateCatalogReasoning(
 	values []modelcatalog.ReasoningFamilyDefinition,
-) (map[string]struct{}, error) {
-	ids := make(map[string]struct{}, len(values))
+) (map[string]modelcatalog.ReasoningFamilyDefinition, error) {
+	definitions := make(map[string]modelcatalog.ReasoningFamilyDefinition, len(values))
 	for _, family := range values {
-		if family.ID == "" || family.Parameter == "" || len(family.Levels) == 0 ||
-			!oneOf(family.Type, "chat_template_kwargs", "reasoning_effort", "top_level_reasoning_effort") ||
-			!catalogContains(family.Levels, family.Default) {
+		if family.ID == "" || family.Parameter == "" ||
+			((family.Type == "reasoning_effort" || family.Type == "top_level_reasoning_effort") && len(family.Levels) == 0) ||
+			!oneOf(family.Type, "chat_template_kwargs", "reasoning_effort", "reasoning_mode", "top_level_reasoning_effort") ||
+			(family.Default != "" && !catalogContains(family.Levels, family.Default)) ||
+			!validCatalogEffortFlags(family) ||
+			!validCatalogReasoningModes(family) {
 			return nil, fmt.Errorf("malformed reasoning family")
 		}
-		if _, exists := ids[family.ID]; exists {
+		if _, exists := definitions[family.ID]; exists {
 			return nil, fmt.Errorf("duplicate reasoning family")
 		}
-		ids[family.ID] = struct{}{}
+		definitions[family.ID] = family
 	}
-	return ids, nil
+	return definitions, nil
 }
 
 func validateCatalogModels(
 	values []modelcatalog.ModelCard,
-	reasoning map[string]struct{},
+	reasoning map[string]modelcatalog.ReasoningFamilyDefinition,
 ) (map[string]struct{}, error) {
 	ids := make(map[string]struct{}, len(values))
 	for _, model := range values {
@@ -358,8 +362,13 @@ func validateCatalogProviderBindings(
 	providers []modelcatalog.ProviderDefinition,
 	models, protocols map[string]struct{},
 	modelDefinitions []modelcatalog.ModelCard,
+	reasoning map[string]modelcatalog.ReasoningFamilyDefinition,
 ) error {
 	boundModels := map[string]struct{}{}
+	modelByID := make(map[string]modelcatalog.ModelCard, len(modelDefinitions))
+	for _, model := range modelDefinitions {
+		modelByID[model.ID] = model
+	}
 	for _, provider := range providers {
 		nativeIDs := map[string]struct{}{}
 		pairs := map[string]struct{}{}
@@ -368,7 +377,9 @@ func validateCatalogProviderBindings(
 				!oneOf(string(binding.Relationship), "first_party", "managed_cloud", "gateway", "self_hosted") ||
 				!oneOf(binding.Lifecycle, "experimental", "active", "deprecated", "removed") ||
 				!oneOf(binding.Verification.Status, "claimed", "imported", "reproduced") ||
-				(binding.ReasoningTransport != "" && !oneOf(string(binding.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "reasoning_object", "thinking_object", "output_config_effort", "deepseek_thinking")) ||
+				(binding.ReasoningTransport != "" && !oneOf(string(binding.ReasoningTransport), "chat_template_kwargs", "top_level_effort", "top_level_boolean", "top_level_effort_template_switch", "top_level_effort_boolean_switch", "reasoning_object", "thinking_object", "thinking_object_effort", "output_config_effort", "deepseek_thinking")) ||
+				!validCatalogReasoningBindingValues(binding) ||
+				!validCatalogReasoningBindingContract(provider, binding, modelByID, reasoning) ||
 				(binding.Verification.Source != "" && !validHTTPSURL(binding.Verification.Source)) {
 				return fmt.Errorf("malformed provider catalog model")
 			}

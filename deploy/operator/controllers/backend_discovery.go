@@ -19,6 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -312,7 +314,11 @@ func canonicalReasoning(spec *vllmv1alpha1.ModelReasoningSpec) *routerconfig.Can
 	}
 	return &routerconfig.CanonicalReasoning{
 		Family: spec.Family, Type: spec.Type, Parameter: spec.Parameter,
-		Levels: append([]string(nil), spec.Levels...), Default: spec.Default,
+		ActivationParameter: spec.ActivationParameter,
+		EffortFlags:         maps.Clone(spec.EffortFlags),
+		Levels:              append([]string(nil), spec.Levels...), Default: spec.Default,
+		Modes: append([]string(nil), spec.Modes...), DefaultMode: spec.DefaultMode,
+		Disabled: spec.Disabled,
 	}
 }
 
@@ -320,17 +326,20 @@ func sameCanonicalReasoning(left, right *routerconfig.CanonicalReasoning) bool {
 	if left == nil || right == nil {
 		return left == right
 	}
-	if left.Family != right.Family || left.Type != right.Type ||
-		left.Parameter != right.Parameter || left.Default != right.Default ||
-		len(left.Levels) != len(right.Levels) {
-		return false
-	}
-	for index := range left.Levels {
-		if left.Levels[index] != right.Levels[index] {
-			return false
-		}
-	}
-	return true
+	return sameCanonicalReasoningScalars(left, right) &&
+		maps.Equal(left.EffortFlags, right.EffortFlags) &&
+		slices.Equal(left.Levels, right.Levels) &&
+		slices.Equal(left.Modes, right.Modes)
+}
+
+func sameCanonicalReasoningScalars(left, right *routerconfig.CanonicalReasoning) bool {
+	return left.Family == right.Family &&
+		left.Type == right.Type &&
+		left.Parameter == right.Parameter &&
+		left.ActivationParameter == right.ActivationParameter &&
+		left.Default == right.Default &&
+		left.DefaultMode == right.DefaultMode &&
+		left.Disabled == right.Disabled
 }
 
 func mergeDiscoveredLoRAs(existing []vllmv1alpha1.LoRAAdapterSpec, incoming []vllmv1alpha1.LoRAAdapterSpec) []vllmv1alpha1.LoRAAdapterSpec {

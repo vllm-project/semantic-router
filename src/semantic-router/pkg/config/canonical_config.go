@@ -328,7 +328,7 @@ func validateCanonicalReasoning(modelName string, reasoning *CanonicalReasoning)
 	if reasoning == nil {
 		return nil
 	}
-	inline := reasoning.Type != "" || reasoning.Parameter != "" || reasoning.ActivationParameter != "" || len(reasoning.Levels) > 0 || reasoning.Default != "" || reasoning.Disabled != ""
+	inline := reasoning.Type != "" || reasoning.Parameter != "" || reasoning.ActivationParameter != "" || len(reasoning.EffortFlags) > 0 || len(reasoning.Levels) > 0 || reasoning.Default != "" || len(reasoning.Modes) > 0 || reasoning.DefaultMode != "" || reasoning.Disabled != ""
 	if reasoning.Family != "" && inline {
 		return fmt.Errorf("providers.models[%s].reasoning must set either family or inline fields, not both", modelName)
 	}

@@ -30,6 +30,9 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  reasoning_modes: [enabled, disabled]
+  reasoning_efforts: [high, max]
   pricing:
     currency: USD
     prompt_per_1m: 1.1
@@ -45,6 +48,7 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_efforts: [low, high, max]
   pricing:
     currency: USD
     prompt_per_1m: 1.1
@@ -60,6 +64,9 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  reasoning_modes: [enabled, disabled]
+  reasoning_efforts: [low, medium, xhigh]
   pricing:
     currency: USD
     prompt_per_1m: 0.4
@@ -75,6 +82,8 @@ models:
   protocols:
   - openai/chat-completions@1
   - openai/responses@1
+  reasoning_transport: chat_template_kwargs
+  reasoning_modes: [enabled, disabled]
   pricing:
     currency: USD
     prompt_per_1m: 0.2

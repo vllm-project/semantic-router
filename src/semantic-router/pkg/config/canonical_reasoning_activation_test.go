@@ -20,6 +20,8 @@ providers:
         levels: [disabled, low, high]
         default: low
         disabled: disabled
+        modes: [enabled, disabled]
+        default_mode: enabled
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm

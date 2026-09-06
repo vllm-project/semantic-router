@@ -479,8 +479,8 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     PRIORITY 200
     TIER 1
     WHEN projection("unified_cost_reasoning")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
-          "local/qwen3.5-9b-economy-replica" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-9b-economy" (reasoning = true, mode = "enabled"),
+          "local/qwen3.5-9b-economy-replica" (reasoning = true, mode = "enabled")
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { cost: 0.6, load: 0.4 }
@@ -705,7 +705,7 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 375
     TIER 2
     WHEN conversation("unified_frontier_active_tool_loop") AND NOT keyword("unified_frontier_workflow_markers")
-    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, effort = "medium")
+    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, mode = "enabled")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -756,9 +756,9 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 300
     TIER 5
     WHEN projection("unified_frontier_deliberate")
-    MODEL "local/qwen3.6-27b-coder" (reasoning = true, effort = "high"),
+    MODEL "local/qwen3.6-27b-coder" (reasoning = true, mode = "enabled"),
           "local/deepseek-v4-flash-analyst" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
+          "local/qwen3.5-122b-frontier" (reasoning = true, mode = "enabled")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
       compaction_strategy: "last_n_tokens"

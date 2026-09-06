@@ -104,11 +104,11 @@ function useMobileDetailDialog(
 
 export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   const [filters, setFilters] = useState<ModelHubFilters>(initialFilters)
-  const [view, setView] = useState<ModelHubView>('table')
+  const [view, setView] = useState<ModelHubView>('list')
   const [selectedID, setSelectedID] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const compact = useCompactModelHubLayout()
-  const [pageSize, setPageSize] = useState(() => (compact ? 12 : 24))
+  const [pageSize, setPageSize] = useState(10)
   const [detailOpen, setDetailOpen] = useState(false)
   const detailCloseRef = useRef<HTMLButtonElement>(null)
   const detailLayerRef = useRef<HTMLDivElement>(null)
@@ -128,7 +128,6 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   )
 
   useEffect(() => {
-    setPageSize(compact ? 12 : 24)
     setPage(1)
     if (!compact) setDetailOpen(false)
   }, [compact])

@@ -200,7 +200,10 @@ function validateModelReasoningFields(data: Record<string, unknown>): void {
     reasoningType,
     reasoningParameter,
     textValue(data.reasoning_activation_parameter),
+    textValue(data.reasoning_effort_flags),
     textValue(data.reasoning_default),
+    textValue(data.reasoning_modes),
+    textValue(data.reasoning_default_mode),
     textValue(data.reasoning_disabled),
     textValue(data.reasoning_levels),
   ].some(Boolean)

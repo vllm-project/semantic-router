@@ -591,7 +591,7 @@ ROUTE medium_code_general (description = "Low-medium cost coding, debugging, ref
   PRIORITY 220
   TIER 7
   WHEN (keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR keyword("code_request_markers") OR embedding("code_general") OR projection("balance_simple") AND (projection("urgency_elevated") OR structure("exclamation_emphasis"))) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers"))
-  MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium"),
+  MODEL "qwen/qwen3.5-rocm" (reasoning = true, mode = "enabled"),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -651,7 +651,7 @@ ROUTE medium_explainer (description = "Low-cost business, history, and psycholog
   PRIORITY 208
   TIER 11
   WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (context("medium_context") OR keyword("history_topic_markers") OR complexity("evidence_synthesis:medium"))) AND NOT (projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR domain("health") OR domain("law") OR embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("reasoning_request_markers") OR keyword("research_request_markers") OR keyword("creative_request_markers"))
-  MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium"),
+  MODEL "qwen/qwen3.5-rocm" (reasoning = true, mode = "enabled"),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true

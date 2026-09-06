@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -79,12 +80,37 @@ func TestThinkingObjectReasoningTransport(t *testing.T) {
 	})
 }
 
+func TestThinkingObjectWithEffortReasoningTransport(t *testing.T) {
+	router := newReasoningRouter(
+		config.ReasoningConfig{ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
+			"glm": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "high", "max"}, Default: "max",
+				Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+			},
+		}},
+		[]config.Decision{reasoningDecision("test", "", 0, "glm-model", boolPtr(true), "high")},
+		map[string]config.ModelParams{"glm-model": {ReasoningFamily: "glm"}},
+	)
+	profile := &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportThinkingEffort}
+
+	enabled := setReasoningModeForProvider(t, router, "glm-model", nil, true, "test", profile)
+	assertThinkingObjectReasoningRequestWithEffort(t, enabled, "enabled", "high")
+
+	disabled := setReasoningModeForProvider(t, router, "glm-model", nil, false, "test", profile)
+	assertThinkingObjectReasoningRequestWithEffort(t, disabled, "disabled", "")
+}
+
 func newThinkingObjectReasoningRouter() *OpenAIRouter {
 	return newReasoningRouter(
 		config.ReasoningConfig{
 			DefaultReasoningEffort: "medium",
 			ReasoningFamilies: map[string]config.ReasoningFamilyConfig{
-				"glm": {Type: "chat_template_kwargs", Parameter: "enable_thinking"},
+				"glm": {
+					Type: "chat_template_kwargs", Parameter: "enable_thinking",
+					Modes:       []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+					DefaultMode: config.ReasoningModeEnabled,
+				},
 			},
 		},
 		[]config.Decision{reasoningDecision("test", "", 0, "glm-model", boolPtr(true), "high")},
@@ -101,6 +127,26 @@ func assertThinkingObjectReasoningRequest(t *testing.T, request map[string]inter
 	assert.Equal(t, thinkingType, thinking["type"])
 	_, hasEffort := request["reasoning_effort"]
 	assert.False(t, hasEffort)
+	_, hasTemplateKwargs := request["chat_template_kwargs"]
+	assert.False(t, hasTemplateKwargs)
+}
+
+func assertThinkingObjectReasoningRequestWithEffort(
+	t *testing.T,
+	request map[string]interface{},
+	thinkingType string,
+	effort string,
+) {
+	t.Helper()
+	thinking, ok := request["thinking"].(map[string]interface{})
+	require.True(t, ok, "thinking should be an object")
+	assert.Equal(t, thinkingType, thinking["type"])
+	if effort == "" {
+		_, hasEffort := request["reasoning_effort"]
+		assert.False(t, hasEffort)
+	} else {
+		assert.Equal(t, effort, request["reasoning_effort"])
+	}
 	_, hasTemplateKwargs := request["chat_template_kwargs"]
 	assert.False(t, hasTemplateKwargs)
 }

@@ -49,6 +49,7 @@ models:
   id: kimi-k2.7-code
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: thinking_object
   lifecycle: active
   verification:
     status: claimed

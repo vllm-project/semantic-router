@@ -23,6 +23,7 @@ export interface CatalogProtocol {
   id: string
   display_name: string
   wire_format: string
+  default_base_path: string
   operations: CatalogProtocolOperation[]
   capabilities: string[]
 }
@@ -43,8 +44,11 @@ export interface CatalogProvider {
     | 'chat_template_kwargs'
     | 'top_level_effort'
     | 'top_level_boolean'
+    | 'top_level_effort_template_switch'
+    | 'top_level_effort_boolean_switch'
     | 'reasoning_object'
     | 'thinking_object'
+    | 'thinking_object_effort'
     | 'output_config_effort'
     | 'deepseek_thinking'
   api_version_query?: boolean
@@ -76,10 +80,15 @@ export interface CatalogModelBinding {
     | 'chat_template_kwargs'
     | 'top_level_effort'
     | 'top_level_boolean'
+    | 'top_level_effort_template_switch'
+    | 'top_level_effort_boolean_switch'
     | 'reasoning_object'
     | 'thinking_object'
+    | 'thinking_object_effort'
     | 'output_config_effort'
     | 'deepseek_thinking'
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
   pricing?: Record<string, string | number | boolean>
   restrictions?: Record<string, unknown>
   lifecycle: ModelCatalogLifecycle
@@ -92,11 +101,18 @@ export interface CatalogModelBinding {
 
 export interface CatalogReasoningFamily {
   id: string
-  type: 'chat_template_kwargs' | 'reasoning_effort' | 'top_level_reasoning_effort'
+  type:
+    | 'chat_template_kwargs'
+    | 'reasoning_effort'
+    | 'reasoning_mode'
+    | 'top_level_reasoning_effort'
   parameter: string
   activation_parameter?: string
-  levels: string[]
-  default: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode: 'enabled' | 'disabled' | 'adaptive'
   disabled?: string
 }
 

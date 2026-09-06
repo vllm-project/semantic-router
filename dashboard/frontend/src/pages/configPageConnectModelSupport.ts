@@ -68,6 +68,7 @@ interface ConnectedProviderModelOptions {
   name: string
   catalog?: string
   providerModelID: string
+  catalogProviderModelID?: string
   providerID: string
   providerAPIFormat: string
   baseURL: string
@@ -80,16 +81,17 @@ interface ConnectedProviderModelOptions {
 /**
  * Builds the user-authored provider model entry for Quick Connect.
  *
- * Catalog-backed entries intentionally retain only the catalog identity and
- * backend provider. The canonical materializer owns the provider binding's
- * upstream model ID and protocol, including models that support Responses but
- * not Chat Completions. Custom models have no such binding, so they keep the
- * provider-wide defaults selected by the user.
+ * Catalog-backed entries retain the catalog identity, backend provider, and
+ * any operator-defined deployment name required by the binding. The canonical
+ * materializer owns stable upstream model IDs and protocols, including models
+ * that support Responses but not Chat Completions. Custom models have no such
+ * binding, so they keep the provider-wide defaults selected by the user.
  */
 export function buildConnectedProviderModel({
   name,
   catalog,
   providerModelID,
+  catalogProviderModelID,
   providerID,
   providerAPIFormat,
   baseURL,
@@ -101,7 +103,12 @@ export function buildConnectedProviderModel({
   return {
     name,
     ...(catalog
-      ? { catalog }
+      ? {
+          catalog,
+          ...(catalogProviderModelID?.trim()
+            ? { provider_model_id: catalogProviderModelID.trim() }
+            : {}),
+        }
       : {
           ...(reasoningFamily ? { reasoning: { family: reasoningFamily } } : {}),
           provider_model_id: providerModelID,

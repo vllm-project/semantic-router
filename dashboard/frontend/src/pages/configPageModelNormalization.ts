@@ -19,19 +19,48 @@ const catalogRuntimeModality = (model?: BuiltInModelMetadata): string | undefine
   return 'ar'
 }
 
+const intersectValues = <Value extends string>(
+  current: Value[] | undefined,
+  next: Value[] | undefined,
+): Value[] | undefined => {
+  if (!next) return current
+  if (!current) return [...next]
+  const allowed = new Set(next)
+  return current.filter((value) => allowed.has(value))
+}
+
+const catalogReasoningConstraints = (
+  model: ProviderModelConfig,
+  catalog?: BuiltInModelCatalog | null,
+): Pick<NormalizedModel, 'reasoning_modes' | 'reasoning_efforts'> => {
+  if (!model.catalog || !catalog) return {}
+  let reasoningModes: NormalizedModel['reasoning_modes']
+  let reasoningEfforts: string[] | undefined
+  for (const backend of model.backend_refs ?? []) {
+    const provider = catalog.providers.find((candidate) => candidate.id === backend.provider)
+    const binding = provider?.models?.find((candidate) => candidate.catalog === model.catalog)
+    reasoningModes = intersectValues(reasoningModes, binding?.reasoning_modes)
+    reasoningEfforts = intersectValues(reasoningEfforts, binding?.reasoning_efforts)
+  }
+  return { reasoning_modes: reasoningModes, reasoning_efforts: reasoningEfforts }
+}
+
 const normalizedProviderModel = (
   model: ProviderModelConfig,
   cardByName: Map<string, RoutingModelCard>,
   builtInByName: Map<string, BuiltInModelMetadata>,
+  catalog?: BuiltInModelCatalog | null,
 ): NormalizedModel => {
   const cardID = model.catalog || model.name
   const override = cardByName.get(cardID)
   const builtIn = model.catalog ? builtInByName.get(model.catalog) : undefined
+  const reasoningConstraints = catalogReasoningConstraints(model, catalog)
   return {
     name: model.name,
     catalog: model.catalog,
     reasoning: model.reasoning,
     reasoning_family: model.reasoning?.family || builtIn?.reasoning_family,
+    ...reasoningConstraints,
     provider_model_id: model.provider_model_id,
     api_format: model.api_format,
     external_model_ids: model.external_model_ids,
@@ -74,7 +103,7 @@ const canonicalModels = (
   const cardByName = new Map(cards.map((card) => [card.name, card]))
   const builtInByName = new Map((catalog?.models ?? []).map((model) => [model.id, model]))
   const models = providerModels.map((model) =>
-    normalizedProviderModel(model, cardByName, builtInByName),
+    normalizedProviderModel(model, cardByName, builtInByName, catalog),
   )
   const boundCards = new Set(providerModels.map((model) => model.catalog || model.name))
   for (const card of cards) {

@@ -510,7 +510,9 @@ func cloneCanonicalReasoning(reasoning *CanonicalReasoning) *CanonicalReasoning 
 		return nil
 	}
 	clone := *reasoning
+	clone.EffortFlags = copyStringMap(reasoning.EffortFlags)
 	clone.Levels = append([]string(nil), reasoning.Levels...)
+	clone.Modes = append([]string(nil), reasoning.Modes...)
 	return &clone
 }
 

@@ -212,50 +212,132 @@ def _validate_protocols(items: list[dict[str, Any]]) -> None:
                 )
 
 
-def _validate_reasoning(items: list[dict[str, Any]]) -> None:
-    for index, item in enumerate(items):
-        path = f"reasoning_families[{index}]"
-        _reject_unknown(
-            item,
-            {
-                "id",
-                "type",
-                "parameter",
-                "activation_parameter",
-                "levels",
-                "default",
-                "disabled",
-            },
-            path,
-        )
-        if not SLUG.fullmatch(_nonempty_string(item.get("id"), f"{path}.id")):
-            raise CatalogBuildError(f"{path}.id must be a lowercase slug")
-        if item.get("type") not in {
-            "chat_template_kwargs",
+def _validate_reasoning_levels(item: dict[str, Any], path: str) -> list[str]:
+    raw_levels = item.get("levels")
+    values = _sequence(raw_levels, f"{path}.levels") if raw_levels is not None else []
+    levels = [
+        _nonempty_string(value, f"{path}.levels[{index}]")
+        for index, value in enumerate(values)
+    ]
+    if len(levels) != len(set(levels)):
+        raise CatalogBuildError(f"{path}.levels contains duplicates")
+    if not levels and item.get("default") is not None:
+        raise CatalogBuildError(f"{path}.levels is required with default")
+    if (
+        item.get("type")
+        in {
             "reasoning_effort",
             "top_level_reasoning_effort",
-        }:
+        }
+        and not levels
+    ):
+        raise CatalogBuildError(f"{path}.levels is required for effort families")
+    if item.get("default") is not None and item.get("default") not in levels:
+        raise CatalogBuildError(f"{path}.default must be listed in levels")
+    return levels
+
+
+def _validate_reasoning_modes(item: dict[str, Any], path: str) -> None:
+    modes = _sequence(item.get("modes"), f"{path}.modes")
+    default_mode = item.get("default_mode")
+    if (
+        not modes
+        or len(modes) != len(set(modes))
+        or any(mode not in {"enabled", "disabled", "adaptive"} for mode in modes)
+        or default_mode not in modes
+    ):
+        raise CatalogBuildError(f"{path}.modes/default_mode is invalid")
+    if item.get("disabled") is not None and "disabled" not in modes:
+        raise CatalogBuildError(
+            f"{path}.disabled requires disabled to be listed in modes"
+        )
+
+
+def _validate_reasoning_activation(item: dict[str, Any], path: str) -> str | None:
+    raw_parameter = item.get("activation_parameter")
+    if raw_parameter is None:
+        return None
+    parameter = _nonempty_string(raw_parameter, f"{path}.activation_parameter")
+    if parameter == item.get("parameter"):
+        raise CatalogBuildError(
+            f"{path}.activation_parameter must differ from parameter"
+        )
+    if item.get("type") != "reasoning_effort":
+        raise CatalogBuildError(
+            f"{path}.activation_parameter requires reasoning_effort type"
+        )
+    return parameter
+
+
+def _validate_reasoning_effort_flags(
+    item: dict[str, Any],
+    path: str,
+    levels: list[str],
+    activation_parameter: str | None,
+) -> None:
+    raw_flags = item.get("effort_flags")
+    if raw_flags is None:
+        return
+    effort_flags = _mapping(raw_flags, f"{path}.effort_flags")
+    if item.get("type") != "reasoning_effort":
+        raise CatalogBuildError(f"{path}.effort_flags requires reasoning_effort type")
+    if not activation_parameter:
+        raise CatalogBuildError(f"{path}.effort_flags requires activation_parameter")
+    seen_parameters: set[str] = set()
+    for effort, raw_parameter in effort_flags.items():
+        if effort not in levels:
+            raise CatalogBuildError(
+                f"{path}.effort_flags key {effort!r} must be listed in levels"
+            )
+        parameter = _nonempty_string(raw_parameter, f"{path}.effort_flags.{effort}")
+        if parameter in {item.get("parameter"), activation_parameter}:
+            raise CatalogBuildError(
+                f"{path}.effort_flags.{effort} must differ from parameter "
+                "and activation_parameter"
+            )
+        if parameter in seen_parameters:
+            raise CatalogBuildError(
+                f"{path}.effort_flags contains duplicate parameter {parameter!r}"
+            )
+        seen_parameters.add(parameter)
+    active_levels = [level for level in levels if level != item.get("disabled")]
+    if len(active_levels) - len(effort_flags) > 1:
+        raise CatalogBuildError(
+            f"{path}.effort_flags leaves multiple levels indistinguishable by omission"
+        )
+
+
+def _validate_reasoning(items: list[dict[str, Any]]) -> None:
+    allowed_fields = {
+        "id",
+        "type",
+        "parameter",
+        "activation_parameter",
+        "effort_flags",
+        "levels",
+        "default",
+        "modes",
+        "default_mode",
+        "disabled",
+    }
+    supported_types = {
+        "chat_template_kwargs",
+        "reasoning_effort",
+        "reasoning_mode",
+        "top_level_reasoning_effort",
+    }
+    for index, item in enumerate(items):
+        path = f"reasoning_families[{index}]"
+        _reject_unknown(item, allowed_fields, path)
+        if not SLUG.fullmatch(_nonempty_string(item.get("id"), f"{path}.id")):
+            raise CatalogBuildError(f"{path}.id must be a lowercase slug")
+        if item.get("type") not in supported_types:
             raise CatalogBuildError(f"{path}.type is unsupported")
-        levels = _sequence(item.get("levels"), f"{path}.levels")
-        if (
-            not levels
-            or item.get("default") not in levels
-            or len(levels) != len(set(levels))
-        ):
-            raise CatalogBuildError(f"{path}.levels/default is invalid")
-        if item.get("disabled") is not None and item.get("disabled") not in levels:
-            raise CatalogBuildError(f"{path}.disabled must be listed in levels")
-        activation_parameter = item.get("activation_parameter")
-        if activation_parameter is not None:
-            _nonempty_string(activation_parameter, f"{path}.activation_parameter")
-            if activation_parameter == item.get("parameter"):
-                raise CatalogBuildError(
-                    f"{path}.activation_parameter must differ from parameter"
-                )
-            if item.get("type") != "reasoning_effort":
-                raise CatalogBuildError(
-                    f"{path}.activation_parameter requires reasoning_effort type"
-                )
+        _nonempty_string(item.get("parameter"), f"{path}.parameter")
+        levels = _validate_reasoning_levels(item, path)
+        _validate_reasoning_modes(item, path)
+        activation_parameter = _validate_reasoning_activation(item, path)
+        _validate_reasoning_effort_flags(item, path, levels, activation_parameter)
 
 
 def _validate_models(
@@ -387,6 +469,19 @@ def _validate_physical_model(item: dict[str, Any], path: str) -> None:
         raise CatalogBuildError(f"{path}.distribution.type is virtual-only")
     if not item["verification"].get("source"):
         raise CatalogBuildError(f"{path}.verification.source is required")
+    if "chat" in item.get("capabilities", []):
+        limits = _mapping(item.get("limits"), f"{path}.limits")
+        context_window = limits.get("context_window_size")
+        if not isinstance(context_window, int) or context_window < 1:
+            raise CatalogBuildError(
+                f"{path}.limits.context_window_size is required for chat models"
+            )
+    if item["distribution"]["type"] == "open_weights" and not item.get(
+        "parameter_size"
+    ):
+        raise CatalogBuildError(
+            f"{path}.parameter_size is required for open-weight models"
+        )
 
 
 def load_and_validate() -> (
@@ -463,10 +558,10 @@ def load_and_validate() -> (
     model_ids = {item["id"] for item in resources["models"]}
     providers = {item["id"]: item for item in resources["providers"]}
     models = {item["id"]: item for item in resources["models"]}
-    _validate_provider_bindings(providers, models, protocol_ids)
+    reasoning = {item["id"]: item for item in resources["reasoning_families"]}
+    _validate_provider_bindings(providers, models, protocol_ids, reasoning)
     metrics = _metric_catalog(resources["benchmarks"])
     _validate_indices(resources["indices"], metrics)
-    reasoning = {item["id"]: item for item in resources["reasoning_families"]}
     _validate_evaluations(resources["evaluations"], models, reasoning, metrics)
 
     defaults = _mapping(manifest.get("defaults"), "defaults")

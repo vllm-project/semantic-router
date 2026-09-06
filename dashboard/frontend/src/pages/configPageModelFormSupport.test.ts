@@ -7,7 +7,9 @@ import {
   modelReasoningFormData,
   normalizeModelBackendRefs,
   normalizeModelEvaluations,
+  normalizeModelPricing,
 } from './configPageModelFormSupport'
+import { newModelFormData } from './configPageModelsSectionSupport'
 
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
@@ -64,6 +66,32 @@ describe('model form backend targets', () => {
       },
     ])
     expect(Object.prototype.hasOwnProperty.call(payload.backend_refs[0], 'auth_prefix')).toBe(true)
+  })
+
+  it('leaves new-model pricing unset until the operator enters a value', () => {
+    const form = newModelFormData()
+
+    expect(form).not.toHaveProperty('pricing')
+    expect(buildProviderModelPayload('private', form).pricing).toBeUndefined()
+  })
+
+  it('preserves explicitly configured zero pricing', () => {
+    const pricing = {
+      currency: 'USD',
+      prompt_per_1m: 0,
+      cached_input_per_1m: 0,
+      completion_per_1m: 0,
+    }
+
+    expect(normalizeModelPricing(pricing)).toEqual(pricing)
+    expect(buildProviderModelPayload('private', { pricing }).pricing).toEqual(pricing)
+  })
+
+  it('defaults the currency when the operator explicitly enters a zero rate', () => {
+    expect(normalizeModelPricing({ prompt_per_1m: 0 })).toEqual({
+      prompt_per_1m: 0,
+      currency: 'USD',
+    })
   })
 })
 

@@ -1,21 +1,25 @@
 import React, { useMemo, useState } from 'react'
 
-import type { BuiltInModelCatalog, CatalogProtocol } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogProtocol, CatalogProvider } from '../types/modelCatalog'
 import {
-  formatContextWindow,
+  modelHubContextLabel,
+  modelHubMaxOutputLabel,
+  modelHubParameterLabel,
+  modelHubPublicEvaluations,
   modelHubDistributionLabel as distributionLabel,
   modelHubRelationshipLabel as relationshipLabel,
   readableModelHubValue as readable,
   type ModelHubRow,
 } from './modelHubSupport'
-import { ModelMark } from './ModelHubComponents'
+import { ModelMark, ProviderMark } from './ModelHubComponents'
 import {
   ModelHubDetailTabs,
   type ModelHubDetailTab,
   type ModelHubDetailTabItem,
 } from './ModelHubDetailTabs'
 import { EvaluationCard } from './ModelHubEvaluationCard'
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubDetail.module.css'
+import { providerProtocolOperations } from './modelHubProviderOperations'
 
 export { EvaluationCard } from './ModelHubEvaluationCard'
 
@@ -44,15 +48,15 @@ const Overview: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> = (
         <dl className={styles.factGrid}>
           <div>
             <dt>Context</dt>
-            <dd>{formatContextWindow(row.model.limits?.context_window_size)}</dd>
+            <dd>{modelHubContextLabel(row.model)}</dd>
           </div>
           <div>
             <dt>Max output</dt>
-            <dd>{formatContextWindow(row.model.limits?.max_output_tokens)}</dd>
+            <dd>{modelHubMaxOutputLabel(row.model)}</dd>
           </div>
           <div>
             <dt>Parameters</dt>
-            <dd>{row.model.parameter_size ?? 'Not published'}</dd>
+            <dd>{modelHubParameterLabel(row.model)}</dd>
           </div>
           <div>
             <dt>Released</dt>
@@ -80,19 +84,33 @@ const Overview: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> = (
             <span>{family.id}</span>
           </div>
           <p>
-            Default: <strong>{readable(family.default)}</strong>
+            Default:{' '}
+            <strong>{family.default ? readable(family.default) : 'model selected'}</strong>
+            {family.default_mode ? ` · mode: ${readable(family.default_mode)}` : ''}
             {family.disabled ? ` · disabled: ${readable(family.disabled)}` : ''}
             {family.activation_parameter
               ? ` · activation: ${readable(family.activation_parameter)}`
               : ''}
           </p>
           <div className={styles.reasoningTrack}>
-            {family.levels.map((level) => (
+            {(family.levels ?? []).map((level) => (
               <span className={level === family.default ? styles.reasoningDefault : ''} key={level}>
                 {readable(level)}
               </span>
             ))}
           </div>
+          {family.modes?.length ? (
+            <div className={styles.reasoningTrack}>
+              {family.modes.map((mode) => (
+                <span
+                  className={mode === family.default_mode ? styles.reasoningDefault : ''}
+                  key={mode}
+                >
+                  {readable(mode)}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
     </div>
@@ -103,8 +121,8 @@ const Evaluations: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> 
   row,
   catalog,
 }) => {
-  const records = catalog.evaluations.filter(
-    (evaluation) => evaluation.model === row.model.id && evaluation.status === 'available',
+  const records = modelHubPublicEvaluations(catalog).filter(
+    (evaluation) => evaluation.model === row.model.id,
   )
   return (
     <section className={styles.detailStack}>
@@ -137,22 +155,31 @@ const Evaluations: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> 
   )
 }
 
-const ProtocolOperations: React.FC<{ protocol: CatalogProtocol }> = ({ protocol }) => (
-  <div className={styles.protocolCard}>
-    <div>
-      <strong>{protocol.display_name}</strong>
-      <code>{protocol.id}</code>
+const ProtocolOperations: React.FC<{
+  provider: CatalogProvider
+  protocol: CatalogProtocol
+}> = ({ provider, protocol }) => {
+  const operations = providerProtocolOperations(provider, protocol)
+  if (!operations.length) return null
+
+  return (
+    <div className={styles.protocolCard}>
+      <div>
+        <strong>{protocol.display_name}</strong>
+        <code>{protocol.id}</code>
+      </div>
+      <div className={styles.operationList}>
+        {operations.map((operation) => (
+          <div className={styles.operationRow} key={operation.reference}>
+            <i>{operation.method}</i>
+            <strong>{readable(operation.id)}</strong>
+            <code>{operation.path}</code>
+          </div>
+        ))}
+      </div>
     </div>
-    <div className={styles.operationList}>
-      {protocol.operations.map((operation) => (
-        <span key={`${protocol.id}/${operation.id}`}>
-          <i>{operation.method}</i>
-          {operation.path}
-        </span>
-      ))}
-    </div>
-  </div>
-)
+  )
+}
 
 export const ModelAccess: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> = ({
   row,
@@ -168,19 +195,24 @@ export const ModelAccess: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCata
         return (
           <section className={styles.providerCard} key={`${provider.id}/${model.id}`}>
             <header>
-              <div>
-                <strong>{provider.display_name}</strong>
-                <small>
-                  {provider.support_tier} support · {readable(model.lifecycle)}
-                </small>
+              <div className={styles.providerIdentity}>
+                <ProviderMark provider={provider} />
+                <span>
+                  <strong>{provider.display_name}</strong>
+                  <small>
+                    {provider.support_tier} support · {readable(model.lifecycle)}
+                  </small>
+                </span>
               </div>
               <span>{relationshipLabel[model.relationship]}</span>
             </header>
-            <code>{model.id}</code>
-            {provider.default_base_url ? <p>{provider.default_base_url}</p> : null}
+            <div className={styles.providerMeta}>
+              <code>{model.id}</code>
+              {provider.default_base_url ? <span>{provider.default_base_url}</span> : null}
+            </div>
             <div className={styles.protocolList}>
               {protocols.map((protocol) => (
-                <ProtocolOperations key={protocol.id} protocol={protocol} />
+                <ProtocolOperations key={protocol.id} provider={provider} protocol={protocol} />
               ))}
             </div>
             {model.pricing && Object.keys(model.pricing).length ? (
@@ -295,7 +327,7 @@ export const ModelDetail: React.FC<{
   const [tab, setTab] = useState<ModelHubDetailTab>('overview')
   if (!row)
     return (
-      <aside className={styles.detailPanel}>
+      <aside className={styles.detailPanel} data-model-hub-detail>
         <div className={styles.detailEmpty}>Select a model to inspect it.</div>
       </aside>
     )
@@ -310,6 +342,7 @@ export const ModelDetail: React.FC<{
   return (
     <aside
       className={styles.detailPanel}
+      data-model-hub-detail
       aria-live="polite"
       role={modal ? 'dialog' : undefined}
       aria-modal={modal || undefined}

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	yamlv3 "gopkg.in/yaml.v3"
 
@@ -100,6 +101,7 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 			ModelReasoningControl: config.ModelReasoningControl{
 				UseReasoning:         &ms.UseReasoning,
 				ReasoningDescription: ms.ReasoningDescription,
+				ReasoningMode:        ms.ReasoningMode,
 				ReasoningEffort:      ms.ReasoningEffort,
 			},
 		}
@@ -313,11 +315,12 @@ func convertModelReasoning(reasoning *v1alpha1.ModelReasoning) *config.Canonical
 		return nil
 	}
 	return &config.CanonicalReasoning{
-		Family:    reasoning.Family,
-		Type:      reasoning.Type,
-		Parameter: reasoning.Parameter,
-		Levels:    append([]string(nil), reasoning.Levels...),
-		Default:   reasoning.Default,
+		Family: reasoning.Family, Type: reasoning.Type, Parameter: reasoning.Parameter,
+		ActivationParameter: reasoning.ActivationParameter,
+		EffortFlags:         maps.Clone(reasoning.EffortFlags),
+		Levels:              append([]string(nil), reasoning.Levels...), Default: reasoning.Default,
+		Modes: append([]string(nil), reasoning.Modes...), DefaultMode: reasoning.DefaultMode,
+		Disabled: reasoning.Disabled,
 	}
 }
 

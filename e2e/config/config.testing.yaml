@@ -25,7 +25,8 @@ routing:
             name: canary_cohort
       modelRefs:
         - model: openai/gpt-oss-20b
-          use_reasoning: false
+          use_reasoning: true
+          reasoning_effort: high
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -36,7 +37,8 @@ routing:
             name: other
       modelRefs:
         - model: openai/gpt-oss-20b
-          use_reasoning: false
+          use_reasoning: true
+          reasoning_effort: high
   signals:
     metadata:
       - name: canary_cohort
@@ -77,7 +79,8 @@ recipes:
                 name: canary_cohort
           modelRefs:
             - model: openai/gpt-oss-20b
-              use_reasoning: false
+              use_reasoning: true
+              reasoning_effort: high
 global:
   router:
     strategy: priority

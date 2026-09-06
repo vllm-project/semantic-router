@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubDetail.module.css'
 
 export type ModelHubDetailTab = 'overview' | 'evaluations' | 'access' | 'pool'
 

@@ -374,7 +374,9 @@ func applyCatalogCardReasoning(model CanonicalProviderModel, overlay *modelcatal
 			overlay.Reasoning = &modelcatalog.ReasoningFamilyDefinition{
 				Type: model.Reasoning.Type, Parameter: model.Reasoning.Parameter,
 				ActivationParameter: model.Reasoning.ActivationParameter,
+				EffortFlags:         copyStringMap(model.Reasoning.EffortFlags),
 				Levels:              append([]string(nil), model.Reasoning.Levels...), Default: model.Reasoning.Default,
+				Modes: append([]string(nil), model.Reasoning.Modes...), DefaultMode: model.Reasoning.DefaultMode,
 				Disabled: model.Reasoning.Disabled,
 			}
 		}

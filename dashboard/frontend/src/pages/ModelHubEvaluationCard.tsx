@@ -6,7 +6,7 @@ import {
   readableModelHubValue as readable,
   type ModelHubRow,
 } from './modelHubSupport'
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubDetail.module.css'
 
 const scoreValue = (value: number, benchmark: CatalogBenchmark | undefined, metric: string) => {
   const definition = benchmark?.metrics.find((candidate) => candidate.id === metric)

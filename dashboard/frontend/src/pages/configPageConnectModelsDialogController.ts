@@ -9,7 +9,7 @@ import {
 } from 'react'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogModelBinding } from '../types/modelCatalog'
 import {
   emptyConnectModelAdvancedValues,
   resolveConnectedModelName,
@@ -49,6 +49,8 @@ interface DialogState {
   setModels: Dispatch<SetStateAction<string[]>>
   selected: Set<string>
   setSelected: Dispatch<SetStateAction<Set<string>>>
+  providerModelIds: Map<string, string>
+  setProviderModelIds: Dispatch<SetStateAction<Map<string, string>>>
   modelSearch: string
   setModelSearch: Dispatch<SetStateAction<string>>
   manualModel: string
@@ -75,6 +77,7 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
   const [apiKey, setAPIKey] = useState('')
   const [models, setModels] = useState<string[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [providerModelIds, setProviderModelIds] = useState<Map<string, string>>(new Map())
   const [modelSearch, setModelSearch] = useState('')
   const [manualModel, setManualModel] = useState('')
   const [advanced, setAdvanced] = useState(emptyConnectModelAdvancedValues)
@@ -94,6 +97,7 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
     setAPIKey('')
     setModels([])
     setSelected(new Set())
+    setProviderModelIds(new Map())
     setModelSearch('')
     setManualModel('')
     setAdvanced(emptyConnectModelAdvancedValues())
@@ -118,6 +122,8 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
     setModels,
     selected,
     setSelected,
+    providerModelIds,
+    setProviderModelIds,
     modelSearch,
     setModelSearch,
     manualModel,
@@ -177,6 +183,10 @@ function useConnectDialogDerived(
     () => modelsForProvider(catalog, state.provider?.id),
     [catalog, state.provider?.id],
   )
+  const providerModelIdRequirements = useMemo(
+    () => providerModelIDRequirements(catalog, state.provider?.id),
+    [catalog, state.provider?.id],
+  )
   const modelDisplayNames = useMemo(
     () => new Map(catalog.models.map((model) => [model.id, model.display_name])),
     [catalog.models],
@@ -187,6 +197,7 @@ function useConnectDialogDerived(
     visibleModels,
     resolvedModelNames,
     catalogModels,
+    providerModelIdRequirements,
     modelDisplayNames,
   }
 }
@@ -212,6 +223,36 @@ export function modelsForProvider(catalog: BuiltInModelCatalog, providerID?: str
   return result
 }
 
+const providerModelIDKind = (binding: CatalogModelBinding): string | undefined => {
+  const kind = binding.restrictions?.provider_model_id_kind
+  return typeof kind === 'string' && kind.trim() ? kind.trim() : undefined
+}
+
+export function providerModelIDRequirements(
+  catalog: BuiltInModelCatalog,
+  providerID?: string,
+): Map<string, string> {
+  const result = new Map<string, string>()
+  if (!providerID) return result
+  const availableBindings = modelsForProvider(catalog, providerID)
+  const provider = catalog.providers.find((candidate) => candidate.id === providerID)
+  for (const binding of provider?.models ?? []) {
+    const kind = providerModelIDKind(binding)
+    if (kind && availableBindings.has(binding.id)) result.set(binding.id, kind)
+  }
+  return result
+}
+
+export function missingRequiredProviderModelID(
+  selected: ReadonlySet<string>,
+  requirements: ReadonlyMap<string, string>,
+  providerModelIds: ReadonlyMap<string, string>,
+): string | undefined {
+  return [...selected].find(
+    (model) => requirements.has(model) && !providerModelIds.get(model)?.trim(),
+  )
+}
+
 export function useConnectModelsDialogController(
   isOpen: boolean,
   existingModelNames: string[],
@@ -227,6 +268,10 @@ export function useConnectModelsDialogController(
     chooseProvider: (provider: ModelProviderPreset) => chooseProvider(state, provider, catalog),
     discover: () => discoverModels(state),
     addManualModel: () => addManualModel(state),
+    setProviderModelId: (model: string, value: string) => {
+      state.setProviderModelIds((current) => new Map(current).set(model, value))
+      state.setError(null)
+    },
     submit: () => submitModels(state, derived, onImport, onClose),
   }
 }
@@ -254,6 +299,7 @@ function chooseProvider(
   state.setAPIKey('')
   state.setModels(modelInventoryForProvider(catalog, provider.id))
   state.setSelected(new Set())
+  state.setProviderModelIds(new Map())
   state.setModelSearch('')
   state.setError(null)
   state.setStage('models')
@@ -328,6 +374,15 @@ async function submitModels(
     state.setError('Choose at least one model.')
     return
   }
+  const missingProviderModelID = missingRequiredProviderModelID(
+    state.selected,
+    derived.providerModelIdRequirements,
+    state.providerModelIds,
+  )
+  if (missingProviderModelID) {
+    state.setError(`Enter the deployment name for ${missingProviderModelID}.`)
+    return
+  }
   state.setSaving(true)
   state.setError(null)
   try {
@@ -346,6 +401,11 @@ async function submitModels(
         [...state.selected]
           .map((modelID) => [modelID, derived.catalogModels.get(modelID)] as const)
           .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+      ),
+      providerModelIds: Object.fromEntries(
+        [...state.selected]
+          .filter((modelID) => derived.providerModelIdRequirements.has(modelID))
+          .map((modelID) => [modelID, state.providerModelIds.get(modelID)?.trim() ?? '']),
       ),
       ...advancedInput(state.advanced),
     })

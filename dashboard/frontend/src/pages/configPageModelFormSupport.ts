@@ -145,8 +145,13 @@ export function modelReasoningFormData(reasoning?: ModelReasoningConfig): Record
     reasoning_type: reasoning?.type || '',
     reasoning_parameter: reasoning?.parameter || '',
     reasoning_activation_parameter: reasoning?.activation_parameter || '',
+    reasoning_effort_flags: Object.entries(reasoning?.effort_flags ?? {})
+      .map(([effort, parameter]) => `${effort}=${parameter}`)
+      .join(', '),
     reasoning_levels: reasoning?.levels?.join(', ') || '',
     reasoning_default: reasoning?.default || '',
+    reasoning_modes: reasoning?.modes?.join(', ') || '',
+    reasoning_default_mode: reasoning?.default_mode || '',
     reasoning_disabled: reasoning?.disabled || '',
   }
 }
@@ -160,6 +165,7 @@ function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig
     typeof data.reasoning_activation_parameter === 'string'
       ? data.reasoning_activation_parameter.trim()
       : ''
+  const effortFlags = parseReasoningEffortFlags(data.reasoning_effort_flags)
   const levels =
     typeof data.reasoning_levels === 'string'
       ? data.reasoning_levels
@@ -169,6 +175,19 @@ function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig
       : []
   const defaultLevel =
     typeof data.reasoning_default === 'string' ? data.reasoning_default.trim() : ''
+  const modes =
+    typeof data.reasoning_modes === 'string'
+      ? data.reasoning_modes
+          .split(',')
+          .map((mode) => mode.trim())
+          .filter((mode): mode is 'enabled' | 'disabled' | 'adaptive' =>
+            ['enabled', 'disabled', 'adaptive'].includes(mode),
+          )
+      : []
+  const defaultMode =
+    typeof data.reasoning_default_mode === 'string'
+      ? (data.reasoning_default_mode.trim() as 'enabled' | 'disabled' | 'adaptive')
+      : ''
   const disabledLevel =
     typeof data.reasoning_disabled === 'string' ? data.reasoning_disabled.trim() : ''
   if (family) return { family }
@@ -176,8 +195,11 @@ function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig
     !type &&
     !parameter &&
     !activationParameter &&
+    Object.keys(effortFlags).length === 0 &&
     levels.length === 0 &&
     !defaultLevel &&
+    modes.length === 0 &&
+    !defaultMode &&
     !disabledLevel
   ) {
     return undefined
@@ -186,10 +208,23 @@ function normalizeReasoning(data: Record<string, unknown>): ModelReasoningConfig
     type,
     parameter,
     activation_parameter: activationParameter || undefined,
+    effort_flags: Object.keys(effortFlags).length > 0 ? effortFlags : undefined,
     levels: levels.length > 0 ? levels : undefined,
     default: defaultLevel || undefined,
+    modes: modes.length > 0 ? modes : undefined,
+    default_mode: defaultMode || undefined,
     disabled: disabledLevel || undefined,
   }
+}
+
+function parseReasoningEffortFlags(value: unknown): Record<string, string> {
+  if (typeof value !== 'string') return {}
+  return Object.fromEntries(
+    value
+      .split(',')
+      .map((entry) => entry.split('=', 2).map((part) => part.trim()))
+      .filter((entry): entry is [string, string] => entry.length === 2 && Boolean(entry[0] && entry[1])),
+  )
 }
 
 export function normalizeModelStringMap(value: unknown): Record<string, string> | undefined {
@@ -224,6 +259,13 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m))
     normalized.completion_per_1m = pricing.completion_per_1m
+  const hasRate = [
+    normalized.prompt_per_1m,
+    normalized.cached_input_per_1m,
+    normalized.cache_write_per_1m,
+    normalized.completion_per_1m,
+  ].some((rate) => typeof rate === 'number')
+  if (hasRate && !normalized.currency) normalized.currency = 'USD'
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 

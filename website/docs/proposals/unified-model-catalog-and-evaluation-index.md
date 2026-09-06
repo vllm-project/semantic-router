@@ -51,7 +51,7 @@ general-purpose physical-model registry. The implemented snapshot compiles 60
 serving providers, three protocol definitions, 83 physical Model Cards, five
 virtual Model Cards, 166 provider-owned model mappings, 64 benchmark
 definitions, and 1,360 exact evaluation records. The five default benchmark
-components produce 1,315 explicit slots over 263 model/effort rows; 124 slots
+components produce 1,155 explicit slots over 231 model/effort rows; 124 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
@@ -60,8 +60,8 @@ All 83 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
-Across 180 selectable effort levels, 110 currently have at least five
-benchmarks, 31 are partial, and 39 are unmeasured. The audit exposes those
+Across 163 selectable effort levels, 104 currently have at least five
+benchmarks, 28 are partial, and 31 are unmeasured. The audit exposes those
 three states and offers a stricter selectable-effort gate for future data work;
 the current release keeps the gaps visible instead of copying a score from
 another effort or deleting a valid runtime control. Conditions recorded for a
@@ -410,10 +410,10 @@ wire behavior inline:
 
 ```yaml
 reasoning:
-  type: chat_template_kwargs
-  parameter: think_mode
-  levels: [low, medium, high]
-  default: medium
+  type: reasoning_mode
+  parameter: thinking_mode
+  modes: [disabled, adaptive, enabled]
+  default_mode: adaptive
 ```
 
 Built-in models need neither form; combining `catalog` with a per-model
@@ -515,20 +515,64 @@ construction, event translation, or non-compatible error behavior.
 
 `reasoning_transport` is internal catalog data, not user YAML. Its reusable
 modes are `chat_template_kwargs`, `top_level_effort`, `top_level_boolean`,
-`reasoning_object`, `thinking_object`, `output_config_effort`, and
-`deepseek_thinking`.
+`top_level_effort_template_switch`, `top_level_effort_boolean_switch`,
+`reasoning_object`, `thinking_object`, `thinking_object_effort`,
+`output_config_effort`, and `deepseek_thinking`.
 `reasoning_object` projects an effort into the OpenRouter-style
 `reasoning.effort` object. The generic `thinking_object` mode projects a model's
 reasoning switch into `thinking.type`; `deepseek_thinking` adds the provider's
-effort field to that shape. `output_config_effort` projects the selected level
+effort field to that shape, while `thinking_object_effort` is the reusable form
+for providers whose object switch and top-level effort are independent.
+`output_config_effort` projects the selected level
 into Anthropic Messages' `output_config.effort` while preserving sibling output
 configuration. Runtime dispatch selects these modes from the Provider ID; it
 never infers provider behavior from an endpoint hostname.
+The two `top_level_effort_*_switch` modes cover mixed-thinking APIs with an
+independent effort ladder and activation switch. They keep `reasoning_effort`
+at the Chat request top level, then place `enable_thinking` either inside local
+`chat_template_kwargs` or at the first-party API top level. Responses requests
+continue to use the protocol-native `reasoning.effort` object.
+
+A provider-model mapping may further declare `reasoning_modes` or
+`reasoning_efforts`. These are internal, typed subsets of the model family, not
+new user configuration. They prevent an API-specific surface from accepting a
+mode that is valid for a self-hosted runtime but invalid on that provider; the
+materializer rejects a configured decision before startup when any selected
+backend cannot carry its requested control.
+
+The public decision contract remains only `use_reasoning`, optional
+`reasoning_mode`, and optional `reasoning_effort`. At the final dispatch
+boundary, the protocol codec and provider transport jointly render that state:
+
+| Target | Exact reasoning projection |
+| --- | --- |
+| vLLM/SGLang model template | `chat_template_kwargs` switch and/or effort |
+| OpenAI-compatible Chat | top-level effort or boolean, according to the binding |
+| OpenAI Responses | standard `reasoning.effort` |
+| Thinking-object API | `thinking.type`, optionally with a separate top-level effort |
+| DeepSeek Chat | `thinking.type` plus top-level effort while enabled |
+| Anthropic Messages | `thinking.type` plus `output_config.effort` |
+| Normalizing gateway | one `reasoning` object |
+
+These projections are mutually exclusive. The adapter first removes controls
+belonging to every other dialect, but preserves unrelated siblings such as a
+structured-output format inside `output_config`. This makes the encoded
+provider request—not an intermediate Router structure—the conformance boundary.
+`adaptive` remains an operator-facing semantic mode: when an API exposes an
+adaptive enum it is sent unchanged, when the same model's API exposes only an
+enabled switch it maps to that enabled wire value, and when a normalizing
+gateway defines adaptive behavior by omission the adapter omits the switch.
 
 A family can declare an optional `activation_parameter` when activation and
 effort are genuinely separate controls. This keeps Qwen3.8's
 `enable_thinking=false` distinct from its `low|medium|xhigh`
 `reasoning_effort` ladder instead of inventing a one-dimensional `none` effort.
+When a template expresses effort through mutually exclusive booleans, its
+optional `effort_flags` maps logical levels to those exact parameter names.
+The one unmapped active level is encoded by omission. For example, Nemotron
+Super maps `low` to `low_effort: true` and represents `high` by omitting
+`low_effort`; Ultra maps `medium` to `medium_effort: true` and likewise uses
+omission for `high`. Validation rejects ambiguous or overlapping mappings.
 
 This separates three questions that are currently conflated:
 
@@ -648,8 +692,10 @@ row. The same contract applies to virtual models, which can receive scores from
 executions of their packaged recipes.
 
 The initial population audit makes both coverage and gaps visible. The 64
-benchmark definitions retain all exact measurements as detail records, while
-the default five-component matrix materializes 1,315 slots over 263
+benchmark definitions retain all exact measurements as source records, while
+public Hub surfaces remove every exact benchmark/profile/metric tuple measured
+on fewer than ten distinct models. The default five-component matrix
+materializes 1,155 slots over 231
 model/effort rows. At this snapshot, 124 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
@@ -863,7 +909,16 @@ effort record appears as an individually colored bar with its creator logo and
 effort label; models without that measurement are omitted instead of being
 assigned zero. The methodology panel shows the selected benchmark identity,
 metric, direction, range, profile, and source metadata. Changing any selector
-produces a different comparison rather than mixing unlike benchmark runs.
+produces a different comparison rather than mixing unlike benchmark runs. A
+benchmark comparison is never paginated: every exact result matching the
+selected tuple and current model filters is rendered in one horizontally
+scrollable chart. Search and creator/provider filters narrow that one comparison
+without splitting it into disconnected pages. The comparison picker admits an
+exact benchmark/profile/metric tuple only when at least ten distinct catalog
+models have an available result; multiple reasoning-effort rows for one model do
+not inflate that coverage. Lower-coverage records remain in the source catalog
+for audit and routing, but are removed from every public Model Hub view,
+including per-model details.
 
 The UI filters providers by tier and models by kind, creator, serving provider,
 capability, and distribution, with search and pagination on both tables. The

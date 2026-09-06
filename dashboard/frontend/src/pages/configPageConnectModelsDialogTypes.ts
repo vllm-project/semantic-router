@@ -8,6 +8,7 @@ export interface ConnectedModelInput {
   modelIds: string[]
   modelNames: Record<string, string>
   catalogModels: Record<string, string>
+  providerModelIds: Record<string, string>
   reasoningFamily?: string
   metadata: Omit<RoutingModelCard, 'name'>
   pricing?: ModelPricing

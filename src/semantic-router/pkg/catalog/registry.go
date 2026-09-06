@@ -254,6 +254,8 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 	value.Models = append([]CatalogModelBinding(nil), value.Models...)
 	for index := range value.Models {
 		value.Models[index].Protocols = append([]string(nil), value.Models[index].Protocols...)
+		value.Models[index].ReasoningModes = append([]string(nil), value.Models[index].ReasoningModes...)
+		value.Models[index].ReasoningEfforts = append([]string(nil), value.Models[index].ReasoningEfforts...)
 		value.Models[index].Restrictions = cloneArbitraryMap(value.Models[index].Restrictions)
 		value.Models[index].Pricing.CacheWritePer1M = cloneFloatPointer(value.Models[index].Pricing.CacheWritePer1M)
 	}
@@ -261,7 +263,9 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 }
 
 func cloneReasoningFamily(value ReasoningFamilyDefinition) ReasoningFamilyDefinition {
+	value.EffortFlags = cloneMap(value.EffortFlags)
 	value.Levels = append([]string(nil), value.Levels...)
+	value.Modes = append([]string(nil), value.Modes...)
 	return value
 }
 

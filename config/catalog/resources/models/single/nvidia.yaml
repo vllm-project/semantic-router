@@ -12,9 +12,11 @@
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
     license: OpenMDW-1.1
   family: nemotron-3.5
-  reasoning_family: nemotron-3.5-lightning
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
+  limits:
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -51,12 +53,13 @@
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     license: OpenMDW-1.1
   family: nemotron-3
+  reasoning_family: nemotron-ultra
   parameter_size: 550B (55B active)
   released_at: '2026-06-04'
   knowledge_cutoff: May 2026 post-training; September 2025 pre-training
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -92,8 +95,11 @@
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16
     license: NVIDIA-Nemotron-Open-Model-License
   family: nemotron-3
+  reasoning_family: nemotron-super
   parameter_size: 120B (12B active)
   lifecycle: active
+  limits:
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -130,6 +136,7 @@
     source: https://huggingface.co/nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16
     license: NVIDIA-Open-Model-Agreement
   family: nemotron-3-omni
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
   limits:
@@ -174,6 +181,7 @@
     source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
     license: NVIDIA-Open-Model-License
   family: nemotron-cascade-2
+  reasoning_family: nemotron-thinking-toggle
   parameter_size: 30B (3B active)
   lifecycle: active
   limits:

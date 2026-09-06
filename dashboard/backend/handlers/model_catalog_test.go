@@ -198,16 +198,59 @@ func TestCatalogProviderBindingRelationshipIsClosed(t *testing.T) {
 	protocols := map[string]struct{}{"openai/chat-completions@1": {}}
 	definitions := []modelcatalog.ModelCard{{ID: "example/model", Kind: "physical", Lifecycle: "active"}}
 	if err := validateCatalogProviderBindings(
-		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions,
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions, nil,
 	); err != nil {
 		t.Fatalf("valid relationship rejected: %v", err)
 	}
 
 	provider.Models[0].Relationship = "brokered"
 	if err := validateCatalogProviderBindings(
-		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions,
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions, nil,
 	); err == nil || !strings.Contains(err.Error(), "malformed provider catalog model") {
 		t.Fatalf("unsupported relationship accepted: %v", err)
+	}
+}
+
+func TestCatalogProviderBindingMustProjectCompleteReasoningContract(t *testing.T) {
+	t.Parallel()
+
+	provider := modelcatalog.ProviderDefinition{
+		ID:                 "example",
+		Protocols:          []string{"openai/chat-completions@1"},
+		ReasoningTransport: modelcatalog.ReasoningTransportThinkingObject,
+		Models: []modelcatalog.CatalogModelBinding{{
+			Catalog:      "example/model",
+			Relationship: modelcatalog.CatalogModelRelationshipFirstParty,
+			ID:           "example-model",
+			Protocols:    []string{"openai/chat-completions@1"},
+			Lifecycle:    "active",
+			Verification: modelcatalog.CatalogBindingVerification{Status: "claimed"},
+		}},
+	}
+	models := map[string]struct{}{"example/model": {}}
+	protocols := map[string]struct{}{"openai/chat-completions@1": {}}
+	definitions := []modelcatalog.ModelCard{{
+		ID: "example/model", Kind: "physical", Lifecycle: "active", ReasoningFamily: "effort",
+	}}
+	reasoning := map[string]modelcatalog.ReasoningFamilyDefinition{
+		"effort": {
+			ID: "effort", Type: "reasoning_effort", Parameter: "reasoning_effort",
+			Levels: []string{"low", "high"}, Default: "high",
+			Modes: []string{"enabled"}, DefaultMode: "enabled",
+		},
+	}
+
+	if err := validateCatalogProviderBindings(
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions, reasoning,
+	); err == nil || !strings.Contains(err.Error(), "malformed provider catalog model") {
+		t.Fatalf("switch-only transport accepted effort contract: %v", err)
+	}
+
+	provider.Models[0].ReasoningTransport = modelcatalog.ReasoningTransportThinkingEffort
+	if err := validateCatalogProviderBindings(
+		[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions, reasoning,
+	); err != nil {
+		t.Fatalf("complete reasoning transport rejected: %v", err)
 	}
 }
 

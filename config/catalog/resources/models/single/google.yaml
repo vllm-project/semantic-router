@@ -9,10 +9,13 @@
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://ai.google.dev/gemini-api/docs/models
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
   family: gemini-3
   reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
   capabilities:
   - chat
   - reasoning
@@ -35,7 +38,7 @@
     authority: Google
     status: claimed
     verified_at: 2026-09-05
-    source: https://ai.google.dev/gemini-api/docs/models
+    source: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
   tags:
   - proprietary
   - multimodal

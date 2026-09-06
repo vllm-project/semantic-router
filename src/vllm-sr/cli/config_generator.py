@@ -1,39 +1,17 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
-import ipaddress
 import os
 from pathlib import Path
-from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader
 
 from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.consts import DEFAULT_LISTENER_PORT
-from cli.envoy_backend_pool import (
-    backend_route_semantics,
-    validate_homogeneous_backend_group,
-)
+from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
 from cli.models import UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
-
-
-def _is_ip_address(host: str) -> bool:
-    """
-    Check if a host string is an IP address (IPv4 or IPv6).
-
-    Args:
-        host: Host string to check
-
-    Returns:
-        bool: True if host is an IP address, False if it's a domain name
-    """
-    try:
-        ipaddress.ip_address(host)
-        return True
-    except ValueError:
-        return False
 
 
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
@@ -113,87 +91,14 @@ def generate_envoy_config_from_user_config(
     # Group endpoints by model for cluster creation
     models = []
     for model in project_provider_models_for_envoy(user_config):
-        endpoints = []
-        backend_semantics = []
-        has_https = False
-        uses_dns = False
-
-        backend_refs = model.backend_refs
-        for index, backend in enumerate(backend_refs):
-            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            # Match the Router's canonical binding precedence. ``base_url`` can
-            # include a provider path prefix while ``endpoint`` is retained as
-            # the legacy host shorthand.
-            endpoint_str = backend.base_url or backend.endpoint or ""
-            if not endpoint_str:
-                continue
-            path = ""
-
-            if "://" in endpoint_str:
-                parsed = urlparse(endpoint_str)
-                host = parsed.hostname or parsed.netloc
-                path = parsed.path.rstrip("/")
-                protocol = parsed.scheme or backend.protocol
-                port = parsed.port or (443 if protocol == "https" else 80)
-            else:
-                protocol = backend.protocol
-
-                # Extract path if present (e.g., "host/path" or "host:port/path")
-                if "/" in endpoint_str:
-                    # Split by first "/" to separate host[:port] from path
-                    parts = endpoint_str.split("/", 1)
-                    endpoint_str = parts[0]  # host or host:port
-                    path = "/" + parts[1]  # /path
-
-                # Parse host and port
-                if ":" in endpoint_str:
-                    host, port = endpoint_str.split(":", 1)
-                    port = int(port)
-                else:
-                    host = endpoint_str
-                    # Default port based on protocol
-                    port = 443 if protocol == "https" else 80
-
-            # Check if this is HTTPS (for transport_socket)
-            is_https = protocol == "https"
-            if is_https:
-                has_https = True
-
-            # Check if host is a domain name (for cluster type)
-            # Simple heuristic: if it contains letters or dots in non-IP pattern, it's a domain
-            is_domain = not _is_ip_address(host)
-            if is_domain:
-                uses_dns = True
-            if is_https and not is_domain:
-                raise ValueError(
-                    f"providers.models[{model.name!r}].backend_refs[{index}] "
-                    "HTTPS endpoint must use a DNS hostname so Envoy can "
-                    "verify its certificate identity"
-                )
-
-            extra_headers = dict(backend.extra_headers or {})
-            endpoint = {
-                "name": backend.name or f"backend-{index + 1}",
-                "address": host,
-                "port": int(port),
-                "host_authority": (
-                    f"{host}:{port}" if int(port) not in (80, 443) else host
-                ),
-                "path": path,
-                "weight": backend.weight,
-                "protocol": protocol,
-                "is_https": is_https,
-                "is_domain": is_domain,
-                "extra_headers": extra_headers,
-            }
-            endpoints.append(endpoint)
-            backend_semantics.append(backend_route_semantics(backend, endpoint))
+        backend_group = project_envoy_backend_group(model)
+        endpoints = list(backend_group.endpoints)
+        has_https = backend_group.has_https
+        uses_dns = backend_group.uses_dns
 
         # Sanitize model name for cluster name (replace / with _)
         if not endpoints:
             continue
-
-        validate_homogeneous_backend_group(model.name, backend_semantics)
 
         cluster_name = model.name.replace("/", "_").replace("-", "_")
 
@@ -238,8 +143,8 @@ def generate_envoy_config_from_user_config(
 
     extproc_host = os.getenv("ENVOY_EXTPROC_ADDRESS", "127.0.0.1")
     router_api_host = os.getenv("ENVOY_ROUTER_API_ADDRESS", "127.0.0.1")
-    extproc_host_is_domain = not _is_ip_address(extproc_host)
-    router_api_host_is_domain = not _is_ip_address(router_api_host)
+    extproc_host_is_domain = not is_ip_address(extproc_host)
+    router_api_host_is_domain = not is_ip_address(router_api_host)
 
     # Prepare template data
     template_data = {

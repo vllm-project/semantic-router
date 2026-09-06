@@ -111,12 +111,13 @@ func comprehensiveReasoningModeCases() []reasoningModeCase {
 			expectBothFieldsAbsent: true,
 		},
 		{
-			name:                   "Phi4 - no reasoning family, disabled",
-			model:                  "phi4",
-			categoryName:           "code",
-			enableReasoning:        false,
-			initialReasoningEffort: "low",
-			expectBothFieldsAbsent: true,
+			name:                          "Phi4 - custom family preserves operator wire control",
+			model:                         "phi4",
+			categoryName:                  "code",
+			enableReasoning:               false,
+			initialReasoningEffort:        "low",
+			expectReasoningEffortKey:      true,
+			expectOriginalEffortPreserved: true,
 		},
 	}
 }

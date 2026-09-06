@@ -24,6 +24,30 @@ presentation:
 conformance:
   status: unverified
 models:
+- catalog: qwen/qwen3.8-27b
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-27B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+- catalog: qwen/qwen3.8-2.4t-a95b
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-2.4T-A95B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
 - catalog: baidu/ernie-4.5-300b-a47b
   relationship: self_hosted
   id: baidu/ERNIE-4.5-300B-A47B-PT

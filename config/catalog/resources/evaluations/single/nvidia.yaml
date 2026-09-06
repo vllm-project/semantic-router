@@ -146,7 +146,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: allenai/ifbench@1.0.0
   benchmark_profile: prompt-loose
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     evaluation_unit: prompt
@@ -164,7 +164,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     hle_mode: no_tools
@@ -182,7 +182,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     source_kind: official_model_card
@@ -199,7 +199,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     tool_policy: none
@@ -217,7 +217,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: scicode-bench/scicode@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     tool_policy: none
@@ -236,7 +236,7 @@
   model: nvidia/nemotron-3-ultra
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: default
+  reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
     source_kind: official_model_card

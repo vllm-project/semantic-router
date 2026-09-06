@@ -48,7 +48,11 @@ models:
   id: MiniMax-M3
   protocols:
   - openai/chat-completions@1
-  reasoning_transport: top_level_effort
+  reasoning_transport: thinking_object
+  reasoning_modes:
+  - disabled
+  - adaptive
+  - enabled
   lifecycle: active
   verification:
     status: claimed

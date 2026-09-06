@@ -1,15 +1,21 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import generatedCatalog from '../generated/modelCatalog.json'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import { ModelOption } from './ConfigPageConnectModelsDialogView'
 import {
   buildConnectedProviderModel,
   resolveConnectedModelName,
 } from './configPageConnectModelSupport'
-import generatedCatalog from '../generated/modelCatalog.json'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import {
+  type ConnectModelsDialogController,
   mergeModelInventory,
+  missingRequiredProviderModelID,
   modelInventoryForProvider,
   modelsForProvider,
+  providerModelIDRequirements,
 } from './configPageConnectModelsDialogController'
 
 describe('connected model naming', () => {
@@ -33,6 +39,8 @@ describe('connected model naming', () => {
 })
 
 describe('catalog-backed model matching', () => {
+  const catalog = generatedCatalog as unknown as BuiltInModelCatalog
+
   it('does not materialize removed provider models from provider discovery', () => {
     const models = modelsForProvider(
       generatedCatalog as unknown as BuiltInModelCatalog,
@@ -58,6 +66,49 @@ describe('catalog-backed model matching', () => {
       'gpt-5.4',
       'custom-preview',
     ])
+  })
+
+  it('projects operator-defined deployment-name requirements from provider bindings', () => {
+    const requirements = providerModelIDRequirements(catalog, 'microsoft-foundry')
+
+    expect(requirements.get('mai-thinking-1')).toBe('deployment_name')
+    expect(providerModelIDRequirements(catalog, 'openai').has('gpt-5.6-sol')).toBe(false)
+  })
+
+  it('requires a non-blank provider model ID only for selected restricted bindings', () => {
+    const selected = new Set(['mai-thinking-1', 'custom-model'])
+    const requirements = new Map([['mai-thinking-1', 'deployment_name']])
+
+    expect(missingRequiredProviderModelID(selected, requirements, new Map())).toBe('mai-thinking-1')
+    expect(
+      missingRequiredProviderModelID(
+        selected,
+        requirements,
+        new Map([['mai-thinking-1', ' operator-mai-production ']]),
+      ),
+    ).toBeUndefined()
+  })
+
+  it('renders the deployment name as a required field for a selected restricted binding', () => {
+    const controller = {
+      advanced: { namePrefix: '' },
+      resolvedModelNames: new Map([['mai-thinking-1', 'mai-thinking-1']]),
+      catalogModels: new Map([['mai-thinking-1', 'microsoft/mai-thinking-1']]),
+      providerModelIdRequirements: new Map([['mai-thinking-1', 'deployment_name']]),
+      modelDisplayNames: new Map([['microsoft/mai-thinking-1', 'MAI-Thinking-1']]),
+      selected: new Set(['mai-thinking-1']),
+      providerModelIds: new Map<string, string>(),
+      setSelected: () => undefined,
+      setProviderModelId: () => undefined,
+    } as unknown as ConnectModelsDialogController
+
+    const markup = renderToStaticMarkup(
+      createElement(ModelOption, { controller, model: 'mai-thinking-1' }),
+    )
+
+    expect(markup).toContain('Deployment name')
+    expect(markup).toContain('required=""')
+    expect(markup).not.toContain('disabled=""')
   })
 })
 
@@ -101,6 +152,28 @@ describe('quick connect provider model payloads', () => {
       reasoning: { family: 'gpt' },
       provider_model_id: 'custom-preview',
       api_format: 'openai',
+    })
+  })
+
+  it('preserves an operator deployment name for a restricted catalog binding', () => {
+    expect(
+      buildConnectedProviderModel({
+        ...common,
+        catalog: 'microsoft/mai-thinking-1',
+        catalogProviderModelID: ' operator-mai-production ',
+        providerID: 'microsoft-foundry',
+        baseURL: 'https://foundry.example.test',
+      }),
+    ).toMatchObject({
+      name: 'frontier',
+      catalog: 'microsoft/mai-thinking-1',
+      provider_model_id: 'operator-mai-production',
+      backend_refs: [
+        {
+          provider: 'microsoft-foundry',
+          base_url: 'https://foundry.example.test',
+        },
+      ],
     })
   })
 })

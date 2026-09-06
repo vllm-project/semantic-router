@@ -495,7 +495,7 @@ routing:
     - description: Low-medium cost coding, debugging, refactoring, and technical Q&A.
       modelRefs:
         - model: qwen/qwen3.5-rocm
-          reasoning_effort: medium
+          reasoning_mode: enabled
           use_reasoning: true
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -717,7 +717,7 @@ routing:
     - description: Low-cost business, history, and psychology explanation when verification pressure is absent.
       modelRefs:
         - model: qwen/qwen3.5-rocm
-          reasoning_effort: medium
+          reasoning_mode: enabled
           use_reasoning: true
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false

@@ -69,28 +69,78 @@ const (
 // CatalogModelBinding is a provider-owned mapping from one canonical model
 // card to the provider-native identifier exposed by that API or runtime.
 type CatalogModelBinding struct {
-	Catalog            string                     `json:"catalog"`
-	Relationship       CatalogModelRelationship   `json:"relationship"`
-	ID                 string                     `json:"id"`
-	Protocols          []string                   `json:"protocols"`
-	ReasoningTransport ReasoningTransport         `json:"reasoning_transport,omitempty"`
-	Pricing            Pricing                    `json:"pricing,omitempty"`
-	Restrictions       map[string]any             `json:"restrictions,omitempty"`
-	Lifecycle          string                     `json:"lifecycle,omitempty"`
-	Verification       CatalogBindingVerification `json:"verification"`
+	Catalog            string                   `json:"catalog"`
+	Relationship       CatalogModelRelationship `json:"relationship"`
+	ID                 string                   `json:"id"`
+	Protocols          []string                 `json:"protocols"`
+	ReasoningTransport ReasoningTransport       `json:"reasoning_transport,omitempty"`
+	// ReasoningModes and ReasoningEfforts narrow the model-level capability to
+	// values accepted by this provider's API. They never expand the family.
+	ReasoningModes   []string                   `json:"reasoning_modes,omitempty"`
+	ReasoningEfforts []string                   `json:"reasoning_efforts,omitempty"`
+	Pricing          Pricing                    `json:"pricing,omitempty"`
+	Restrictions     map[string]any             `json:"restrictions,omitempty"`
+	Lifecycle        string                     `json:"lifecycle,omitempty"`
+	Verification     CatalogBindingVerification `json:"verification"`
 }
 
 type ReasoningTransport string
 
 const (
-	ReasoningTransportChatTemplate     ReasoningTransport = "chat_template_kwargs"
-	ReasoningTransportTopLevelEffort   ReasoningTransport = "top_level_effort"
-	ReasoningTransportTopLevelBoolean  ReasoningTransport = "top_level_boolean"
-	ReasoningTransportReasoningObject  ReasoningTransport = "reasoning_object"
-	ReasoningTransportThinkingObject   ReasoningTransport = "thinking_object"
-	ReasoningTransportOutputConfig     ReasoningTransport = "output_config_effort"
-	ReasoningTransportDeepSeekThinking ReasoningTransport = "deepseek_thinking"
+	ReasoningTransportChatTemplate    ReasoningTransport = "chat_template_kwargs"
+	ReasoningTransportTopLevelEffort  ReasoningTransport = "top_level_effort"
+	ReasoningTransportTopLevelBoolean ReasoningTransport = "top_level_boolean"
+	// Qwen-style mixed controls keep effort at the OpenAI-compatible top level
+	// while the independent on/off switch is either a local template kwarg or a
+	// provider extension. They are distinct transports because the same model
+	// family has different request schemas when self-hosted and first-party.
+	ReasoningTransportEffortTemplateSwitch ReasoningTransport = "top_level_effort_template_switch"
+	ReasoningTransportEffortBooleanSwitch  ReasoningTransport = "top_level_effort_boolean_switch"
+	ReasoningTransportReasoningObject      ReasoningTransport = "reasoning_object"
+	ReasoningTransportThinkingObject       ReasoningTransport = "thinking_object"
+	ReasoningTransportThinkingEffort       ReasoningTransport = "thinking_object_effort"
+	ReasoningTransportOutputConfig         ReasoningTransport = "output_config_effort"
+	ReasoningTransportDeepSeekThinking     ReasoningTransport = "deepseek_thinking"
 )
+
+var reasoningTransportFamilyTypes = map[ReasoningTransport]map[string]struct{}{
+	ReasoningTransportChatTemplate: {
+		"chat_template_kwargs": {}, "reasoning_effort": {}, "reasoning_mode": {}, "top_level_reasoning_effort": {},
+	},
+	ReasoningTransportReasoningObject: {
+		"chat_template_kwargs": {}, "reasoning_effort": {}, "reasoning_mode": {}, "top_level_reasoning_effort": {},
+	},
+	ReasoningTransportTopLevelEffort: {
+		"reasoning_effort": {}, "top_level_reasoning_effort": {},
+	},
+	ReasoningTransportEffortTemplateSwitch: {"reasoning_effort": {}},
+	ReasoningTransportEffortBooleanSwitch:  {"reasoning_effort": {}},
+	ReasoningTransportTopLevelBoolean:      {"chat_template_kwargs": {}},
+	ReasoningTransportThinkingObject: {
+		"chat_template_kwargs": {}, "reasoning_mode": {},
+	},
+	ReasoningTransportThinkingEffort: {
+		"reasoning_effort": {}, "top_level_reasoning_effort": {},
+	},
+	ReasoningTransportOutputConfig: {
+		"reasoning_effort": {}, "top_level_reasoning_effort": {},
+	},
+	ReasoningTransportDeepSeekThinking: {
+		"chat_template_kwargs": {}, "reasoning_effort": {}, "top_level_reasoning_effort": {},
+	},
+}
+
+// SupportsFamilyType reports whether this wire projection can represent the
+// complete operator-facing reasoning contract. Keep this closed: silently
+// dropping an effort or mode at the provider boundary is never valid.
+func (transport ReasoningTransport) SupportsFamilyType(familyType string) bool {
+	familyTypes, ok := reasoningTransportFamilyTypes[transport]
+	if !ok {
+		return false
+	}
+	_, ok = familyTypes[familyType]
+	return ok
+}
 
 type ProviderDefinition struct {
 	ID                  string                         `json:"id"`
@@ -170,12 +220,22 @@ type ModelAlias struct {
 }
 
 type ReasoningFamilyDefinition struct {
-	ID                  string   `json:"id" yaml:"name"`
-	Type                string   `json:"type" yaml:"type"`
-	Parameter           string   `json:"parameter" yaml:"parameter"`
-	ActivationParameter string   `json:"activation_parameter,omitempty" yaml:"activation_parameter,omitempty"`
-	Levels              []string `json:"levels" yaml:"levels,omitempty"`
-	Default             string   `json:"default" yaml:"default,omitempty"`
+	ID                  string `json:"id" yaml:"name"`
+	Type                string `json:"type" yaml:"type"`
+	Parameter           string `json:"parameter" yaml:"parameter"`
+	ActivationParameter string `json:"activation_parameter,omitempty" yaml:"activation_parameter,omitempty"`
+	// EffortFlags maps a logical reasoning effort to the boolean chat-template
+	// kwarg that selects it. An effort without a mapping is the model-native
+	// default-by-omission. This covers models such as Nemotron, whose local
+	// serving contract uses low_effort/medium_effort rather than a string-valued
+	// reasoning_effort field.
+	EffortFlags map[string]string `json:"effort_flags,omitempty" yaml:"effort_flags,omitempty"`
+	Levels      []string          `json:"levels,omitempty" yaml:"levels,omitempty"`
+	Default     string            `json:"default" yaml:"default,omitempty"`
+	// Modes describes whether reasoning can be enabled, disabled, or selected
+	// adaptively independently from an effort ladder.
+	Modes       []string `json:"modes,omitempty" yaml:"modes,omitempty"`
+	DefaultMode string   `json:"default_mode,omitempty" yaml:"default_mode,omitempty"`
 	// Disabled is the provider/model-native level that explicitly turns
 	// reasoning off. It is empty for always-reasoning families.
 	Disabled string `json:"disabled,omitempty" yaml:"disabled,omitempty"`

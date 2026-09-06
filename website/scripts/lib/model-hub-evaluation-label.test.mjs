@@ -86,14 +86,27 @@ test('model hub distinguishes configurable effort from published run conditions'
 })
 
 test('website benchmark bars and detail evidence use the shared condition label', () => {
-  const page = readFileSync(
-    resolve(repositoryRoot, 'website/src/pages/models.tsx'),
+  const benchmark = readFileSync(
+    resolve(
+      repositoryRoot,
+      'website/src/components/model-hub/ModelHubBenchmark.tsx',
+    ),
+    'utf8',
+  )
+  const detail = readFileSync(
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubDetail.tsx'),
+    'utf8',
+  )
+  const primitives = readFileSync(
+    resolve(repositoryRoot, 'website/src/components/model-hub/ModelHubPrimitives.tsx'),
     'utf8',
   )
 
-  assert.equal(page.match(/modelHubEvaluationConditionLabel\(/g)?.length, 2)
-  assert.match(page, /aria-label=\{`Rank \$\{rank\}[^`]+\$\{conditionLabel\}/)
-  assert.doesNotMatch(page, /readable\([^)]*reasoning_effort[^)]*\)/)
-  assert.match(page, /if \(!value\) return 'Not published'/)
-  assert.doesNotMatch(page, /Release date unavailable/)
+  assert.equal(benchmark.match(/modelHubEvaluationConditionLabel\(/g)?.length, 1)
+  assert.equal(detail.match(/modelHubEvaluationConditionLabel\(/g)?.length, 1)
+  assert.match(benchmark, /aria-label=\{`\$\{row\.model\.display_name\}, \$\{condition\}/)
+  assert.doesNotMatch(benchmark, /Rank \$\{/)
+  assert.doesNotMatch(detail, /readable\([^)]*reasoning_effort[^)]*\)/)
+  assert.match(primitives, /if \(!value\) return 'Not published'/)
+  assert.doesNotMatch(primitives, /Release date unavailable/)
 })

@@ -1,0 +1,312 @@
+.shell {
+  overflow: hidden;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.9rem;
+  background: var(--hub-surface);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1.45fr) repeat(2, minmax(10rem, 0.75fr));
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--hub-border-soft);
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--hub-border-soft);
+  background: color-mix(in srgb, var(--hub-surface) 74%, var(--ifm-background-color));
+}
+
+.search {
+  position: relative;
+  display: flex;
+  width: min(25rem, 100%);
+  align-items: center;
+}
+
+.search svg {
+  position: absolute;
+  left: 0.7rem;
+  width: 0.9rem;
+  fill: none;
+  stroke: var(--hub-muted);
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.search input,
+.publisherFilter select {
+  height: 2.15rem;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.55rem;
+  outline: none;
+  background: var(--ifm-background-color);
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.search input {
+  width: 100%;
+  padding: 0 0.65rem 0 2rem;
+}
+
+.publisherFilter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.publisherFilter select {
+  min-width: 10rem;
+  padding: 0 1.7rem 0 0.6rem;
+}
+
+.search input:focus,
+.publisherFilter select:focus {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ifm-color-primary) 11%, transparent);
+}
+
+.chartHeader {
+  display: flex;
+  min-height: 3.6rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1rem;
+}
+
+.chartHeader > span {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.chartHeader strong {
+  font-size: 0.84rem;
+}
+
+.chartHeader small,
+.chartHeader > span:last-child {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+.chartHeader b {
+  color: var(--ifm-font-color-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.chartHeader a {
+  margin-left: 0.45rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.viewport {
+  overflow-x: auto;
+  border-top: 1px solid var(--hub-border-soft);
+  border-bottom: 1px solid var(--hub-border-soft);
+  outline: none;
+  scrollbar-color: var(--ifm-color-emphasis-400) transparent;
+  scrollbar-width: thin;
+}
+
+.viewport:focus-visible {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ifm-color-primary) 55%, transparent);
+}
+
+.chart {
+  --column-width: 3.35rem;
+  --label-height: 6.7rem;
+  position: relative;
+  display: grid;
+  grid-auto-columns: var(--column-width);
+  grid-auto-flow: column;
+  min-width: max(100%, calc(var(--bar-count) * var(--column-width) + 1.6rem));
+  justify-content: center;
+  height: 26.5rem;
+  padding: 1.25rem 0.8rem 0.55rem;
+  background: var(--ifm-background-color);
+}
+
+.grid {
+  position: absolute;
+  inset: 2rem 0.8rem var(--label-height);
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to top,
+    var(--hub-border-soft) 0,
+    var(--hub-border-soft) 1px,
+    transparent 1px,
+    transparent 25%
+  );
+}
+
+.grid::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--hub-border);
+  content: '';
+}
+
+.columnItem {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.column {
+  display: grid;
+  grid-template-rows: 1.35rem minmax(0, 1fr) var(--label-height);
+  width: 100%;
+  height: 100%;
+  padding: 0 0.18rem;
+  border: 0;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.column:hover {
+  background: var(--bar-soft);
+}
+
+.column:focus-visible {
+  outline: 2px solid var(--bar-color);
+  outline-offset: -2px;
+}
+
+.column > strong {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.columnTrack {
+  display: flex;
+  min-height: 0;
+  align-items: end;
+  justify-content: center;
+}
+
+.columnTrack i {
+  width: min(2.2rem, 72%);
+  height: var(--bar-height);
+  min-height: 3px;
+  border-radius: 0.35rem 0.35rem 0.1rem 0.1rem;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bar-color) 76%, white), var(--bar-color));
+  box-shadow: 0 0.7rem 1.8rem var(--bar-soft);
+  transition: filter 150ms ease, transform 150ms ease;
+}
+
+.column:hover .columnTrack i {
+  filter: saturate(1.12) brightness(1.03);
+  transform: translateY(-2px);
+}
+
+.columnIdentity {
+  display: grid;
+  min-width: 0;
+  place-items: start center;
+  align-content: start;
+  gap: 0.32rem;
+  padding-top: 0.48rem;
+  border-top: 1px solid var(--hub-border-soft);
+  text-align: center;
+}
+
+.columnIdentity > span:last-child {
+  display: grid;
+  min-width: 0;
+  width: 100%;
+  gap: 0.1rem;
+}
+
+.columnIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.columnIdentity b {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.68rem;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.columnIdentity small {
+  color: var(--hub-muted);
+  font-size: 0.66rem;
+}
+
+@media (max-width: 760px) {
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search {
+    width: 100%;
+  }
+
+  .publisherFilter {
+    justify-content: space-between;
+  }
+
+  .publisherFilter select {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .chartHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .chartHeader > span {
+    flex-wrap: wrap;
+    gap: 0.2rem 0.4rem;
+  }
+
+  .chart {
+    --column-width: 3.8rem;
+    min-width: calc(var(--bar-count) * var(--column-width) + 1.1rem);
+    justify-content: start;
+    height: 24rem;
+    padding-inline: 0.55rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .columnTrack i {
+    transition: none;
+  }
+
+  .column:hover .columnTrack i {
+    transform: none;
+  }
+}

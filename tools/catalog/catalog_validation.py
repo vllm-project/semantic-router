@@ -18,10 +18,54 @@ REASONING_TRANSPORTS = {
     "chat_template_kwargs",
     "top_level_effort",
     "top_level_boolean",
+    "top_level_effort_template_switch",
+    "top_level_effort_boolean_switch",
     "reasoning_object",
     "thinking_object",
+    "thinking_object_effort",
     "output_config_effort",
     "deepseek_thinking",
+}
+# A transport is a wire projection, while a family type describes the model's
+# operator-facing control. Keep the compatibility table closed so a future
+# catalog entry cannot advertise a control that the selected provider adapter
+# would silently drop (for example, an effort ladder over a switch-only
+# thinking object).
+REASONING_TRANSPORT_FAMILY_TYPES = {
+    "chat_template_kwargs": {
+        "chat_template_kwargs",
+        "reasoning_effort",
+        "reasoning_mode",
+        "top_level_reasoning_effort",
+    },
+    "top_level_effort": {
+        "reasoning_effort",
+        "reasoning_mode",
+        "top_level_reasoning_effort",
+    },
+    "top_level_boolean": {"chat_template_kwargs"},
+    "top_level_effort_template_switch": {"reasoning_effort"},
+    "top_level_effort_boolean_switch": {"reasoning_effort"},
+    "reasoning_object": {
+        "chat_template_kwargs",
+        "reasoning_effort",
+        "reasoning_mode",
+        "top_level_reasoning_effort",
+    },
+    "thinking_object": {"chat_template_kwargs", "reasoning_mode"},
+    "thinking_object_effort": {
+        "reasoning_effort",
+        "top_level_reasoning_effort",
+    },
+    "output_config_effort": {
+        "reasoning_effort",
+        "top_level_reasoning_effort",
+    },
+    "deepseek_thinking": {
+        "chat_template_kwargs",
+        "reasoning_effort",
+        "top_level_reasoning_effort",
+    },
 }
 PROVIDER_MODEL_ID_KINDS = {"deployment_name"}
 MODEL_BINDING_RELATIONSHIPS = {
@@ -69,6 +113,7 @@ def validate_provider_bindings(
     providers: dict[str, dict[str, Any]],
     models: dict[str, dict[str, Any]],
     protocol_ids: set[str],
+    reasoning_families: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     bound_models: set[str] = set()
     for provider_id, provider in providers.items():
@@ -77,7 +122,14 @@ def validate_provider_bindings(
         for index, item in enumerate(provider.get("models", [])):
             path = f"providers[{provider_id}].models[{index}]"
             _validate_provider_binding(
-                item, path, provider, models, protocol_ids, native_ids, pairs
+                item,
+                path,
+                provider,
+                models,
+                protocol_ids,
+                native_ids,
+                pairs,
+                reasoning_families or {},
             )
             bound_models.add(str(item["catalog"]))
     _validate_every_physical_model_is_bound(models, bound_models)
@@ -91,6 +143,7 @@ def _validate_provider_binding(
     protocol_ids: set[str],
     native_ids: set[str],
     pairs: set[tuple[str, str]],
+    reasoning_families: dict[str, dict[str, Any]],
 ) -> None:
     _reject_unknown(
         item,
@@ -100,6 +153,8 @@ def _validate_provider_binding(
             "id",
             "protocols",
             "reasoning_transport",
+            "reasoning_modes",
+            "reasoning_efforts",
             "pricing",
             "restrictions",
             "lifecycle",
@@ -119,6 +174,14 @@ def _validate_provider_binding(
         raise CatalogBuildError(f"{path}.reasoning_transport is unsupported")
     if model_id not in models:
         raise CatalogBuildError(f"{path}.catalog references an unknown model")
+    _validate_reasoning_transport_family(
+        item,
+        path,
+        provider,
+        models[model_id],
+        reasoning_families,
+    )
+    _validate_reasoning_binding_values(item, path, models[model_id], reasoning_families)
     if native_id in native_ids:
         raise CatalogBuildError(
             f"{path}.id duplicates a provider-native model identifier"
@@ -138,6 +201,137 @@ def _validate_provider_binding(
                 f"{path} duplicates catalog model {model_id} for {protocol}"
             )
         pairs.add(pair)
+
+
+def _validate_reasoning_transport_family(
+    item: dict[str, Any],
+    path: str,
+    provider: dict[str, Any],
+    model: dict[str, Any],
+    reasoning_families: dict[str, dict[str, Any]],
+) -> None:
+    family_id = model.get("reasoning_family")
+    if family_id is None:
+        return
+    family = reasoning_families.get(str(family_id))
+    if family is None:
+        # The model validator reports the missing reference with the more
+        # specific model path. Do not obscure that diagnostic here.
+        return
+    transport = str(
+        item.get(
+            "reasoning_transport",
+            provider.get("reasoning_transport", "chat_template_kwargs"),
+        )
+    )
+    supported_types = REASONING_TRANSPORT_FAMILY_TYPES.get(transport, set())
+    if family.get("type") not in supported_types:
+        raise CatalogBuildError(
+            f"{path}.reasoning_transport {transport!r} cannot project "
+            f"reasoning family type {family.get('type')!r}"
+        )
+    if transport in {
+        "top_level_effort_template_switch",
+        "top_level_effort_boolean_switch",
+    } and not family.get("activation_parameter"):
+        raise CatalogBuildError(
+            f"{path}.reasoning_transport {transport!r} requires the model "
+            "reasoning family to declare activation_parameter"
+        )
+    effective_modes = item.get("reasoning_modes", family.get("modes", []))
+    if (
+        transport == "top_level_effort"
+        and family.get("activation_parameter")
+        and "disabled" in effective_modes
+        and not family.get("disabled")
+    ):
+        raise CatalogBuildError(
+            f"{path}.reasoning_transport 'top_level_effort' cannot project the "
+            "family's independent disabled switch"
+        )
+
+
+def _validated_reasoning_modes(item: dict[str, Any], path: str) -> list[Any] | None:
+    modes = item.get("reasoning_modes")
+    if modes is None:
+        return None
+    values = _sequence(modes, f"{path}.reasoning_modes")
+    if (
+        not values
+        or len(values) != len(set(values))
+        or any(value not in {"enabled", "disabled", "adaptive"} for value in values)
+    ):
+        raise CatalogBuildError(f"{path}.reasoning_modes is invalid")
+    return values
+
+
+def _validated_reasoning_efforts(item: dict[str, Any], path: str) -> list[Any] | None:
+    efforts = item.get("reasoning_efforts")
+    if efforts is None:
+        return None
+    values = _sequence(efforts, f"{path}.reasoning_efforts")
+    if not values or len(values) != len(set(values)):
+        raise CatalogBuildError(f"{path}.reasoning_efforts is invalid")
+    for index, value in enumerate(values):
+        _nonempty_string(value, f"{path}.reasoning_efforts[{index}]")
+    return values
+
+
+def _validate_reasoning_mode_subset(
+    modes: list[Any] | None,
+    family: dict[str, Any],
+    path: str,
+) -> None:
+    if modes is None:
+        return
+    unsupported = sorted(set(modes) - set(family.get("modes", [])))
+    if unsupported:
+        raise CatalogBuildError(
+            f"{path}.reasoning_modes expands the model family: {', '.join(unsupported)}"
+        )
+    if family.get("default_mode") not in modes:
+        raise CatalogBuildError(
+            f"{path}.reasoning_modes must include the model default_mode"
+        )
+
+
+def _validate_reasoning_effort_subset(
+    efforts: list[Any] | None,
+    family: dict[str, Any],
+    path: str,
+) -> None:
+    if efforts is None:
+        return
+    unsupported = sorted(set(efforts) - set(family.get("levels", [])))
+    if unsupported:
+        raise CatalogBuildError(
+            f"{path}.reasoning_efforts expands the model family: {', '.join(unsupported)}"
+        )
+    default_effort = family.get("default")
+    if default_effort is not None and default_effort not in efforts:
+        raise CatalogBuildError(
+            f"{path}.reasoning_efforts must include the model default"
+        )
+
+
+def _validate_reasoning_binding_values(
+    item: dict[str, Any],
+    path: str,
+    model: dict[str, Any],
+    reasoning_families: dict[str, dict[str, Any]],
+) -> None:
+    modes = _validated_reasoning_modes(item, path)
+    efforts = _validated_reasoning_efforts(item, path)
+    if modes is None and efforts is None:
+        return
+    family_id = model.get("reasoning_family")
+    family = reasoning_families.get(str(family_id))
+    if family is None:
+        raise CatalogBuildError(
+            f"{path} narrows reasoning values for a model without a reasoning family"
+        )
+    _validate_reasoning_mode_subset(modes, family, path)
+    _validate_reasoning_effort_subset(efforts, family, path)
 
 
 def _validate_provider_model_id_policy(item: dict[str, Any], path: str) -> None:
@@ -317,7 +511,13 @@ def _validate_reasoning_effort(
     family = reasoning_families.get(str(family_id))
     if family is None:
         raise CatalogBuildError(f"{path} references an unknown reasoning family")
-    allowed_efforts = {*family["levels"], "unspecified"}
+    allowed_efforts = {
+        *family.get("levels", []),
+        *family.get("modes", []),
+        "unspecified",
+    }
+    if family.get("disabled"):
+        allowed_efforts.add(str(family["disabled"]))
     # A family with an independent activation parameter keeps its effort ladder
     # separate from the off state. Evaluation evidence may still describe an
     # explicitly disabled run without making "disabled" a selectable effort.

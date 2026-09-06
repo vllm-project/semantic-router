@@ -16,7 +16,7 @@
   parameter_size: 428B (23B active)
   lifecycle: active
   limits:
-    context_window_size: 1000000
+    context_window_size: 1048576
   capabilities:
   - chat
   - reasoning
@@ -59,6 +59,8 @@
   family: minimax-m2
   parameter_size: 230B
   lifecycle: active
+  limits:
+    context_window_size: 204800
   capabilities:
   - chat
   - reasoning

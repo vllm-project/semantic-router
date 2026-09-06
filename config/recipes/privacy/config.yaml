@@ -685,7 +685,7 @@ routing:
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:
@@ -746,7 +746,7 @@ routing:
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:

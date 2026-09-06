@@ -5,6 +5,39 @@ import (
 	"testing"
 )
 
+func TestValidateEndpointURLRejectsQueryAndInvalidPort(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "query", raw: "https://api.example.test/v1?region=west", want: "query parameters"},
+		{name: "zero port", raw: "http://api.example.test:0/v1", want: "between 1 and 65535"},
+		{name: "large port", raw: "http://api.example.test:65536/v1", want: "between 1 and 65535"},
+		{name: "negative port", raw: "http://api.example.test:-1/v1", want: "absolute http(s) URL"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateEndpointURL(test.raw)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("validateEndpointURL(%q) error = %v, want %q", test.raw, err, test.want)
+			}
+		})
+	}
+}
+
+func TestValidateEndpointURLAcceptsIPv6AndTemplates(t *testing.T) {
+	for _, raw := range []string{
+		"http://[::1]:8000/v1",
+		"https://${AZURE_RESOURCE}.openai.azure.com/openai/deployments/${AZURE_DEPLOYMENT}",
+	} {
+		if err := validateEndpointURL(raw); err != nil {
+			t.Fatalf("validateEndpointURL(%q) error = %v", raw, err)
+		}
+	}
+}
+
 func TestBuiltInRegistryOwnsProviderProtocolAndPresentation(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {

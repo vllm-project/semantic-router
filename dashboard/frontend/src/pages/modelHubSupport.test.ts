@@ -6,12 +6,20 @@ import {
   benchmarkName,
   formatContextWindow,
   formatIntelligence,
+  modelHubBenchmarkBarHeight,
+  modelHubBenchmarkDomain,
   modelHubBenchmarkPoints,
-  modelHubChartHues,
+  modelHubBenchmarkSelections,
+  modelHubChartColors,
+  modelHubChartColorToken,
   modelHubCreators,
   modelHubDefaultBenchmark,
   modelHubEvaluationConditionLabel,
   modelHubProviders,
+  modelHubContextLabel,
+  modelHubMaxOutputLabel,
+  modelHubParameterLabel,
+  modelHubPublicEvaluations,
   modelHubRows,
   modelHubStats,
   paginateModelHubRows,
@@ -116,12 +124,25 @@ describe('model hub presentation support', () => {
 
   it('formats context, missing scores, and benchmark labels explicitly', () => {
     expect(formatContextWindow(1_000_000)).toBe('1M')
-    expect(formatContextWindow(131_072)).toBe('131.1K')
+    expect(formatContextWindow(1_048_576)).toBe('1M')
+    expect(formatContextWindow(1_050_000)).toBe('1.05M')
+    expect(formatContextWindow(131_072)).toBe('128K')
+    expect(formatContextWindow(128_000)).toBe('128K')
     expect(formatContextWindow()).toBe('Not published')
     expect(formatIntelligence(null)).toBe('Not yet measured')
     expect(benchmarkName('idavidrein/gpqa-diamond@1.0.0', 'accuracy', catalog)).toBe(
       'GPQA Diamond · accuracy',
     )
+  })
+
+  it('distinguishes disclosed values from provider and runtime-owned metadata', () => {
+    const gemini = catalog.models.find((model) => model.id === 'google/gemini-3.8-flash')!
+    const openModel = catalog.models.find((model) => model.id === 'openai/gpt-oss-20b')!
+
+    expect(modelHubContextLabel(gemini)).toBe('1M')
+    expect(modelHubMaxOutputLabel(gemini)).toBe('64K')
+    expect(modelHubParameterLabel(gemini)).toBe('Undisclosed')
+    expect(modelHubMaxOutputLabel(openModel)).toBe('Runtime-set')
   })
 
   it('paginates large inventories with stable, bounded page metadata', () => {
@@ -135,7 +156,7 @@ describe('model hub presentation support', () => {
     expect(beyondEnd.end).toBe(rows.length)
   })
 
-  it('assigns stable, collision-free chart hues to the visible models', () => {
+  it('assigns stable, collision-free chart colors to the visible models', () => {
     const modelIDs = [
       'ai21/jamba-reasoning-3b',
       'google/gemma-4-31b-it',
@@ -143,14 +164,85 @@ describe('model hub presentation support', () => {
       'anthropic/claude-fable-5.1',
       'anthropic/claude-opus-5',
     ]
-    const hues = modelHubChartHues(modelIDs)
+    const colors = modelHubChartColors(modelIDs)
+    const tokens = [...colors.values()].map(modelHubChartColorToken)
 
-    expect(new Set(hues.values())).toHaveLength(modelIDs.length)
-    expect(modelHubChartHues([...modelIDs].reverse())).toEqual(hues)
+    expect(new Set(tokens)).toHaveLength(modelIDs.length)
+    expect(modelHubChartColors([...modelIDs].reverse())).toEqual(colors)
+  })
+
+  it('keeps a model color stable when its chart peers change', () => {
+    const qwen = 'qwen/qwen3.7-max'
+    const universe = catalog.models.map((model) => model.id)
+    const alone = modelHubChartColors([qwen], universe).get(qwen)
+    const withPeer = modelHubChartColors(['anthropic/claude-opus-4.8', qwen], universe).get(qwen)
+
+    expect(withPeer).toStrictEqual(alone)
+  })
+
+  it('assigns unique stable colors to every current catalog model', () => {
+    const modelIDs = catalog.models.map((model) => model.id)
+    const colors = modelHubChartColors(modelIDs)
+    const tokens = new Map([...colors].map(([id, color]) => [id, modelHubChartColorToken(color)]))
+
+    expect(new Set(tokens.values())).toHaveLength(modelIDs.length)
+    expect(tokens.get('anthropic/claude-opus-4.8')).not.toBe(tokens.get('qwen/qwen3.7-max'))
+    expect(tokens.get('qwen/qwen3.8-max')).not.toBe(tokens.get('google/gemini-3.8-flash'))
+    expect(tokens.get('nvidia/nemotron-3-ultra')).not.toBe(tokens.get('stepfun/step-3.7-flash'))
+    expect(tokens.get('tencent/hy3')).not.toBe(tokens.get('bytedance/seed-2.0-pro'))
+    expect(tokens.get('moonshot/kimi-k2.5')).not.toBe(tokens.get('moonshot/kimi-k2.6'))
   })
 })
 
 describe('model hub selection and benchmark support', () => {
+  it('omits narrow benchmark evidence from every public Hub surface', () => {
+    const broad = Array.from({ length: 10 }, (_, index) => ({
+      id: `broad-${index}`,
+      model: `model-${index}`,
+      benchmark: 'broad@1',
+      benchmark_profile: 'default',
+      reasoning_effort: 'default',
+      status: 'available' as const,
+      metrics: { score: 0.8 },
+      subject: {},
+      evidence: {
+        provenance: 'vendor_claimed' as const,
+        verification: 'claimed' as const,
+        redistributable: false,
+      },
+    }))
+    const narrow = broad.slice(0, 9).map((evaluation, index) => ({
+      ...evaluation,
+      id: `narrow-${index}`,
+      benchmark: 'narrow@1',
+    }))
+    const filtered = modelHubPublicEvaluations({
+      ...catalog,
+      evaluations: [...broad, ...narrow],
+    })
+
+    expect(filtered).toHaveLength(10)
+    expect(new Set(filtered.map((evaluation) => evaluation.benchmark))).toEqual(
+      new Set(['broad@1']),
+    )
+  })
+
+  it('scales the best observed result to the full chart height', () => {
+    const metric = {
+      id: 'score',
+      unit: 'proportion',
+      direction: 'higher_is_better' as const,
+      range: [0, 1] as [number, number],
+    }
+    const domain = modelHubBenchmarkDomain([0.91, 0.65, 0.26], metric)
+
+    expect(domain).toEqual([0, 0.91])
+    expect(modelHubBenchmarkBarHeight(0.91, ...domain, metric.direction)).toBe(100)
+    expect(modelHubBenchmarkBarHeight(0.65, ...domain, metric.direction)).toBeCloseTo(
+      (0.65 / 0.91) * 100,
+    )
+  })
+
   it('keeps table and card selection on the visible page after pagination or filtering', () => {
     const rows = modelHubRows(catalog, filters())
     const firstPage = paginateModelHubRows(rows, 1, 24)
@@ -171,19 +263,11 @@ describe('model hub selection and benchmark support', () => {
   it('builds benchmark-specific model-effort points from available records only', () => {
     const selection = modelHubDefaultBenchmark(catalog)
     expect(selection).not.toBeNull()
-    const exactSetupCounts = new Map<string, number>()
-    for (const evaluation of catalog.evaluations) {
-      if (evaluation.status !== 'available') continue
-      for (const metric of Object.keys(evaluation.metrics)) {
-        const key = `${evaluation.benchmark}\u0000${evaluation.benchmark_profile}\u0000${metric}`
-        exactSetupCounts.set(key, (exactSetupCounts.get(key) ?? 0) + 1)
-      }
-    }
-    const expectedDefault = Array.from(exactSetupCounts.entries()).sort(
-      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-    )[0][0]
+    const selections = modelHubBenchmarkSelections(catalog)
+    expect(selections.every((candidate) => candidate.modelCount >= 10)).toBe(true)
+    const expectedDefault = selections[0]
     expect(`${selection!.benchmark}\u0000${selection!.profile}\u0000${selection!.metric}`).toBe(
-      expectedDefault,
+      `${expectedDefault.benchmark}\u0000${expectedDefault.profile}\u0000${expectedDefault.metric}`,
     )
     const points = modelHubBenchmarkPoints(catalog, selection!)
     expect(points.length).toBeGreaterThan(0)

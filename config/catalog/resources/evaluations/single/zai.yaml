@@ -303,7 +303,6 @@
     variant: GLM-5.3-Flash
     reasoning_effort: max
     source_kind: official_vendor_republication
-    measurement_origin: Artificial Analysis
   metrics:
     elo: 1773
   status: available
@@ -484,7 +483,6 @@
     variant: GLM-5.3-Flash
     reasoning_effort: max
     source_kind: official_vendor_republication
-    measurement_origin: Artificial Analysis
   metrics:
     accuracy: 0.912
   status: available

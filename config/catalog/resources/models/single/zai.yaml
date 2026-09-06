@@ -15,6 +15,9 @@
   parameter_size: 753B
   reasoning_family: glm-5.3
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -56,6 +59,7 @@
   lifecycle: active
   limits:
     context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -97,6 +101,9 @@
   parameter_size: 753B
   reasoning_family: glm-5.2
   lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning
@@ -138,7 +145,7 @@
   lifecycle: active
   limits:
     context_window_size: 200000
-    max_output_tokens: 128000
+    max_output_tokens: 131072
   capabilities:
   - chat
   - reasoning

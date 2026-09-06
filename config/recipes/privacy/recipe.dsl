@@ -269,7 +269,7 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   PRIORITY 250
   TIER 2
   WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active")) AND NOT projection("policy_security_local_only")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "filtered"
@@ -302,7 +302,7 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
   PRIORITY 100
   TIER 4
   WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "passthrough"

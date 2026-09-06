@@ -230,5 +230,7 @@ func validateReasoningFamilyReferences(
 }
 
 func hasInlineReasoningFields(reasoning *v1alpha1.ModelReasoning) bool {
-	return reasoning.Type != "" || reasoning.Parameter != "" || len(reasoning.Levels) > 0 || reasoning.Default != ""
+	return reasoning.Type != "" || reasoning.Parameter != "" || reasoning.ActivationParameter != "" || len(reasoning.EffortFlags) > 0 ||
+		len(reasoning.Levels) > 0 || reasoning.Default != "" || len(reasoning.Modes) > 0 ||
+		reasoning.DefaultMode != "" || reasoning.Disabled != ""
 }

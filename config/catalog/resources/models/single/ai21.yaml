@@ -12,6 +12,7 @@
     source: https://huggingface.co/ai21labs/AI21-Jamba2-Mini
     license: Apache-2.0
   family: jamba2
+  parameter_size: 52B (12B active)
   lifecycle: active
   limits:
     context_window_size: 256000

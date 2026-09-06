@@ -49,6 +49,8 @@ providers:
         parameter: reasoning_effort
         levels: [low, medium, high]
         default: medium
+        modes: [enabled]
+        default_mode: enabled
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
@@ -232,6 +234,46 @@ func TestCatalogBackedModelMaterializesAPIFormat(t *testing.T) {
 				t.Fatalf("provider profile = %+v, want protocol %q", profile, test.wantWire)
 			}
 		})
+	}
+}
+
+func TestCatalogProviderBindingExposesNativeReasoningModes(t *testing.T) {
+	model := CanonicalProviderModel{
+		Name: "minimax", Catalog: "minimax/minimax-m3",
+		BackendRefs: []CanonicalBackendRef{{Name: "primary", Provider: "minimax"}},
+	}
+	input, err := canonicalCatalogInput(&CanonicalConfig{
+		Version: "v0.3", Providers: CanonicalProviders{Models: []CanonicalProviderModel{model}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective, err := registry.Compile(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &RouterConfig{}
+	if err := applyEffectiveModelRegistry(cfg, effective, []CanonicalProviderModel{model}); err != nil {
+		t.Fatal(err)
+	}
+	profile := cfg.ProviderProfiles["minimax_primary"]
+	if got := strings.Join(profile.ReasoningModes, ","); got != "disabled,adaptive,enabled" {
+		t.Fatalf("materialized provider reasoning modes = %q", got)
+	}
+	useReasoning := true
+	ref := ModelRef{Model: "minimax", ModelReasoningControl: ModelReasoningControl{
+		UseReasoning: &useReasoning, ReasoningMode: ReasoningModeEnabled,
+	}}
+	if err := validateModelRefReasoningControl(cfg, "route", 0, ref); err != nil {
+		t.Fatalf("enabled MiniMax provider reasoning should validate: %v", err)
+	}
+	ref.ReasoningMode = ReasoningModeAdaptive
+	if err := validateModelRefReasoningControl(cfg, "route", 0, ref); err != nil {
+		t.Fatalf("adaptive MiniMax provider reasoning should validate: %v", err)
 	}
 }
 

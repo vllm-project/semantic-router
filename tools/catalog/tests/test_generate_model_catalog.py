@@ -17,6 +17,7 @@ sys.modules[SPEC.name] = catalog
 SPEC.loader.exec_module(catalog)
 
 DEFAULT_INDEX_COMPONENT_COUNT = 5
+OPENAI_LONG_CONTEXT_TOKENS = 1_050_000
 
 
 def _evaluation_benchmarks_by_bucket(
@@ -417,29 +418,31 @@ class ModelCatalogCompilerTests(unittest.TestCase):
     def test_core_reasoning_families_match_native_control_surfaces(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         families = {item["id"]: item for item in resources["reasoning_families"]}
-        models = {item["id"]: item for item in resources["models"]}
-        providers = {item["id"]: item for item in resources["providers"]}
-
         self.assertEqual(
             families["grok-4.6"]["levels"], ["low", "medium", "high", "xhigh"]
         )
         self.assertEqual(families["grok-4.6"]["default"], "high")
-        self.assertNotIn("disabled", families["grok-4.6"])
-        self.assertEqual(families["claude-effort"]["levels"], ["low", "medium", "high"])
+        self.assertEqual(families["grok-4.6"]["modes"], ["enabled"])
+        self.assertEqual(families["claude-effort-always-on"]["modes"], ["adaptive"])
         self.assertEqual(
-            families["claude-effort-max"]["levels"],
-            ["low", "medium", "high", "max"],
+            families["claude-effort-adaptive"]["modes"],
+            ["adaptive", "disabled"],
         )
-        self.assertEqual(
-            families["claude-effort-xhigh-max"]["levels"],
-            ["low", "medium", "high", "xhigh", "max"],
-        )
+        self.assertEqual(families["claude-effort-opt-in"]["default_mode"], "disabled")
         self.assertEqual(families["kimi-k3"]["levels"], ["low", "high", "max"])
         self.assertEqual(families["kimi-k3"]["default"], "max")
-        self.assertEqual(families["hunyuan-hy4"]["levels"], ["no_think", "high"])
+        self.assertEqual(families["hunyuan-hy4"]["levels"], ["high"])
+        self.assertEqual(families["hunyuan-hy4"]["disabled"], "no_think")
         self.assertEqual(families["qwen3.8"]["activation_parameter"], "enable_thinking")
         self.assertEqual(families["qwen3.8"]["levels"], ["low", "medium", "xhigh"])
-        self.assertNotIn("disabled", families["qwen3.8"])
+        self.assertEqual(families["qwen3.8"]["modes"], ["enabled", "disabled"])
+        self.assertEqual(families["qwen3.8-always-on"]["modes"], ["enabled"])
+        self.assertEqual(
+            families["inkling"]["levels"],
+            ["minimal", "low", "medium", "high", "xhigh", "max"],
+        )
+        self.assertEqual(families["glm"]["modes"], ["enabled", "disabled"])
+        self.assertEqual(families["glm"]["default_mode"], "enabled")
         self.assertEqual(
             families["glm-5.2"],
             {
@@ -449,35 +452,57 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "activation_parameter": "enable_thinking",
                 "levels": ["high", "max"],
                 "default": "max",
+                "modes": ["enabled", "disabled"],
+                "default_mode": "enabled",
             },
         )
         self.assertEqual(
-            families["minimax-m3"]["levels"],
+            families["minimax-m3"]["modes"],
             ["disabled", "adaptive", "enabled"],
         )
-        self.assertEqual(families["minimax-m3"]["default"], "adaptive")
+        self.assertEqual(families["minimax-m3"]["default_mode"], "adaptive")
+        self.assertEqual(
+            families["nemotron-super"]["effort_flags"], {"low": "low_effort"}
+        )
+        self.assertEqual(
+            families["nemotron-ultra"]["effort_flags"],
+            {"medium": "medium_effort"},
+        )
+        self.assertEqual(families["kimi-k2-always-on"]["modes"], ["enabled"])
         self.assertEqual(
             families["muse-glimmer"]["levels"],
             ["low", "medium", "high", "xhigh"],
         )
-        self.assertEqual(families["mistral-none-high"]["levels"], ["none", "high"])
+        self.assertEqual(families["mistral-none-high"]["levels"], ["high"])
+        self.assertEqual(families["mistral-none-high"]["disabled"], "none")
+
+    def test_core_reasoning_model_and_provider_bindings(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        models = {item["id"]: item for item in resources["models"]}
+        providers = {item["id"]: item for item in resources["providers"]}
 
         expected_models = {
             "xai/grok-4.6": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
             "moonshot/kimi-k3": "kimi-k3",
+            "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",
             "meta/muse-glimmer-30b": "muse-glimmer",
             "mistral/mistral-medium-3.5": "mistral-none-high",
             "mistral/mistral-small-4": "mistral-none-high",
             "qwen/qwen3.8-27b": "qwen3.8",
-            "qwen/qwen3.8-2.4t-a95b": "qwen3.8",
+            "qwen/qwen3.8-2.4t-a95b": "qwen3.8-always-on",
             "zai/glm-5.2": "glm-5.2",
-            "anthropic/claude-fable-5": "claude-effort-xhigh-max",
-            "anthropic/claude-fable-5.1": "claude-effort-xhigh-max",
-            "anthropic/claude-sonnet-5": "claude-effort-xhigh-max",
-            "anthropic/claude-opus-4.8": "claude-effort-xhigh-max",
-            "anthropic/claude-opus-5": "claude-effort-xhigh-max",
+            "anthropic/claude-fable-5": "claude-effort-always-on",
+            "anthropic/claude-fable-5.1": "claude-effort-always-on",
+            "anthropic/claude-sonnet-5": "claude-effort-adaptive",
+            "anthropic/claude-opus-4.8": "claude-effort-opt-in",
+            "anthropic/claude-opus-5": "claude-effort-adaptive",
+            "nvidia/nemotron-3.5-lightning": "nemotron-thinking-toggle",
+            "nvidia/nemotron-3-super": "nemotron-super",
+            "nvidia/nemotron-3-ultra": "nemotron-ultra",
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
+            "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
         }
         self.assertEqual(
             {
@@ -490,6 +515,100 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             providers["anthropic"]["reasoning_transport"], "output_config_effort"
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
+        zai_bindings = {
+            binding["catalog"]: binding for binding in providers["zai"]["models"]
+        }
+        for model_id in ("zai/glm-5.2", "zai/glm-5.3", "zai/glm-5.3-flash"):
+            self.assertEqual(
+                zai_bindings[model_id]["reasoning_transport"],
+                "thinking_object_effort",
+            )
+        moonshot_bindings = {
+            binding["catalog"]: binding for binding in providers["moonshot"]["models"]
+        }
+        self.assertEqual(
+            moonshot_bindings["moonshot/kimi-k2.7-code"]["reasoning_transport"],
+            "thinking_object",
+        )
+        minimax_binding = next(
+            binding
+            for binding in providers["minimax"]["models"]
+            if binding["catalog"] == "minimax/minimax-m3"
+        )
+        self.assertEqual(
+            minimax_binding["reasoning_modes"], ["disabled", "adaptive", "enabled"]
+        )
+        for runtime in ("vllm", "sglang"):
+            qwen_binding = next(
+                binding
+                for binding in providers[runtime]["models"]
+                if binding["catalog"] == "qwen/qwen3.8-27b"
+            )
+            self.assertEqual(
+                qwen_binding["reasoning_transport"],
+                "top_level_effort_template_switch",
+            )
+        dashscope_qwen = next(
+            binding
+            for binding in providers["dashscope"]["models"]
+            if binding["catalog"] == "qwen/qwen3.8-max"
+        )
+        self.assertEqual(
+            dashscope_qwen["reasoning_transport"],
+            "top_level_effort_boolean_switch",
+        )
+        self.assertIn("openai/responses@1", dashscope_qwen["protocols"])
+
+    def test_frontier_context_limits_keep_exact_published_units(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        models = {item["id"]: item for item in resources["models"]}
+
+        openai_1050k = {
+            model_id
+            for model_id, model in models.items()
+            if model.get("limits", {}).get("context_window_size")
+            == OPENAI_LONG_CONTEXT_TOKENS
+        }
+        self.assertEqual(
+            openai_1050k,
+            {
+                "openai/gpt-5.4",
+                "openai/gpt-5.5",
+                "openai/gpt-5.6-luna",
+                "openai/gpt-5.6-sol",
+                "openai/gpt-5.6-terra",
+            },
+            "1.05M is an exact published limit, not a rounded 1M display value",
+        )
+        self.assertEqual(
+            models["zai/glm-5.1"]["limits"]["context_window_size"], 200_000
+        )
+        self.assertEqual(
+            models["nvidia/nemotron-3-super"]["limits"]["context_window_size"],
+            1_048_576,
+        )
+        self.assertEqual(
+            models["nvidia/nemotron-3-ultra"]["limits"]["context_window_size"],
+            1_048_576,
+        )
+        for model_id in ("zai/glm-5.2", "zai/glm-5.3", "zai/glm-5.3-flash"):
+            self.assertEqual(
+                models[model_id]["limits"]["context_window_size"],
+                1_048_576,
+            )
+        for model_id in ("qwen/qwen3.8-max", "qwen/qwen3.7-max"):
+            self.assertEqual(
+                models[model_id]["limits"]["context_window_size"],
+                1_000_000,
+            )
+        self.assertEqual(
+            models["amazon/nova-premier-v1"]["limits"],
+            {"context_window_size": 1_000_000, "max_output_tokens": 10_000},
+        )
+        self.assertEqual(
+            models["amazon/nova-pro-v1"]["limits"],
+            {"context_window_size": 300_000, "max_output_tokens": 10_000},
+        )
 
     def test_every_model_reasoning_mode_materializes_default_slots_including_missing(
         self,
@@ -551,7 +670,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ("zai/glm-5.3-flash", "max"): 2,
             ("qwen/qwen3.8-27b", "xhigh"): 3,
             ("tencent/hy3", "high"): 4,
-            ("thinking-machines/inkling", "xhigh"): 4,
+            ("thinking-machines/inkling", "max"): 4,
             ("microsoft/mai-thinking-1", "unspecified"): 3,
             ("cohere/tiny-aya-global", "unspecified"): 1,
         }

@@ -2,7 +2,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/briefcase@1.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -22,7 +22,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/critpt@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -40,7 +40,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/gdp-pdf@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -58,7 +58,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/gdpval-aa@2.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -78,7 +78,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/lcr@1.1.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -96,7 +96,7 @@
   model: thinking-machines/inkling
   benchmark: artificial-analysis/omniscience@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling
     source_model_slug: inkling
@@ -114,7 +114,7 @@
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -132,7 +132,7 @@
   model: thinking-machines/inkling
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -150,7 +150,7 @@
   model: thinking-machines/inkling
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -168,7 +168,7 @@
   model: thinking-machines/inkling
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -187,7 +187,7 @@
   model: thinking-machines/inkling
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: independent-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -205,7 +205,7 @@
   model: thinking-machines/inkling
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -223,7 +223,7 @@
   model: thinking-machines/inkling
   benchmark: scicode-bench/scicode@1.0.0
   benchmark_profile: independent-test-288
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -241,7 +241,7 @@
   model: thinking-machines/inkling
   benchmark: swe-bench/pro@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -259,7 +259,7 @@
   model: thinking-machines/inkling
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling
     renderer_effort: 0.99
@@ -278,7 +278,7 @@
   model: thinking-machines/inkling
   benchmark: tau-bench/tau3-banking@1.0.0
   benchmark_profile: independent-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     source_model: Inkling (xhigh)
     source_model_slug: inkling
@@ -296,10 +296,10 @@
   model: thinking-machines/inkling-small
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: no-tools
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     accuracy: 0.316
@@ -314,10 +314,10 @@
   model: thinking-machines/inkling-small
   benchmark: harbor/terminal-bench@2.1.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
     harness: internal-coding-agent
   metrics:
@@ -333,10 +333,10 @@
   model: thinking-machines/inkling-small
   benchmark: idavidrein/gpqa-diamond@1.0.0
   benchmark_profile: published-standard
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     accuracy: 0.895
@@ -351,10 +351,10 @@
   model: thinking-machines/inkling-small
   benchmark: swe-bench/pro@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
   metrics:
     resolved: 0.559
@@ -369,10 +369,10 @@
   model: thinking-machines/inkling-small
   benchmark: swe-bench/verified@1.0.0
   benchmark_profile: published-agent
-  reasoning_effort: xhigh
+  reasoning_effort: max
   subject:
     variant: Inkling Small
-    reasoning_effort: xhigh
+    reasoning_effort: max
     source_kind: official_model_card
     harness: bash-only
   metrics:

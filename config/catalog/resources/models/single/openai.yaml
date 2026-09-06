@@ -28,7 +28,7 @@
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -69,7 +69,7 @@
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -110,7 +110,7 @@
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.6
   verification:
     authority: OpenAI
     status: claimed
@@ -151,7 +151,7 @@
     - image
     output:
     - text
-  reasoning_family: gpt
+  reasoning_family: gpt-5.5
   verification:
     authority: OpenAI
     status: claimed

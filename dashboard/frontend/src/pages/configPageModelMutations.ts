@@ -100,6 +100,7 @@ export function buildConnectedModelsConfig(
         name: modelName,
         catalog: catalogID,
         providerModelID: modelID,
+        catalogProviderModelID: input.providerModelIds[modelID],
         providerID: input.provider.id,
         providerAPIFormat: input.provider.apiFormat,
         baseURL: input.baseUrl,

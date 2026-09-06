@@ -342,9 +342,13 @@ type ProviderProfile struct {
 	Type               string                          `yaml:"type"`
 	Protocol           string                          `yaml:"protocol,omitempty"`
 	ReasoningTransport modelcatalog.ReasoningTransport `yaml:"reasoning_transport,omitempty"`
-	BaseURL            string                          `yaml:"base_url,omitempty"`
-	AuthHeader         string                          `yaml:"auth_header,omitempty"`
-	AuthPrefix         string                          `yaml:"auth_prefix,omitempty"`
+	// ReasoningModes and ReasoningEfforts are catalog-materialized provider API
+	// constraints. They are intentionally absent from the public config surface.
+	ReasoningModes   []string `yaml:"-"`
+	ReasoningEfforts []string `yaml:"-"`
+	BaseURL          string   `yaml:"base_url,omitempty"`
+	AuthHeader       string   `yaml:"auth_header,omitempty"`
+	AuthPrefix       string   `yaml:"auth_prefix,omitempty"`
 	// AuthPrefixSet distinguishes an omitted override from an explicit empty
 	// prefix after canonical config has been materialized.
 	AuthPrefixSet bool              `yaml:"-"`
@@ -406,12 +410,15 @@ type LoRAAdapter struct {
 }
 
 type ReasoningFamilyConfig struct {
-	Type                string   `yaml:"type"`
-	Parameter           string   `yaml:"parameter"`
-	ActivationParameter string   `yaml:"activation_parameter,omitempty"`
-	Levels              []string `yaml:"levels,omitempty"`
-	Default             string   `yaml:"default,omitempty"`
-	Disabled            string   `yaml:"disabled,omitempty"`
+	Type                string            `yaml:"type"`
+	Parameter           string            `yaml:"parameter"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
 type PIIPolicy struct {

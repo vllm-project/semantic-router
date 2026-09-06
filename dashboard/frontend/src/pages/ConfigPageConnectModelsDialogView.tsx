@@ -1,3 +1,5 @@
+import { useId } from 'react'
+
 import ProductIcon from '../components/ProductIcon'
 import ConfigPageConnectModelAdvanced from './ConfigPageConnectModelAdvanced'
 import type { ConnectModelsDialogController } from './configPageConnectModelsDialogController'
@@ -348,10 +350,14 @@ function ModelPicker({ controller }: Pick<Props, 'controller'>) {
   )
 }
 
-function ModelOption({ controller, model }: Pick<Props, 'controller'> & { model: string }) {
+export function ModelOption({ controller, model }: Pick<Props, 'controller'> & { model: string }) {
+  const providerModelIDField = useId()
   const logicalName = controller.resolvedModelNames.get(model) ?? model
   const renamed = logicalName !== requestedConnectedModelName(controller.advanced.namePrefix, model)
   const catalogID = controller.catalogModels.get(model)
+  const providerModelIDKind = controller.providerModelIdRequirements.get(model)
+  const needsProviderModelID = Boolean(providerModelIDKind)
+  const selected = controller.selected.has(model)
   const toggle = () =>
     controller.setSelected((current) => {
       const next = new Set(current)
@@ -360,18 +366,36 @@ function ModelOption({ controller, model }: Pick<Props, 'controller'> & { model:
       return next
     })
   return (
-    <label className={styles.modelOption}>
-      <input type="checkbox" checked={controller.selected.has(model)} onChange={toggle} />
-      <span>
-        <strong>{logicalName}</strong>
-        {catalogID ? (
-          <small>Built-in · {controller.modelDisplayNames.get(catalogID)}</small>
-        ) : renamed ? (
-          <small>Named to avoid a public model conflict</small>
-        ) : null}
-      </span>
-      <ProductIcon className={styles.modelCheck} name="check" aria-hidden="true" />
-    </label>
+    <div className={styles.modelOption}>
+      <label className={styles.modelChoice}>
+        <input type="checkbox" checked={selected} onChange={toggle} />
+        <span>
+          <strong>{logicalName}</strong>
+          {catalogID ? (
+            <small>Built-in · {controller.modelDisplayNames.get(catalogID)}</small>
+          ) : renamed ? (
+            <small>Named to avoid a public model conflict</small>
+          ) : null}
+        </span>
+        <ProductIcon className={styles.modelCheck} name="check" aria-hidden="true" />
+      </label>
+      {needsProviderModelID ? (
+        <label className={styles.providerModelIDField} htmlFor={providerModelIDField}>
+          <span>
+            {providerModelIDKind === 'deployment_name' ? 'Deployment name' : 'Provider model ID'}
+          </span>
+          <input
+            id={providerModelIDField}
+            type="text"
+            value={controller.providerModelIds.get(model) ?? ''}
+            onChange={(event) => controller.setProviderModelId(model, event.target.value)}
+            placeholder="Enter the deployed model name"
+            required={selected}
+            disabled={!selected}
+          />
+        </label>
+      ) : null}
+    </div>
   )
 }
 

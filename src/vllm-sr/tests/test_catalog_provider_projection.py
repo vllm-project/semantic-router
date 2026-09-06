@@ -406,6 +406,171 @@ routing: {}
         )
 
 
+@pytest.mark.parametrize(
+    ("base_url", "expected_error"),
+    (
+        (
+            "ftp://example.com/v1",
+            "base_url scheme 'ftp' is unsupported",
+        ),
+        (
+            "https://user@example.com/v1",
+            "base_url userinfo and fragments are not allowed",
+        ),
+        (
+            "https://example.com/v1#fragment",
+            "base_url userinfo and fragments are not allowed",
+        ),
+        (
+            "example.com/v1",
+            "base_url must be an absolute http(s) URL",
+        ),
+        (
+            "https://example.com/v1?region=west",
+            "base_url query parameters are not supported by Envoy routing",
+        ),
+    ),
+)
+def test_catalog_provider_projection_rejects_invalid_backend_url(
+    tmp_path, base_url, expected_error
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+version: v0.3
+listeners: []
+providers:
+  models:
+    - name: local-model
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          base_url: {base_url}
+routing: {{}}
+"""
+    )
+
+    with pytest.raises(ValueError) as error:
+        project_provider_models_for_envoy(parse_user_config(str(config_path)))
+    assert expected_error in str(error.value)
+
+
+def test_catalog_provider_projection_rejects_base_url_with_endpoint(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: v0.3
+listeners: []
+providers:
+  models:
+    - name: local-model
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          base_url: http://base.example/v1
+          endpoint: endpoint.example:8000/v1
+routing: {}
+"""
+    )
+
+    with pytest.raises(ValueError, match="cannot set both base_url and endpoint"):
+        project_provider_models_for_envoy(parse_user_config(str(config_path)))
+
+
+def test_catalog_provider_projection_accepts_backend_url_templates(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: v0.3
+listeners: []
+providers:
+  models:
+    - name: private-deployment
+      provider_model_id: deployment-name
+      api_format: openai
+      backend_refs:
+        - provider: azure-openai
+          base_url: https://${AZURE_RESOURCE}.openai.azure.com/openai/deployments/${AZURE_DEPLOYMENT}
+          api_version: "2025-04-01"
+routing: {}
+"""
+    )
+
+    projected = project_provider_models_for_envoy(parse_user_config(str(config_path)))
+
+    assert projected[0].backend_refs[0].base_url.startswith("https://${AZURE_RESOURCE}")
+    assert projected[0].backend_refs[0].api_version == "2025-04-01"
+
+
+@pytest.mark.parametrize(
+    (
+        "backend_config",
+        "expected_address",
+        "expected_port",
+        "expected_authority",
+        "expected_https",
+    ),
+    (
+        (
+            "base_url: http://[::1]:8000/v1",
+            "::1",
+            8000,
+            "[::1]:8000",
+            False,
+        ),
+        (
+            'endpoint: "[::1]:9123/v1"\n          protocol: HTTP',
+            "::1",
+            9123,
+            "[::1]:9123",
+            False,
+        ),
+        (
+            "endpoint: api.example.test:9443/v1\n          protocol: HTTPS",
+            "api.example.test",
+            9443,
+            "api.example.test:9443",
+            True,
+        ),
+    ),
+)
+def test_shared_backend_projection_normalizes_protocol_and_ipv6_authority(
+    tmp_path,
+    monkeypatch,
+    backend_config,
+    expected_address,
+    expected_port,
+    expected_authority,
+    expected_https,
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        f"""
+version: v0.3
+providers:
+  models:
+    - name: local-model
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          {backend_config}
+routing: {{}}
+""",
+    )
+
+    cluster = _cluster_by_name(rendered, "local_model_cluster")
+    endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]
+    assert endpoint["endpoint"]["address"]["socket_address"] == {
+        "address": expected_address,
+        "port_value": expected_port,
+    }
+    route = _model_route(rendered, "local-model")
+    assert route["route"]["host_rewrite_literal"] == expected_authority
+    assert route["route"]["regex_rewrite"]["substitution"] == "/v1" + r"\1"
+    assert ("transport_socket" in cluster) is expected_https
+
+
 def test_catalog_deployment_name_requires_explicit_provider_model_id(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

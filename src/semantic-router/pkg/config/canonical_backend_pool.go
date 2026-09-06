@@ -5,6 +5,7 @@ import (
 	"maps"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -29,6 +30,8 @@ type effectiveBackendSemantics struct {
 	chatPath           string
 	createPath         string
 	reasoningTransport modelcatalog.ReasoningTransport
+	reasoningModes     []string
+	reasoningEfforts   []string
 }
 
 type effectiveCredentialIdentity struct {
@@ -149,6 +152,8 @@ func newEffectiveBackendSemantics(
 		chatPath:           effective.Provider.Instance.ChatPath,
 		createPath:         createPath,
 		reasoningTransport: reasoningTransport,
+		reasoningModes:     profile.ReasoningModes,
+		reasoningEfforts:   profile.ReasoningEfforts,
 	}, nil
 }
 
@@ -183,6 +188,8 @@ func effectiveBackendDifferences(left, right effectiveBackendSemantics) []string
 		left.reasoningTransport != right.reasoningTransport,
 		"reasoning transport",
 	)
+	result = appendDifference(result, !slices.Equal(left.reasoningModes, right.reasoningModes), "reasoning modes")
+	result = appendDifference(result, !slices.Equal(left.reasoningEfforts, right.reasoningEfforts), "reasoning efforts")
 	return result
 }
 

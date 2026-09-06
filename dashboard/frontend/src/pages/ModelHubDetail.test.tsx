@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import generatedCatalog from '../generated/modelCatalog.json'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { EvaluationCard, ModelAccess, ModelDetail, VirtualPool } from './ModelHubDetail'
+import { providerProtocolOperations } from './modelHubProviderOperations'
 import { modelHubRows, type ModelHubFilters } from './modelHubSupport'
 
 const catalog = generatedCatalog as unknown as BuiltInModelCatalog
@@ -82,7 +83,9 @@ describe('model hub detail', () => {
     expect(markup).toContain('role="tabpanel"')
     expect(markup).toContain('aria-labelledby="model-detail-')
   })
+})
 
+describe('model hub provider detail', () => {
   it('labels the creator-to-serving-channel relationship for each access route', () => {
     const provider = catalog.providers.find((candidate) => candidate.id === 'openrouter')
     const binding = provider?.models?.[0]
@@ -105,6 +108,57 @@ describe('model hub detail', () => {
     expect(markup).toContain('Gateway')
     expect(markup).toContain(provider!.display_name)
   })
+
+  it.each([
+    ['bedrock', '/chat/completions'],
+    ['minimax', '/v1/chat/completions'],
+  ])(
+    'renders only supported operations and the effective path for %s',
+    (providerID, expectedPath) => {
+      const provider = catalog.providers.find((candidate) => candidate.id === providerID)!
+      const binding = provider.models?.[0]
+      const sourceRow = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' }).find(
+        (candidate) => candidate.model.id === binding?.catalog,
+      )
+      expect(binding).toBeDefined()
+      expect(sourceRow).toBeDefined()
+
+      const row = {
+        ...sourceRow!,
+        providers: [{ provider, model: binding! }],
+      }
+      const markup = renderToStaticMarkup(<ModelAccess row={row} catalog={catalog} />)
+
+      expect(markup).toContain('POST')
+      expect(markup.match(/>create<\/strong>/g)).toHaveLength(1)
+      expect(markup).toContain(expectedPath)
+      expect(markup).not.toContain('GET')
+      expect(markup).not.toContain('List Models')
+      if (providerID === 'bedrock') expect(markup).not.toContain('/v1/chat/completions')
+    },
+  )
+
+  it.each([
+    ['openai', 'openai/responses@1', 'create', '/v1/responses'],
+    ['openrouter', 'openai/chat-completions@1', 'create', '/api/v1/chat/completions'],
+    ['openrouter', 'openai/responses@1', 'create', '/api/v1/responses'],
+    ['gemini', 'openai/chat-completions@1', 'create', '/v1beta/openai/chat/completions'],
+    ['gemini', 'openai/chat-completions@1', 'list_models', '/v1beta/openai/models'],
+    ['baidu-ai-studio', 'openai/chat-completions@1', 'create', '/llm/lmapi/v3/chat/completions'],
+    ['bedrock', 'openai/chat-completions@1', 'create', '/chat/completions'],
+    ['minimax', 'openai/chat-completions@1', 'create', '/v1/chat/completions'],
+  ])(
+    'resolves the Go registry effective path for %s %s#%s',
+    (providerID, protocolID, operationID, expectedPath) => {
+      const provider = catalog.providers.find((candidate) => candidate.id === providerID)!
+      const protocol = catalog.protocols.find((candidate) => candidate.id === protocolID)!
+      const operation = providerProtocolOperations(provider, protocol).find(
+        (candidate) => candidate.id === operationID,
+      )
+
+      expect(operation?.path).toBe(expectedPath)
+    },
+  )
 
   it('exposes the compact detail as a labelled modal with an explicit close action', () => {
     const row = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' })[0]

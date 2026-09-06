@@ -11,14 +11,15 @@ import (
 
 func TestResolveProviderReasoningTransport(t *testing.T) {
 	tests := []struct {
-		name       string
-		profile    *config.ProviderProfile
-		want       modelcatalog.ReasoningTransport
-		wantTop    bool
-		wantThink  bool
-		wantDeep   bool
-		wantObject bool
-		wantOutput bool
+		name               string
+		profile            *config.ProviderProfile
+		want               modelcatalog.ReasoningTransport
+		wantTop            bool
+		wantThink          bool
+		wantDeep           bool
+		wantObject         bool
+		wantOutput         bool
+		wantThinkingEffort bool
 	}{
 		{
 			name: "endpoint without profile uses template kwargs",
@@ -50,6 +51,14 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			wantThink: true,
 		},
 		{
+			name:               "model binding can combine thinking object and top-level effort",
+			profile:            &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportThinkingEffort},
+			want:               modelcatalog.ReasoningTransportThinkingEffort,
+			wantTop:            true,
+			wantThink:          true,
+			wantThinkingEffort: true,
+		},
+		{
 			name:       "openrouter uses normalized reasoning object",
 			profile:    &config.ProviderProfile{Type: "openrouter"},
 			want:       modelcatalog.ReasoningTransportReasoningObject,
@@ -77,6 +86,7 @@ func TestResolveProviderReasoningTransport(t *testing.T) {
 			assert.Equal(t, tt.wantDeep, isDeepSeekThinkingTransport(transport))
 			assert.Equal(t, tt.wantObject, usesReasoningObjectTransport(transport))
 			assert.Equal(t, tt.wantOutput, usesOutputConfigEffortTransport(transport))
+			assert.Equal(t, tt.wantThinkingEffort, usesThinkingObjectEffortTransport(transport))
 		})
 	}
 }

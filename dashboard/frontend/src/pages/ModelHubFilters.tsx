@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 import type { CatalogProvider } from '../types/modelCatalog'
 import {
@@ -10,7 +10,7 @@ import {
   type ModelHubView,
   readableModelHubValue,
 } from './modelHubSupport'
-import styles from './ModelHubPage.module.css'
+import styles from './ModelHubFilters.module.css'
 
 interface FilterSelectProps {
   label: string
@@ -34,13 +34,13 @@ const FilterSelect: React.FC<FilterSelectProps> = ({ label, value, onChange, chi
 )
 
 const ViewIcon: React.FC<{ view: ModelHubView }> = ({ view }) => {
-  if (view === 'cards') {
+  if (view === 'list') {
     return (
       <svg viewBox="0 0 16 16" aria-hidden="true">
-        <rect x="2" y="2" width="5" height="5" rx="1" />
-        <rect x="9" y="2" width="5" height="5" rx="1" />
-        <rect x="2" y="9" width="5" height="5" rx="1" />
-        <rect x="9" y="9" width="5" height="5" rx="1" />
+        <path d="M5 3h9M5 8h9M5 13h9" />
+        <circle cx="2" cy="3" r=".7" />
+        <circle cx="2" cy="8" r=".7" />
+        <circle cx="2" cy="13" r=".7" />
       </svg>
     )
   }
@@ -98,7 +98,7 @@ const HubFilterTopline: React.FC<{
         type="search"
         value={query}
         onChange={(event) => update({ query: event.target.value })}
-        placeholder="Search model, creator, family, capability…"
+        placeholder="Search models"
       />
       {query ? (
         <button type="button" onClick={() => update({ query: '' })} aria-label="Clear search">
@@ -107,7 +107,7 @@ const HubFilterTopline: React.FC<{
       ) : null}
     </label>
     <div className={styles.viewSwitch} role="group" aria-label="Catalog view">
-      {(['table', 'cards', 'benchmarks'] as ModelHubView[]).map((candidate) => (
+      {(['list', 'table', 'benchmarks'] as ModelHubView[]).map((candidate) => (
         <button
           key={candidate}
           type="button"
@@ -133,7 +133,7 @@ const HubIdentityFilters: React.FC<{
 }> = ({ filters, creators, providers, capabilities, update }) => (
   <>
     <FilterSelect
-      label="Model type"
+      label="Type"
       value={filters.kind}
       onChange={(value) => update({ kind: value as ModelHubKindFilter })}
     >
@@ -142,7 +142,7 @@ const HubIdentityFilters: React.FC<{
       <option value="virtual">Virtual models</option>
     </FilterSelect>
     <FilterSelect
-      label="Model creator"
+      label="Creator"
       value={filters.publisher}
       onChange={(publisher) => update({ publisher })}
     >
@@ -154,7 +154,7 @@ const HubIdentityFilters: React.FC<{
       ))}
     </FilterSelect>
     <FilterSelect
-      label="Serving provider"
+      label="Provider"
       value={filters.provider}
       onChange={(provider) => update({ provider })}
     >
@@ -182,13 +182,11 @@ const HubIdentityFilters: React.FC<{
 
 const HubMetadataFilters: React.FC<{
   filters: ModelHubFilters
-  activeCount: number
   update: HubFiltersProps['update']
-  reset: HubFiltersProps['reset']
-}> = ({ filters, activeCount, update, reset }) => (
+}> = ({ filters, update }) => (
   <>
     <FilterSelect
-      label="Availability"
+      label="Distribution"
       value={filters.distribution}
       onChange={(distribution) =>
         update({ distribution: distribution as ModelHubDistributionFilter })
@@ -221,14 +219,6 @@ const HubMetadataFilters: React.FC<{
       <option value="providers">Provider coverage</option>
       <option value="name">Model name</option>
     </FilterSelect>
-    <button
-      className={styles.resetButton}
-      type="button"
-      onClick={reset}
-      disabled={activeCount === 0}
-    >
-      Reset {activeCount ? `(${activeCount})` : ''}
-    </button>
   </>
 )
 
@@ -243,11 +233,32 @@ export const HubFilters: React.FC<HubFiltersProps> = ({
   reset,
 }) => {
   const activeCount = activeModelHubFilterCount(filters)
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   return (
-    <div className={styles.filterArea}>
+    <aside className={styles.filterArea} aria-label="Model filters">
+      <div className={styles.filterRailTitle}>
+        <strong>Filters</strong>
+        <button
+          className={styles.resetInline}
+          type="button"
+          onClick={reset}
+          disabled={activeCount === 0}
+        >
+          Reset{activeCount ? ` (${activeCount})` : ''}
+        </button>
+      </div>
       <HubFilterTopline query={filters.query} view={view} update={update} setView={setView} />
-      <div className={styles.filters}>
+      <button
+        type="button"
+        className={styles.mobileFilterToggle}
+        aria-expanded={filtersOpen}
+        onClick={() => setFiltersOpen((current) => !current)}
+      >
+        Filters{activeCount ? ` (${activeCount})` : ''}
+        <span aria-hidden="true">{filtersOpen ? '−' : '+'}</span>
+      </button>
+      <div className={`${styles.filters} ${filtersOpen ? styles.filtersOpen : ''}`}>
         <HubIdentityFilters
           filters={filters}
           creators={creators}
@@ -255,13 +266,8 @@ export const HubFilters: React.FC<HubFiltersProps> = ({
           capabilities={capabilities}
           update={update}
         />
-        <HubMetadataFilters
-          filters={filters}
-          activeCount={activeCount}
-          update={update}
-          reset={reset}
-        />
+        <HubMetadataFilters filters={filters} update={update} />
       </div>
-    </div>
+    </aside>
   )
 }

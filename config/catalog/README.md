@@ -155,6 +155,10 @@ an effort ladder. For example, Qwen3.8 uses `enable_thinking` for activation and
 `reasoning_effort` for `low`, `medium`, or `xhigh`; `none` is not fabricated as
 an effort level. Provider bindings still own whether those controls travel as
 chat-template kwargs, top-level fields, or a provider-native object.
+Some templates expose effort as mutually exclusive boolean flags instead of a
+string. `effort_flags` maps each named level to its real template parameter;
+one remaining active level may be represented by omitting every effort flag.
+This is catalog or custom-model schema, never a new decision field.
 
 Virtual-model `recommended_pool` entries are suggestions, not foreign keys.
 They may name catalog-backed models or operator-defined models that only exist
@@ -165,7 +169,13 @@ views may compare only one selected benchmark version, profile, and metric.
 Every bar is one exact model-and-reasoning-effort record and labels that effort
 explicitly; missing records are omitted rather than treated as zero. Internal
 index resources remain available to routing code, but they do not create a
-public composite leaderboard.
+public composite leaderboard. Benchmark comparisons render every record matching
+the selected version, profile, metric, and current model filters in one chart;
+pagination remains a directory concern and never splits a comparison set. A
+comparison tuple enters the Hub picker only after ten distinct models have
+available results. Repeated reasoning-effort records do not count as additional
+models. Lower-coverage evidence remains in the source catalog for audit and
+routing, but is omitted from every public Model Hub view.
 
 See the [Day-0 support guide](../../website/docs/community/model-provider-day-0-support.md)
 for the end-to-end contribution workflow.
