@@ -147,11 +147,13 @@ func (r *SemanticRouterReconciler) resolveSemanticCacheSecrets(
 	ctx context.Context,
 	sr *vllmv1alpha1.SemanticRouter,
 ) error {
-	if sr.Spec.Config.SemanticCache == nil {
+	cache, err := operatorResponseCacheConfig(sr.Spec.Config)
+	if err != nil {
+		return err
+	}
+	if cache == nil {
 		return nil
 	}
-
-	cache := sr.Spec.Config.SemanticCache
 
 	// Resolve Redis password from Secret
 	if cache.Redis != nil && cache.Redis.Connection.PasswordSecretRef != nil {

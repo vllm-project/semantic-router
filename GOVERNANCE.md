@@ -14,7 +14,7 @@ ensuring community health.
 
 Ownership is distributed across the repository through per-directory `OWNER` files.
 Each file lists the reviewers responsible for that area. A full index of all
-`OWNER` file locations is maintained in [`CODEOWNERS`](./CODEOWNERS).
+`OWNER` file locations is maintained in [`.github/CODEOWNERS`](./.github/CODEOWNERS).
 
 ## How Decisions Are Made
 
@@ -31,4 +31,4 @@ all current maintainers.
 ## Community Channels
 
 - **Slack:** `#semantic-router` in vLLM Slack
-- **Meetings:** First and third Tuesday of each month, listed in the [README](./README.md#community-meetings-)
+- **Meetings:** First and third Tuesday of each month, listed in the [README](./README.md#community-meetings)

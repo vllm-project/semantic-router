@@ -26,7 +26,7 @@ func EmitYAML(input string) ([]byte, []error) {
 
 // EmitYAMLFromConfig marshals a RouterConfig to YAML bytes.
 func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
-	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
+	if cfg != nil && (len(cfg.KnowledgeBases) > 0 || len(cfg.Entrypoints) > 0 || len(cfg.Recipes) > 1) {
 		canonical := config.CanonicalConfigFromRouterConfig(cfg)
 		return yaml.Marshal(canonical)
 	}
@@ -37,7 +37,7 @@ func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 // that matches the config.yaml format used by vllm-serve.
 // This is the inverse of normalizeYAML.
 func EmitUserYAML(cfg *config.RouterConfig) ([]byte, error) {
-	if cfg != nil && len(cfg.KnowledgeBases) > 0 {
+	if cfg != nil && (len(cfg.KnowledgeBases) > 0 || len(cfg.Entrypoints) > 0 || len(cfg.Recipes) > 1) {
 		canonical := config.CanonicalConfigFromRouterConfig(cfg)
 		return yaml.Marshal(canonical)
 	}
@@ -79,6 +79,7 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"kb":                  "kb",
 		"conversation":        "conversation",
 		"events":              "events",
+		"input_modality":      "input_modality",
 	}
 
 	signals := make(map[string]interface{})
@@ -286,7 +287,7 @@ func pruneZeroValueInfra(raw map[string]interface{}) {
 		"authz", "ratelimit", "mom_registry",
 		"auto_model_name", "include_config_models_in_list",
 		"clear_route_cache",
-		"image_gen_backends", "provider_profiles",
+		"provider_profiles",
 		"batch_classification",
 		"observability",
 	}
@@ -549,7 +550,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 		"fact_check_rules", "user_feedback_rules", "reask_rules", "preference_rules",
 		"language_rules", "context_rules", "structure_rules",
 		"modality_rules", "role_bindings", "jailbreak", "pii",
-		"kb", "conversation", "events",
+		"kb", "conversation", "events", "input_modality",
 	}
 	for _, key := range signalKeys {
 		moveKey(flat, configSpec, key)
@@ -652,7 +653,8 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
 	}
 
-	routingBytes, err := yaml.Marshal(config.CanonicalRoutingFromRouterConfig(cfg))
+	canonical := config.CanonicalConfigFromRouterConfig(cfg)
+	routingBytes, err := yaml.Marshal(canonical.Routing)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal routing: %w", err)
 	}
@@ -660,12 +662,23 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
 		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
 	}
+	preserveBaseDecisionField(routing, base["routing"], "adaptations")
 
 	base["routing"] = routing
+	if len(canonical.Entrypoints) > 0 {
+		base["entrypoints"] = canonical.Entrypoints
+	} else {
+		delete(base, "entrypoints")
+	}
+	if len(canonical.Recipes) > 0 {
+		base["recipes"] = canonical.Recipes
+	} else {
+		delete(base, "recipes")
+	}
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
-	canonicalOrder := []string{"version", "listeners", "providers", "routing", "global"}
+	canonicalOrder := []string{"version", "listeners", "providers", "routing", "entrypoints", "recipes", "global"}
 	added := make(map[string]bool)
 	for _, key := range canonicalOrder {
 		if v, ok := base[key]; ok {

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -139,6 +140,52 @@ func TestFusionExecute_CachedPanelSkipsLiveCalls(t *testing.T) {
 	// Usage = cached panel (12+23) + two judge calls (34 each via fusionTestUsage).
 	usage := body["usage"].(map[string]interface{})
 	assert.Equal(t, float64(12+23+34+34), usage["total_tokens"])
+}
+
+func TestFusionExecute_CachedPanelBelowUsableQuorumFailsBeforeJudge(t *testing.T) {
+	var judgeCalls atomic.Int64
+	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+		judgeCalls.Add(1)
+		return "unexpected judge response", http.StatusOK
+	})
+	defer server.Close()
+
+	req := newFusionTestRequest()
+	req.CachedPanel = []*ModelResponse{
+		{Model: "panel-a", Content: "usable", Usage: TokenUsage{PromptTokens: 10, CompletionTokens: 2, TotalTokens: 12}},
+		{Model: "panel-b", Content: "  \n ", Usage: TokenUsage{PromptTokens: 20, CompletionTokens: 3, TotalTokens: 23}},
+	}
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:                  "judge",
+			AnalysisModels:         []string{"panel-a", "panel-b"},
+			MinSuccessfulResponses: 2,
+		},
+	}
+
+	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+	require.Error(t, err)
+	assert.Zero(t, judgeCalls.Load())
+	evidence, ok := FusionQuorumEvidenceFromError(err)
+	require.True(t, ok)
+	assert.Equal(t, 1, evidence.UsableCount)
+	assert.Equal(t, TokenUsage{PromptTokens: 30, CompletionTokens: 5, TotalTokens: 35}, evidence.Usage)
+	assert.Equal(t, FusionPanelAttemptUnusable, evidence.Attempts[1].State)
+}
+
+func TestFusionExecute_CachedReasoningOnlyResponseMeetsQuorum(t *testing.T) {
+	panel := []*ModelResponse{
+		{Model: "panel-a", ReasoningContent: "reasoning-only evidence", Usage: TokenUsage{TotalTokens: 7}},
+		{Model: "panel-b", Content: "ordinary answer", Usage: TokenUsage{TotalTokens: 9}},
+	}
+
+	body, judgePrompts := runCachedPanelArm(t, panel, nil, nil)
+	require.Len(t, judgePrompts, 2)
+	assert.Contains(t, judgePrompts[0], "reasoning-only evidence")
+	choices := body["choices"].([]interface{})
+	message := choices[0].(map[string]interface{})["message"].(map[string]interface{})
+	assert.Equal(t, "final answer", message["content"])
 }
 
 // TestFusionExecute_CachedPanel_ArmIsolation_BvsC proves arms B (plain fusion)

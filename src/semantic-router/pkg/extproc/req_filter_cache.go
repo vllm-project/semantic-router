@@ -1,6 +1,9 @@
 package extproc
 
 import (
+	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -8,9 +11,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -40,7 +45,11 @@ func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool
 }
 
 // handleCaching handles cache lookup and storage with category-specific settings
-func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+func (r *OpenAIRouter) handleCaching(
+	ctx *RequestContext,
+	categoryName string,
+	selectedModels ...string,
+) (*ext_proc.ProcessingResponse, bool) {
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
@@ -50,58 +59,169 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	}
 
 	if ctx.LooperRequest {
-		return r.handleLooperCacheSkip(ctx, categoryName)
+		return r.handleLooperCacheSkip(ctx, categoryName, selectedModels...)
 	}
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
 
-	ctx.RequestModel = requestModel
-	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
-
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
-
-	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, cacheEnabled); shouldReturn {
-		return response, true
+	ctx.RequestModel = identity.Model
+	ctx.RequestQuery = identity.Query
+	ctx.CacheRequestModel = identity.Model
+	ctx.CacheQuery = identity.Query
+	policyFingerprint := responseCachePolicyFingerprint(ctx)
+	ctx.CacheExactFingerprint = cache.CombineFingerprints(
+		identity.ExactFingerprint,
+		policyFingerprint,
+	)
+	ctx.CacheCompatibilityFingerprint = cache.CombineFingerprints(
+		identity.CompatibilityFingerprint,
+		policyFingerprint,
+	)
+	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
+	ctx.CacheSemanticSafe = identity.SemanticSafe
+	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
+	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
+	applyRequestCacheControls(ctx)
+	if !ctx.CacheReadBypass {
+		if response, shouldReturn := r.performExactCacheLookup(ctx, categoryName, cacheEnabled); shouldReturn {
+			return response, true
+		}
+	}
+	if !identity.SemanticSafe || !semanticLookupEnabledForRequest(ctx) {
+		logging.ComponentDebugEvent("extproc", "semantic_cache_lookup_skipped", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"reason":     semanticCacheSkipReason(identity.SemanticSafe, ctx),
+		})
+		return nil, false
 	}
 
-	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
+	if !ctx.CacheReadBypass {
+		if response, shouldReturn := r.performCacheLookup(ctx, categoryName, identity.Model, cacheEnabled); shouldReturn {
+			return response, true
+		}
+	}
 
 	return nil, false
+}
+
+func semanticCacheSkipReason(semanticSafe bool, ctx *RequestContext) string {
+	if !semanticSafe {
+		return "unsupported_current_user_content"
+	}
+	if !semanticLookupEnabledForRequest(ctx) {
+		return "exact_only_mode"
+	}
+	return "disabled"
 }
 
 // handleLooperCacheSkip extracts the query for a looper request (skipping read)
 // and registers a pending cache write if caching is enabled.
-func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName string) (*ext_proc.ProcessingResponse, bool) {
+func (r *OpenAIRouter) handleLooperCacheSkip(
+	ctx *RequestContext,
+	_ string,
+	selectedModels ...string,
+) (*ext_proc.ProcessingResponse, bool) {
 	logging.Debugf("[Cache] Skipping cache read for looper internal request")
 
-	requestModel, requestQuery, err := cache.ExtractQueryFromOpenAIRequest(ctx.OriginalRequestBody)
+	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-	ctx.RequestModel = requestModel
-	ctx.RequestQuery = requestQuery
-	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
-
-	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
-	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
+	ctx.RequestModel = identity.Model
+	ctx.RequestQuery = identity.Query
+	ctx.CacheRequestModel = identity.Model
+	ctx.CacheQuery = identity.Query
+	policyFingerprint := responseCachePolicyFingerprint(ctx)
+	ctx.CacheExactFingerprint = cache.CombineFingerprints(
+		identity.ExactFingerprint,
+		policyFingerprint,
+	)
+	ctx.CacheCompatibilityFingerprint = cache.CombineFingerprints(
+		identity.CompatibilityFingerprint,
+		policyFingerprint,
+	)
+	ctx.CacheSelectedModel = selectedCacheModel(identity.Model, selectedModels)
+	ctx.CacheSemanticSafe = identity.SemanticSafe
+	ctx.CacheIdentity = responseCacheIdentity(ctx, identity.Model)
 	return nil, false
 }
 
-// storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
-func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool) {
-	cacheQuery := cacheQueryForContext(ctx)
-	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
-		return
+func selectedCacheModel(requestModel string, selectedModels []string) string {
+	if len(selectedModels) > 0 && strings.TrimSpace(selectedModels[0]) != "" {
+		return strings.TrimSpace(selectedModels[0])
 	}
-	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
-		logging.Errorf("Error adding pending request to cache: %v", err)
+	return strings.TrimSpace(requestModel)
+}
+
+func responseCachePolicyFingerprint(ctx *RequestContext) string {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return ""
+	}
+	fingerprint, err := cache.FingerprintValue(map[string]interface{}{
+		"decision":             ctx.VSRSelectedDecision.Name,
+		"model_refs":           ctx.VSRSelectedDecision.ModelRefs,
+		"plugins":              ctx.VSRSelectedDecision.Plugins,
+		"output_contract":      ctx.VSRSelectedDecision.OutputContract,
+		"output_contract_spec": ctx.VSRSelectedDecision.OutputContractSpec,
+		"client_protocol":      string(ctx.SourceFormat),
+	})
+	if err != nil {
+		return ""
+	}
+	return fingerprint
+}
+
+func semanticCachePartition(ctx *RequestContext, model string) string {
+	if ctx == nil {
+		return model
+	}
+	return responseCacheIdentity(ctx, model).Partition.Key()
+}
+
+func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
+	protocol := strings.TrimSpace(string(ctx.SourceFormat))
+	if protocol == "" {
+		protocol = "openai"
+	}
+	if ctx.ExpectStreamingResponse {
+		protocol += ":stream"
+	} else {
+		protocol += ":body"
+	}
+	decision := ""
+	revision := ""
+	if ctx.VSRSelectedDecision != nil {
+		decision = ctx.VSRSelectedDecision.Name
+		if plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig(); plugin != nil &&
+			plugin.Revision != nil {
+			if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
+				revision = value
+			}
+		}
+	}
+	scope := responseCacheScope(ctx)
+	scopeIdentity := responseCacheScopeIdentity(ctx)
+	if scopeIdentity != "" {
+		scopeIdentity = scope + ":" + scopeIdentity
+	}
+	return cache.CacheIdentity{
+		Partition: cache.CachePartition{
+			Recipe:        string(ctx.Routing.RecipeName()),
+			Decision:      decision,
+			RequestModel:  strings.TrimSpace(model),
+			SelectedModel: strings.TrimSpace(ctx.CacheSelectedModel),
+			Protocol:      protocol,
+			Namespace:     cache.UserScopeNamespace(scopeIdentity),
+			Epoch:         revision,
+		},
+		ExactFingerprint:         ctx.CacheExactFingerprint,
+		CompatibilityFingerprint: ctx.CacheCompatibilityFingerprint,
+		SemanticQuery:            cacheQueryForContext(ctx),
 	}
 }
 
@@ -116,18 +236,37 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	threshold := r.Config.GetCacheSimilarityThreshold()
-	if categoryName != "" {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecision(categoryName)
+	if ctx.VSRSelectedDecision != nil {
+		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
 	}
 
-	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, ctx.RequestQuery, threshold)
+	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
+		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
-	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
+	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "response_cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
-	lookupTime := time.Since(startTime).Milliseconds()
+	identity := ctx.CacheIdentity
+	if identity.ExactFingerprint == "" {
+		identity = responseCacheIdentity(ctx, requestModel)
+	}
+	identity.SemanticQuery = cacheQuery
+	lookupContext := ctx.TraceContext
+	if lookupContext == nil {
+		lookupContext = context.Background()
+	}
+	service := r.responseCacheService()
+	if service == nil {
+		return nil, false
+	}
+	lookupResult, cacheErr := service.LookupSemantic(lookupContext, cache.SemanticLookup{
+		Identity:  identity,
+		Threshold: threshold,
+	})
+	cachedResponse := lookupResult.ResponseBody
+	found := lookupResult.Found
+	lookupDuration := time.Since(startTime)
+	lookupTime := lookupDuration.Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
@@ -144,16 +283,21 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
 		ctx.VSRCacheHit = true
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
+		ctx.VSRCacheSimilarity = lookupResult.Similarity
+		ctx.VSRCacheHitKind = string(lookupResult.HitKind)
+		ctx.VSRCacheSource = string(lookupResult.Source)
+		ctx.VSRCacheEntryAgeSeconds = lookupResult.Age.Seconds()
+		applyCacheHitSelectedModel(ctx)
 
 		if categoryName != "" {
 			ctx.VSRSelectedDecisionName = categoryName
 		}
 
-		metrics.RecordCachePluginHit(categoryName, "semantic-cache")
+		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		r.startRouterReplay(ctx, requestModel, requestModel, categoryName)
+		r.reportCacheHitTelemetry(ctx, cachedResponse, lookupDuration)
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      requestModel,
@@ -164,19 +308,144 @@ func (r *OpenAIRouter) performCacheLookup(
 		// Intermediate cache detail (category, matched keywords, similarity) is
 		// demoted to the x-vsr-debug surface (#2205).
 		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
-		response := http.CreateCacheHitResponse(cachedResponse, ctx.ExpectStreamingResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
+		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
-		ctx.VSRCacheSimilarity = r.Cache.LastSimilarity()
-		metrics.RecordCachePluginMiss(categoryName, "semantic-cache")
+		// A semantic miss may expose this lookup's rejected-candidate score on the
+		// debug and Replay surfaces; LookupResult keeps it request-owned.
+		ctx.VSRCacheSimilarity = lookupResult.Similarity
+		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+//nolint:nestif // Cache-hit output must preserve separate buffered and streaming protocol lifecycles.
+func (r *OpenAIRouter) createCacheHitResponse(
+	ctx *RequestContext,
+	cachedResponse []byte,
+	category string,
+	decisionName string,
+	matchedKeywords []string,
+	similarity float32,
+) *ext_proc.ProcessingResponse {
+	semanticResponse, err := r.decodeCachedClientResponse(cachedResponse, ctx)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "cache_response_decode_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(502, "The cached response is invalid")
+	}
+	refreshCachedSemanticResponse(semanticResponse, ctx)
+	contentType := "application/json"
+	var responseBody []byte
+	if ctx.ExpectStreamingResponse {
+		engine, engineErr := r.protocolEngine()
+		if engineErr == nil {
+			responseBody, ctx.ProtocolDiagnostics, engineErr = encodeCachedSemanticStream(
+				engine, ctx, *semanticResponse, ctx.ProtocolDiagnostics,
+			)
+		}
+		if engineErr != nil {
+			logging.ComponentErrorEvent("extproc", "cache_stream_encode_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"format":     ctx.SourceFormat,
+				"error":      engineErr.Error(),
+			})
+			return r.createErrorResponse(502, "The cached response cannot be streamed")
+		}
+		contentType = "text/event-stream"
+	} else {
+		responseBody, err = r.encodeClientResponse(*semanticResponse, ctx)
+		if err != nil {
+			logging.ComponentErrorEvent("extproc", "cache_response_encode_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"format":     ctx.SourceFormat,
+				"error":      err.Error(),
+			})
+			return r.createErrorResponse(502, "The cached response is invalid")
+		}
+	}
+	response := http.CreateCacheHitResponseWithBody(
+		responseBody,
+		contentType,
+		category,
+		decisionName,
+		matchedKeywords,
+		similarity,
+	)
+	ctx.ImmediateResponseEncoded = true
+	ctx.SemanticResponse = semanticResponse
+	appendRecipeHeaderToImmediateResponse(response, ctx)
+	r.attachRouterReplayResponse(ctx, responseBody, true)
+	return response
+}
+
+func refreshCachedSemanticResponse(response *llmprotocol.Response, ctx *RequestContext) {
+	if response == nil {
+		return
+	}
+	response.Generation++
+	requestID := ""
+	if ctx != nil {
+		requestID = ctx.RequestID
+	}
+	response.ID = llmprotocol.StableID("cache-response", requestID)
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
+		response.ID = "resp_" + strings.TrimPrefix(response.ID, "item_")
+	}
+	response.CreatedAt = time.Now().UTC()
+	for index := range response.Output {
+		response.Output[index].ID = llmprotocol.StableID(response.ID, fmt.Sprint(index))
+	}
+}
+
+func encodeCachedSemanticStream(
+	engine *protocolcodec.Engine,
+	ctx *RequestContext,
+	response llmprotocol.Response,
+	diagnostics llmprotocol.Diagnostics,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	format := ctx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	body, emitted, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
+		Context: ctx.TraceContext, Options: clientStreamOptions(ctx),
+		PublicModel: response.Model, ResponseID: response.ID,
+		PreviousResponseID: responseObjectPreviousID(ctx),
+	})
+	return body, append(diagnostics, emitted...), err
+}
+
+func applyCacheHitSelectedModel(ctx *RequestContext) {
+	if ctx != nil && ctx.CacheSelectedModel != "" {
+		ctx.RequestModel = ctx.CacheSelectedModel
+	}
+}
+
+func cacheIdentityForContext(ctx *RequestContext) (cache.RequestIdentity, error) {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return cache.RequestIdentity{}, fmt.Errorf("neutral request is unavailable")
+	}
+	return cache.BuildSemanticRequestIdentity(*ctx.SemanticRequest)
+}
+
+func cacheRequestBodyForContext(ctx *RequestContext) []byte {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return nil
+	}
+	body, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest)
+	if err != nil {
+		return nil
+	}
+	return body
 }
 
 func cacheQueryForContext(ctx *RequestContext) string {

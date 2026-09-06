@@ -1,28 +1,13 @@
 name: OpenVINO Binding CI
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'openvino-binding/**'
-      - '.github/workflows/openvino-binding-ci.yml'
-    branches:
-      - main
-  push:
-    paths:
-      - 'openvino-binding/**'
-      - '.github/workflows/openvino-binding-ci.yml'
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
-    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -46,10 +31,13 @@ jobs:
 
       - name: Install OpenVINO
         run: |
+          # Keep the exporter stack compatible with OpenVINO 2025.1.
+          # Newer NNCF releases require OpenVINO integer types added after 2025.1.
           pip3 install --no-cache-dir \
             openvino==2025.1.0 \
             openvino-tokenizers==2025.1.0 \
-            optimum[openvino] \
+            'optimum-intel[openvino]==1.23.0' \
+            nncf==2.16.0 \
             Pillow \
             huggingface_hub[cli]
 
@@ -99,7 +87,6 @@ jobs:
           CGO_ENABLED=1 go test -v -timeout 10m ./...
 
   docker-build:
-    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo

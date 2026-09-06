@@ -5,18 +5,7 @@ export type LayoutMegaMenuDensity = 'compact' | 'standard' | 'dense'
 export interface LayoutMegaMenuGeometry {
   density: LayoutMegaMenuDensity
   itemCount: number
-  maxWidth: number
-  railWidth: number
   sectionCount: number
-}
-
-const GEOMETRY_BY_DENSITY: Record<
-  LayoutMegaMenuDensity,
-  Pick<LayoutMegaMenuGeometry, 'maxWidth' | 'railWidth'>
-> = {
-  compact: { maxWidth: 860, railWidth: 200 },
-  standard: { maxWidth: 980, railWidth: 210 },
-  dense: { maxWidth: 1280, railWidth: 220 },
 }
 
 function resolveDensity(sectionCount: number, itemCount: number): LayoutMegaMenuDensity {
@@ -40,6 +29,5 @@ export function getLayoutMegaMenuGeometry(category: LayoutMenuCategory): LayoutM
     density,
     itemCount,
     sectionCount,
-    ...GEOMETRY_BY_DENSITY[density],
   }
 }

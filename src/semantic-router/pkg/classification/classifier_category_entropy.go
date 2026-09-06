@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,13 @@ import (
 
 // ClassifyCategoryWithEntropy performs category classification with entropy-based reasoning decision
 func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, entropy.ReasoningDecision, error) {
+	return c.ClassifyCategoryWithEntropyContext(context.Background(), text)
+}
+
+// ClassifyCategoryWithEntropyContext preserves the caller lifecycle while
+// evaluating a category backend. The context-free method above remains for
+// compatibility with service callers that do not expose a request context.
+func (c *Classifier) ClassifyCategoryWithEntropyContext(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	// Try keyword and embedding classifiers first
 	category, confidence, decision, matched, err := c.tryKeywordBasedClassification(text)
 	if err != nil {
@@ -24,7 +32,7 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 
 	// Try in-tree first if properly configured
 	if c.IsCategoryEnabled() && c.categoryInference != nil {
-		return c.classifyCategoryWithEntropyInTree(text)
+		return c.classifyCategoryWithEntropyInTree(ctx, text)
 	}
 
 	// If in-tree classifier was initialized but config is now invalid, return specific error
@@ -43,12 +51,21 @@ func (c *Classifier) ClassifyCategoryWithEntropy(text string) (string, float64, 
 // tryKeywordBasedClassification attempts classification via keyword and embedding classifiers.
 // Returns matched=true if a classifier produced a result.
 func (c *Classifier) tryKeywordBasedClassification(text string) (string, float64, entropy.ReasoningDecision, bool, error) {
-	for _, clf := range []interface {
+	// Checked and appended one at a time rather than nil-checked inside a
+	// []interface{...} literal: a nil *KeywordClassifier or
+	// *EmbeddingClassifier placed directly into that slice becomes a non-nil
+	// interface value (it carries a concrete, non-nil type), so `clf == nil`
+	// never trips and Classify is called on a nil receiver.
+	var classifiers []interface {
 		Classify(string) (string, float64, error)
-	}{c.keywordClassifier, c.keywordEmbeddingClassifier} {
-		if clf == nil {
-			continue
-		}
+	}
+	if c.keywordClassifier != nil {
+		classifiers = append(classifiers, c.keywordClassifier)
+	}
+	if c.keywordEmbeddingClassifier != nil {
+		classifiers = append(classifiers, c.keywordEmbeddingClassifier)
+	}
+	for _, clf := range classifiers {
 		category, confidence, err := clf.Classify(text)
 		if err != nil {
 			return "", 0.0, entropy.ReasoningDecision{}, false, err
@@ -92,13 +109,13 @@ func (c *Classifier) makeReasoningDecisionForKeywordCategory(category string) en
 }
 
 // classifyCategoryWithEntropyInTree performs category classification with entropy using in-tree model
-func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, float64, entropy.ReasoningDecision, error) {
+func (c *Classifier) classifyCategoryWithEntropyInTree(ctx context.Context, text string) (string, float64, entropy.ReasoningDecision, error) {
 	if !c.IsCategoryEnabled() {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("category classification is not properly configured")
 	}
 
 	// Get full probability distribution
-	result, err := c.categoryInference.ClassifyWithProbabilities(text)
+	result, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
 	if err != nil {
 		return "", 0.0, entropy.ReasoningDecision{}, fmt.Errorf("classification error: %w", err)
 	}
@@ -152,7 +169,7 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 			result.Confidence, c.Config.CategoryModel.Threshold, fallbackCategory)
 
 		// Record the fallback category as a signal match
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 
 		// Return fallback category instead of empty string to enable proper decision routing
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
@@ -168,13 +185,13 @@ func (c *Classifier) classifyCategoryWithEntropyInTree(text string) (string, flo
 		}
 
 		logging.Warnf("Class index %d not found in category mapping, falling back to: %s", result.Class, fallbackCategory)
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 	genericCategory := c.translateMMLUToGeneric(categoryName)
 
 	// Record the category as a signal match
-	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
+	c.recordSignalMatch(config.SignalTypeKeyword, genericCategory)
 
 	logging.Debugf("Classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)

@@ -678,7 +678,7 @@ adapters:
 
 - [OpenAI API Specification](https://platform.openai.com/docs/api-reference)
 - [Envoy ExtProc Documentation](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/ext_proc_filter)
-- [vLLM Semantic Router Documentation](https://vllm-semantic-router.com)
+- [vLLM Semantic Router Documentation](https://vllm-sr.ai)
 
 ## Appendix
 

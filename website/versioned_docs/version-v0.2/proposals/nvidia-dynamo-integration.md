@@ -1500,11 +1500,11 @@ prompt_guard:
 
 ### 9.2 vLLM Semantic Router Documentation
 
-- [Semantic Router Overview](https://vllm-semantic-router.com/docs/overview/semantic-router-overview/)
-- [System Architecture](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)
-- [Kubernetes Deployment](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway)
+- [Semantic Router Overview](https://vllm-sr.ai/docs/overview/semantic-router-overview/)
+- [System Architecture](https://vllm-sr.ai/docs/overview/architecture/system-architecture/)
+- [Kubernetes Deployment](https://vllm-sr.ai/docs/installation/k8s/ai-gateway)
 - [Distributed Tracing Support (PR #322)](https://github.com/vllm-project/semantic-router/pull/322)
-- [Milvus-based Semantic Caching](https://vllm-semantic-router.com/docs/features/semantic-caching/)
+- [Milvus-based Semantic Caching](https://vllm-sr.ai/docs/features/semantic-caching/)
 
 ### 9.3 Related Research
 
@@ -1516,7 +1516,7 @@ prompt_guard:
 ### 9.4 Integration Proposals
 
 - [vLLM Production Stack Integration (#295)](https://github.com/vllm-project/semantic-router/issues/295)
-- [Prompt Classification Routing Proposal](https://vllm-semantic-router.com/docs/proposals/prompt-classification-routing/)
+- [Prompt Classification Routing Proposal](https://vllm-sr.ai/docs/proposals/prompt-classification-routing/)
 
 ---
 

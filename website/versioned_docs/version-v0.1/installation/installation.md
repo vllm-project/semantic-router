@@ -147,4 +147,4 @@ vllm-sr serve --image-pull-policy always
 
 - **Issues**: [GitHub Issues](https://github.com/vllm-project/semantic-router/issues)
 - **Community**: Join `#semantic-router` channel in vLLM Slack
-- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com/)
+- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai/)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import posixpath
+import re
 import shutil
 import tempfile
 from contextlib import suppress
@@ -18,11 +19,17 @@ log = get_logger(__name__)
 
 KB_RUNTIME_ROOT = "knowledge_bases"
 KB_BOOTSTRAP_STATE_FILE = ".bootstrap-state.yaml"
+MIN_KB_SOURCE_PATH_PARTS = 2
+_SAFE_KB_PATH_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def _runtime_kb_state_dir(config_path: Path) -> Path:
     kb_dir = _runtime_config_output_dir(config_path) / KB_RUNTIME_ROOT
+    if kb_dir.is_symlink():
+        raise ValueError("Runtime knowledge-base directory must not be a symlink")
     kb_dir.mkdir(parents=True, exist_ok=True)
+    if kb_dir.is_symlink() or not kb_dir.is_dir():
+        raise ValueError("Runtime knowledge-base path must be an owned directory")
     return kb_dir
 
 
@@ -39,8 +46,12 @@ def _runtime_kb_bootstrap_state_path(config_path: Path) -> Path:
 
 def _load_runtime_kb_bootstrap_state(config_path: Path) -> set[str]:
     state_path = _runtime_kb_bootstrap_state_path(config_path)
+    if state_path.is_symlink():
+        raise ValueError("Runtime KB bootstrap state must be a regular file")
     if not state_path.exists():
         return set()
+    if not state_path.is_file():
+        raise ValueError("Runtime KB bootstrap state must be a regular file")
 
     try:
         data = yaml.safe_load(state_path.read_text(encoding="utf-8")) or {}
@@ -94,23 +105,60 @@ def _write_runtime_kb_bootstrap_state(
     )
 
 
-def _candidate_kb_source_roots(config_path: Path, source_path: str) -> list[Path]:
-    source_root = Path(source_path)
-    if source_root.is_absolute():
-        return [source_root]
+def _safe_relative_kb_source_path(source_path: str) -> Path:
+    raw = str(source_path or "").strip()
+    if not raw or "\\" in raw:
+        raise ValueError("Knowledge-base source.path must be a relative POSIX path")
+    source_root = Path(raw)
+    parts = raw.rstrip("/").split("/")
+    if source_root.is_absolute() or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(
+            "Knowledge-base source.path must not be absolute or contain dot segments"
+        )
+    return Path(*parts)
 
-    candidates: list[Path] = [config_path.parent / source_root]
+
+def _candidate_kb_source_roots(
+    config_path: Path, source_path: str
+) -> list[tuple[Path, Path]]:
+    source_root = _safe_relative_kb_source_path(source_path)
+    candidates: list[tuple[Path, Path]] = [
+        (config_path.parent, config_path.parent / source_root)
+    ]
     for ancestor in Path(__file__).resolve().parents:
         config_root = ancestor / "config"
         if config_root.is_dir():
-            candidates.append(config_root / source_root)
+            candidates.append((config_root, config_root / source_root))
     return candidates
 
 
+def _assert_no_symlink_components(root: Path, candidate: Path) -> None:
+    relative = candidate.relative_to(root)
+    current = root
+    for component in relative.parts:
+        current /= component
+        if current.is_symlink():
+            raise ValueError(
+                "Knowledge-base source paths must not contain symbolic links"
+            )
+
+
 def _resolve_kb_source_root(config_path: Path, source_path: str) -> Path | None:
-    for candidate in _candidate_kb_source_roots(config_path, source_path):
-        if candidate.exists():
-            return candidate
+    for root, candidate in _candidate_kb_source_roots(config_path, source_path):
+        if not candidate.exists():
+            continue
+        if not candidate.is_dir():
+            raise ValueError("Knowledge-base source.path must resolve to a directory")
+        resolved_root = root.resolve(strict=True)
+        resolved_candidate = candidate.resolve(strict=True)
+        try:
+            resolved_candidate.relative_to(resolved_root)
+        except ValueError as exc:
+            raise ValueError(
+                "Knowledge-base source.path escapes its allowed source directory"
+            ) from exc
+        _assert_no_symlink_components(root, candidate)
+        return resolved_candidate
     return None
 
 
@@ -146,6 +194,7 @@ def _kb_source_spec(
 
 
 def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
+    _safe_relative_kb_source_path(source_path)
     cleaned = _clean_kb_source_path(source_path)
     runtime_root = _clean_kb_source_path(KB_RUNTIME_ROOT)
 
@@ -161,7 +210,69 @@ def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
 
 
 def _runtime_kb_target_root(config_path: Path, runtime_relative_path: str) -> Path:
-    return _runtime_config_output_dir(config_path) / Path(runtime_relative_path)
+    runtime_root = _runtime_kb_state_dir(config_path)
+    target = _runtime_config_output_dir(config_path) / Path(runtime_relative_path)
+    try:
+        target.relative_to(runtime_root)
+    except ValueError as exc:
+        raise ValueError(
+            "Runtime knowledge-base target escapes the owned runtime directory"
+        ) from exc
+    if target == runtime_root:
+        raise ValueError("Runtime knowledge-base target must name a child directory")
+    current = runtime_root
+    for component in target.relative_to(runtime_root).parts:
+        current /= component
+        if current.is_symlink():
+            raise ValueError(
+                "Runtime knowledge-base target paths must not contain symbolic links"
+            )
+    return target
+
+
+def _assert_copy_is_non_recursive(source_root: Path, runtime_target: Path) -> None:
+    resolved_source = source_root.resolve(strict=True)
+    resolved_target = runtime_target.absolute()
+    try:
+        resolved_target.relative_to(resolved_source)
+    except ValueError:
+        return
+    raise ValueError(
+        "Knowledge-base source directory must not contain its runtime target"
+    )
+
+
+def _assert_source_tree_has_no_symlinks(source_root: Path) -> None:
+    for root, directories, filenames in os.walk(source_root, followlinks=False):
+        root_path = Path(root)
+        for entry in [*directories, *filenames]:
+            if (root_path / entry).is_symlink():
+                raise ValueError(
+                    "Knowledge-base source trees must not contain symbolic links"
+                )
+
+
+def _validate_package_kb_paths(config: dict[str, object]) -> bool:
+    """Validate packaged KB references without reading or changing runtime state."""
+
+    kb_configs = _configured_knowledge_bases(config)
+    for kb_config in kb_configs:
+        kb_source_spec = _kb_source_spec(kb_config)
+        if kb_source_spec is None:
+            continue
+        _kb_name, _source, source_path = kb_source_spec
+        relative = _safe_relative_kb_source_path(source_path)
+        parts = relative.parts
+        if (
+            len(parts) < MIN_KB_SOURCE_PATH_PARTS
+            or parts[0] != KB_RUNTIME_ROOT
+            or any(not _SAFE_KB_PATH_COMPONENT.fullmatch(part) for part in parts[1:])
+        ):
+            raise ValueError(
+                "Packaged knowledge-base source.path must use the canonical "
+                "knowledge_bases/<name>/ form"
+            )
+    return bool(kb_configs)
 
 
 def _sync_runtime_kb_store(
@@ -191,6 +302,10 @@ def _sync_runtime_kb_store(
             changed = True
 
         if runtime_target.exists():
+            if not runtime_target.is_dir():
+                raise ValueError(
+                    "Runtime knowledge-base target must be a real directory"
+                )
             if runtime_relative_path not in bootstrapped:
                 bootstrapped.add(runtime_relative_path)
                 state_changed = True
@@ -208,6 +323,8 @@ def _sync_runtime_kb_store(
             )
             continue
 
+        _assert_copy_is_non_recursive(resolved_source_root, runtime_target)
+        _assert_source_tree_has_no_symlinks(resolved_source_root)
         runtime_target.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copytree(resolved_source_root, runtime_target)

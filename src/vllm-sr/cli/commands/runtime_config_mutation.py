@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
+from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -80,10 +81,13 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
     },
 }
 
-AMD_OVERRIDE_PREVIEW_LIMIT = 8
+GPU_OVERRIDE_PREVIEW_LIMIT = 8
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
-AMD_GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
+# Platforms that flip router internal-model `use_cpu` flags to false by default
+# so local signal models run on the platform GPU.
+GPU_DEFAULT_PLATFORMS = (PLATFORM_AMD, PLATFORM_NVIDIA)
+GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
     ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
     ("global", "model_catalog", "modules", "classifier", "domain", "use_cpu"),
@@ -130,7 +134,7 @@ def _normalize_platform(value: str | None) -> str:
     return str(value).strip().lower()
 
 
-def _set_use_cpu_false_for_amd(
+def _set_use_cpu_false(
     config_node: object, path: str, changed_paths: list[str]
 ) -> None:
     if isinstance(config_node, dict):
@@ -140,16 +144,16 @@ def _set_use_cpu_false_for_amd(
                 config_node[key] = False
                 changed_paths.append(current_path)
             else:
-                _set_use_cpu_false_for_amd(value, current_path, changed_paths)
+                _set_use_cpu_false(value, current_path, changed_paths)
         return
 
     if isinstance(config_node, list):
         for index, item in enumerate(config_node):
-            _set_use_cpu_false_for_amd(item, f"{path}[{index}]", changed_paths)
+            _set_use_cpu_false(item, f"{path}[{index}]", changed_paths)
 
 
 def _ensure_mapping_path(
-    root: dict[str, object], path: tuple[str, ...]
+    root: dict[str, object], path: tuple[str, ...], platform: str
 ) -> dict[str, object] | None:
     current: dict[str, object] = root
     current_path: list[str] = []
@@ -164,7 +168,8 @@ def _ensure_mapping_path(
             continue
         if not isinstance(next_node, dict):
             log.warning(
-                "Platform amd detected: skipping GPU default injection for %s because %s is not a mapping",
+                "Platform %s detected: skipping GPU default injection for %s because %s is not a mapping",
+                platform,
                 ".".join(path),
                 ".".join(current_path),
             )
@@ -174,11 +179,11 @@ def _ensure_mapping_path(
     return current
 
 
-def _inject_missing_amd_gpu_defaults(
-    merged_config: dict[str, object], changed_paths: list[str]
+def _inject_missing_gpu_defaults(
+    merged_config: dict[str, object], changed_paths: list[str], platform: str
 ) -> None:
-    for use_cpu_path in AMD_GPU_USE_CPU_PATHS:
-        parent = _ensure_mapping_path(merged_config, use_cpu_path[:-1])
+    for use_cpu_path in GPU_USE_CPU_PATHS:
+        parent = _ensure_mapping_path(merged_config, use_cpu_path[:-1], platform)
         if parent is None:
             continue
 
@@ -191,31 +196,41 @@ def _inject_missing_amd_gpu_defaults(
         changed_paths.append(".".join(use_cpu_path))
 
 
-def _platform_requires_gpu_defaults(platform: str | None) -> bool:
+def _resolve_gpu_default_platform(platform: str | None) -> str:
+    """Return the normalized GPU platform requiring use_cpu defaults, else ""."""
     normalized_platform = _normalize_platform(
         platform or os.getenv("VLLM_SR_PLATFORM") or os.getenv("DASHBOARD_PLATFORM")
     )
-    if normalized_platform != "amd":
-        return False
+    if normalized_platform not in GPU_DEFAULT_PLATFORMS:
+        return ""
 
-    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "").strip().lower()
+    env_prefix = f"VLLM_SR_{normalized_platform.upper()}"
+    force_gpu = os.getenv(f"{env_prefix}_FORCE_GPU", "").strip().lower()
     if force_gpu in TRUTHY_ENV_VALUES:
-        return True
+        return normalized_platform
     if force_gpu in FALSEY_ENV_VALUES:
         log.info(
-            "Platform amd detected: keeping router internal model use_cpu settings; "
-            "VLLM_SR_AMD_FORCE_GPU is explicitly disabled"
+            "Platform %s detected: keeping router internal model use_cpu settings; "
+            "%s_FORCE_GPU is explicitly disabled",
+            normalized_platform,
+            env_prefix,
         )
-        return False
+        return ""
 
-    preserve_cpu = os.getenv("VLLM_SR_AMD_PRESERVE_CPU", "").strip().lower()
+    preserve_cpu = os.getenv(f"{env_prefix}_PRESERVE_CPU", "").strip().lower()
     if preserve_cpu in TRUTHY_ENV_VALUES:
         log.info(
-            "Platform amd detected: keeping router internal model use_cpu settings; "
-            "VLLM_SR_AMD_PRESERVE_CPU is enabled"
+            "Platform %s detected: keeping router internal model use_cpu settings; "
+            "%s_PRESERVE_CPU is enabled",
+            normalized_platform,
+            env_prefix,
         )
-        return False
-    return True
+        return ""
+    return normalized_platform
+
+
+def _platform_requires_gpu_defaults(platform: str | None) -> bool:
+    return bool(_resolve_gpu_default_platform(platform))
 
 
 def apply_platform_gpu_defaults(
@@ -224,26 +239,33 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD platform, rewrite router internal model `use_cpu` flags to false by
-    default so `--platform amd` uses ROCm for local signal models. Set
-    VLLM_SR_AMD_PRESERVE_CPU=1/true/yes/on or VLLM_SR_AMD_FORCE_GPU=0/false/no/off
+    For AMD (ROCm) and NVIDIA (CUDA) platforms, rewrite router internal model
+    `use_cpu` flags to false by default so `--platform amd` / `--platform nvidia`
+    run local signal models on the platform GPU. Set
+    VLLM_SR_<PLATFORM>_PRESERVE_CPU=1/true/yes/on (e.g. VLLM_SR_NVIDIA_PRESERVE_CPU)
+    or VLLM_SR_<PLATFORM>_FORCE_GPU=0/false/no/off
     to preserve CPU settings when the router does not have dedicated GPU headroom.
     """
-    if not _platform_requires_gpu_defaults(platform):
+    resolved_platform = _resolve_gpu_default_platform(platform)
+    if not resolved_platform:
         return False
 
     changed_paths: list[str] = []
-    _set_use_cpu_false_for_amd(merged_config, "", changed_paths)
-    _inject_missing_amd_gpu_defaults(merged_config, changed_paths)
+    _set_use_cpu_false(merged_config, "", changed_paths)
+    _inject_missing_gpu_defaults(merged_config, changed_paths, resolved_platform)
     if not changed_paths:
-        log.info("Platform amd detected: no use_cpu flags found to override")
+        log.info(
+            "Platform %s detected: no use_cpu flags found to override",
+            resolved_platform,
+        )
         return False
 
-    preview = ", ".join(changed_paths[:AMD_OVERRIDE_PREVIEW_LIMIT])
-    if len(changed_paths) > AMD_OVERRIDE_PREVIEW_LIMIT:
+    preview = ", ".join(changed_paths[:GPU_OVERRIDE_PREVIEW_LIMIT])
+    if len(changed_paths) > GPU_OVERRIDE_PREVIEW_LIMIT:
         preview = f"{preview}, ..."
     log.info(
-        "Platform amd detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        "Platform %s detected: set %d use_cpu flag(s) to false for GPU default (%s)",
+        resolved_platform,
         len(changed_paths),
         preview,
     )

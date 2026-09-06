@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -43,13 +44,12 @@ func TestScheduleResponseMemoryStore_NoOpWithoutMemoryExtractor(t *testing.T) {
 
 	reqCtx := &RequestContext{
 		RequestID: "req-noop",
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			ConversationID:       "conv-noop",
+		ResponseObjectState: &ResponseObjectState{
+			ConversationID: "conv-noop",
 		},
 	}
 
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
+	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
 }
 
 func TestScheduleResponseMemoryStore_SkippedWhenAutoStoreDisabled(t *testing.T) {
@@ -64,7 +64,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenAutoStoreDisabled(t *testing.T) 
 		RequestID: "req-disabled",
 	}
 
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
+	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
 }
 
 func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) {
@@ -81,7 +81,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) 
 	}
 
 	// Should return early at the jailbreak check — no goroutine launched.
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
+	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
 }
 
 func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
@@ -95,12 +95,12 @@ func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
 
 	// No per-decision plugin → extractAutoStore returns false
 	// Router AutoStore=true -> fallback kicks in -> function does NOT return early
-	// The goroutine runs but extractMemoryInfo fails gracefully (no ResponseAPICtx)
+	// The goroutine runs but extractMemoryInfo fails gracefully (no ResponseObjectState)
 	reqCtx := &RequestContext{
 		RequestID: "req-router-fallback",
 	}
 
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
+	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
 }
 
 func TestScheduleResponseMemoryStore_SkippedWhenBothAutoStoresDisabled(t *testing.T) {
@@ -116,5 +116,19 @@ func TestScheduleResponseMemoryStore_SkippedWhenBothAutoStoresDisabled(t *testin
 		RequestID: "req-both-disabled",
 	}
 
-	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
+	router.scheduleSemanticResponseMemoryStore(reqCtx, memoryTestResponse("test"))
+}
+
+func memoryTestResponse(text string) *llmprotocol.Response {
+	return &llmprotocol.Response{
+		Generation: 1,
+		ID:         "response_test",
+		Model:      "model",
+		Output: []llmprotocol.OutputItem{{
+			ID: "item_test", Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+		}},
+		StopReason: llmprotocol.StopEndTurn,
+		Usage:      llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
+	}
 }

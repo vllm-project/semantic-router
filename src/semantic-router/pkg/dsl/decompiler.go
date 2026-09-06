@@ -11,11 +11,13 @@ import (
 // Decompile converts runtime config into the DSL contract.
 
 func Decompile(cfg *config.RouterConfig) (string, error) {
-	return DecompileRouting(cfg)
+	return DecompileConfig(cfg)
 }
 
 func DecompileToAST(cfg *config.RouterConfig) *Program {
-	return DecompileRoutingToAST(cfg)
+	prog := DecompileRoutingToAST(cfg)
+	appendConfigScopesToAST(prog, cfg)
+	return prog
 }
 
 type decompiler struct {
@@ -108,7 +110,7 @@ func Format(input string) (string, error) {
 		return "", fmt.Errorf("compile errors: %v", compileErrs)
 	}
 
-	formatted, err := DecompileRouting(cfg)
+	formatted, err := Decompile(cfg)
 	if err != nil {
 		return "", err
 	}

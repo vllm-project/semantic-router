@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  ANALYZE_MENU_CATEGORIES,
-  BUILD_MENU_CATEGORIES,
-  type LayoutMenuCategory,
-} from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES, type LayoutMenuCategory } from './LayoutNavSupport'
 import { getLayoutMegaMenuGeometry } from './LayoutMegaMenuSupport'
 
 function categoryByKey(categories: LayoutMenuCategory[], key: string): LayoutMenuCategory {
@@ -17,13 +13,11 @@ function categoryByKey(categories: LayoutMenuCategory[], key: string): LayoutMen
 
 describe('layout mega-menu geometry', () => {
   it('keeps sparse multi-section navigation compact', () => {
-    const outcomes = categoryByKey(ANALYZE_MENU_CATEGORIES, 'outcomes')
+    const outcomes = categoryByKey(BUILD_MENU_CATEGORIES, 'outcomes')
 
     expect(getLayoutMegaMenuGeometry(outcomes)).toEqual({
       density: 'compact',
       itemCount: 3,
-      maxWidth: 860,
-      railWidth: 200,
       sectionCount: 3,
     })
   })
@@ -33,9 +27,7 @@ describe('layout mega-menu geometry', () => {
 
     expect(getLayoutMegaMenuGeometry(routing)).toEqual({
       density: 'standard',
-      itemCount: 6,
-      maxWidth: 980,
-      railWidth: 210,
+      itemCount: 7,
       sectionCount: 3,
     })
   })
@@ -50,6 +42,7 @@ describe('layout mega-menu geometry', () => {
         items: Array.from({ length: 2 }, (_, itemIndex) => ({
           kind: 'route' as const,
           label: `Item ${sectionIndex + 1}-${itemIndex + 1}`,
+          icon: 'model' as const,
           to: `/item-${sectionIndex + 1}-${itemIndex + 1}`,
         })),
       })),
@@ -58,8 +51,6 @@ describe('layout mega-menu geometry', () => {
     expect(getLayoutMegaMenuGeometry(denseCategory)).toEqual({
       density: 'dense',
       itemCount: 8,
-      maxWidth: 1280,
-      railWidth: 220,
       sectionCount: 4,
     })
   })

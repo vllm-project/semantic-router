@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-embedding
+  namespace: default
+data:
+  server.py: |
+    import json
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    EXPECTED_AUTH = "Bearer e2e-embedding-key"
+    BILLING_TERMS = (
+        "billing",
+        "invoice",
+        "payment",
+        "subscription",
+        "refund",
+        "pricing",
+        "credit card",
+        "account balance",
+    )
+
+    def embedding_for(text):
+        normalized = str(text).lower()
+        if any(term in normalized for term in BILLING_TERMS):
+            return [1.0, 0.0, 0.0, 0.0]
+        return [0.0, 1.0, 0.0, 0.0]
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format, *args):
+            return
+
+        def send_json(self, status, payload):
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_json(200, {"status": "ok"})
+                return
+            self.send_json(404, {"error": {"message": "not found"}})
+
+        def do_POST(self):
+            if self.path not in ("/embeddings", "/v1/embeddings"):
+                self.send_json(404, {"error": {"message": "not found"}})
+                return
+            if self.headers.get("Authorization") != EXPECTED_AUTH:
+                self.send_json(401, {"error": {"message": "invalid bearer token"}})
+                return
+
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length))
+            except (ValueError, json.JSONDecodeError):
+                self.send_json(400, {"error": {"message": "invalid JSON"}})
+                return
+
+            inputs = payload.get("input", [])
+            if isinstance(inputs, str):
+                inputs = [inputs]
+            if not isinstance(inputs, list):
+                self.send_json(400, {"error": {"message": "input must be text or a list"}})
+                return
+            if payload.get("dimensions") not in (None, 4):
+                self.send_json(400, {"error": {"message": "dimensions must be 4"}})
+                return
+
+            data = [
+                {"object": "embedding", "index": index, "embedding": embedding_for(text)}
+                for index, text in enumerate(inputs)
+            ]
+            self.send_json(
+                200,
+                {
+                    "object": "list",
+                    "model": payload.get("model", "e2e-remote-embedding"),
+                    "data": data,
+                    "usage": {"prompt_tokens": len(inputs), "total_tokens": len(inputs)},
+                },
+            )
+
+    ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-embedding
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-embedding
+  template:
+    metadata:
+      labels:
+        app: mock-embedding
+    spec:
+      containers:
+        - name: mock-embedding
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/app/server.py"]
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: script
+              mountPath: /app/server.py
+              subPath: server.py
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: script
+          configMap:
+            name: mock-embedding
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-embedding
+  namespace: default
+spec:
+  selector:
+    app: mock-embedding
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

@@ -353,7 +353,10 @@ global:
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
 	}
-	if cfg.RouterReplay.StoreBackend != "postgres" {
+	if cfg.RouterReplay.Enabled {
+		t.Fatal("expected sparse global override to preserve default router_replay.enabled=false")
+	}
+	if cfg.RouterReplay.StoreBackend != "memory" {
 		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
 	}
 	if cfg.RouterReplay.TTLSeconds != 2592000 {
@@ -424,8 +427,8 @@ global:
 	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
-	if !cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected sparse category override to keep mmBERT-32K enabled")
+	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
+		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
 	}
 	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
@@ -436,7 +439,7 @@ global:
 	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
-	if !cfg.PromptGuard.UseMmBERT32K {
+	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
 		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
 	}
 	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {

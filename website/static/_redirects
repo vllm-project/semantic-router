@@ -1,0 +1,4 @@
+http://vllm-semantic-router.com/* https://vllm-sr.ai/:splat 301!
+https://vllm-semantic-router.com/* https://vllm-sr.ai/:splat 301!
+http://www.vllm-semantic-router.com/* https://vllm-sr.ai/:splat 301!
+https://www.vllm-semantic-router.com/* https://vllm-sr.ai/:splat 301!

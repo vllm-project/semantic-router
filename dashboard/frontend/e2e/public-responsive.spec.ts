@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedAppShell } from './support/auth'
 
 async function mockPublicVisitor(page: Page) {
   await page.route('**/api/setup/state', async (route) => {
@@ -24,7 +24,7 @@ async function mockPublicVisitor(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ readonlyMode: false, platform: '' }),
+      body: JSON.stringify(dashboardSettingsResponse()),
     })
   })
 }
@@ -40,7 +40,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(header.getByRole('link', { name: 'vLLM Semantic Router home' })).toBeVisible()
     await expect(header.getByRole('link', { name: 'Docs', exact: true })).toHaveAttribute(
       'href',
-      'https://vllm-semantic-router.com/docs/intro/',
+      'https://vllm-sr.ai/docs/intro/',
     )
     await expect(header.getByRole('link', { name: 'GitHub', exact: true })).toHaveAttribute(
       'href',
@@ -51,11 +51,11 @@ test.describe('Public and transition surfaces on short screens', () => {
       '/login',
     )
 
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
+      page.getByRole('heading', {
+        name: 'Match every workload to the right model and hardware.',
+      }),
     ).toBeVisible()
 
     const routingHeadings = [
@@ -84,6 +84,75 @@ test.describe('Public and transition surfaces on short screens', () => {
     ).toBe(true)
   })
 
+  test('aligns the public and authenticated header shells', async ({ page, context }) => {
+    const viewports = [
+      { width: 2048, height: 1152 },
+      { width: 1024, height: 800 },
+      { width: 961, height: 720 },
+      { width: 390, height: 844 },
+    ]
+
+    await page.setViewportSize(viewports[0])
+    await mockPublicVisitor(page)
+    await page.goto('/')
+
+    const publicHeader = page.getByTestId('public-header')
+    const publicBrand = publicHeader.getByRole('link', { name: 'vLLM Semantic Router home' })
+
+    const authenticatedPage = await context.newPage()
+    await authenticatedPage.setViewportSize(viewports[0])
+    await mockAuthenticatedAppShell(authenticatedPage)
+    await authenticatedPage.goto('/dashboard')
+
+    const authenticatedHeader = authenticatedPage.getByTestId('layout-header-content')
+    const authenticatedBrand = authenticatedHeader.getByRole('link').first()
+    await expect(authenticatedHeader).toBeVisible()
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      await authenticatedPage.setViewportSize(viewport)
+
+      const publicHeaderBox = await page.getByTestId('public-header-content').boundingBox()
+      const publicLogoBox = await publicBrand.locator('img').boundingBox()
+      const publicDashboardBox = await publicHeader
+        .getByRole('link', { name: 'Enter Dashboard' })
+        .boundingBox()
+      const authenticatedHeaderBox = await authenticatedHeader.boundingBox()
+      const authenticatedLogoBox = await authenticatedBrand.locator('img').boundingBox()
+
+      expect(publicHeaderBox).not.toBeNull()
+      expect(publicLogoBox).not.toBeNull()
+      expect(publicDashboardBox).not.toBeNull()
+      expect(authenticatedHeaderBox).not.toBeNull()
+      expect(authenticatedLogoBox).not.toBeNull()
+
+      expect(publicHeaderBox?.height).toBeCloseTo(authenticatedHeaderBox?.height ?? 0, 0)
+      expect(publicHeaderBox?.width).toBeCloseTo(authenticatedHeaderBox?.width ?? 0, 0)
+      expect(publicLogoBox?.x).toBeCloseTo(authenticatedLogoBox?.x ?? 0, 0)
+      expect(publicLogoBox?.y).toBeCloseTo(authenticatedLogoBox?.y ?? 0, 0)
+      expect(publicLogoBox?.width).toBeCloseTo(authenticatedLogoBox?.width ?? 0, 0)
+      expect(publicLogoBox?.height).toBeCloseTo(authenticatedLogoBox?.height ?? 0, 0)
+      expect((publicDashboardBox?.x ?? 0) + (publicDashboardBox?.width ?? 0)).toBeCloseTo(
+        (authenticatedHeaderBox?.x ?? 0) +
+          (authenticatedHeaderBox?.width ?? 0) -
+          ((authenticatedLogoBox?.x ?? 0) - (authenticatedHeaderBox?.x ?? 0)),
+        0,
+      )
+
+      await expect(publicBrand.locator('img')).toHaveAttribute('src', '/vllm-sr-logo.white.png')
+      await expect(authenticatedBrand.locator('img')).toHaveAttribute(
+        'src',
+        '/vllm-sr-logo.white.png',
+      )
+
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        viewport.width,
+      )
+    }
+
+    await authenticatedPage.close()
+  })
+
   test('keeps expressive landing and login surfaces reachable on a short mobile viewport', async ({
     page,
   }) => {
@@ -95,13 +164,9 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(landingMotion).toBeVisible()
     await expect(landingMotion.locator('canvas')).toBeVisible()
 
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
-    await expect(
-      page.getByText(
-        'Compose heterogeneous LLMs into personalized model paths.',
-      ),
+      page.getByText('System-level intelligence for heterogeneous LLM inference'),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })
     await exploreDocs.scrollIntoViewIfNeeded()

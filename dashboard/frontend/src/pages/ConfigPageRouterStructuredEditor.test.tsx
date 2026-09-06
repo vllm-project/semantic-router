@@ -54,4 +54,28 @@ describe('ConfigPageRouterStructuredEditor', () => {
     expect(markup).toContain('1 additional advanced field')
     expect(markup).toContain('Enabled')
   })
+
+  it('renders the remote embedding endpoint as typed fields', () => {
+    const schema = ROUTER_STRUCTURED_FIELDS.embedding_models?.endpoint.schema
+    expect(schema).toBeDefined()
+    const markup = renderToStaticMarkup(
+      <ConfigPageRouterStructuredEditor
+        schema={schema!}
+        value={{
+          base_url: 'https://embedding.example.com/v1',
+          model: 'text-embedding-3-small',
+          api_key_env: 'OPENAI_API_KEY',
+          max_response_bytes: 16777216,
+          dimensions: 1536,
+        }}
+        onChange={vi.fn()}
+      />,
+    )
+
+    expect(markup).toContain('Base URL')
+    expect(markup).toContain('text-embedding-3-small')
+    expect(markup).toContain('OPENAI_API_KEY')
+    expect(markup).toContain('Max Response Bytes')
+    expect(markup).not.toContain('<textarea')
+  })
 })

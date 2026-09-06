@@ -119,8 +119,8 @@ case "${1:-menu}" in
     raw)
         # Show raw curl command for copy/paste
         echo -e "${BOLD}Raw Curl Command (Math Example):${NC}\n"
-        cat << 'EOF'
-curl -X POST "http://semantic-router-api-vllm-semantic-router-system.apps.cluster-pbd96.pbd96.sandbox5333.opentlc.com/api/v1/classify/intent" \
+        cat << EOF
+curl -X POST "${API_URL}" \
   -H 'Content-Type: application/json' \
   -d '{"text": "Is 17 a prime number?"}' | python3 -m json.tool
 EOF

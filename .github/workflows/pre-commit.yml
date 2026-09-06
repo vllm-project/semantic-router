@@ -1,21 +1,75 @@
 name: Pre-commit
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch: # Allow manual triggering
+  workflow_call:
+    inputs:
+      docs_only:
+        description: Run the lightweight docs and website gate.
+        required: true
+        type: boolean
+      website:
+        description: Build the website in lightweight mode.
+        required: false
+        default: false
+        type: boolean
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  pre-commit:
-    if: github.repository == 'vllm-project/semantic-router'
+  docs-precommit:
+    if: inputs.docs_only
     runs-on: ubuntu-latest
-    name: Run pre-commit hooks check file lint
+    name: Docs and website lightweight checks
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        if: inputs.website
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Cache Node dependencies
+        if: inputs.website
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            website/node_modules
+          key: ${{ runner.os }}-node-docs-ci-${{ hashFiles('website/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-docs-ci-
+
+      - name: Run docs CI gate
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+          else
+            export AGENT_BASE_REF="HEAD^"
+          fi
+          make agent-docs-ci-gate
+
+      - name: Build website
+        if: inputs.website
+        run: |
+          cd website
+          npm ci
+          npm run build
+
+  full-precommit:
+    if: ${{ !inputs.docs_only }}
+    runs-on: ubuntu-latest
+    name: Full pre-commit checks
 
     steps:
       - name: Check out the repo
@@ -36,7 +90,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -99,28 +153,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
-      - name: Install tree-sitter for security scan
-        run: |
-          # Pin tree-sitter core + grammars to an ABI-compatible set (see
-          # security-scan.yml); unpinned installs segfault the scanner on ABI drift.
-          pip install \
-            tree-sitter==0.25.2 \
-            tree-sitter-python==0.25.0 \
-            tree-sitter-javascript==0.25.0 \
-            tree-sitter-typescript==0.23.2 \
-            tree-sitter-go==0.25.0 \
-            tree-sitter-rust==0.24.0
-
-      - name: Run AST supply chain security scan
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            scan . --fail-on HIGH
-
-      - name: Run AST PR diff security scan
-        if: github.event_name == 'pull_request'
-        run: |
-          python3 tools/security/ast_security_scanner.py \
-            diff "origin/${{ github.base_ref }}" --fail-on HIGH
+      # agent-ci-lint runs the selected domains' fast tests, which for dashboard
+      # changes includes make dashboard-check. Some dashboard backend tests shell
+      # out to the vllm-sr CLI, so its Python dependencies must be importable.
+      - name: Install vllm-sr CLI
+        run: pip install -e src/vllm-sr
 
       - name: Run agent CI lint on changed files
         run: |
@@ -130,34 +167,6 @@ jobs:
             export AGENT_BASE_REF="HEAD^"
           fi
           make agent-ci-lint
-
-      - name: Diagnose gofmt state before pre-commit
-        run: |
-          echo "=== Go version ==="
-          go version
-          echo "=== gofmt version ==="
-          gofmt -h 2>&1 | head -3 || true
-          echo "=== Files needing gofmt (gofmt -l) ==="
-          NEEDS_FMT=$(gofmt -l $(find . -name "*.go" -not -path "./.git/*" -not -path "./.venv/*") 2>/dev/null)
-          if [ -n "$NEEDS_FMT" ]; then
-            echo "Files that need formatting:"
-            echo "$NEEDS_FMT"
-            echo ""
-            echo "=== Diffs ==="
-            for f in $NEEDS_FMT; do
-              echo "--- $f ---"
-              gofmt -d "$f" || true
-            done
-          else
-            echo "All Go files are properly formatted"
-          fi
-          echo "=== git status (any working tree changes) ==="
-          git status --short || true
-
-      - name: Run pre-commit check
-        run: make precommit-check
-        env:
-          CI: true
 
       - name: Show pre-commit results
         if: failure()
@@ -182,5 +191,5 @@ jobs:
           echo "To run the local branch prelint bundle manually:"
           echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
           echo ""
-          echo "To run only the pre-commit workflow locally:"
+          echo "To run the changed-file pre-commit workflow locally:"
           echo "  make precommit-local"

@@ -30,6 +30,23 @@ describe('router defaults structured schemas', () => {
     expect(normalized.skip_processing).toEqual({ enabled: true })
   })
 
+  it('preserves omitted auto aliases instead of turning them into an explicit empty list', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: { router_core: { strategy: 'priority' } },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const routerCore = cards.find((card) => card.key === 'router_core')
+    const patch = routerCore?.save(routerCore.editData) as {
+      router?: Record<string, unknown>
+    }
+
+    expect(patch.router).not.toHaveProperty('auto_model_names')
+  })
+
   it('round-trips nested provider and rule object arrays', () => {
     const normalized = normalizeRouterStructuredFields('ratelimit', {
       fail_open: false,
@@ -189,6 +206,60 @@ describe('router defaults structured schemas', () => {
         future_classifier_module: { enabled: true },
         preference: expect.objectContaining({
           prototype_scoring: expect.objectContaining({ future_bank_mode: 'adaptive' }),
+        }),
+      }),
+    )
+
+    const embeddingCards = buildRouterSectionCards({
+      config: null,
+      routerConfig: {
+        embedding_models: {
+          semantic: {
+            mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
+            embedding_config: { backend: 'candle', model_type: 'mmbert' },
+          },
+        },
+      },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const embeddingCard = embeddingCards.find((card) => card.key === 'embedding_models')
+    expect(embeddingCard?.editFields.find((field) => field.name === 'provider_type')).toEqual(
+      expect.objectContaining({ type: 'select', required: true }),
+    )
+    expect(embeddingCard?.editFields.find((field) => field.name === 'remote_backend')).toEqual(
+      expect.objectContaining({ type: 'select', options: ['openai_compatible'] }),
+    )
+    expect(embeddingCard?.editFields.find((field) => field.name === 'endpoint')?.type).toBe(
+      'custom',
+    )
+    const embeddingPatch = embeddingCard?.save({
+      ...embeddingCard.editData,
+      provider_type: 'remote',
+      remote_backend: 'openai_compatible',
+      endpoint: {
+        base_url: 'https://embedding.example.com/v1',
+        model: 'text-embedding-3-small',
+        api_key_env: 'OPENAI_API_KEY',
+        dimensions: 1536,
+      },
+      embedding_config: { target_dimension: 1536 },
+    }) as {
+      model_catalog?: {
+        embeddings?: { semantic?: Record<string, unknown> }
+      }
+    }
+    expect(embeddingPatch.model_catalog?.embeddings?.semantic).toEqual(
+      expect.objectContaining({
+        embedding_config: expect.objectContaining({
+          backend: 'openai_compatible',
+          model_type: 'remote',
+        }),
+        endpoint: expect.objectContaining({
+          base_url: 'https://embedding.example.com/v1',
+          model: 'text-embedding-3-small',
         }),
       }),
     )

@@ -73,7 +73,7 @@ real_eval = [
 
 [project.urls]
 Homepage = "https://github.com/vllm-project/semantic-router"
-Documentation = "https://vllm-semantic-router.com"
+Documentation = "https://vllm-sr.ai"
 Repository = "https://github.com/vllm-project/semantic-router"
 "Bug Tracker" = "https://github.com/vllm-project/semantic-router/issues"
 

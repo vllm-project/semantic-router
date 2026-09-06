@@ -7,7 +7,7 @@ from agent_support import REPO_ROOT
 
 REQUIRED_CONTEXT_MAP_DEFAULT_SECTIONS = {"start_here", "resume_refs"}
 REQUIRED_CONTEXT_MAP_PATHS = {
-    "defaults.start_here": {"AGENTS.md", "docs/agent/README.md"},
+    "defaults.start_here": {"AGENTS.md", "tools/agent/docs/README.md"},
 }
 
 

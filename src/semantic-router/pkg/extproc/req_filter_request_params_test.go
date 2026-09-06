@@ -3,27 +3,26 @@
 package extproc
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
-func TestBuildRequestParamsMutationsNilDecision(t *testing.T) {
+func TestApplySemanticRequestParamsNilDecision(t *testing.T) {
 	r := &OpenAIRouter{}
-	out, err := r.buildRequestParamsMutations(nil, []byte(`{"model":"x"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != `{"model":"x"}` {
-		t.Fatalf("expected passthrough, got %s", out)
+	request := llmprotocol.Request{Model: "x"}
+	changed, err := r.applySemanticRequestParams(nil, &request, config.DefaultRecipeName)
+	if err != nil || changed || request.Model != "x" {
+		t.Fatalf("nil decision changed request: changed=%v request=%+v err=%v", changed, request, err)
 	}
 }
 
-func TestBuildRequestParamsMutationsBlockedAndCaps(t *testing.T) {
+func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 	r := &OpenAIRouter{}
 	payload, err := config.NewStructuredPayload(map[string]interface{}{
-		"blocked_params":   []string{"logprobs", "custom_evil_field"},
+		"blocked_params":   []string{"frequency_penalty", "custom_evil_field"},
 		"max_tokens_limit": 500,
 		"max_n":            1,
 		"strip_unknown":    true,
@@ -37,28 +36,31 @@ func TestBuildRequestParamsMutationsBlockedAndCaps(t *testing.T) {
 			{Type: "request_params", Configuration: payload},
 		},
 	}
-	raw := []byte(`{"model":"m","messages":[],"logprobs":true,"max_tokens":9000,"n":5,"custom_evil_field":"x","foo":1}`)
-	out, err := r.buildRequestParamsMutations(decision, raw)
+	request := llmprotocol.Request{
+		Model:          "m",
+		CandidateCount: llmprotocol.Int64(5),
+		Sampling: llmprotocol.Sampling{
+			MaxOutputTokens:  llmprotocol.Int64(9000),
+			FrequencyPenalty: llmprotocol.Float64(0.5),
+		},
+	}
+	changed, err := r.applySemanticRequestParams(decision, &request, config.DefaultRecipeName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var body map[string]interface{}
-	if err := json.Unmarshal(out, &body); err != nil {
-		t.Fatal(err)
+	if !changed || request.Sampling.FrequencyPenalty != nil || request.Sampling.MaxOutputTokens == nil ||
+		*request.Sampling.MaxOutputTokens != 500 || request.CandidateCount == nil || *request.CandidateCount != 1 {
+		t.Fatalf("semantic request params = %+v, changed=%v", request, changed)
 	}
-	if _, ok := body["logprobs"]; ok {
-		t.Fatal("expected logprobs stripped via blocked_params")
-	}
-	if _, ok := body["custom_evil_field"]; ok {
-		t.Fatal("expected custom_evil_field stripped")
-	}
-	if _, ok := body["foo"]; ok {
-		t.Fatal("expected unknown field stripped")
-	}
-	if int(body["max_tokens"].(float64)) != 500 {
-		t.Fatalf("max_tokens cap: got %v", body["max_tokens"])
-	}
-	if int(body["n"].(float64)) != 1 {
-		t.Fatalf("n cap: got %v", body["n"])
+}
+
+func TestProtocolCodecRejectsUnknownFieldsBeforeRequestParamPlugins(t *testing.T) {
+	engine := protocolcodec.NewBuiltinEngine()
+	_, _, _, err := engine.DecodeRequest(
+		llmprotocol.OpenAIChatV1,
+		[]byte(`{"model":"m","messages":[{"role":"user","content":"hello"}],"future_field":true}`),
+	)
+	if err == nil {
+		t.Fatal("unknown wire field reached semantic request plugins")
 	}
 }

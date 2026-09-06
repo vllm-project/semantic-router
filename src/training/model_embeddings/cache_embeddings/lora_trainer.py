@@ -29,21 +29,20 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add this script's directory to the path so common_utils resolves
+# regardless of where the script is invoked from
+sys.path.insert(0, str(Path(__file__).parent))
 
-from training.cache_embeddings.common_utils import (
-    set_seed,
-    save_jsonl,
+from common_utils import (
     load_jsonl,
+    set_seed,
     setup_logging,
 )
 
@@ -108,8 +107,8 @@ class MultipleNegativesRankingLoss(nn.Module):
 
 # Optional dependencies
 try:
+    from peft import LoraConfig, TaskType, get_peft_model
     from transformers import AutoModel, AutoTokenizer
-    from peft import LoraConfig, get_peft_model, TaskType
 
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -255,7 +254,7 @@ def train_epoch(
     loss_fn: MultipleNegativesRankingLoss,
     device: torch.device,
     epoch: int,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Train for one epoch.
 
@@ -312,7 +311,7 @@ def validate(
     val_loader: DataLoader,
     loss_fn: MultipleNegativesRankingLoss,
     device: torch.device,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Validate the model.
 
@@ -384,7 +383,8 @@ def save_model(model: CacheEmbeddingModel, output_dir: str, tokenizer):
     logger.info(f"Model saved to {output_dir}")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Train domain-specific cache embedding model with LoRA"
     )
@@ -422,7 +422,20 @@ def main():
     parser.add_argument("--output", required=True, help="Output directory for model")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def select_device() -> torch.device:
+    """Select the best available training device."""
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+
+def main():
+    args = parse_args()
 
     # Check dependencies
     if not TRANSFORMERS_AVAILABLE:
@@ -434,12 +447,7 @@ def main():
     setup_logging()
     set_seed(args.seed)
     # Prefer MPS (Apple Silicon) > CUDA > CPU
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+    device = select_device()
 
     logger.info(f"Using device: {device}")
     logger.info(f"Training configuration: {vars(args)}")

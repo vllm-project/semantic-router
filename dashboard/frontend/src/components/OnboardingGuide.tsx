@@ -11,6 +11,7 @@ import {
 import { preloadDashboardRoute } from '../app/routeLoaders'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './OnboardingGuide.module.css'
+import ProductIcon from './ProductIcon'
 
 interface GuideStep {
   id: string
@@ -26,70 +27,54 @@ const GUIDE_STEPS: GuideStep[] = [
   {
     id: 'models',
     pageLabel: 'Models',
-    title: 'Start with the model inventory',
-    description:
-      'This page defines the models and endpoints the router can actually use before any routing logic becomes meaningful.',
+    title: 'Connect your models',
+    description: 'Bring the models you already use into one workspace.',
     highlights: [
-      'Register local or hosted model providers',
-      'Choose the default model used by fallback routes',
-      'Tune endpoint weights and credentials before touching routing',
+      'Choose a local or hosted provider',
+      'Connect once with a URL and API key',
+      'Import one or many models in a single step',
     ],
     route: '/config/models',
     actionLabel: 'Open Models',
   },
   {
-    id: 'routing',
-    pageLabel: 'Decisions',
-    title: 'Turn signals into routing behavior',
-    description:
-      'This is where request signals and explicit preferences become executable model paths.',
+    id: 'mixture',
+    pageLabel: 'Mixture-of-Models',
+    title: 'Build your model path',
+    description: 'Choose a recipe, then assign the right model to each decision.',
     highlights: [
-      'Turn reusable signals and preference policy into executable model paths',
-      'Choose when to select, cascade, or coordinate models',
-      'Review the complete path before promoting changes',
+      'Start from a proven recipe',
+      'Assign models to its decision paths',
+      'Publish one stable model name for applications',
     ],
-    route: '/config/decisions',
-    actionLabel: 'Open Decisions',
+    route: '/config/entrypoints-recipes',
+    actionLabel: 'Build a Mixture',
   },
   {
     id: 'playground',
     pageLabel: 'Playground',
-    title: 'Test the active router end to end',
-    description:
-      'Use Playground as the shortest loop for checking whether the router is behaving the way you expect after setup.',
+    title: 'Try it in Playground',
+    description: 'Send a real prompt and see the selected path as it happens.',
     highlights: [
-      'Send prompts through the live routing pipeline',
-      'Check whether the active routing graph behaves as expected',
-      'Iterate here before changing real traffic',
+      'Choose your new Mixture-of-Models',
+      'Stream responses through the live router',
+      'Reveal the decision, algorithm, and model when needed',
     ],
     route: '/playground',
     actionLabel: 'Open Playground',
   },
   {
-    id: 'dsl',
-    pageLabel: 'DSL Builder',
-    title: 'Author router behavior directly in DSL',
-    description: 'Use Builder when the manager UI is no longer expressive enough.',
+    id: 'insights',
+    pageLabel: 'Insights',
+    title: 'See what you saved',
+    description: 'Understand the quality, speed, and cost of every routed request.',
     highlights: [
-      'Open the Guide drawer for DSL snippets',
-      'Author model cards, signals, routes, and plugins',
-      'Compile and deploy deeper routing changes',
+      'Compare actual spend with your baseline',
+      'Inspect the model path behind each result',
+      'Use evidence to tune the next version',
     ],
-    route: '/builder',
-    actionLabel: 'Open DSL Builder',
-  },
-  {
-    id: 'clawos',
-    pageLabel: 'ClawOS',
-    title: 'Orchestrate multi-claw worker systems',
-    description: 'Use ClawOS when one router needs multi-agent orchestration.',
-    highlights: [
-      'Create teams with one leader and workers',
-      'Connect workers to routed models and memory',
-      'Inspect live agents, teams, and runtime health',
-    ],
-    route: '/clawos',
-    actionLabel: 'Open ClawOS',
+    route: '/insights',
+    actionLabel: 'Open Insights',
   },
 ]
 
@@ -168,13 +153,21 @@ const OnboardingGuide: React.FC = () => {
   }
 
   if (!isOpen) {
-    if (status === 'completed') {
+    // Evaluation is a focused evidence workspace and is not part of this product guide.
+    // Keep the launcher from obscuring dense controls or sticky decision actions there.
+    if (status === 'completed' || location.pathname === '/evaluation') {
       return null
     }
 
     return (
-      <button type="button" className={styles.replayButton} onClick={handleOpenGuide}>
-        {status === 'dismissed' ? 'Resume guide' : 'Guide'}
+      <button
+        type="button"
+        className={styles.replayButton}
+        onClick={handleOpenGuide}
+        aria-label={status === 'dismissed' ? 'Resume product guide' : 'Open product guide'}
+        title={status === 'dismissed' ? 'Resume guide' : 'Product guide'}
+      >
+        <span aria-hidden="true">?</span>
       </button>
     )
   }
@@ -192,11 +185,16 @@ const OnboardingGuide: React.FC = () => {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
-          <div>
-            <div className={styles.eyebrow}>Product guide</div>
-            <h2 id={titleId} className={styles.title}>
-              {step.title}
-            </h2>
+          <div className={styles.headerIdentity}>
+            <div className={styles.logo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <div className={styles.eyebrow}>Getting started</div>
+              <h2 id={titleId} className={styles.title}>
+                {step.title}
+              </h2>
+            </div>
           </div>
           <button
             type="button"
@@ -205,51 +203,63 @@ const OnboardingGuide: React.FC = () => {
             onClick={handlePause}
             data-dialog-initial-focus
           >
-            ×
+            <ProductIcon name="close" />
           </button>
         </div>
 
-        <div
-          className={styles.progressRow}
-          role="progressbar"
-          aria-label="Guide progress"
-          aria-valuemin={1}
-          aria-valuemax={GUIDE_STEPS.length}
-          aria-valuenow={stepIndex + 1}
-        >
-          {GUIDE_STEPS.map((guideStep, index) => (
-            <span
-              key={guideStep.id}
-              className={`${styles.progressDot} ${
-                index === stepIndex ? styles.progressDotActive : ''
-              } ${index < stepIndex ? styles.progressDotDone : ''}`}
-              aria-hidden="true"
-            />
-          ))}
-        </div>
-        <p className={styles.progressCopy}>
-          Step {stepIndex + 1} of {GUIDE_STEPS.length}
-        </p>
-
-        <p id={descriptionId} className={styles.description}>
-          {step.description}
-        </p>
-
-        <div className={styles.detailCard}>
-          <div className={styles.detailLabel}>What to do in {step.pageLabel}</div>
-          <ul className={styles.detailList}>
-            {step.highlights.map((highlight) => (
-              <li key={highlight} className={styles.detailItem}>
-                {highlight}
-              </li>
+        <div className={styles.progressBlock}>
+          <div
+            className={styles.progressRow}
+            role="progressbar"
+            aria-label="Guide progress"
+            aria-valuemin={1}
+            aria-valuemax={GUIDE_STEPS.length}
+            aria-valuenow={stepIndex + 1}
+            aria-valuetext={`Step ${stepIndex + 1} of ${GUIDE_STEPS.length}`}
+          >
+            {GUIDE_STEPS.map((guideStep, index) => (
+              <span
+                key={guideStep.id}
+                className={`${styles.progressDot} ${
+                  index === stepIndex ? styles.progressDotActive : ''
+                } ${index < stepIndex ? styles.progressDotDone : ''}`}
+                aria-hidden="true"
+              />
             ))}
-          </ul>
-          {isOnTargetRoute && (
-            <div className={styles.detailHint}>You are already on this page.</div>
-          )}
+          </div>
+          <p className={styles.progressCopy} aria-live="polite" aria-atomic="true">
+            Step {stepIndex + 1} of {GUIDE_STEPS.length}
+          </p>
         </div>
 
-        <div className={styles.footer}>
+        <div
+          key={step.id}
+          className={styles.body}
+          role="region"
+          aria-label={`${step.pageLabel} guide details`}
+          tabIndex={0}
+          data-testid="onboarding-guide-body"
+        >
+          <p id={descriptionId} className={styles.description}>
+            {step.description}
+          </p>
+
+          <div className={styles.detailCard}>
+            <div className={styles.detailLabel}>What to do in {step.pageLabel}</div>
+            <ul className={styles.detailList}>
+              {step.highlights.map((highlight) => (
+                <li key={highlight} className={styles.detailItem}>
+                  {highlight}
+                </li>
+              ))}
+            </ul>
+            {isOnTargetRoute && (
+              <div className={styles.detailHint}>You are already on this page.</div>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.footer} data-testid="onboarding-guide-actions">
           <div className={styles.footerLeft}>
             <button type="button" className={styles.secondaryButton} onClick={handlePause}>
               Pause tour

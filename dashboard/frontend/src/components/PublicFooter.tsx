@@ -4,9 +4,9 @@ const FOOTER_GROUPS = [
   {
     title: 'Product',
     links: [
-      { label: 'Documentation', href: 'https://vllm-semantic-router.com/docs/intro/' },
-      { label: 'Blog', href: 'https://vllm-semantic-router.com/blog/' },
-      { label: 'Publications', href: 'https://vllm-semantic-router.com/publications/' },
+      { label: 'Documentation', href: 'https://vllm-sr.ai/docs/intro/' },
+      { label: 'Blog', href: 'https://vllm-sr.ai/blog/' },
+      { label: 'Publications', href: 'https://vllm-sr.ai/publications/' },
     ],
   },
   {
@@ -14,7 +14,7 @@ const FOOTER_GROUPS = [
     links: [
       { label: 'GitHub', href: 'https://github.com/vllm-project/semantic-router' },
       { label: 'Hugging Face', href: 'https://huggingface.co/LLM-Semantic-Router' },
-      { label: 'Installation', href: 'https://vllm-semantic-router.com/docs/installation/' },
+      { label: 'Installation', href: 'https://vllm-sr.ai/docs/installation/' },
     ],
   },
   {
@@ -23,11 +23,11 @@ const FOOTER_GROUPS = [
       { label: 'Slack', href: 'https://slack.vllm.ai/' },
       {
         label: 'Working Groups',
-        href: 'https://vllm-semantic-router.com/community/work-groups',
+        href: 'https://vllm-sr.ai/community/work-groups',
       },
       {
         label: 'Contributing',
-        href: 'https://vllm-semantic-router.com/community/contributing',
+        href: 'https://vllm-sr.ai/community/contributing',
       },
     ],
   },

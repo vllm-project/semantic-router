@@ -1,24 +1,40 @@
-# Install with agentgateway
+---
+title: Deploy with agentgateway
+description: Attach Semantic Router as an ExtProc service to an agentgateway Kubernetes data plane.
+---
 
-This guide provides step-by-step instructions for integrating the vLLM Semantic Router with [agentgateway](https://agentgateway.dev/) on Kubernetes. agentgateway acts as the Gateway API data plane for OpenAI-compatible traffic, and vLLM Semantic Router runs as an Envoy ExtProc server that classifies each request and mutates the request body before agentgateway forwards it to vLLM.
+# Deploy with agentgateway
 
-## Architecture Overview
+Use this topology when [agentgateway](https://agentgateway.dev/) owns the
+Kubernetes Gateway API data plane. Semantic Router runs as an Envoy ExtProc
+service: it evaluates the selected recipe and writes the chosen model into the
+request before agentgateway forwards it to an OpenAI-compatible backend.
+
+## Responsibility split
 
 The deployment consists of:
 
-- **vLLM Semantic Router**: Provides prompt classification, model selection, request mutation, and response processing through ExtProc
-- **agentgateway**: Provides the Kubernetes Gateway API proxy, `AgentgatewayBackend`, `HTTPRoute`, and `AgentgatewayPolicy` resources
-- **Demo vLLM-compatible backend**: Serves a base model and LoRA adapters through an OpenAI-compatible API
+- **Semantic Router** owns semantic policy, model selection, and recipe-scoped
+  request or response processing.
+- **agentgateway** owns the Gateway, `HTTPRoute`, backend, and ExtProc policy.
+- **The model server** owns inference capacity. The simulator below is for
+  validating the integration, not for production inference.
 
 ## Prerequisites
 
-Before starting, ensure you have the following tools installed:
+You need:
 
-- [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) - Kubernetes in Docker (Optional)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
-- [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
+- Kubernetes `1.31`–`1.36`; [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation)
+  is sufficient for the demo;
+- Gateway API `1.4`–`1.6` CRDs (this guide installs `1.6.0`);
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) within the supported
+  version skew for the cluster; and
+- [Helm](https://helm.sh/docs/intro/install/) `3.12` or later.
 
-This guide requires agentgateway `v1.3.0-alpha.1` or newer because it uses the ExtProc `processingOptions` and `allowModeOverride` fields that were added after `v1.2.1`.
+This guide pins the agentgateway 1.4 release line, including ExtProc
+`processingOptions` and `allowModeOverride`. Review the upstream
+[ExtProc reference](https://agentgateway.dev/docs/kubernetes/latest/traffic-management/extproc/)
+before upgrading either side of the integration.
 
 ## Step 1: Create Kind Cluster (Optional)
 
@@ -36,22 +52,19 @@ kubectl wait --for=condition=Ready nodes --all --timeout=300s
 Install the Kubernetes Gateway API CRDs and the agentgateway control plane:
 
 ```bash
-export AGENTGATEWAY_VERSION=v1.3.0-alpha.1
+export AGENTGATEWAY_VERSION=v1.4.1
 
 kubectl apply --server-side --force-conflicts \
-  -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.5.0/standard-install.yaml
+  -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
 
 helm upgrade -i agentgateway-crds oci://cr.agentgateway.dev/charts/agentgateway-crds \
   --create-namespace \
   --namespace agentgateway-system \
-  --version "${AGENTGATEWAY_VERSION}" \
-  --set controller.image.pullPolicy=Always
+  --version "${AGENTGATEWAY_VERSION}"
 
 helm upgrade -i agentgateway oci://cr.agentgateway.dev/charts/agentgateway \
   --namespace agentgateway-system \
   --version "${AGENTGATEWAY_VERSION}" \
-  --set controller.image.pullPolicy=Always \
-  --set controller.extraEnv.KGW_ENABLE_GATEWAY_API_EXPERIMENTAL_FEATURES=true \
   --wait
 
 kubectl get pods -n agentgateway-system
@@ -107,7 +120,7 @@ spec:
     spec:
       containers:
       - name: vllm-sim
-        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
+        image: ghcr.io/llm-d/llm-d-inference-sim:v0.6.1
         imagePullPolicy: IfNotPresent
         args:
         - --model
@@ -163,9 +176,12 @@ Install the Semantic Router in the `agentgateway-system` namespace so the agentg
 
 ```bash
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version v0.0.0-latest \
+  --version 0.0.0-latest \
   --namespace agentgateway-system \
-  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/agentgateway/semantic-router-values/values.yaml
+  -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/agentgateway/semantic-router-values/values.yaml \
+  --set config.global.router.streamed_body.enabled=true \
+  --set config.global.router.streamed_body.max_bytes=10485760 \
+  --set config.global.router.streamed_body.timeout_sec=30
 
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n agentgateway-system \
@@ -236,14 +252,27 @@ spec:
         port: 50051
       processingOptions:
         requestHeaderMode: Send
-        requestBodyMode: Buffered
+        requestBodyMode: FullDuplexStreamed
         responseHeaderMode: Send
         responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
         allowModeOverride: true
 EOF
 ```
 
-The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option. See [Streamed ExtProc and immediate responses](./streamed-extproc.md) for the full configuration, immediate-response behavior, and verification checklist.
+The bundled agentgateway example explicitly opts into full-duplex streamed request
+bodies. This is an example-specific choice; other proxy defaults and examples
+may continue to use buffered request bodies. The Semantic Router Helm command
+above explicitly enables `global.router.streamed_body`, allowing the router to
+accumulate request chunks and process the complete body at end-of-stream.
+
+agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is its
+streaming option. The deployable policy is in
+`deploy/kubernetes/agentgateway/extproc-policy.yaml`, with the matching router
+configuration passed through the Helm command in Step 5. See
+[Streamed ExtProc and immediate responses](./streamed-extproc) for protocol
+behavior and the verification checklist.
 
 ## Testing the Deployment
 
@@ -253,13 +282,14 @@ Start a port-forward to the agentgateway proxy:
 kubectl port-forward -n agentgateway-system svc/agentgateway-proxy 8080:80
 ```
 
-In another terminal, send an OpenAI-compatible request with `"model": "auto"`:
+In another terminal, send an OpenAI-compatible request with the stable
+automatic-routing alias:
 
 ```bash
 curl -i -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "auto",
+    "model": "vllm-sr/auto",
     "messages": [
       {"role": "user", "content": "What is the derivative of f(x) = x^3?"}
     ],

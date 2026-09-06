@@ -10,7 +10,9 @@ import (
 )
 
 type routingYAMLDocument struct {
-	Routing config.CanonicalRouting `yaml:"routing"`
+	Routing     config.CanonicalRouting      `yaml:"routing"`
+	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
 }
 
 // EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
@@ -28,8 +30,11 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	canonical := config.CanonicalConfigFromRouterConfig(cfg)
 	doc := routingYAMLDocument{
-		Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		Routing:     canonical.Routing,
+		Entrypoints: canonical.Entrypoints,
+		Recipes:     canonical.Recipes,
 	}
 	return yaml.Marshal(doc)
 }
@@ -39,6 +44,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d := &decompiler{cfg: cfg}
 	d.pluginTemplates = make(map[string]*pluginTemplate)
 	d.extractPluginTemplates()
+	d.decompileRoutingStrategy()
 
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
@@ -63,11 +69,19 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{}
+	prog := &Program{Strategy: string(cfg.Strategy)}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
+}
+
+func (d *decompiler) decompileRoutingStrategy() {
+	if d.cfg.Strategy == "" {
+		return
+	}
+	d.writeSection("ROUTING PROFILE")
+	d.write("ROUTING {\n  strategy: %s\n}\n\n", d.cfg.Strategy)
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {

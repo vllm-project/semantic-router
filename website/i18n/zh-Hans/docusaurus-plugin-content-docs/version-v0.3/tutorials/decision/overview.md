@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-最新决策教程与 `config/decision/` 下的布尔形态目录一致。
+最新决策教程与 `config/fragments/decision/` 下的布尔形态目录一致。
 
 信号说明路由器**检测到了什么**；决策说明路由器**据此做什么**：
 
@@ -23,7 +23,7 @@ translation:
 - 多个信号协作时仍能保持路由策略可读。
 - 布尔逻辑显式、可review。
 - 将路由匹配与部署绑定、算法、插件解耦。
-- 直接映射到 `config/decision/` 下可复用的片段目录。
+- 直接映射到 `config/fragments/decision/` 下可复用的片段目录。
 
 ## 解决什么问题？
 
@@ -69,10 +69,10 @@ routing:
 
 | 决策形态 | 片段示例 | 适用场景 | 教程 |
 |----------|----------|----------|------|
-| `single` | `config/decision/single/domain-business.yaml` | 单一决定性信号 | [单条件](./single) |
-| `and` | `config/decision/and/urgent-business.yaml` | 多个信号必须同时满足 | [AND 决策](./and) |
-| `or` | `config/decision/or/business-or-law.yaml` | 多种等价触发共用一路由 | [OR 决策](./or) |
-| `not` | `config/decision/not/exclude-jailbreak.yaml` | 显式排除或安全门控 | [NOT 决策](./not) |
-| `composite` | `config/decision/composite/priority-safe-escalation.yaml` | 嵌套的真实策略 | [组合决策](./composite) |
+| `single` | `config/fragments/decision/single/domain-business.yaml` | 单一决定性信号 | [单条件](./single) |
+| `and` | `config/fragments/decision/and/urgent-business.yaml` | 多个信号必须同时满足 | [AND 决策](./and) |
+| `or` | `config/fragments/decision/or/business-or-law.yaml` | 多种等价触发共用一路由 | [OR 决策](./or) |
+| `not` | `config/fragments/decision/not/exclude-jailbreak.yaml` | 显式排除或安全门控 | [NOT 决策](./not) |
+| `composite` | `config/fragments/decision/composite/priority-safe-escalation.yaml` | 嵌套的真实策略 | [组合决策](./composite) |
 
 若 `modelRefs` 中有多个候选，请配合 [算法](../algorithm/overview)；若路由需要选中后的行为，请配合 [插件](../plugin/overview)。

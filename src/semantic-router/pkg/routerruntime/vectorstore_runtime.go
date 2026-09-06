@@ -2,8 +2,10 @@ package routerruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -20,7 +22,16 @@ type VectorStoreRuntime struct {
 	Pipeline       *vectorstore.IngestionPipeline
 	Embedder       vectorstore.Embedder
 	registryCloser io.Closer
+	// drainTimeout bounds how long Shutdown waits for in-flight ingestion jobs
+	// to drain before cancelling them. Sourced from
+	// vector_store.ingestion_drain_timeout_seconds.
+	drainTimeout time.Duration
 }
+
+// defaultDrainTimeout is the fallback shutdown drain bound used when a runtime
+// is constructed without a configured drain timeout, so Stop is never
+// unbounded.
+const defaultDrainTimeout = 25 * time.Second
 
 func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error) {
 	if cfg == nil {
@@ -71,6 +82,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		Pipeline:       pipeline,
 		Embedder:       embedder,
 		registryCloser: regCloser,
+		drainTimeout:   time.Duration(cfg.VectorStore.IngestionDrainTimeoutSeconds) * time.Second,
 	}, nil
 }
 
@@ -123,17 +135,36 @@ func (r *VectorStoreRuntime) Shutdown() error {
 		return nil
 	}
 	if r.Pipeline != nil {
-		r.Pipeline.Stop()
+		// Fall back to a bounded default if drainTimeout was not configured
+		// (e.g. a hand-constructed runtime), so Stop is never unbounded.
+		drain := r.drainTimeout
+		if drain <= 0 {
+			drain = defaultDrainTimeout
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), drain)
+		defer cancel()
+		if err := r.Pipeline.Stop(ctx); err != nil {
+			logging.Warnf("Ingestion pipeline did not drain within %s: %v", drain, err)
+			// Workers may still be inside backend or registry calls after a bounded
+			// timeout. Closing their dependencies here would create a use-after-close
+			// race, so leave ownership with the still-stopping pipeline and report the
+			// shutdown failure to the caller.
+			return fmt.Errorf("stop vector store ingestion pipeline: %w", err)
+		}
 	}
+	var closeErr error
 	if r.registryCloser != nil {
 		if err := r.registryCloser.Close(); err != nil {
 			logging.Warnf("Failed to close metadata registry: %v", err)
+			closeErr = errors.Join(closeErr, fmt.Errorf("close metadata registry: %w", err))
 		}
 	}
 	if r.Backend != nil {
-		return r.Backend.Close()
+		if err := r.Backend.Close(); err != nil {
+			closeErr = errors.Join(closeErr, fmt.Errorf("close vector store backend: %w", err))
+		}
 	}
-	return nil
+	return closeErr
 }
 
 func (r *VectorStoreRuntime) LogInitialized(component string, cfg *config.RouterConfig) {

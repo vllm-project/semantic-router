@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-在**一个信号足以选定路由**时使用 `config/decision/single/`。
+在**一个信号足以选定路由**时使用 `config/fragments/decision/single/`。
 
 这是「单一权威检测器」路由最干净的入口。
 
@@ -36,7 +36,7 @@ translation:
 
 ## 配置
 
-源片段：`config/decision/single/domain-business.yaml`
+源片段：`config/fragments/decision/single/domain-business.yaml`
 
 ```yaml
 routing:

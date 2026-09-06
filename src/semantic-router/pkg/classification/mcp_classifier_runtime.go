@@ -95,12 +95,12 @@ func (c *Classifier) classifyCategoryWithEntropyMCP(text string) (string, float6
 
 		logging.Infof("MCP classification confidence (%.4f) below threshold (%.4f), falling back to category: %s",
 			result.Confidence, threshold, fallbackCategory)
-		metrics.RecordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
+		c.recordSignalMatch(config.SignalTypeKeyword, fallbackCategory)
 		return fallbackCategory, float64(result.Confidence), reasoningDecision, nil
 	}
 
 	categoryName, genericCategory := c.mcpCategoryNameForClass(result.Class)
-	metrics.RecordSignalMatch(config.SignalTypeKeyword, genericCategory)
+	c.recordSignalMatch(config.SignalTypeKeyword, genericCategory)
 	logging.Infof("MCP classified as category: %s (mmlu=%s), reasoning_decision: use=%t, confidence=%.3f, reason=%s",
 		genericCategory, categoryName, reasoningDecision.UseReasoning, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
 

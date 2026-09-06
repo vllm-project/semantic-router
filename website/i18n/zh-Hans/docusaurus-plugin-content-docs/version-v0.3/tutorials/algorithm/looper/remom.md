@@ -11,7 +11,7 @@ translation:
 
 `remom` 是用于**广度受控**的多模型编排循环算法。
 
-对应 `config/algorithm/looper/remom.yaml`。
+对应 `config/fragments/algorithm/looper/remom.yaml`。
 
 ## 主要优势
 

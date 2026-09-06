@@ -8,8 +8,10 @@ from pathlib import Path
 
 from agent_support import REPO_ROOT
 
-TECH_DEBT_DIR = REPO_ROOT / "docs" / "agent" / "tech-debt"
-TECH_DEBT_REGISTER_DOC = REPO_ROOT / "docs" / "agent" / "tech-debt-register.md"
+TECH_DEBT_DIR = REPO_ROOT / "tools" / "agent" / "docs" / "tech-debt"
+TECH_DEBT_REGISTER_DOC = (
+    REPO_ROOT / "tools" / "agent" / "docs" / "tech-debt-register.md"
+)
 TECH_DEBT_FILENAME_PATTERN = re.compile(r"^td-(\d{3})-[a-z0-9-]+\.md$")
 TECH_DEBT_HEADING_PREFIX = "# TD"
 TECH_DEBT_ENTRY_REQUIRED_SECTIONS = [
@@ -103,7 +105,7 @@ def validate_tech_debt_inventory_and_template(
     validate_tech_debt_register_landing_page(register_text, errors)
     entries = collect_tech_debt_entries()
     if not entries:
-        errors.append("docs/agent/tech-debt must contain at least one TD entry")
+        errors.append("tools/agent/docs/tech-debt must contain at least one TD entry")
         return
 
     manifest_docs = set(repo_manifest.get("docs", []))
@@ -112,15 +114,15 @@ def validate_tech_debt_inventory_and_template(
 
 def load_tech_debt_index_texts(errors: list[str]) -> tuple[str, str] | None:
     if not TECH_DEBT_REGISTER_DOC.exists():
-        errors.append("Missing docs/agent/tech-debt-register.md")
+        errors.append("Missing tools/agent/docs/tech-debt-register.md")
         return None
     if not TECH_DEBT_DIR.exists():
-        errors.append("Missing docs/agent/tech-debt directory")
+        errors.append("Missing tools/agent/docs/tech-debt directory")
         return None
 
     debt_readme = TECH_DEBT_DIR / "README.md"
     if not debt_readme.exists():
-        errors.append("Missing docs/agent/tech-debt/README.md")
+        errors.append("Missing tools/agent/docs/tech-debt/README.md")
         return None
 
     return (
@@ -152,7 +154,7 @@ def validate_tech_debt_entries(
     )
     if duplicate_entry_ids:
         errors.append(
-            "docs/agent/tech-debt has duplicate debt IDs: "
+            "tools/agent/docs/tech-debt has duplicate debt IDs: "
             + ", ".join(duplicate_entry_ids)
         )
 
@@ -161,7 +163,7 @@ def validate_tech_debt_entries(
     )
     if duplicate_filename_indices:
         errors.append(
-            "docs/agent/tech-debt has duplicate filename indices: "
+            "tools/agent/docs/tech-debt has duplicate filename indices: "
             + ", ".join(duplicate_filename_indices)
         )
 
@@ -219,7 +221,7 @@ def validate_tech_debt_entry_inventory(
 
     if f"({path.name})" not in debt_readme_text:
         errors.append(
-            f"docs/agent/tech-debt/README.md must link to tech debt entry '{relative_path}'"
+            f"tools/agent/docs/tech-debt/README.md must link to tech debt entry '{relative_path}'"
         )
 
 
@@ -240,11 +242,11 @@ def validate_tech_debt_register_landing_page(
 ) -> None:
     if "(tech-debt/README.md)" not in register_text:
         errors.append(
-            "docs/agent/tech-debt-register.md must link to docs/agent/tech-debt/README.md"
+            "tools/agent/docs/tech-debt-register.md must link to tools/agent/docs/tech-debt/README.md"
         )
     if "### TD" in register_text:
         errors.append(
-            "docs/agent/tech-debt-register.md must stay a landing page and must not duplicate per-item TD headings"
+            "tools/agent/docs/tech-debt-register.md must stay a landing page and must not duplicate per-item TD headings"
         )
 
 

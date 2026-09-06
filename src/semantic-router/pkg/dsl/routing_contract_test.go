@@ -168,7 +168,7 @@ providers:
     default_model: math-small
     reasoning_families:
       openai:
-        type: effort
+        type: reasoning_effort
         parameter: reasoning.effort
     default_reasoning_effort: medium
   models:

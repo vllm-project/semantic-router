@@ -2,4 +2,4 @@
 User-agent: *
 Disallow:
 
-Sitemap: https://vllm-semantic-router.com/sitemap.xml
+Sitemap: https://vllm-sr.ai/sitemap.xml

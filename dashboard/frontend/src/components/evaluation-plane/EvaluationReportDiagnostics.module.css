@@ -1,0 +1,324 @@
+.diagnosticsStack {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.diagnosticArtifact {
+  min-width: 0;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.analysisProvenance {
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.analysisProvenanceSummary {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.analysisProvenance dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0.65rem 0 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.analysisProvenance dl + dl {
+  margin-top: 0.45rem;
+}
+
+.analysisProvenance dl > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.analysisProvenance dl > div:first-child {
+  border-left: 0;
+}
+
+.analysisProvenance dt {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+}
+
+.analysisProvenance dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.diagnosticSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.diagnosticSummary > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.diagnosticSummary > div:first-child {
+  border-left: 0;
+}
+
+.diagnosticSummary span {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.diagnosticSummary strong {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.capacitySLOContract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-bottom: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.capacitySLOContract > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border-left: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.capacitySLOContract > div:first-child {
+  border-left: 0;
+}
+
+.capacitySLOContract span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.capacitySLOContract strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.capacityProtocolContract {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+}
+
+.capacityProtocolContract > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.capacityProtocolContract > div:first-child {
+  border-left: 0;
+}
+
+.capacityProtocolContract span {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.capacityProtocolContract strong {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.repetitionDisclosure {
+  min-width: 190px;
+}
+
+.repetitionDisclosureSummary {
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.repetitionDisclosure ol {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.45rem 0 0;
+  padding-left: 1rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.capacityFailureReasons {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.7rem;
+  margin-bottom: 0.75rem;
+  padding: 0.7rem 0.75rem;
+  border: 0;
+  border-left: 2px solid rgba(251, 191, 36, 0.5);
+  border-radius: 0;
+  background: transparent;
+}
+
+.capacityFailureReasons strong {
+  color: #f9d38b;
+  font-size: 0.75rem;
+}
+
+.capacityFailureReasons ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.capacityChecks {
+  display: grid;
+  min-width: 260px;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.capacityChecks > li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+  color: #ffb0b3;
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.capacityChecks > li > span:first-child {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.38);
+  border-radius: 50%;
+  font-size: 0.65rem;
+}
+
+.capacityChecks > li[data-passed='true'] {
+  color: #a5f3c1;
+}
+
+.capacityChecks > li[data-passed='true'] > span:first-child {
+  border-color: rgba(74, 222, 128, 0.34);
+}
+
+@media (max-width: 800px) {
+  .diagnosticSummary,
+  .capacitySLOContract,
+  .capacityProtocolContract,
+  .analysisProvenance dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .diagnosticSummary > div:nth-child(3) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .diagnosticSummary > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .capacitySLOContract > div:nth-child(3),
+  .capacityProtocolContract > div:nth-child(3) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .capacitySLOContract > div:nth-child(4),
+  .capacityProtocolContract > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .analysisProvenance dl > div:nth-child(odd) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .diagnosticSummary,
+  .capacitySLOContract,
+  .capacityProtocolContract,
+  .analysisProvenance dl,
+  .capacityFailureReasons {
+    grid-template-columns: 1fr;
+  }
+
+  .diagnosticSummary > div,
+  .diagnosticSummary > div:nth-child(3),
+  .diagnosticSummary > div:nth-child(4) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .diagnosticSummary > div:first-child {
+    border-top: 0;
+  }
+
+  .capacityProtocolContract > div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .capacitySLOContract > div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .analysisProvenance dl > div {
+    border-left: 0;
+  }
+
+  .capacitySLOContract > div:first-child,
+  .capacityProtocolContract > div:first-child,
+  .analysisProvenance dl > div:first-child {
+    border-top: 0;
+  }
+}

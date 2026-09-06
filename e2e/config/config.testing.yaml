@@ -26,6 +26,17 @@ providers:
           weight: 1
 routing:
   decisions:
+    - name: metadata_decision
+      description: Explicit metadata-based routing contract
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: metadata
+            name: canary_cohort
+      modelRefs:
+        - model: openai/gpt-oss-20b
+          use_reasoning: false
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -38,6 +49,12 @@ routing:
         - model: openai/gpt-oss-20b
           use_reasoning: false
   signals:
+    metadata:
+      - name: canary_cohort
+        description: Caller opted into the canary routing cohort
+        key: cohort
+        predicate:
+          equals: canary
     domains:
       - name: other
         description: General knowledge and miscellaneous topics
@@ -45,6 +62,33 @@ routing:
           - other
   modelCards:
     - name: openai/gpt-oss-20b
+entrypoints:
+  - model_names:
+      - vllm-sr/metadata-policy
+    recipe: metadata-policy
+recipes:
+  - name: metadata-policy
+    description: Exercise recipe-local request metadata routing.
+    routing:
+      signals:
+        metadata:
+          - name: canary_cohort
+            description: Recipe-local canary cohort policy.
+            key: cohort
+            predicate:
+              equals: canary
+      decisions:
+        - name: metadata_recipe_decision
+          description: Route canary metadata inside the selected recipe.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: metadata
+                name: canary_cohort
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
 global:
   router:
     strategy: priority
@@ -83,7 +127,7 @@ global:
             - 100
             - 200
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8
@@ -100,5 +144,5 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true

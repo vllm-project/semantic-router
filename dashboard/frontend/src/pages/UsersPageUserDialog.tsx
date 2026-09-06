@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPageUserDialog.module.css'
 import type { UsersPageRolePermissions } from './usersPageSupport'
 
@@ -111,7 +112,7 @@ export default function UsersPageUserDialog({
           </button>
         </div>
 
-        <form className={styles.form} onSubmit={handleSubmit}>
+        <form className={styles.form} onSubmit={handleSubmit} autoComplete="on">
           {error ? <div className={styles.error}>{error}</div> : null}
 
           <div className={styles.grid}>
@@ -120,6 +121,8 @@ export default function UsersPageUserDialog({
               <input
                 id={`${fieldIdPrefix}-email`}
                 type="email"
+                name="email"
+                autoComplete="username"
                 className={styles.input}
                 value={values.email}
                 onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
@@ -136,6 +139,8 @@ export default function UsersPageUserDialog({
               <input
                 id={`${fieldIdPrefix}-name`}
                 type="text"
+                name="name"
+                autoComplete="name"
                 className={styles.input}
                 value={values.name}
                 onChange={(event) => setValues((prev) => ({ ...prev, name: event.target.value }))}
@@ -189,7 +194,7 @@ export default function UsersPageUserDialog({
               </div>
               <span className={styles.hint}>Effective permissions granted by the selected role.</span>
               {isLoadingRolePermissions ? (
-                <p className={styles.emptyState}>Loading role permissions...</p>
+                <ProductLoadingState compact label="Loading permissions" />
               ) : selectedRolePermissions.length > 0 ? (
                 <ul className={styles.permissionList}>
                   {selectedRolePermissions.map((permission) => (
@@ -208,6 +213,8 @@ export default function UsersPageUserDialog({
               <input
                 id={`${fieldIdPrefix}-password`}
                 type="password"
+                name="new-password"
+                autoComplete="new-password"
                 className={styles.input}
                 value={values.password}
                 onChange={(event) => setValues((prev) => ({ ...prev, password: event.target.value }))}

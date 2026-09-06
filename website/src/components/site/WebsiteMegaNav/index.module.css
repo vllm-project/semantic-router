@@ -1,0 +1,74 @@
+/* Primary navigation. Resolves through --site-* tokens instead of hard-coded dark-chrome literals. */
+.root {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 2px;
+  margin-left: var(--space-2);
+}
+
+.link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.4rem 0.7rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  transition:
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+.link:hover,
+.link:focus-visible {
+  background: var(--site-menu-hover);
+  color: var(--site-text-strong);
+  text-decoration: none;
+}
+
+.linkActive,
+.linkActive:hover {
+  background: var(--site-accent-soft);
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-semibold);
+  text-decoration: none;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+/* The landing page keeps dark chrome in both color modes. */
+:global(.site-root--home) .link {
+  color: #a1a1aa;
+}
+
+:global(.site-root--home) .link:hover,
+:global(.site-root--home) .link:focus-visible,
+:global(.site-root--home) .linkActive {
+  background: rgba(48, 162, 255, 0.12);
+  color: #fafafa;
+}
+
+/* Collapses at 996px to match Docusaurus breakpoint and shell.css. */
+@media (max-width: 996px) {
+  .root {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition: none;
+  }
+}

@@ -35,7 +35,9 @@ func CompileAST(prog *Program) (*config.RouterConfig, []error) {
 		},
 		pluginTemplates: make(map[string]*PluginDecl),
 	}
+	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.compile()
+	c.compileScopes()
 	if len(c.errors) > 0 {
 		return nil, c.errors
 	}

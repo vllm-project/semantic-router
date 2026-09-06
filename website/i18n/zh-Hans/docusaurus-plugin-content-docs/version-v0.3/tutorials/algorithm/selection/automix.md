@@ -11,7 +11,7 @@ translation:
 
 `automix` 用于在**核验质量、升级深度与成本**之间权衡的路由选择算法。
 
-对应 `config/algorithm/selection/automix.yaml`。
+对应 `config/fragments/algorithm/selection/automix.yaml`。
 
 ## 主要优势
 

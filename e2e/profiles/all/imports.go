@@ -7,19 +7,27 @@ import (
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
 	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
+	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
+	externalgatewayresponses "github.com/vllm-project/semantic-router/e2e/profiles/external-gateway-responses"
+	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
+	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
+	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
+	responsejailbreak "github.com/vllm-project/semantic-router/e2e/profiles/response-jailbreak"
+	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
@@ -34,17 +42,59 @@ var mockVLLMLocalImages = []framework.LocalImageBuild{
 	},
 }
 
+var dashboardLocalImages = []framework.LocalImageBuild{
+	{
+		Dockerfile:   "dashboard/backend/Dockerfile",
+		Tag:          "ghcr.io/vllm-project/semantic-router/dashboard:e2e-test",
+		BuildContext: ".",
+	},
+}
+
 func init() {
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
-	register("kubernetes", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"envoy-ai-gateway",
+		func() framework.Profile { return aigateway.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
-	register("anthropic-shim", func() framework.Profile { return anthropicshim.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"anthropic-shim",
+		func() framework.Profile { return anthropicshim.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: anthropicshim.LocalImages()},
+	)
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
-	register("dashboard", func() framework.Profile { return dashboard.NewProfile() }, framework.ProfileCapabilities{})
+	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
+	register(
+		"dashboard",
+		func() framework.Profile { return dashboard.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: dashboardLocalImages},
+	)
 	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamo", func() framework.Profile { return dynamo.NewProfile() }, framework.ProfileCapabilities{RequiresGPU: true})
+	register(
+		"external-gateway-responses",
+		func() framework.Profile { return externalgatewayresponses.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"hallucination",
+		func() framework.Profile { return hallucination.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("istio", func() framework.Profile { return istio.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"jailbreak-onerror",
+		func() framework.Profile { return jailbreakonerror.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 	register("llm-d", func() framework.Profile { return llmd.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"route-action",
+		func() framework.Profile { return routeaction.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register("looper", func() framework.Profile { return looper.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"ml-model-selection",
 		func() framework.Profile { return mlmodelselection.NewProfile() },
@@ -69,6 +119,12 @@ func init() {
 		func() framework.Profile { return responseapirediscluster.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
+	register(
+		"response-jailbreak",
+		func() framework.Profile { return responsejailbreak.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"router-replay",
 		func() framework.Profile { return routerreplay.NewProfile() },

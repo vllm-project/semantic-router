@@ -1502,11 +1502,11 @@ prompt_guard:
 
 ### 9.2 vLLM Semantic Router 文档
 
-- [Semantic Router 概览](https://vllm-semantic-router.com/docs/overview/semantic-router-overview/)
-- [系统架构](https://vllm-semantic-router.com/docs/overview/architecture/system-architecture/)
-- [Kubernetes 部署](https://vllm-semantic-router.com/docs/installation/k8s/ai-gateway)
+- [Semantic Router 概览](https://vllm-sr.ai/docs/overview/semantic-router-overview/)
+- [系统架构](https://vllm-sr.ai/docs/overview/architecture/system-architecture/)
+- [Kubernetes 部署](https://vllm-sr.ai/docs/installation/k8s/ai-gateway)
 - [分布式追踪支持 (PR #322)](https://github.com/vllm-project/semantic-router/pull/322)
-- [基于 Milvus 的 Semantic Cache](https://vllm-semantic-router.com/docs/features/semantic-caching/)
+- [基于 Milvus 的 Semantic Cache](https://vllm-sr.ai/docs/features/semantic-caching/)
 
 ### 9.3 相关研究
 
@@ -1518,7 +1518,7 @@ prompt_guard:
 ### 9.4 集成提案
 
 - [vLLM 生产堆栈集成 (#295)](https://github.com/vllm-project/semantic-router/issues/295)
-- [Prompt 分类路由提案](https://vllm-semantic-router.com/docs/proposals/prompt-classification-routing/)
+- [Prompt 分类路由提案](https://vllm-sr.ai/docs/proposals/prompt-classification-routing/)
 
 ---
 

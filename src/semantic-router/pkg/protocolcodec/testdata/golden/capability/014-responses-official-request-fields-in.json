@@ -1,0 +1,41 @@
+{
+  "operation": "request",
+  "base": {
+    "model": "client-model",
+    "input": "hello"
+  },
+  "cases": [
+    {"name": "auto_store", "patch": {"auto_store": true}},
+    {"name": "background", "patch": {"background": true}},
+    {"name": "context_management", "patch": {"context_management": [{"type": "compaction", "compact_threshold": 1000}]}},
+    {"name": "conversation", "patch": {"conversation": "conv-1"}},
+    {"name": "include", "patch": {"include": ["reasoning.encrypted_content"]}},
+    {"name": "input", "patch": {"input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": "hello"}]}]}},
+    {"name": "instructions", "patch": {"instructions": "Be concise."}},
+    {"name": "max_output_tokens", "patch": {"max_output_tokens": 64}},
+    {"name": "max_tool_calls", "patch": {"max_tool_calls": 4}},
+    {"name": "metadata", "patch": {"metadata": {"trace": "field-matrix"}}},
+    {"name": "model", "patch": {"model": "alternate-client-model"}},
+    {"name": "moderation", "patch": {"moderation": {"mode": "auto"}}},
+    {"name": "parallel_tool_calls", "patch": {"parallel_tool_calls": false}},
+    {"name": "previous_response_id", "patch": {"previous_response_id": "resp_previous"}},
+    {"name": "prompt", "patch": {"prompt": {"id": "pmpt_1"}}},
+    {"name": "prompt_cache_key", "patch": {"prompt_cache_key": "cache-key"}},
+    {"name": "prompt_cache_options", "patch": {"prompt_cache_options": {"retention": "24h"}}},
+    {"name": "prompt_cache_retention", "patch": {"prompt_cache_retention": "24h"}},
+    {"name": "reasoning", "patch": {"reasoning": {"effort": "high"}}},
+    {"name": "safety_identifier", "patch": {"safety_identifier": "safety-user"}},
+    {"name": "service_tier", "patch": {"service_tier": "default"}},
+    {"name": "store", "patch": {"store": true}},
+    {"name": "stream", "patch": {"stream": true}},
+    {"name": "stream_options", "patch": {"stream": true, "stream_options": {"include_obfuscation": false}}},
+    {"name": "temperature", "patch": {"temperature": 0.2}},
+    {"name": "text", "patch": {"text": {"format": {"type": "json_object"}}}},
+    {"name": "tool_choice", "patch": {"tool_choice": "auto"}},
+    {"name": "tools", "patch": {"tools": [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}]}},
+    {"name": "top_logprobs", "patch": {"top_logprobs": 3}},
+    {"name": "top_p", "patch": {"top_p": 0.9}},
+    {"name": "truncation", "patch": {"truncation": "auto"}},
+    {"name": "user", "patch": {"user": "user-2"}}
+  ]
+}

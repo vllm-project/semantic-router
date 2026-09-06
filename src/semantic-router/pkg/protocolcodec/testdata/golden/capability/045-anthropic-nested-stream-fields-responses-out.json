@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "name": "thinking_signature_and_usage",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        }
+      }
+    },
+    {
+      "name": "citation_delta",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unknown_stream_delta"
+        }
+      }
+    }
+  ]
+}

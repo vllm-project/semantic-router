@@ -92,9 +92,7 @@ func persistConfigAndSync(
 		return err
 	}
 	if paths.usesRuntimeOverride() {
-		if _, err := runtimeConfigSyncRunner(paths.sourcePath); err != nil {
-			_ = writeConfigAtomically(paths.sourcePath, previousData)
-			_, _ = runtimeConfigSyncRunner(paths.sourcePath)
+		if err := syncRuntimeConfigOrRestore(paths, previousData); err != nil {
 			return err
 		}
 	}

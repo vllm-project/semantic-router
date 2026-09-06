@@ -1,0 +1,10 @@
+.colorModeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+:global(.navbar__items--right) > :last-child {
+  padding-right: 0;
+}

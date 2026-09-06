@@ -23,6 +23,7 @@ interface RouterModelInventoryProps {
   modelsInfo?: RouterModelsInfo | null
   mode?: 'preview' | 'full'
   previewLimit?: number
+  showSummary?: boolean
   emptyMessage?: string
   onSelectModel?: (model: RouterModelInfo) => void
 }
@@ -383,6 +384,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   modelsInfo,
   mode = 'full',
   previewLimit,
+  showSummary = true,
   emptyMessage = 'No router model metadata is available yet.',
   onSelectModel,
 }) => {
@@ -429,21 +431,23 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
     <div className={styles.inventory}>
       {mode === 'full' && (
         <>
-          <div className={styles.summaryRow}>
-            <div className={styles.summaryStat}>
-              <span className={styles.summaryLabel}>Loaded</span>
-              <span className={styles.summaryValue}>
-                {loadedCount}/{totalCount}
-              </span>
-            </div>
-            {phase && (
+          {showSummary && (
+            <div className={styles.summaryRow}>
               <div className={styles.summaryStat}>
-                <span className={styles.summaryLabel}>Phase</span>
-                <span className={styles.summaryValue}>{formatTitleLabel(phase)}</span>
+                <span className={styles.summaryLabel}>Loaded</span>
+                <span className={styles.summaryValue}>
+                  {loadedCount}/{totalCount}
+                </span>
               </div>
-            )}
-            {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
-          </div>
+              {phase && (
+                <div className={styles.summaryStat}>
+                  <span className={styles.summaryLabel}>Phase</span>
+                  <span className={styles.summaryValue}>{formatTitleLabel(phase)}</span>
+                </div>
+              )}
+              {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
+            </div>
+          )}
 
           <div className={styles.inventoryToolbar}>
             <label className={styles.searchField}>

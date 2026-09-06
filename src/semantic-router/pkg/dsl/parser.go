@@ -67,14 +67,7 @@ func Parse(input string) (*Program, []error) {
 		}
 		parsedAny = true
 		resolved, lowerErrs := rawToProgram(r)
-		prog.Signals = append(prog.Signals, resolved.Signals...)
-		prog.ProjectionPartitions = append(prog.ProjectionPartitions, resolved.ProjectionPartitions...)
-		prog.ProjectionScores = append(prog.ProjectionScores, resolved.ProjectionScores...)
-		prog.ProjectionMappings = append(prog.ProjectionMappings, resolved.ProjectionMappings...)
-		prog.Routes = append(prog.Routes, resolved.Routes...)
-		prog.Models = append(prog.Models, resolved.Models...)
-		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
-		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
+		mergeProgram(prog, resolved)
 		allErrors = append(allErrors, lowerErrs...)
 	}
 
@@ -91,7 +84,10 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{
+		"DECISION_TREE", "ENTRYPOINT", "PROJECTION", "ROUTING", "RECIPE",
+		"SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST",
+	}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -156,6 +152,16 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 	treeCount := 0
 	for _, entry := range raw.Entries {
 		switch {
+		case entry.Routing != nil:
+			errs = append(errs, applyRawRouting(prog, entry.Routing)...)
+		case entry.Entrypoint != nil:
+			decl, entryErrs := rawToEntrypoint(entry.Entrypoint)
+			prog.Entrypoints = append(prog.Entrypoints, decl)
+			errs = append(errs, entryErrs...)
+		case entry.Recipe != nil:
+			decl, recipeErrs := rawToRecipe(entry.Recipe)
+			prog.Recipes = append(prog.Recipes, decl)
+			errs = append(errs, recipeErrs...)
 		case entry.Signal != nil:
 			prog.Signals = append(prog.Signals, rawToSignal(entry.Signal))
 		case entry.Projection != nil:
@@ -187,6 +193,22 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 		errs = append(errs, fmt.Errorf("DECISION_TREE and ROUTE declarations cannot coexist in the same program. Use only DECISION_TREE (for if/else conditional logic) or only ROUTE (for priority-based routing with WHEN clauses), not both"))
 	}
 	return prog, errs
+}
+
+func mergeProgram(dst, src *Program) {
+	if src.Strategy != "" {
+		dst.Strategy = src.Strategy
+	}
+	dst.Entrypoints = append(dst.Entrypoints, src.Entrypoints...)
+	dst.Recipes = append(dst.Recipes, src.Recipes...)
+	dst.Signals = append(dst.Signals, src.Signals...)
+	dst.ProjectionPartitions = append(dst.ProjectionPartitions, src.ProjectionPartitions...)
+	dst.ProjectionScores = append(dst.ProjectionScores, src.ProjectionScores...)
+	dst.ProjectionMappings = append(dst.ProjectionMappings, src.ProjectionMappings...)
+	dst.Routes = append(dst.Routes, src.Routes...)
+	dst.Models = append(dst.Models, src.Models...)
+	dst.Plugins = append(dst.Plugins, src.Plugins...)
+	dst.TestBlocks = append(dst.TestBlocks, src.TestBlocks...)
 }
 
 func rawToProjectionPartition(r *rawProjectionDecl) *ProjectionPartitionDecl {
@@ -357,12 +379,7 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		Pos:  posFromLexer(r.Pos),
 	}
 
-	// Process options
-	for _, opt := range r.Opts {
-		if opt.Key == "description" && opt.Value != nil && opt.Value.Str != nil {
-			route.Description = unquote(*opt.Value.Str)
-		}
-	}
+	applyRouteOptions(route, r.Opts)
 
 	// Process body items
 	for _, item := range r.Body {
@@ -383,6 +400,12 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.Action != nil:
+			route.Action = &ActionDecl{
+				Type:        item.Action.Type,
+				Destination: unquoteIdent(item.Action.Destination),
+				Pos:         posFromLexer(item.Action.Pos),
+			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		case item.Emit != nil:
@@ -425,14 +448,15 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":     "semantic_cache",
-	"system-prompt":      "system_prompt",
-	"header-mutation":    "header_mutation",
-	"router-replay":      "router_replay",
-	"image-gen":          "image_gen",
-	"fast-response":      "fast_response",
-	"request-params":     "request_params",
-	"response-jailbreak": "response_jailbreak",
+	"semantic-cache":      "response_cache",
+	"response-cache":      "response_cache",
+	"context-compression": "context_compression",
+	"system-prompt":       "system_prompt",
+	"header-mutation":     "header_mutation",
+	"router-replay":       "router_replay",
+	"fast-response":       "fast_response",
+	"request-params":      "request_params",
+	"response-jailbreak":  "response_jailbreak",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their
@@ -532,6 +556,7 @@ func toFactorExpr(f *BoolFactor) BoolExpr {
 		return &SignalRefExpr{
 			SignalType: f.SignalRef.SignalType,
 			SignalName: unquote(f.SignalRef.SignalName),
+			Fields:     entriesToMap(f.SignalRef.Fields),
 			Pos:        pos,
 		}
 	}

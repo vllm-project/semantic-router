@@ -3,8 +3,6 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
@@ -13,40 +11,68 @@ import (
 )
 
 type reasoningRequestMutation struct {
-	requestMap              map[string]interface{}
-	chatTemplateKwargs      map[string]interface{}
+	requestMap              map[string]json.RawMessage
+	chatTemplateKwargs      map[string]json.RawMessage
+	chatTemplateKwargsDirty bool
 	model                   string
-	originalReasoningEffort interface{}
+	originalReasoningEffort json.RawMessage
 	hasOriginalEffort       bool
 	appliedEffort           string
 	reasoningApplied        bool
 }
 
-func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool, categoryName string) ([]byte, error) {
-	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, categoryName, nil)
+func (r *OpenAIRouter) setReasoningModeToRequestBody(
+	requestBody []byte,
+	enabled bool,
+	decision *config.Decision,
+) ([]byte, error) {
+	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, decision, nil)
 }
 
 // setReasoningModeToRequestBodyForProvider adds provider-compatible reasoning fields to the JSON request body.
 func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	requestBody []byte,
 	enabled bool,
-	categoryName string,
+	decision *config.Decision,
+	profile *config.ProviderProfile,
+) ([]byte, error) {
+	return r.setReasoningModeToRequestBodyForModelAndProvider(
+		requestBody, "", enabled, decision, profile,
+	)
+}
+
+func (r *OpenAIRouter) setReasoningModeToRequestBodyForModelAndProvider(
+	requestBody []byte,
+	logicalModel string,
+	enabled bool,
+	decision *config.Decision,
 	profile *config.ProviderProfile,
 ) ([]byte, error) {
 	mutation, err := parseReasoningRequestMutation(requestBody)
 	if err != nil {
 		return nil, err
 	}
+	if logicalModel != "" {
+		mutation.model = logicalModel
+	}
 	familyConfig := r.getModelReasoningFamily(mutation.model)
+	dialect := resolveOpenAIBackendDialect(profile)
 	if enabled {
-		r.applyEnabledReasoningMutation(mutation, familyConfig, categoryName, profile)
+		r.applyEnabledReasoningMutation(mutation, familyConfig, decision, dialect)
 	} else {
-		applyDisabledReasoningMutation(mutation, familyConfig, profile)
+		r.applyDisabledReasoningMutation(mutation, familyConfig, dialect)
 	}
 
 	logReasoningMutation(mutation, enabled)
 	r.recordReasoningMutationMetrics(mutation, enabled, familyConfig)
 
+	if mutation.chatTemplateKwargsDirty {
+		kwargs, marshalErr := json.Marshal(mutation.chatTemplateKwargs)
+		if marshalErr != nil {
+			return nil, fmt.Errorf("failed to serialize chat template kwargs: %w", marshalErr)
+		}
+		mutation.requestMap["chat_template_kwargs"] = kwargs
+	}
 	modifiedBody, err := json.Marshal(mutation.requestMap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize modified request: %w", err)
@@ -56,14 +82,14 @@ func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 }
 
 func parseReasoningRequestMutation(requestBody []byte) (*reasoningRequestMutation, error) {
-	var requestMap map[string]interface{}
+	var requestMap map[string]json.RawMessage
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
 		return nil, fmt.Errorf("failed to parse request body: %w", err)
 	}
 
 	originalReasoningEffort, hasOriginalEffort := requestMap["reasoning_effort"]
 	if !hasOriginalEffort {
-		originalReasoningEffort = "low"
+		originalReasoningEffort = reasoningStringValue("low")
 	}
 	// Normalize the request before applying the selected family syntax. The
 	// top-level field is restored only for providers that accept it; vLLM-style
@@ -79,43 +105,86 @@ func parseReasoningRequestMutation(requestBody []byte) (*reasoningRequestMutatio
 	}, nil
 }
 
-func extractReasoningRequestModel(requestMap map[string]interface{}) string {
+func extractReasoningRequestModel(requestMap map[string]json.RawMessage) string {
 	modelValue, ok := requestMap["model"]
 	if !ok {
 		return consts.UnknownLabel
 	}
-	model, ok := modelValue.(string)
-	if !ok {
+	var model string
+	if err := json.Unmarshal(modelValue, &model); err != nil {
 		return consts.UnknownLabel
 	}
 	return model
 }
 
-func extractChatTemplateKwargs(requestMap map[string]interface{}) map[string]interface{} {
-	kwargs, ok := requestMap["chat_template_kwargs"].(map[string]interface{})
-	if !ok || kwargs == nil {
-		return map[string]interface{}{}
+func extractChatTemplateKwargs(requestMap map[string]json.RawMessage) map[string]json.RawMessage {
+	kwargs := map[string]json.RawMessage{}
+	rawKwargs, ok := requestMap["chat_template_kwargs"]
+	if !ok || json.Unmarshal(rawKwargs, &kwargs) != nil || kwargs == nil {
+		return map[string]json.RawMessage{}
 	}
 	return kwargs
+}
+
+func reasoningStringValue(value string) json.RawMessage {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return json.RawMessage(`""`)
+	}
+	return encoded
+}
+
+func setChatTemplateReasoningValue(
+	mutation *reasoningRequestMutation,
+	parameter string,
+	value json.RawMessage,
+) {
+	mutation.chatTemplateKwargs[parameter] = value
+	mutation.chatTemplateKwargsDirty = true
+}
+
+func removeChatTemplateReasoningValue(
+	mutation *reasoningRequestMutation,
+	parameter string,
+) {
+	if _, exists := mutation.chatTemplateKwargs[parameter]; !exists {
+		return
+	}
+	delete(mutation.chatTemplateKwargs, parameter)
+	if len(mutation.chatTemplateKwargs) == 0 {
+		delete(mutation.requestMap, "chat_template_kwargs")
+		mutation.chatTemplateKwargsDirty = false
+		return
+	}
+	mutation.chatTemplateKwargsDirty = true
 }
 
 func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
-	categoryName string,
-	profile *config.ProviderProfile,
+	decision *config.Decision,
+	dialect openAIBackendDialect,
 ) {
 	if familyConfig == nil {
 		return
 	}
+	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
+		effort := r.getReasoningEffort(decision, mutation.model)
+		applyDeepSeekOfficialReasoningMutation(mutation, true, effort)
+		return
+	}
 	switch familyConfig.Type {
-	case "chat_template_kwargs":
-		mutation.chatTemplateKwargs[familyConfig.Parameter] = true
-		mutation.requestMap["chat_template_kwargs"] = mutation.chatTemplateKwargs
+	case config.ReasoningFamilyTypeChatTemplateKwargs:
+		setChatTemplateReasoningValue(mutation, familyConfig.Parameter, json.RawMessage("true"))
 		mutation.reasoningApplied = true
-	case "reasoning_effort":
-		effort := r.getReasoningEffort(categoryName, mutation.model)
-		applyReasoningEffortField(mutation, familyConfig.Parameter, effort, profile)
+	case config.ReasoningFamilyTypeReasoningEffort:
+		effort := r.getReasoningEffort(decision, mutation.model)
+		applyReasoningEffortField(mutation, familyConfig.Parameter, effort, dialect)
+		mutation.appliedEffort = effort
+		mutation.reasoningApplied = true
+	case config.ReasoningFamilyTypeTopLevelReasoningEffort:
+		effort := r.getReasoningEffort(decision, mutation.model)
+		applyTopLevelReasoningEffortField(mutation, familyConfig.Parameter, effort)
 		mutation.appliedEffort = effort
 		mutation.reasoningApplied = true
 	default:
@@ -123,24 +192,52 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	}
 }
 
-func applyDisabledReasoningMutation(
+func (r *OpenAIRouter) applyDisabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
-	profile *config.ProviderProfile,
+	dialect openAIBackendDialect,
 ) {
 	if familyConfig == nil {
 		return
 	}
+	if usesDeepSeekOfficialReasoning(familyConfig, dialect) {
+		applyDeepSeekOfficialReasoningMutation(mutation, false, "")
+		return
+	}
 	switch familyConfig.Type {
-	case "reasoning_effort":
-		preserveReasoningEffort(mutation, familyConfig.Parameter, profile)
-	case "chat_template_kwargs":
+	case config.ReasoningFamilyTypeReasoningEffort:
+		preserveReasoningEffort(mutation, familyConfig.Parameter, dialect)
+	case config.ReasoningFamilyTypeTopLevelReasoningEffort:
+		preserveTopLevelReasoningEffort(mutation, familyConfig.Parameter)
+	case config.ReasoningFamilyTypeChatTemplateKwargs:
 		// Some chat-template models default to thinking enabled, so disabled
 		// reasoning still needs an explicit false flag for those families.
-		mutation.chatTemplateKwargs[familyConfig.Parameter] = false
-		mutation.requestMap["chat_template_kwargs"] = mutation.chatTemplateKwargs
+		setChatTemplateReasoningValue(mutation, familyConfig.Parameter, json.RawMessage("false"))
 	default:
 		return
+	}
+}
+
+func applyTopLevelReasoningEffortField(
+	mutation *reasoningRequestMutation,
+	parameter string,
+	effort string,
+) {
+	removeChatTemplateReasoningValue(mutation, parameter)
+	mutation.requestMap[parameter] = reasoningStringValue(effort)
+}
+
+func preserveTopLevelReasoningEffort(
+	mutation *reasoningRequestMutation,
+	parameter string,
+) {
+	removeChatTemplateReasoningValue(mutation, parameter)
+	if mutation.hasOriginalEffort {
+		mutation.requestMap[parameter] = mutation.originalReasoningEffort
+	}
+	var effort string
+	if json.Unmarshal(mutation.originalReasoningEffort, &effort) == nil {
+		mutation.appliedEffort = effort
 	}
 }
 
@@ -148,24 +245,23 @@ func applyReasoningEffortField(
 	mutation *reasoningRequestMutation,
 	parameter string,
 	effort string,
-	profile *config.ProviderProfile,
+	dialect openAIBackendDialect,
 ) {
-	if usesTopLevelReasoningEffort(profile) {
-		mutation.requestMap[parameter] = effort
+	if dialect.usesTopLevelReasoningEffort() {
+		mutation.requestMap[parameter] = reasoningStringValue(effort)
 		return
 	}
 	// Local vLLM-compatible reasoning_effort models expect the value under
 	// chat_template_kwargs, not as an OpenAI top-level request field.
-	mutation.chatTemplateKwargs[parameter] = effort
-	mutation.requestMap["chat_template_kwargs"] = mutation.chatTemplateKwargs
+	setChatTemplateReasoningValue(mutation, parameter, reasoningStringValue(effort))
 }
 
 func preserveReasoningEffort(
 	mutation *reasoningRequestMutation,
 	parameter string,
-	profile *config.ProviderProfile,
+	dialect openAIBackendDialect,
 ) {
-	if usesTopLevelReasoningEffort(profile) {
+	if dialect.usesTopLevelReasoningEffort() {
 		// When routing to OpenAI with reasoning disabled, keep a user-supplied
 		// top-level effort but do not synthesize a new one.
 		if mutation.hasOriginalEffort {
@@ -174,10 +270,10 @@ func preserveReasoningEffort(
 	} else {
 		// Non-OpenAI reasoning_effort families preserve the effective effort in
 		// chat_template_kwargs so backends that require the template arg still see it.
-		mutation.chatTemplateKwargs[parameter] = mutation.originalReasoningEffort
-		mutation.requestMap["chat_template_kwargs"] = mutation.chatTemplateKwargs
+		setChatTemplateReasoningValue(mutation, parameter, mutation.originalReasoningEffort)
 	}
-	if effort, ok := mutation.originalReasoningEffort.(string); ok {
+	var effort string
+	if json.Unmarshal(mutation.originalReasoningEffort, &effort) == nil {
 		mutation.appliedEffort = effort
 	}
 }
@@ -222,46 +318,54 @@ func (r *OpenAIRouter) reasoningMetricLabels(
 			modelFamily = familyName
 		}
 	}
-	if familyConfig.Type == "chat_template_kwargs" {
+	if familyConfig.Type == config.ReasoningFamilyTypeChatTemplateKwargs {
 		return modelFamily, familyConfig.Parameter
 	}
 	return modelFamily, "reasoning_effort"
 }
 
-func usesTopLevelReasoningEffort(profile *config.ProviderProfile) bool {
-	if profile == nil || profile.Type != "openai" || profile.BaseURL == "" {
-		return false
-	}
-	u, err := url.Parse(profile.BaseURL)
-	if err != nil {
-		return false
-	}
-	// The official OpenAI API and OpenRouter accept reasoning_effort as a
-	// top-level OpenAI-compatible field. Local vLLM-compatible servers keep the
-	// value under chat_template_kwargs.
-	return supportsTopLevelReasoningEffortHost(u.Hostname())
+func usesDeepSeekOfficialReasoning(
+	familyConfig *config.ReasoningFamilyConfig,
+	dialect openAIBackendDialect,
+) bool {
+	return familyConfig != nil && dialect.usesDeepSeekOfficialReasoning()
 }
 
-func supportsTopLevelReasoningEffortHost(host string) bool {
-	return strings.EqualFold(host, "api.openai.com") ||
-		strings.EqualFold(host, "openrouter.ai")
+func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, enabled bool, effort string) {
+	// DeepSeek's official OpenAI-compatible API uses top-level thinking plus
+	// reasoning_effort. Drop template kwargs so local-template controls do not
+	// leak into the provider request alongside official fields.
+	delete(mutation.requestMap, "chat_template_kwargs")
+	mutation.chatTemplateKwargs = map[string]json.RawMessage{}
+	mutation.chatTemplateKwargsDirty = false
+
+	if enabled {
+		mutation.requestMap["thinking"] = json.RawMessage(`{"type":"enabled"}`)
+		mutation.requestMap["reasoning_effort"] = reasoningStringValue(effort)
+		mutation.appliedEffort = effort
+	} else {
+		mutation.requestMap["thinking"] = json.RawMessage(`{"type":"disabled"}`)
+		delete(mutation.requestMap, "reasoning_effort")
+	}
+	// Disabled official reasoning is still an applied provider mutation because
+	// the request must carry thinking.type=disabled.
+	mutation.reasoningApplied = true
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model
-func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string) string {
+func (r *OpenAIRouter) getReasoningEffort(
+	decision *config.Decision,
+	modelName string,
+) string {
 	// Handle case where Config is nil (e.g., in tests)
 	if r.Config == nil {
 		return "medium"
 	}
 
-	for _, decision := range r.Config.Decisions {
-		if decision.Name != categoryName {
-			continue
-		}
-		if effort := r.reasoningEffortForDecision(decision, modelName); effort != "" {
+	if decision != nil {
+		if effort := r.reasoningEffortForDecision(*decision, modelName); effort != "" {
 			return effort
 		}
-		break
 	}
 
 	// Fall back to global default if configured
@@ -289,45 +393,4 @@ func (r *OpenAIRouter) getModelReasoningFamily(model string) *config.ReasoningFa
 		return nil
 	}
 	return r.Config.GetModelReasoningFamily(model)
-}
-
-func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
-	model string,
-	useReasoning bool,
-	categoryName string,
-	profile *config.ProviderProfile,
-) (map[string]interface{}, string) {
-	familyConfig := r.getModelReasoningFamily(model)
-	if familyConfig == nil {
-		// No reasoning family configured for this model - don't apply any reasoning syntax
-		// Models without reasoning_family don't support reasoning mode
-		return nil, ""
-	}
-
-	if !useReasoning {
-		// When reasoning is disabled, don't add any reasoning fields
-		return nil, ""
-	}
-
-	// When reasoning is enabled, use the configured family syntax
-	switch familyConfig.Type {
-	case "chat_template_kwargs":
-		kwargs := map[string]interface{}{
-			familyConfig.Parameter: useReasoning,
-		}
-		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
-	case "reasoning_effort":
-		effort := r.getReasoningEffort(categoryName, model)
-		if usesTopLevelReasoningEffort(profile) {
-			return map[string]interface{}{familyConfig.Parameter: effort}, effort
-		}
-		// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
-		kwargs := map[string]interface{}{
-			familyConfig.Parameter: effort,
-		}
-		return map[string]interface{}{"chat_template_kwargs": kwargs}, effort
-	default:
-		// Unknown reasoning syntax type - don't apply anything
-		return nil, ""
-	}
 }

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedSession } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedAppShell } from './support/auth'
+import { openComposerAddMenu } from './support/playground'
 
 const openClawTeam = {
   id: 'team-alpha',
@@ -47,9 +48,9 @@ const initialMessages = [
 ]
 
 async function mockCollaborationBootstrap(page: Page) {
-  await mockAuthenticatedSession(page)
+  await mockAuthenticatedAppShell(page)
 
-  await page.route('**/api/setup/state', async route => {
+  await page.route('**/api/setup/state', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -65,37 +66,59 @@ async function mockCollaborationBootstrap(page: Page) {
     })
   })
 
-  await page.route('**/api/settings', async route => {
+  await page.route('**/api/settings', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ readonlyMode: false, setupMode: false }),
+      body: JSON.stringify(dashboardSettingsResponse()),
     })
   })
 
-  await page.route('**/api/openclaw/teams', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([openClawTeam]) })
+  await page.route('**/api/openclaw/teams', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([openClawTeam]),
+    })
   })
 
-  await page.route('**/api/openclaw/workers', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openClawWorkers) })
+  await page.route('**/api/openclaw/workers', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(openClawWorkers),
+    })
   })
 
-  await page.route('**/api/openclaw/rooms?*', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([openClawRoom]) })
+  await page.route('**/api/openclaw/rooms?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([openClawRoom]),
+    })
   })
 
-  await page.route('**/api/openclaw/rooms/room-alpha/messages?*', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(initialMessages) })
+  await page.route('**/api/openclaw/rooms/room-alpha/messages?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(initialMessages),
+    })
   })
 }
 
 async function enableClawRoom(page: Page, waitForWebSocket = true) {
   await page.goto('/playground')
-  await page.getByRole('button', { name: 'Enable HireClaw' }).click()
-  await page.getByRole('button', { name: 'Open ClawRoom view' }).click()
+  const menu = await openComposerAddMenu(page)
+  await menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' }).click()
+  const roomToggle = menu.getByRole('menuitemcheckbox', { name: 'Open ClawRoom view' })
+  await expect(roomToggle).toBeEnabled()
+  await roomToggle.click()
   await expect(page.getByTestId('claw-room-transcript')).toBeVisible()
   await expect(page.getByText('hello team')).toBeVisible()
+  const roomMenu = await openComposerAddMenu(page)
+  await expect(roomMenu.getByRole('menuitemcheckbox', { name: 'Exit ClawRoom view' })).toBeVisible()
+  await page.keyboard.press('Escape')
   if (waitForWebSocket) {
     await expect(page.getByTestId('claw-room-transport-status')).toContainText('Live')
   }
@@ -199,16 +222,19 @@ test.describe('Claw room collaboration', () => {
         }
       }
 
-      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets = MockWebSocket.instances
+      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets =
+        MockWebSocket.instances
       window.WebSocket = MockWebSocket as unknown as typeof WebSocket
     })
 
     await enableClawRoom(page)
 
     await page.evaluate(() => {
-      const sockets = (window as typeof window & {
-        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
-      }).__mockRoomSockets
+      const sockets = (
+        window as typeof window & {
+          __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+        }
+      ).__mockRoomSockets
       const socket = sockets?.[sockets.length - 1]
       socket?.emit({
         type: 'message_chunk',
@@ -249,21 +275,26 @@ test.describe('Claw room collaboration', () => {
         }
 
         send() {}
-        close() { this.readyState = 3 }
+        close() {
+          this.readyState = 3
+        }
         emit(payload: Record<string, unknown>) {
           this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent)
         }
       }
 
-      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets = MockWebSocket.instances
+      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets =
+        MockWebSocket.instances
       window.WebSocket = MockWebSocket as unknown as typeof WebSocket
     })
     await enableClawRoom(page)
 
     await page.evaluate(() => {
-      const sockets = (window as typeof window & {
-        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
-      }).__mockRoomSockets
+      const sockets = (
+        window as typeof window & {
+          __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+        }
+      ).__mockRoomSockets
       const socket = sockets?.[sockets.length - 1]
       socket?.emit({
         type: 'message_chunk',
@@ -306,9 +337,11 @@ test.describe('Claw room collaboration', () => {
     await expect(page.getByTestId('claw-room-tool-trace')).toContainText('/workspace')
 
     await page.evaluate(() => {
-      const sockets = (window as typeof window & {
-        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
-      }).__mockRoomSockets
+      const sockets = (
+        window as typeof window & {
+          __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+        }
+      ).__mockRoomSockets
       const socket = sockets?.[sockets.length - 1]
       socket?.emit({
         type: 'message_updated',
@@ -321,13 +354,15 @@ test.describe('Claw room collaboration', () => {
           content: 'Done.',
           createdAt: '2026-05-31T00:00:00Z',
           metadata: {
-            toolTrace: JSON.stringify([{
-              id: 'call_1',
-              name: 'exec',
-              arguments: '{"command":"pwd"}',
-              status: 'completed',
-              result: '/workspace',
-            }]),
+            toolTrace: JSON.stringify([
+              {
+                id: 'call_1',
+                name: 'exec',
+                arguments: '{"command":"pwd"}',
+                status: 'completed',
+                result: '/workspace',
+              },
+            ]),
           },
         },
       })
@@ -335,7 +370,9 @@ test.describe('Claw room collaboration', () => {
 
     await expect(page.getByTestId('claw-room-tool-trace')).toBeVisible()
     await expect(page.locator('[data-room-message-streaming="true"]')).toHaveCount(0)
-    await expect(page.locator('[data-room-message-id="stream-worker-tools"]')).toContainText('Done.')
+    await expect(page.locator('[data-room-message-id="stream-worker-tools"]')).toContainText(
+      'Done.',
+    )
   })
 
   test('falls back to SSE when websocket disconnects', async ({ page }) => {
@@ -386,16 +423,22 @@ test.describe('Claw room collaboration', () => {
 
       window.WebSocket = FailingWebSocket as unknown as typeof WebSocket
       window.EventSource = MockEventSource as unknown as typeof EventSource
-      ;(window as typeof window & { __mockEventSource?: typeof MockEventSource }).__mockEventSource = MockEventSource
+      ;(
+        window as typeof window & { __mockEventSource?: typeof MockEventSource }
+      ).__mockEventSource = MockEventSource
     })
 
     await enableClawRoom(page, false)
     await expect(page.getByTestId('claw-room-transport-status')).toContainText('SSE')
 
     await page.evaluate(() => {
-      const MockEventSource = (window as typeof window & {
-        __mockEventSource?: { latest?: { emitMessage: (payload: Record<string, unknown>) => void } }
-      }).__mockEventSource
+      const MockEventSource = (
+        window as typeof window & {
+          __mockEventSource?: {
+            latest?: { emitMessage: (payload: Record<string, unknown>) => void }
+          }
+        }
+      ).__mockEventSource
       MockEventSource?.latest?.emitMessage({
         type: 'message',
         roomId: 'room-alpha',
@@ -446,11 +489,12 @@ test.describe('Claw room collaboration', () => {
         }
       }
 
-      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets = MockWebSocket.instances
+      ;(window as typeof window & { __mockRoomSockets?: MockWebSocket[] }).__mockRoomSockets =
+        MockWebSocket.instances
       window.WebSocket = MockWebSocket as unknown as typeof WebSocket
     })
 
-    await page.route('**/api/openclaw/status', async route => {
+    await page.route('**/api/openclaw/status', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -470,7 +514,7 @@ test.describe('Claw room collaboration', () => {
       })
     })
 
-    await page.route('**/api/openclaw/token?name=*', async route => {
+    await page.route('**/api/openclaw/token?name=*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -478,7 +522,7 @@ test.describe('Claw room collaboration', () => {
       })
     })
 
-    await page.route('**/embedded/openclaw/**', async route => {
+    await page.route('**/embedded/openclaw/**', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'text/html',
@@ -486,7 +530,7 @@ test.describe('Claw room collaboration', () => {
           <script>
             window.__bridgeEvents = [];
             window.addEventListener('message', (event) => {
-              if (event.data && event.data.source === 'clawos-room-bridge') {
+              if (event.data && event.data.source === 'openclaw-room-bridge') {
                 window.__bridgeEvents.push(event.data);
               }
             });
@@ -495,16 +539,18 @@ test.describe('Claw room collaboration', () => {
       })
     })
 
-    await page.goto('/clawos')
-    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
+    await page.goto('/openclaw')
+    await page.getByRole('tab', { name: /Runtime/ }).click()
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
 
     await expect(page.getByTestId('claw-room-bridge-activity')).toBeVisible()
 
     await page.evaluate(() => {
-      const sockets = (window as typeof window & {
-        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
-      }).__mockRoomSockets
+      const sockets = (
+        window as typeof window & {
+          __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+        }
+      ).__mockRoomSockets
       const socket = sockets?.[sockets.length - 1]
       socket?.emit({
         type: 'new_message',
@@ -522,17 +568,20 @@ test.describe('Claw room collaboration', () => {
     })
 
     const iframeEvents = await page.evaluate(async () => {
-      const iframe = document.querySelector('iframe[title*="OpenClaw Control UI"]') as HTMLIFrameElement | null
+      const iframe = document.querySelector(
+        'iframe[title*="OpenClaw Control UI"]',
+      ) as HTMLIFrameElement | null
       if (!iframe?.contentWindow) {
         return [] as unknown[]
       }
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        const events = (iframe.contentWindow as Window & { __bridgeEvents?: unknown[] }).__bridgeEvents
+        const events = (iframe.contentWindow as Window & { __bridgeEvents?: unknown[] })
+          .__bridgeEvents
         if (Array.isArray(events) && events.length > 0) {
           return events
         }
-        await new Promise(resolve => window.setTimeout(resolve, 100))
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
       }
       return [] as unknown[]
     })
@@ -540,24 +589,30 @@ test.describe('Claw room collaboration', () => {
     expect(iframeEvents.length).toBeGreaterThan(0)
 
     await page.evaluate(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        data: {
-          source: 'clawos-room-bridge',
-          type: 'surface_event',
-          roomId: 'room-alpha',
-          payload: { kind: 'tool_call', name: 'search' },
-        },
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            source: 'openclaw-room-bridge',
+            type: 'surface_event',
+            roomId: 'room-alpha',
+            payload: { kind: 'tool_call', name: 'search' },
+          },
+        }),
+      )
     })
 
     await expect(page.getByTestId('claw-room-bridge-activity')).toContainText('Surface')
 
     const surfaceWrites = await page.evaluate(() => {
-      const sockets = (window as typeof window & {
-        __mockRoomSockets?: Array<{ sent: string[] }>
-      }).__mockRoomSockets
-      return sockets?.flatMap(socket => socket.sent) || []
+      const sockets = (
+        window as typeof window & {
+          __mockRoomSockets?: Array<{ sent: string[] }>
+        }
+      ).__mockRoomSockets
+      return sockets?.flatMap((socket) => socket.sent) || []
     })
-    expect(surfaceWrites.some(entry => entry.includes('surface_event') && entry.includes('tool_call'))).toBeTruthy()
+    expect(
+      surfaceWrites.some((entry) => entry.includes('surface_event') && entry.includes('tool_call')),
+    ).toBeTruthy()
   })
 })

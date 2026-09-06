@@ -120,7 +120,7 @@ COPY --from=go-builder /app/candle-binding/target/release/libcandle_semantic_rou
 COPY config/config.yaml /app/config/
 ENV LD_LIBRARY_PATH=/app/lib
 EXPOSE 50051
-COPY scripts/entrypoint.sh /app/entrypoint.sh
+COPY tools/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 ```

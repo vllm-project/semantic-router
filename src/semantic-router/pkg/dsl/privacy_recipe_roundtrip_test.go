@@ -10,7 +10,7 @@ import (
 )
 
 func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "privacy", "privacy-router.yaml")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "privacy", "config.yaml")
 	cfg, err := config.Parse(assetPath)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
@@ -30,7 +30,7 @@ func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 }
 
 func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "privacy", "privacy-router.dsl")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "privacy", "recipe.dsl")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
 		t.Skipf("privacy recipe DSL not found at %s: %v", assetPath, err)
@@ -95,7 +95,7 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 }
 
 func TestMaintainedPrivacyRecipeValidates(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "privacy", "privacy-router.dsl")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "privacy", "recipe.dsl")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
 		t.Skipf("privacy recipe DSL not found: %v", err)

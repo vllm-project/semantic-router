@@ -1,0 +1,47 @@
+.table {
+  min-width: 1080px;
+}
+
+.table th[scope='row'] {
+  min-width: 230px;
+}
+
+.table th[scope='row'] > *,
+.table td > * {
+  display: block;
+}
+
+.table th[scope='row'] strong,
+.table td strong {
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.table th[scope='row'] span,
+.table td span {
+  margin-top: 0.16rem;
+  color: var(--text-secondary);
+}
+
+.table th[scope='row'] small {
+  margin-top: 0.18rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.reason {
+  max-width: 220px;
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.empty {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}

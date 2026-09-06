@@ -44,7 +44,7 @@ MAX_MUST_READ_LINKS_BY_CATEGORY = {
 }
 
 DEFERRED_MUST_READ_PATHS = {
-    "docs/agent/feature-complete-checklist.md": (
+    "tools/agent/docs/feature-complete-checklist.md": (
         "close-out checklist docs belong in workflow or acceptance, not Must Read"
     ),
 }
@@ -79,7 +79,7 @@ def validate_surface_catalog(
                 )
         if f"`{surface_name}`" not in change_surfaces_text:
             errors.append(
-                f"Surface '{surface_name}' is missing from docs/agent/change-surfaces.md"
+                f"Surface '{surface_name}' is missing from tools/agent/docs/change-surfaces.md"
             )
 
 
@@ -139,13 +139,13 @@ def validate_skill_definition(
 
 
 def validate_skill_catalog(skill_registry: dict, errors: list[str]) -> None:
-    catalog_text = (REPO_ROOT / "docs" / "agent" / "skill-catalog.md").read_text(
-        encoding="utf-8"
-    )
+    catalog_text = (
+        REPO_ROOT / "tools" / "agent" / "docs" / "skill-catalog.md"
+    ).read_text(encoding="utf-8")
     for skill in iter_registry_skills(skill_registry):
         if f"`{skill['name']}`" not in catalog_text:
             errors.append(
-                f"docs/agent/skill-catalog.md must list skill '{skill['name']}'"
+                f"tools/agent/docs/skill-catalog.md must list skill '{skill['name']}'"
             )
         validate_skill_template(skill, errors)
 
@@ -264,16 +264,17 @@ def validate_primary_skill(
     skill: dict, skill_lookup: dict[str, dict], skill_registry: dict, errors: list[str]
 ) -> None:
     skill_name = skill["name"]
+    is_fallback = skill_name == "project-change"
     priority = skill.get("priority")
     if not isinstance(priority, int):
         errors.append(f"Primary skill '{skill_name}' is missing integer priority")
-    if not skill.get("required_surfaces"):
+    if not skill.get("required_surfaces") and not is_fallback:
         errors.append(f"Primary skill '{skill_name}' has no required_surfaces")
     if not skill.get("stop_conditions"):
         errors.append(f"Primary skill '{skill_name}' has no stop_conditions")
     if not skill.get("acceptance_criteria"):
         errors.append(f"Primary skill '{skill_name}' has no acceptance_criteria")
-    if not skill.get("selector_paths") and skill_name != "cross-stack-bugfix":
+    if not skill.get("selector_paths") and not is_fallback:
         errors.append(f"Primary skill '{skill_name}' has no selector_paths")
     validate_surface_refs(skill_name, skill, skill_registry, errors)
 

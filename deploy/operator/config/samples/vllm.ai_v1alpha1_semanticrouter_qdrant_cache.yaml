@@ -42,7 +42,7 @@ spec:
       use_cpu: true
 
     # Semantic cache with Qdrant backend
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: qdrant
       similarity_threshold: "0.90"

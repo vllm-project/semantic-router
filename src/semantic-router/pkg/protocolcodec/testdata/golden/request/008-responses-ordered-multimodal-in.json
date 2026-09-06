@@ -1,0 +1,15 @@
+{
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {"type": "input_text", "text": "Before image"},
+        {"type": "input_image", "image_url": "https://example.com/image.png"},
+        {"type": "input_text", "text": "After image"}
+      ]
+    }
+  ],
+  "max_output_tokens": 24,
+  "model": "client-model"
+}

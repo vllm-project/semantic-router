@@ -2,14 +2,15 @@
 
 <img src="website/static/img/artworks/vllm-sr-logo.dark.png" alt="vLLM Semantic Router" width="50%"/>
 
-<p><strong>Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference</strong></p>
+<p><strong>Make Your Mixture-of-Models Programmable.</strong></p>
 
 <p>
-  <a href="https://vllm-semantic-router.com">Documentation</a> |
-  <a href="https://play.vllm-semantic-router.com">Playground</a> |
-  <a href="https://vllm-semantic-router.com/blog/">Blog</a> |
-  <a href="https://vllm-semantic-router.com/publications/">Publications</a> |
-  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a>
+  <a href="https://vllm-sr.ai">Documentation</a> |
+  <a href="https://app.vllm-sr.ai/playground">Playground</a> |
+  <a href="https://vllm-sr.ai/blog/">Blog</a> |
+  <a href="https://vllm-sr.ai/publications/">Publications</a> |
+  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a> |
+  <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
 
 </div>
@@ -18,39 +19,41 @@
 
 ## About
 
-**Mixture-of-Models** is the next-generation model architecture for heterogeneous LLM inference.
+vLLM Semantic Router is a programmable routing layer for building Mixture-of-Models systems across heterogeneous LLM infrastructure. It evaluates request signals, user preferences, and application policies to select—or compose—the right model path for each request.
 
-**vLLM Semantic Router** turns signals and preferences into executable model paths for every user, product, and workload.
+Use it to improve quality, cost, latency, privacy, and safety without hard-coding routing logic into applications.
 
-| Dimension | Today's landscape | With vLLM SR |
+| Dimension | Fragmented today | With vLLM SR |
 | --- | --- | --- |
-| **Models** | Frontier, open, specialized, and edge models excel at different work. | Compose them into personalized model paths. |
-| **Compute** | GPUs, accelerators, edge devices, and cloud capacity coexist. | Route across heterogeneous compute. |
-| **Location** | Inference spans edge, private data centers, and cloud. | Respect privacy and data boundaries. |
-| **Preference** | "Best" varies by user, product, and workload. | Make those preferences executable. |
+| **Models** | Models specialize in different work. | Compose personalized model paths. |
+| **Compute** | GPUs, accelerators, edge, and cloud coexist. | Route across heterogeneous compute. |
+| **Location** | Inference spans edge, private, and cloud. | Keep data within its boundaries. |
+| **Preference** | "Best" changes by user and workload. | Make every preference executable. |
 
-[Explore how it works →](https://vllm-semantic-router.com/docs/)
+[Explore how it works →](https://vllm-sr.ai/docs/intro/)
 
 ## Getting Started
 
 ### Install
 
 ```bash
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
 ```
 
-For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-semantic-router.com/docs/installation/)**.
+For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-<details>
-<summary>Online playground credentials</summary>
+### Online playground
+
+Try the online playground at <https://app.vllm-sr.ai/playground>.
+
+Credentials:
 
 - Username: `love@vllm-sr.ai`
-- Password: `vllm-sr`
-
-</details>
+- Password: `vllm-sr-read`
 
 ## Latest News
 
+- [2026/07/21] New Blog: [Beyond a Single Model: Building Mixture-of-Models Systems with vLLM Semantic Router](https://vllm.ai/blog/2026-07-21-vllm-sr-new-chapter-mom)
 - [2026/06/29] New Blog: [Micro-Agent: Beat Frontier Models with Collaboration inside Model API](https://vllm.ai/blog/2026-06-29-micro-agent-frontier-models)
 - [2026/06/16] New Blog: [Beyond One Model: Fusion in vLLM Semantic Router](https://vllm.ai/blog/2026-06-16-vllm-sr-fusion-api)
 - [2026/06/05] v0.3 Released: [vLLM Semantic Router v0.3 Themis: From Signals to Stateful Production Routing](https://vllm.ai/blog/2026-06-05-v0.3-vllm-sr-themis-release)
@@ -58,9 +61,9 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 <details>
 <summary>Earlier announcements</summary>
 
-- [2026/03/24] Vision Paper Released: [The Workload-Router-Pool Architecture for LLM Inference Optimization](https://vllm-semantic-router.com/vision-paper)
+- [2026/03/24] Vision Paper Released: [The Workload-Router-Pool Architecture for LLM Inference Optimization](https://vllm-sr.ai/vision-paper)
 - [2026/03/10] v0.2 Released: [vLLM Semantic Router v0.2 Athena Release](https://vllm.ai/blog/v0.2-vllm-sr-athena-release)
-- [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-semantic-router.com/white-paper/)
+- [2026/02/27] White Paper Released: [Signal Driven Decision Routing for Mixture-of-Modality Models](https://vllm-sr.ai/white-paper/)
 - [2026/01/05] Iris v0.1 Released: [vLLM Semantic Router v0.1 Iris: The First Major Release](https://blog.vllm.ai/2026/01/05/vllm-sr-iris.html)
 - [2025/12/16] Collaboration: [AMD × vLLM Semantic Router: Building the System Intelligence Together](https://blog.vllm.ai/2025/12/16/vllm-sr-amd.html)
 - [2025/12/15] New Blog: [Token-Level Truth: Real-Time Hallucination Detection for Production LLMs](https://blog.vllm.ai/2025/12/14/halugate.html)
@@ -73,11 +76,12 @@ For platform notes, detailed setup options, and troubleshooting, see the **[Inst
 
 </details>
 
-More announcements are available on the **[Blog](https://vllm-semantic-router.com/blog/)** and **[Publications](https://vllm-semantic-router.com/publications/)** pages.
+More announcements are available on the **[Blog](https://vllm-sr.ai/blog/)** and **[Publications](https://vllm-sr.ai/publications/)** pages.
 
 ## Community
 
-For questions, feedback, or to contribute, please join the `#semantic-router` channel in vLLM Slack.
+For questions, feedback, or to contribute, please join the [`#semantic-router`](https://vllm-dev.slack.com/archives/C09CTGF8KCN) channel in vLLM Slack.
+Track contributors, workgroups, and weekly activity at [community.vllm-sr.ai](https://community.vllm-sr.ai).
 
 ### Community Meetings
 
@@ -97,7 +101,7 @@ We host community meetings on the first and third Tuesday of each month to sync 
 
 If you want to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[docs/agent/README.md](docs/agent/README.md)** as the canonical index.
+For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[tools/agent/docs/README.md](tools/agent/docs/README.md)** as the canonical index.
 
 ## Citation
 
@@ -111,10 +115,6 @@ If you find Semantic Router helpful in your research or projects, please conside
   howpublished={\url{https://github.com/vllm-project/semantic-router}},
 }
 ```
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=vllm-project/semantic-router&type=Date)](https://www.star-history.com/#vllm-project/semantic-router&Date)
 
 ## Sponsors
 

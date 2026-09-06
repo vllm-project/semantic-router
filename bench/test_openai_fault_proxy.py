@@ -2,6 +2,7 @@ import importlib.util
 import json
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -10,6 +11,8 @@ from typing import ClassVar
 
 HTTP_OK = 200
 HTTP_UNAVAILABLE = 503
+DELAY_MS = 100
+MIN_DELAY_SECONDS = 0.09
 
 
 def load_fault_proxy_module():
@@ -150,6 +153,71 @@ def test_fault_proxy_session_modulo_selects_subset():
     finally:
         stop_server(proxy, proxy_thread)
         stop_server(upstream, upstream_thread)
+
+
+def test_fault_proxy_delays_forwarded_and_injected_responses():
+    fault = load_fault_proxy_module()
+    upstream, upstream_thread = start_server(UpstreamEchoHandler)
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset({1}),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        delay_ms=DELAY_MS,
+    )
+    handler = fault.make_handler(f"http://127.0.0.1:{upstream.server_port}", policy)
+    proxy, proxy_thread = start_server(handler)
+
+    try:
+        base_url = f"http://127.0.0.1:{proxy.server_port}"
+        started = time.monotonic()
+        forwarded_status = post_turn(base_url, 0, 0)[0]
+        forwarded_elapsed = time.monotonic() - started
+
+        started = time.monotonic()
+        injected_status, injected_headers, injected_payload = post_turn(base_url, 0, 1)
+        injected_elapsed = time.monotonic() - started
+    finally:
+        stop_server(proxy, proxy_thread)
+        stop_server(upstream, upstream_thread)
+
+    assert forwarded_status == HTTP_OK
+    assert forwarded_elapsed >= MIN_DELAY_SECONDS
+    assert injected_status == HTTP_UNAVAILABLE
+    assert injected_headers["x-vsr-fault-injected"] == "true"
+    assert injected_payload["error"]["type"] == "fault_proxy_injected"
+    assert injected_elapsed >= MIN_DELAY_SECONDS
+
+
+def test_fault_proxy_delay_seconds_defaults_to_no_sleep():
+    fault = load_fault_proxy_module()
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+    )
+    assert policy.delay_ms == 0
+    assert policy.delay_jitter_ms == 0
+    assert fault.delay_seconds(policy) == 0.0
+
+    jittered = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        delay_ms=DELAY_MS,
+        delay_jitter_ms=DELAY_MS,
+    )
+    for _ in range(20):
+        seconds = fault.delay_seconds(jittered)
+        assert MIN_DELAY_SECONDS <= seconds <= 2 * DELAY_MS / 1000.0
 
 
 def test_fault_proxy_phase_inference_targets_tool_loops():

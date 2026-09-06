@@ -21,11 +21,10 @@ const LEGACY_SIGNAL_SECTIONS = [
   ['complexity_rules', 'complexity'],
   ['jailbreak', 'jailbreak'],
   ['pii', 'pii'],
-] as const satisfies ReadonlyArray<
-  readonly [keyof ConfigData, keyof CanonicalSignalSections]
->
+] as const satisfies ReadonlyArray<readonly [keyof ConfigData, keyof CanonicalSignalSections]>
 
 const LEGACY_GLOBAL_ROOT_KEYS = [
+  'response_cache',
   'semantic_cache',
   'memory',
   'response_api',
@@ -249,7 +248,10 @@ const mergeLegacyModelIntoProviderModel = (
   if (!existing.external_model_ids && modelConfig.external_model_ids) {
     existing.external_model_ids = cloneUnknown(modelConfig.external_model_ids)
   }
-  if ((!existing.backend_refs || existing.backend_refs.length === 0) && modelConfig.preferred_endpoints) {
+  if (
+    (!existing.backend_refs || existing.backend_refs.length === 0) &&
+    modelConfig.preferred_endpoints
+  ) {
     existing.backend_refs = legacyBackendRefsForModel(modelConfig, backendCatalog)
   }
 }
@@ -333,6 +335,11 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
 
   const globalRoot = cfg.global as MutableRecord
   const rawConfig = cfg as MutableRecord
+  const stores = asRecord(globalRoot.stores)
+  if (stores?.semantic_cache !== undefined && stores.response_cache === undefined) {
+    stores.response_cache = cloneUnknown(stores.semantic_cache)
+    delete stores.semantic_cache
+  }
 
   const placeBlockIfMissing = (path: string[], value: unknown) => {
     if (value === undefined || value === null) {
@@ -357,7 +364,7 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     }
   }
 
-  placeBlockIfMissing(['stores', 'semantic_cache'], cfg.semantic_cache)
+  placeBlockIfMissing(['stores', 'response_cache'], cfg.response_cache ?? cfg.semantic_cache)
   placeBlockIfMissing(['stores', 'memory'], cfg.memory)
   placeBlockIfMissing(['services', 'response_api'], cfg.response_api)
   placeBlockIfMissing(['services', 'router_replay'], cfg.router_replay)
@@ -409,7 +416,7 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
         continue
       }
       switch (key) {
-        case 'semantic_cache':
+        case 'response_cache':
         case 'memory':
         case 'vector_store':
           placeBlockIfMissing(['stores', key], value)

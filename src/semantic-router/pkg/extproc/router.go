@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -12,40 +13,64 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	Config                *config.RouterConfig
-	CategoryDescriptions  []string
-	Classifier            *classification.Classifier
+	Config               *config.RouterConfig
+	CategoryDescriptions []string
+	Classifier           *classification.Classifier
+	// RecipeClassifiers selects the isolated classifier graph for each routing
+	// request. Classifier is the default-recipe accessor.
+	RecipeClassifiers     *classification.RecipeClassifiers
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
+	ResponseCache         *cache.ResponseCacheService
+	responseCacheMu       sync.Mutex
+	ContextCompression    *contextcompression.Service
+	CompressionRecovery   contextcompression.RecoveryStore
+	CompressionEmbedding  embedding.Provider
+	CompressionScorer     contextcompression.RelevanceScorer
+	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
 	toolSelectionDBMu     sync.Mutex
 	toolSelectionDBByPath map[string]*tools.ToolsDatabase
-	ResponseAPIFilter     *ResponseAPIFilter
-	ReplayRecorder        *routerreplay.Recorder
-	ReplayStoreShared     bool
+	// toolEmbedder embeds request-supplied tool definitions for tool_selection
+	// filter mode, memoizing them across requests. Set once at router
+	// construction and read-only afterwards; nil (remote provider construction
+	// failed, or a directly assembled test router) makes filter mode error into
+	// its configured fallback instead of embedding.
+	toolEmbedder      *cachedToolEmbedder
+	ResponseAPIFilter *ResponseAPIFilter
+	ReplayRecorder    *routerreplay.Recorder
+	ReplayStoreShared bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
-	ModelSelector   *selection.Registry
-	LookupTable     lookuptable.LookupTable
-	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     memory.Store
-	MemoryExtractor *memory.MemoryExtractor
+	ModelSelector *selection.Registry
+	// RecipeModelSelectors keeps mutable algorithm state (Elo, RL, ML adapters,
+	// and similar selectors) isolated even when recipes reuse decision names.
+	RecipeModelSelectors map[config.RecipeName]*selection.Registry
+	LookupTable          lookuptable.LookupTable
+	ReplayRecorders      map[string]*routerreplay.Recorder
+	MemoryStore          memory.Store
+	MemoryExtractor      *memory.MemoryExtractor
+	ProtocolCodecs       *protocolcodec.Registry
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
@@ -59,21 +84,53 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	routerLearningMu      sync.Mutex
-	routerLearningRuntime *routerLearningRuntime
-	lookupTableCancel     func()
+	routerLearningMu        sync.Mutex
+	routerLearningRuntime   *routerLearningRuntime
+	lookupTableCancel       func()
+	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	resources *resourceScope
 }
 
-// Close releases background resources held by the router (e.g. lookup table
-// auto-save and periodic re-population goroutines).
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
-	if r.lookupTableCancel != nil {
-		r.lookupTableCancel()
+	return r.resources.close()
+}
+
+func closeReplayRecorders(
+	replayRecorder *routerreplay.Recorder,
+	replayRecorders map[string]*routerreplay.Recorder,
+	replayStoreShared bool,
+) error {
+	if replayStoreShared {
+		if replayRecorder == nil {
+			return nil
+		}
+		return replayRecorder.Close()
 	}
-	return nil
+
+	seen := make(map[*routerreplay.Recorder]struct{}, len(replayRecorders)+1)
+	var errs []error
+	for _, recorder := range replayRecorders {
+		if recorder == nil {
+			continue
+		}
+		if _, duplicate := seen[recorder]; duplicate {
+			continue
+		}
+		seen[recorder] = struct{}{}
+		if err := recorder.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if replayRecorder != nil {
+		if _, duplicate := seen[replayRecorder]; !duplicate {
+			errs = append(errs, replayRecorder.Close())
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.
@@ -114,38 +171,6 @@ func (r *OpenAIRouter) createJSONResponseWithBody(statusCode int, jsonBody []byt
 	}
 }
 
-// createSSEResponseWithBody creates a direct response with pre-marshaled SSE
-// (text/event-stream) body. Used when the original client request requested
-// streaming (stream: true) but the response is generated by modality routing
-// (e.g. image generation) rather than a streaming model backend.
-func (r *OpenAIRouter) createSSEResponseWithBody(statusCode int, sseBody []byte, responsePath string) *ext_proc.ProcessingResponse {
-	setHeaders := []*core.HeaderValueOption{
-		{
-			Header: &core.HeaderValue{
-				Key:      "content-type",
-				RawValue: []byte("text/event-stream; charset=utf-8"),
-			},
-		},
-	}
-	if responsePath != "" {
-		setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(responsePath)...)
-	}
-
-	return &ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
-			ImmediateResponse: &ext_proc.ImmediateResponse{
-				Status: &typev3.HttpStatus{
-					Code: statusCodeToImmediateResponseCode(statusCode),
-				},
-				Headers: &ext_proc.HeaderMutation{
-					SetHeaders: setHeaders,
-				},
-				Body: sseBody,
-			},
-		},
-	}
-}
-
 // createJSONResponse creates a direct response with JSON content.
 func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext_proc.ProcessingResponse {
 	jsonData, err := json.Marshal(data)
@@ -161,10 +186,14 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	errorType := "invalid_request_error"
+	if statusCode >= 500 {
+		errorType = "api_error"
+	}
 	errorResp := map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
-			"type":    "invalid_request_error",
+			"type":    errorType,
 			"code":    statusCode,
 		},
 	}
@@ -204,6 +233,21 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
 
 	return nil
+}
+
+// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
+// request and into startup/reload readiness.
+func (r *OpenAIRouter) PreloadKnowledgeBases() error {
+	if r == nil {
+		return nil
+	}
+	if r.RecipeClassifiers != nil {
+		return r.RecipeClassifiers.PreloadKnowledgeBases()
+	}
+	if r.Classifier == nil {
+		return nil
+	}
+	return r.Classifier.PreloadKnowledgeBases()
 }
 
 func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {

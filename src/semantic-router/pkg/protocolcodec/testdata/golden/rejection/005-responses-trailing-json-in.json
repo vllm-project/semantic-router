@@ -1,0 +1,4 @@
+{
+  "operation": "request",
+  "body_json": "{\"model\":\"source-model\",\"input\":\"hello\"} {\"unexpected\":true}"
+}
