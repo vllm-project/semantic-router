@@ -211,6 +211,7 @@ def _parse_catalog_models(
     raw_models = document.get("models")
     if not isinstance(raw_models, list) or not raw_models:
         raise ModelCatalogError("built-in model catalog has no models")
+    protocols = _parse_catalog_protocols(document.get("protocols"))
     models: list[CatalogModel] = []
     seen: set[str] = set()
     seen_entrypoints: set[str] = set()
@@ -242,6 +243,7 @@ def _parse_catalog_models(
             model_id,
             asset=asset,
             entrypoint=entrypoint,
+            protocols=protocols,
             verification=verification,
             resource_version=resource_version,
             header=header,
@@ -258,6 +260,7 @@ def _parse_catalog_model(
     *,
     asset: str,
     entrypoint: str,
+    protocols: tuple[str, ...],
     verification: dict[str, str],
     resource_version: str,
     header: _CatalogHeader,
@@ -287,9 +290,7 @@ def _parse_catalog_model(
         asset=asset,
         entrypoint=entrypoint,
         recipe=recipe,
-        protocols=_unique_enum_strings(
-            raw.get("protocols"), f"{model_id}.protocols", SUPPORTED_PROTOCOLS
-        ),
+        protocols=protocols,
         traits=_unique_slugs(raw.get("traits"), f"{model_id}.traits"),
         roles=roles,
         verification=verification,
@@ -302,6 +303,19 @@ def _parse_catalog_model(
         enabled_by_default=model_id in header.enabled_models,
         default=model_id == header.default_model,
     )
+
+
+def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
+    """Project v2 protocol definitions onto the CLI virtual-model contract."""
+
+    if not isinstance(value, list) or not value:
+        raise ModelCatalogError("built-in catalog has no protocols")
+    protocol_ids: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ModelCatalogError("catalog protocol entry is invalid")
+        protocol_ids.append(_required_string(item, "id"))
+    return _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
 
 
 def _parse_model_verification(

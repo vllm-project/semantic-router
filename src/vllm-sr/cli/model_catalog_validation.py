@@ -22,7 +22,10 @@ SUPPORTED_CATALOG_FEATURES = frozenset(
         "effective_model_registry",
     }
 )
-SUPPORTED_MODEL_KINDS = frozenset({"virtual"})
+# The packaged snapshot is shared with the Router and both UIs, so the CLI
+# parser must recognize every model-card kind it can encounter. The CLI still
+# materializes only virtual models because physical cards have no recipe asset.
+SUPPORTED_MODEL_KINDS = frozenset({"physical", "virtual"})
 SUPPORTED_PROTOCOLS = frozenset(
     {
         "openai/chat-completions@1",
@@ -75,6 +78,9 @@ _MODEL_KEYS = frozenset(
         "display_name",
         "description",
         "kind",
+        "publisher",
+        "presentation",
+        "distribution",
         "family",
         "generation",
         "parameter_size",
