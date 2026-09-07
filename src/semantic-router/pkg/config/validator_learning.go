@@ -133,6 +133,51 @@ func validateProtectionTuning(prefix string, tuning RouterLearningProtectionTuni
 	}); err != nil {
 		return err
 	}
+	return validateProgressGateTuning(prefix+".progress_gate", tuning.ProgressGate)
+}
+
+// validateProgressGateTuning checks the switch-gate knobs, including the two
+// relationships the gate depends on: the escalation threshold must not be
+// easier than the downgrade threshold (that ordering is what produces
+// hysteresis), and the window cannot require more evidence than it can hold.
+func validateProgressGateTuning(prefix string, cfg *ProgressGateTuning) error {
+	if cfg == nil {
+		return nil
+	}
+	switch strings.TrimSpace(cfg.Mode) {
+	case "", "observe", "enforce":
+	default:
+		return fmt.Errorf("%s.mode must be observe or enforce, got %q", prefix, cfg.Mode)
+	}
+	if err := validateOptionalNonNegativeIntFields([]optionalNonNegativeIntField{
+		{prefix + ".window_size", cfg.WindowSize},
+		{prefix + ".window_ttl_seconds", cfg.WindowTTLSeconds},
+		{prefix + ".min_window_outcomes", cfg.MinWindowOutcomes},
+		{prefix + ".min_consecutive_regressions", cfg.MinConsecutiveRegressions},
+		{prefix + ".min_consecutive_recoveries", cfg.MinConsecutiveRecoveries},
+		{prefix + ".max_switches_per_window", cfg.MaxSwitchesPerWindow},
+	}); err != nil {
+		return err
+	}
+	if err := validateOptionalNonNegativeFloatFields([]optionalNonNegativeFloatField{
+		{prefix + ".cooldown_seconds", cfg.CooldownSeconds},
+	}); err != nil {
+		return err
+	}
+	if cfg.MinWindowOutcomes != nil && cfg.WindowSize != nil &&
+		*cfg.MinWindowOutcomes > *cfg.WindowSize {
+		return fmt.Errorf(
+			"%s.min_window_outcomes (%d) must not exceed %s.window_size (%d)",
+			prefix, *cfg.MinWindowOutcomes, prefix, *cfg.WindowSize,
+		)
+	}
+	if cfg.MinConsecutiveRegressions != nil && cfg.MinConsecutiveRecoveries != nil &&
+		*cfg.MinConsecutiveRegressions < *cfg.MinConsecutiveRecoveries {
+		return fmt.Errorf(
+			"%s.min_consecutive_regressions (%d) must be at least %s.min_consecutive_recoveries (%d) to keep hysteresis",
+			prefix, *cfg.MinConsecutiveRegressions, prefix, *cfg.MinConsecutiveRecoveries,
+		)
+	}
 	return nil
 }
 
