@@ -137,8 +137,8 @@ then produce exactly one provider-native shape:
 
 | Provider/runtime surface | Final request control |
 | --- | --- |
-| Local vLLM/SGLang boolean mode | `chat_template_kwargs.<parameter>: true\|false` |
-| Local vLLM/SGLang effort plus switch | both values inside `chat_template_kwargs` |
+| Local vLLM/SGLang template control | switch and/or effort inside `chat_template_kwargs` |
+| Local mixed effort plus template switch | top-level effort plus `chat_template_kwargs.<activation_parameter>` |
 | Local template effort flags | activation boolean plus one mutually exclusive effort flag; default/full may be omission |
 | OpenAI-compatible Chat effort | top-level `reasoning_effort` |
 | OpenAI Responses effort | `reasoning.effort` |

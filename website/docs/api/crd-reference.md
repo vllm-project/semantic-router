@@ -172,7 +172,7 @@ _Appears in:_
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
-| `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. |  | Enum: [low medium high] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
 
@@ -571,10 +571,15 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `family` _string_ |  |  | Optional: \{\} <br /> |
-| `type` _string_ |  |  | Enum: [chat_template_kwargs reasoning_effort top_level_reasoning_effort] <br />Optional: \{\} <br /> |
+| `type` _string_ |  |  | Enum: [chat_template_kwargs reasoning_effort reasoning_mode top_level_reasoning_effort] <br />Optional: \{\} <br /> |
 | `parameter` _string_ |  |  | Optional: \{\} <br /> |
+| `activationParameter` _string_ |  |  | Optional: \{\} <br /> |
+| `effortFlags` _object (keys:string, values:string)_ | EffortFlags maps a logical effort to a boolean chat-template parameter. |  | Optional: \{\} <br /> |
 | `levels` _string array_ |  |  | Optional: \{\} <br /> |
 | `default` _string_ |  |  | Optional: \{\} <br /> |
+| `modes` _string array_ |  |  | items:Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `defaultMode` _string_ |  |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `disabled` _string_ |  |  | Optional: \{\} <br /> |
 
 #### ModelRefConfig
 
@@ -589,7 +594,8 @@ _Appears in:_
 | `model` _string_ | Model name to route to |  |  |
 | `lora_name` _string_ | LoRAName is the optional LoRA adapter name |  | Optional: \{\} <br /> |
 | `use_reasoning` _boolean_ | UseReasoning enables reasoning mode for this model |  | Optional: \{\} <br /> |
-| `reasoning_effort` _string_ | ReasoningEffort specifies the reasoning effort level (low, medium, high) |  | Optional: \{\} <br /> |
+| `reasoning_mode` _string_ | ReasoningMode selects the model's reasoning activation mode when the<br />family supports more than a boolean switch. |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort selects one of the model family's declared effort levels. |  | Optional: \{\} <br /> |
 
 #### ObservabilityConfig
 

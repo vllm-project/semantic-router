@@ -306,8 +306,8 @@ type ConfigSpec struct {
 	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
 	// ReasoningEffort is the default reasoning effort for model bindings that do
-	// not select a different effort.
-	// +kubebuilder:validation:Enum=low;medium;high
+	// not select a different effort. The selected model family validates the
+	// value because built-in and custom families may expose different ladders.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 

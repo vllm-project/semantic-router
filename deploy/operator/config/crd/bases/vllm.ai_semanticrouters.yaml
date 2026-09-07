@@ -1211,8 +1211,17 @@ spec:
                                 description: Model name to route to
                                 type: string
                               reasoning_effort:
-                                description: ReasoningEffort specifies the reasoning
-                                  effort level (low, medium, high)
+                                description: ReasoningEffort selects one of the model
+                                  family's declared effort levels.
+                                type: string
+                              reasoning_mode:
+                                description: |-
+                                  ReasoningMode selects the model's reasoning activation mode when the
+                                  family supports more than a boolean switch.
+                                enum:
+                                - enabled
+                                - disabled
+                                - adaptive
                                 type: string
                               use_reasoning:
                                 description: UseReasoning enables reasoning mode for
@@ -1545,11 +1554,8 @@ spec:
                   reasoning_effort:
                     description: |-
                       ReasoningEffort is the default reasoning effort for model bindings that do
-                      not select a different effort.
-                    enum:
-                    - low
-                    - medium
-                    - high
+                      not select a different effort. The selected model family validates the
+                      value because built-in and custom families may expose different ladders.
                     type: string
                   response_cache:
                     description: Response cache configuration.
@@ -4059,12 +4065,36 @@ spec:
                         Reasoning optionally selects a built-in family or defines inline wire
                         behavior for this self-hosted model. Catalog-backed models normally omit it.
                       properties:
+                        activationParameter:
+                          type: string
                         default:
                           type: string
+                        defaultMode:
+                          enum:
+                          - enabled
+                          - disabled
+                          - adaptive
+                          type: string
+                        disabled:
+                          type: string
+                        effortFlags:
+                          additionalProperties:
+                            type: string
+                          description: EffortFlags maps a logical effort to a boolean
+                            chat-template parameter.
+                          type: object
                         family:
                           type: string
                         levels:
                           items:
+                            type: string
+                          type: array
+                        modes:
+                          items:
+                            enum:
+                            - enabled
+                            - disabled
+                            - adaptive
                             type: string
                           type: array
                         parameter:
@@ -4073,6 +4103,7 @@ spec:
                           enum:
                           - chat_template_kwargs
                           - reasoning_effort
+                          - reasoning_mode
                           - top_level_reasoning_effort
                           type: string
                       type: object
