@@ -43,6 +43,7 @@ runtime behavior.
 - [x] `TASK-05` Redeploy and inspect the final Website and Dashboard previews.
 - [x] `TASK-06` Close the Hub interaction and global-navigation regression.
 - [x] `TASK-07` Normalize Hub benchmark display units and add the curated Core filter.
+- [x] `TASK-08` Stabilize OpenVINO CI against an incompatible Hub client major release.
 
 ## Next Action
 

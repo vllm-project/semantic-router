@@ -39,7 +39,7 @@ jobs:
             'optimum-intel[openvino]==1.23.0' \
             nncf==2.16.0 \
             Pillow \
-            huggingface_hub[cli]
+            'huggingface_hub[cli]<1.0'
 
       - name: Build OpenVINO C++ library
         run: |
