@@ -92,7 +92,8 @@ entrypoints:
 
 ```text
 Entrypoint model 'vllm-sr/auto' conflicts with a configured model or reserved alias
-Hint: Use a distinct entrypoint model name; do not reuse a configured model or reserved alias such as vllm-sr/auto.
+Hint: Use a distinct entrypoint model name; do not reuse a configured model or
+reserved alias such as vllm-sr/auto.
 ```
 
 Broken:
@@ -111,7 +112,8 @@ entrypoints:
     recipe: production
 ```
 
-See the [entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
+See the
+[entrypoints and recipes tutorial](../tutorials/global/entrypoints-and-recipes.md)
 and [recipes tutorial](../tutorials/global/recipes.md) for complete examples.
 
 ### `failed to read config file`
