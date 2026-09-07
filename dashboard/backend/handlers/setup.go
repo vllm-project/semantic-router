@@ -539,14 +539,15 @@ func backupCurrentConfig(configPath string, configDir string) error {
 		return err
 	}
 
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	backupDir := configBackupDir(configDir)
+	if err := ensureConfigSnapshotDir(backupDir); err != nil {
 		return err
 	}
+	repairConfigSnapshotPermissions(backupDir)
 
 	version := time.Now().Format("20060102-150405")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
+	if err := writeConfigSnapshot(backupFile, existingData); err != nil {
 		return err
 	}
 	cleanupBackups(backupDir)
