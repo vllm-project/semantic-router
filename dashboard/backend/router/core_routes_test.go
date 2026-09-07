@@ -2,11 +2,15 @@ package router
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,6 +20,91 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
+
+func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
+	directory := filepath.Join("..", "..", "..", "config", "recipes", "accuracy")
+	configPath := filepath.Join(directory, "config.yaml")
+	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", directory)
+	t.Setenv(recipe.ManagementCredentialEnv, "")
+
+	store := recipe.NewStore(recipe.StoreOptions{
+		Root:       filepath.Join(t.TempDir(), "recipe-store"),
+		ConfigPath: configPath,
+	})
+	token, err := store.EnsureManagementCredential()
+	if err != nil {
+		t.Fatalf("EnsureManagementCredential(): %v", err)
+	}
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile(config): %v", err)
+	}
+	hash := sha256.Sum256(configBytes)
+	var authenticated []string
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			http.Error(w, "missing service credential", http.StatusUnauthorized)
+			return
+		}
+		authenticated = append(authenticated, r.URL.Path)
+		switch r.URL.Path {
+		case "/config/hash":
+			_, _ = fmt.Fprintf(w, `{"hash":%q,"runtime_hash":%q,"active_hash":%q,"status":"active"}`, hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]), hex.EncodeToString(hash[:]))
+		case "/api/v1/eval":
+			_, _ = w.Write([]byte(`{
+  "requested_model":"vllm-sr/auto",
+  "selected_model":"gpt55-worker",
+  "selection_status":"selected",
+  "selection_method":"static",
+  "recipe":"default",
+  "routing_decision":"accuracy_direct",
+  "decision_result":{
+    "decision_name":"accuracy_direct",
+    "algorithm":"static",
+    "plugins":[],
+    "matched_signals":{}
+  },
+  "recommended_models":["gpt55-worker"],
+  "eval_trace":[{"decision_name":"accuracy_direct","matched":true}]
+}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer router.Close()
+
+	mux := http.NewServeMux()
+	registerRecipeRoutes(mux, &config.Config{
+		AbsConfigPath: configPath,
+		ConfigDir:     filepath.Dir(directory),
+		RouterAPIURL:  router.URL,
+	}, store)
+
+	descriptorResponse := httptest.NewRecorder()
+	mux.ServeHTTP(descriptorResponse, httptest.NewRequest(http.MethodGet, "/api/recipe", nil))
+	if descriptorResponse.Code != http.StatusOK {
+		t.Fatalf("GET /api/recipe status=%d body=%s", descriptorResponse.Code, descriptorResponse.Body.String())
+	}
+	var descriptor struct {
+		Digests struct {
+			Recipe string `json:"recipe"`
+		} `json:"digests"`
+	}
+	if err := json.NewDecoder(descriptorResponse.Body).Decode(&descriptor); err != nil {
+		t.Fatalf("decode descriptor: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/recipe/probes/accuracy_direct/direct_explanation/validate", nil)
+	request.Header.Set("If-Match", `"`+descriptor.Digests.Recipe+`"`)
+	validationResponse := httptest.NewRecorder()
+	mux.ServeHTTP(validationResponse, request)
+	if validationResponse.Code != http.StatusOK {
+		t.Fatalf("POST /api/recipe/probes/.../validate status=%d body=%s", validationResponse.Code, validationResponse.Body.String())
+	}
+	if got, want := authenticated, []string{"/config/hash", "/api/v1/eval", "/config/hash"}; !slices.Equal(got, want) {
+		t.Fatalf("authenticated Router requests = %v, want %v", got, want)
+	}
+}
 
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
