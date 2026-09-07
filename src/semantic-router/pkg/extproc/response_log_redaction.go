@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -8,7 +9,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const redactedHeaderValue = "[REDACTED]"
+const (
+	redactedHeaderValue = "[REDACTED]"
+	// redactedBodyValue replaces request/response body content in log dumps.
+	// It is distinct from redactedHeaderValue so a log reader can tell a masked
+	// credential from withheld content.
+	redactedBodyValue = "[REDACTED BODY]"
+)
 
 // sensitiveHeaderKeys lists header names whose values are credentials and must
 // never be written to logs. The credential resolver injects the upstream
@@ -39,10 +46,17 @@ func isSensitiveHeaderKey(key string) bool {
 		strings.Contains(k, "secret")
 }
 
-// redactResponseForLog returns a deep copy of response with the
-// values of sensitive headers masked, so a debug-level dump of the ext_proc
-// mutation never writes the upstream provider credential to the log. The
+// redactResponseForLog returns a deep copy of response with credential header
+// values masked and all request/response body content replaced by a size-only
+// placeholder, so a debug-level dump of the ext_proc mutation never writes the
+// upstream provider credential or user content to the log (CWE-532). The
 // original response (the one actually sent to Envoy) is left untouched.
+//
+// Bodies are redacted, not dropped: the rewritten request body carries the
+// prompt (including any RAG/memory context injected by the router) and an
+// immediate response carries generated or cached completion text, so neither
+// belongs in normal diagnostics. The byte count is preserved because size is
+// what makes the log useful for debugging mutation and truncation problems.
 func redactResponseForLog(response *ext_proc.ProcessingResponse) *ext_proc.ProcessingResponse {
 	if response == nil {
 		return nil
@@ -53,26 +67,61 @@ func redactResponseForLog(response *ext_proc.ProcessingResponse) *ext_proc.Proce
 		return nil
 	}
 	redactHeaderMutation(responseHeaderMutation(clone))
+	redactBodyMutation(responseCommonResponse(clone).GetBodyMutation())
 	if imm := clone.GetImmediateResponse(); imm != nil {
 		redactHeaderMutation(imm.GetHeaders())
+		imm.Body = redactedBodyPlaceholder(imm.GetBody())
 	}
 	return clone
+}
+
+// redactedBodyPlaceholder replaces body bytes with a size-only marker. An empty
+// body stays empty so the log distinguishes "no body" from "body withheld".
+func redactedBodyPlaceholder(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+	return []byte(fmt.Sprintf("%s %d bytes", redactedBodyValue, len(body)))
+}
+
+// redactBodyMutation masks body content in place on the clone. Only the inline
+// body variants carry content; ClearBody is a boolean directive with nothing to
+// redact.
+func redactBodyMutation(bm *ext_proc.BodyMutation) {
+	if bm == nil {
+		return
+	}
+	switch m := bm.Mutation.(type) {
+	case *ext_proc.BodyMutation_Body:
+		m.Body = redactedBodyPlaceholder(m.Body)
+	case *ext_proc.BodyMutation_StreamedResponse:
+		if m.StreamedResponse != nil {
+			m.StreamedResponse.Body = redactedBodyPlaceholder(m.StreamedResponse.GetBody())
+		}
+	}
+}
+
+// responseCommonResponse returns the CommonResponse carried by whichever
+// request/response phase variant the ProcessingResponse holds, or nil. Header
+// and body mutations both hang off it, so the phase switch lives in one place.
+func responseCommonResponse(r *ext_proc.ProcessingResponse) *ext_proc.CommonResponse {
+	switch v := r.Response.(type) {
+	case *ext_proc.ProcessingResponse_RequestHeaders:
+		return v.RequestHeaders.GetResponse()
+	case *ext_proc.ProcessingResponse_ResponseHeaders:
+		return v.ResponseHeaders.GetResponse()
+	case *ext_proc.ProcessingResponse_RequestBody:
+		return v.RequestBody.GetResponse()
+	case *ext_proc.ProcessingResponse_ResponseBody:
+		return v.ResponseBody.GetResponse()
+	}
+	return nil
 }
 
 // responseHeaderMutation returns the HeaderMutation carried by whichever
 // request/response phase variant the ProcessingResponse holds, or nil.
 func responseHeaderMutation(r *ext_proc.ProcessingResponse) *ext_proc.HeaderMutation {
-	switch v := r.Response.(type) {
-	case *ext_proc.ProcessingResponse_RequestHeaders:
-		return v.RequestHeaders.GetResponse().GetHeaderMutation()
-	case *ext_proc.ProcessingResponse_ResponseHeaders:
-		return v.ResponseHeaders.GetResponse().GetHeaderMutation()
-	case *ext_proc.ProcessingResponse_RequestBody:
-		return v.RequestBody.GetResponse().GetHeaderMutation()
-	case *ext_proc.ProcessingResponse_ResponseBody:
-		return v.ResponseBody.GetResponse().GetHeaderMutation()
-	}
-	return nil
+	return responseCommonResponse(r).GetHeaderMutation()
 }
 
 // redactHeaderMutation masks the value of every sensitive set-header in place.

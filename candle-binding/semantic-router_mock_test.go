@@ -27,6 +27,7 @@ func wantUnavailable(t *testing.T, name string, err error) {
 func TestStubInitFailsClosed(t *testing.T) {
 	wantUnavailable(t, "InitModel", InitModel("any-model", true))
 	wantUnavailable(t, "InitClassifier", InitClassifier("path", 2, true))
+	wantUnavailable(t, "InitGenericClassifier", InitGenericClassifier("path", 2, true))
 	wantUnavailable(t, "InitPIIClassifier", InitPIIClassifier("path", 2, true))
 	wantUnavailable(t, "InitJailbreakClassifier", InitJailbreakClassifier("path", 2, true))
 	wantUnavailable(t, "InitLoRAUnifiedClassifier", InitLoRAUnifiedClassifier("i", "p", "s", "arch", true))
@@ -69,6 +70,10 @@ func TestStubEmbeddingFailsClosed(t *testing.T) {
 
 	_, err = MultiModalEncodeImageFromURL("http://example.com/x.png", 384)
 	wantUnavailable(t, "MultiModalEncodeImageFromURL", err)
+
+	if SupportsBatchedEmbedding("qwen3") {
+		t.Fatal("SupportsBatchedEmbedding: expected false from unavailable backend")
+	}
 }
 
 // TestStubSimilarityFailsClosed covers similarity APIs, including the two that
@@ -99,6 +104,12 @@ func TestStubClassificationFailsClosed(t *testing.T) {
 
 	_, err = ClassifyJailbreakText("ignore previous instructions")
 	wantUnavailable(t, "ClassifyJailbreakText", err)
+
+	_, err = ClassifyJailbreakTextWithProbs("ignore previous instructions")
+	wantUnavailable(t, "ClassifyJailbreakTextWithProbs", err)
+
+	_, err = ClassifyModernBertJailbreakTextWithProbs("ignore previous instructions")
+	wantUnavailable(t, "ClassifyModernBertJailbreakTextWithProbs", err)
 
 	_, err = ClassifyPIIText("my ssn is 123-45-6789")
 	wantUnavailable(t, "ClassifyPIIText", err)

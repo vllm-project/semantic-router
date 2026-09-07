@@ -61,6 +61,16 @@ type SelfVerificationResult struct {
 	Reason     string  `json:"reason"`
 }
 
+// selfVerificationExecution separates call accounting from verification
+// success. A completed model response remains paid evidence even when its
+// verification payload cannot be parsed.
+type selfVerificationExecution struct {
+	Confidence float64
+	Accepted   bool
+	Response   *ModelResponse
+	Attempted  bool
+}
+
 // parseSelfVerification parses the model's self-verification response
 func parseSelfVerification(response string) (*SelfVerificationResult, error) {
 	// Try to extract JSON from the response
@@ -236,27 +246,21 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 
 	// Helper to compute AutoMix value for a model
 	getValue := func(ref config.ModelRef) float64 {
-		quality := 0.5   // Default quality estimate
-		costScore := 0.5 // Default cost score (mid-range)
+		quality, costScore := 0.0, 0.0
+		hasQuality, hasCost := false, false
 
 		if modelParams != nil {
 			if params, ok := modelParams[ref.Model]; ok {
-				// Use configured QualityScore if available
-				if params.QualityScore > 0 && params.QualityScore <= 1.0 {
-					quality = params.QualityScore
-				} else {
-					// Fallback: estimate quality from param_size (larger = higher quality)
-					size := parseParamSize(params.ParamSize)
-					if size > 0 {
-						// Normalize size: assume 1B-70B range maps to 0.3-1.0 quality
-						quality = 0.3 + 0.7*math.Min(float64(size)/70000, 1.0)
-					}
+				if score, available := params.EvidenceScore(""); available {
+					quality = math.Max(0, math.Min(1, score/100))
+					hasQuality = true
 				}
 
 				// Normalize cost: 0 = most expensive, 1 = cheapest
 				cost := params.Pricing.PromptPer1M
 				if cost > 0 && costRange > 0 {
 					costScore = 1.0 - (cost-minCost)/costRange
+					hasCost = true
 				}
 			}
 		}
@@ -266,8 +270,17 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 		// When tradeoff = 0: pure quality ordering
 		// When tradeoff = 1: pure cost ordering (cheapest first)
 		// When tradeoff = 0.3: favor quality but consider cost
-		value := (1-tradeoff)*quality + tradeoff*costScore
-		return value
+		qualityWeight, costWeight := 1-tradeoff, tradeoff
+		if !hasQuality {
+			qualityWeight = 0
+		}
+		if !hasCost {
+			costWeight = 0
+		}
+		if qualityWeight+costWeight == 0 {
+			return 0
+		}
+		return (qualityWeight*quality + costWeight*costScore) / (qualityWeight + costWeight)
 	}
 
 	// Sort by value ascending (start with lower-value/cheaper models for cascading)
@@ -318,15 +331,17 @@ type ConfidenceEvaluator struct {
 	// Empty/zero values when the method is anything else.
 	VerifierServerURL      string
 	VerifierTimeoutSeconds int
+	MaxResponseBytes       int64
 }
 
 // NewConfidenceEvaluator creates a confidence evaluator from algorithm config
 func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEvaluator {
 	eval := &ConfidenceEvaluator{
-		Method:        "avg_logprob", // Default method
-		Threshold:     -1.0,          // Default threshold for avg_logprob
-		LogprobWeight: 0.5,
-		MarginWeight:  0.5,
+		Method:           "avg_logprob", // Default method
+		Threshold:        -1.0,          // Default threshold for avg_logprob
+		LogprobWeight:    0.5,
+		MarginWeight:     0.5,
+		MaxResponseBytes: config.DefaultMaxResponseBytes,
 	}
 
 	if cfg == nil {
@@ -373,6 +388,9 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 
 	eval.VerifierServerURL = cfg.VerifierServerURL
 	eval.VerifierTimeoutSeconds = cfg.VerifierTimeoutSeconds
+	if cfg.MaxResponseBytes > 0 {
+		eval.MaxResponseBytes = cfg.MaxResponseBytes
+	}
 
 	return eval
 }
@@ -413,35 +431,50 @@ func normalizeMargin(margin float64) float64 {
 // When a TokenFilter is active and filtered metrics are available, those are
 // used instead of the all-token averages.
 // All methods return normalized confidence in 0-1 range (1 = most confident).
-// Returns (confidence_score, meets_threshold).
+// Logprob-based methods reject responses without token logprobs so the float64
+// zero value cannot be mistaken for a perfectly confident average logprob of 0.
 func (e *ConfidenceEvaluator) Evaluate(resp *ModelResponse) (float64, bool) {
+	confidence, accepted, _ := e.evaluate(resp)
+	return confidence, accepted
+}
+
+func (e *ConfidenceEvaluator) evaluate(resp *ModelResponse) (float64, bool, error) {
+	if resp == nil {
+		return 0, false, fmt.Errorf("confidence response is nil")
+	}
+	if e.NeedsLogprobs() && len(resp.Logprobs) == 0 {
+		return 0, false, fmt.Errorf("backend returned no token logprobs required by confidence method %q", e.Method)
+	}
+	if (e.Method == "margin" || e.Method == "hybrid") && !resp.MarginEvidenceComplete {
+		return 0, false, fmt.Errorf(
+			"backend returned no complete top-logprob alternatives required by confidence method %q",
+			e.Method,
+		)
+	}
+
 	avgLP := resp.AverageLogprob
 	avgM := resp.AverageMargin
 
 	useFiltered := e.TokenFilter != "" && e.TokenFilter != "all"
-	if useFiltered {
-		if resp.FilteredAverageLogprob != 0 {
-			avgLP = resp.FilteredAverageLogprob
-		}
-		if resp.FilteredAverageMargin != 0 {
-			avgM = resp.FilteredAverageMargin
-		}
+	if useFiltered && resp.FilteredTokenCount > 0 {
+		avgLP = resp.FilteredAverageLogprob
+		avgM = resp.FilteredAverageMargin
 	}
 
 	switch e.Method {
 	case "margin":
 		confidence := normalizeMargin(avgM)
-		return confidence, confidence >= e.Threshold
+		return confidence, confidence >= e.Threshold, nil
 
 	case "hybrid":
 		normalizedLogprob := normalizeLogprob(avgLP)
 		normalizedMargin := normalizeMargin(avgM)
 		confidence := e.LogprobWeight*normalizedLogprob + e.MarginWeight*normalizedMargin
-		return confidence, confidence >= e.Threshold
+		return confidence, confidence >= e.Threshold, nil
 
 	default: // "avg_logprob"
 		confidence := normalizeLogprob(avgLP)
-		return confidence, confidence >= e.Threshold
+		return confidence, confidence >= e.Threshold, nil
 	}
 }
 
@@ -477,11 +510,17 @@ func (e *ConfidenceEvaluator) NeedsTopLogprobs() int {
 	}
 }
 
+func confidenceModelCallStreaming(clientStreaming bool, evaluator *ConfidenceEvaluator) bool {
+	return clientStreaming && !evaluator.NeedsLogprobs()
+}
+
 // Execute implements the confidence algorithm:
 // 1. Sort models by param_size in ascending order (smallest first)
 // 2. Try smallest model first
 // 3. If confidence is below threshold, try next larger model
 // 4. Continue until confidence is acceptable or all models tried
+// Iterations counts actual backend attempts, including failed dispatches and
+// the second model call used by self_verify.
 func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
@@ -514,6 +553,14 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	var sortedRefs []config.ModelRef
 
 	switch escalationOrder {
+	case config.ConfidenceEscalationOrderDeclared:
+		sortedRefs = append([]config.ModelRef(nil), req.ModelRefs...)
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "declared",
+		})
 	case "cost":
 		// AutoMix-style: order by pricing (cheapest first)
 		sortedRefs = sortModelRefsByCost(req.ModelRefs, req.ModelParams)
@@ -589,10 +636,13 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	var lastResponse *ModelResponse
 	var allResponses []*ModelResponse
 	var modelsUsed []string
-	iteration := 0
+	var lastEvaluationErr error
+	attempts := 0
+	partialExecutionError := func(cause error) error {
+		return newConfidencePartialExecutionError(cause, allResponses, modelsUsed, attempts)
+	}
 
 	for _, modelRef := range sortedRefs {
-		iteration++
 		modelName := modelRef.Model
 		if modelRef.LoRAName != "" {
 			modelName = modelRef.LoRAName
@@ -610,28 +660,38 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			"looper":    "confidence",
 			"decision":  req.DecisionName,
 			"model_ref": modelName,
-			"iteration": iteration,
+			"iteration": attempts + 1,
 		})
 
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, logprobsCfg, accessKey)
+		attempts++
+		resp, err := l.callModelWithContextGate(
+			ctx,
+			req,
+			req.OriginalRequest,
+			modelName,
+			confidenceModelCallStreaming(req.IsStreaming, evaluator),
+			attempts,
+			logprobsCfg,
+			accessKey,
+		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "confidence",
 				"decision":  req.DecisionName,
 				"model_ref": modelName,
-				"iteration": iteration,
+				"iteration": attempts,
 				"error":     err.Error(),
 			})
 			if onError == "fail" {
-				return nil, fmt.Errorf("model %s failed: %w", modelName, err)
+				return nil, partialExecutionError(fmt.Errorf("model %s failed: %w", modelName, err))
 			}
 			continue
 		}
 
 		// Apply token filter before confidence evaluation (e.g., exclude JSON boilerplate)
 		ApplyTokenFilter(resp, evaluator.TokenFilter)
-
-		lastResponse = resp
+		// The call has already consumed backend capacity even if its confidence
+		// evidence is unusable. Preserve every paid attempt for usage and replay.
 		allResponses = append(allResponses, resp)
 		modelsUsed = append(modelsUsed, modelName)
 
@@ -653,7 +713,11 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 					"error":     verifyErr.Error(),
 				})
 				if onError == "fail" {
-					return nil, fmt.Errorf("automix_entailment verification for %s failed: %w", modelName, verifyErr)
+					return nil, partialExecutionError(fmt.Errorf(
+						"automix_entailment verification for %s failed: %w",
+						modelName,
+						verifyErr,
+					))
 				}
 			}
 			logging.ComponentDebugEvent("looper", "automix_entailment_completed", map[string]interface{}{
@@ -666,7 +730,40 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			})
 		case evaluator.IsSelfVerify():
 			// AutoMix self-verification: ask the model to evaluate its own answer
-			confidence, meetsThreshold = l.performSelfVerification(ctx, req, modelName, resp.Content, accessKey, evaluator.Threshold)
+			verificationIteration := attempts + 1
+			verification, verifyErr := l.performSelfVerification(
+				ctx,
+				req,
+				modelName,
+				resp.Content,
+				accessKey,
+				evaluator.Threshold,
+				verificationIteration,
+			)
+			if verification.Attempted {
+				attempts++
+				modelsUsed = append(modelsUsed, modelName)
+			}
+			if verification.Response != nil {
+				allResponses = append(allResponses, verification.Response)
+			}
+			if verifyErr != nil {
+				lastEvaluationErr = fmt.Errorf("self verification for model %q failed: %w", modelName, verifyErr)
+				logging.ComponentWarnEvent("looper", "self_verification_failed", map[string]interface{}{
+					"looper":    "confidence",
+					"decision":  req.DecisionName,
+					"model_ref": modelName,
+					"iteration": verificationIteration,
+					"attempted": verification.Attempted,
+					"error":     verifyErr.Error(),
+				})
+				if onError == "fail" {
+					return nil, partialExecutionError(lastEvaluationErr)
+				}
+				continue
+			}
+			confidence = verification.Confidence
+			meetsThreshold = verification.Accepted
 			logging.ComponentDebugEvent("looper", "self_verification_completed", map[string]interface{}{
 				"looper":     "confidence",
 				"decision":   req.DecisionName,
@@ -676,8 +773,24 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 				"accepted":   meetsThreshold,
 			})
 		default:
-			confidence, meetsThreshold = evaluator.Evaluate(resp)
-			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredAverageLogprob != 0 {
+			var evaluateErr error
+			confidence, meetsThreshold, evaluateErr = evaluator.evaluate(resp)
+			if evaluateErr != nil {
+				lastEvaluationErr = fmt.Errorf("confidence evaluation for model %q failed: %w", modelName, evaluateErr)
+				logging.ComponentWarnEvent("looper", "confidence_evaluation_failed", map[string]interface{}{
+					"looper":    "confidence",
+					"decision":  req.DecisionName,
+					"model_ref": modelName,
+					"iteration": attempts,
+					"method":    evaluator.Method,
+					"error":     evaluateErr.Error(),
+				})
+				if onError == "fail" {
+					return nil, partialExecutionError(lastEvaluationErr)
+				}
+				continue
+			}
+			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredTokenCount > 0 {
 				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
 					"looper":             "confidence",
 					"decision":           req.DecisionName,
@@ -702,12 +815,14 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			}
 		}
 
+		lastResponse = resp
+
 		if meetsThreshold {
 			logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
 				"looper":         "confidence",
 				"decision":       req.DecisionName,
 				"models_used":    modelsUsed,
-				"iterations":     iteration,
+				"iterations":     attempts,
 				"selected_model": modelName,
 				"reason":         "threshold_met",
 			})
@@ -724,16 +839,19 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	}
 
 	if lastResponse == nil {
-		return nil, fmt.Errorf("all models failed")
+		if lastEvaluationErr != nil {
+			return nil, partialExecutionError(fmt.Errorf("all models failed: %w", lastEvaluationErr))
+		}
+		return nil, partialExecutionError(fmt.Errorf("all models failed"))
 	}
 
-	// Format the final response. Content/model come from the chosen (last)
-	// response, but every attempted call is included so token usage reflects the
-	// full cost of the confidence cascade, not just the accepted answer.
-	// allResponses is ordered, so its final element is always lastResponse.
+	// Publish only the last confidence-evaluated response. Usage and models-used
+	// retain every paid attempt, including a skipped response with missing
+	// logprob evidence.
 	agg := &AggregatedResponse{
 		Models:          modelsUsed,
-		Responses:       allResponses,
+		Responses:       []*ModelResponse{lastResponse},
+		UsageResponses:  allResponses,
 		CombinedContent: lastResponse.Content,
 		FinalModel:      lastResponse.Model,
 		AverageLogprob:  lastResponse.AverageLogprob,
@@ -741,9 +859,19 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	}
 
 	if req.IsStreaming {
-		return l.formatConfidenceStreamingResponse(agg, modelsUsed, iteration)
+		return l.formatConfidenceStreamingResponse(
+			agg,
+			modelsUsed,
+			attempts,
+			confidenceStreamUsageRequested(req),
+		)
 	}
-	return l.formatConfidenceJSONResponse(agg, modelsUsed, iteration)
+	return l.formatConfidenceJSONResponse(agg, modelsUsed, attempts)
+}
+
+func confidenceStreamUsageRequested(req *Request) bool {
+	return req != nil && req.OriginalRequest != nil &&
+		req.OriginalRequest.StreamOptions.IncludeUsage.Or(false)
 }
 
 // performSelfVerification implements AutoMix self-verification
@@ -756,12 +884,12 @@ func (l *ConfidenceLooper) performSelfVerification(
 	responseContent string,
 	accessKey string,
 	threshold float64,
-) (float64, bool) {
+	iteration int,
+) (selfVerificationExecution, error) {
 	// Extract original question from the request
 	originalQuestion := l.extractQuestionFromRequest(req.OriginalRequest)
 	if originalQuestion == "" {
-		logging.Warnf("[SelfVerify] Could not extract original question, using logprob fallback")
-		return 0.5, false // Return neutral confidence if we can't extract question
+		return selfVerificationExecution{}, fmt.Errorf("could not extract user question from request")
 	}
 
 	// Build self-verification prompt
@@ -770,8 +898,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 	// Create a new request for self-verification
 	verifyRequest := l.buildSelfVerificationRequest(verificationPrompt)
 	if verifyRequest == nil {
-		logging.Warnf("[SelfVerify] Failed to build verification request, using fallback")
-		return 0.5, false
+		return selfVerificationExecution{}, fmt.Errorf("could not build self-verification request")
 	}
 
 	logging.ComponentDebugEvent("looper", "self_verification_started", map[string]interface{}{
@@ -780,32 +907,33 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, 0, nil, accessKey)
+	verifyResp, err := l.callModelWithContextGate(ctx, req, verifyRequest, modelName, false, iteration, nil, accessKey)
 	if err != nil {
-		logging.Warnf("[SelfVerify] Self-verification call failed: %v, using fallback", err)
-		return 0.5, false
+		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}
 
 	// Parse the self-verification result
 	result, err := parseSelfVerification(verifyResp.Content)
 	if err != nil {
-		logging.Warnf("[SelfVerify] Failed to parse self-verification response: %v", err)
-		// Try to use logprobs as fallback
-		if verifyResp.AverageLogprob != 0 {
-			confidence := normalizeLogprob(verifyResp.AverageLogprob)
-			return confidence, confidence >= threshold
-		}
-		return 0.5, false
+		return selfVerificationExecution{
+			Response:  verifyResp,
+			Attempted: true,
+		}, fmt.Errorf("could not parse verifier result: %w", err)
 	}
 
 	logging.ComponentDebugEvent("looper", "self_verification_result_parsed", map[string]interface{}{
 		"looper":     "confidence",
 		"model_ref":  modelName,
 		"confidence": result.Confidence,
-		"reason":     result.Reason,
+		"reason_len": len(result.Reason),
 	})
 
-	return result.Confidence, result.Confidence >= threshold
+	return selfVerificationExecution{
+		Confidence: result.Confidence,
+		Accepted:   result.Confidence >= threshold,
+		Response:   verifyResp,
+		Attempted:  true,
+	}, nil
 }
 
 // extractQuestionFromRequest extracts the user's question from the original request
@@ -893,22 +1021,27 @@ func (l *ConfidenceLooper) buildSelfVerificationRequest(verificationPrompt strin
 }
 
 // automixVerifierCache memoises one selection.AutoMixVerifierClient per
-// (server_url, timeout_seconds) pair so repeated requests share a single
-// http.Client (and its underlying connection pool) instead of reconstructing
-// one per evaluation.
+// (server_url, timeout_seconds, max_response_bytes) tuple so repeated requests
+// share a single http.Client (and its underlying connection pool) instead of
+// reconstructing one per evaluation.
 var automixVerifierCache sync.Map
 
 type automixVerifierCacheKey struct {
-	url            string
-	timeoutSeconds int
+	url              string
+	timeoutSeconds   int
+	maxResponseBytes int64
 }
 
-func getAutoMixVerifierClient(serverURL string, timeoutSeconds int) *selection.AutoMixVerifierClient {
-	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds}
+func getAutoMixVerifierClient(serverURL string, timeoutSeconds int, maxResponseBytes int64) *selection.AutoMixVerifierClient {
+	if maxResponseBytes <= 0 {
+		maxResponseBytes = config.DefaultMaxResponseBytes
+	}
+	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds, maxResponseBytes: maxResponseBytes}
 	if existing, ok := automixVerifierCache.Load(key); ok {
 		return existing.(*selection.AutoMixVerifierClient)
 	}
 	client := selection.NewAutoMixVerifierClient(serverURL)
+	client.SetMaxResponseBytes(maxResponseBytes)
 	if timeoutSeconds > 0 {
 		client.SetTimeout(time.Duration(timeoutSeconds) * time.Second)
 	}
@@ -939,7 +1072,7 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
 
-	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds)
+	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes)
 
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
 		"looper":     "confidence",
@@ -955,24 +1088,4 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 
 	accepted := verifyResp.Confidence >= evaluator.Threshold
 	return verifyResp.Confidence, accepted, nil
-}
-
-// formatConfidenceJSONResponse creates response with confidence algorithm type
-func (l *ConfidenceLooper) formatConfidenceJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	resp, err := l.formatJSONResponse(agg, modelsUsed, iterations)
-	if err != nil {
-		return nil, err
-	}
-	resp.AlgorithmType = "confidence"
-	return resp, nil
-}
-
-// formatConfidenceStreamingResponse creates response with confidence algorithm type
-func (l *ConfidenceLooper) formatConfidenceStreamingResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	resp, err := l.formatStreamingResponse(agg, modelsUsed, iterations)
-	if err != nil {
-		return nil, err
-	}
-	resp.AlgorithmType = "confidence"
-	return resp, nil
 }

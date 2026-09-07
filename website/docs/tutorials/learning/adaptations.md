@@ -58,6 +58,11 @@ global:
 `global` is broadest and can propose deployed models that do not appear in the
 matched decision's `modelRefs`, so it uses stricter cost and reliability guards.
 
+The resolved candidate set is a hard boundary. Protection does not reintroduce
+a previous session model that is outside it, and candidates with a known
+insufficient context window are removed before adaptation. This keeps learned
+continuity from overriding the matched decision or a model capability contract.
+
 ## Routing Sampling
 
 `routing_sampling` scores each candidate from model experience:

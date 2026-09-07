@@ -114,7 +114,7 @@ Get started in seconds with a single pip command. The package includes all core 
 >   default_model: "openai/gpt-oss-120b"
 > ```
 >
-> See the [configuration documentation](https://vllm-semantic-router.com/docs/installation/) for full details.
+> See the [configuration documentation](https://vllm-sr.ai/docs/installation/) for full details.
 
 **Kubernetes Deployment:**
 
@@ -280,7 +280,7 @@ We believe the future of intelligent routing is built together. Whether you're a
 
 Every contribution matters—from fixing a typo to architecting a new feature. Join us in shaping the next generation of semantic routing infrastructure.
 
-- **Documentation**: [vllm-semantic-router.com](https://vllm-semantic-router.com)
+- **Documentation**: [vllm-sr.ai](https://vllm-sr.ai)
 - **GitHub**: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
 - **Models**: [Hugging Face](https://huggingface.co/llm-semantic-router)
 - **Community**: Join us on Slack in [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)

@@ -21,7 +21,7 @@ func defaultWorkflowsExecutionConfig() workflowsExecutionConfig {
 		Template:                     "micro_agent",
 		PlannerMaxCompletionTokens:   2048,
 		MaxSteps:                     3,
-		MaxParallel:                  2,
+		MaxParallel:                  config.DefaultWorkflowMaxParallel,
 		IncludeIntermediateResponses: true,
 		OnError:                      config.WorkflowOnErrorFail,
 	}

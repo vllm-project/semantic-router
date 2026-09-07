@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 
 	yamlv3 "gopkg.in/yaml.v3"
 
@@ -77,6 +78,7 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 		Priority:    int(decision.Priority),
 		Rules: config.RuleCombination{
 			Operator:   decision.Signals.Operator,
+			OnUnknown:  config.UnknownPolicy(decision.Signals.OnUnknown),
 			Conditions: make([]config.RuleCondition, 0),
 		},
 		ModelRefs: make([]config.ModelRef, 0),
@@ -99,6 +101,7 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 			ModelReasoningControl: config.ModelReasoningControl{
 				UseReasoning:         &ms.UseReasoning,
 				ReasoningDescription: ms.ReasoningDescription,
+				ReasoningMode:        ms.ReasoningMode,
 				ReasoningEffort:      ms.ReasoningEffort,
 			},
 		}
@@ -134,8 +137,12 @@ func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingMod
 
 	cards := make([]config.RoutingModel, 0, len(models))
 	for _, model := range models {
+		cardName := model.Catalog
+		if cardName == "" {
+			cardName = model.Name
+		}
 		card := config.RoutingModel{
-			Name: model.Name,
+			Name: cardName,
 		}
 		if len(model.LoRAs) > 0 {
 			card.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
@@ -277,10 +284,11 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 	converted := make([]config.CanonicalProviderModel, 0, len(models))
 	for _, model := range models {
 		providerModel := config.CanonicalProviderModel{
-			Name:            model.Name,
-			ReasoningFamily: model.ReasoningFamily,
+			Name:      model.Name,
+			Catalog:   model.Catalog,
+			Reasoning: convertModelReasoning(model.Reasoning),
 		}
-		if model.Pricing == nil && providerModel.ReasoningFamily == "" {
+		if model.Pricing == nil && providerModel.Catalog == "" && providerModel.Reasoning == nil {
 			continue
 		}
 		if model.Pricing != nil {
@@ -300,6 +308,20 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 		converted = append(converted, providerModel)
 	}
 	return converted
+}
+
+func convertModelReasoning(reasoning *v1alpha1.ModelReasoning) *config.CanonicalReasoning {
+	if reasoning == nil {
+		return nil
+	}
+	return &config.CanonicalReasoning{
+		Family: reasoning.Family, Type: reasoning.Type, Parameter: reasoning.Parameter,
+		ActivationParameter: reasoning.ActivationParameter,
+		EffortFlags:         maps.Clone(reasoning.EffortFlags),
+		Levels:              append([]string(nil), reasoning.Levels...), Default: reasoning.Default,
+		Modes: append([]string(nil), reasoning.Modes...), DefaultMode: reasoning.DefaultMode,
+		Disabled: reasoning.Disabled,
+	}
 }
 
 func mergeProviderMetadata(
@@ -338,8 +360,11 @@ func mergeCanonicalProviderMetadata(
 	if overlay.Pricing != (config.ModelPricing{}) {
 		existing.Pricing = overlay.Pricing
 	}
-	if overlay.ReasoningFamily != "" {
-		existing.ReasoningFamily = overlay.ReasoningFamily
+	if overlay.Catalog != "" {
+		existing.Catalog = overlay.Catalog
+	}
+	if overlay.Reasoning != nil {
+		existing.Reasoning = overlay.Reasoning
 	}
 	if overlay.ProviderModelID != "" {
 		existing.ProviderModelID = overlay.ProviderModelID

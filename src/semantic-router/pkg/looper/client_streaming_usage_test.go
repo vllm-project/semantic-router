@@ -39,6 +39,22 @@ func TestParseStreamingUsage_ExtractsFinalUsageChunk(t *testing.T) {
 	}
 }
 
+func TestParseStreamingUsage_AcceptsDataWithoutSpace(t *testing.T) {
+	body := "data:{\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\r\n" +
+		"data:{\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":4,\"total_tokens\":11}}\r\n" +
+		"data:[DONE]\r\n"
+
+	want := TokenUsage{PromptTokens: 7, CompletionTokens: 4, TotalTokens: 11}
+	if got := parseStreamingUsage([]byte(body)); got != want {
+		t.Fatalf("parseStreamingUsage() = %+v, want %+v", got, want)
+	}
+
+	content, _, chunks := parseSSEContent([]byte(body))
+	if content != "hi" || len(chunks) != 3 || chunks[2] != "[DONE]" {
+		t.Fatalf("parseSSEContent() = content %q chunks %v, want no-space data fields parsed", content, chunks)
+	}
+}
+
 func TestParseStreamingUsage_NoUsageChunkReturnsZero(t *testing.T) {
 	body := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
 		"data: [DONE]\n"

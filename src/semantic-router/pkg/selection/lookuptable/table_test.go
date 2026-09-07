@@ -38,6 +38,14 @@ func TestKeyString_HandoffPenalty(t *testing.T) {
 	}
 }
 
+func TestKeyString_ScopedHandoffPenalty(t *testing.T) {
+	k := lookuptable.ScopedHandoffPenaltyKey("privacy", "gpt-4", "claude-3")
+	want := "handoff_penalty::privacy::gpt-4::claude-3"
+	if got := k.String(); got != want {
+		t.Errorf("ScopedHandoffPenaltyKey.String() = %q, want %q", got, want)
+	}
+}
+
 func TestKeyString_RemainingTurnPrior(t *testing.T) {
 	k := lookuptable.RemainingTurnPriorKey("customer_support")
 	want := "remaining_turn_prior::customer_support"
@@ -50,6 +58,7 @@ func TestParseKey_RoundTrip(t *testing.T) {
 	keys := []lookuptable.Key{
 		lookuptable.QualityGapKey("coding", "gpt-4", "claude-3"),
 		lookuptable.HandoffPenaltyKey("gpt-4", "claude-3"),
+		lookuptable.ScopedHandoffPenaltyKey("privacy", "gpt-4", "claude-3"),
 		lookuptable.RemainingTurnPriorKey("customer_support"),
 	}
 

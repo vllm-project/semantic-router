@@ -125,6 +125,7 @@ the locked chart dependencies.
 | config.global.stores.semantic_cache.max_entries | int | `1000` |  |
 | config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
 | config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
+| configOverride | object | `null` | Complete canonical Router config supplied by deployment tooling. Unlike `config`, this map atomically replaces chart defaults before Kubernetes integration rewrites. |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
 | dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |
@@ -158,19 +159,12 @@ the locked chart dependencies.
 | config.listeners[1].name | string | `"http-8080"` |  |
 | config.listeners[1].port | int | `8080` |  |
 | config.listeners[1].timeout | string | `"300s"` |  |
-| config.providers.defaults.default_model | string | `"replace-with-your-model"` |  |
-| config.providers.defaults.default_reasoning_effort | string | `"high"` |  |
-| config.providers.defaults.reasoning_families.deepseek.parameter | string | `"thinking"` |  |
-| config.providers.defaults.reasoning_families.deepseek.type | string | `"chat_template_kwargs"` |  |
-| config.providers.defaults.reasoning_families.gpt-oss.parameter | string | `"reasoning_effort"` |  |
-| config.providers.defaults.reasoning_families.gpt-oss.type | string | `"reasoning_effort"` |  |
-| config.providers.defaults.reasoning_families.gpt.parameter | string | `"reasoning_effort"` |  |
-| config.providers.defaults.reasoning_families.gpt.type | string | `"reasoning_effort"` |  |
-| config.providers.defaults.reasoning_families.qwen3.parameter | string | `"enable_thinking"` |  |
-| config.providers.defaults.reasoning_families.qwen3.type | string | `"chat_template_kwargs"` |  |
+| config.providers.defaults.model | string | `"replace-with-your-model"` |  |
+| config.providers.defaults.reasoning_effort | string | `"high"` |  |
 | config.providers.models[0].backend_refs[0].endpoint | string | `"replace-with-your-vllm-service:8000"` |  |
 | config.providers.models[0].backend_refs[0].name | string | `"primary"` |  |
 | config.providers.models[0].backend_refs[0].protocol | string | `"http"` |  |
+| config.providers.models[0].backend_refs[0].provider | string | `"vllm"` |  |
 | config.providers.models[0].backend_refs[0].weight | int | `100` |  |
 | config.providers.models[0].name | string | `"replace-with-your-model"` |  |
 | config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |

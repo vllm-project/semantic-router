@@ -3,8 +3,10 @@ import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
+  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
+  ModelReliabilityEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 
@@ -27,13 +29,14 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       customRender: (value, onChange) => <ModelTagsEditor value={value} onChange={onChange} />,
     },
     {
-      name: 'quality_score',
-      label: 'Quality Score',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.85',
+      name: 'evaluations',
+      label: 'Evaluations',
+      type: 'custom',
+      description:
+        'Optional measurements for a custom model. Built-in models receive repository evidence automatically.',
+      customRender: (value, onChange) => (
+        <ModelEvaluationsEditor value={value} onChange={onChange} />
+      ),
     },
     {
       name: 'loras',
@@ -66,6 +69,15 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       type: 'custom',
       description: 'Per-million-token rates stored under providers.models[].pricing.',
       customRender: (value, onChange) => <ModelPricingEditor value={value} onChange={onChange} />,
+    },
+    {
+      name: 'reliability',
+      label: 'Delivery Policy',
+      type: 'custom',
+      description: 'Retry, health check, and load-balancing controls for this model.',
+      customRender: (value, onChange) => (
+        <ModelReliabilityEditor value={value} onChange={onChange} />
+      ),
     },
   ]
 }

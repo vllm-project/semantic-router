@@ -27,6 +27,7 @@ type RouterOutcomeResponse struct {
 	Success   bool   `json:"success"`
 	Updated   int    `json:"updated"`
 	Recorded  bool   `json:"recorded"`
+	Duplicate bool   `json:"duplicate,omitempty"`
 	Timestamp string `json:"timestamp"`
 }
 
@@ -41,28 +42,73 @@ func (s *ClassificationAPIServer) handleRouterOutcome(w http.ResponseWriter, r *
 		s.writeJSONRequestError(w, err)
 		return
 	}
+
+	principal, _ := managementPrincipalFromContext(r.Context())
+	idempotencyKey, source, policyErr := s.learningOutcomeIngestPolicy().enforce(r, principal)
+	if policyErr != nil {
+		s.writeErrorResponse(w, policyErr.Status, policyErr.Code, policyErr.Message)
+		return
+	}
+
 	outcome, validationErr := normalizeRouterOutcomeRequest(req)
 	if validationErr != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, validationErr.code, validationErr.message)
 		return
 	}
-	runtime := s.currentLearningRuntime()
+	// Provenance is derived from authenticated credentials, never from the body.
+	outcome.Source = source
+	outcome.IdempotencyKey = idempotencyKey
+
+	runtime, releaseRuntime := s.acquireLearningRuntime()
 	if runtime == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NO_ROUTER_LEARNING_RUNTIME",
 			"Router Learning outcome ingestion requires an active router learning runtime.")
 		return
 	}
+	defer releaseRuntime()
 	ctx := r.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	result := runtime.UpdateOutcome(ctx, outcome)
+	if status, code, message, ok := routerOutcomeResultError(result); ok {
+		s.writeErrorResponse(w, status, code, message)
+		return
+	}
 	s.writeJSONResponse(w, http.StatusOK, RouterOutcomeResponse{
 		Success:   true,
 		Updated:   result.Updated,
 		Recorded:  result.Recorded,
+		Duplicate: result.Code == routerruntime.RouterOutcomeCodeDuplicate,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	})
+}
+
+func routerOutcomeResultError(result routerruntime.RouterOutcomeResult) (status int, code string, message string, isErr bool) {
+	switch result.Code {
+	case routerruntime.RouterOutcomeCodeOK, routerruntime.RouterOutcomeCodeDuplicate:
+		return 0, "", "", false
+	case routerruntime.RouterOutcomeCodeReplayNotFound:
+		return http.StatusNotFound, "REPLAY_NOT_FOUND", firstNonEmpty(result.Message, "replay_id does not reference an owned routing event"), true
+	case routerruntime.RouterOutcomeCodeOwnershipMismatch:
+		return http.StatusConflict, "OUTCOME_OWNERSHIP_MISMATCH", firstNonEmpty(result.Message, "outcome model binding does not match the owned routing event"), true
+	case routerruntime.RouterOutcomeCodeInvalid:
+		return http.StatusBadRequest, "INVALID_OUTCOME", firstNonEmpty(result.Message, "learning outcome is invalid"), true
+	default:
+		if result.Code == "" {
+			return 0, "", "", false
+		}
+		return http.StatusBadRequest, "INVALID_OUTCOME", firstNonEmpty(result.Message, result.Code), true
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.RouterOutcome, *routerOutcomeValidationError) {
@@ -70,9 +116,11 @@ func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.Rou
 	if replayID == "" {
 		return nil, &routerOutcomeValidationError{code: "INVALID_OUTCOME", message: "replay_id is required"}
 	}
-	source, ok := routerOutcomeSource(req.Source)
-	if !ok {
-		return nil, &routerOutcomeValidationError{code: "INVALID_OUTCOME", message: "source must be one of user, agent, eval, operator, provider, router"}
+	// Body source is optional and ignored for attribution; if provided it must still be a known enum.
+	if strings.TrimSpace(req.Source) != "" {
+		if _, ok := routerOutcomeSource(req.Source); !ok {
+			return nil, &routerOutcomeValidationError{code: "INVALID_OUTCOME", message: "source must be one of user, agent, eval, operator, provider, router"}
+		}
 	}
 	target, ok := routerOutcomeTarget(req.Target)
 	if !ok {
@@ -91,7 +139,6 @@ func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.Rou
 	}
 	return &routerruntime.RouterOutcome{
 		ReplayID:  replayID,
-		Source:    source,
 		Target:    target,
 		TargetRef: boundedOutcomeTargetRef(req.TargetRef),
 		Verdict:   verdict,

@@ -1,99 +1,456 @@
+/* Documentation reading layout: three-rail canvas, compact nav, readable measure. */
+.site-root--docs {
+  /* Geometry from shared tokens for consistent edges. No step-up at 1600/2000px to avoid resizing. */
+  --site-doc-canvas: var(--page-max);
+  --site-doc-sidebar-width: var(--rail);
+  --site-doc-toc-width: var(--toc);
+  /* Rail to content is shared with research and community; the TOC gap is
+   * ours alone, and ramps from --space-6 at ~1220px to its cap at 1920px. */
+  --site-doc-content-inset: var(--rail-gap);
+  /* Caps at 1680px with --rail-gap; 110 + 130 = the row's 240px of slack. */
+  --site-doc-column-gap: clamp(var(--space-6), calc(16.9vw - 153.9px), 8.125rem);
+  /* Not var(--measure): 72ch resolves against the grid container's 16px, not
+   * the 18px body text inside it. 46rem is 72ch at --site-doc-body-size. */
+  --site-doc-measure: 46rem;
+  --site-doc-rail-top: 2.5rem;
+  --site-doc-sidebar-top: 2rem;
+  --site-doc-body-size: var(--text-lg);
+  --site-doc-nav-size: var(--text-sm);
+  --site-doc-breadcrumb-gap: var(--space-3);
+  --site-doc-title-gap: var(--space-6);
+  --site-doc-page-gutter: max(var(--gutter), calc((100% - var(--site-doc-canvas)) / 2));
+  --doc-sidebar-width: var(--site-doc-sidebar-width);
+  --ifm-navbar-height: var(--site-header-height);
+  background: var(--site-bg);
+}
+
+.site-root--docs .main-wrapper,
 .site-docs-shell {
-  padding: 2rem 0 4rem;
+  min-width: 0;
+  background: var(--site-bg);
 }
 
-.site-doc-masthead {
-  margin-bottom: 1.5rem;
-  padding: 1.8rem 0 0.5rem;
+.site-docs-shell {
+  padding-bottom: 4rem;
 }
 
-.site-doc-masthead__row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1.5rem;
-  align-items: end;
+/* Infima adds these utility paddings with !important declarations. */
+.site-root--docs main[class*='docMainContainer'] > .container.padding-top--md {
+  padding-top: 0 !important;
 }
 
-.site-doc-masthead__copy h1 {
-  margin: 0.8rem 0 0;
-  font-size: clamp(2.2rem, 4vw, 3.3rem);
-  line-height: 0.95;
+.site-root--docs main[class*='docMainContainer'] > .container.padding-bottom--lg {
+  padding-bottom: 0 !important;
 }
 
-.site-doc-masthead__copy p {
-  max-width: 48rem;
-  margin: 1rem 0 0;
-  font-size: 1rem;
-  line-height: 1.7;
+/* Left navigation --------------------------------------------------- */
+.site-root--docs .theme-doc-sidebar-container {
+  border: 0;
+  border-right: 1px solid var(--site-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.site-doc-masthead__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+.site-root--docs .theme-doc-sidebar-container .menu {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.theme-doc-sidebar-container {
-  top: calc(var(--site-header-height) + 1rem);
-  margin-left: 0;
-  border: 1px solid var(--site-border);
-  border-radius: 1.35rem;
-  background: rgba(255, 253, 248, 0.9);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--site-shadow);
+.site-root--docs .theme-doc-sidebar-menu {
+  padding: var(--site-doc-sidebar-top) var(--space-5) 3.5rem 0;
 }
 
-.theme-doc-sidebar-menu {
-  padding: 1rem 0.9rem;
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item {
+  margin: 0 0 var(--space-5);
 }
 
-.theme-doc-version-badge {
-  display: block;
-  width: fit-content;
-  margin: 0 0 1rem auto;
-  padding: 0.4rem 0.7rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: rgba(17, 17, 17, 0.055);
-  color: var(--site-text);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1;
+/* Rule between groups for section separation. */
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item + .menu__list-item {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--site-border);
 }
 
-.site-docs-shell .theme-doc-markdown,
+/* Top-level categories as section labels (bold sentence case, not uppercase). */
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link {
+  padding: 0.15rem var(--space-2) var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.005em;
+  text-transform: none;
+}
+
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible:hover,
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link:hover {
+  background: transparent;
+}
+
+/* Nesting by indent only; removed guide lines that competed with active pill. */
+.site-root--docs .theme-doc-sidebar-menu .menu__list .menu__list {
+  margin: 0;
+  padding-left: var(--space-3);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__list .menu__list-item + .menu__list-item {
+  margin-top: 2px;
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__list-item-collapsible {
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__link {
+  position: relative;
+  min-height: 2.1rem;
+  padding: 0.42rem var(--space-3);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--site-muted);
+  font-size: var(--site-doc-nav-size);
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
+  transition:
+    background-color var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+/* One step below the active pill's --site-accent-soft, same hue, so hovering
+ * never looks like you have selected the row. */
+.site-root--docs .theme-doc-sidebar-menu .menu__link:hover {
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__link--active,
+.site-root--docs .theme-doc-sidebar-menu .menu__link--active:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-medium);
+}
+
+/* Current page as filled pill with accent text. No accent bar or rule. */
+.site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page'],
+.site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page']:hover {
+  background: var(--site-accent-soft);
+  box-shadow: none;
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-medium);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__caret {
+  flex: 0 0 1.75rem;
+  justify-content: center;
+  width: 1.75rem;
+  min-height: 1.75rem;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__caret:hover {
+  background: var(--site-hover-chrome-bg);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__caret::before,
+.site-root--docs .theme-doc-sidebar-menu .menu__link--sublist-caret::after {
+  flex: 0 0 1.25rem;
+  opacity: 0.5;
+  transform: scale(0.62) rotate(180deg);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__list-item--collapsed .menu__caret::before,
+.site-root--docs .theme-doc-sidebar-menu .menu__list-item--collapsed .menu__link--sublist-caret::after {
+  transform: scale(0.62) rotate(90deg);
+}
+
+.site-root--docs .theme-doc-sidebar-container button[class*='collapseSidebarButton'] {
+  height: 2.25rem;
+  border: 0;
+  border-top: 1px solid var(--site-border);
+  background: var(--site-bg);
+  color: var(--site-muted);
+}
+
+.site-root--docs .theme-doc-sidebar-container button[class*='collapseSidebarButton']:hover {
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
+}
+
+/* Article ----------------------------------------------------------- */
+.site-docs-shell > .row {
+  align-items: start;
+}
+
 .site-docs-shell article {
-  color: var(--site-text);
-}
-
-.site-docs-shell .theme-doc-markdown > header h1 {
-  display: none;
-}
-
-.site-docs-shell article {
+  position: relative;
   max-width: none;
-  padding: 2rem 2rem 2.4rem;
-  border: 1px solid var(--site-border);
-  border-radius: 1.6rem;
-  background:
-    linear-gradient(180deg, rgba(17, 17, 17, 0.025), transparent 18%),
-    var(--site-surface);
-  box-shadow: var(--site-shadow);
+  padding-top: var(--site-doc-rail-top);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
+/* Breadcrumbs as eyebrow over H1: mono micro-type, muted. */
 .theme-doc-breadcrumbs {
-  margin-bottom: 1rem;
+  margin: 0 0 var(--site-doc-breadcrumb-gap);
+}
+
+.theme-doc-breadcrumbs .breadcrumbs {
+  gap: 0;
+}
+
+.theme-doc-breadcrumbs .breadcrumbs__item {
+  align-items: center;
 }
 
 .theme-doc-breadcrumbs .breadcrumbs__link,
 .theme-doc-breadcrumbs .breadcrumbs__item--active .breadcrumbs__link {
+  padding: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.theme-doc-breadcrumbs .breadcrumbs__link:hover {
+  background: transparent;
+  color: var(--site-accent-strong);
+}
+
+.theme-doc-breadcrumbs .breadcrumbs__item--active .breadcrumbs__link {
   color: var(--site-muted-bright);
 }
 
+/* Slash separator instead of Infima's background image. */
+.theme-doc-breadcrumbs .breadcrumbs__item:not(:last-child)::after {
+  content: '/';
+  width: auto;
+  height: auto;
+  margin: 0 var(--space-2) 0 calc(var(--space-2) - 0.14em);
+  background: none;
+  color: var(--site-muted);
+  filter: none;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  opacity: 0.55;
+  transform: none;
+}
+
+/* Hide home crumb; eyebrow starts at section. */
+.theme-doc-breadcrumbs .breadcrumbs__item:first-child:has(svg) {
+  display: none;
+}
+
+/* Version in global docs version control. */
+.site-root--docs .theme-doc-version-badge {
+  display: none;
+}
+
+.theme-doc-markdown {
+  max-width: none;
+  color: var(--site-muted-bright);
+  font-size: var(--site-doc-body-size);
+  line-height: 1.7;
+}
+
+/* No measure cap here — it is on the grid track. Capping twice re-opens the
+ * prose/table edge mismatch at 997-1279px, where the track is 1fr. */
+.theme-doc-markdown > h2 > span,
+.theme-doc-markdown > h2 {
+  text-wrap: balance;
+}
+
+.theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
+.theme-doc-markdown > div:has(> table),
+.theme-doc-markdown > div:has(> pre) {
+  max-width: none;
+}
+
+.theme-doc-markdown > header {
+  margin: 0 0 var(--site-doc-title-gap);
+}
+
+.theme-doc-markdown > header h1,
+.theme-doc-markdown > h1:first-child {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: var(--text-3xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.theme-doc-markdown p,
+.theme-doc-markdown li {
+  color: var(--site-muted-bright);
+}
+
+.theme-doc-markdown p {
+  margin: 1em 0;
+}
+
+.theme-doc-markdown ul,
+.theme-doc-markdown ol {
+  margin: 1em 0;
+  padding-left: 1.35rem;
+}
+
+.theme-doc-markdown li + li {
+  margin-top: 0.2rem;
+}
+
+.theme-doc-markdown li > ul,
+.theme-doc-markdown li > ol {
+  margin: 0.25rem 0;
+}
+
+/* No rules/borders on headings. Space separates sections. */
+.theme-doc-markdown h1,
 .theme-doc-markdown h2,
 .theme-doc-markdown h3,
+.theme-doc-markdown h4,
+.theme-doc-markdown h5,
+.theme-doc-markdown h6 {
+  /* Also the containing block for the anchor marker, which hangs outside. */
+  position: relative;
+  border: 0;
+  color: var(--site-text-strong);
+  text-wrap: balance;
+}
+
+/* H2 margin: large above, small below to bind to following text. */
+.theme-doc-markdown h2 {
+  margin: 2em 0 0.6em;
+  padding-top: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.theme-doc-markdown h2:first-child {
+  margin-top: 0;
+}
+
+.theme-doc-markdown h3 {
+  margin: 1.7em 0 0.5em;
+  font-size: var(--text-xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.35;
+  letter-spacing: -0.018em;
+}
+
 .theme-doc-markdown h4 {
-  margin-top: 2.25rem;
+  margin: 1em 0;
+  font-size: 1em;
+  font-weight: var(--site-font-weight-bold);
+  line-height: 1.5;
+  letter-spacing: -0.008em;
+}
+
+.theme-doc-markdown h5,
+.theme-doc-markdown h6 {
+  margin: 1.2rem 0 0.4rem;
+  font-size: 0.9rem;
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+
+.theme-doc-markdown a:not(.hash-link) {
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-medium);
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
+}
+
+.theme-doc-markdown a:not(.hash-link):hover {
+  color: var(--site-brand-blue);
+  text-decoration-color: currentcolor;
+}
+
+/* Anchor marker in left gutter on hover, not inline after text. */
+.theme-doc-markdown .hash-link {
+  color: var(--site-muted);
+  font-weight: var(--site-font-weight-normal);
+}
+
+.theme-doc-markdown .hash-link:hover {
+  color: var(--site-accent-strong);
+}
+
+@media (min-width: 997px) {
+  .theme-doc-markdown .hash-link {
+    position: absolute;
+    top: 0;
+    right: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.3em;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-base);
+    line-height: 1;
+  }
+}
+
+.theme-doc-markdown blockquote {
+  margin: 1.1rem 0;
+  padding: 0.15rem 0 0.15rem 0.9rem;
+  border-left: 2px solid var(--site-border-strong);
+}
+
+.theme-doc-markdown blockquote p {
+  color: var(--site-muted-bright);
+}
+
+.theme-doc-markdown hr {
+  margin: 1.8rem 0;
+  background: var(--site-border);
+}
+
+/* Code, tables, and supporting content ----------------------------- */
+.theme-doc-markdown :not(pre) > code {
+  padding: 0.12em 0.3em;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+  background: var(--site-code-bg);
+  color: var(--site-text);
+  font-size: 0.84em;
+}
+
+.theme-doc-markdown pre,
+.theme-doc-markdown .prism-code {
+  background: var(--site-code-bg) !important;
+}
+
+.theme-doc-markdown pre,
+.theme-doc-markdown .theme-code-block {
+  border-color: var(--site-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.theme-doc-markdown .theme-code-block {
+  margin: 1rem 0;
 }
 
 .theme-doc-markdown table,
@@ -103,106 +460,326 @@
 }
 
 .theme-doc-markdown table {
+  margin: 1rem 0;
   overflow: hidden;
-  border-radius: 1rem;
+  border-collapse: separate;
+  border: 1px solid var(--site-border);
+  border-spacing: 0;
+  border-radius: var(--radius-sm);
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+
+.theme-doc-markdown th,
+.theme-doc-markdown td {
+  padding: 0.48rem 0.6rem;
+  border-top: 0;
+  border-left: 0;
+  border-right: 1px solid var(--site-border);
+  border-bottom: 1px solid var(--site-border);
+}
+
+.theme-doc-markdown th:last-child,
+.theme-doc-markdown td:last-child {
+  border-right: 0;
+}
+
+.theme-doc-markdown tr:last-child td {
+  border-bottom: 0;
 }
 
 .theme-doc-markdown thead tr {
-  background: rgba(17, 17, 17, 0.04);
+  background: var(--site-table-header-bg);
 }
 
 .theme-doc-markdown tr:nth-child(2n) {
-  background: rgba(17, 17, 17, 0.02);
-}
-
-.theme-doc-markdown pre,
-.theme-doc-markdown .prism-code {
-  background: #f6f2ea !important;
+  background: var(--site-table-stripe-bg);
 }
 
 .theme-doc-markdown .theme-admonition {
-  border: 1px solid var(--site-border);
-  border-radius: 1.1rem;
-  background: rgba(17, 17, 17, 0.025);
+  margin: 1.05rem 0;
+  border: 1px solid var(--site-admonition-border);
+  border-left: 3px solid var(--ifm-alert-border-color);
+  border-radius: var(--radius-md);
+  background: var(--site-admonition-bg);
   box-shadow: none;
+  font-size: 0.86rem;
 }
 
-.theme-doc-markdown .theme-admonition-heading {
-  border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+.theme-doc-markdown .tabs {
+  border-bottom-color: var(--site-border);
 }
 
-.theme-doc-toc-desktop {
-  top: calc(var(--site-header-height) + 1rem);
-}
-
-.theme-doc-toc-desktop .table-of-contents {
-  padding: 1.2rem;
-  border: 1px solid var(--site-border);
-  border-radius: 1.2rem;
-  background: rgba(255, 253, 248, 0.92);
-  box-shadow: var(--site-shadow);
-}
-
-.theme-doc-footer .pagination-nav {
-  gap: 1rem;
-}
-
-.menu__link {
-  border-radius: 0.9rem;
+.theme-doc-markdown .tabs__item {
+  padding: 0.5rem 0.7rem;
+  border-radius: 0;
   color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  font-weight: var(--site-font-weight-semibold);
 }
 
-.menu__link:hover,
-.menu__link--active {
-  color: var(--site-text);
-  background: rgba(17, 17, 17, 0.06);
+.theme-doc-markdown .tabs__item--active {
+  color: var(--site-text-strong);
 }
 
-.menu__caret:before {
-  opacity: 0.8;
+.theme-doc-markdown details {
+  margin: 1rem 0;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-surface-soft);
 }
 
 .theme-doc-markdown .mermaid,
 .theme-doc-markdown [class*='zoomContainer'] {
+  margin: 1.1rem 0;
   border: 1px solid var(--site-border);
-  border-radius: 1.25rem;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-md);
+  background: var(--site-mermaid-bg);
 }
 
+/* Right TOC: sticky below navbar. align-self on .col--3 gives it travel distance. */
+.theme-doc-toc-desktop {
+  position: sticky;
+  top: calc(var(--site-header-height) + 1.25rem);
+  max-height: calc(100vh - var(--site-header-height) - 3.5rem);
+  overflow-y: auto;
+  padding: 0;
+  scrollbar-color: var(--site-border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+/* Titled rail with list glyph as background image (::before carries label). */
+.theme-doc-toc-desktop::before {
+  content: 'On this page';
+  display: block;
+  margin-bottom: var(--space-3);
+  padding-left: calc(14px + var(--space-2));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23556070' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6 4h8M6 8h8M6 12h8M2.6 4h.01M2.6 8h.01M2.6 12h.01'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 0.05em;
+  background-size: 14px 14px;
+  color: var(--site-text-strong);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+html[data-theme='dark'] .theme-doc-toc-desktop::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6 4h8M6 8h8M6 12h8M2.6 4h.01M2.6 8h.01M2.6 12h.01'/%3E%3C/svg%3E");
+}
+
+.theme-doc-toc-desktop .table-of-contents {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--site-doc-nav-size);
+  line-height: 1.3;
+}
+
+.theme-doc-toc-desktop .table-of-contents ul {
+  margin-top: 0;
+  padding-left: var(--space-3);
+}
+
+.theme-doc-toc-desktop .table-of-contents__link {
+  position: relative;
+  display: block;
+  padding: 0.35rem 0 0.35rem var(--space-3);
+  border-left: 1px solid var(--site-border);
+  color: var(--site-muted);
+  font-size: var(--site-doc-nav-size);
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
+  transition:
+    color var(--site-transition-fast),
+    border-color var(--site-transition-fast);
+}
+
+.theme-doc-toc-desktop .table-of-contents__link:hover {
+  border-left-color: var(--site-hover-border);
+  color: var(--site-hover-text);
+}
+
+/* Active entry: 2px accent border, negative margin absorbs extra pixel. */
+.theme-doc-toc-desktop .table-of-contents__link--active {
+  margin-left: -1px;
+  border-left: 2px solid var(--site-accent);
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-medium);
+}
+
+/* Footer navigation ------------------------------------------------ */
+.theme-doc-footer,
+.site-docs-shell .pagination-nav {
+  max-width: none;
+}
+
+.theme-doc-footer .pagination-nav,
+.site-docs-shell .pagination-nav {
+  gap: 0.75rem;
+  margin-top: 2.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--site-border);
+}
+
+.site-docs-shell .pagination-nav__link {
+  min-height: 4.5rem;
+  padding: var(--space-4);
+  border-color: var(--site-border);
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
+  box-shadow: none;
+}
+
+.site-docs-shell .pagination-nav__link:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
+  transform: none;
+}
+
+.site-docs-shell .pagination-nav__sublabel {
+  color: var(--site-muted);
+  font-size: 0.62rem;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.site-docs-shell .pagination-nav__label {
+  margin-top: 0.12rem;
+  color: var(--site-text);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+/* Keyboard focus --------------------------------------------------- */
+.site-root--docs .theme-doc-sidebar-menu .menu__link:focus-visible,
+.site-root--docs .theme-doc-sidebar-menu .menu__caret:focus-visible,
+.theme-doc-breadcrumbs .breadcrumbs__link:focus-visible,
+.theme-doc-toc-desktop .table-of-contents__link:focus-visible,
+.site-docs-shell .pagination-nav__link:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+/* Three-rail canvas: left-flush sidebar, right-flush TOC, article between. Fluid column. */
 @media (min-width: 997px) {
-  main[class*='docMainContainer'] > .container {
-    width: auto;
-    max-width: none;
-    margin-left: 1rem;
-    margin-right: 1rem;
+  .site-root--docs .theme-doc-sidebar-container {
+    margin-left: var(--site-doc-page-gutter);
   }
 
-  .site-doc-masthead .site-shell-container {
+  .site-root--docs main[class*='docMainContainer'] {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: calc(var(--site-doc-canvas) - var(--site-doc-sidebar-width));
+    margin-right: var(--site-doc-page-gutter);
+  }
+
+  .site-root--docs main[class*='docMainContainer'] > .container {
     width: 100%;
     max-width: none;
     margin: 0;
+    padding: 0 0 0 var(--site-doc-content-inset);
+  }
+
+  /* Track IS the measure: at 1fr it took the rails' leftover while prose
+   * stopped at the measure, so prose and tables ended on different edges. */
+  .site-docs-shell > .row {
+    display: grid;
+    grid-template-columns: minmax(0, var(--site-doc-measure)) var(--site-doc-toc-width);
+    gap: var(--site-doc-column-gap);
+    margin: 0;
+  }
+
+  .site-docs-shell > .row > .col {
+    width: auto;
+    max-width: none !important;
+    padding: 0;
+  }
+
+  /* Stretch TOC column to row height for sticky positioning. */
+  .site-docs-shell > .row > .col.col--3 {
+    align-self: stretch;
+    padding-top: var(--site-doc-rail-top);
   }
 }
 
+/* Hide desktop TOC below 1280px; mobile TOC takes over. */
+@media (max-width: 1279px) and (min-width: 997px) {
+  .site-docs-shell > .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-docs-shell > .row > .col.col--3 {
+    display: none;
+  }
+
+  .site-root--docs .theme-doc-toc-mobile {
+    display: block;
+    margin: 0 0 1.25rem;
+    border: 1px solid var(--site-border);
+    border-radius: var(--radius-sm);
+    background: var(--site-surface-soft);
+  }
+
+  .site-root--docs .theme-doc-toc-mobile button {
+    color: var(--site-text);
+    font-size: 0.78rem;
+    font-weight: var(--site-font-weight-semibold);
+  }
+}
+
+/* Mobile docs: same hierarchy, no desktop rails. Gutter matches navbar/footer. */
 @media (max-width: 996px) {
-  .site-doc-masthead__row {
-    flex-direction: column;
-    align-items: start;
+  .site-root--docs {
+    --site-doc-rail-top: 2.5rem;
   }
 
-  .site-docs-shell article {
-    padding: 1.4rem 1.1rem 1.7rem;
-    border-radius: 1.25rem;
+  .site-root--docs main[class*='docMainContainer'] > .container {
+    width: 100%;
+    max-width: none;
+    padding: 0 var(--site-doc-page-gutter) 3rem;
   }
 
-  .theme-doc-sidebar-container {
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
+  .site-docs-shell > .row {
+    margin: 0;
+  }
+
+  .site-docs-shell > .row > .col {
+    padding: 0;
+  }
+
+  .theme-doc-toc-mobile {
+    margin: 0 0 1.25rem;
+    border: 1px solid var(--site-border);
+    border-radius: var(--radius-sm);
+    background: var(--site-surface-soft);
+  }
+
+  .theme-doc-toc-mobile button {
+    color: var(--site-text);
+    font-size: 0.78rem;
+    font-weight: var(--site-font-weight-semibold);
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
+  .site-root--docs {
+    --site-doc-rail-top: 2.25rem;
+  }
+
+  .theme-doc-breadcrumbs {
+    margin-bottom: 1rem;
+  }
+
+  .theme-doc-markdown h2 {
+    margin-top: 1.6em;
+  }
+
   .theme-doc-markdown table {
     display: block;
     width: max-content;
@@ -211,5 +788,28 @@
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .theme-doc-footer .pagination-nav,
+  .site-docs-shell .pagination-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media print {
+  .site-root--docs main[class*='docMainContainer'] > .container {
+    padding: 0;
+  }
+
+  .site-docs-shell article {
+    padding-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-root--docs .theme-doc-sidebar-menu .menu__link,
+  .theme-doc-markdown a:not(.hash-link),
+  .theme-doc-toc-desktop .table-of-contents__link {
+    transition: none;
   }
 }

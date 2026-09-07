@@ -3,23 +3,18 @@ package extproc
 import (
 	"testing"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func makeTool(name string) openai.ChatCompletionToolParam {
-	return openai.ChatCompletionToolParam{
-		Function: openai.FunctionDefinitionParam{
-			Name: name,
-		},
-	}
+func makeTool(name string) llmprotocol.Tool {
+	return llmprotocol.Tool{Name: name, InputSchema: []byte(`{"type":"object"}`)}
 }
 
 func TestFilterToolsByDecisionPolicy_AllowList(t *testing.T) {
-	tools := []openai.ChatCompletionToolParam{
+	tools := []llmprotocol.Tool{
 		makeTool("read_file"),
 		makeTool("write_file"),
 		makeTool("search_web"),
@@ -31,7 +26,7 @@ func TestFilterToolsByDecisionPolicy_AllowList(t *testing.T) {
 	assert.Len(t, filtered, 2)
 	names := make(map[string]bool)
 	for _, tool := range filtered {
-		names[tool.Function.Name] = true
+		names[tool.Name] = true
 	}
 	assert.True(t, names["read_file"])
 	assert.True(t, names["search_web"])
@@ -40,7 +35,7 @@ func TestFilterToolsByDecisionPolicy_AllowList(t *testing.T) {
 }
 
 func TestFilterToolsByDecisionPolicy_BlockList(t *testing.T) {
-	tools := []openai.ChatCompletionToolParam{
+	tools := []llmprotocol.Tool{
 		makeTool("read_file"),
 		makeTool("write_file"),
 		makeTool("search_web"),
@@ -52,7 +47,7 @@ func TestFilterToolsByDecisionPolicy_BlockList(t *testing.T) {
 	assert.Len(t, filtered, 2)
 	names := make(map[string]bool)
 	for _, tool := range filtered {
-		names[tool.Function.Name] = true
+		names[tool.Name] = true
 	}
 	assert.True(t, names["read_file"])
 	assert.True(t, names["search_web"])
@@ -61,7 +56,7 @@ func TestFilterToolsByDecisionPolicy_BlockList(t *testing.T) {
 }
 
 func TestFilterToolsByDecisionPolicy_AllowAndBlock(t *testing.T) {
-	tools := []openai.ChatCompletionToolParam{
+	tools := []llmprotocol.Tool{
 		makeTool("read_file"),
 		makeTool("write_file"),
 		makeTool("search_web"),
@@ -71,11 +66,11 @@ func TestFilterToolsByDecisionPolicy_AllowAndBlock(t *testing.T) {
 	filtered := filterToolsByDecisionPolicy(tools, []string{"read_file", "write_file"}, []string{"write_file"})
 
 	assert.Len(t, filtered, 1)
-	assert.Equal(t, "read_file", filtered[0].Function.Name)
+	assert.Equal(t, "read_file", filtered[0].Name)
 }
 
 func TestFilterToolsByDecisionPolicy_EmptyBoth(t *testing.T) {
-	tools := []openai.ChatCompletionToolParam{
+	tools := []llmprotocol.Tool{
 		makeTool("a"),
 		makeTool("b"),
 	}
@@ -120,38 +115,22 @@ func TestDecisionGetToolsConfig(t *testing.T) {
 }
 
 func TestClearToolChoiceWhenNoTools_RemovesAutoChoice(t *testing.T) {
-	requestJSON := []byte(`{
-		"model": "test-model",
-		"messages": [{"role": "user", "content": "你好"}],
-		"tool_choice": "auto"
-	}`)
+	req := testNeutralRequest("test-model", "你好")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 
-	req, err := parseOpenAIRequest(requestJSON)
-	assert.NoError(t, err)
-
-	changed := clearToolChoiceWhenNoTools(req)
+	changed := clearSemanticToolChoiceWhenNoTools(req)
 
 	assert.True(t, changed)
-	assert.True(t, param.IsOmitted(req.ToolChoice.OfAuto))
-	assert.Nil(t, req.ToolChoice.OfChatCompletionNamedToolChoice)
+	assert.Equal(t, llmprotocol.ToolChoice{}, req.ToolChoice)
 }
 
 func TestClearToolChoiceWhenNoTools_KeepsChoiceWhenToolsPresent(t *testing.T) {
-	requestJSON := []byte(`{
-		"model": "test-model",
-		"messages": [{"role": "user", "content": "天气如何"}],
-		"tool_choice": "auto",
-		"tools": [{
-			"type": "function",
-			"function": {"name": "lookup_weather"}
-		}]
-	}`)
+	req := testNeutralRequest("test-model", "天气如何")
+	req.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+	req.Tools = []llmprotocol.Tool{makeTool("lookup_weather")}
 
-	req, err := parseOpenAIRequest(requestJSON)
-	assert.NoError(t, err)
-
-	changed := clearToolChoiceWhenNoTools(req)
+	changed := clearSemanticToolChoiceWhenNoTools(req)
 
 	assert.False(t, changed)
-	assert.False(t, param.IsOmitted(req.ToolChoice.OfAuto))
+	assert.Equal(t, llmprotocol.ToolChoiceAuto, req.ToolChoice.Mode)
 }

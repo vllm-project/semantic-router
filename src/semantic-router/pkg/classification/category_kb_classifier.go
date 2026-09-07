@@ -45,7 +45,6 @@ type KnowledgeBaseClassifier struct {
 	baseDir     string
 	preloadOnce sync.Once
 	preloadErr  error
-	preloaded   bool
 	provider    embedding.Provider
 }
 
@@ -72,7 +71,7 @@ func NewKnowledgeBaseClassifierWithProvider(rule config.KnowledgeBaseConfig, mod
 			"labels":         len(c.labels),
 			"backend":        c.currentBackend(),
 		})
-	} else if err := c.preloadEmbeddings(); err != nil {
+	} else if err := c.ensureEmbeddingsPreloaded(); err != nil {
 		return nil, fmt.Errorf("failed to preload KB embeddings: %w", err)
 	}
 	return c, nil
@@ -91,14 +90,8 @@ func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
 }
 
 func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {
-	if c.preloaded {
-		return nil
-	}
 	c.preloadOnce.Do(func() {
 		c.preloadErr = c.preloadEmbeddings()
-		if c.preloadErr == nil {
-			c.preloaded = true
-		}
 	})
 	return c.preloadErr
 }
@@ -163,4 +156,10 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 
 func (c *KnowledgeBaseClassifier) LabelCount() int {
 	return len(c.labels)
+}
+
+// Preload prepares all exemplar embeddings before request handling. It is
+// idempotent and shares the same once/error state as lazy classification.
+func (c *KnowledgeBaseClassifier) Preload() error {
+	return c.ensureEmbeddingsPreloaded()
 }

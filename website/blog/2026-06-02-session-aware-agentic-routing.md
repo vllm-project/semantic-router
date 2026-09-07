@@ -400,5 +400,5 @@ If you are building agent systems, running model portfolios on AMD GPUs, or rese
 Resources:
 
 - GitHub: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
-- Documentation: [vllm-semantic-router.com](https://vllm-semantic-router.com)
+- Documentation: [vllm-sr.ai](https://vllm-sr.ai)
 - Community: join the **#semantic-router** channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)

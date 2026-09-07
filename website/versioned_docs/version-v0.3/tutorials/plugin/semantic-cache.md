@@ -4,7 +4,7 @@
 
 `semantic-cache` is a route-local plugin for reusing semantically similar prior responses.
 
-It aligns to `config/plugin/semantic-cache/high-recall.yaml` and `config/plugin/semantic-cache/memory.yaml`.
+It aligns to `config/fragments/plugin/semantic-cache/high-recall.yaml` and `config/fragments/plugin/semantic-cache/memory.yaml`.
 
 ## Key Advantages
 

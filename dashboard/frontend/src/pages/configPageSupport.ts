@@ -1,5 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
+import bundledCatalog from '../generated/modelCatalog.json'
 import type { DecisionConditionType } from '../types/config'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -59,6 +61,7 @@ export interface ModelScore {
   score: number
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
 }
 
@@ -99,6 +102,13 @@ export interface Tool {
 export interface ReasoningFamily {
   type: string
   parameter: string
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
 }
 
 export interface ModelPricing {
@@ -107,6 +117,18 @@ export interface ModelPricing {
   cached_input_per_1m?: number
   cache_write_per_1m?: number
   completion_per_1m?: number
+}
+
+export interface ProviderReliability {
+  lb_policy?: string
+  retry_count?: number
+  retry_on?: string
+  consecutive_5xx?: number
+  base_ejection_time?: string
+  max_ejection_percent?: number
+  health_check_path?: string
+  health_check_interval?: string
+  health_check_timeout?: string
 }
 
 export interface LoRAAdapter {
@@ -137,7 +159,6 @@ export interface BackendRefEntry {
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number
-  type?: string
   base_url?: string
   provider?: string
   auth_header?: string
@@ -149,8 +170,34 @@ export interface BackendRefEntry {
   api_key_env?: string
 }
 
+export interface ModelReasoningConfig {
+  family?: string
+  type?: string
+  parameter?: string
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
+}
+
+export interface ModelEvaluationConfig {
+  benchmark: string
+  benchmark_profile?: string
+  reasoning_effort?: string
+  metrics: Record<string, number>
+  source?: string
+  measured_at?: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
 export interface ProviderModelConfig {
   name: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
+  /** @deprecated Use reasoning. */
   reasoning_family?: string
   provider_model_id?: string
   api_format?: string
@@ -164,12 +211,14 @@ export interface ProviderModelConfig {
   }>
   access_key?: string
   pricing?: ModelPricing
+  reliability?: ProviderReliability
 }
 
 export interface ProviderDefaultsConfig {
-  default_model?: string
+  model?: string
+  reasoning_effort?: string
+  /** @deprecated Reasoning definitions are now catalog-backed or inline on a provider model. */
   reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
 }
 
 export interface ProvidersConfig {
@@ -179,30 +228,56 @@ export interface ProvidersConfig {
 
 export interface RoutingModelCard {
   name: string
+  display_name?: string
+  publisher?: string
+  presentation?: {
+    logo: string
+    monogram: string
+    monochrome: boolean
+  }
+  distribution?: {
+    type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+    source: string
+    license?: string
+  }
+  family?: string
+  revision?: string
+  released_at?: string
+  knowledge_cutoff?: string
+  lifecycle?: 'experimental' | 'active' | 'deprecated' | 'removed'
   param_size?: string
   context_window_size?: number
+  max_output_tokens?: number
   description?: string
   capabilities?: string[]
+  modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
 export interface DecisionCondition {
-  type: string
-  name: string
+  type?: string
+  name?: string
+  label?: string
+  predicate?: NumericPredicate
+  on_error?: 'no_match' | 'match'
+  operator?: 'AND' | 'OR' | 'NOT'
+  conditions?: DecisionCondition[]
 }
 
 export interface DecisionRuleSet {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface DecisionModelRef {
   model: string
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: '' | 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
   lora_name?: string
   weight?: number
@@ -221,18 +296,49 @@ export interface DecisionConfig {
   modelRefs: DecisionModelRef[]
   plugins?: DecisionPluginConfig[]
   algorithm?: Record<string, unknown>
+  candidateIterations?: unknown
+  tier?: number
+  annotations?: Record<string, unknown>
+  output_contract?: string
 }
+
+export const ROUTING_STRATEGIES = ['priority', 'confidence'] as const
+export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
+export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
 
 export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
+  strategy?: RoutingStrategy
+}
+
+export interface EntrypointConfig {
+  model_names: string[]
+  recipe: string
+}
+
+export interface RecipeRoutingConfig {
+  signals?: ConfigSignals
+  projections?: ConfigProjections
+  decisions?: DecisionConfig[]
+  strategy?: RoutingStrategy
+}
+
+export interface RecipeConfig {
+  name: string
+  description?: string
+  routing: RecipeRoutingConfig
 }
 
 export interface NormalizedModel {
   name: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
   reasoning_family?: string
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -244,7 +350,8 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
+  card_override?: RoutingModelCard
   modality?: string
   pricing?: {
     currency?: string
@@ -253,6 +360,7 @@ export interface NormalizedModel {
     cache_write_per_1m?: number
     completion_per_1m?: number
   }
+  reliability?: ProviderReliability
 }
 
 export interface TracingConfig {
@@ -320,7 +428,6 @@ export interface MemoryConfig {
   embedding_model?: string
   default_retrieval_limit?: number
   default_similarity_threshold?: number
-  extraction_batch_size?: number
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
@@ -400,6 +507,7 @@ export interface EmbeddingEndpointConfig {
   api_key_env?: string
   timeout_seconds?: number
   max_retries?: number
+  max_response_bytes?: number
   dimensions?: number
 }
 
@@ -422,7 +530,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      model_metrics?: boolean
       queue_depth_estimation?: boolean
       max_models?: number
     }
@@ -506,6 +613,7 @@ export interface VectorStoreConfig {
   embedding_model?: string
   embedding_dimension?: number
   ingestion_workers?: number
+  ingestion_drain_timeout_seconds?: number
   supported_formats?: string[]
   milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig
@@ -543,7 +651,6 @@ export interface ModalityDetectionConfig {
 
 export interface ModalityDetectorConfig {
   enabled?: boolean
-  prompt_prefixes?: string[]
   method?: string
   classifier?: ModalityClassifierConfig
   keywords?: string[]
@@ -643,9 +750,9 @@ export interface ModelSelectionConfig {
 }
 
 export interface CanonicalClassifierConfig {
-  domain?: (ModelConfig & { model_ref?: string; fallback_category?: string })
+  domain?: ModelConfig & { model_ref?: string; fallback_category?: string }
   mcp?: MCPCategoryModel
-  pii?: (ModelConfig & { model_ref?: string })
+  pii?: ModelConfig & { model_ref?: string }
   preference?: {
     use_contrastive?: boolean
     embedding_model?: string
@@ -654,7 +761,6 @@ export interface CanonicalClassifierConfig {
 
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
-  on_hallucination_detected?: string
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
   explainer?: NLIExplainerModuleConfig
@@ -685,6 +791,8 @@ export interface CanonicalServiceGlobalConfig {
 }
 
 export interface CanonicalStoreGlobalConfig {
+  response_cache?: SemanticCacheConfig
+  /** @deprecated Use response_cache. */
   semantic_cache?: SemanticCacheConfig
   memory?: MemoryConfig
   vector_store?: VectorStoreConfig
@@ -706,10 +814,10 @@ export interface CanonicalIntegrationGlobalConfig {
 
 export interface CanonicalModelModulesConfig {
   prompt_compression?: PromptCompressionConfig
-  prompt_guard?: (ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean })
+  prompt_guard?: ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean }
   classifier?: CanonicalClassifierConfig
   hallucination_mitigation?: CanonicalHallucinationModuleConfig
-  feedback_detector?: (FeedbackDetectorConfig & { model_ref?: string })
+  feedback_detector?: FeedbackDetectorConfig & { model_ref?: string }
   modality_detector?: ModalityDetectorConfig
 }
 
@@ -745,6 +853,9 @@ export interface ConfigSignals {
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
+  metadata?: MetadataSignal[]
+  classifiers?: ClassifierSignal[]
+  conversation?: ConversationSignal[]
 }
 
 export interface ConfigProjections {
@@ -954,6 +1065,28 @@ export interface EmbeddingSignal {
   aggregation_method: string
 }
 
+export interface MetadataSignal {
+  name: string
+  description?: string
+  key: string
+  predicate: {
+    equals?: string
+    in?: string[]
+    exists?: boolean
+  }
+}
+
+export interface ClassifierSignal {
+  name: string
+  description?: string
+  type: 'local' | 'llm' | 'sequence_classifier'
+  model?: string
+  model_path?: string
+  labels: string[]
+  instructions?: string
+  use_cpu?: boolean
+}
+
 export interface DomainSignal {
   name: string
   description: string
@@ -1064,8 +1197,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 
@@ -1096,6 +1231,23 @@ export interface StructureSignal {
   predicate?: NumericPredicate
 }
 
+export interface ConversationSource {
+  type: string
+  role?: string
+}
+
+export interface ConversationFeature {
+  type: string
+  source: ConversationSource
+}
+
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: ConversationFeature
+  predicate?: NumericPredicate
+}
+
 export interface ComplexitySignal {
   name: string
   threshold: number
@@ -1104,7 +1256,7 @@ export interface ComplexitySignal {
   description?: string
   composer?: {
     operator: 'AND' | 'OR' | 'NOT'
-    conditions: Array<{ type: string; name: string }>
+    conditions: DecisionCondition[]
   }
 }
 
@@ -1113,6 +1265,7 @@ export interface JailbreakSignal {
   threshold?: number
   method?: string
   include_history?: boolean
+  direction?: 'request' | 'response'
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
   description?: string
@@ -1134,7 +1287,11 @@ export interface ConfigData {
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig
+  entrypoints?: EntrypointConfig[]
+  recipes?: RecipeConfig[]
   global?: CanonicalGlobalConfig
+  response_cache?: SemanticCacheConfig
+  /** @deprecated Use response_cache. */
   semantic_cache?: SemanticCacheConfig
   tools?: ToolIntegrationConfig
   prompt_guard?: ModelConfig & { enabled: boolean }
@@ -1193,15 +1350,52 @@ export type SignalType =
   | 'Jailbreak'
   | 'PII'
   | 'KB'
+  | 'Metadata'
+  | 'Classifier'
+  | 'Conversation'
 
 export interface DecisionFormState {
   name: string
   description: string
   priority: number
   operator: 'AND' | 'OR' | 'NOT'
+  on_unknown?: '' | 'no_match' | 'match' | 'fail_request'
   conditions: DecisionCondition[]
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
+}
+
+export function mergeDecisionForSave(
+  existing: DecisionConfig | undefined,
+  update: DecisionConfig,
+): DecisionConfig {
+  return {
+    ...(existing || {}),
+    ...update,
+  }
+}
+
+export function decisionRulesForSave(
+  existing: DecisionRuleSet | undefined,
+  next: DecisionRuleSet,
+): DecisionRuleSet {
+  if (existing?.conditions.some(conditionHasNestedRules)) {
+    const preserved = JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
+    if (next.on_unknown) preserved.on_unknown = next.on_unknown
+    else delete preserved.on_unknown
+    return preserved
+  }
+  return next
+}
+
+export function cloneDecisionConditions(
+  conditions: DecisionCondition[] | undefined,
+): DecisionCondition[] {
+  return JSON.parse(JSON.stringify(conditions || [])) as DecisionCondition[]
+}
+
+export function conditionHasNestedRules(condition: DecisionCondition): boolean {
+  return Boolean(condition.operator || condition.conditions?.length)
 }
 
 export interface AddSignalFormState {
@@ -1223,6 +1417,8 @@ export interface AddSignalFormState {
   complexity_threshold?: number
   structure_feature?: StructureFeature
   structure_predicate?: NumericPredicate
+  conversation_feature?: ConversationFeature
+  conversation_predicate?: NumericPredicate
   role?: string
   subjects?: Subject[]
   hard_candidates?: string[]
@@ -1231,6 +1427,7 @@ export interface AddSignalFormState {
   composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
+  jailbreak_direction?: string
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
@@ -1241,6 +1438,17 @@ export interface AddSignalFormState {
   target_kind?: 'label' | 'group'
   target_value?: string
   kb_match?: 'best' | 'threshold'
+  metadata_key?: string
+  metadata_predicate_type?: 'equals' | 'in' | 'exists'
+  metadata_equals?: string
+  metadata_in?: string[]
+  metadata_exists?: boolean
+  classifier_type?: 'local' | 'llm' | 'sequence_classifier'
+  classifier_model?: string
+  classifier_model_path?: string
+  classifier_labels?: string[]
+  classifier_instructions?: string
+  classifier_use_cpu?: boolean
 }
 
 export const formatThreshold = (value: number): string => {
@@ -1248,7 +1456,7 @@ export const formatThreshold = (value: number): string => {
 }
 
 export const normalizeModelScores = (
-  modelScores: ModelScore[] | Record<string, number> | undefined
+  modelScores: ModelScore[] | Record<string, number> | undefined,
 ): ModelScore[] => {
   if (!modelScores) return []
   if (Array.isArray(modelScores)) return modelScores
@@ -1264,7 +1472,7 @@ export const normalizeEndpointProtocol = (protocol: unknown): Endpoint['protocol
 
 export const normalizeEndpoint = (
   endpoint: Partial<Endpoint> | undefined,
-  index: number
+  index: number,
 ): Endpoint => ({
   name: endpoint?.name?.trim() || `endpoint-${index + 1}`,
   endpoint: endpoint?.endpoint?.trim() || '',
@@ -1274,14 +1482,14 @@ export const normalizeEndpoint = (
 })
 
 export const normalizeEndpoints = (endpoints: Partial<Endpoint>[] | undefined): Endpoint[] =>
-  Array.isArray(endpoints) ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index)) : []
+  Array.isArray(endpoints)
+    ? endpoints.map((endpoint, index) => normalizeEndpoint(endpoint, index))
+    : []
 
-export const normalizeProviderModelEndpoints = (
-  model: {
-    endpoints?: Partial<Endpoint>[]
-    backend_refs?: BackendRefEntry[]
-  }
-): Endpoint[] => {
+export const normalizeProviderModelEndpoints = (model: {
+  endpoints?: Partial<Endpoint>[]
+  backend_refs?: BackendRefEntry[]
+}): Endpoint[] => {
   if (Array.isArray(model.backend_refs) && model.backend_refs.length > 0) {
     return model.backend_refs.map((backend, index) => {
       const baseURL = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
@@ -1289,15 +1497,16 @@ export const normalizeProviderModelEndpoints = (
         typeof backend.endpoint === 'string' && backend.endpoint.trim()
           ? backend.endpoint.trim()
           : baseURL
-      const protocol =
-        backend.protocol ||
-        (baseURL.startsWith('https://') ? 'https' : 'http')
-      return normalizeEndpoint({
-        name: backend.name,
-        endpoint,
-        protocol,
-        weight: backend.weight,
-      }, index)
+      const protocol = backend.protocol || (baseURL.startsWith('https://') ? 'https' : 'http')
+      return normalizeEndpoint(
+        {
+          name: backend.name,
+          endpoint,
+          protocol,
+          weight: backend.weight,
+        },
+        index,
+      )
     })
   }
   return normalizeEndpoints(model.endpoints)
@@ -1306,14 +1515,12 @@ export const normalizeProviderModelEndpoints = (
 export const mergeProviderBackendRefs = (
   existingRefs: BackendRefEntry[] | undefined,
   endpoints: Endpoint[],
-  accessKey?: string
+  accessKey?: string,
 ): BackendRefEntry[] => {
   const existing = Array.isArray(existingRefs) ? existingRefs : []
 
   return endpoints.map((ep, index) => {
-    const matched =
-      existing.find((ref) => ref.name === ep.name) ||
-      existing[index]
+    const matched = existing.find((ref) => ref.name === ep.name) || existing[index]
 
     const merged: BackendRefEntry = {
       ...(matched || {}),
@@ -1358,96 +1565,35 @@ export const TABLE_COLUMN_WIDTH = {
 
 export type ConfigDecisionConditionType = DecisionConditionType
 
-export const getDefaultModelName = (
-  config: ConfigData | null,
-  isPythonCLI: boolean
-): string => {
+export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: boolean): string => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.default_model || ''
+    return config?.providers?.defaults?.model || ''
   }
   return config?.default_model || ''
 }
 
 export const getReasoningFamiliesMap = (
   config: ConfigData | null,
-  isPythonCLI: boolean
+  isPythonCLI: boolean,
+  catalog: BuiltInModelCatalog | null = bundledCatalog as unknown as BuiltInModelCatalog,
 ): Record<string, ReasoningFamily> => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.reasoning_families || {}
+    return Object.fromEntries(
+      (catalog?.reasoning_families ?? []).map((family) => [
+        family.id,
+        {
+          type: family.type,
+          parameter: family.parameter,
+          activation_parameter: family.activation_parameter,
+          effort_flags: family.effort_flags ? { ...family.effort_flags } : undefined,
+          levels: [...(family.levels ?? [])],
+          default: family.default,
+          modes: family.modes ? [...family.modes] : undefined,
+          default_mode: family.default_mode,
+          disabled: family.disabled,
+        },
+      ]),
+    )
   }
   return config?.reasoning_families || {}
-}
-
-export const getNormalizedModels = (
-  config: ConfigData | null,
-  isPythonCLI: boolean
-): NormalizedModel[] => {
-  if (isPythonCLI && config?.providers?.models) {
-    const cards = config?.routing?.modelCards || []
-    const cardByName = new Map(cards.map((card) => [card.name, card]))
-    const models = config.providers.models.map((m): NormalizedModel => ({
-      name: m.name,
-      reasoning_family: m.reasoning_family,
-      provider_model_id: m.provider_model_id,
-      api_format: m.api_format,
-      external_model_ids: m.external_model_ids,
-      backend_refs: m.backend_refs,
-      endpoints: normalizeProviderModelEndpoints(m),
-      param_size: cardByName.get(m.name)?.param_size,
-      context_window_size: cardByName.get(m.name)?.context_window_size,
-      description: cardByName.get(m.name)?.description,
-      capabilities: cardByName.get(m.name)?.capabilities,
-      loras: cardByName.get(m.name)?.loras,
-      tags: cardByName.get(m.name)?.tags,
-      quality_score: cardByName.get(m.name)?.quality_score,
-      modality: cardByName.get(m.name)?.modality,
-      pricing: m.pricing,
-    }))
-
-    for (const card of cards) {
-      if (models.some((model) => model.name === card.name)) {
-        continue
-      }
-      models.push({
-        name: card.name,
-        reasoning_family: undefined,
-        provider_model_id: undefined,
-        api_format: undefined,
-        external_model_ids: undefined,
-        backend_refs: undefined,
-        endpoints: [],
-        param_size: card.param_size,
-        context_window_size: card.context_window_size,
-        description: card.description,
-        capabilities: card.capabilities,
-        loras: card.loras,
-        tags: card.tags,
-        quality_score: card.quality_score,
-        modality: card.modality,
-        pricing: undefined,
-      })
-    }
-
-    return models
-  }
-
-  if (config?.model_config) {
-    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(([name, cfg]) => ({
-      name,
-      reasoning_family: cfg.reasoning_family,
-      endpoints: cfg.preferred_endpoints?.map((ep: string) => {
-        const endpoint = config.vllm_endpoints?.find((entry: VLLMEndpoint) => entry.name === ep)
-        return endpoint ? normalizeEndpoint({
-          name: ep,
-          weight: endpoint.weight || 1,
-          endpoint: `${endpoint.address}:${endpoint.port}`,
-          protocol: 'http',
-        }, 0) : null
-      }).filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
-      access_key: undefined,
-      pricing: cfg.pricing,
-    }))
-  }
-
-  return []
 }

@@ -1,6 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
 
 // ============== Signal Types ==============
 export type SignalType =
@@ -107,6 +108,7 @@ export interface ComplexitySignalConfig {
 export interface JailbreakSignalConfig {
   threshold?: number
   include_history?: boolean
+  direction?: 'request' | 'response'
 }
 
 // Modality is detected by the modality_detector inline model; no extra params needed.
@@ -204,6 +206,7 @@ export type AlgorithmType =
 
 export interface AlgorithmConfig {
   type: AlgorithmType
+  minimum_candidates?: number
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig
@@ -252,19 +255,19 @@ export interface GenericAlgorithmConfig {
 
 // ============== Plugin Types ==============
 export type PluginType =
-  | 'semantic-cache'
+  | 'response_cache'
   | 'memory'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'
   | 'router_replay'
   | 'rag'
-  | 'image_gen'
   | 'fast_response'
   | 'request_params'
   | 'response_jailbreak'
   | 'tools'
   | 'tool_selection'
+  | 'context_compression'
 
 export interface PluginConfig {
   type: PluginType
@@ -276,7 +279,8 @@ export interface PluginConfig {
 export interface ModelRefConfig {
   model: string
   use_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+  reasoning_effort?: string
   lora_name?: string
   reasoning_family?: string
 }
@@ -305,7 +309,7 @@ export interface PricingConfig {
 
 // ============== Global Plugin Types ==============
 export interface GlobalPluginConfig {
-  type: 'prompt_guard' | 'pii_detection' | 'semantic_cache'
+  type: 'prompt_guard' | 'pii_detection' | 'response_cache'
   enabled: boolean
   modelId?: string
   threshold?: number
@@ -437,12 +441,8 @@ export interface ConfigData {
       threshold?: number
     }
   }
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold?: number
-    ttl_seconds?: number
-  }
+  response_cache?: TopologyCacheConfig
+  semantic_cache?: TopologyCacheConfig
   // Signal definitions
   keyword_rules?: Array<{
     name: string
@@ -517,6 +517,7 @@ export interface ConfigData {
     name: string
     threshold?: number
     include_history?: boolean
+    direction?: 'request' | 'response'
     description?: string
   }>
   pii?: Array<{
@@ -671,6 +672,7 @@ export interface ConfigData {
       name: string
       threshold?: number
       include_history?: boolean
+      direction?: 'request' | 'response'
       description?: string
     }>
     pii?: Array<{
@@ -713,7 +715,8 @@ export interface ConfigData {
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean
-      reasoning_effort?: 'low' | 'medium' | 'high'
+      reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+      reasoning_effort?: string
       lora_name?: string
     }>
     plugins?: Array<{
@@ -724,11 +727,18 @@ export interface ConfigData {
   }>
   providers?: {
     defaults?: {
-      default_model?: string
+      model?: string
     }
     models?: Array<{
       name: string
-      reasoning_family?: string
+      catalog?: string
+      reasoning?: {
+        family?: string
+        type?: string
+        parameter?: string
+        levels?: string[]
+        default?: string
+      }
     }>
   }
   routing?: {
@@ -738,18 +748,29 @@ export interface ConfigData {
     signals?: ConfigData['signals']
     projections?: ConfigData['projections']
     decisions?: ConfigData['decisions']
+    strategy?: 'priority' | 'confidence'
   }
+  entrypoints?: Array<{
+    model_names: string[]
+    recipe: string
+  }>
+  recipes?: Array<{
+    name: string
+    description?: string
+    routing: {
+      signals?: ConfigData['signals']
+      projections?: ConfigData['projections']
+      decisions?: ConfigData['decisions']
+      strategy?: 'priority' | 'confidence'
+    }
+  }>
   global?: {
     router?: {
       strategy?: 'priority' | 'confidence'
     }
     stores?: {
-      semantic_cache?: {
-        enabled?: boolean
-        backend_type?: string
-        similarity_threshold?: number
-        ttl_seconds?: number
-      }
+      response_cache?: TopologyOptionalCacheConfig
+      semantic_cache?: TopologyOptionalCacheConfig
     }
     model_catalog?: {
       modules?: {

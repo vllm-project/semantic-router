@@ -186,6 +186,12 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	return nil, ErrBackendUnavailable
 }
 
+// SupportsBatchedEmbedding reports batched-embedding capability. Returns false
+// because the native backend is unavailable.
+func SupportsBatchedEmbedding(modelType string) bool {
+	return false
+}
+
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models
 func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -310,6 +316,15 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
+// InitGenericClassifier initializes the generic classifier.
+func InitGenericClassifier(
+	modelPath string,
+	numClasses int,
+	useCPU bool,
+) error {
+	return ErrBackendUnavailable
+}
+
 // InitPIIClassifier initializes the PII classifier
 func InitPIIClassifier(modelPath string, numClasses int, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -338,6 +353,11 @@ func ClassifyPIIText(text string) (ClassResult, error) {
 // ClassifyJailbreakText classifies the provided text for jailbreak
 func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
+}
+
+// ClassifyJailbreakTextWithProbs classifies jailbreak with probs
+func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // InitModernBertClassifier initializes ModernBERT
@@ -378,6 +398,11 @@ func ClassifyModernBertPIIText(text string) (ClassResult, error) {
 // ClassifyModernBertJailbreakText classifies Jailbreak using ModernBERT
 func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
+}
+
+// ClassifyModernBertJailbreakTextWithProbs classifies Jailbreak using ModernBERT with probs
+func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // InitDebertaJailbreakClassifier initializes DeBERTa
@@ -570,6 +595,7 @@ const (
 	NLIEntailment    NLILabel = 0
 	NLINeutral       NLILabel = 1
 	NLIContradiction NLILabel = 2
+	NLIUnknown       NLILabel = 3
 	NLIError         NLILabel = -1
 )
 

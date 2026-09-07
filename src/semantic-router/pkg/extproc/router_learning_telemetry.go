@@ -44,7 +44,7 @@ func (r *OpenAIRouter) observeRouterLearningUsageTelemetry(
 	}
 	inputCostMultiplier := r.learningInputCostMultiplier(ctx.RequestModel, usage)
 	r.routerLearningRuntimeState().recordModelTelemetry(
-		ctx.VSRSelectedDecisionName,
+		requestDecisionStateKey(ctx),
 		decisionTier(ctx),
 		ctx.RequestModel,
 		routerLearningTelemetryObservation{
@@ -67,7 +67,7 @@ func (r *OpenAIRouter) observeRouterLearningProviderStatus(ctx *RequestContext, 
 		return
 	}
 	r.routerLearningRuntimeState().recordModelTelemetry(
-		ctx.VSRSelectedDecisionName,
+		requestDecisionStateKey(ctx),
 		decisionTier(ctx),
 		ctx.RequestModel,
 		routerLearningTelemetryObservation{ProviderFailureObserved: true},
@@ -108,8 +108,8 @@ func (rt *routerLearningRuntime) recordModelTelemetry(
 	if rt == nil || model == "" {
 		return
 	}
-	rt.mu.Lock()
-	defer rt.mu.Unlock()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
 	rt.recordModelTelemetryLocked(decisionName, decisionTier, model, observation)
 	if decisionName != "" {
 		rt.recordModelTelemetryLocked("", decisionTier, model, observation)
@@ -126,13 +126,13 @@ func (rt *routerLearningRuntime) recordModelTelemetryLocked(
 	observation routerLearningTelemetryObservation,
 ) {
 	key := modelExperienceKey(decisionName, decisionTier, model)
-	exp := rt.experience[key]
+	exp := rt.shared.experience[key]
 	if exp == nil {
 		exp = &routerLearningModelExperience{
 			QualitySeed: 0.5,
 			SeedWeight:  2,
 		}
-		rt.experience[key] = exp
+		rt.shared.experience[key] = exp
 	}
 	if observation.LatencyObserved {
 		exp.LatencyEWMA = updateRouterLearningEWMA(exp.LatencyEWMA, observation.LatencySeconds)

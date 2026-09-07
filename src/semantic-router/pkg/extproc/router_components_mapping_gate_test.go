@@ -2,7 +2,9 @@ package extproc
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -64,6 +66,50 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 			require.Contains(t, err.Error(), tt.wantErrPart)
 		})
 	}
+}
+
+func TestBuildRouterComponentsClosesEarlierResourcesOnLaterFailure(t *testing.T) {
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{
+			Enabled:    true,
+			TTLSeconds: 60,
+		},
+		InlineModels: config.InlineModels{
+			PromptGuard: config.PromptGuardConfig{
+				Enabled:  true,
+				Protocol: config.PromptGuardProtocolHTTPClassify,
+			},
+		},
+	}
+
+	baseline := stableGoroutineCount(t)
+
+	components, err := buildRouterComponents(cfg)
+	require.Error(t, err)
+	require.Nil(t, components)
+
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		return runtime.NumGoroutine() <= baseline
+	}, 10*time.Second, 10*time.Millisecond)
+}
+
+func stableGoroutineCount(t *testing.T) int {
+	t.Helper()
+	var last int
+	consecutive := 0
+	require.Eventually(t, func() bool {
+		runtime.GC()
+		current := runtime.NumGoroutine()
+		if current == last {
+			consecutive++
+		} else {
+			consecutive = 0
+			last = current
+		}
+		return consecutive >= 3
+	}, 10*time.Second, 10*time.Millisecond, "goroutine count never settled")
+	return last
 }
 
 func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {

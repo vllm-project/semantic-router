@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
@@ -77,6 +80,64 @@ func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
 				t.Error("Config file is empty after update")
 			}
 		})
+	}
+}
+
+func TestUpdateConfigHandler_PreservesEntrypointsAndRecipes(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	body := canonicalConfigBody("127.0.0.1:8000")
+	body["entrypoints"] = []map[string]interface{}{
+		{
+			"model_names": []string{"vllm-sr/mom-v1-vault"},
+			"recipe":      "privacy-first",
+		},
+	}
+	body["recipes"] = []map[string]interface{}{
+		{
+			"name":        "privacy-first",
+			"description": "Keep private traffic on the governed model.",
+			"routing": map[string]interface{}{
+				"decisions": []map[string]interface{}{
+					{
+						"name":        "privacy-route",
+						"description": "Private recipe route",
+						"priority":    100,
+						"rules":       map[string]interface{}{"operator": "AND"},
+						"modelRefs": []map[string]interface{}{
+							{"model": "test-model", "use_reasoning": false},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal multi-recipe config: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, "")(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	updated, err := readCanonicalConfigFile(configPath)
+	if err != nil {
+		t.Fatalf("read updated canonical config: %v", err)
+	}
+	if len(updated.Entrypoints) != 1 || updated.Entrypoints[0].Recipe != "privacy-first" {
+		t.Fatalf("entrypoints were not preserved: %+v", updated.Entrypoints)
+	}
+	if len(updated.Recipes) != 1 || updated.Recipes[0].Name != "privacy-first" {
+		t.Fatalf("recipes were not preserved: %+v", updated.Recipes)
+	}
+	if got := updated.Recipes[0].Routing.Decisions[0].ModelRefs[0].Model; got != "test-model" {
+		t.Fatalf("recipe model ref = %q, want test-model", got)
 	}
 }
 
@@ -244,6 +305,118 @@ func TestUpdateConfigHandler_WritesBackendEndpoint(t *testing.T) {
 	}
 	if endpoint, ok := backend["endpoint"].(string); !ok || endpoint != "192.168.1.100:8000" {
 		t.Errorf("Expected endpoint to be '192.168.1.100:8000', got '%v'", endpoint)
+	}
+}
+
+func TestUpdateConfigHandler_PreservesExplicitFreePricing(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+	config := canonicalConfigBody("192.168.1.100:8000")
+	providers := config["providers"].(map[string]interface{})
+	models := providers["models"].([]map[string]interface{})
+	models[0]["pricing"] = map[string]interface{}{
+		"currency":      "USD",
+		"prompt_per_1m": 0,
+	}
+
+	bodyBytes, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, "")(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	updatedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read updated config: %v", err)
+	}
+	parsed, err := routerconfig.ParseYAMLBytes(updatedData)
+	if err != nil {
+		t.Fatalf("parse persisted config: %v", err)
+	}
+	pricing, configured := parsed.GetFullModelPricing("test-model")
+	if !configured || pricing.Currency != "USD" || pricing.PromptPer1M != 0 {
+		t.Fatalf("persisted pricing = %+v, configured = %t; want explicit free USD pricing", pricing, configured)
+	}
+}
+
+func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := createValidTestConfig(t, tempDir)
+
+	config := canonicalConfigBody("provider.internal:8443")
+	providers := config["providers"].(map[string]interface{})
+	models := providers["models"].([]map[string]interface{})
+	models[0]["reasoning"] = map[string]interface{}{"family": "gpt"}
+	models[0]["backend_refs"] = []map[string]interface{}{
+		{
+			"name":          "hosted-primary",
+			"endpoint":      "provider.internal:8443",
+			"protocol":      "https",
+			"weight":        75,
+			"base_url":      "https://provider.example/v1",
+			"provider":      "openai",
+			"auth_header":   "Authorization",
+			"auth_prefix":   "Bearer",
+			"extra_headers": map[string]string{"X-Tenant": "production"},
+			"api_version":   "2026-09-01",
+			"chat_path":     "/chat/completions",
+			"api_key_env":   "PROVIDER_API_KEY",
+		},
+	}
+
+	bodyBytes, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/update", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	UpdateConfigHandler(configPath, false, "")(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d. Response: %s", w.Code, w.Body.String())
+	}
+
+	updatedData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read updated config: %v", err)
+	}
+	var updated map[string]interface{}
+	if err := yaml.Unmarshal(updatedData, &updated); err != nil {
+		t.Fatalf("parse updated config: %v", err)
+	}
+	updatedProviders := updated["providers"].(map[string]interface{})
+	updatedModels := updatedProviders["models"].([]interface{})
+	updatedModel := updatedModels[0].(map[string]interface{})
+	updatedRefs := updatedModel["backend_refs"].([]interface{})
+	got := updatedRefs[0].(map[string]interface{})
+
+	want := map[string]interface{}{
+		"name":          "hosted-primary",
+		"endpoint":      "provider.internal:8443",
+		"protocol":      "https",
+		"weight":        75,
+		"base_url":      "https://provider.example/v1",
+		"provider":      "openai",
+		"auth_header":   "Authorization",
+		"auth_prefix":   "Bearer",
+		"extra_headers": map[string]interface{}{"X-Tenant": "production"},
+		"api_version":   "2026-09-01",
+		"chat_path":     "/chat/completions",
+		"api_key_env":   "PROVIDER_API_KEY",
+	}
+	for key, expected := range want {
+		if actual := got[key]; !reflect.DeepEqual(actual, expected) {
+			t.Errorf("backend field %s = %#v, want %#v", key, actual, expected)
+		}
 	}
 }
 

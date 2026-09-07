@@ -4,7 +4,7 @@
 
 `fast_response` is a route-local plugin that returns a deterministic fallback message immediately.
 
-It aligns to `config/plugin/fast-response/busy.yaml`.
+It aligns to `config/fragments/plugin/fast-response/busy.yaml`.
 
 ## Key Advantages
 

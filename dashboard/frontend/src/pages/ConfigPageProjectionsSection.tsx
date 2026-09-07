@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfirmDialog from '../components/ConfirmDialog'
+import RoutingScopeSelector from '../components/RoutingScopeSelector'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
@@ -10,10 +11,8 @@ import type {
   ConfigData,
   ConfigProjections,
   ProjectionMapping,
-  ProjectionMappingOutput,
   ProjectionPartition,
   ProjectionScore,
-  ProjectionScoreInput,
 } from './configPageSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
@@ -35,6 +34,19 @@ import {
   ProjectionOutputsEditor,
 } from './configPageProjectionStructuredEditors'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
+import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
+import {
+  cloneProjections,
+  EMPTY_MAPPINGS,
+  EMPTY_PARTITIONS,
+  EMPTY_PROJECTIONS,
+  EMPTY_SCORES,
+  ensureProjectionConfig,
+  type ProjectionDeleteTarget,
+  type ProjectionMappingFormState,
+  type ProjectionPartitionFormState,
+  type ProjectionScoreFormState,
+} from './configPageProjectionTableSupport'
 
 interface ConfigPageProjectionsSectionProps {
   config: ConfigData | null
@@ -42,54 +54,6 @@ interface ConfigPageProjectionsSectionProps {
   saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-}
-
-interface ProjectionPartitionFormState {
-  name: string
-  semantics: string
-  members: string[]
-  temperature?: number
-  default?: string
-}
-
-interface ProjectionScoreFormState {
-  name: string
-  method: string
-  inputs: ProjectionScoreInput[]
-}
-
-interface ProjectionMappingFormState {
-  name: string
-  source: string
-  method: string
-  calibration?: ProjectionMapping['calibration']
-  outputs: ProjectionMappingOutput[]
-}
-
-type ProjectionDeleteTarget =
-  | { kind: 'partition'; name: string }
-  | { kind: 'score'; name: string }
-  | { kind: 'mapping'; name: string }
-
-const EMPTY_PROJECTIONS: ConfigProjections = { partitions: [], scores: [], mappings: [] }
-const EMPTY_PARTITIONS: ProjectionPartition[] = []
-const EMPTY_SCORES: ProjectionScore[] = []
-const EMPTY_MAPPINGS: ProjectionMapping[] = []
-
-const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
-  partitions: [...(cfg.projections?.partitions || [])],
-  scores: [...(cfg.projections?.scores || [])],
-  mappings: [...(cfg.projections?.mappings || [])],
-})
-
-const ensureProjectionConfig = (cfg: ConfigData) => {
-  if (!cfg.projections) {
-    cfg.projections = { partitions: [], scores: [], mappings: [] }
-  }
-  if (!cfg.projections.partitions) cfg.projections.partitions = []
-  if (!cfg.projections.scores) cfg.projections.scores = []
-  if (!cfg.projections.mappings) cfg.projections.mappings = []
-  return cfg.projections
 }
 
 export default function ConfigPageProjectionsSection({
@@ -100,12 +64,19 @@ export default function ConfigPageProjectionsSection({
   openViewModal,
 }: ConfigPageProjectionsSectionProps) {
   const [search, setSearch] = useState('')
-  const [projectionPendingDelete, setProjectionPendingDelete] = useState<ProjectionDeleteTarget | null>(null)
+  const [projectionPendingDelete, setProjectionPendingDelete] =
+    useState<ProjectionDeleteTarget | null>(null)
   const [projectionDeletePending, setProjectionDeletePending] = useState(false)
   const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
+  useEffect(() => {
+    setProjectionPendingDelete(null)
+    setProjectionDeleteError(null)
+  }, [selectedScopeId])
   const projections = useMemo<ConfigProjections>(
-    () => config?.projections || EMPTY_PROJECTIONS,
-    [config?.projections]
+    () => scopedConfig?.projections || EMPTY_PROJECTIONS,
+    [scopedConfig?.projections],
   )
   const partitions = projections.partitions || EMPTY_PARTITIONS
   const scores = projections.scores || EMPTY_SCORES
@@ -118,9 +89,9 @@ export default function ConfigPageProjectionsSection({
         [partition.name, partition.semantics, partition.default || '', ...(partition.members || [])]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [partitions, search]
+    [partitions, search],
   )
 
   const filteredScores = useMemo(
@@ -129,13 +100,17 @@ export default function ConfigPageProjectionsSection({
         [
           score.name,
           score.method,
-          ...(score.inputs || []).flatMap((input) => [input.type, input.name, input.value_source || '']),
+          ...(score.inputs || []).flatMap((input) => [
+            input.type,
+            input.name,
+            input.value_source || '',
+          ]),
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [scores, search]
+    [scores, search],
   )
 
   const filteredMappings = useMemo(
@@ -150,9 +125,9 @@ export default function ConfigPageProjectionsSection({
         ]
           .join(' ')
           .toLowerCase()
-          .includes(search.toLowerCase())
+          .includes(search.toLowerCase()),
       ),
-    [mappings, search]
+    [mappings, search],
   )
 
   const partitionFields: FieldConfig<ProjectionPartitionFormState>[] = [
@@ -203,8 +178,7 @@ export default function ConfigPageProjectionsSection({
       label: 'Inputs',
       type: 'custom',
       required: true,
-      description:
-        'Weighted signal, knowledge-base metric, or earlier projection contributions.',
+      description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
       customRender: (value, onChange) => (
         <ProjectionInputsEditor value={value} onChange={onChange} />
       ),
@@ -250,10 +224,10 @@ export default function ConfigPageProjectionsSection({
   ]
 
   const withClonedConfig = async (mutate: (next: ConfigData) => void) => {
-    if (!config) return
-    const next = cloneConfigData(config)
+    if (!scopedConfig) return
+    const next = cloneConfigData(scopedConfig)
     mutate(next)
-    await saveConfig(next)
+    await saveConfig(applyScopedConfig(next))
   }
 
   const handleAddPartition = () => {
@@ -284,7 +258,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.partitions = [...projectionConfig.partitions!, nextPartition]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -314,10 +288,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.partitions = cloneProjections(next).partitions?.map((entry) =>
-            entry.name === partition.name ? nextPartition : entry
+            entry.name === partition.name ? nextPartition : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -343,7 +317,9 @@ export default function ConfigPageProjectionsSection({
         ],
       },
     ]
-    openViewModal(`Projection Partition: ${partition.name}`, sections, () => handleEditPartition(partition))
+    openViewModal(`Projection Partition: ${partition.name}`, sections, () =>
+      handleEditPartition(partition),
+    )
   }
 
   const handleAddScore = () => {
@@ -368,7 +344,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.scores = [...projectionConfig.scores!, nextScore]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -392,10 +368,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.scores = cloneProjections(next).scores?.map((entry) =>
-            entry.name === score.name ? nextScore : entry
+            entry.name === score.name ? nextScore : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -451,7 +427,7 @@ export default function ConfigPageProjectionsSection({
           projectionConfig.mappings = [...projectionConfig.mappings!, nextMapping]
         })
       },
-      'add'
+      'add',
     )
   }
 
@@ -482,10 +458,10 @@ export default function ConfigPageProjectionsSection({
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
           projectionConfig.mappings = cloneProjections(next).mappings?.map((entry) =>
-            entry.name === mapping.name ? nextMapping : entry
+            entry.name === mapping.name ? nextMapping : entry,
           )
         })
-      }
+      },
     )
   }
 
@@ -509,7 +485,9 @@ export default function ConfigPageProjectionsSection({
         const projectionConfig = ensureProjectionConfig(next)
         const cloned = cloneProjections(next)
         if (target.kind === 'partition') {
-          projectionConfig.partitions = cloned.partitions?.filter((entry) => entry.name !== target.name)
+          projectionConfig.partitions = cloned.partitions?.filter(
+            (entry) => entry.name !== target.name,
+          )
         } else if (target.kind === 'score') {
           projectionConfig.scores = cloned.scores?.filter((entry) => entry.name !== target.name)
         } else {
@@ -518,7 +496,9 @@ export default function ConfigPageProjectionsSection({
       })
       setProjectionPendingDelete(null)
     } catch (error) {
-      setProjectionDeleteError(error instanceof Error ? error.message : 'Failed to delete projection.')
+      setProjectionDeleteError(
+        error instanceof Error ? error.message : 'Failed to delete projection.',
+      )
     } finally {
       setProjectionDeletePending(false)
     }
@@ -534,9 +514,11 @@ export default function ConfigPageProjectionsSection({
           { label: 'Method', value: mapping.method },
           {
             label: 'Calibration',
-            value: mapping.calibration
-              ? <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
-              : 'N/A',
+            value: mapping.calibration ? (
+              <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
+            ) : (
+              'N/A'
+            ),
             fullWidth: true,
           },
           {
@@ -601,7 +583,11 @@ export default function ConfigPageProjectionsSection({
     {
       key: 'sources',
       header: 'Sources',
-      render: (row) => row.inputs?.map((input) => `${input.type}:${input.name}`).slice(0, 3).join(', ') || 'N/A',
+      render: (row) =>
+        row.inputs
+          ?.map((input) => `${input.type}:${input.name}`)
+          .slice(0, 3)
+          .join(', ') || 'N/A',
     },
   ]
 
@@ -637,39 +623,13 @@ export default function ConfigPageProjectionsSection({
     <ConfigPageManagerLayout
       title="Projections"
       description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
-      pills={[
-        { label: 'Models', active: false },
-        { label: 'Signals', active: false },
-        { label: 'Projections', active: true },
-        { label: 'Decisions', active: false },
-      ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <p
-          style={{
-            margin: 0,
-            padding: '0.75rem 1rem',
-            borderRadius: 8,
-            background: 'var(--color-surface-elevated, rgba(255, 255, 255, 0.04))',
-            border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: 'var(--color-text-secondary)',
-          }}
-        >
-          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router replay is on,
-          each Insights record can include a structured{' '}
-          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and winners, score
-          contributions, mapping confidence and boundary distance, per-output threshold steps). See{' '}
-          <a
-            href="https://vllm-sr.ai/docs/tutorials/projection/traces"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Projection traces
-          </a>{' '}
-          in the docs.
-        </p>
+        <RoutingScopeSelector
+          scopes={routingScopes}
+          value={selectedScopeId}
+          onChange={setSelectedScopeId}
+        />
         <TableHeader
           title="Projection Surfaces"
           count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
@@ -768,7 +728,9 @@ export default function ConfigPageProjectionsSection({
         eyebrow="Destructive configuration change"
         confirmLabel={`Delete ${projectionPendingDelete?.kind || 'projection'}`}
         pending={projectionDeletePending}
-        details={projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined}
+        details={
+          projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined
+        }
         onCancel={() => {
           if (projectionDeletePending) return
           setProjectionPendingDelete(null)

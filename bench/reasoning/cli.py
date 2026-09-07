@@ -72,7 +72,7 @@ def _add_compare_command(subparsers):
     )
     compare_parser.add_argument(
         "--router-endpoint",
-        default="http://127.0.0.1:8801/v1",
+        default="http://127.0.0.1:8899/v1",
         help="Router endpoint URL",
     )
     compare_parser.add_argument(

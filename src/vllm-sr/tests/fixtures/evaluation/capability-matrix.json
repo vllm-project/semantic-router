@@ -1,0 +1,448 @@
+{
+  "schema_version": "evaluation.v1",
+  "cases": [
+    {
+      "name": "unbound-mixture-target-is-unavailable",
+      "valid": true,
+      "target": {"schema_version": "evaluation.v1", "id": "unbound-mixture", "kind": "mixture-of-models"},
+      "expected_tracks": []
+    },
+    {
+      "name": "connectivity-without-a-frozen-mixture-is-unavailable",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "unbound-mixture",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected_tracks": []
+    },
+    {
+      "name": "two-arm-mixture-enables-all-in-one-core",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary", "vllm-sr/mom-alias"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:1ddd0ce32961e4b4c7e8de072d1b6a74b41db254a2b8295d3df1619d903becfa",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:e2544ed8aba06b8de5d05234b16dfd3b34c64b563b125ddf732ae6cdf2b28131",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "capabilities": ["chat"], "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "capabilities": ["chat", "vision"], "modalities": ["text", "image"]}
+          ],
+          "support_models": [
+            {
+              "model": "org/router-support",
+              "provider_model_id_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "config_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "runtime_revision": "runtime-v1",
+              "backend_topology_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            }
+          ],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:7cb3a0b6d29e82c0e4608b186d9a1d1fef90a69c52e143e81364043d26cbfa95",
+            "target_snapshot_digest": "sha256:6d670e837cd9a9bd65f73e1cede60230388e9c1b0e0acc6640730fd3c3cbc958",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "multimodal", "capacity"]
+    },
+    {
+      "name": "agent-task-ledger-enables-only-agentic-track",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "agent_task_ledger": {"schema_version": "evaluation.v1", "url": "https://agent-task-ledger.example.test", "timeout_seconds": 30.0},
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:ba1ca29376dca3db6010f2467dd6ef5b94f37086f94f997d58a2428a81abdf24",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "modalities": ["text", "image"]}
+          ],
+          "support_models": [],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:e2923da5096055b56ab1464ce5e9029d279b270ce29901bbb3faf11173b2add8",
+            "target_snapshot_digest": "sha256:065abf2aa10093ae2bbe0c14e400306ad878f9902bc556d5f954fbc6f8936f30",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "agentic", "multimodal", "capacity"]
+    },
+    {
+      "name": "fault-recovery-ledger-enables-only-agentic-track",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "fault_recovery_ledger": {"schema_version": "evaluation.v1", "url": "https://recovery-ledger.example.test", "timeout_seconds": 30.0},
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:ba1ca29376dca3db6010f2467dd6ef5b94f37086f94f997d58a2428a81abdf24",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "modalities": ["text", "image"]}
+          ],
+          "support_models": [],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:e2923da5096055b56ab1464ce5e9029d279b270ce29901bbb3faf11173b2add8",
+            "target_snapshot_digest": "sha256:065abf2aa10093ae2bbe0c14e400306ad878f9902bc556d5f954fbc6f8936f30",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "agentic", "multimodal", "capacity"]
+    },
+    {
+      "name": "hard-policy-ledger-enables-only-safety-track",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "hard_policy_ledger": {"schema_version": "evaluation.v1", "url": "https://policy-ledger.example.test", "timeout_seconds": 30.0},
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:ba1ca29376dca3db6010f2467dd6ef5b94f37086f94f997d58a2428a81abdf24",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "modalities": ["text", "image"]}
+          ],
+          "support_models": [],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:e2923da5096055b56ab1464ce5e9029d279b270ce29901bbb3faf11173b2add8",
+            "target_snapshot_digest": "sha256:065abf2aa10093ae2bbe0c14e400306ad878f9902bc556d5f954fbc6f8936f30",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "multimodal", "safety", "capacity"]
+    },
+    {
+      "name": "production-experiment-ledger-enables-only-preference-track",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "production_experiment_ledger": {"schema_version": "evaluation.v1", "url": "https://experiment-ledger.example.test", "timeout_seconds": 30.0},
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:ba1ca29376dca3db6010f2467dd6ef5b94f37086f94f997d58a2428a81abdf24",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "modalities": ["text", "image"]}
+          ],
+          "support_models": [],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:e2923da5096055b56ab1464ce5e9029d279b270ce29901bbb3faf11173b2add8",
+            "target_snapshot_digest": "sha256:065abf2aa10093ae2bbe0c14e400306ad878f9902bc556d5f954fbc6f8936f30",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "multimodal", "preference", "capacity"]
+    },
+    {
+      "name": "sealed-ledgers-enable-every-live-track",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "agent_task_ledger": {"schema_version": "evaluation.v1", "url": "https://agent-task-ledger.example.test", "timeout_seconds": 30.0},
+        "fault_recovery_ledger": {"schema_version": "evaluation.v1", "url": "https://recovery-ledger.example.test", "timeout_seconds": 30.0},
+        "hard_policy_ledger": {"schema_version": "evaluation.v1", "url": "https://policy-ledger.example.test", "timeout_seconds": 30.0},
+        "production_experiment_ledger": {"schema_version": "evaluation.v1", "url": "https://experiment-ledger.example.test", "timeout_seconds": 30.0},
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-c0905088ba5b80677849d4824f21b8b075ab49c6a7f58b5b84815ccd69f3b0a5",
+          "entrypoint_model": "vllm-sr/mom-primary",
+          "aliases": ["vllm-sr/mom-primary"],
+          "recipe_name": "balanced",
+          "recipe_description": "Balanced test mixture",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:ba1ca29376dca3db6010f2467dd6ef5b94f37086f94f997d58a2428a81abdf24",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "fast", "model": "org/fast", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 1.0, "modalities": ["text"]},
+            {"id": "vision", "model": "org/vision", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 1.0, "output_cost_per_million_tokens_usd": 2.0, "modalities": ["text", "image"]}
+          ],
+          "support_models": [],
+          "fallback_arm_id": "fast",
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["fast", "vision"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:e2923da5096055b56ab1464ce5e9029d279b270ce29901bbb3faf11173b2add8",
+            "target_snapshot_digest": "sha256:065abf2aa10093ae2bbe0c14e400306ad878f9902bc556d5f954fbc6f8936f30",
+            "arm_ids": ["fast", "vision"],
+            "fallback_arm_id": "fast",
+            "signals": [
+              {"id": "complexity:complexity", "value_kind": "numeric"},
+              {"id": "modality:modality", "value_kind": "numeric"}
+            ],
+            "projections": [
+              {"id": "projection:route-confidence", "value_kind": "probability", "outcome_binding": "selected_is_oracle"}
+            ],
+            "top_k": [1, 2]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "model_pool", "joint", "agentic", "multimodal", "preference", "safety", "capacity"]
+    },
+    {
+      "name": "single-arm-mixture-does-not-claim-pool-or-joint",
+      "valid": true,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-947f187506f7629c81c81879a2cb2256455038e4ac770091d897fa0a8b945e3b",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "backend_topology_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-947f187506f7629c81c81879a2cb2256455038e4ac770091d897fa0a8b945e3b",
+          "entrypoint_model": "vllm-sr/single",
+          "aliases": ["vllm-sr/single"],
+          "recipe_name": "single",
+          "recipe_description": "Single arm",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:e2a00b6c0a26b5ec27efa404579f1b42acbbf3f22b0b21f98b505897d4c3b912",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [{"id": "only", "model": "org/only", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 0.0, "modalities": ["text"]}],
+          "support_models": [],
+          "fallback_arm_id": "only",
+          "decisions": [{"name": "default", "algorithm": "single", "arm_ids": ["only"]}],
+          "routing_recipe_plan": {
+            "contract_version": "routing-recipe-plan.v1",
+            "plan_digest": "sha256:47c3e33101bf4bc381bd7479e63750ecbab9ce124b7d5892ffddc66412139f6c",
+            "target_snapshot_digest": "sha256:b4f527e35536c0aa66a8fb82a6852c1ef99c3ae34f9106e2e53ac528da37c2b3",
+            "arm_ids": ["only"],
+            "fallback_arm_id": "only",
+            "signals": [],
+            "projections": [],
+            "top_k": [1]
+          }
+        }
+      },
+      "expected_tracks": ["routing", "capacity"]
+    },
+    {
+      "name": "duplicate-arm-id-is-invalid",
+      "valid": false,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-f1234d75178d892a133a410355a5a990cf75d2f33eba25d575943d4df632f3a4",
+        "kind": "mixture-of-models",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-f1234d75178d892a133a410355a5a990cf75d2f33eba25d575943d4df632f3a4",
+          "entrypoint_model": "vllm-sr/invalid",
+          "aliases": ["vllm-sr/invalid"],
+          "recipe_name": "invalid",
+          "recipe_description": "Invalid duplicate arms",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:8ae8fe958cb3df3fc0f6c87203d1639bfa82c440f4128c42476ec81b71ea9d4c",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [
+            {"id": "same", "model": "org/a", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 0.0},
+            {"id": "same", "model": "org/b", "provider_model_id_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 0.0}
+          ],
+          "support_models": [],
+          "decisions": [{"name": "default", "algorithm": "static", "arm_ids": ["same"]}]
+        }
+      }
+    },
+    {
+      "name": "entrypoint-must-be-a-frozen-alias",
+      "valid": false,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "mom-f1234d75178d892a133a410355a5a990cf75d2f33eba25d575943d4df632f3a4",
+        "kind": "mixture-of-models",
+        "mixture": {
+          "schema_version": "evaluation.v1",
+          "id": "mom-f1234d75178d892a133a410355a5a990cf75d2f33eba25d575943d4df632f3a4",
+          "entrypoint_model": "vllm-sr/missing",
+          "aliases": ["vllm-sr/other"],
+          "recipe_name": "invalid",
+          "recipe_description": "Invalid alias binding",
+          "recipe_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "pool_digest": "sha256:d8308de74ac2f6ddcfba6eeb06ae7d913e2f51fe96ed0b1135480f3c4bc348ef",
+          "selector_policy_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "selector_digest": "sha256:6d94faf94a7f0be2312943256c1fb107eade978d6da72923a61da25312371093",
+          "adaptation_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+          "binding_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "model_arms": [{"id": "only", "model": "org/only", "provider_model_id_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "input_cost_per_million_tokens_usd": 0.0, "output_cost_per_million_tokens_usd": 0.0}],
+          "support_models": [],
+          "decisions": [{"name": "default", "algorithm": "single", "arm_ids": ["only"]}]
+        }
+      }
+    },
+    {
+      "name": "url-path-is-invalid",
+      "valid": false,
+      "target": {"schema_version": "evaluation.v1", "id": "unbound-mixture", "kind": "mixture-of-models", "envoy_url": "https://envoy.example.test/v1"}
+    },
+    {
+      "name": "credential-environments-must-be-distinct",
+      "valid": false,
+      "target": {
+        "schema_version": "evaluation.v1",
+        "id": "unbound-mixture",
+        "kind": "mixture-of-models",
+        "router_api_url": "https://router.example.test",
+        "envoy_url": "https://envoy.example.test",
+        "router_api_key": {"schema_version": "evaluation.v1", "env": "SHARED_KEY"},
+        "envoy_api_key": {"schema_version": "evaluation.v1", "env": "SHARED_KEY"}
+      }
+    }
+  ]
+}

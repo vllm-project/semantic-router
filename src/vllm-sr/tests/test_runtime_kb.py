@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 import yaml
 from cli.commands.runtime_kb import (
     _load_runtime_kb_bootstrap_state,
@@ -159,3 +160,83 @@ def test_runtime_kb_bootstrap_state_write_replaces_file_without_temp_leftovers(
         "knowledge_bases/privacy",
     }
     assert list(state_path.parent.glob(f".{state_path.name}.*.tmp")) == []
+
+
+@pytest.mark.parametrize(
+    "source_path",
+    ["../private", ".", "/var/lib/private", "knowledge_bases/../private"],
+)
+def test_runtime_kb_bootstrap_rejects_paths_outside_allowed_roots(
+    tmp_path: Path, source_path: str
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "global": {
+                    "model_catalog": {
+                        "kbs": [
+                            {
+                                "name": "unsafe_kb",
+                                "source": {
+                                    "path": source_path,
+                                    "manifest": "labels.json",
+                                },
+                            }
+                        ]
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    with pytest.raises(ValueError, match=r"source\.path"):
+        resolve_effective_config_path(
+            config_path=config_path,
+            algorithm=None,
+            setup_mode=False,
+            platform=None,
+        )
+
+
+def test_runtime_kb_bootstrap_rejects_symlinked_source_tree(tmp_path: Path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "labels.json").write_text("{}", encoding="utf-8")
+    source_root = tmp_path / "knowledge_bases" / "custom"
+    source_root.mkdir(parents=True)
+    (source_root / "linked").symlink_to(outside, target_is_directory=True)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "global": {
+                    "model_catalog": {
+                        "kbs": [
+                            {
+                                "name": "custom_kb",
+                                "source": {
+                                    "path": "knowledge_bases/custom/",
+                                    "manifest": "labels.json",
+                                },
+                            }
+                        ]
+                    }
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    with pytest.raises(ValueError, match=r"source trees.*symbolic links"):
+        resolve_effective_config_path(
+            config_path=config_path,
+            algorithm=None,
+            setup_mode=False,
+            platform=None,
+        )
+
+    assert not (tmp_path / ".vllm-sr" / "knowledge_bases" / "custom").exists()

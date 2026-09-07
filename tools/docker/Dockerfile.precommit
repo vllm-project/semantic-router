@@ -1,7 +1,7 @@
 FROM golang:1.25
 
 # Allow pip install without --break-system-packages inside the container.
-# Needed because make targets (e.g. agent-bootstrap) call pip directly.
+# Needed because the repository check environment calls pip directly.
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # System dependencies — matches CI "Install system dependencies" step.
@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js 20 — matches CI setup-node node-version: 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+# Node.js 22 — matches CI setup-node and website dependency requirements
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs
 
 # Rust 1.90 with rustfmt + clippy — matches CI dtolnay/rust-toolchain 1.90
@@ -27,11 +27,11 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --de
 ENV PATH="/root/.cargo/bin:${PATH}"
 RUN rustup component add rustfmt clippy
 
-# markdownlint-cli pinned — matches agent-bootstrap npm install
+# markdownlint-cli pinned — matches the harness bootstrap version
 RUN npm install -g markdownlint-cli@0.43.0
 
 # Python tooling — versions match tools/agent/requirements.txt so that
-# `make agent-ci-lint` and `make precommit-check` both work out of the box.
+# `make check` and `make precommit-check` both work out of the box.
 RUN pip install --break-system-packages \
     PyYAML==6.0.3 \
     codespell==2.4.1 \

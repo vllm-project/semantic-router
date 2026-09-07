@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+type statusCredentialProvider struct{ token string }
+
+func (provider statusCredentialProvider) ManagementCredential() (string, error) {
+	return provider.token, nil
+}
+
 func TestFetchRouterModelsInfoSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -58,5 +64,20 @@ func TestFetchRouterModelsInfoIgnoresNonOKResponses(t *testing.T) {
 
 	if info := fetchRouterModelsInfo(server.URL); info != nil {
 		t.Fatalf("expected nil info on non-200 response, got %+v", info)
+	}
+}
+
+func TestFetchRouterModelsInfoUsesManagedCredential(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer status-service-token" {
+			t.Fatalf("Authorization = %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"models":[],"summary":{}}`))
+	}))
+	defer server.Close()
+
+	if info := fetchRouterModelsInfo(server.URL, statusCredentialProvider{token: "status-service-token"}); info == nil {
+		t.Fatal("expected authenticated model inventory")
 	}
 }

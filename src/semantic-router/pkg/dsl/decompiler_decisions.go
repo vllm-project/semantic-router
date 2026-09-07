@@ -52,6 +52,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
 	}
+	if model.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", model.ReasoningMode))
+	}
 	if model.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
 	}
@@ -91,10 +94,10 @@ func decompileRuleNode(node *config.RuleCombination) string {
 
 	// Leaf node — signal reference
 	if node.Type != "" {
-		return fmt.Sprintf("%s(%q)", node.Type, node.Name)
+		return decompileRuleLeaf(node)
 	}
 
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		// Flatten nested ANDs into a flat list: a AND b AND c
 		parts := flattenRuleNode(node, "AND")
@@ -102,6 +105,9 @@ func decompileRuleNode(node *config.RuleCombination) string {
 	case "OR":
 		// Flatten nested ORs into a flat list: (a OR b OR c)
 		parts := flattenRuleNode(node, "OR")
+		if len(parts) == 1 {
+			return parts[0]
+		}
 		return "(" + strings.Join(parts, " OR ") + ")"
 	case "NOT":
 		if len(node.Conditions) == 1 {
@@ -110,7 +116,29 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		}
 	}
 
-	// Fallback: join with operator
+	return decompileRuleFallback(node)
+}
+
+func decompileRuleLeaf(node *config.RuleCombination) string {
+	arguments := []string{fmt.Sprintf("%q", node.Name)}
+	if node.Label != "" {
+		arguments = append(arguments, fmt.Sprintf("label: %q", node.Label))
+	}
+	if node.Predicate != nil {
+		arguments = append(
+			arguments,
+			"predicate: "+formatPluginConfigValue(
+				structurePredicateToMap(node.Predicate),
+			),
+		)
+	}
+	if node.OnError != "" {
+		arguments = append(arguments, fmt.Sprintf("on_error: %q", node.OnError))
+	}
+	return fmt.Sprintf("%s(%s)", node.Type, strings.Join(arguments, ", "))
+}
+
+func decompileRuleFallback(node *config.RuleCombination) string {
 	parts := make([]string, 0, len(node.Conditions))
 	for _, c := range node.Conditions {
 		parts = append(parts, decompileRuleNode(&c))
@@ -122,7 +150,7 @@ func decompileRuleNode(node *config.RuleCombination) string {
 }
 
 func flattenRuleNode(node *config.RuleCombination, op string) []string {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var parts []string
 		for i := range node.Conditions {
 			parts = append(parts, flattenRuleNode(&node.Conditions[i], op)...)
@@ -163,7 +191,7 @@ func decompileComposerObj(node *config.RuleCombination) string {
 	for i := range node.Conditions {
 		parts = append(parts, decompileComposerObj(&node.Conditions[i]))
 	}
-	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", node.Operator, strings.Join(parts, ", "))
+	return fmt.Sprintf("{ operator: %q, conditions: [%s] }", normalizedRuleOperator(node.Operator), strings.Join(parts, ", "))
 }
 
 func (d *decompiler) decompileDecisions() {
@@ -181,6 +209,9 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 	if ruleExpr := decompileRuleNode(&dec.Rules); ruleExpr != "" {
 		d.write("  WHEN %s\n", ruleExpr)
 	}
+	if dec.Action != nil {
+		d.write("  ACTION %s %q\n", dec.Action.Type, dec.Action.Destination)
+	}
 	d.writeDecisionModels(dec)
 	for _, iter := range dec.CandidateIterations {
 		d.decompileCandidateIteration(iter)
@@ -194,8 +225,15 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 }
 
 func (d *decompiler) writeDecisionHeader(dec config.Decision) {
+	var options []string
 	if dec.Description != "" {
-		d.write("ROUTE %s (description = %q) {\n", quoteName(dec.Name), dec.Description)
+		options = append(options, fmt.Sprintf("description = %q", dec.Description))
+	}
+	if dec.Rules.OnUnknown != "" {
+		options = append(options, fmt.Sprintf("on_unknown = %q", dec.Rules.OnUnknown))
+	}
+	if len(options) > 0 {
+		d.write("ROUTE %s (%s) {\n", quoteName(dec.Name), strings.Join(options, ", "))
 		return
 	}
 	d.write("ROUTE %s {\n", quoteName(dec.Name))
@@ -232,11 +270,12 @@ func (d *decompiler) writeDecisionAlgorithm(dec config.Decision) {
 
 func (d *decompiler) writeDecisionPlugins(dec config.Decision) {
 	for _, p := range dec.Plugins {
+		pluginType := config.NormalizeDecisionPluginType(p.Type)
 		pluginFields := decompilePluginConfig(&p)
 		if pluginFields != "" {
-			d.write("  PLUGIN %s {\n%s  }\n", sanitizeName(p.Type), pluginFields)
+			d.write("  PLUGIN %s {\n%s  }\n", sanitizeName(pluginType), pluginFields)
 			continue
 		}
-		d.write("  PLUGIN %s\n", sanitizeName(p.Type))
+		d.write("  PLUGIN %s\n", sanitizeName(pluginType))
 	}
 }

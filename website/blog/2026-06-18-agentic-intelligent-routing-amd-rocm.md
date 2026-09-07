@@ -31,7 +31,7 @@ experience route decisions and Router Learning behavior from an agent client.
 <!-- truncate -->
 
 The reference recipe is
-[deploy/recipes/agentic-saars.yaml](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/agentic-saars.yaml).
+[config/recipes/agent/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/config.yaml).
 It is designed to be runnable on a single MI300X-class AMD ROCm host while
 exercising the same routing shape you would use with a heterogeneous fleet.
 
@@ -46,7 +46,7 @@ front of it.
 | ROCm vLLM backend | `http://<host>:8090/v1` | Serves `Qwen/Qwen3.6-35B-A3B` and exposes the logical model aliases used by the recipe. |
 | Envoy router API | `http://<host>:8899/v1` | OpenAI-compatible endpoint for agents and SDKs. |
 | Router dashboard | `http://<host>:8700` | Imports the recipe, shows replay, topology, playground, and route inspection. |
-| Recipe | [`deploy/recipes/agentic-saars.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/agentic-saars.yaml) | Encodes simple, complex, privacy, domain, and agentic Router Learning policy. |
+| Recipe | [`config/recipes/agent/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/config.yaml) | Encodes simple, complex, privacy, domain, and agentic Router Learning policy. |
 | Inferoa | [github.com/agentic-in/inferoa](https://github.com/agentic-in/inferoa) | Optional agent client with native vLLM-SR route, learning, cache, and token visibility. |
 
 The fastest remote development setup is to expose the API and dashboard ports
@@ -289,12 +289,12 @@ curl -s "http://localhost:${VLLM_PORT_QWEN36:-8090}/metrics" \
 Download the published recipe and serve it with the installed CLI:
 
 ```bash
-curl -L -o agentic-saars.yaml \
-  https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/agentic-saars.yaml
+curl -L -o agent.yaml \
+  https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/agent/config.yaml
 
 vllm-sr serve \
   --platform amd \
-  --config agentic-saars.yaml
+  --config agent.yaml
 ```
 
 The recipe exposes the OpenAI-compatible router through Envoy:
@@ -325,7 +325,7 @@ Open the dashboard at `http://<host>:8700`. If you are using the dashboard
 onboarding flow instead of the CLI command above, import the recipe from:
 
 ```text
-https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/agentic-saars.yaml
+https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/agent/config.yaml
 ```
 
 That gives you the same routing policy in the dashboard playground, replay

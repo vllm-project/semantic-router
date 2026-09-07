@@ -18,9 +18,14 @@ import (
 )
 
 func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
-	var seenModels []string
+	var (
+		seenModelsMu sync.Mutex
+		seenModels   []string
+	)
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+		seenModelsMu.Lock()
 		seenModels = append(seenModels, model)
+		seenModelsMu.Unlock()
 		switch model {
 		case "panel-a":
 			return "panel a answer", http.StatusOK
@@ -54,7 +59,10 @@ func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
 	assert.Equal(t, "judge", resp.Model)
 	assert.Equal(t, []string{"panel-a", "panel-b", "judge"}, resp.ModelsUsed)
 	assert.Equal(t, 4, resp.Iterations)
-	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModels)
+	seenModelsMu.Lock()
+	seenModelsSnapshot := append([]string(nil), seenModels...)
+	seenModelsMu.Unlock()
+	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModelsSnapshot)
 	expectedUsage := TokenUsage{PromptTokens: 90, CompletionTokens: 13, TotalTokens: 103}
 	assert.Equal(t, expectedUsage, resp.Usage)
 
@@ -75,6 +83,7 @@ func TestFusionLooperRecordsPartialPanelFailures(t *testing.T) {
 	server := newFusionStubServer(t, func(model, prompt string) (string, int) {
 		switch model {
 		case "panel-a":
+			time.Sleep(50 * time.Millisecond)
 			return "panel a answer", http.StatusOK
 		case "panel-b":
 			return "failed", http.StatusBadGateway
@@ -93,8 +102,9 @@ func TestFusionLooperRecordsPartialPanelFailures(t *testing.T) {
 	req.Algorithm = &config.AlgorithmConfig{
 		Type: "fusion",
 		Fusion: &config.FusionAlgorithmConfig{
-			Model:          "judge",
-			AnalysisModels: []string{"panel-a", "panel-b"},
+			Model:                  "judge",
+			AnalysisModels:         []string{"panel-a", "panel-b"},
+			MinSuccessfulResponses: 1,
 		},
 	}
 
@@ -172,6 +182,15 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, 2, dst.GroundingMinKeep)
 	assert.Equal(t, 0.7, dst.GroundingNLIContradictionPenalty)
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
+}
+
+func TestFusionExecutionConfigRejectsQuorumLargerThanPanel(t *testing.T) {
+	cfg := normalizeFusionExecutionConfig(fusionExecutionConfig{
+		AnalysisModels:         []string{"panel-a", "panel-b"},
+		MinSuccessfulResponses: 3,
+	})
+	assert.Equal(t, 3, cfg.MinSuccessfulResponses)
+	require.ErrorContains(t, validateFusionExecutionConfig(cfg), "exceeds panel size 2")
 }
 
 func TestResolveFusionExecutionConfigLayersAnalysisOverridesFieldWise(t *testing.T) {
@@ -587,7 +606,14 @@ func TestFusionLooperAllPanelFailuresReturnError(t *testing.T) {
 
 	_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "all 2 analysis models failed")
+	assert.Equal(t, "fusion panel quorum not met: got 0 usable responses, require 2", err.Error())
+	var quorumErr *FusionQuorumError
+	require.ErrorAs(t, err, &quorumErr)
+	evidence := quorumErr.Evidence()
+	assert.Equal(t, 0, evidence.UsableCount)
+	require.Len(t, evidence.Attempts, 2)
+	assert.Equal(t, FusionPanelAttemptFailed, evidence.Attempts[0].State)
+	assert.Equal(t, FusionPanelAttemptFailed, evidence.Attempts[1].State)
 }
 
 func TestFusionLooperUsesDecisionModelRefs(t *testing.T) {
@@ -740,20 +766,6 @@ func writeFusionTestCompletion(w http.ResponseWriter, model string, content stri
 		},
 		"usage": fusionTestUsage(model),
 	})
-}
-
-func extractMessageContent(t *testing.T, body []byte) string {
-	t.Helper()
-	var payload struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	require.NoError(t, json.Unmarshal(body, &payload))
-	require.NotEmpty(t, payload.Choices)
-	return payload.Choices[0].Message.Content
 }
 
 func fusionTestUsage(model string) map[string]int64 {

@@ -91,16 +91,17 @@ func TestValidateSelectionResultAcceptsModelAndLoRAReferences(t *testing.T) {
 }
 
 func TestGlobalSelectRejectsInvalidSelectorResult(t *testing.T) {
-	oldRegistry := GlobalRegistry
+	oldRegistry := GetGlobalRegistry()
 	defer func() {
-		GlobalRegistry = oldRegistry
+		SetGlobalRegistry(oldRegistry)
 	}()
 
 	method := SelectionMethod("stub_invalid_result")
-	GlobalRegistry = NewRegistry()
-	GlobalRegistry.Register(method, stubSelector{
+	registry := NewRegistry()
+	registry.Register(method, stubSelector{
 		result: &SelectionResult{SelectedModel: "other"},
 	})
+	SetGlobalRegistry(registry)
 
 	_, err := Select(context.Background(), method, &SelectionContext{
 		CandidateModels: createCandidateModels("model-a", "model-b"),
@@ -111,14 +112,15 @@ func TestGlobalSelectRejectsInvalidSelectorResult(t *testing.T) {
 }
 
 func TestGlobalSelectRejectsNilSelectorResult(t *testing.T) {
-	oldRegistry := GlobalRegistry
+	oldRegistry := GetGlobalRegistry()
 	defer func() {
-		GlobalRegistry = oldRegistry
+		SetGlobalRegistry(oldRegistry)
 	}()
 
 	method := SelectionMethod("stub_nil_result")
-	GlobalRegistry = NewRegistry()
-	GlobalRegistry.Register(method, stubSelector{})
+	registry := NewRegistry()
+	registry.Register(method, stubSelector{})
+	SetGlobalRegistry(registry)
 
 	_, err := Select(context.Background(), method, &SelectionContext{
 		CandidateModels: createCandidateModels("model-a"),

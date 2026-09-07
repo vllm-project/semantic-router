@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -7,6 +8,19 @@ import {
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
+  it('closes an open workflow menu before a primary route is revealed', () => {
+    const layout = readFileSync(new URL('./Layout.tsx', import.meta.url), 'utf8')
+    const topNavRenderer = layout.slice(
+      layout.indexOf('const renderTopNavLink'),
+      layout.indexOf('const renderDesktopDropdown'),
+    )
+
+    expect(topNavRenderer).toContain('onClick={closeMenus}')
+    expect(layout).toMatch(
+      /useEffect\(\(\) => \{[\s\S]*setOpenDropdown\(null\)[\s\S]*\}, \[location\.pathname\]\)/,
+    )
+  })
+
   it('maps named knowledge-map routes back to the Knowledge category and Bases entry', () => {
     const pathname = '/knowledge-bases/customer-support/map'
     const basesItem = BUILD_MENU_CATEGORIES.find((category) => category.key === 'knowledge')
@@ -16,5 +30,31 @@ describe('layout navigation route matching', () => {
     expect(basesItem).toBeDefined()
     expect(isLayoutMenuItemActive(basesItem!, pathname, false)).toBe(true)
     expect(findActiveLayoutMenuCategory(BUILD_MENU_CATEGORIES, pathname, false)).toBe('knowledge')
+  })
+
+  it('keeps Model Hub, Models, and Mixture-of-Models together in the first Routing column', () => {
+    const models = BUILD_MENU_CATEGORIES.find(
+      (category) => category.key === 'routing',
+    )?.sections.find((section) => section.title === 'Models')
+    const entrypoints = models?.items.find(
+      (item) => item.kind === 'config' && item.configSection === 'entrypoints-recipes',
+    )
+
+    expect(models?.items[0]).toMatchObject({
+      kind: 'route',
+      label: 'Model Hub',
+      to: '/models',
+    })
+    expect(models?.items[1]).toMatchObject({
+      kind: 'config',
+      label: 'Models',
+      configSection: 'models',
+    })
+    expect(entrypoints).toMatchObject({
+      kind: 'config',
+      label: 'Mixture-of-Models',
+      configSection: 'entrypoints-recipes',
+    })
+    expect(models?.items.indexOf(entrypoints!)).toBe(2)
   })
 })

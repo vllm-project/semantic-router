@@ -345,6 +345,9 @@ func newReplayAPITestRouterWithRecords(t *testing.T, count int, requestBody stri
 	t.Helper()
 
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(count+1, 0))
+	// Capture must be enabled for AddRecord to store bodies; the limit must
+	// exceed the 5MiB oversized-body fixtures so they are stored untruncated.
+	recorder.SetCapturePolicy(true, true, 10*1024*1024)
 	for i := 1; i <= count; i++ {
 		recordID := fmt.Sprintf("replay-%03d", i)
 		timestamp := time.Unix(int64(i), 0).UTC()

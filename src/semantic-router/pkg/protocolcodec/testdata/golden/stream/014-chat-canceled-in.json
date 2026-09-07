@@ -1,0 +1,9 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "response_id": "chatcmpl_cancelled",
+  "finalize_reason": "canceled",
+  "chunks": [
+    "data: {\"id\":\"chatcmpl_cancelled\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"partial\"},\"finish_reason\":null}]}\n\n"
+  ]
+}

@@ -10,6 +10,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
+func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
+	if selCtx == nil {
+		return ""
+	}
+	return config.RoutingDecisionKey(selCtx.RecipeName, selCtx.DecisionName)
+}
+
+func requestDecisionStateKey(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	return config.RoutingDecisionKey(ctx.Routing.RecipeName(), ctx.VSRSelectedDecisionName)
+}
+
+func routingSessionStateKey(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if ctx.Routing.IsPassthrough() {
+		return ""
+	}
+	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.SessionID)
+}
+
+func requestBypassesRouting(ctx *RequestContext) bool {
+	return ctx != nil && ctx.Routing.IsPassthrough()
+}
+
 func currentLearningModel(selCtx *selection.SelectionContext) string {
 	if selCtx == nil || selCtx.AgenticSession == nil {
 		return ""
@@ -39,13 +67,15 @@ func (r *OpenAIRouter) configuredBackendModel(model string) bool {
 	return model == r.Config.DefaultModel
 }
 
-func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef) []config.ModelRef {
+func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *RequestContext) []config.ModelRef {
 	if len(refs) == 0 {
 		return nil
 	}
 	eligible := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
-		if strings.TrimSpace(ref.Model) == "" || !r.configuredBackendModel(ref.Model) {
+		if strings.TrimSpace(ref.Model) == "" ||
+			!r.configuredBackendModel(ref.Model) ||
+			(ctx != nil && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) {
 			continue
 		}
 		eligible = append(eligible, ref)

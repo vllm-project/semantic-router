@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import {
   buildTeamRuntimeStats,
   filterAndSortOpenClawTeams,
@@ -236,10 +237,7 @@ export const TeamTab: React.FC<TeamTabProps> = ({
       ) : null}
 
       {teamsLoading && teams.length === 0 ? (
-        <div className={styles.loading} role="status">
-          <div className={styles.spinner} />
-          <p>Loading teams…</p>
-        </div>
+        <ProductLoadingState label="Loading teams" compact />
       ) : (
         <>
           <OpenClawCatalogControls

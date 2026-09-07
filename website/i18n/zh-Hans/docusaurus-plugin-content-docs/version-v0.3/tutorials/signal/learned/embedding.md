@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`embedding` 通过语义相似度将请求与代表性示例匹配。映射到 `config/signal/embedding/`，在 `routing.signals.embeddings` 中声明。
+`embedding` 通过语义相似度将请求与代表性示例匹配。映射到 `config/fragments/signal/embedding/`，在 `routing.signals.embeddings` 中声明。
 
 该族为学习型：依赖 `global.model_catalog.embeddings` 中的语义嵌入资产。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/embedding/`
+源片段族：`config/fragments/signal/embedding/`
 
 ```yaml
 routing:

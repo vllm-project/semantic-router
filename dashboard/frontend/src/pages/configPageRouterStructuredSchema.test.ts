@@ -30,6 +30,23 @@ describe('router defaults structured schemas', () => {
     expect(normalized.skip_processing).toEqual({ enabled: true })
   })
 
+  it('preserves omitted auto aliases instead of turning them into an explicit empty list', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: { router_core: { strategy: 'priority' } },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+    const routerCore = cards.find((card) => card.key === 'router_core')
+    const patch = routerCore?.save(routerCore.editData) as {
+      router?: Record<string, unknown>
+    }
+
+    expect(patch.router).not.toHaveProperty('auto_model_names')
+  })
+
   it('round-trips nested provider and rule object arrays', () => {
     const normalized = normalizeRouterStructuredFields('ratelimit', {
       fail_open: false,

@@ -17,7 +17,9 @@ RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
-	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding
 
 test-rust-ci:
 	@$(LOG_TARGET)
@@ -93,6 +95,18 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
 
+# The CK flash-attention graph rewriter is a Python script under onnx-binding;
+# its unit tests need onnx, which the agent venv does not carry by default.
+CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
+CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
+
+ck-rewrite-deps: harness-venv-install ## Install the CK graph rewriter test dependencies into the harness venv
+	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
+
+ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
+	@$(LOG_TARGET)
+	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph
+
 # Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
 # the candle-binding Go tests (including the network-dependent image-encode
 # ones), the Go router integration tests in pkg/classification, and the
@@ -120,12 +134,12 @@ test-binding-multimodal: $(if $(CI),rust-ci,rust) ## Run the multimodal model-ga
 
 # Exploratory lane for the #[ignore] Rust multimodal unit tests. Kept OUT of
 # test-binding-multimodal so that target stays a pass/fail receipt: this suite
-# has a known-red baseline (see docs/agent/testing-strategy.md, "Model-Gated
+# has a known-red baseline (see tools/agent/docs/testing-strategy.md, "Model-Gated
 # Multimodal Tests") and is expected to exit non-zero until those pre-existing
 # defects are fixed.
 test-binding-multimodal-rust-baseline: $(if $(CI),rust-ci,rust) ## Run the ignored Rust multimodal unit tests (known-red baseline)
 	@$(LOG_TARGET)
-	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see docs/agent/testing-strategy.md)..."
+	@echo "Running ignored Rust multimodal unit tests (known-red baseline; see tools/agent/docs/testing-strategy.md)..."
 	@cd candle-binding && \
 		MULTIMODAL_MODEL_PATH=$${MULTIMODAL_MODEL_PATH:-$(CURDIR)/models/mom-embedding-multimodal} \
 		cargo test --release --no-default-features --lib multimodal_embedding::integration_tests -- --ignored --test-threads=1

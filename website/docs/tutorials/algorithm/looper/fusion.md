@@ -2,9 +2,8 @@
 
 ## Overview
 
-`fusion` is a **looper** algorithm for multi-model deliberation. It fans a prompt out to an analysis panel, asks a judge model for structured analysis, and then asks the judge/calling model to produce the final answer.
-
-It aligns to `config/algorithm/looper/fusion.yaml`.
+`fusion` asks several models to analyze a request and a judge model to
+synthesize one final answer.
 
 The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
 
@@ -15,15 +14,28 @@ The same runtime also supports a direct Fusion model slug through `global.integr
 - Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
 - Lets clients override the judge, analysis panel, templates, trace flags, and
   grounding policy per request with `plugins[].id = fusion`.
-- Degrades on partial panel failures while preserving failed model metadata.
+- Continues after partial panel failures only when the remaining usable
+  responses meet quorum, while preserving failed model metadata.
 
 ## Algorithm Principle
 
 Fusion executes a three-stage flow:
 
-1. **Panel**: dispatch the original request to the configured analysis models in parallel.
+1. **Panel**: dispatch the original request to the configured analysis models in parallel and require the configured usable-response quorum.
 2. **Judge analysis**: ask the judge model for structured JSON covering consensus, contradictions, partial coverage, unique insights, and blind spots.
 3. **Final synthesis**: ask the judge/calling model to write the user-facing answer using the panel responses and structured analysis.
+
+A panel response is usable only when its assistant `content` or
+`reasoning_content` is non-empty after trimming whitespace. Fusion checks
+`min_successful_responses` against those usable responses before grounding,
+judge analysis, or final synthesis. `on_error: skip` skips an individual failed
+or unusable response; it does not allow synthesis below quorum.
+
+When Router Replay is enabled, a below-quorum failure records the aggregate
+panel token usage on the Replay record and stores the required count, usable
+count, and ordered per-attempt model, state, and reported token usage under
+`route_diagnostics.fusion_quorum`. These diagnostics do not store panel answer
+content, reasoning, prompt data, raw response bodies, or error text.
 
 ## Execution Flow
 
@@ -43,19 +55,20 @@ flowchart TD
     K --> H
     H --> L[Apply request plugin overrides]
     L --> M[Run analysis panel concurrently]
-    M --> N{Any panel success?}
-    N -- No --> O[Return typed Fusion error]
-    N -- Yes --> P[Judge structured analysis]
-    P --> Q{JSON parsed?}
-    Q -- Yes --> R[Final synthesis with structured analysis]
-    Q -- No --> S[Final synthesis from raw panel responses]
-    R --> T[Return final answer + optional fusion trace]
-    S --> T
+    M --> N{Usable responses meet quorum?}
+    N -- No --> O[Return typed Fusion quorum error]
+    N -- Yes --> P[Apply optional grounding]
+    P --> Q[Judge structured analysis]
+    Q --> R{JSON parsed?}
+    R -- Yes --> S[Final synthesis with structured analysis]
+    R -- No --> T[Final synthesis from raw panel responses]
+    S --> U[Return final answer + optional fusion trace]
+    T --> U
 ```
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` makes that orchestration a router-owned policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
 
 ## When to Use
 
@@ -68,7 +81,7 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 
 - Fusion costs multiple model calls per request.
 - Streaming is emitted after panel and judge phases complete.
-- The first implementation does not include OpenRouter web search/fetch parity.
+- The current Fusion path does not include OpenRouter web search or fetch.
 - Final quality depends on the configured judge/calling model.
 
 ## Configuration
@@ -79,6 +92,8 @@ Decision-level Fusion:
 routing:
   decisions:
     - name: deliberation
+      description: Compare candidate answers and synthesize one response.
+      priority: 100
       output_contract: Preserve any explicit output format exactly.
       modelRefs:
         - model: qwen3-32b
@@ -108,7 +123,7 @@ or reference dereferencing. Extraction defaults to exact `content` matching;
 use `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 
-Algorithm-only fragment:
+Minimal algorithm configuration:
 
 ```yaml
 algorithm:
@@ -216,15 +231,16 @@ Request-level override:
 | `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion execution |
 | `model` | string | first analysis model | Judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
+| `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `analysis_overrides` | list[object] | none | Per-panel-model `temperature` and `max_completion_tokens`, keyed by `model`. Request-level entries merge field-wise onto the decision entry for the same model, so setting one field keeps the decision value for the other |
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
 | `round_timeout_seconds` | int | wait for all | Stop waiting for a panel round after this many seconds |
-| `min_successful_responses` | int | panel size | Continue once this many panel responses succeed |
+| `min_successful_responses` | int | panel size | Continue only after this many responses contain non-empty assistant content or reasoning after trimming whitespace |
 | `temperature` | float | request default | Temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Include structured judge analysis in the response trace |
 | `include_intermediate_responses` | bool | `true` | Include raw panel responses in the response trace |
-| `on_error` | string | `skip` | `skip` partial panel failures or `fail` on the first panel error |
+| `on_error` | string | `skip` | `skip` individual failed or unusable panel responses while still enforcing quorum, or `fail` on the first such response |
 | `analysis_template` | string | built-in | Custom judge analysis prompt with `{{original}}` and `{{responses}}` |
 | `synthesis_template` | string | built-in | Custom final prompt with `{{original}}`, `{{responses}}`, and `{{analysis}}` |
 | `judge_prompt_version` | string | `fusion-v1` | Version marker included in Fusion response trace |
@@ -235,6 +251,11 @@ Best practice:
 - Keep `analysis_models` stable per decision, and use `analysis_overrides` for model-specific tuning.
 - Use decision-level overrides for your baseline and request-level overrides only for one-off experiments.
 - Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
+- Keep `min_successful_responses` at or below the effective panel size. Invalid
+  quorums are rejected; the Router does not lower them automatically.
+- A partial panel continues only when its usable responses still satisfy
+  `min_successful_responses`; otherwise Fusion returns an error without running
+  grounding or either judge call.
 
 ## Grounding-Aware Synthesis
 
@@ -251,6 +272,10 @@ Policy (how the scores are used):
 - `weight` (default) — keep every response and instruct the judge to weight each panel answer by its score, while explicitly protecting a correct lone dissenter.
 - `annotate` — keep every response and pass the scores to the judge as notes, without a weighting instruction.
 - `filter` — hard-drop responses scoring below `min_score` (always keeping `min_keep`); only this policy uses `min_score`/`min_keep`.
+
+The usable-response quorum is checked on the original panel before grounding.
+If the `filter` policy later removes responses, Fusion does not run a second
+quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
@@ -285,3 +310,8 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
 | `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
+
+Panel responses and the original request are sent to the judge model. Treat all
+panel and judge providers as one data boundary, and disable intermediate traces
+when they would expose sensitive content. See a complete example:
+[`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml).

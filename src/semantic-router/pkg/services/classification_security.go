@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -30,15 +31,18 @@ type SecurityResponse struct {
 	ProcessingTimeMs int64    `json:"processing_time_ms"`
 }
 
-// CheckSecurity performs security detection
-func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityResponse, error) {
+// CheckSecurity performs security detection. ctx is forwarded to the
+// configured jailbreak backend so a remote (http_chat/http_classify) call can
+// be cancelled if the caller (e.g. the HTTP request) is cancelled first.
+func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityRequest) (*SecurityResponse, error) {
 	start := time.Now()
 
 	if blankText(req.Text) {
 		return nil, ErrEmptyText
 	}
 
-	if s.classifier == nil {
+	classifier := s.classifierSnapshot()
+	if classifier == nil {
 		processingTime := time.Since(start).Milliseconds()
 		return &SecurityResponse{
 			IsJailbreak:      false,
@@ -51,7 +55,7 @@ func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityRes
 		}, nil
 	}
 
-	isJailbreak, jailbreakType, confidence, riskScore, err := s.classifier.CheckForJailbreakWithRisk(req.Text)
+	isJailbreak, jailbreakType, confidence, riskScore, err := classifier.CheckForJailbreakWithRisk(ctx, req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("security detection failed: %w", err)
 	}

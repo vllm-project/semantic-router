@@ -19,5 +19,8 @@ func (d *decompiler) decompileSignals() {
 	d.decompilePIISignals()
 	d.decompileKBSignals()
 	d.decompileEventSignals()
+	d.decompileMetadataSignals()
+	d.decompileClassifierSignals()
+	d.decompileInputModalitySignals()
 	d.decompileProjectionSignals()
 }

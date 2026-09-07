@@ -178,35 +178,39 @@ global:
 仓库将**详尽的 canonical 参考配置**与**可复用路由片段**分开：
 
 - `config/config.yaml`：详尽 canonical 参考配置
-- `config/signal/`：可复用的 `routing.signals` 片段
-- `config/decision/`：可复用的 `routing.decisions` 规则形状片段
-- `config/algorithm/`：可复用的 `decision.algorithm` 片段
-- `config/plugin/`：可复用的路由插件片段
+- `config/fragments/signal/`：可复用的 `routing.signals` 片段
+- `config/fragments/decision/`：可复用的 `routing.decisions` 规则形状片段
+- `config/fragments/algorithm/`：可复用的 `decision.algorithm` 片段
+- `config/fragments/plugin/`：可复用的路由插件片段
 
-`config/decision/` 按布尔情形组织：`single/`、`and/`、`or/`、`not/`、`composite/`。  
-`config/algorithm/` 按路由策略族组织：`looper/` 与 `selection/`。  
-`config/plugin/` 按每个插件或可复用包单独目录组织。  
+`config/fragments/decision/` 按布尔情形组织：`single/`、`and/`、`or/`、`not/`、`composite/`。
+`config/fragments/algorithm/` 按路由策略族组织：`looper/` 与 `selection/`。
+`config/fragments/plugin/` 按每个插件或可复用包单独目录组织。
 仓库在 `go test ./pkg/config/...` 中强制该片段目录，因此路由表面变更须同步更新 `config/` 树。
+
+四类片段原先直接位于 `config/` 下。仓库链接和自动化脚本现在必须使用
+`config/fragments/...`。这仅是资源路径迁移；YAML 配置结构和运行时字段名
+均未改变。
 
 最新教程遵循同一分类：
 
-- `tutorials/signal/overview` 以及 `tutorials/signal/heuristic/`、`tutorials/signal/learned/` 对应 `config/signal/`
-- `tutorials/decision/` 对应 `config/decision/`
-- `tutorials/algorithm/` 对应 `config/algorithm/`，每种算法一页
-- `tutorials/plugin/` 对应 `config/plugin/`，每种插件一页
+- `tutorials/signal/overview` 以及 `tutorials/signal/heuristic/`、`tutorials/signal/learned/` 对应 `config/fragments/signal/`
+- `tutorials/decision/` 对应 `config/fragments/decision/`
+- `tutorials/algorithm/` 对应 `config/fragments/algorithm/`，每种算法一页
+- `tutorials/plugin/` 对应 `config/fragments/plugin/`，每种插件一页
 - `tutorials/global/` 对应 `global:` 下的稀疏路由器级覆盖
 
 与仓库相关的运行时与测试台资产现位于 `config/` 之外：
 
-- `deploy/examples/runtime/semantic-cache/`
-- `deploy/examples/runtime/response-api/`
-- `deploy/examples/runtime/tools/`
+- `config/runtime/semantic-cache/`
+- `config/runtime/response-api/`
+- `config/runtime/tools/`
 - `e2e/config/`
 - `deploy/local/envoy.yaml`
 
 仅测试用 ONNX 绑定资产位于 `e2e/config/onnx-binding/`。
 
-上述目录为支持资产，**不是**面向用户的主配置契约。手写配置请从 `config/config.yaml` 或上述片段目录开始。本仓库中，详尽参考配置将 `global.integrations.tools.tools_db_path` 指向 `deploy/examples/runtime/tools/tools_db.json` 以供本地开发。
+上述目录为支持资产，**不是**面向用户的主配置契约。手写配置请从 `config/config.yaml` 或上述片段目录开始。本仓库中，详尽参考配置将 `global.integrations.tools.tools_db_path` 指向 `config/runtime/tools/tools_db.json` 以供本地开发。
 
 `config/config.yaml` 不再只是示例。仓库将其作为**详尽公开契约参考**强制执行：
 
@@ -232,8 +236,8 @@ global:
 
 专题教程见 [Projections](../tutorials/projection/overview)。端到端维护示例：
 
-- [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml)
-- [`deploy/recipes/balance.dsl`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.dsl)
+- [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
+- [`config/recipes/balance/recipe.dsl`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/recipe.dsl)
 
 ## 如何使用
 
@@ -408,4 +412,4 @@ vllm-sr config import --from openclaw --source openclaw.json --target config.yam
 1. 对 `routing.modelCards`、`routing.signals`、`routing.decisions` 使用 DSL。
 2. 仍可导入完整 YAML 文件，但只有 `routing` 会反编译为 DSL。
 3. 端点、API 密钥、监听器与 `global` 保留在 YAML。
-4. 可复用路由片段现位于 `config/signal/`、`config/decision/`、`config/algorithm/`、`config/plugin/`。
+4. 可复用路由片段现位于 `config/fragments/signal/`、`config/fragments/decision/`、`config/fragments/algorithm/`、`config/fragments/plugin/`。

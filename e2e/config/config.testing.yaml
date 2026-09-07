@@ -2,30 +2,31 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-20b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: openai/gpt-oss-20b
+    reasoning_effort: high
   models:
     - name: openai/gpt-oss-20b
-      reasoning_family: gpt-oss
+      reasoning:
+        family: gpt-oss
       backend_refs:
         - name: mock
+          provider: vllm
           endpoint: 172.28.0.10:8000
           weight: 1
 routing:
   decisions:
+    - name: metadata_decision
+      description: Explicit metadata-based routing contract
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: metadata
+            name: canary_cohort
+      modelRefs:
+        - model: openai/gpt-oss-20b
+          use_reasoning: true
+          reasoning_effort: high
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -36,8 +37,15 @@ routing:
             name: other
       modelRefs:
         - model: openai/gpt-oss-20b
-          use_reasoning: false
+          use_reasoning: true
+          reasoning_effort: high
   signals:
+    metadata:
+      - name: canary_cohort
+        description: Caller opted into the canary routing cohort
+        key: cohort
+        predicate:
+          equals: canary
     domains:
       - name: other
         description: General knowledge and miscellaneous topics
@@ -45,6 +53,34 @@ routing:
           - other
   modelCards:
     - name: openai/gpt-oss-20b
+entrypoints:
+  - model_names:
+      - vllm-sr/metadata-policy
+    recipe: metadata-policy
+recipes:
+  - name: metadata-policy
+    description: Exercise recipe-local request metadata routing.
+    routing:
+      signals:
+        metadata:
+          - name: canary_cohort
+            description: Recipe-local canary cohort policy.
+            key: cohort
+            predicate:
+              equals: canary
+      decisions:
+        - name: metadata_recipe_decision
+          description: Route canary metadata inside the selected recipe.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: metadata
+                name: canary_cohort
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: true
+              reasoning_effort: high
 global:
   router:
     strategy: priority
@@ -83,7 +119,7 @@ global:
             - 100
             - 200
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8
@@ -100,5 +136,5 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true

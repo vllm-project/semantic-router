@@ -84,10 +84,10 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 		logging.Warnf("UpdateWithResponse: docID '%s' doesn't have expected prefix '%s'", entry.docID, prefix)
 	}
 
-	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query='%s'", entry.docID, entry.model, entry.query)
+	logging.Debugf("UpdateWithResponse: extracted docID='%s', model='%s', query=%s", entry.docID, entry.model, logging.ContentDescriptor(entry.query))
 
 	if entry.model == "" || entry.query == "" {
-		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query='%s')", entry.model, entry.query)
+		logging.Warnf("UpdateWithResponse: missing required fields (model='%s', query=%s)", entry.model, logging.ContentDescriptor(entry.query))
 		return nil, fmt.Errorf("missing required fields in pending entry")
 	}
 
@@ -98,6 +98,43 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 type searchMatch struct {
 	distance     float64
 	responseBody interface{}
+	timestamp    int64
+	ttlSeconds   int64
+}
+
+func extractSearchMatch(fieldsMap map[string]interface{}) (*searchMatch, bool) {
+	distanceVal, exists := fieldsMap["vector_distance"]
+	if !exists {
+		return nil, false
+	}
+
+	var distance float64
+	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
+		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
+		return nil, false
+	}
+
+	var timestamp int64
+	if tsVal, exists := fieldsMap["timestamp"]; exists {
+		var ts int64
+		if _, err := fmt.Sscanf(fmt.Sprint(tsVal), "%d", &ts); err == nil && ts > 0 {
+			timestamp = ts
+		}
+	}
+	var ttlSeconds int64
+	if ttlVal, exists := fieldsMap["ttl_seconds"]; exists {
+		var ttl int64
+		if _, err := fmt.Sscanf(fmt.Sprint(ttlVal), "%d", &ttl); err == nil && ttl > 0 {
+			ttlSeconds = ttl
+		}
+	}
+
+	return &searchMatch{
+		distance:     distance,
+		responseBody: fieldsMap["response_body"],
+		timestamp:    timestamp,
+		ttlSeconds:   ttlSeconds,
+	}, true
 }
 
 // parseBestMatch extracts the best-match distance and response body from a Valkey FT.SEARCH vector result.
@@ -130,22 +167,9 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 			continue
 		}
 
-		distanceVal, exists := fieldsMap["vector_distance"]
-		if !exists {
-			continue
-		}
-
-		var distance float64
-		if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
-			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
-			continue
-		}
-
-		if best == nil || distance < best.distance {
-			best = &searchMatch{
-				distance:     distance,
-				responseBody: fieldsMap["response_body"],
-			}
+		candidate, matchOk := extractSearchMatch(fieldsMap)
+		if matchOk && (best == nil || candidate.distance < best.distance) {
+			best = candidate
 		}
 	}
 
@@ -174,18 +198,16 @@ func escapeTagValue(s string) string {
 	return b.String()
 }
 
-// distanceToSimilarity converts a vector distance to a similarity score based on the metric type.
-func distanceToSimilarity(metricType string, distance float64) float32 {
-	switch metricType {
-	case "COSINE":
-		return 1.0 - float32(distance)/2.0
-	case "IP":
-		return float32(distance)
-	case "L2":
-		return 1.0 / (1.0 + float32(distance))
-	default:
-		return 1.0 - float32(distance)
-	}
+// partitionedKNNQuery combines an exact model TAG filter with vector search.
+// The model field is the cache partition key, so omitting this filter can
+// return another model or recipe's response even when its vector is nearest.
+func partitionedKNNQuery(model string, topK int, vectorField string) string {
+	return fmt.Sprintf(
+		"(@model:{%s})=>[KNN %d @%s $vec AS vector_distance]",
+		escapeTagValue(model),
+		topK,
+		vectorField,
+	)
 }
 
 // extractResponseBody returns the response bytes from a search match, or nil if missing/empty.

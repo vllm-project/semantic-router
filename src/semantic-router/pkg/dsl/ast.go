@@ -32,11 +32,48 @@ type rawProgram struct {
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
 	Pos          lexer.Position
-	Signal       *rawSignalDecl       `parser:"  @@"`
+	Routing      *rawRoutingDecl      `parser:"  @@"`
+	Entrypoint   *rawEntrypointDecl   `parser:"| @@"`
+	Recipe       *rawRecipeDecl       `parser:"| @@"`
+	Signal       *rawSignalDecl       `parser:"| @@"`
 	Projection   *rawProjectionDecl   `parser:"| @@"`
 	Route        *rawRouteDecl        `parser:"| @@"`
 	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
 	Model        *rawModelDecl        `parser:"| @@"`
+	Plugin       *rawPluginDecl       `parser:"| @@"`
+	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
+}
+
+// rawRoutingDecl configures the ordering strategy for the current routing
+// scope. At the top level it describes the default profile; inside RECIPE it
+// applies only to that recipe.
+type rawRoutingDecl struct {
+	Pos    lexer.Position
+	Fields []*FieldEntry `parser:"'ROUTING' '{' @@* '}'"`
+}
+
+// rawEntrypointDecl binds one or more request-facing model IDs to a recipe.
+type rawEntrypointDecl struct {
+	Pos    lexer.Position
+	Fields []*FieldEntry `parser:"'ENTRYPOINT' '{' @@* '}'"`
+}
+
+// rawRecipeDecl owns a complete, isolated routing program. MODEL declarations
+// intentionally remain top-level because the runtime model catalog is shared.
+type rawRecipeDecl struct {
+	Pos  lexer.Position
+	Name string            `parser:"'RECIPE' @(Ident | String)"`
+	Opts []*RouteOpt       `parser:"( '(' @@* ')' )?"`
+	Body []*rawRecipeEntry `parser:"'{' @@* '}'"`
+}
+
+type rawRecipeEntry struct {
+	Pos          lexer.Position
+	Routing      *rawRoutingDecl      `parser:"  @@"`
+	Signal       *rawSignalDecl       `parser:"| @@"`
+	Projection   *rawProjectionDecl   `parser:"| @@"`
+	Route        *rawRouteDecl        `parser:"| @@"`
+	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
 	Plugin       *rawPluginDecl       `parser:"| @@"`
 	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
 }
@@ -147,8 +184,16 @@ type rawRouteItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
+	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 	Emit         *rawEmitDecl         `parser:"| @@"`
+}
+
+// rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
+type rawActionDecl struct {
+	Pos         lexer.Position
+	Type        string `parser:"@Ident"`
+	Destination string `parser:"@(Ident | String)"`
 }
 
 // rawCandidateForDecl: FOR <var> IN decision.candidates|[models...] { body... }
@@ -237,11 +282,12 @@ type BoolFactor struct {
 	SignalRef *rawSignalRefExpr `parser:"| @@"`
 }
 
-// rawSignalRefExpr: signal_type("signal_name") or signal_type(signal_name)
+// rawSignalRefExpr: signal_type("signal_name", optional: fields)
 type rawSignalRefExpr struct {
 	Pos        lexer.Position
-	SignalType string `parser:"@Ident"`
-	SignalName string `parser:"'(' @(String | Ident) ')'"`
+	SignalType string        `parser:"@Ident"`
+	SignalName string        `parser:"'(' @(String | Ident)"`
+	Fields     []*FieldEntry `parser:"@@* ')'"`
 }
 
 // ---------- Field / Value (parsed by participle) ----------
@@ -275,6 +321,9 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
+	Strategy             string
+	Entrypoints          []*EntrypointDecl
+	Recipes              []*RecipeDecl
 	Signals              []*SignalDecl
 	ProjectionPartitions []*ProjectionPartitionDecl
 	ProjectionScores     []*ProjectionScoreDecl
@@ -283,6 +332,23 @@ type Program struct {
 	Models               []*ModelDecl
 	Plugins              []*PluginDecl
 	TestBlocks           []*TestBlockDecl
+}
+
+// EntrypointDecl is the DSL form of one request-facing recipe binding.
+type EntrypointDecl struct {
+	ModelNames []string
+	Recipe     string
+	Pos        Position
+}
+
+// RecipeDecl is an isolated routing scope. Program contains only recipe-local
+// signals, projections, plugins, decisions, and tests; models are resolved
+// from the parent Program.
+type RecipeDecl struct {
+	Name        string
+	Description string
+	Program     *Program
+	Pos         Position
 }
 
 // ProjectionPartitionDecl declares a mutually exclusive partition of signals.
@@ -370,6 +436,8 @@ type SignalDecl struct {
 type RouteDecl struct {
 	Name                string
 	Description         string
+	OnUnknown           string
+	Action              *ActionDecl
 	Priority            int
 	Tier                int
 	When                BoolExpr
@@ -379,6 +447,13 @@ type RouteDecl struct {
 	CandidateIterations []*CandidateIterationDecl
 	Emits               []*EmitDecl
 	Pos                 Position
+}
+
+// ActionDecl is the resolved AST node for a route ACTION statement.
+type ActionDecl struct {
+	Type        string
+	Destination string
+	Pos         Position
 }
 
 // EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
@@ -488,6 +563,7 @@ func (b *BoolNot) GetPos() Position { return b.Pos }
 type SignalRefExpr struct {
 	SignalType string
 	SignalName string
+	Fields     map[string]Value
 	Pos        Position
 }
 
@@ -500,6 +576,7 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 type ModelRef struct {
 	Model     string
 	Reasoning *bool
+	Mode      string
 	Effort    string
 	LoRA      string
 	ParamSize string

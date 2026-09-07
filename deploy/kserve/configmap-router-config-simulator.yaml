@@ -11,32 +11,23 @@ data:
     listeners: []
     providers:
       defaults:
-        default_model: '{{MODEL_NAME_B}}'
-        reasoning_families:
-          deepseek:
-            type: chat_template_kwargs
-            parameter: thinking
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-          gpt-oss:
-            type: reasoning_effort
-            parameter: reasoning_effort
-          gpt:
-            type: reasoning_effort
-            parameter: reasoning_effort
-        default_reasoning_effort: high
+        model: '{{MODEL_NAME_B}}'
+        reasoning_effort: high
       models:
         - name: '{{MODEL_NAME_A}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-a-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_A}}:8000'
               weight: 1
         - name: '{{MODEL_NAME_B}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-b-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_B}}:8000'
               weight: 1
     routing:
@@ -86,7 +77,7 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a helpful assistant.
-            - type: semantic-cache
+            - type: response_cache
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
@@ -189,7 +180,7 @@ data:
                 - 100
                 - 200
       stores:
-        semantic_cache:
+        response_cache:
           enabled: true
           backend_type: memory
           similarity_threshold: 0.8
