@@ -14,8 +14,8 @@ global:
     - vllm-sr/auto
 providers:
   defaults:
-    default_model: local/small-7b
-    default_reasoning_effort: medium
+    model: local/small-7b
+    reasoning_effort: medium
   models:
   - name: local/omni
     api_format: openai
@@ -24,7 +24,7 @@ providers:
     - name: local-omni
       endpoint: vllm-omni:8000
       protocol: http
-      type: vllm
+      provider: vllm
       weight: 1
   - name: local/small-7b
     api_format: openai
@@ -33,7 +33,7 @@ providers:
     - name: local-vllm
       endpoint: vllm:8000
       protocol: http
-      type: vllm
+      provider: vllm
       weight: 1
     pricing:
       prompt_per_1m: 0.04
@@ -45,6 +45,7 @@ providers:
     backend_refs:
     - name: vllm_primary
       endpoint: vllm:8000
+      provider: vllm
       protocol: http
       weight: 1
     pricing:

@@ -25,6 +25,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: model-catalog-generated
+        name: model catalog schema and generated projections
+        entry: make model-catalog-check
+        language: system
+        pass_filenames: false
+        files: ^(config/catalog/|config/recipes/built-in/latest/catalog\.yaml$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+
+  - repo: local
+    hooks:
       - id: deployment-support-matrix
         name: deployment support matrix coverage
         entry: python3 tools/ci/check_deployment_support_matrix.py

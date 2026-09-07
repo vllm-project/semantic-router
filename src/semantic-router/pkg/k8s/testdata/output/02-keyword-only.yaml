@@ -1,18 +1,8 @@
 version: v0.3
 providers:
   defaults:
-    default_model: gemma-2-9b
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: gemma-2-9b
+    reasoning_effort: high
   models:
     - name: gemma-2-9b
       pricing:

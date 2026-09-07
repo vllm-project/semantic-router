@@ -2,8 +2,10 @@
 
 - Steady-state input is canonical `version/listeners/providers/routing/global`.
   Legacy layouts belong only in migration tooling.
-- `providers.defaults` owns default selection and reasoning metadata;
-  `providers.models[]` owns concrete backend bindings.
+- `providers.defaults` owns default model and reasoning-effort selection;
+  `providers.models[]` owns aliases, optional catalog references, custom
+  reasoning metadata, and concrete backend bindings. The repository catalog
+  owns built-in reasoning-family and provider/protocol metadata.
 - `global` remains layered into `router`, `services`, `stores`, `integrations`,
   and `model_catalog`.
 - Signals extract facts; decisions compose them; algorithms select models;

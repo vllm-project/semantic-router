@@ -188,11 +188,12 @@ func TestDecompileValidYAML(t *testing.T) {
 	yamlInput := js.ValueOf(`version: v0.3
 providers:
   defaults:
-    default_model: qwen
+    model: qwen
   models:
     - name: qwen
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
 routing:

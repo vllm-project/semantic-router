@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -206,6 +207,11 @@ func (r *OpenAIRouter) buildReasoningFieldsForTest(
 	effort, _ := fields["reasoning_effort"].(string)
 	if kwargs, ok := fields["chat_template_kwargs"].(map[string]interface{}); ok {
 		if nested, ok := kwargs["reasoning_effort"].(string); ok {
+			effort = nested
+		}
+	}
+	if reasoning, ok := fields["reasoning"].(map[string]interface{}); ok {
+		if nested, ok := reasoning["effort"].(string); ok {
 			effort = nested
 		}
 	}

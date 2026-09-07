@@ -2,21 +2,18 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: auto
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: auto
   models:
     - name: auto
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: auto
       api_format: openai
       backend_refs:
         - name: local_vllm
           endpoint: 127.0.0.1:8091
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -86,21 +83,18 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: auto
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: auto
   models:
     - name: auto
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: auto
       api_format: openai
       backend_refs:
         - name: local_vllm
           endpoint: 127.0.0.1:8091
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -170,22 +164,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-14B-Instruct-AWQ
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: Qwen/Qwen2.5-14B-Instruct-AWQ
+    reasoning_effort: medium
   models:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
       api_format: openai
       backend_refs:
         - name: vllm-general
           endpoint: 127.0.0.1:8083
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -291,22 +282,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-14B-Instruct-AWQ
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: Qwen/Qwen2.5-14B-Instruct-AWQ
+    reasoning_effort: medium
   models:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
       api_format: openai
       backend_refs:
         - name: vllm-qwen
           endpoint: 127.0.0.1:8083
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -421,32 +409,23 @@ data:
     listeners: []
     providers:
       defaults:
-        default_model: '{{MODEL_NAME_B}}'
-        reasoning_families:
-          deepseek:
-            type: chat_template_kwargs
-            parameter: thinking
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-          gpt-oss:
-            type: reasoning_effort
-            parameter: reasoning_effort
-          gpt:
-            type: reasoning_effort
-            parameter: reasoning_effort
-        default_reasoning_effort: high
+        model: '{{MODEL_NAME_B}}'
+        reasoning_effort: high
       models:
         - name: '{{MODEL_NAME_A}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-a-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_A}}:8000'
               weight: 1
         - name: '{{MODEL_NAME_B}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-b-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_B}}:8000'
               weight: 1
     routing:
@@ -631,26 +610,15 @@ data:
     listeners: []
     providers:
       defaults:
-        default_model: '{{MODEL_NAME}}'
-        reasoning_families:
-          deepseek:
-            type: chat_template_kwargs
-            parameter: thinking
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-          gpt-oss:
-            type: reasoning_effort
-            parameter: reasoning_effort
-          gpt:
-            type: reasoning_effort
-            parameter: reasoning_effort
-        default_reasoning_effort: high
+        model: '{{MODEL_NAME}}'
+        reasoning_effort: high
       models:
         - name: '{{MODEL_NAME}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: '{{INFERENCESERVICE_NAME}}-endpoint'
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP}}:8000'
               weight: 1
     routing:
@@ -848,25 +816,25 @@ data:
     version: v0.3
     providers:
       defaults:
-        default_model: granite32-8b
-        reasoning_families:
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-        default_reasoning_effort: medium
+        model: granite32-8b
+        reasoning_effort: medium
       models:
         - name: granite32-8b
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           provider_model_id: granite32-8b
           backend_refs:
             - name: granite32-8b-endpoint
+              provider: vllm
               endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
         - name: granite32-78b
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           provider_model_id: granite32-78b
           backend_refs:
             - name: granite32-78b-endpoint
+              provider: vllm
               endpoint: granite32-78b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
     routing:
@@ -966,30 +934,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: llama3-8b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: llama3-8b
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: phi4-mini
       backend_refs:
         - name: phi4-mini-service
+          provider: vllm
           endpoint: phi4-mini:80
           weight: 1
 routing:
@@ -1343,30 +1300,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: llama3-8b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: llama3-8b
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: phi4-mini
       backend_refs:
         - name: phi4-mini-service
+          provider: vllm
           endpoint: phi4-mini:80
           weight: 1
 routing:
@@ -1720,25 +1666,13 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o-mini
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: gpt-4o-mini
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: gpt-4o-mini
@@ -1746,7 +1680,6 @@ providers:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
 routing:
   decisions:
     - name: business
@@ -2098,26 +2031,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:
@@ -2285,21 +2207,21 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
   models:
     - name: Model-A
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: model-a-endpoint
+          provider: vllm
           endpoint: DYNAMIC_MODEL_A_IP:8000
           weight: 1
     - name: Model-B
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: model-b-endpoint
+          provider: vllm
           endpoint: DYNAMIC_MODEL_B_IP:8001
           weight: 1
 routing:
@@ -2621,7 +2543,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-free
+    model: qwen14b-free
   models:
     - name: qwen14b-admin
       external_model_ids:
@@ -2630,7 +2552,7 @@ providers:
         - name: vllm-14b-admin
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-free
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -2638,7 +2560,7 @@ providers:
         - name: vllm-14b-free
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -2700,14 +2622,20 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      quality_score: 0.7
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.7
 global:
   router:
     strategy: priority
@@ -2732,7 +2660,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-7B-Instruct
+    model: Qwen/Qwen2.5-7B-Instruct
   models:
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
@@ -2741,7 +2669,7 @@ providers:
         - name: vllm-14b
           endpoint: 127.0.0.1:8000
           weight: 1
-          type: vllm
+          provider: vllm
     - name: Qwen/Qwen2.5-7B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-7B-Instruct
@@ -2749,7 +2677,7 @@ providers:
         - name: vllm-7b
           endpoint: 127.0.0.1:8001
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: admin_unrestricted
@@ -2861,14 +2789,20 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
     - name: Qwen/Qwen2.5-7B-Instruct
       param_size: 7b
       description: Qwen2.5 7B — efficient model for free tier and simple queries
       capabilities:
         - chat
         - code
-      quality_score: 0.7
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.7
 global:
   router:
     strategy: priority
@@ -2890,31 +2824,21 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Model-A
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: medium
+    model: Model-A
+    reasoning_effort: medium
   models:
     - name: Model-A
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: qwen-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: Model-B
       backend_refs:
         - name: tinyllama-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -3202,16 +3126,14 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen3
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: mock-vllm
+          provider: vllm
           endpoint: 127.0.0.1:8002
           weight: 1
 routing:
@@ -3274,11 +3196,12 @@ global:
 version: v0.3
 providers:
   defaults:
-    default_model: "Qwen/Qwen-Image"
+    model: "Qwen/Qwen-Image"
   models:
     - name: "Qwen/Qwen-Image"
       backend_refs:
         - name: vllm-omni
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -3329,12 +3252,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: 172.17.0.1:8000
           protocol: http
@@ -3391,16 +3315,18 @@ global:
 version: v0.3
 providers:
   defaults:
-    default_model: "Qwen/Qwen2.5-14B-Instruct"
+    model: "Qwen/Qwen2.5-14B-Instruct"
   models:
     - name: "Qwen/Qwen2.5-14B-Instruct"
       backend_refs:
         - name: vllm-ar
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: "Qwen/Qwen-Image"
       backend_refs:
         - name: vllm-omni
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -3493,7 +3419,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-dev
+    model: qwen14b-dev
   models:
     - name: qwen14b-dev
       external_model_ids:
@@ -3502,7 +3428,7 @@ providers:
         - name: vllm-14b-dev
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-prod
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -3510,7 +3436,7 @@ providers:
         - name: vllm-14b-prod
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_dev
@@ -3588,7 +3514,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
     - name: qwen14b-prod
       param_size: 14b
       description: Qwen2.5 14B — Prod environment (user-facing)
@@ -3597,7 +3526,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
 global:
   router:
     strategy: priority
@@ -3617,25 +3549,22 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o
+    model: gpt-4o
   models:
     - name: gpt-4o
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
         - name: azure-east
           base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
           provider: azure-openai
           api_version: '2024-10-21'
-          type: azure-openai
     - name: gpt-4o-mini
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
     - name: claude-sonnet-4-20250514
       backend_refs:
         - name: anthropic
@@ -3643,14 +3572,13 @@ providers:
           provider: anthropic
           extra_headers:
             anthropic-version: '2023-06-01'
-          type: anthropic
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
       backend_refs:
         - name: local-vllm
           endpoint: 127.0.0.1:8000
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_local
@@ -3737,15 +3665,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       backend_refs:
         - name: test-endpoint
+          provider: vllm
           endpoint: 0.0.0.0:8000
           weight: 1
 routing:
@@ -3808,15 +3733,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       backend_refs:
         - name: test-endpoint
+          provider: vllm
           endpoint: 0.0.0.0:8000
           weight: 1
 routing:
@@ -3867,26 +3789,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-20b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: openai/gpt-oss-20b
+    reasoning_effort: high
   models:
     - name: openai/gpt-oss-20b
-      reasoning_family: gpt-oss
+      reasoning:
+        family: gpt-oss
       backend_refs:
         - name: mock
+          provider: vllm
           endpoint: 172.28.0.10:8000
           weight: 1
 routing:
@@ -3972,26 +3883,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:
@@ -4378,21 +4278,18 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: auto
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: auto
   models:
     - name: auto
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: auto
       api_format: openai
       backend_refs:
         - name: local_vllm
           endpoint: 127.0.0.1:8091
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -4462,22 +4359,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-14B-Instruct-AWQ
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: Qwen/Qwen2.5-14B-Instruct-AWQ
+    reasoning_effort: medium
   models:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
       api_format: openai
       backend_refs:
         - name: vllm-general
           endpoint: 127.0.0.1:8083
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -4583,22 +4477,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-14B-Instruct-AWQ
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: Qwen/Qwen2.5-14B-Instruct-AWQ
+    reasoning_effort: medium
   models:
     - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
       api_format: openai
       backend_refs:
         - name: vllm-qwen
           endpoint: 127.0.0.1:8083
           protocol: http
-          type: chat
+          provider: vllm
           weight: 1
 routing:
   modelCards:
@@ -4713,32 +4604,23 @@ data:
     listeners: []
     providers:
       defaults:
-        default_model: '{{MODEL_NAME_B}}'
-        reasoning_families:
-          deepseek:
-            type: chat_template_kwargs
-            parameter: thinking
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-          gpt-oss:
-            type: reasoning_effort
-            parameter: reasoning_effort
-          gpt:
-            type: reasoning_effort
-            parameter: reasoning_effort
-        default_reasoning_effort: high
+        model: '{{MODEL_NAME_B}}'
+        reasoning_effort: high
       models:
         - name: '{{MODEL_NAME_A}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-a-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_A}}:8000'
               weight: 1
         - name: '{{MODEL_NAME_B}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: model-b-endpoint
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP_B}}:8000'
               weight: 1
     routing:
@@ -4923,26 +4805,15 @@ data:
     listeners: []
     providers:
       defaults:
-        default_model: '{{MODEL_NAME}}'
-        reasoning_families:
-          deepseek:
-            type: chat_template_kwargs
-            parameter: thinking
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-          gpt-oss:
-            type: reasoning_effort
-            parameter: reasoning_effort
-          gpt:
-            type: reasoning_effort
-            parameter: reasoning_effort
-        default_reasoning_effort: high
+        model: '{{MODEL_NAME}}'
+        reasoning_effort: high
       models:
         - name: '{{MODEL_NAME}}'
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           backend_refs:
             - name: '{{INFERENCESERVICE_NAME}}-endpoint'
+              provider: vllm
               endpoint: '{{PREDICTOR_SERVICE_IP}}:8000'
               weight: 1
     routing:
@@ -5140,25 +5011,25 @@ data:
     version: v0.3
     providers:
       defaults:
-        default_model: granite32-8b
-        reasoning_families:
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-        default_reasoning_effort: medium
+        model: granite32-8b
+        reasoning_effort: medium
       models:
         - name: granite32-8b
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           provider_model_id: granite32-8b
           backend_refs:
             - name: granite32-8b-endpoint
+              provider: vllm
               endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
         - name: granite32-78b
-          reasoning_family: qwen3
+          reasoning:
+            family: qwen3
           provider_model_id: granite32-78b
           backend_refs:
             - name: granite32-78b-endpoint
+              provider: vllm
               endpoint: granite32-78b-predictor.<namespace>.svc.cluster.local:80
               weight: 1
     routing:
@@ -5258,30 +5129,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: llama3-8b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: llama3-8b
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: phi4-mini
       backend_refs:
         - name: phi4-mini-service
+          provider: vllm
           endpoint: phi4-mini:80
           weight: 1
 routing:
@@ -5635,30 +5495,19 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: llama3-8b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: llama3-8b
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: phi4-mini
       backend_refs:
         - name: phi4-mini-service
+          provider: vllm
           endpoint: phi4-mini:80
           weight: 1
 routing:
@@ -6012,25 +5861,13 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o-mini
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: gpt-4o-mini
+    reasoning_effort: high
   models:
     - name: llama3-8b
       backend_refs:
         - name: llama-8b-service
+          provider: vllm
           endpoint: llama-8b:80
           weight: 1
     - name: gpt-4o-mini
@@ -6038,7 +5875,6 @@ providers:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
 routing:
   decisions:
     - name: business
@@ -6390,26 +6226,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:
@@ -6577,21 +6402,21 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
   models:
     - name: Model-A
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: model-a-endpoint
+          provider: vllm
           endpoint: DYNAMIC_MODEL_A_IP:8000
           weight: 1
     - name: Model-B
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: model-b-endpoint
+          provider: vllm
           endpoint: DYNAMIC_MODEL_B_IP:8001
           weight: 1
 routing:
@@ -6913,7 +6738,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-free
+    model: qwen14b-free
   models:
     - name: qwen14b-admin
       external_model_ids:
@@ -6922,7 +6747,7 @@ providers:
         - name: vllm-14b-admin
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-free
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -6930,7 +6755,7 @@ providers:
         - name: vllm-14b-free
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -6992,14 +6817,20 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      quality_score: 0.7
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.7
 global:
   router:
     strategy: priority
@@ -7024,7 +6855,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Qwen/Qwen2.5-7B-Instruct
+    model: Qwen/Qwen2.5-7B-Instruct
   models:
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
@@ -7033,7 +6864,7 @@ providers:
         - name: vllm-14b
           endpoint: 127.0.0.1:8000
           weight: 1
-          type: vllm
+          provider: vllm
     - name: Qwen/Qwen2.5-7B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-7B-Instruct
@@ -7041,7 +6872,7 @@ providers:
         - name: vllm-7b
           endpoint: 127.0.0.1:8001
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: admin_unrestricted
@@ -7153,14 +6984,20 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
     - name: Qwen/Qwen2.5-7B-Instruct
       param_size: 7b
       description: Qwen2.5 7B — efficient model for free tier and simple queries
       capabilities:
         - chat
         - code
-      quality_score: 0.7
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.7
 global:
   router:
     strategy: priority
@@ -7182,31 +7019,21 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: Model-A
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: medium
+    model: Model-A
+    reasoning_effort: medium
   models:
     - name: Model-A
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: qwen-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: Model-B
       backend_refs:
         - name: tinyllama-endpoint
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -7494,16 +7321,14 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen3
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: mock-vllm
+          provider: vllm
           endpoint: 127.0.0.1:8002
           weight: 1
 routing:
@@ -7566,11 +7391,12 @@ global:
 version: v0.3
 providers:
   defaults:
-    default_model: "Qwen/Qwen-Image"
+    model: "Qwen/Qwen-Image"
   models:
     - name: "Qwen/Qwen-Image"
       backend_refs:
         - name: vllm-omni
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -7621,12 +7447,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: 172.17.0.1:8000
           protocol: http
@@ -7683,16 +7510,18 @@ global:
 version: v0.3
 providers:
   defaults:
-    default_model: "Qwen/Qwen2.5-14B-Instruct"
+    model: "Qwen/Qwen2.5-14B-Instruct"
   models:
     - name: "Qwen/Qwen2.5-14B-Instruct"
       backend_refs:
         - name: vllm-ar
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: "Qwen/Qwen-Image"
       backend_refs:
         - name: vllm-omni
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -7785,7 +7614,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-dev
+    model: qwen14b-dev
   models:
     - name: qwen14b-dev
       external_model_ids:
@@ -7794,7 +7623,7 @@ providers:
         - name: vllm-14b-dev
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-prod
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -7802,7 +7631,7 @@ providers:
         - name: vllm-14b-prod
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_dev
@@ -7880,7 +7709,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
     - name: qwen14b-prod
       param_size: 14b
       description: Qwen2.5 14B — Prod environment (user-facing)
@@ -7889,7 +7721,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
 global:
   router:
     strategy: priority
@@ -7909,25 +7744,22 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: gpt-4o
+    model: gpt-4o
   models:
     - name: gpt-4o
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
         - name: azure-east
           base_url: https://my-resource.openai.azure.com/openai/deployments/gpt-4o
           provider: azure-openai
           api_version: '2024-10-21'
-          type: azure-openai
     - name: gpt-4o-mini
       backend_refs:
         - name: openai
           base_url: https://api.openai.com/v1
           provider: openai
-          type: openai
     - name: claude-sonnet-4-20250514
       backend_refs:
         - name: anthropic
@@ -7935,14 +7767,13 @@ providers:
           provider: anthropic
           extra_headers:
             anthropic-version: '2023-06-01'
-          type: anthropic
     - name: Qwen/Qwen2.5-14B-Instruct
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
       backend_refs:
         - name: local-vllm
           endpoint: 127.0.0.1:8000
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_local
@@ -8029,15 +7860,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       backend_refs:
         - name: test-endpoint
+          provider: vllm
           endpoint: 0.0.0.0:8000
           weight: 1
 routing:
@@ -8100,15 +7928,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       backend_refs:
         - name: test-endpoint
+          provider: vllm
           endpoint: 0.0.0.0:8000
           weight: 1
 routing:
@@ -8159,26 +7984,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: openai/gpt-oss-20b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: openai/gpt-oss-20b
+    reasoning_effort: high
   models:
     - name: openai/gpt-oss-20b
-      reasoning_family: gpt-oss
+      reasoning:
+        family: gpt-oss
       backend_refs:
         - name: mock
+          provider: vllm
           endpoint: 172.28.0.10:8000
           weight: 1
 routing:
@@ -8264,26 +8078,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:

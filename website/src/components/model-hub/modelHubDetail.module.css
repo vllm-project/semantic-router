@@ -1,0 +1,351 @@
+.backdrop {
+  position: fixed;
+  z-index: calc(var(--ifm-z-index-fixed) + 10);
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: rgb(2 6 23 / 55%);
+  backdrop-filter: blur(5px);
+}
+
+.detail {
+  position: relative;
+  width: min(46rem, 94vw);
+  height: 100%;
+  overflow-y: auto;
+  padding: clamp(1.2rem, 3vw, 2rem);
+  border-left: 1px solid var(--hub-border);
+  background: var(--ifm-background-color);
+  box-shadow: -28px 0 80px rgb(2 6 23 / 25%);
+}
+
+.closeButton {
+  position: sticky;
+  z-index: 3;
+  top: 0.7rem;
+  display: grid;
+  width: 2.1rem;
+  height: 2.1rem;
+  place-items: center;
+  margin: 0 0 -2.1rem auto;
+  border: 1px solid var(--hub-border);
+  border-radius: 50%;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  font-size: 1.15rem;
+}
+
+.detailHero {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.8rem;
+  padding-right: 3rem;
+}
+
+.detailHero > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.detailHero small {
+  color: var(--ifm-color-primary);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.detailHero h2 {
+  overflow: hidden;
+  margin: 0.1rem 0;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: -0.035em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailHero code,
+.providerList code,
+.recipeSummary code {
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.description {
+  margin: 1rem 0;
+  color: var(--hub-muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 1rem 0 0;
+}
+
+.facts > div,
+.recipeSummary > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+  padding: 0.55rem;
+  border: 1px solid var(--hub-border-soft);
+  border-radius: 0.58rem;
+  background: var(--hub-surface);
+}
+
+.facts dt,
+.recipeSummary small {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+.facts dd,
+.recipeSummary strong {
+  overflow: hidden;
+  margin: 0;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailSection {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--hub-border-soft);
+}
+
+.detailSection h3 {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.detailSection p {
+  margin: 0;
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.detailSection code {
+  font-size: 0.75rem;
+}
+
+.recipeSummary {
+  display: grid;
+  grid-template-columns: 1.5fr 0.7fr 0.45fr;
+  gap: 0.45rem;
+}
+
+.poolEntrypoint {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--ifm-color-primary) 24%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--ifm-color-primary) 6%, transparent);
+}
+
+.poolEntrypoint > span:last-child,
+.roleCard li > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.poolEntrypoint small,
+.roleCard small {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+.roleGrid,
+.providerList,
+.evaluationList {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.roleGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.roleCard,
+.providerList article,
+.evaluationList article {
+  padding: 0.7rem;
+  border: 1px solid var(--hub-border-soft);
+  border-radius: 0.65rem;
+  background: var(--hub-surface);
+}
+
+.roleCard > header,
+.evaluationList article > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.roleCard ul {
+  display: grid;
+  gap: 0.24rem;
+  margin: 0.55rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roleCard li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  border-radius: 0.38rem;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.roleCard li strong {
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customMark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  border-radius: 0.68rem;
+  background: var(--ifm-color-emphasis-200);
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.providerList article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.providerList article > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.providerList article > span:first-child > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.providerList article > span:last-child {
+  justify-content: flex-end;
+}
+
+.providerList strong {
+  font-size: 0.75rem;
+}
+
+.evaluationList article > header > span {
+  display: grid;
+  min-width: 0;
+}
+
+.evaluationList article > header > span:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.evaluationList article > header > span:last-child > span {
+  display: grid;
+  gap: 0.06rem;
+  padding: 0.22rem 0.4rem;
+  border-radius: 0.38rem;
+  background: color-mix(in srgb, var(--ifm-color-primary) 9%, transparent);
+}
+
+.evaluationList strong,
+.evaluationList b {
+  font-size: 0.75rem;
+}
+
+.evaluationList small {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+.evaluationList footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.evaluationList footer a {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.sourceLink {
+  display: inline-flex;
+  margin-top: 1.25rem;
+  padding: 0.62rem 0.8rem;
+  border-radius: 0.58rem;
+  background: var(--ifm-color-primary);
+  color: var(--ifm-color-primary-contrast-background);
+  font-size: 0.75rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+@media (max-width: 620px) {
+  .detail {
+    width: 100%;
+  }
+
+  .facts,
+  .roleGrid,
+  .recipeSummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .providerList article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .providerList article > span:last-child {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .facts,
+  .roleGrid,
+  .recipeSummary {
+    grid-template-columns: 1fr;
+  }
+}

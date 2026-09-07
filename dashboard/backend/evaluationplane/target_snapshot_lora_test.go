@@ -16,12 +16,13 @@ global:
     auto_model_names: [lora-mom]
 providers:
   defaults:
-    default_model: general-expert
+    model: general-expert
   models:
     - name: foundation-private
       provider_model_id: PrivateCorp/Foundation-Runtime
       backend_refs:
         - name: shared-private
+          provider: vllm
           endpoint: foundation.private.test:8000/v1
           api_key: base-secret
       pricing:
@@ -228,7 +229,7 @@ func TestLoRAAliasWithDirectBackendFailsClosed(t *testing.T) {
 		"    - name: premium-expert\n      pricing:",
 		"    - name: premium-expert\n"+
 			"      backend_refs:\n"+
-			"        - {endpoint: premium.private.test:8100}\n"+
+			"        - {provider: vllm, endpoint: premium.private.test:8100}\n"+
 			"      pricing:",
 		1,
 	)

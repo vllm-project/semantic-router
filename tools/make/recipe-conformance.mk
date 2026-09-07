@@ -6,7 +6,8 @@ RECIPE_CONFORMANCE_PYTHON ?= $(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$
 RECIPE_CONFORMANCE_REPORT_DIR ?= $(CURDIR)/.agent-harness/recipe-conformance
 RECIPE_CONFORMANCE_SHARDS ?= 3
 RECIPE_CONFORMANCE_RECIPE ?=
-RECIPE_CONFORMANCE_ROUTER_URL ?= http://127.0.0.1:8080
+VLLM_SR_PORT_OFFSET ?= 0
+RECIPE_CONFORMANCE_ROUTER_URL ?= http://127.0.0.1:$(shell expr 8080 + $(VLLM_SR_PORT_OFFSET))
 RECIPE_CONFORMANCE_RECIPES ?=
 
 ##@ Recipe Conformance
@@ -61,6 +62,7 @@ recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_C
 	fi
 	@$(MAKE) vllm-sr-router-build
 	@RECIPES="$(RECIPE_CONFORMANCE_RECIPES)" \
+		ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)" \
 		ROUTER_URL="$(RECIPE_CONFORMANCE_ROUTER_URL)" \
 		REPORT_ROOT="$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		bash e2e/testing/run_recipe_conformance.sh

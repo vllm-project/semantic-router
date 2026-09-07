@@ -165,7 +165,8 @@ spec:
   vllmEndpoints:
     - name: qwen-backend
       model: qwen/assistant
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:

@@ -27,12 +27,8 @@ global:
 
 providers:
   defaults:
-    default_model: qwen-coordinator
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen-coordinator
+    reasoning_effort: medium
   models:
     - name: local/omni
       provider_model_id: local/omni
@@ -41,12 +37,13 @@ providers:
         - name: local-omni
           endpoint: vllm-omni:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: qwen-coordinator
       provider_model_id: qwen-coordinator
       api_format: openai
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 0
@@ -56,7 +53,7 @@ providers:
         - name: local-qwen
           endpoint: qwen-coordinator:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: opus48-worker
       provider_model_id: anthropic/claude-opus-4.8
@@ -116,28 +113,40 @@ routing:
       context_window_size: 32768
       description: Local planner and synthesis model for Router Flow dynamic plans.
       capabilities: [chat, planning, synthesis, code]
-      quality_score: 0.88
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.88
       modality: text
       tags: [deployment:self_hosted, role:planner]
     - name: opus48-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon agentic work.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.95
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.95
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gemini31-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and coding.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.93
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.93
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gpt55-worker
       context_window_size: 1048576
       description: OpenRouter worker for long-context planning and frontier synthesis.
       capabilities: [chat, code, reasoning, long-context, planning, synthesis]
-      quality_score: 0.94
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       modality: text
       tags: [deployment:openrouter, role:worker, role:planner]
 

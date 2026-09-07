@@ -12,18 +12,17 @@ func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface
 func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface{}) {
 	providers := mustMapAt(t, root, "providers")
 	defaults := mustMapAt(t, providers, "defaults")
-	reasoningFamilies := mustMapAt(t, defaults, "reasoning_families")
 	models := mustSliceAt(t, providers, "models")
 
 	assertMapCoversStructFields(t, providers, reflect.TypeOf(CanonicalProviders{}), "providers")
 	assertMapCoversStructFields(t, defaults, reflect.TypeOf(CanonicalProviderDefaults{}), "providers.defaults")
+	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
-		mapValuesToSlice(t, reasoningFamilies, "providers.defaults.reasoning_families"),
-		reflect.TypeOf(ReasoningFamilyConfig{}),
-		"providers.defaults.reasoning_families",
+		collectChildMapsFromSlice(t, models, "reasoning", "providers.models"),
+		reflect.TypeOf(CanonicalReasoning{}),
+		"providers.models[].reasoning",
 	)
-	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),

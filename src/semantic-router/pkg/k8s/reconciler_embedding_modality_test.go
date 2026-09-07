@@ -118,6 +118,32 @@ func TestReconcileKubernetesConfigValidationDispatch(t *testing.T) {
 	assertKubernetesValidationFailureStatus(t, reconciler, namespace)
 }
 
+func TestReconcilePreservesMultimodalTargetLayer(t *testing.T) {
+	const namespace = "default"
+	pool := buildEmbeddingModalityPool(namespace)
+	route := buildEmbeddingModalityRoute(namespace, "image_rule_under_test", "image")
+	staticConfig := buildEmbeddingModalityStaticConfig("multimodal")
+	staticConfig.EmbeddingConfig.TargetLayer = 6
+
+	var updatedConfig *config.RouterConfig
+	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
+	reconciler.onConfigUpdate = func(candidate *config.RouterConfig) error {
+		updatedConfig = candidate
+		return nil
+	}
+
+	if err := reconciler.validateAndUpdate(context.Background(), pool, route); err != nil {
+		t.Fatalf("validateAndUpdate: %v", err)
+	}
+	if updatedConfig == nil {
+		t.Fatal("validateAndUpdate did not publish the reconciled config")
+	}
+	got := updatedConfig.EmbeddingConfig.TargetLayer
+	if got != 6 {
+		t.Fatalf("reconciled multimodal target_layer = %d, want 6", got)
+	}
+}
+
 // reconcileEmbeddingModalityCase is one row in the embedding-modality
 // reconcile-path validation table. ruleName is named explicitly per case
 // so the OmittedModalityAccepted case (queryModality = "") still has a

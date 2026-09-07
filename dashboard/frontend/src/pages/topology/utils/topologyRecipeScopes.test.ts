@@ -10,7 +10,7 @@ import { parseConfigToTopology } from './topologyParser'
 
 const config = {
   providers: {
-    defaults: { default_model: 'model-a' },
+    defaults: { model: 'model-a' },
     models: [{ name: 'model-a' }],
   },
   entrypoints: [

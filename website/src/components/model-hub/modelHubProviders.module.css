@@ -1,0 +1,328 @@
+.providers {
+  display: grid;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+}
+
+.toolbar > label {
+  position: relative;
+  display: flex;
+  width: min(26rem, 100%);
+  align-items: center;
+}
+
+.toolbar svg {
+  position: absolute;
+  left: 0.7rem;
+  width: 0.92rem;
+  fill: none;
+  stroke: var(--hub-muted);
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
+
+.toolbar input {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.42rem 0.65rem 0.42rem 2.05rem;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.58rem;
+  outline: none;
+  background: var(--ifm-background-surface-color);
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.toolbar input:focus {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ifm-color-primary) 11%, transparent);
+}
+
+.toolbar > div {
+  display: flex;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.58rem;
+  background: var(--hub-border-soft);
+}
+
+.toolbar button {
+  min-height: 2.15rem;
+  padding: 0.3rem 0.65rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--ifm-background-surface-color);
+  color: var(--hub-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.toolbar button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--ifm-color-primary) 10%, var(--ifm-background-color));
+  color: var(--ifm-color-primary);
+}
+
+.resultCount {
+  margin-bottom: 0.5rem;
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+.providerGrid {
+  overflow: hidden;
+  border: 1px solid var(--hub-border);
+  border-radius: 0.72rem;
+  background: var(--hub-surface);
+}
+
+.providerCard {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(11.5rem, 0.72fr) minmax(14rem, 0.95fr) minmax(24rem, 1.55fr);
+  gap: 1.15rem;
+  padding: 0.95rem 1rem;
+  background: var(--hub-surface);
+}
+
+.providerCard + .providerCard {
+  border-top: 1px solid var(--hub-border-soft);
+}
+
+.identity,
+.summary,
+.apiSurface {
+  min-width: 0;
+}
+
+.identity {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.identity > header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.identity > header > span:last-child {
+  display: grid;
+  min-width: 0;
+}
+
+.identity strong,
+.apiSurface strong {
+  overflow: hidden;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity code,
+.summary > code {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--hub-muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.providerStatus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.65rem;
+  color: var(--hub-muted);
+  font-size: 0.68rem;
+}
+
+.providerStatus > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  white-space: nowrap;
+}
+
+.providerStatus i {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: var(--ifm-color-warning-dark);
+}
+
+.providerStatus [data-status='fixture_verified'] i,
+.providerStatus [data-status='live_verified'] i {
+  background: var(--ifm-color-success-dark);
+}
+
+.summary {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+}
+
+.summary > p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.providerFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  margin: 0;
+}
+
+.providerFacts > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.providerFacts dt {
+  color: var(--hub-muted);
+  font-size: 0.68rem;
+}
+
+.providerFacts dd {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.apiSurface {
+  display: grid;
+  align-content: start;
+  gap: 0.38rem;
+}
+
+.apiSurface > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.apiSurface > header span,
+.noOperations {
+  color: var(--hub-muted);
+  font-size: 0.68rem;
+}
+
+.operationViewport {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.operationTable {
+  width: 100%;
+  min-width: 25rem;
+  border: 0;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+}
+
+.operationTable th,
+.operationTable td {
+  padding: 0.3rem 0.45rem 0.3rem 0;
+  border: 0;
+  border-top: 1px solid var(--hub-border-soft);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.operationTable th {
+  color: var(--hub-muted);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.operationTable td:first-child {
+  color: var(--hub-muted);
+}
+
+.operationTable i {
+  color: var(--ifm-color-primary);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.operationTable code {
+  display: block;
+  overflow: hidden;
+  max-width: 16rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--hub-muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.providers > nav {
+  margin-top: 0.55rem;
+}
+
+@media (max-width: 1080px) {
+  .providerCard {
+    grid-template-columns: minmax(11rem, 0.72fr) minmax(0, 1.3fr);
+  }
+
+  .apiSurface {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbar > label {
+    width: 100%;
+  }
+
+  .toolbar > div {
+    overflow-x: auto;
+  }
+
+  .toolbar button {
+    flex: 1 0 auto;
+  }
+
+  .providerCard {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .apiSurface {
+    grid-column: auto;
+  }
+
+  .operationTable {
+    min-width: 23rem;
+  }
+}

@@ -1,0 +1,132 @@
+id: sglang
+display_name: SGLang
+description: Connect a private SGLang endpoint.
+category: start_here
+support_tier: runtime
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: url:https://raw.githubusercontent.com/sgl-project/sgl-docs/main/favicon.png
+  monogram: S
+  monochrome: false
+  featured: true
+conformance:
+  status: unverified
+models:
+- catalog: qwen/qwen3.8-27b
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-27B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+- catalog: qwen/qwen3.8-2.4t-a95b
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-2.4T-A95B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-07
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+- catalog: baidu/ernie-4.5-300b-a47b
+  relationship: self_hosted
+  id: baidu/ERNIE-4.5-300B-A47B-PT
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+- catalog: moonshot/kimi-k2.7-code
+  relationship: self_hosted
+  id: moonshotai/Kimi-K2.7-Code
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/moonshotai/Kimi-K2.7-Code
+- catalog: nvidia/nemotron-3-ultra
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+- catalog: cohere/tiny-aya-global
+  relationship: self_hosted
+  id: CohereLabs/tiny-aya-global
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://huggingface.co/CohereLabs/tiny-aya-global
+- catalog: stepfun/step-3.7-flash
+  relationship: self_hosted
+  id: stepfun-ai/Step-3.7-Flash
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/stepfun-ai/Step-3.7-Flash
+- catalog: stepfun/step-3.5-flash
+  relationship: self_hosted
+  id: stepfun-ai/Step-3.5-Flash
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/stepfun-ai/Step-3.5-Flash
+- catalog: stepfun/step3-vl-10b
+  relationship: self_hosted
+  id: stepfun-ai/Step3-VL-10B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    minimum_sglang_version: main
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://huggingface.co/stepfun-ai/Step3-VL-10B

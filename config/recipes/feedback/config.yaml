@@ -17,12 +17,8 @@ global:
 
 providers:
   defaults:
-    default_model: qwen/qwen3.5-rocm
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    model: qwen/qwen3.5-rocm
+    reasoning_effort: medium
   models:
     - name: local/omni
       provider_model_id: local/omni
@@ -31,17 +27,19 @@ providers:
         - name: local-omni
           endpoint: vllm-omni:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: qwen/qwen3.5-rocm
       provider_model_id: qwen/qwen3.5-rocm
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 0.00
         completion_per_1m: 0.00
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
@@ -53,6 +51,7 @@ providers:
         completion_per_1m: 1.92
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
@@ -64,6 +63,7 @@ providers:
         completion_per_1m: 4.80
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
@@ -77,21 +77,30 @@ routing:
       context_window_size: 131072
       description: Cheap default lane for standard follow-ups and lightweight clarification.
       capabilities: [cheap_followup, concise_rewrite, general_chat]
-      quality_score: 0.72
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.72
       modality: text
       tags: [tier:cheap, purpose:default_feedback]
     - name: google/gemini-3.1-pro
       context_window_size: 262144
       description: Mid-cost recovery lane for repeated dissatisfaction, debugging, and answer repair.
       capabilities: [answer_repair, debugging, reasoning]
-      quality_score: 0.88
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.88
       modality: text
       tags: [tier:repair, purpose:feedback_recovery]
     - name: openai/gpt5.4
       context_window_size: 262144
       description: Premium lane reserved for verified or high-stakes dissatisfaction recovery.
       capabilities: [verified_reasoning, evidence_synthesis, high_stakes]
-      quality_score: 0.94
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       modality: text
       tags: [tier:verified, purpose:feedback_recovery]
 

@@ -449,7 +449,7 @@ MODEL anthropic/claude-opus-4.6 {
   description: "PREMIUM tier alias reserved for legal and high-risk analysis."
   capabilities: ["legal_analysis", "policy_review", "high_risk_review"]
   tags: ["tier:premium", "cost:highest", "specialty:legal"]
-  quality_score: 0.94
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -458,7 +458,7 @@ MODEL google/gemini-2.5-flash-lite {
   description: "MEDIUM tier alias for low-cost verified explanation and correction tasks."
   capabilities: ["verified_explanation", "source_backed_correction", "nuanced_explanation"]
   tags: ["tier:medium", "cost:low", "specialty:verified"]
-  quality_score: 0.68
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.68 } }]
   modality: "text"
 }
 
@@ -467,7 +467,7 @@ MODEL google/gemini-3.1-pro {
   description: "COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning."
   capabilities: ["architecture", "stem_analysis", "long_context", "general_reasoning"]
   tags: ["tier:complex", "cost:upper_mid", "specialty:complex_generalist"]
-  quality_score: 0.82
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -481,7 +481,7 @@ MODEL openai/gpt5.4 {
   description: "REASONING tier alias for narrow formal math proofs and derivations."
   capabilities: ["reasoning", "proofs", "formal_derivation"]
   tags: ["tier:reasoning", "cost:high", "specialty:formal_proof"]
-  quality_score: 0.9
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.9 } }]
   modality: "text"
 }
 
@@ -490,7 +490,7 @@ MODEL qwen/qwen3.5-rocm {
   description: "SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic."
   capabilities: ["fast_qa", "self_hosted", "concise_answers", "general_chat", "creative_drafting"]
   tags: ["tier:simple", "cost:free", "deployment:self_hosted", "traffic:default"]
-  quality_score: 0.58
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.58 } }]
   modality: "text"
 }
 
@@ -591,7 +591,7 @@ ROUTE medium_code_general (description = "Low-medium cost coding, debugging, ref
   PRIORITY 220
   TIER 7
   WHEN (keyword("code_request_markers") OR keyword("implementation_markers") OR embedding("code_general")) AND (projection("balance_medium") OR projection("balance_complex") OR keyword("code_request_markers") OR embedding("code_general") OR projection("balance_simple") AND (projection("urgency_elevated") OR structure("exclamation_emphasis"))) AND NOT (keyword("agentic_request_markers") OR keyword("architecture_markers") OR keyword("creative_request_markers"))
-  MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium"),
+  MODEL "qwen/qwen3.5-rocm" (reasoning = true, mode = "enabled"),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -651,7 +651,7 @@ ROUTE medium_explainer (description = "Low-cost business, history, and psycholog
   PRIORITY 208
   TIER 11
   WHEN (domain("business") OR domain("economics") OR domain("history") OR domain("psychology") OR embedding("business_analysis") OR embedding("history_explainer") OR embedding("psychology_support") OR keyword("history_topic_markers")) AND (projection("balance_medium") OR projection("balance_complex") OR projection("balance_simple") AND (context("medium_context") OR keyword("history_topic_markers") OR complexity("evidence_synthesis:medium"))) AND NOT (projection("verification_required") OR fact_check("needs_fact_check") OR keyword("verification_markers") OR keyword("reference_heavy_markers") OR domain("health") OR domain("law") OR embedding("fast_qa_en") OR embedding("fast_qa_zh") OR keyword("simple_request_markers") OR keyword("reasoning_request_markers") OR keyword("research_request_markers") OR keyword("creative_request_markers"))
-  MODEL "qwen/qwen3.5-rocm" (reasoning = true, effort = "medium"),
+  MODEL "qwen/qwen3.5-rocm" (reasoning = true, mode = "enabled"),
         "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true

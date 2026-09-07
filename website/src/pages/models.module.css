@@ -1,0 +1,136 @@
+.page {
+  --hub-border: color-mix(in srgb, var(--ifm-color-emphasis-400) 55%, transparent);
+  --hub-border-soft: color-mix(in srgb, var(--ifm-color-emphasis-300) 68%, transparent);
+  --hub-surface: color-mix(in srgb, var(--ifm-background-surface-color) 95%, transparent);
+  --hub-muted: var(--ifm-color-emphasis-650);
+  width: min(1440px, calc(100% - 2.5rem));
+  margin: 0 auto;
+  padding: 1.1rem 0 6rem;
+  color: var(--ifm-font-color-base);
+}
+
+.pageHeader {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) auto;
+  min-height: 6.75rem;
+  align-items: center;
+  gap: 0.8rem 2rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid var(--hub-border);
+  border-radius: 1rem;
+  background:
+    linear-gradient(105deg, color-mix(in srgb, var(--ifm-color-primary) 8%, transparent), transparent 36%),
+    var(--hub-surface);
+  box-shadow: 0 12px 34px rgb(15 23 42 / 5%);
+}
+
+.pageHeader > div h1 {
+  margin: 0;
+  font-size: clamp(1.9rem, 3.5vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.pageHeader > div p {
+  margin: 0.35rem 0 0;
+  color: var(--hub-muted);
+  font-size: 0.78rem;
+}
+
+.pageHeader dl {
+  display: flex;
+  gap: 0;
+  margin: 0;
+}
+
+.pageHeader dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.32rem;
+  padding: 0.15rem 0.8rem;
+  border-left: 1px solid var(--hub-border-soft);
+}
+
+.pageHeader dd {
+  margin: 0;
+  font-size: 0.94rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.pageHeader dt {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.section {
+  scroll-margin-top: calc(var(--ifm-navbar-height) + 1.5rem);
+  padding-top: clamp(1.5rem, 3vw, 2.8rem);
+}
+
+.sectionHeading {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 2rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.sectionHeading span {
+  color: var(--hub-muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 980px) {
+  .pageHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .pageHeader dl {
+    grid-row: 2;
+    flex-wrap: wrap;
+  }
+
+  .pageHeader dl > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .page {
+    width: min(100% - 1rem, 1440px);
+    padding-top: 0.5rem;
+  }
+
+  .pageHeader {
+    min-height: 0;
+    padding: 1rem;
+    border-radius: 0.8rem;
+  }
+
+  .pageHeader dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pageHeader dl > div {
+    padding: 0.12rem 0.5rem 0.12rem 0;
+    border-left: 0;
+  }
+
+  .sectionHeading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.28rem;
+  }
+}

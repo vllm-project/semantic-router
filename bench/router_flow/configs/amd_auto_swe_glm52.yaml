@@ -17,17 +17,14 @@ global:
 
 providers:
   defaults:
-    default_model: glm52-finalizer
-    default_reasoning_effort: high
-    reasoning_families:
-      openrouter:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: glm52-finalizer
+    reasoning_effort: high
   models:
     - name: glm52-planner
       provider_model_id: z-ai/glm-5.2
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -44,7 +41,8 @@ providers:
     - name: glm52-patcher-a
       provider_model_id: z-ai/glm-5.2
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -61,7 +59,8 @@ providers:
     - name: glm52-patcher-b
       provider_model_id: z-ai/glm-5.2
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -78,7 +77,8 @@ providers:
     - name: glm52-verifier
       provider_model_id: z-ai/glm-5.2
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -95,7 +95,8 @@ providers:
     - name: glm52-finalizer
       provider_model_id: z-ai/glm-5.2
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -116,35 +117,50 @@ routing:
       context_window_size: 1048576
       description: GLM 5.2 planner alias for SWE-Bench Pro issue triage.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:planner, base:glm52]
     - name: glm52-patcher-a
       context_window_size: 1048576
       description: GLM 5.2 patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
     - name: glm52-patcher-b
       context_window_size: 1048576
       description: GLM 5.2 alternate patch author alias for SWE-Bench Pro.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:patcher, base:glm52]
     - name: glm52-verifier
       context_window_size: 1048576
       description: GLM 5.2 verifier alias for regression and test-risk review.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:verifier, base:glm52]
     - name: glm52-finalizer
       context_window_size: 1048576
       description: GLM 5.2 finalizer alias for patch and answer contract synthesis.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:swe-bench-pro, role:finalizer, base:glm52]
 

@@ -25,7 +25,7 @@ func (l *WorkflowsLooper) generateDynamicWorkflowPlan(
 	plannerOriginal := requestTextWithOutputContract(original, req.OriginalRequest, req.OutputContract)
 	prompt := buildWorkflowPlannerPrompt(plannerOriginal, workerModels, cfg, req.OutputContractSpec)
 	planReq := appendFusionStageMessage(stripFusionToolUse(req.OriginalRequest), prompt)
-	configureWorkflowPlannerRequest(planReq, cfg.PlannerModel)
+	configureWorkflowPlannerRequest(planReq)
 	resp, err := l.callWorkflowModel(ctx, planReq, cfg, cfg.PlannerModel, false, 1, req)
 	if err != nil {
 		return nil, resp, fmt.Errorf("workflow planner %q failed: %w", cfg.PlannerModel, err)
@@ -121,48 +121,10 @@ Original user request:
 %s`, strings.Join(workerModels, "\n"), cfg.MaxSteps, cfg.MaxParallel, choicePlanningRule, original)
 }
 
-func configureWorkflowPlannerRequest(req *openai.ChatCompletionNewParams, plannerModel string) {
+func configureWorkflowPlannerRequest(req *openai.ChatCompletionNewParams) {
 	if req == nil {
 		return
 	}
 	jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
 	req.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{OfJSONObject: &jsonObjectFormat}
-
-	applyWorkflowChatTemplateKwargs(req, workflowPlannerChatTemplateKwargs(plannerModel))
-}
-
-func applyWorkflowChatTemplateKwargs(req *openai.ChatCompletionNewParams, kwargs map[string]any) {
-	if req == nil || len(kwargs) == 0 {
-		return
-	}
-	extras := cloneWorkflowPlannerExtraFields(req.ExtraFields())
-	if existing, ok := extras["chat_template_kwargs"].(map[string]any); ok {
-		for key, value := range kwargs {
-			existing[key] = value
-		}
-		extras["chat_template_kwargs"] = existing
-	} else {
-		extras["chat_template_kwargs"] = kwargs
-	}
-	req.SetExtraFields(extras)
-}
-
-func cloneWorkflowPlannerExtraFields(fields map[string]any) map[string]any {
-	cloned := make(map[string]any, len(fields)+1)
-	for key, value := range fields {
-		cloned[key] = value
-	}
-	return cloned
-}
-
-func workflowPlannerChatTemplateKwargs(plannerModel string) map[string]any {
-	normalized := strings.ToLower(plannerModel)
-	kwargs := map[string]any{}
-	if strings.Contains(normalized, "qwen") || strings.Contains(normalized, "qwq") {
-		kwargs["enable_thinking"] = false
-	}
-	if strings.Contains(normalized, "deepseek") {
-		kwargs["thinking"] = false
-	}
-	return kwargs
 }

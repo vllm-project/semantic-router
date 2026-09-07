@@ -29,14 +29,16 @@ spec:
     # Multiple KServe models with different reasoning families
     - name: llama3-8b-endpoint
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
 
     - name: deepseek-endpoint
       model: deepseek-r1-distill-qwen-7b
-      reasoningFamily: deepseek
+      reasoning:
+        family: deepseek
       backend:
         type: kserve
         inferenceServiceName: deepseek-r1
@@ -44,7 +46,8 @@ spec:
     # Direct service backend (vLLM deployment)
     - name: custom-vllm
       model: qwen2.5-7b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
@@ -116,18 +119,7 @@ spec:
       pii_model:
         threshold: "0.7"
 
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-
-    default_reasoning_effort: medium
+    reasoning_effort: medium
 
     # OpenTelemetry tracing
     observability:

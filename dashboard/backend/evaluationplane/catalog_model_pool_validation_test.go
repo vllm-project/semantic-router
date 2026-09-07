@@ -23,7 +23,7 @@ func TestLiveModelPoolCandidateSeparatesPolicyFromArmComposition(t *testing.T) {
 	poolBaselineYAML := strings.Replace(
 		modelArmTestYAML,
 		"    - name: metadata-only\n      provider_model_id: metadata-only-upstream",
-		"    - name: pool/third\n      provider_model_id: provider-third\n      backend_refs:\n        - name: pool-third-primary\n          endpoint: pool-third.example.test:8004\n      pricing:\n        currency: USD\n        prompt_per_1m: 0.4\n        completion_per_1m: 0.8\n    - name: metadata-only\n      provider_model_id: metadata-only-upstream",
+		"    - name: pool/third\n      provider_model_id: provider-third\n      backend_refs:\n        - name: pool-third-primary\n          provider: vllm\n          endpoint: pool-third.example.test:8004\n      pricing:\n        currency: USD\n        prompt_per_1m: 0.4\n        completion_per_1m: 0.8\n    - name: metadata-only\n      provider_model_id: metadata-only-upstream",
 		1,
 	)
 	poolBaselineYAML = strings.Replace(

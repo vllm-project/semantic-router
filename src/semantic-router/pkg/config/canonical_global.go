@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -184,6 +183,24 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return defaults, nil
 	}
 
+	resolved, err := mergeCanonicalGlobalOverride(defaults, override, rawOverride)
+	if err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := resolveModuleModelRefs(&resolved); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	return resolved, nil
+}
+
+func mergeCanonicalGlobalOverride(
+	defaults CanonicalGlobal,
+	override *CanonicalGlobal,
+	rawOverride *StructuredPayload,
+) (CanonicalGlobal, error) {
 	resolved := defaults
 	overrideSource := interface{}(override)
 	if rawOverride != nil {
@@ -197,6 +214,13 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
+	return resolved, nil
+}
+
+func normalizeSparseCanonicalCategoryOverride(
+	resolved *CanonicalGlobal,
+	rawOverride *StructuredPayload,
+) error {
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
 	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
 		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
@@ -218,13 +242,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 			categoryModel.Variant = ""
 		}
 	}
-	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
-		return CanonicalGlobal{}, err
-	}
-	if err := resolveModuleModelRefs(&resolved); err != nil {
-		return CanonicalGlobal{}, err
-	}
-	return resolved, nil
+	return normalizeCanonicalCategoryVariant(categoryModel)
 }
 
 // normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
@@ -285,53 +303,66 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global == nil {
 		return nil
 	}
-
-	cfg.ConfigSource = global.Router.ConfigSource
-	cfg.Strategy = global.Router.Strategy
-	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = nil
-	if global.Router.AutoModelNames != nil {
-		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
-	}
-	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
-	cfg.ClearRouteCache = global.Router.ClearRouteCache
-	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
-	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
-	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
-	cfg.SkipProcessing = global.Router.SkipProcessing
-	cfg.ModelSelection = global.Router.ModelSelection
-	cfg.RouterLearning = global.Router.Learning
-
-	cfg.API = global.Services.API
-	cfg.ResponseAPI = global.Services.ResponseAPI
-	cfg.Observability = global.Services.Observability
-	cfg.Authz = global.Services.Authz
-	cfg.RateLimit = global.Services.RateLimit
-	cfg.ManagementAPI = global.Services.ManagementAPI
-	cfg.RouterReplay = global.Services.RouterReplay
-	cfg.StartupStatus = global.Services.StartupStatus
-
-	cfg.SemanticCache = global.Stores.ResponseCache
-	cfg.Memory = global.Stores.Memory
-	cfg.VectorStore = global.Stores.VectorStore
-
-	cfg.Tools = global.Integrations.Tools
-	cfg.Looper = global.Integrations.Looper
-
-	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)
-	cfg.EmbeddingModels = global.ModelCatalog.Embeddings.Semantic
-	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), global.ModelCatalog.KBs...)
-
-	cfg.PromptCompression = global.ModelCatalog.Modules.PromptCompression
-	cfg.PromptGuard = global.ModelCatalog.Modules.PromptGuard.PromptGuardConfig
-	cfg.Classifier = global.ModelCatalog.Modules.Classifier.runtimeConfig()
-	cfg.ComplexityModel = global.ModelCatalog.Modules.Complexity.WithDefaults()
-	cfg.HallucinationMitigation = global.ModelCatalog.Modules.HallucinationMitigation.runtimeConfig()
-	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
-	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
-	cfg.ModelAdmission = cloneAdmissionMap(global.ModelCatalog.Admission)
-
+	applyCanonicalRouterGlobal(cfg, global.Router)
+	applyCanonicalServiceGlobal(cfg, global.Services)
+	applyCanonicalStoreGlobal(cfg, global.Stores)
+	applyCanonicalIntegrationGlobal(cfg, global.Integrations)
+	applyCanonicalModelCatalogGlobal(cfg, global.ModelCatalog)
 	return nil
+}
+
+func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal) {
+	cfg.ConfigSource = router.ConfigSource
+	cfg.Strategy = router.Strategy
+	cfg.AutoModelName = router.AutoModelName
+	cfg.AutoModelNames = nil
+	if router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*router.AutoModelNames)...)
+	}
+	cfg.IncludeConfigModelsInList = router.IncludeConfigModelsInList
+	cfg.ClearRouteCache = router.ClearRouteCache
+	cfg.StreamedBodyMode = router.StreamedBody.Enabled
+	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
+	cfg.StreamedBodyTimeoutSec = router.StreamedBody.TimeoutSec
+	cfg.SkipProcessing = router.SkipProcessing
+	cfg.ModelSelection = router.ModelSelection
+	cfg.RouterLearning = router.Learning
+}
+
+func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
+	cfg.API = services.API
+	cfg.ResponseAPI = services.ResponseAPI
+	cfg.Observability = services.Observability
+	cfg.Authz = services.Authz
+	cfg.RateLimit = services.RateLimit
+	cfg.ManagementAPI = services.ManagementAPI
+	cfg.RouterReplay = services.RouterReplay
+	cfg.StartupStatus = services.StartupStatus
+}
+
+func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
+	cfg.SemanticCache = stores.ResponseCache
+	cfg.Memory = stores.Memory
+	cfg.VectorStore = stores.VectorStore
+}
+
+func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
+	cfg.Tools = integrations.Tools
+	cfg.Looper = integrations.Looper
+}
+
+func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
+	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
+	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
+	cfg.PromptCompression = modelCatalog.Modules.PromptCompression
+	cfg.PromptGuard = modelCatalog.Modules.PromptGuard.PromptGuardConfig
+	cfg.Classifier = modelCatalog.Modules.Classifier.runtimeConfig()
+	cfg.ComplexityModel = modelCatalog.Modules.Complexity.WithDefaults()
+	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
+	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
+	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
+	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
@@ -434,14 +465,4 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
 	}
 	return modelID, nil
-}
-
-func resolveBackendAPIKey(ref CanonicalBackendRef) string {
-	if ref.APIKey != "" {
-		return ref.APIKey
-	}
-	if ref.APIKeyEnv != "" {
-		return os.Getenv(ref.APIKeyEnv)
-	}
-	return ""
 }

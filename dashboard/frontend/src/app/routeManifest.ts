@@ -5,6 +5,7 @@ export type ShellRoutePage =
   | 'insights'
   | 'insights-record'
   | 'logs'
+  | 'models'
   | 'monitoring'
   | 'openclaw'
   | 'playground'
@@ -41,6 +42,7 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
   { path: '/evaluation', page: 'evaluation' },
+  { path: '/models', page: 'models' },
   { path: '/builder', page: 'builder' },
   { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },

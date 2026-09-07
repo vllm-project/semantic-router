@@ -30,14 +30,16 @@ spec:
     # RHOAI 3 KServe InferenceServices
     - name: llama3-8b
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
 
     - name: qwen2-5-7b
       model: qwen2.5-7b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: qwen-2-5-7b
@@ -111,12 +113,7 @@ spec:
         use_cpu: true
 
     # Reasoning configuration
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-
-    default_reasoning_effort: medium
+    reasoning_effort: medium
 
   # ====================
   # Tools Database

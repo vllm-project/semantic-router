@@ -25,7 +25,6 @@ import {
   fetchPresets,
   getStepOneErrors,
   maskSecrets,
-  PROVIDER_OPTIONS,
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
@@ -35,7 +34,6 @@ import {
   type PresetDelta,
   type PresetInfo,
   type PresetRequestState,
-  type ProviderKind,
   type RemoteImportState,
   type RemovedModelSnapshot,
   type SetupActivationState,
@@ -43,6 +41,10 @@ import {
   type SetupStep,
   type SetupValidationState,
 } from "./setupWizardSupport";
+import {
+  getSetupProviderOption,
+  type ProviderKind,
+} from "./setupWizardProviderCatalog";
 import styles from "./SetupWizardPage.module.css";
 
 const SetupWizardPage: React.FC = () => {
@@ -286,15 +288,14 @@ const SetupWizardPage: React.FC = () => {
 
         if (field === "providerKind") {
           const nextProvider = value as ProviderKind;
-          const nextPlaceholder = PROVIDER_OPTIONS.find(
-            (option) => option.id === nextProvider,
-          )?.placeholder;
+          const nextBaseUrl =
+            getSetupProviderOption(nextProvider).initialBaseUrl;
           return {
             ...model,
             providerKind: nextProvider,
             baseUrl: model.baseUrl.trim()
               ? model.baseUrl
-              : nextPlaceholder || model.baseUrl,
+              : nextBaseUrl,
           };
         }
 

@@ -54,12 +54,8 @@ global:
 
 providers:
   defaults:
-    default_model: qwen/qwen3.6-rocm
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen/qwen3.6-rocm
+    reasoning_effort: medium
   models:
     - name: local/omni
       provider_model_id: local/omni
@@ -68,11 +64,12 @@ providers:
         - name: local-omni
           endpoint: vllm-omni:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: qwen/qwen3.6-rocm
       api_format: openai
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen/qwen3.6-rocm
       pricing:
         currency: USD
@@ -83,7 +80,7 @@ providers:
         - name: vllm_primary
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: google/gemini-2.5-flash-lite
       api_format: openai
@@ -97,7 +94,7 @@ providers:
         - name: vllm_primary
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: google/gemini-3.1-pro
       api_format: openai
@@ -111,7 +108,7 @@ providers:
         - name: vllm_primary
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: openai/gpt5.4
       api_format: openai
@@ -125,7 +122,7 @@ providers:
         - name: vllm_primary
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: anthropic/claude-opus-4.6
       api_format: openai
@@ -139,7 +136,7 @@ providers:
         - name: vllm_primary
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 
 routing:
@@ -156,7 +153,10 @@ routing:
         - private_code
         - simple_qa
         - tool_use
-      quality_score: 0.78
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.78
       modality: text
       tags:
         - deployment:self_hosted
@@ -170,7 +170,10 @@ routing:
         - low_cost
         - explanation
         - coding
-      quality_score: 0.84
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.84
       modality: text
       tags:
         - deployment:vllm_alias
@@ -184,7 +187,10 @@ routing:
         - architecture
         - research
         - code
-      quality_score: 0.90
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.90
       modality: text
       tags:
         - deployment:vllm_alias
@@ -198,7 +204,10 @@ routing:
         - frontier_reasoning
         - planning
         - synthesis
-      quality_score: 0.95
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.95
       modality: text
       tags:
         - deployment:vllm_alias
@@ -211,7 +220,10 @@ routing:
         - legal_analysis
         - health_guidance
         - high_stakes
-      quality_score: 0.96
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.96
       modality: text
       tags:
         - deployment:vllm_alias

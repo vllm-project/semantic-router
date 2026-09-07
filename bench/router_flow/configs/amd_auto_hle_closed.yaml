@@ -17,17 +17,14 @@ global:
 
 providers:
   defaults:
-    default_model: gemini31-worker
-    default_reasoning_effort: high
-    reasoning_families:
-      openrouter:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: gemini31-worker
+    reasoning_effort: high
   models:
     - name: opus48-worker
       provider_model_id: anthropic/claude-opus-4.8
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 15
@@ -44,7 +41,8 @@ providers:
     - name: gemini31-worker
       provider_model_id: google/gemini-3.1-pro-preview
       api_format: openai
-      reasoning_family: openrouter
+      reasoning:
+        family: openrouter
       pricing:
         currency: USD
         prompt_per_1m: 2
@@ -65,14 +63,20 @@ routing:
       context_window_size: 1000000
       description: Closed-model HLE worker for high-confidence reasoning and disagreement checks.
       capabilities: [chat, reasoning, long-context]
-      quality_score: 0.95
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.95
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, pool:closed]
     - name: gemini31-worker
       context_window_size: 1000000
       description: Closed-model HLE worker and synthesis/judge model.
       capabilities: [chat, reasoning, long-context]
-      quality_score: 0.94
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:synthesis, pool:closed]
 

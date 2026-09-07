@@ -121,13 +121,13 @@ python result_to_config.py \
   --output-file config.eval.yaml \
   --backend-endpoint 127.0.0.1:8000 \
   --backend-protocol http \
-  --backend-type chat \
+  --provider-id vllm \
   --api-format openai
 ```
 
 The generator creates a v0.3 document with:
 
-- the highest average evaluated model as `providers.defaults.default_model`
+- the highest average evaluated model as `providers.defaults.model`
 - one provider binding and model card for each evaluated logical model
 - one domain signal per observed MMLU-Pro category
 - ranked `model_scores` for each category
@@ -144,7 +144,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: evaluated-model
+    model: evaluated-model
   models: []
 routing:
   modelCards: []

@@ -401,9 +401,25 @@ func validateServerCoverage(label string, actual, expected Coverage) error {
 
 func validatePromotionSummary(report Report) error {
 	if report.Run.EvidenceLevel == "E0" {
-		if report.Summary.QualityScore != nil || report.Summary.LatencyP95MS != nil ||
+		if report.Summary.PrimaryMetric != nil || report.Summary.LatencyP95MS != nil ||
 			report.Summary.RuntimeCost != nil || report.Summary.CapacityTCO != nil {
 			return fmt.Errorf("%w: E0 reports cannot publish promotion headline metrics", ErrInvalid)
+		}
+		return nil
+	}
+	primaryMetric := func(ids ...string) *ReportPrimaryMetric {
+		for _, id := range ids {
+			for _, metric := range report.Metrics {
+				if metric.ID != id || metric.Value == nil {
+					continue
+				}
+				return &ReportPrimaryMetric{
+					ID:                 metric.ID,
+					Value:              *metric.Value,
+					Unit:               metric.Unit,
+					ConfidenceInterval: append([]float64(nil), metric.ConfidenceInterval...),
+				}
+			}
 		}
 		return nil
 	}
@@ -418,9 +434,9 @@ func validatePromotionSummary(report Report) error {
 		}
 		return nil
 	}
-	quality := metricValue("joint.realized_quality", "routing.accuracy", "model_pool.oracle_quality")
+	quality := primaryMetric("joint.realized_quality", "routing.accuracy", "model_pool.oracle_quality")
 	latency := metricValue("joint.latency_p95_ms", "capacity.latency_p95_ms", "routing.latency_p95_ms")
-	if !reflect.DeepEqual(report.Summary.QualityScore, quality) || !reflect.DeepEqual(report.Summary.LatencyP95MS, latency) ||
+	if !reflect.DeepEqual(report.Summary.PrimaryMetric, quality) || !reflect.DeepEqual(report.Summary.LatencyP95MS, latency) ||
 		!reflect.DeepEqual(report.Summary.RuntimeCost, report.Costs.Runtime.Amount) ||
 		!reflect.DeepEqual(report.Summary.CapacityTCO, report.Costs.CapacityTCO.Amount) {
 		return fmt.Errorf("%w: report promotion summary does not match typed evidence", ErrInvalid)

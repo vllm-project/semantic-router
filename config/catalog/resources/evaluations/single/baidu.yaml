@@ -1,0 +1,320 @@
+- id: baidu/ernie-5.1-release-tau3-bench@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: tau-bench/tau3@1.0.0
+  benchmark_profile: published-avg-at-4
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+    aggregation: avg@4
+  metrics:
+    score: 0.679
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.1-release-deepsearchqa@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: baidu/deepsearchqa@1.0.0
+  benchmark_profile: published-f1
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+  metrics:
+    f1: 0.773
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.1-release-spreadsheetbench-verified@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: spreadsheetbench/verified@1.0.0
+  benchmark_profile: published-pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+  metrics:
+    pass_at_1: 0.725
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.1-release-gpqa-diamond@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+    reported_measure: pass@1
+  metrics:
+    accuracy: 0.91
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.1-release-mmlu-pro@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+  metrics:
+    accuracy: 0.843
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.1-release-advanceif@1.0.0
+  model: baidu/ernie-5.1
+  benchmark: baidu/advanceif@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.1
+    source_kind: official_release_benchmark
+  metrics:
+    accuracy: 0.723
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/
+    redistributable: true
+- id: baidu/ernie-5.0-paper-simpleqa@1.0.0
+  model: baidu/ernie-5.0
+  benchmark: openai/simpleqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.0
+    source_kind: official_technical_report
+    table: post-training results
+  metrics:
+    accuracy: 0.7401
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2602.04705
+    redistributable: true
+- id: baidu/ernie-5.0-paper-mmlu-pro@1.0.0
+  model: baidu/ernie-5.0
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.0
+    source_kind: official_technical_report
+    table: post-training results
+  metrics:
+    accuracy: 0.838
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2602.04705
+    redistributable: true
+- id: baidu/ernie-5.0-paper-humanitys-last-exam@1.0.0
+  model: baidu/ernie-5.0
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.0
+    source_kind: official_technical_report
+    table: post-training results
+  metrics:
+    accuracy: 0.2581
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2602.04705
+    redistributable: true
+- id: baidu/ernie-5.0-paper-gpqa-diamond@1.0.0
+  model: baidu/ernie-5.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.0
+    source_kind: official_technical_report
+    table: post-training results
+  metrics:
+    accuracy: 0.8636
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2602.04705
+    redistributable: true
+- id: baidu/ernie-5.0-paper-ifeval@1.0.0
+  model: baidu/ernie-5.0
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: ERNIE 5.0
+    source_kind: official_technical_report
+    table: post-training results
+  metrics:
+    accuracy: 0.9335
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/pdf/2602.04705
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-omniscience@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    index: -35.1333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-ifbench@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    accuracy: 0.391156462585034
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/ifbench
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    accuracy: 0.0333642261353105
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-gpqa-diamond@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    accuracy: 0.811111111111111
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-critpt@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-livecodebench-v6@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: code-generation-pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.466666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/livecodebench
+    redistributable: true
+- id: independent/ernie-4.5-300b-a47b-aime-2025@1.0.0
+  model: baidu/ernie-4.5-300b-a47b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: ERNIE 4.5 300B A47B
+    source_model_slug: ernie-4-5-300b-a47b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.413333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aime-2025
+    redistributable: true

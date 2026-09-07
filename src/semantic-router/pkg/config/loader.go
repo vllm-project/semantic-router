@@ -569,14 +569,26 @@ func logParsedDecisions(cfg *RouterConfig) {
 }
 
 func deprecatedUserConfigFields(raw map[string]interface{}) []string {
-	fields := []string{}
-
 	routing := nestedStringMap(raw["routing"])
+	providers := nestedStringMap(raw["providers"])
+	fields := deprecatedRoutingConfigFields(routing)
+	fields = append(fields, deprecatedProviderConfigFields(providers)...)
+	fields = append(fields, deprecatedGlobalConfigFields(nestedStringMap(raw["global"]))...)
+	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
+	return fields
+}
+
+func deprecatedRoutingConfigFields(routing map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := routing["models"]; ok {
 		fields = append(fields, "routing.models")
 	}
+	fields = append(fields, deprecatedModelCardFields(routing)...)
+	return fields
+}
 
-	providers := nestedStringMap(raw["providers"])
+func deprecatedProviderConfigFields(providers map[string]interface{}) []string {
+	fields := []string{}
 	for _, key := range []string{
 		"model_targets",
 		"backends",
@@ -589,31 +601,74 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 			fields = append(fields, "providers."+key)
 		}
 	}
+	providerDefaults := nestedStringMap(providers["defaults"])
+	for _, key := range []string{"default_model", "default_reasoning_effort", "reasoning_families"} {
+		if _, ok := providerDefaults[key]; ok {
+			fields = append(fields, "providers.defaults."+key)
+		}
+	}
+	fields = append(fields, deprecatedProviderModelFields(providers)...)
+	return fields
+}
 
-	if models, ok := providers["models"].([]interface{}); ok {
-		for index, rawModel := range models {
-			model := nestedStringMap(rawModel)
-			for _, key := range []string{
-				"access",
-				"endpoints",
-				"access_key",
-				"param_size",
-				"context_window_size",
-				"description",
-				"capabilities",
-				"loras",
-				"quality_score",
-				"modality",
-				"tags",
-			} {
-				if _, ok := model[key]; ok {
-					fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
-				}
+func deprecatedProviderModelFields(providers map[string]interface{}) []string {
+	models, ok := providers["models"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for index, rawModel := range models {
+		fields = append(fields, deprecatedProviderModelFieldNames(nestedStringMap(rawModel), index)...)
+	}
+	return fields
+}
+
+func deprecatedProviderModelFieldNames(model map[string]interface{}, index int) []string {
+	fields := []string{}
+	for _, key := range []string{
+		"access", "endpoints", "access_key", "param_size", "context_window_size",
+		"description", "capabilities", "loras", "quality_score", "modality", "tags",
+	} {
+		if _, ok := model[key]; ok {
+			fields = append(fields, fmt.Sprintf("providers.models[%d].%s", index, key))
+		}
+	}
+	if _, ok := model["reasoning_family"]; ok {
+		fields = append(fields, fmt.Sprintf("providers.models[%d].reasoning_family", index))
+	}
+	return append(fields, deprecatedBackendRefFields(model, index)...)
+}
+
+func deprecatedBackendRefFields(model map[string]interface{}, modelIndex int) []string {
+	refs, ok := model["backend_refs"].([]interface{})
+	if !ok {
+		return nil
+	}
+	fields := []string{}
+	for backendIndex, rawRef := range refs {
+		if _, ok := nestedStringMap(rawRef)["type"]; ok {
+			fields = append(fields, fmt.Sprintf(
+				"providers.models[%d].backend_refs[%d].type", modelIndex, backendIndex,
+			))
+		}
+	}
+	return fields
+}
+
+func deprecatedModelCardFields(routing map[string]interface{}) []string {
+	fields := []string{}
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["quality_score"]; ok {
+				fields = append(fields, fmt.Sprintf("routing.modelCards[%d].quality_score", index))
 			}
 		}
 	}
+	return fields
+}
 
-	global := nestedStringMap(raw["global"])
+func deprecatedGlobalConfigFields(global map[string]interface{}) []string {
+	fields := []string{}
 	if _, ok := global["modules"]; ok {
 		fields = append(fields, "global.modules")
 	}
@@ -622,9 +677,6 @@ func deprecatedUserConfigFields(raw map[string]interface{}) []string {
 	if _, ok := embeddings["bert"]; ok {
 		fields = append(fields, "global.model_catalog.embeddings.bert")
 	}
-
-	fields = append(fields, deprecatedDecisionConfigFields(routing)...)
-
 	return fields
 }
 

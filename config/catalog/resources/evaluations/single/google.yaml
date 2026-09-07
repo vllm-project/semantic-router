@@ -1,0 +1,1625 @@
+- id: independent/gemini-3-6-flash-critpt@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    score: .105714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-6-flash-gdpval-aa@2.0.0
+  model: google/gemini-3.6-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    elo: 1335.96
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-6-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.6-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    score: .8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-6-flash-omniscience@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    index: 22.1333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-6-flash-humanitys-last-exam@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    accuracy: .408248378127896
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-6-flash-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    resolved: .775280898876405
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-6-flash-gpqa-diamond@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    accuracy: .928282828282828
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-6-flash-scicode@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    score: .533564814814815
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-6-flash-tau3-banking@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.6 Flash (high)
+    source_model_slug: gemini-3-6-flash
+    run_kind: independent
+  metrics:
+    score: .298969072164948
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemma-4-31b-critpt@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    score: .0142857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemma-4-31b-gdpval-aa@2.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    elo: 758.55
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemma-4-31b-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    score: .696666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemma-4-31b-omniscience@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    index: -47.9333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemma-4-31b-humanitys-last-exam@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    accuracy: .236329935125116
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemma-4-31b-terminalbench-v2-1@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    resolved: .434456928838951
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemma-4-31b-gpqa-diamond@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    accuracy: .856565656565657
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemma-4-31b-scicode@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    score: .454861111111111
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemma-4-31b-tau3-banking@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B (Reasoning)
+    source_model_slug: gemma-4-31b
+    run_kind: independent
+  metrics:
+    score: .148453608247423
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-critpt@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-gdpval-aa@2.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 694.67
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .466666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-omniscience@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -51.6833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-humanitys-last-exam@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .118164967562558
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-terminalbench-v2-1@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: .292134831460674
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-gpqa-diamond@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .762626262626263
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemma-4-31b-non-reasoning-tau3-banking@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 4 31B (Non-reasoning)
+    source_model_slug: gemma-4-31b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .088659793814433
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-8-flash-aa-briefcase@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    elo: 1205.69
+    elo_lower: 1196.19
+    elo_upper: 1215.07
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/gemini-3-8-flash-critpt@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    score: 0.182857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-8-flash-gdp-pdf@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    all_pass: 0.19
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gemini-3-8-flash-gdpval-aa@2.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    elo: 1466.98
+    elo_lower: 1447.17
+    elo_upper: 1486.78
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-8-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    score: 0.813333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-8-flash-omniscience@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    index: 29.55
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-8-flash-humanitys-last-exam@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.478220574606117
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-8-flash-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.876404494382023
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-8-flash-gpqa-diamond@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.952525252525253
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-8-flash-scicode@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    score: 0.565972222222222
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-8-flash-tau3-banking@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.8 Flash (high)
+    source_model_slug: gemini-3-8-flash
+    run_kind: independent
+  metrics:
+    score: 0.449484536082474
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-critpt@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.04
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-gdpval-aa@2.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    elo: 1363.39
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.806666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-omniscience@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    index: 21.35
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-humanitys-last-exam@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.370713623725672
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    resolved: 0.831460674157303
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-gpqa-diamond@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.92020202020202
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-scicode@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.549768518518518
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-8-flash-low-tau3-banking@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.8 Flash (low)
+    source_model_slug: gemini-3-8-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.331958762886598
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-critpt@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.122857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-gdpval-aa@2.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    elo: 1458.53
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.84
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-omniscience@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    index: 28.5833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-humanitys-last-exam@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.421223354958295
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.838951310861423
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-gpqa-diamond@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.935353535353535
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-scicode@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.550925925925926
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-8-flash-medium-tau3-banking@1.0.0
+  model: google/gemini-3.8-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.8 Flash (medium)
+    source_model_slug: gemini-3-8-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.457731958762887
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-7-flash-critpt@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.142857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-7-flash-gdpval-aa@2.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    elo: 1436.97
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-7-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.816666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-7-flash-omniscience@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    index: 26.4833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-7-flash-humanitys-last-exam@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.478683966635774
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-7-flash-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.857677902621723
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-7-flash-gpqa-diamond@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.945454545454545
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-7-flash-scicode@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.571759259259259
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-7-flash-tau3-banking@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 3.7 Flash (high)
+    source_model_slug: gemini-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.327835051546392
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-critpt@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.0571428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-gdpval-aa@2.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    elo: 1359.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.786666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-omniscience@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    index: 22.1333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-humanitys-last-exam@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.351251158480074
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    resolved: 0.797752808988764
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-gpqa-diamond@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.901010101010101
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-scicode@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.556712962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-7-flash-low-tau3-banking@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.7 Flash (low)
+    source_model_slug: gemini-3-7-flash-low
+    run_kind: independent
+  metrics:
+    score: 0.294845360824742
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-critpt@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.0942857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-gdpval-aa@2.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    elo: 1411.28
+    elo_lower: 1395.41
+    elo_upper: 1427.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.83
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-omniscience@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    index: 23.7
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-humanitys-last-exam@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.389712696941613
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-terminalbench-v2-1@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.782771535580524
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-gpqa-diamond@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.921212121212121
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-scicode@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.59837962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gemini-3-7-flash-medium-tau3-banking@1.0.0
+  model: google/gemini-3.7-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.7 Flash (medium)
+    source_model_slug: gemini-3-7-flash-medium
+    run_kind: independent
+  metrics:
+    score: 0.354639175257732
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 31B
+    reasoning_mode: enabled
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.195
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: google/gemma-4-31b-model-card-gpqa-diamond@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 31B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.843
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: google/gemma-4-31b-model-card-mmlu-pro@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 31B
+    reasoning_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.852
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: cognition/gemini-3-6-flash-low-frontiercode-1-1@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: low
+  subject:
+    source_model: Gemini 3.6 Flash
+    source_model_slug: gemini-3-6-flash-low
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: chisel
+    internet_flagged_rate: 0
+  metrics:
+    score: 0.2282
+    pass_rate: 0.2565
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/gemini-3-6-flash-medium-frontiercode-1-1@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.6 Flash
+    source_model_slug: gemini-3-6-flash-medium
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: chisel
+    internet_flagged_rate: 0
+  metrics:
+    score: 0.3437
+    pass_rate: 0.389
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: duellab/gemini-3-6-flash-minimal-gamebench-2@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: minimal
+  subject:
+    source_model: Gemini 3.6 Flash
+    source_model_slug: google-gemini-3-6-flash-minimal
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Minimal
+    result_status: tested_and_included
+  metrics:
+    score: 37.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-google-gemini-3-6-flash
+    redistributable: true
+- id: duellab/gemini-3-6-flash-medium-gamebench-2@1.0.0
+  model: google/gemini-3.6-flash
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Gemini 3.6 Flash
+    source_model_slug: google-gemini-3-6-flash-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 55.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-google-gemini-3-6-flash
+    redistributable: true

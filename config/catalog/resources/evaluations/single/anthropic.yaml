@@ -1,0 +1,3307 @@
+- id: independent/claude-fable-5-1-high-aa-briefcase@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    elo: 1584.75
+    elo_lower: 1576.75
+    elo_upper: 1593.73
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-fable-5-1-high-critpt@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    score: 0.302857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-1-high-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    elo: 1655.69
+    elo_lower: 1637.03
+    elo_upper: 1674.36
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-1-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    score: 0.836666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-1-high-omniscience@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    index: 40.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-1-high-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.559314179796108
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-1-high-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    resolved: 0.898876404494382
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-1-high-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, High Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.906060606060606
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-1-high-scicode@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (high with fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    score: 0.586805555555556
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-1-high-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, High Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-high
+    run_kind: independent
+  metrics:
+    score: 0.430927835051546
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-fable-5-1-low-critpt@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    score: 0.277142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-1-low-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    elo: 1506.86
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-1-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    score: 0.823333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-1-low-omniscience@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    index: 34.1333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-1-low-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.48887859128823
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-1-low-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    resolved: 0.850187265917603
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-1-low-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.880808080808081
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-1-low-scicode@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    score: 0.56712962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-1-low-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Low Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-low
+    run_kind: independent
+  metrics:
+    score: 0.389690721649485
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-fable-5-1-aa-briefcase@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    elo: 1665.82
+    elo_lower: 1655.68
+    elo_upper: 1676.22
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-fable-5-1-critpt@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    score: 0.297142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-1-gdp-pdf@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    all_pass: 0.262
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/claude-fable-5-1-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    elo: 1769.1
+    elo_lower: 1749.95
+    elo_upper: 1788.25
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-1-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    score: 0.853333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-1-omniscience@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    index: 43.45
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-1-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    accuracy: 0.591288229842447
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-1-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    resolved: 0.913857677902622
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-1-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Max Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    accuracy: 0.937373737373737
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-1-scicode@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    score: 0.630787037037037
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-1-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5.1 (max with fallback)
+    source_model_slug: claude-fable-5-1
+    run_kind: independent
+  metrics:
+    score: 0.472164948453608
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-critpt@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    score: 0.291428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    elo: 1585.31
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (medium with fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    score: 0.846666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-omniscience@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    index: 37.6
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (medium with fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.537998146431881
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.885858585858586
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-scicode@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    score: 0.563657407407407
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-1-medium-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Medium Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-medium
+    run_kind: independent
+  metrics:
+    score: 0.410309278350515
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-aa-briefcase@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1657.44
+    elo_lower: 1648.35
+    elo_upper: 1668.14
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-critpt@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.311428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1751.06
+    elo_lower: 1731.32
+    elo_upper: 1770.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Xhigh Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.83
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-omniscience@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    index: 42.3833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.587117701575533
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.910112359550562
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (Adaptive Reasoning, Xhigh Effort, Default Fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.934343434343434
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-scicode@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.608796296296296
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-1-xhigh-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5.1 (xhigh with fallback)
+    source_model_slug: claude-fable-5-1-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.457731958762887
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-opus-5-high-aa-briefcase@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (high)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    elo: 1562.53
+    elo_lower: 1556.14
+    elo_upper: 1570.02
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-opus-5-high-critpt@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    score: 0.282857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-5-high-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    elo: 1633.24
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-5-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    score: 0.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-5-high-omniscience@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    index: 33.7166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-5-high-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.528266913809083
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-5-high-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    resolved: 0.876404494382023
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-5-high-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.937373737373737
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-5-high-scicode@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    score: 0.554398148148148
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-opus-5-high-tau3-banking@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-opus-5-high
+    run_kind: independent
+  metrics:
+    score: 0.447422680412371
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-opus-5-low-critpt@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    score: 0.231428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-5-low-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    elo: 1376.4
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-5-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    score: 0.813333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-5-low-omniscience@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    index: 28.55
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-5-low-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.434198331788693
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-5-low-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    resolved: 0.764044943820225
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-5-low-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.888888888888889
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-5-low-scicode@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    score: 0.491898148148148
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-opus-5-low-tau3-banking@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-opus-5-low
+    run_kind: independent
+  metrics:
+    score: 0.303092783505155
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-opus-5-aa-briefcase@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    elo: 1650.28
+    elo_lower: 1642.79
+    elo_upper: 1657.9
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-opus-5-critpt@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    score: 0.291428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-5-gdp-pdf@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    all_pass: 0.216
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/claude-opus-5-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    elo: 1739.09
+    elo_lower: 1722.92
+    elo_upper: 1755.25
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    score: 0.793333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-5-omniscience@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    index: 37.0666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-5-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.548656163113994
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-5-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    resolved: 0.891385767790262
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-5-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.932323232323232
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-5-scicode@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    score: 0.563657407407407
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-opus-5-tau3-banking@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 5 (max)
+    source_model_slug: claude-opus-5
+    run_kind: independent
+  metrics:
+    score: 0.420618556701031
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-opus-5-medium-critpt@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.268571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-5-medium-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    elo: 1529.04
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-5-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.82
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-5-medium-omniscience@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    index: 31.0166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-5-medium-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.512974976830398
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-5-medium-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.861423220973783
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-5-medium-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.919191919191919
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-5-medium-scicode@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.515046296296296
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-opus-5-medium-tau3-banking@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-opus-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.385567010309278
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-aa-briefcase@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (xhigh)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1629.57
+    elo_lower: 1622.49
+    elo_upper: 1637.27
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-critpt@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.277142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (xhigh)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1713.13
+    elo_lower: 1697.52
+    elo_upper: 1728.73
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-omniscience@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    index: 35.3833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (xhigh)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.544022242817424
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.937373737373737
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-scicode@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.556712962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-opus-5-xhigh-tau3-banking@1.0.0
+  model: anthropic/claude-opus-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-opus-5-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.43298969072165
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-sonnet-5-high-gdpval-aa@2.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, High Effort)
+    source_model_slug: claude-sonnet-5-high
+    run_kind: independent
+  metrics:
+    elo: 1320.08
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-sonnet-5-low-gdpval-aa@2.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Low Effort)
+    source_model_slug: claude-sonnet-5-low
+    run_kind: independent
+  metrics:
+    elo: 1149.48
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-sonnet-5-critpt@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    score: 0.168571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-sonnet-5-gdpval-aa@2.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    elo: 1505.81
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-sonnet-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    score: 0.82
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-sonnet-5-omniscience@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    index: 16.45
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-sonnet-5-humanitys-last-exam@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.412882298424467
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-sonnet-5-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    resolved: 0.805243445692884
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-sonnet-5-gpqa-diamond@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.911111111111111
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-sonnet-5-scicode@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    score: 0.542824074074074
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-sonnet-5-tau3-banking@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-sonnet-5
+    run_kind: independent
+  metrics:
+    score: 0.37319587628866
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/claude-sonnet-5-medium-gdpval-aa@2.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Medium Effort)
+    source_model_slug: claude-sonnet-5-medium
+    run_kind: independent
+  metrics:
+    elo: 1226.91
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-sonnet-5-xhigh-gdpval-aa@2.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Sonnet 5 (Adaptive Reasoning, Xhigh Effort)
+    source_model_slug: claude-sonnet-5-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1414.43
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-aa-briefcase@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    elo: 1534.8
+    elo_lower: 1528.29
+    elo_upper: 1541.89
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/claude-fable-5-critpt@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    score: 0.2857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-fable-5-gdp-pdf@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    all_pass: 0.24
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/claude-fable-5-gdpval-aa@2.0.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    elo: 1636.73
+    elo_lower: 1622.75
+    elo_upper: 1650.71
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-fable-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    score: 0.823333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-fable-5-omniscience@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    index: 43.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-fable-5-humanitys-last-exam@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.554680259499537
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-fable-5-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    resolved: 0.846441947565543
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-fable-5-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (Adaptive Reasoning, Max Effort, Opus 4.8 Fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.926262626262626
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-fable-5-scicode@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    score: 0.609953703703704
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/claude-fable-5-tau3-banking@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Fable 5 (with fallback)
+    source_model_slug: claude-fable-5
+    run_kind: independent
+  metrics:
+    score: 0.381443298969072
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/claude-fable-5-comparison-terminal-bench@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Claude Fable 5
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    resolved: 0.831
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/claude-fable-5-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Claude Fable 5
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.92
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: independent/claude-opus-4-8-critpt@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    score: 0.208571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/claude-opus-4-8-gdpval-aa@2.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    elo: 1493.78
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/claude-opus-4-8-artificial-analysis-long-context-reasoning@1.1.0
+  model: anthropic/claude-opus-4.8
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    score: 0.776666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/claude-opus-4-8-omniscience@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    index: 28.75
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/claude-opus-4-8-humanitys-last-exam@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    accuracy: 0.486561631139944
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/claude-opus-4-8-terminalbench-v2-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    resolved: 0.846441947565543
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/claude-opus-4-8-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    accuracy: 0.92020202020202
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/claude-opus-4-8-tau3-banking@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: Claude Opus 4.8 (Adaptive Reasoning, Max Effort)
+    source_model_slug: claude-opus-4-8
+    run_kind: independent
+  metrics:
+    score: 0.342268041237113
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/claude-opus-4.8-comparison-terminal-bench@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Claude Opus 4.8
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    resolved: 0.789
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/claude-opus-4.8-comparison-gpqa-diamond@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Claude Opus 4.8
+    source_kind: official_cross-vendor_comparison
+  metrics:
+    accuracy: 0.941
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: cognition/claude-fable-5-low-frontiercode-1-1@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-low
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.001
+  metrics:
+    score: 0.4801
+    pass_rate: 0.5282
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-fable-5-medium-frontiercode-1-1@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-medium
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.003
+  metrics:
+    score: 0.4982
+    pass_rate: 0.546
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-fable-5-high-frontiercode-1-1@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-high
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.002
+  metrics:
+    score: 0.5273
+    pass_rate: 0.5766
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-fable-5-xhigh-frontiercode-1-1@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-xhigh
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.003
+  metrics:
+    score: 0.5348
+    pass_rate: 0.5885
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-opus-4-8-low-frontiercode-1-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-low
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.001
+  metrics:
+    score: 0.3514
+    pass_rate: 0.3923
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-opus-4-8-medium-frontiercode-1-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-medium
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.005
+  metrics:
+    score: 0.4046
+    pass_rate: 0.4493
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-opus-4-8-high-frontiercode-1-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-high
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.008
+  metrics:
+    score: 0.4102
+    pass_rate: 0.4565
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-opus-4-8-xhigh-frontiercode-1-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-xhigh
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.005
+  metrics:
+    score: 0.4549
+    pass_rate: 0.5027
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-sonnet-5-low-frontiercode-1-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: low
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-low
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.001
+  metrics:
+    score: 0.2871
+    pass_rate: 0.32
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-sonnet-5-medium-frontiercode-1-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-medium
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0
+  metrics:
+    score: 0.352
+    pass_rate: 0.3907
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-sonnet-5-high-frontiercode-1-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: high
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-high
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.002
+  metrics:
+    score: 0.3935
+    pass_rate: 0.4366
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cognition/claude-sonnet-5-xhigh-frontiercode-1-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-xhigh
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: claude-code
+    internet_flagged_rate: 0.005
+  metrics:
+    score: 0.4273
+    pass_rate: 0.4759
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: cursor/claude-fable-5-low-cursorbench-3-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-low
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.621
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-fable-5-medium-cursorbench-3-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-medium
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.652
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-fable-5-high-cursorbench-3-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-high
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.665
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-fable-5-xhigh-cursorbench-3-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-xhigh
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.684
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-opus-4-8-low-cursorbench-3-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-low
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.531
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-opus-4-8-medium-cursorbench-3-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-medium
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.561
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-opus-4-8-high-cursorbench-3-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-high
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.58
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-opus-4-8-xhigh-cursorbench-3-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-xhigh
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.594
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-sonnet-5-low-cursorbench-3-2@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: low
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-low
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.477
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-sonnet-5-medium-cursorbench-3-2@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-medium
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.524
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-sonnet-5-high-cursorbench-3-2@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: high
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-high
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.569
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: cursor/claude-sonnet-5-xhigh-cursorbench-3-2@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-xhigh
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.587
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: anthropic/claude-opus-4-8-low-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: low
+  subject:
+    variant: Claude Opus 4.8
+    reasoning_effort: low
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.502
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-opus-4-8-medium-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: medium
+  subject:
+    variant: Claude Opus 4.8
+    reasoning_effort: medium
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.552
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-opus-4-8-high-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: high
+  subject:
+    variant: Claude Opus 4.8
+    reasoning_effort: high
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.557
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-opus-4-8-xhigh-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: Claude Opus 4.8
+    reasoning_effort: xhigh
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.576
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-low-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: low
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: low
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.365
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-medium-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: medium
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: medium
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.472
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-high-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: high
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: high
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.528
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-xhigh-humanitys-last-exam-with-tools@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: xhigh
+    thinking_mode: adaptive
+    tool_policy: with_tools
+    tools: web_search, web_fetch, programmatic_tool_calling, code_execution
+    total_token_budget: 1000000
+    trials: 1
+    source_kind: official_system_card
+  metrics:
+    accuracy: 0.546
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-xhigh-terminal-bench-2-1@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: xhigh
+    thinking_mode: adaptive
+    harness: mini-swe-agent
+    tasks: 89
+    attempts_per_task: 5
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.804
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: anthropic/claude-opus-4-8-high-terminal-bench-2-1@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Claude Opus 4.8
+    reasoning_effort: high
+    thinking_mode: adaptive
+    harness: mini-swe-agent
+    tasks: 89
+    attempts_per_task: 5
+    source_kind: official_system_card
+  metrics:
+    resolved: 0.827
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/d00db56fa754a1b115b6dd7cb2e3c342ee809620.pdf
+    redistributable: true
+- id: anthropic/claude-sonnet-5-high-usamo-2026@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: matharena/usamo@2026.0.0
+  benchmark_profile: proof-panel
+  reasoning_effort: high
+  subject:
+    variant: Claude Sonnet 5
+    reasoning_effort: high
+    thinking_mode: adaptive
+    token_limit: 300000
+    attempts_per_problem: 10
+    rewrite_model: Gemini 3.1 Pro
+    judge_panel: Gemini 3.1 Pro, Claude Opus 4.6, Claude Mythos Preview
+    aggregation: minimum_judge_score
+    source_kind: official_system_card
+  metrics:
+    score: 0.795
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://www-cdn.anthropic.com/9e6a1044980d8c4ed85669faf9c2a8342e2e9f1e/Claude%20Sonnet%205%20System%20Card.pdf
+    redistributable: true
+- id: duellab/claude-fable-5-medium-gamebench-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 66.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-claude-fable-5
+    redistributable: true
+- id: duellab/claude-fable-5-xhigh-gamebench-2@1.0.0
+  model: anthropic/claude-fable-5
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Fable 5
+    source_model_slug: claude-fable-5-xhigh
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: XHigh
+    result_status: tested_and_included
+  metrics:
+    score: 83.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-claude-fable-5
+    redistributable: true
+- id: duellab/claude-opus-4-8-medium-gamebench-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 47.4
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-claude-opus-4-8
+    redistributable: true
+- id: duellab/claude-opus-4-8-xhigh-gamebench-2@1.0.0
+  model: anthropic/claude-opus-4.8
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: xhigh
+  subject:
+    source_model: Claude Opus 4.8
+    source_model_slug: claude-opus-4-8-xhigh
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: XHigh
+    result_status: tested_and_included
+  metrics:
+    score: 66.6
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-claude-opus-4-8
+    redistributable: true
+- id: duellab/claude-sonnet-5-medium-gamebench-2@1.0.0
+  model: anthropic/claude-sonnet-5
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Claude Sonnet 5
+    source_model_slug: claude-sonnet-5-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 40.9
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-claude-sonnet-5
+    redistributable: true

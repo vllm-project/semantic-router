@@ -607,7 +607,7 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
-    await expect(buildMenu.getByRole('button', { name: 'Models', exact: true })).toBeFocused()
+    await expect(buildMenu.getByRole('link', { name: 'Model Hub', exact: true })).toBeFocused()
 
     const buildBounds = await buildMenu.boundingBox()
     expect(buildBounds).not.toBeNull()
@@ -653,6 +653,29 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('Shift+Tab')
     await expect(operateMenu).toBeHidden()
     await expect(operateTrigger).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  test('navigates primary links while a workflow menu is open', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+
+    await page.goto('/dashboard')
+
+    const primaryGroup = page.getByRole('group', { name: 'Primary navigation' })
+    const buildTrigger = page.getByRole('button', { name: 'Build' })
+    const buildMenu = page.getByRole('navigation', { name: 'Build' })
+
+    await buildTrigger.click()
+    await expect(buildMenu).toBeVisible()
+    await primaryGroup.getByRole('link', { name: 'Playground' }).click()
+    await expect(page).toHaveURL(/\/playground$/)
+    await expect(buildMenu).toBeHidden()
+
+    await buildTrigger.click()
+    await expect(buildMenu).toBeVisible()
+    await primaryGroup.getByRole('link', { name: 'Dashboard' }).click()
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(buildMenu).toBeHidden()
   })
 
   test('keeps the desktop mega menu inside the viewport at 1024px', async ({ page }) => {

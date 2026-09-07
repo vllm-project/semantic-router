@@ -16,15 +16,22 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 	decision *config.Decision,
 	modelName string,
 ) (bool, string) {
+	if decision == nil {
+		return false, ""
+	}
 	for _, ref := range decision.ModelRefs {
-		if ref.Model == modelName || ref.LoRAName == modelName {
+		matchesModel := ref.Model == modelName
+		if r.Config != nil {
+			matchesModel = r.Config.ModelNameMatches(ref.Model, modelName)
+		}
+		if matchesModel || ref.LoRAName == modelName {
 			if ref.UseReasoning == nil {
 				break
 			}
 
-			reasoningEffort := ref.ReasoningEffort
-			if reasoningEffort == "" {
-				reasoningEffort = "medium"
+			reasoningEffort := ""
+			if *ref.UseReasoning {
+				reasoningEffort = r.getReasoningEffort(decision, modelName)
 			}
 			logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
 				"model":             modelName,
@@ -45,10 +52,7 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 		return false, ""
 	}
 
-	reasoningEffort := "medium"
-	if r.Config.DefaultReasoningEffort != "" {
-		reasoningEffort = r.Config.DefaultReasoningEffort
-	}
+	reasoningEffort := r.getReasoningEffort(decision, modelName)
 	logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
 		"model":            modelName,
 		"source":           "model_params",

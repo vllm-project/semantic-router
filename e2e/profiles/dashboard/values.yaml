@@ -3,7 +3,8 @@
 config:
   model_config:
     "base-model":
-      reasoning_family: "qwen3"
+      reasoning:
+        family: "qwen3"
       loras:
         - name: "general-expert"
           description: "General-purpose adapter"
@@ -27,7 +28,7 @@ config:
           use_reasoning: false
 
   strategy: "priority"
-  default_model: general-expert
+  model: general-expert
 
   bert_model:
     model_id: models/mom-embedding-light

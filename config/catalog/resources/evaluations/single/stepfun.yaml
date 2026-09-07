@@ -1,0 +1,456 @@
+- id: independent/step-3.7-flash-high-omniscience@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    index: -37.2833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/step-3.7-flash-high-gdpval-aa@2.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    elo: 958.76
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/step-3.7-flash-high-tau3-banking@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.119587628865979
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/step-3.7-flash-high-terminalbench-v2-1@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.393258426966292
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/step-3.7-flash-high-lcr@1.1.0
+  model: stepfun/step-3.7-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.736666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/step-3.7-flash-high-humanitys-last-exam@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.214087117701576
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/step-3.7-flash-high-gpqa-diamond@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.809090909090909
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/step-3.7-flash-high-critpt@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    score: 0.0228571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/step-3.7-flash-high-ifbench@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.672789115646258
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/ifbench
+    redistributable: true
+- id: independent/step-3.7-flash-high-mmmu-pro@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: high
+  subject:
+    source_model: Step 3.7 Flash (high)
+    source_model_slug: step-3-7-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.753179190751445
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/mmmu-pro
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-omniscience@1.0.0
+  model: stepfun/step-3.5-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    index: -41.8166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-lcr@1.1.0
+  model: stepfun/step-3.5-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    score: 0.5
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-ifbench@1.0.0
+  model: stepfun/step-3.5-flash
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    accuracy: 0.645578231292517
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/ifbench
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-humanitys-last-exam@1.0.0
+  model: stepfun/step-3.5-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    accuracy: 0.211306765523633
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-gpqa-diamond@1.0.0
+  model: stepfun/step-3.5-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    accuracy: 0.831313131313131
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/step-3.5-flash-enabled-critpt@1.0.0
+  model: stepfun/step-3.5-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step 3.5 Flash (open weights)
+    source_model_slug: step-3-5-flash-0202
+    run_kind: independent
+  metrics:
+    score: 0.0246938775510204
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-omniscience@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    index: -59
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-lcr@1.1.0
+  model: stepfun/step3-vl-10b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-ifbench@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.502040816326531
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/ifbench
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-humanitys-last-exam@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.108433734939759
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-gpqa-diamond@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.68989898989899
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-critpt@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/step3-vl-10b-enabled-mmmu-pro@1.0.0
+  model: stepfun/step3-vl-10b
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: enabled
+  subject:
+    source_model: Step3-VL-10B
+    source_model_slug: step-3-vl-10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.639884393063584
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/mmmu-pro
+    redistributable: true
+- id: duellab/step-3-7-flash-low-gamebench-2@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: low
+  subject:
+    source_model: Step 3.7 Flash
+    source_model_slug: stepfun-step-3-7-flash-low
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Low
+    result_status: tested_and_included
+  metrics:
+    score: 31.0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-stepfun-step-3-7-flash
+    redistributable: true
+- id: duellab/step-3-7-flash-medium-gamebench-2@1.0.0
+  model: stepfun/step-3.7-flash
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Step 3.7 Flash
+    source_model_slug: stepfun-step-3-7-flash-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 32.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-stepfun-step-3-7-flash
+    redistributable: true

@@ -120,10 +120,10 @@ def parse_args():
         help="Protocol for generated backend_refs entries",
     )
     parser.add_argument(
-        "--backend-type",
+        "--provider-id",
         type=str,
-        default="chat",
-        help="Backend type for generated backend_refs entries",
+        default="vllm",
+        help="Catalog Provider ID for generated backend_refs entries",
     )
     parser.add_argument(
         "--api-format",
@@ -190,7 +190,7 @@ def build_provider_models(
     ranked_models,
     backend_endpoint,
     backend_protocol,
-    backend_type,
+    provider_id,
     api_format,
     provider_name,
 ):
@@ -207,7 +207,7 @@ def build_provider_models(
                         "name": f"{model_name}-backend",
                         "endpoint": backend_endpoint,
                         "protocol": backend_protocol,
-                        "type": backend_type,
+                        "provider": provider_id,
                         "weight": 1,
                     }
                 ],
@@ -225,7 +225,15 @@ def build_routing_model_cards(ranked_models):
                 "description": (
                     "Generated from MMLU-Pro evaluation results for category-aware routing."
                 ),
-                "quality_score": round(float(average_accuracy), 6),
+                "evaluations": [
+                    {
+                        "benchmark": "tiger-lab/mmlu-pro@1.0.0",
+                        "metrics": {
+                            "average_accuracy": round(float(average_accuracy), 6)
+                        },
+                        "metadata": {"aggregation": "macro_category_mean"},
+                    }
+                ],
                 "capabilities": ["chat"],
                 "tags": ["generated", "mmlu-pro"],
                 "modality": "ar",
@@ -272,7 +280,7 @@ def generate_config_yaml(
     similarity_threshold,
     backend_endpoint,
     backend_protocol,
-    backend_type,
+    provider_id,
     api_format,
     provider_name,
 ):
@@ -292,14 +300,14 @@ def generate_config_yaml(
         "listeners": [],
         "providers": {
             "defaults": {
-                "default_model": default_model,
-                "default_reasoning_effort": "medium",
+                "model": default_model,
+                "reasoning_effort": "medium",
             },
             "models": build_provider_models(
                 ranked_models,
                 backend_endpoint,
                 backend_protocol,
-                backend_type,
+                provider_id,
                 api_format,
                 provider_name,
             ),
@@ -359,7 +367,7 @@ def main():
         args.similarity_threshold,
         args.backend_endpoint,
         args.backend_protocol,
-        args.backend_type,
+        args.provider_id,
         args.api_format,
         args.provider_name,
     )

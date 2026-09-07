@@ -246,7 +246,7 @@ function isEvaluationReportSummary(value: unknown): boolean {
     isEvaluationRecord(value) &&
     hasOnlyEvaluationFields(value, [
       'verdict',
-      'quality_score',
+      'primary_metric',
       'latency_p95_ms',
       'runtime_cost',
       'capacity_tco',
@@ -256,7 +256,21 @@ function isEvaluationReportSummary(value: unknown): boolean {
       'unavailable_gates',
     ]) &&
     isKnownValue(value.verdict, EVALUATION_SUMMARY_VERDICT_SET) &&
-    (value.quality_score === null || isFiniteNumber(value.quality_score)) &&
+    (value.primary_metric === null ||
+      (isEvaluationRecord(value.primary_metric) &&
+        hasOnlyEvaluationFields(value.primary_metric, [
+          'id',
+          'value',
+          'unit',
+          'confidence_interval',
+        ]) &&
+        isNonEmptyText(value.primary_metric.id) &&
+        isFiniteNumber(value.primary_metric.value) &&
+        isNonEmptyText(value.primary_metric.unit) &&
+        (value.primary_metric.confidence_interval === undefined ||
+          (Array.isArray(value.primary_metric.confidence_interval) &&
+            value.primary_metric.confidence_interval.length === 2 &&
+            value.primary_metric.confidence_interval.every(isFiniteNumber))))) &&
     (value.latency_p95_ms === null || isFiniteNumber(value.latency_p95_ms)) &&
     (value.runtime_cost === null || isFiniteNumber(value.runtime_cost)) &&
     (value.capacity_tco === null || isFiniteNumber(value.capacity_tco)) &&

@@ -192,10 +192,50 @@
   color: #fff;
 }
 
+.reasoningFamilyIdentity {
+  display: flex;
+  min-width: 220px;
+  align-items: center;
+  gap: 0.72rem;
+}
+
+.reasoningFamilyIdentity > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.reasoningFamilyIdentity small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasoningFamilyMark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.035));
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.68rem;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+}
+
 .reasoningFamilyName {
+  overflow: hidden;
   color: #f5f5f7;
+  font-size: 0.78rem;
   font-weight: 660;
   letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reasoningFamilyType {
@@ -203,9 +243,9 @@
   width: fit-content;
   padding: 0.32rem 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
+  border-radius: 7px;
   color: rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(255, 255, 255, 0.035);
   font-size: 0.72rem;
   font-weight: 680;
 }

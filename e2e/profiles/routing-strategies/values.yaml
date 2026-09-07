@@ -3,26 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: base-model
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: base-model
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: premium-model
@@ -32,6 +21,7 @@ config:
           prompt_per_1m: 10
         backend_refs:
           - name: local-vllm-premium
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: economy-model
@@ -41,6 +31,7 @@ config:
           prompt_per_1m: 1
         backend_refs:
           - name: local-vllm-economy
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   entrypoints:
@@ -394,9 +385,15 @@ config:
     modelCards:
       - name: base-model
       - name: premium-model
-        quality_score: 0.9
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.9
       - name: economy-model
-        quality_score: 0.1
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.1
   global:
     model_catalog:
       kbs: []

@@ -62,7 +62,7 @@ to select. A Kubernetes backend reference uses this shape:
 ```yaml
 providers:
   defaults:
-    default_model: production/qwen3
+    model: production/qwen3
   models:
     - name: production/qwen3
       provider_model_id: Qwen/Qwen3-8B
@@ -70,6 +70,7 @@ providers:
         - name: production-stack
           endpoint: vllm-router-service.default.svc.cluster.local:80
           protocol: http
+          provider: vllm
           weight: 100
 ```
 

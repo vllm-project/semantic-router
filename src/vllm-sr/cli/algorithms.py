@@ -11,9 +11,8 @@ class ModelRef(BaseModel):
     model: str
     use_reasoning: bool | None = False
     reasoning_description: str | None = None
-    reasoning_effort: str | None = (
-        None  # Model-specific reasoning effort level (low, medium, high)
-    )
+    reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
+    reasoning_effort: str | None = None  # Model-specific reasoning effort level.
     lora_name: str | None = None  # LoRA adapter name (if using LoRA)
     weight: float | None = None
 

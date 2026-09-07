@@ -141,7 +141,12 @@ export interface EvaluationTrackReport {
 
 export interface EvaluationReportSummary {
   verdict: EvaluationSummaryVerdict
-  quality_score: number | null
+  primary_metric: {
+    id: string
+    value: number
+    unit: string
+    confidence_interval?: number[]
+  } | null
   latency_p95_ms: number | null
   runtime_cost: number | null
   capacity_tco: number | null

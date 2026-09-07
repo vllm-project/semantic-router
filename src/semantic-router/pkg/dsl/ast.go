@@ -576,6 +576,7 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 type ModelRef struct {
 	Model     string
 	Reasoning *bool
+	Mode      string
 	Effort    string
 	LoRA      string
 	ParamSize string

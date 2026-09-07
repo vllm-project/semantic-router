@@ -2,22 +2,6 @@ package config
 
 import "sort"
 
-func canonicalModelOrLoRAExists(
-	modelsByName map[string]RoutingModel,
-	modelCards []RoutingModel,
-	name string,
-) bool {
-	if _, ok := modelsByName[name]; ok {
-		return true
-	}
-	for _, model := range modelCards {
-		if routingModelHasLoRA(model, name) {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *RouterConfig) resolveLoRABaseModel(alias string) (string, ModelParams, bool) {
 	if c == nil || c.ModelConfig == nil || alias == "" {
 		return "", ModelParams{}, false

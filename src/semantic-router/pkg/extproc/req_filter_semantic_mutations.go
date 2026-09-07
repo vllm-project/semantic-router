@@ -21,20 +21,17 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	enabled bool,
 	decision *config.Decision,
 ) bool {
-	if request == nil || !enabled || r.getModelReasoningFamily(model) == nil {
+	if request == nil {
 		return false
 	}
-	effort := ""
-	if targetFormat == llmprotocol.OpenAIChatV1 || targetFormat == llmprotocol.OpenAIResponsesV1 {
-		effort = r.getReasoningEffort(decision, model)
+	family := r.getModelReasoningFamily(model)
+	if family == nil {
+		return false
 	}
-	mode := request.ReasoningMode
-	budget := request.ReasoningBudgetTokens
-	if targetFormat != llmprotocol.AnthropicMessagesV1 {
-		mode = ""
-		budget = nil
-	} else if mode == llmprotocol.ReasoningModeDisabled {
-		mode = ""
+	effort, mode := semanticReasoningControls(r, family, decision, model, targetFormat, enabled)
+	var budget *int64
+	if targetFormat == llmprotocol.AnthropicMessagesV1 && mode == llmprotocol.ReasoningModeEnabled {
+		budget = request.ReasoningBudgetTokens
 	}
 	if request.ReasoningEffort == effort && request.ReasoningMode == mode && request.ReasoningBudgetTokens == budget {
 		return false
@@ -44,6 +41,107 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 	request.ReasoningBudgetTokens = budget
 	logging.Infof("Applied reasoning controls to model %q", model)
 	return true
+}
+
+func semanticReasoningControls(
+	router *OpenAIRouter,
+	family *config.ReasoningFamilyConfig,
+	decision *config.Decision,
+	model string,
+	targetFormat llmprotocol.WireFormat,
+	enabled bool,
+) (string, llmprotocol.ReasoningMode) {
+	if targetFormat == llmprotocol.AnthropicMessagesV1 {
+		return semanticAnthropicReasoningControls(router, family, decision, model, enabled)
+	}
+	if targetFormat != llmprotocol.OpenAIResponsesV1 && targetFormat != llmprotocol.OpenAIChatV1 {
+		return "", ""
+	}
+	return semanticOpenAIReasoningControls(router, family, decision, model, enabled)
+}
+
+func semanticAnthropicReasoningControls(
+	router *OpenAIRouter,
+	family *config.ReasoningFamilyConfig,
+	decision *config.Decision,
+	model string,
+	enabled bool,
+) (string, llmprotocol.ReasoningMode) {
+	if enabled {
+		return router.getReasoningEffort(decision, model), llmprotocol.ReasoningMode(router.getReasoningMode(decision, model, true))
+	}
+	if reasoningFamilySupportsMode(family, string(llmprotocol.ReasoningModeDisabled)) {
+		return "", llmprotocol.ReasoningModeDisabled
+	}
+	return "", ""
+}
+
+func semanticOpenAIReasoningControls(
+	router *OpenAIRouter,
+	family *config.ReasoningFamilyConfig,
+	decision *config.Decision,
+	model string,
+	enabled bool,
+) (string, llmprotocol.ReasoningMode) {
+	if enabled {
+		return semanticEnabledOpenAIReasoningControls(router, family, decision, model)
+	}
+	return semanticDisabledOpenAIReasoningControls(family)
+}
+
+func semanticEnabledOpenAIReasoningControls(
+	router *OpenAIRouter,
+	family *config.ReasoningFamilyConfig,
+	decision *config.Decision,
+	model string,
+) (string, llmprotocol.ReasoningMode) {
+	switch family.Type {
+	case config.ReasoningFamilyTypeReasoningEffort,
+		config.ReasoningFamilyTypeTopLevelReasoningEffort:
+		return router.getReasoningEffort(decision, model), ""
+	case config.ReasoningFamilyTypeChatTemplateKwargs:
+		// vLLM's OpenAI-compatible Responses surface maps a standard effort
+		// to enable_thinking for boolean template controls.
+		return "high", ""
+	default:
+		// Provider adaptation owns non-standard string modes such as
+		// MiniMax's adaptive thinking_mode.
+		return "", ""
+	}
+}
+
+func semanticDisabledOpenAIReasoningControls(
+	family *config.ReasoningFamilyConfig,
+) (string, llmprotocol.ReasoningMode) {
+	switch family.Type {
+	case config.ReasoningFamilyTypeReasoningEffort,
+		config.ReasoningFamilyTypeTopLevelReasoningEffort:
+		if family.Disabled != "" ||
+			reasoningFamilySupportsMode(family, string(llmprotocol.ReasoningModeDisabled)) {
+			// The neutral OpenAI-compatible contract has one portable disabled
+			// effort value. Provider-native sentinels such as Hunyuan's
+			// "no_think" are projected only after encoding, at the final
+			// provider adapter boundary.
+			return "none", ""
+		}
+	case config.ReasoningFamilyTypeChatTemplateKwargs:
+		if family.Disabled != "" {
+			return "none", ""
+		}
+	}
+	return "", ""
+}
+
+func reasoningFamilySupportsMode(family *config.ReasoningFamilyConfig, mode string) bool {
+	if family == nil {
+		return false
+	}
+	for _, supported := range family.Modes {
+		if supported == mode {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(

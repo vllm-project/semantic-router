@@ -52,6 +52,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
 	}
+	if model.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", model.ReasoningMode))
+	}
 	if model.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
 	}

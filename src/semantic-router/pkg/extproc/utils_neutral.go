@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // semanticAssistantContent returns the ordered, client-visible assistant text
@@ -144,7 +145,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		case llmprotocol.ContentImage:
 			result.ImageContentCount++
 			if result.FirstImageURL == "" {
-				result.FirstImageURL = content.URL
+				result.FirstImageURL = neutralInlineImageDataURL(content)
 			}
 		case llmprotocol.ContentToolCall:
 			result.AssistantToolCallCount++
@@ -166,6 +167,25 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		}
 	}
 	consumeNeutralContext(result, message.Content)
+}
+
+// neutralInlineImageDataURL returns the classifier-safe representation of one
+// neutral image. Ingress codecs split inline data URIs into MediaType and Data;
+// reconstructing them here preserves protocol neutrality without permitting
+// the classifier to fetch remote URLs or read local paths.
+func neutralInlineImageDataURL(content llmprotocol.Content) string {
+	if canonical, ok := imageurl.CanonicalDataURL(content.URL); ok {
+		return canonical
+	}
+	if content.MediaType == "" || content.Data == "" {
+		return ""
+	}
+	candidate := "data:" + strings.ToLower(strings.TrimSpace(content.MediaType)) + ";base64," + content.Data
+	canonical, ok := imageurl.CanonicalDataURL(candidate)
+	if !ok {
+		return ""
+	}
+	return canonical
 }
 
 // recordUserInputModalities counts the structural input modalities carried by

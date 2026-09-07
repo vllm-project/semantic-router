@@ -33,14 +33,16 @@ routing:
           use_reasoning: false
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
+          provider: vllm
 `
 
 const recipeTestPrivacyBlockYAML = `
@@ -159,11 +161,12 @@ recipes:
               use_reasoning: false
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 `
 	cfg, err := ParseYAMLBytes([]byte(yaml))
 	if err != nil {

@@ -103,6 +103,9 @@ func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {
 	if m.Effort != "" {
 		ref.ReasoningEffort = m.Effort
 	}
+	if m.Mode != "" {
+		ref.ReasoningMode = m.Mode
+	}
 	decision.ModelRefs = append(decision.ModelRefs, ref)
 
 	// Populate model_config for route-local model metadata fields.
@@ -147,6 +150,9 @@ func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) confi
 		}
 		if model.Effort != "" {
 			ref.ReasoningEffort = model.Effort
+		}
+		if model.Mode != "" {
+			ref.ReasoningMode = model.Mode
 		}
 		compiled.Models = append(compiled.Models, ref)
 	}

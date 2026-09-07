@@ -1,0 +1,300 @@
+import React, { useState } from 'react'
+
+import type { CatalogProvider } from '../types/modelCatalog'
+import {
+  type ModelHubDistributionFilter,
+  type ModelHubFilters,
+  type ModelHubKindFilter,
+  type ModelHubLifecycleFilter,
+  type ModelHubSort,
+  type ModelHubView,
+  readableModelHubValue,
+} from './modelHubSupport'
+import styles from './ModelHubFilters.module.css'
+
+interface FilterSelectProps {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  children: React.ReactNode
+}
+
+const FilterSelect: React.FC<FilterSelectProps> = ({ label, value, onChange, children }) => (
+  <label className={styles.filterControl}>
+    <span>{label}</span>
+    <div className={styles.selectShell}>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {children}
+      </select>
+      <span className={styles.selectIndicator} aria-hidden="true">
+        <svg viewBox="0 0 16 16">
+          <path d="m5 6.5 3 3 3-3" />
+        </svg>
+      </span>
+    </div>
+  </label>
+)
+
+const ViewIcon: React.FC<{ view: ModelHubView }> = ({ view }) => {
+  if (view === 'list') {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M5 3h9M5 8h9M5 13h9" />
+        <circle cx="2" cy="3" r=".7" />
+        <circle cx="2" cy="8" r=".7" />
+        <circle cx="2" cy="13" r=".7" />
+      </svg>
+    )
+  }
+  if (view === 'benchmarks') {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2 13V8m4 5V3m4 10V6m4 7V1" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 3h12M2 8h12M2 13h12" />
+    </svg>
+  )
+}
+
+interface HubFiltersProps {
+  filters: ModelHubFilters
+  creators: string[]
+  providers: CatalogProvider[]
+  capabilities: string[]
+  view: ModelHubView
+  collapsed: boolean
+  update: (patch: Partial<ModelHubFilters>) => void
+  setView: (view: ModelHubView) => void
+  toggleCollapsed: () => void
+  reset: () => void
+}
+
+const activeModelHubFilterCount = (filters: ModelHubFilters): number =>
+  [
+    filters.query,
+    filters.kind !== 'all',
+    filters.distribution !== 'all',
+    filters.lifecycle !== 'supported',
+    filters.publisher !== 'all',
+    filters.provider !== 'all',
+    filters.capability !== 'all',
+    filters.sort !== 'released',
+  ].filter(Boolean).length
+
+const HubFilterTopline: React.FC<{
+  query: string
+  view: ModelHubView
+  update: HubFiltersProps['update']
+  setView: HubFiltersProps['setView']
+}> = ({ query, view, update, setView }) => (
+  <div className={styles.filterTopline}>
+    <label className={styles.searchField}>
+      <span className={styles.srOnly}>Search models</span>
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <circle cx="8.5" cy="8.5" r="5.5" />
+        <path d="m12.5 12.5 4 4" />
+      </svg>
+      <input
+        type="search"
+        value={query}
+        onChange={(event) => update({ query: event.target.value })}
+        placeholder="Search models"
+      />
+      {query ? (
+        <button type="button" onClick={() => update({ query: '' })} aria-label="Clear search">
+          ×
+        </button>
+      ) : null}
+    </label>
+    <div className={styles.viewSwitch} role="group" aria-label="Catalog view">
+      {(['list', 'table', 'benchmarks'] as ModelHubView[]).map((candidate) => (
+        <button
+          key={candidate}
+          type="button"
+          className={view === candidate ? styles.viewButtonActive : ''}
+          onClick={() => setView(candidate)}
+          aria-pressed={view === candidate}
+          title={`${readableModelHubValue(candidate)} view`}
+        >
+          <ViewIcon view={candidate} />
+          <span>{readableModelHubValue(candidate)}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+)
+
+const HubIdentityFilters: React.FC<{
+  filters: ModelHubFilters
+  creators: string[]
+  providers: CatalogProvider[]
+  capabilities: string[]
+  update: HubFiltersProps['update']
+}> = ({ filters, creators, providers, capabilities, update }) => (
+  <>
+    <FilterSelect
+      label="Type"
+      value={filters.kind}
+      onChange={(value) => update({ kind: value as ModelHubKindFilter })}
+    >
+      <option value="all">All models</option>
+      <option value="physical">Single models</option>
+      <option value="virtual">Virtual models</option>
+    </FilterSelect>
+    <FilterSelect
+      label="Creator"
+      value={filters.publisher}
+      onChange={(publisher) => update({ publisher })}
+    >
+      <option value="all">All creators</option>
+      {creators.map((name) => (
+        <option key={name} value={name}>
+          {name}
+        </option>
+      ))}
+    </FilterSelect>
+    <FilterSelect
+      label="Provider"
+      value={filters.provider}
+      onChange={(provider) => update({ provider })}
+    >
+      <option value="all">All serving providers</option>
+      {providers.map((provider) => (
+        <option key={provider.id} value={provider.id}>
+          {provider.display_name}
+        </option>
+      ))}
+    </FilterSelect>
+    <FilterSelect
+      label="Capability"
+      value={filters.capability}
+      onChange={(capability) => update({ capability })}
+    >
+      <option value="all">All capabilities</option>
+      {capabilities.map((capability) => (
+        <option key={capability} value={capability}>
+          {readableModelHubValue(capability)}
+        </option>
+      ))}
+    </FilterSelect>
+  </>
+)
+
+const HubMetadataFilters: React.FC<{
+  filters: ModelHubFilters
+  update: HubFiltersProps['update']
+}> = ({ filters, update }) => (
+  <>
+    <FilterSelect
+      label="Distribution"
+      value={filters.distribution}
+      onChange={(distribution) =>
+        update({ distribution: distribution as ModelHubDistributionFilter })
+      }
+    >
+      <option value="all">All distributions</option>
+      <option value="open_weights">Open weights</option>
+      <option value="proprietary_api">Proprietary API</option>
+      <option value="router_recipe">Router recipe</option>
+    </FilterSelect>
+    <FilterSelect
+      label="Lifecycle"
+      value={filters.lifecycle}
+      onChange={(lifecycle) => update({ lifecycle: lifecycle as ModelHubLifecycleFilter })}
+    >
+      <option value="supported">Supported</option>
+      <option value="active">Active</option>
+      <option value="experimental">Experimental</option>
+      <option value="deprecated">Deprecated</option>
+      <option value="removed">Removed</option>
+      <option value="all">All states</option>
+    </FilterSelect>
+    <FilterSelect
+      label="Sort by"
+      value={filters.sort}
+      onChange={(sort) => update({ sort: sort as ModelHubSort })}
+    >
+      <option value="released">Newest release</option>
+      <option value="context">Context window</option>
+      <option value="providers">Provider coverage</option>
+      <option value="name">Model name</option>
+    </FilterSelect>
+  </>
+)
+
+export const HubFilters: React.FC<HubFiltersProps> = ({
+  filters,
+  creators,
+  providers,
+  capabilities,
+  view,
+  collapsed,
+  update,
+  setView,
+  toggleCollapsed,
+  reset,
+}) => {
+  const activeCount = activeModelHubFilterCount(filters)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+
+  return (
+    <aside
+      className={`${styles.filterArea} ${collapsed ? styles.filterAreaCollapsed : ''}`}
+      aria-label="Model filters"
+    >
+      <div className={styles.filterRailTitle}>
+        <strong>Filters</strong>
+        <span className={styles.filterRailActions}>
+          <button
+            className={styles.resetInline}
+            type="button"
+            onClick={reset}
+            disabled={activeCount === 0}
+          >
+            Reset{activeCount ? ` (${activeCount})` : ''}
+          </button>
+          <button
+            className={styles.collapseFiltersButton}
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-controls="model-hub-filter-controls"
+            aria-label={collapsed ? 'Show model filters' : 'Hide model filters'}
+            title={collapsed ? 'Show filters' : 'Hide filters'}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d={collapsed ? 'm6 4 4 4-4 4' : 'm10 4-4 4 4 4'} />
+            </svg>
+          </button>
+        </span>
+      </div>
+      <HubFilterTopline query={filters.query} view={view} update={update} setView={setView} />
+      <button
+        type="button"
+        className={styles.mobileFilterToggle}
+        aria-expanded={filtersOpen}
+        onClick={() => setFiltersOpen((current) => !current)}
+      >
+        Filters{activeCount ? ` (${activeCount})` : ''}
+        <span aria-hidden="true">{filtersOpen ? '−' : '+'}</span>
+      </button>
+      <div
+        id="model-hub-filter-controls"
+        className={`${styles.filters} ${filtersOpen ? styles.filtersOpen : ''}`}
+      >
+        <HubIdentityFilters
+          filters={filters}
+          creators={creators}
+          providers={providers}
+          capabilities={capabilities}
+          update={update}
+        />
+        <HubMetadataFilters filters={filters} update={update} />
+      </div>
+    </aside>
+  )
+}

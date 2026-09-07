@@ -218,7 +218,7 @@ export function reportFor(reportRun: EvaluationRun) {
     run: reportRun,
     summary: {
       verdict: 'unavailable',
-      quality_score: null,
+      primary_metric: null,
       latency_p95_ms: null,
       runtime_cost: null,
       capacity_tco: null,

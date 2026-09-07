@@ -2,7 +2,9 @@
 
 import json
 import math
+import re
 import warnings
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -1631,11 +1633,153 @@ class ProviderReliability(BaseModel):
     health_check_timeout: str = "2s"
 
 
+class Reasoning(BaseModel):
+    """Built-in family reference or inline behavior for a custom model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    family: Optional[str] = None
+    type: Optional[
+        Literal[
+            "chat_template_kwargs",
+            "reasoning_effort",
+            "reasoning_mode",
+            "top_level_reasoning_effort",
+        ]
+    ] = None
+    parameter: Optional[str] = None
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]] = Field(
+        default_factory=list
+    )
+    default_mode: Optional[Literal["enabled", "disabled", "adaptive"]] = None
+    disabled: Optional[str] = None
+
+    def _has_inline_fields(self) -> bool:
+        return bool(
+            self.type
+            or self.parameter
+            or self.activation_parameter
+            or self.effort_flags
+            or self.levels
+            or self.default
+            or self.modes
+            or self.default_mode
+            or self.disabled
+        )
+
+    def _validate_reference_shape(self, inline: bool) -> None:
+        if self.family and inline:
+            raise ValueError(
+                "family and inline reasoning fields are mutually exclusive"
+            )
+        if not self.family and not inline:
+            raise ValueError(
+                "reasoning must reference a family or define inline behavior"
+            )
+        if inline and (not self.type or not self.parameter):
+            raise ValueError("inline reasoning requires type and parameter")
+
+    def _validate_activation_parameter(self) -> None:
+        if self.activation_parameter:
+            if not self.activation_parameter.strip():
+                raise ValueError(
+                    "inline reasoning activation_parameter cannot be blank"
+                )
+            if self.activation_parameter == self.parameter:
+                raise ValueError(
+                    "inline reasoning activation_parameter must differ from parameter"
+                )
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning activation_parameter requires reasoning_effort type"
+                )
+
+    def _validate_effort_flags(self) -> None:
+        if self.effort_flags:
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning effort_flags requires reasoning_effort type"
+                )
+            if not self.activation_parameter:
+                raise ValueError(
+                    "inline reasoning effort_flags requires activation_parameter"
+                )
+            if any(effort not in self.levels for effort in self.effort_flags):
+                raise ValueError(
+                    "inline reasoning effort_flags keys must be listed in levels"
+                )
+            parameters = list(self.effort_flags.values())
+            if any(not parameter.strip() for parameter in parameters):
+                raise ValueError("inline reasoning effort_flags values cannot be blank")
+            if len(parameters) != len(set(parameters)):
+                raise ValueError("inline reasoning effort_flags values must be unique")
+            if self.parameter in parameters or self.activation_parameter in parameters:
+                raise ValueError(
+                    "inline reasoning effort_flags values must differ from parameter and activation_parameter"
+                )
+            active_levels = [level for level in self.levels if level != self.disabled]
+            if len(active_levels) - len(self.effort_flags) > 1:
+                raise ValueError(
+                    "inline reasoning effort_flags cannot leave multiple levels indistinguishable by omission"
+                )
+
+    def _validate_effort_levels(self) -> None:
+        if self.levels and self.default is not None and self.default not in self.levels:
+            raise ValueError("inline reasoning default must be listed in levels")
+        if (
+            self.type
+            in {
+                "reasoning_effort",
+                "top_level_reasoning_effort",
+            }
+            and not self.levels
+        ):
+            raise ValueError("inline effort-based reasoning requires levels")
+        # Operator-authored families may omit the mode contract entirely. This
+        # keeps the user-facing custom-model form small for the common cases
+        # where a boolean activation flag or an effort value already describes
+        # the complete wire behavior. Built-in families are validated strictly
+        # by the catalog generator.
+
+    def _validate_modes(self) -> None:
+        if not self.modes and self.default_mode is not None:
+            raise ValueError(
+                "inline reasoning modes are required when default_mode is set"
+            )
+        if self.modes and self.default_mode is None:
+            raise ValueError(
+                "inline reasoning default_mode is required when modes are set"
+            )
+        if self.default_mode is not None and self.default_mode not in self.modes:
+            raise ValueError("inline reasoning default_mode must be listed in modes")
+        if self.disabled and self.modes and "disabled" not in self.modes:
+            raise ValueError("inline reasoning disabled value requires disabled mode")
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        inline = self._has_inline_fields()
+        self._validate_reference_shape(inline)
+        if not inline:
+            return self
+        self._validate_activation_parameter()
+        self._validate_effort_flags()
+        self._validate_effort_levels()
+        self._validate_modes()
+        return self
+
+
 class Model(BaseModel):
-    """Provider model binding for canonical providers.models entries."""
+    """Provider model binding under the existing providers.models hierarchy."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
-    reasoning_family: Optional[str] = None
+    catalog: Optional[str] = None
+    reasoning: Optional[Reasoning] = None
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
@@ -1651,18 +1795,101 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
+class ModelEvaluation(BaseModel):
+    """Small operator-authored benchmark result attached to one model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark: str = Field(
+        min_length=1,
+        pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
+    )
+    benchmark_profile: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    metrics: Dict[str, float]
+    source: Optional[str] = None
+    measured_at: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_measurement(self):
+        if not self.metrics:
+            raise ValueError("metrics cannot be empty")
+        if any(
+            not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", key) or not math.isfinite(value)
+            for key, value in self.metrics.items()
+        ):
+            raise ValueError("metrics must contain named finite numbers")
+        if any(
+            isinstance(value, (dict, list, tuple, set))
+            or (isinstance(value, float) and not math.isfinite(value))
+            for value in self.metadata.values()
+        ):
+            raise ValueError("metadata values must be scalar")
+        if any(not key.strip() for key in self.metadata):
+            raise ValueError("metadata keys cannot be empty")
+        if self.measured_at:
+            try:
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.measured_at):
+                    raise ValueError
+                date.fromisoformat(self.measured_at)
+            except ValueError as error:
+                raise ValueError("measured_at must use YYYY-MM-DD") from error
+        return self
+
+
+class RoutingModelPresentation(BaseModel):
+    """Optional product presentation for a handwritten model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logo: str
+    monogram: str
+    monochrome: bool = False
+
+
+class RoutingModelDistribution(BaseModel):
+    """Distribution metadata for a handwritten physical or virtual model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["open_weights", "proprietary_api", "router_recipe"]
+    source: str
+    license: Optional[str] = None
+
+
 class RoutingModel(BaseModel):
-    """Semantic model catalog entry exposed to routing/DSL."""
+    """Handwritten custom card or explicit overlay of a built-in card."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
+    display_name: Optional[str] = None
+    publisher: Optional[str] = None
+    presentation: Optional[RoutingModelPresentation] = None
+    distribution: Optional[RoutingModelDistribution] = None
+    family: Optional[str] = None
+    revision: Optional[str] = None
+    released_at: Optional[str] = None
+    knowledge_cutoff: Optional[str] = None
+    lifecycle: Optional[str] = None
     param_size: Optional[str] = None
     context_window_size: Optional[int] = Field(default=None, ge=1)
+    max_output_tokens: Optional[int] = Field(default=None, ge=1)
     description: Optional[str] = None
     capabilities: Optional[List[str]] = None
     loras: Optional[List[LoRAAdapter]] = None
     tags: Optional[List[str]] = None
-    quality_score: Optional[float] = Field(default=None, ge=0, le=1)
+    modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
+    evaluations: List[ModelEvaluation] = Field(default_factory=list)
+
+    @field_validator("released_at", "knowledge_cutoff", mode="before")
+    @classmethod
+    def normalize_date_metadata(cls, value: Any) -> Any:
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        return value
 
 
 class ReasoningFamily(BaseModel):
@@ -1670,18 +1897,26 @@ class ReasoningFamily(BaseModel):
 
     type: str
     parameter: str
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]]
+    default_mode: Literal["enabled", "disabled", "adaptive"]
+    disabled: Optional[str] = None
 
 
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = None
     endpoint: Optional[str] = None
     protocol: str = "http"
-    weight: int = 1
-    type: Optional[str] = None
+    weight: int = Field(default=1, ge=0)
     base_url: Optional[str] = None
-    provider: Optional[str] = None
+    provider: str = "vllm"
     auth_header: Optional[str] = None
     auth_prefix: Optional[str] = None
     extra_headers: Optional[Dict[str, str]] = None
@@ -1703,36 +1938,33 @@ class BackendRef(BaseModel):
 class ProviderDefaults(BaseModel):
     """Provider-wide defaults that should not be mixed into per-model access bindings."""
 
-    default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
-        default_factory=dict
-    )
-    default_reasoning_effort: Optional[str] = "high"
+    model_config = ConfigDict(extra="forbid")
+
+    model: Optional[str] = None
+    reasoning_effort: Optional[str] = None
 
 
 class Providers(BaseModel):
     """Provider configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
     models: List[Model] = Field(default_factory=list)
 
     @property
     def default_model(self) -> Optional[str]:
-        return self.defaults.default_model
-
-    @property
-    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
-        return self.defaults.reasoning_families or {}
+        return self.defaults.model
 
     @property
     def default_reasoning_effort(self) -> Optional[str]:
-        return self.defaults.default_reasoning_effort
+        return self.defaults.reasoning_effort
 
 
 class Routing(BaseModel):
     """Canonical routing block."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)

@@ -14,17 +14,15 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: test-model
   models:
     - name: test-model
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 1

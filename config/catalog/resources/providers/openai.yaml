@@ -1,0 +1,85 @@
+id: openai
+display_name: OpenAI
+description: OpenAI models and reasoning families.
+category: model_api
+support_tier: native
+default_base_url: https://api.openai.com/v1
+protocols:
+- openai/chat-completions@1
+- openai/responses@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+- openai/responses@1#create
+- openai/responses@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+  injected_header: x-user-openai-key
+presentation:
+  logo: package:openai
+  monogram: O
+  monochrome: true
+  featured: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: openai/gpt-5.4
+  relationship: first_party
+  id: gpt-5.4
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.4
+- catalog: openai/gpt-5.5
+  relationship: first_party
+  id: gpt-5.5
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.5
+- catalog: openai/gpt-5.6-sol
+  relationship: first_party
+  id: gpt-5.6-sol
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-sol
+- catalog: openai/gpt-5.6-terra
+  relationship: first_party
+  id: gpt-5.6-terra
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+- catalog: openai/gpt-5.6-luna
+  relationship: first_party
+  id: gpt-5.6-luna
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://developers.openai.com/api/docs/models/gpt-5.6-luna

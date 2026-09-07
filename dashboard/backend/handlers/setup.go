@@ -509,7 +509,6 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 	}
 	if len(patch.Providers.Models) > 0 ||
 		patch.Providers.Defaults.DefaultModel != "" ||
-		len(patch.Providers.Defaults.ReasoningFamilies) > 0 ||
 		patch.Providers.Defaults.DefaultReasoningEffort != "" {
 		merged.Providers = patch.Providers
 	}

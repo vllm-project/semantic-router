@@ -220,8 +220,8 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []sign
 	for _, c := range candidates {
 		sig := signalSet{model: c.Model}
 		if params, ok := s.modelParams[c.Model]; ok {
-			if params.QualityScore > 0 {
-				sig.quality = params.QualityScore
+			if score, available := params.EvidenceScore(""); available {
+				sig.quality = score
 				sig.hasQ = true
 			}
 			if params.Pricing.PromptPer1M > 0 {
@@ -374,20 +374,28 @@ func updateOptionalExtrema(min, max *float64, hasMin, hasMax *bool, v float64, o
 func (s *MultiFactorSelector) scoreCandidate(sig signalSet, mins, maxs extrema) float64 {
 	w := s.config.Weights
 	score := 0.0
+	activeWeight := 0.0
 
-	if w.Quality > 0 && maxs.hasQ {
+	if w.Quality > 0 && maxs.hasQ && sig.hasQ {
 		score += w.Quality * normalizeDirect(sig.quality, mins.quality, maxs.quality, sig.hasQ)
+		activeWeight += w.Quality
 	}
-	if w.Latency > 0 && maxs.hasLat {
+	if w.Latency > 0 && maxs.hasLat && sig.hasLat {
 		score += w.Latency * normalizeInverted(sig.latency, mins.latency, maxs.latency, sig.hasLat)
+		activeWeight += w.Latency
 	}
-	if w.Cost > 0 && maxs.hasCost {
+	if w.Cost > 0 && maxs.hasCost && sig.hasCost {
 		score += w.Cost * normalizeInverted(sig.cost, mins.cost, maxs.cost, sig.hasCost)
+		activeWeight += w.Cost
 	}
 	if w.Load > 0 {
 		score += w.Load * normalizeInverted(sig.load, mins.load, maxs.load, true)
+		activeWeight += w.Load
 	}
-	return score
+	if activeWeight == 0 {
+		return 0
+	}
+	return score / activeWeight
 }
 
 // normalizeDirect maps [min, max] -> [0, 1] linearly. Missing observation

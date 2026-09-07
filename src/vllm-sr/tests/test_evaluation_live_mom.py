@@ -509,7 +509,7 @@ def _assert_live_report_artifacts(
         "capacity": "E0",
     }
     assert report.run.evidence_level == "E0"
-    assert report.summary.quality_score is None
+    assert report.summary.primary_metric is None
 
     persisted_metrics = store.read_run_json(report.run.id, "metrics.json")["metrics"]
     assert persisted_metrics == [

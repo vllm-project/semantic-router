@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSetupConfig,
   createSetupRequestGuard,
   createModelDraft,
   filterSetupModels,
@@ -178,5 +179,36 @@ describe("setup wizard model drafts", () => {
         ],
       }),
     ).toEqual({ models: 1, decisions: 2, signals: 2, canActivate: true });
+  });
+});
+
+describe("setup wizard provider projection", () => {
+  it("derives provider wire behavior from the shared provider catalog", () => {
+    const models = [
+      modelDraft({ id: "local", name: "qwen/qwen3.5-rocm" }),
+      modelDraft({
+        id: "claude",
+        name: "anthropic/claude-opus-4.1",
+        providerKind: "anthropic",
+        baseUrl: "https://api.anthropic.com",
+      }),
+    ];
+
+    const config = buildSetupConfig(models, "local") as {
+      providers: { models: Array<Record<string, unknown>> };
+    };
+    const [local, claude] = config.providers.models;
+
+    expect(local).not.toHaveProperty("api_format");
+    expect(local.backend_refs).toEqual([
+      expect.objectContaining({ provider: "vllm", endpoint: "vllm:8000" }),
+    ]);
+    expect(claude).toMatchObject({ api_format: "anthropic" });
+    expect(claude.backend_refs).toEqual([
+      expect.objectContaining({
+        provider: "anthropic",
+        base_url: "https://api.anthropic.com",
+      }),
+    ]);
   });
 });

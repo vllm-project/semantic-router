@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "config/catalog/**"
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
       - "src/vllm-sr/MANIFEST.in"
@@ -14,9 +15,14 @@ on:
       - "src/vllm-sr/cli/model_catalog_export.py"
       - "src/vllm-sr/cli/model_catalog_types.py"
       - "src/vllm-sr/cli/model_catalog_validation.py"
+      - "src/semantic-router/pkg/catalog/**"
+      - "dashboard/frontend/src/generated/modelCatalog.json"
+      - "website/static/model-catalog/catalog.json"
       - "src/vllm-sr/pyproject.toml"
       - "config/schemas/recipe-probes-v1.schema.json"
       - "tools/dev/router-calibration/**"
+      - "tools/catalog/**"
+      - "tools/make/model-catalog.mk"
       - "tools/make/recipe-conformance.mk"
       - "tools/release/sync_model_catalog.py"
       - "tools/release/snapshot_model_catalog.py"
@@ -25,6 +31,7 @@ on:
     branches:
       - main
     paths:
+      - "config/catalog/**"
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
       - "src/vllm-sr/MANIFEST.in"
@@ -35,9 +42,14 @@ on:
       - "src/vllm-sr/cli/model_catalog_export.py"
       - "src/vllm-sr/cli/model_catalog_types.py"
       - "src/vllm-sr/cli/model_catalog_validation.py"
+      - "src/semantic-router/pkg/catalog/**"
+      - "dashboard/frontend/src/generated/modelCatalog.json"
+      - "website/static/model-catalog/catalog.json"
       - "src/vllm-sr/pyproject.toml"
       - "config/schemas/recipe-probes-v1.schema.json"
       - "tools/dev/router-calibration/**"
+      - "tools/catalog/**"
+      - "tools/make/model-catalog.mk"
       - "tools/make/recipe-conformance.mk"
       - "tools/release/sync_model_catalog.py"
       - "tools/release/snapshot_model_catalog.py"
@@ -72,6 +84,7 @@ jobs:
       - name: Validate source contracts and generated package assets
         run: |
           python -m pip install -r tools/agent/requirements.txt
+          make model-catalog-check
           python tools/release/sync_model_catalog.py --check
           make recipe-conformance-static
 

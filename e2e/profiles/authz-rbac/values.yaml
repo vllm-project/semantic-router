@@ -40,7 +40,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: Qwen/Qwen2.5-7B-Instruct
+      model: Qwen/Qwen2.5-7B-Instruct
     models:
       - name: Qwen/Qwen2.5-14B-Instruct
         external_model_ids:
@@ -49,7 +49,7 @@ config:
           - name: vllm-14b
             endpoint: vllm-14b.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
       - name: Qwen/Qwen2.5-7B-Instruct
         external_model_ids:
           vllm: Qwen/Qwen2.5-7B-Instruct
@@ -57,7 +57,7 @@ config:
           - name: vllm-7b
             endpoint: vllm-7b.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
   routing:
     decisions:
       - name: admin_unrestricted
@@ -174,14 +174,20 @@ config:
           - code
           - reasoning
           - math
-        quality_score: 0.9
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.9
       - name: Qwen/Qwen2.5-7B-Instruct
         param_size: 7b
         description: Qwen2.5 7B — efficient model
         capabilities:
           - chat
           - code
-        quality_score: 0.7
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.7
   global:
     model_catalog:
       kbs: []

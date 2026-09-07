@@ -17,7 +17,7 @@ global:
 
 providers:
   defaults:
-    default_model: kimi-k27-code-finalizer
+    model: kimi-k27-code-finalizer
   models:
     - name: kimi-k27-code-solver-a
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -89,28 +89,40 @@ routing:
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
     - name: kimi-k27-code-solver-b
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
     - name: kimi-k27-code-solver-c
       context_window_size: 262144
       description: Kimi K2.7 Code solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:kimi-k27-code]
     - name: kimi-k27-code-finalizer
       context_window_size: 262144
       description: Kimi K2.7 Code final synthesis alias for LiveCodeBench loop recipes.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:synthesis, base:kimi-k27-code]
 

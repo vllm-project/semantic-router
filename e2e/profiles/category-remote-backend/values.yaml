@@ -3,12 +3,13 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: base-model
+      model: base-model
     models:
       - name: base-model
         provider_model_id: base-model
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:

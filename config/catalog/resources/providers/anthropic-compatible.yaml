@@ -1,0 +1,24 @@
+id: anthropic-compatible
+display_name: Anthropic Compatible
+description: Connect a private Anthropic-compatible endpoint.
+category: private_runtime
+support_tier: compatible
+protocols:
+- anthropic/messages@1
+default_protocol: anthropic/messages@1
+supported_operations:
+- anthropic/messages@1#create
+- anthropic/messages@1#list_models
+default_headers:
+  anthropic-version: '2023-06-01'
+auth:
+  strategy: api_key_header
+  header: x-api-key
+  prefix: ''
+presentation:
+  logo: package:anthropic
+  monogram: A
+  monochrome: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
