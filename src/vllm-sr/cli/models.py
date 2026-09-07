@@ -372,6 +372,10 @@ class JailbreakRule(BaseModel):
     threshold: float
     method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
+    # "request" (default) scores the prompt; "response" scores the model's
+    # output once it has answered, for the selected decision's
+    # response_jailbreak plugin to enforce on.
+    direction: Optional[Literal["request", "response"]] = None
     jailbreak_patterns: Optional[list[str]] = (
         None  # Known jailbreak prompts (contrastive KB)
     )

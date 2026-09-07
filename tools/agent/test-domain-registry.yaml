@@ -567,8 +567,16 @@ profiles:
   response-jailbreak:
     owner: e2e
     coverage_role: response-jailbreak-window
-    selection: manual
+    selection: pr
     paths:
       - e2e/profiles/response-jailbreak/**
       - e2e/testcases/response_jailbreak_window.go
+      - e2e/testcases/response_jailbreak_signal.go
       - deploy/kubernetes/response-jailbreak/**
+      - src/semantic-router/pkg/extproc/res_filter_jailbreak.go
+      - src/semantic-router/pkg/extproc/res_filter_response_stage_signal.go
+      - src/semantic-router/pkg/classification/classifier_signal_response_jailbreak.go
+      - src/semantic-router/pkg/classification/classifier_jailbreak_risk.go
+      - src/semantic-router/pkg/config/signal_stage.go
+      - src/semantic-router/pkg/config/validator_signal_stage.go
+      - tools/mock-vllm/classify.py
