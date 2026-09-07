@@ -33,6 +33,7 @@ static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = OnceLock::ne
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
     if model_path.is_null() {
@@ -78,6 +79,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
 }
 
 /// Check if mmBERT model is initialized
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn is_mmbert_model_initialized() -> bool {
     GLOBAL_MMBERT_MODEL.get().is_some()
@@ -113,6 +115,7 @@ fn create_error_result() -> EmbeddingResult {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
@@ -203,6 +206,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
     get_embedding_2d_matryoshka(text, 0, 0, result)
@@ -217,6 +221,7 @@ pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResul
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_with_dim(
     text: *const c_char,
@@ -241,6 +246,7 @@ pub extern "C" fn get_embedding_with_dim(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embeddings_batch(
     texts: *const *const c_char,
@@ -306,18 +312,18 @@ pub extern "C" fn get_embeddings_batch(
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
+            for (i, text_str) in text_strs.iter().enumerate() {
                 let embedding = embeddings.row(i).to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
+                    *results.add(i) = EmbeddingResult {
                         data,
                         length,
                         error: false,
                         model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
+                        sequence_length: text_str.split_whitespace().count() as i32,
                         processing_time_ms: per_text_time,
                     };
                 }
@@ -330,7 +336,7 @@ pub extern "C" fn get_embeddings_batch(
             // Set error for all results
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = create_error_result();
+                    *results.add(i) = create_error_result();
                 }
             }
             -1
@@ -353,6 +359,7 @@ pub extern "C" fn get_embeddings_batch(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
@@ -435,6 +442,7 @@ pub extern "C" fn calculate_embedding_similarity(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_similarity_batch(
     query: *const c_char,
@@ -610,6 +618,7 @@ pub extern "C" fn calculate_similarity_batch(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResult) -> i32 {
     if result.is_null() {
@@ -686,6 +695,7 @@ pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResu
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
     if result.is_null() {
@@ -723,6 +733,7 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
 }
 
 /// Free MatryoshkaInfo
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
     if info.is_null() {
