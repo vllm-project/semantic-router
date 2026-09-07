@@ -412,6 +412,22 @@ profiles:
     paths:
       - e2e/profiles/routing-strategies/**
       - deploy/kubernetes/routing-strategies/**
+  selector-algorithms:
+    owner: e2e
+    coverage_role: deterministic-selector-algorithm-contracts
+    selection: pr
+    paths:
+      - e2e/profiles/selector-algorithms/**
+      - e2e/testcases/selector_*.go
+      - e2e/pkg/testcases/selector_algorithm_coverage_test.go
+      - e2e/pkg/testcases/testdata/selector_algorithm_coverage.json
+      - src/semantic-router/pkg/config/routing_surface_catalog.go
+      - src/semantic-router/pkg/selection/**
+      - src/semantic-router/pkg/extproc/req_filter_classification*.go
+      - src/semantic-router/pkg/extproc/req_filter_model_eligibility.go
+      - src/semantic-router/pkg/extproc/router_selection.go
+      - src/semantic-router/pkg/extproc/processor_res_header_mutation.go
+      - src/semantic-router/pkg/headers/**
   production-stack:
     owner: e2e
     coverage_role: production-ha-load-observability
