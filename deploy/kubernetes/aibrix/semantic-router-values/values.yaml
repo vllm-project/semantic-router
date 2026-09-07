@@ -3,26 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: vllm-llama3-8b-instruct
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: vllm-llama3-8b-instruct
+      reasoning_effort: high
     models:
       - name: vllm-llama3-8b-instruct
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: aibrix-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:

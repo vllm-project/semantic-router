@@ -105,11 +105,8 @@ func operatorResponseCacheConfig(
 }
 
 func (r *SemanticRouterReconciler) applyOperatorProviderDefaults(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
-	if spec.ReasoningFamilies != nil {
-		canonical.Providers.Defaults.ReasoningFamilies = convertReasoningFamilies(spec.ReasoningFamilies)
-	}
-	if spec.DefaultReasoningEffort != "" {
-		canonical.Providers.Defaults.DefaultReasoningEffort = spec.DefaultReasoningEffort
+	if spec.ReasoningEffort != "" {
+		canonical.Providers.Defaults.DefaultReasoningEffort = spec.ReasoningEffort
 	}
 	return nil
 }
@@ -208,20 +205,6 @@ func convertCompositionConditions(conditions []vllmv1alpha1.CompositionCondition
 			Type: condition.Type,
 			Name: condition.Name,
 		})
-	}
-	return result
-}
-
-func convertReasoningFamilies(spec map[string]vllmv1alpha1.ReasoningFamily) map[string]routerconfig.ReasoningFamilyConfig {
-	if len(spec) == 0 {
-		return nil
-	}
-	result := make(map[string]routerconfig.ReasoningFamilyConfig, len(spec))
-	for name, family := range spec {
-		result[name] = routerconfig.ReasoningFamilyConfig{
-			Type:      family.Type,
-			Parameter: family.Parameter,
-		}
 	}
 	return result
 }

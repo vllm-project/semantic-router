@@ -2,26 +2,15 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
+    model: qwen3
+    reasoning_effort: high
   models:
     - name: qwen3
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
 routing:
