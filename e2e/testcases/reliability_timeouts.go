@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -39,10 +40,21 @@ func init() {
 	})
 }
 
-// TimeoutProbeModel names used for distinct deadline verification
+// TimeoutProbeModel names used for deadline, streaming, and connect verification
 const (
-	timeoutProbeSlowModel = "timeout-probe-slow"
-	timeoutProbeFastModel = "timeout-probe-fast"
+	timeoutProbeFastModel        = "timeout-probe-fast"
+	timeoutProbeSlowModel        = "timeout-probe-slow"
+	timeoutProbeUnreachableModel = "timeout-probe-unreachable"
+
+	// Expected timeouts configured in e2e/profiles/ai-gateway/values.yaml
+	expectedFastDeadline       = 2 * time.Second
+	expectedFastDeadlineSlack  = 500 * time.Millisecond
+	expectedSlowDeadline       = 15 * time.Second
+	expectedSlowDeadlineSlack  = 1 * time.Second
+	expectedStreamIdleTimeout  = 2 * time.Second
+	expectedStreamIdleMaxSlack = 6 * time.Second
+	expectedConnectTimeout     = 1 * time.Second
+	expectedConnectSlack       = 4 * time.Second
 )
 
 func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -65,6 +77,26 @@ func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, 
 	return errors.Join(failures...)
 }
 
+func probeModelDeadline(ctx context.Context, localPort, model, prompt string, timeout time.Duration) (time.Duration, error) {
+	start := time.Now()
+	resp, err := sendLocalChatCompletion(ctx, localPort, model, prompt, timeout)
+	elapsed := time.Since(start)
+
+	if err != nil && !isTimeoutOrConnectionError(err) {
+		return elapsed, fmt.Errorf("unexpected error on %s: %w", model, err)
+	}
+	if resp != nil && !isAllowedProbeStatusCode(resp.StatusCode) {
+		return elapsed, fmt.Errorf("expected 200, 408, or 504 for %s, got status %d", model, resp.StatusCode)
+	}
+	return elapsed, nil
+}
+
+func isAllowedProbeStatusCode(statusCode int) bool {
+	return statusCode == http.StatusOK ||
+		statusCode == http.StatusGatewayTimeout ||
+		statusCode == http.StatusRequestTimeout
+}
+
 func testReliabilityDistinctDeadlines(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing distinct deadlines per model")
@@ -76,27 +108,71 @@ func testReliabilityDistinctDeadlines(ctx context.Context, client *kubernetes.Cl
 	}
 	defer stop()
 
-	// Probe fast model with tight deadline
-	start := time.Now()
-	resp, err := sendLocalChatCompletion(ctx, localPort, timeoutProbeFastModel, "hello", 15*time.Second)
-	elapsed := time.Since(start)
-
-	if err != nil && !isTimeoutOrConnectionError(err) {
-		return fmt.Errorf("unexpected error on fast model: %w", err)
+	fastElapsed, err := probeModelDeadline(ctx, localPort, timeoutProbeFastModel, "hello fast deadline probe", 15*time.Second)
+	if err != nil {
+		return err
 	}
 
-	// Status 504 / 408 or client-side timeout within reasonable bounds is expected
-	if resp != nil && resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusGatewayTimeout && resp.StatusCode != http.StatusRequestTimeout {
-		return fmt.Errorf("expected 200, 408, or 504 for deadline probe, got status %d", resp.StatusCode)
+	slowElapsed, err := probeModelDeadline(ctx, localPort, timeoutProbeSlowModel, "hello slow deadline probe", 20*time.Second)
+	if err != nil {
+		return err
+	}
+
+	if err := evaluateTimeoutBound("fast model deadline", fastElapsed, expectedFastDeadline, expectedFastDeadlineSlack); err != nil {
+		return err
+	}
+	if err := evaluateTimeoutBound("slow model deadline", slowElapsed, expectedSlowDeadline, expectedSlowDeadlineSlack); err != nil {
+		return err
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"distinct_deadlines_verified": true,
-			"fast_model_elapsed_ms":       elapsed.Milliseconds(),
+			"fast_model_elapsed_ms":       fastElapsed.Milliseconds(),
+			"slow_model_elapsed_ms":       slowElapsed.Milliseconds(),
 		})
 	}
 	return nil
+}
+
+func sendStalledStreamRequest(ctx context.Context, localPort, model string) (*http.Response, time.Time, error) {
+	reqBody := map[string]interface{}{
+		"model":  model,
+		"stream": true,
+		"messages": []map[string]string{
+			{"role": "user", "content": "__mock_incomplete_stream__"},
+		},
+	}
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("marshal request: %w", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
+	if err != nil {
+		return nil, time.Time{}, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+
+	start := time.Now()
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	resp, err := httpClient.Do(req)
+	return resp, start, err
+}
+
+func scanStreamForCompletion(body io.Reader) (int, bool) {
+	chunks := 0
+	hasDone := false
+	scanner := bufio.NewScanner(body)
+	for scanner.Scan() {
+		chunks++
+		if strings.Contains(scanner.Text(), "[DONE]") {
+			hasDone = true
+		}
+	}
+	return chunks, hasDone
 }
 
 func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -110,44 +186,32 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stop()
 
-	reqBody := map[string]interface{}{
-		"model":  "MoM",
-		"stream": true,
-		"messages": []map[string]string{
-			{"role": "user", "content": "Stream test probe"},
-		},
-	}
-	jsonBytes, err := json.Marshal(reqBody)
+	resp, start, err := sendStalledStreamRequest(ctx, localPort, timeoutProbeFastModel)
 	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
-
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		return fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "text/event-stream")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		// A timeout or broken pipe is valid when stream stalls
-		return nil
+		return fmt.Errorf("failed to initiate stalled stream request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	chunksReceived := 0
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		chunksReceived++
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected status 200 for stalled stream probe, got %d", resp.StatusCode)
+	}
+
+	chunksReceived, streamHasDone := scanStreamForCompletion(resp.Body)
+	elapsed := time.Since(start)
+
+	if streamHasDone {
+		return fmt.Errorf("stalled stream path unexpectedly emitted [DONE]")
+	}
+	if err := evaluateTimeoutBound("stalled stream idle timeout", elapsed, expectedStreamIdleTimeout, expectedStreamIdleMaxSlack); err != nil {
+		return err
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"stalled_streams_verified": true,
 			"chunks_received":          chunksReceived,
+			"elapsed_ms":               elapsed.Milliseconds(),
+			"prematurely_terminated":   !streamHasDone,
 		})
 	}
 	return nil
@@ -155,24 +219,31 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 
 func testReliabilityShortConnectFailures(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing short connect timeout failure")
+		fmt.Println("[Test] Testing short connect timeout failure through Envoy cluster")
 	}
 
-	// Verify that dialing an unreachable/non-listening address fails fast under bounded duration
-	d := net.Dialer{Timeout: 500 * time.Millisecond}
+	localPort, stop, err := setupServiceConnection(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer stop()
+
+	// Send request through Envoy for unreachable model cluster with short connect_timeout (1s)
 	start := time.Now()
-	conn, err := d.DialContext(ctx, "tcp", "127.0.0.1:65530")
+	resp, err := sendLocalChatCompletion(ctx, localPort, timeoutProbeUnreachableModel, "connect failure probe", 10*time.Second)
 	elapsed := time.Since(start)
 
-	if conn != nil {
-		_ = conn.Close()
+	// An upstream connect failure through Envoy must return an HTTP failure (503/504) or transport error
+	if resp != nil && resp.StatusCode == http.StatusOK {
+		return fmt.Errorf("expected connect failure through Envoy cluster, but got 200 OK")
 	}
 
-	if err == nil {
-		return fmt.Errorf("expected connection failure to closed port 65530, but succeeded")
+	if err != nil && !isTimeoutOrConnectionError(err) {
+		return fmt.Errorf("unexpected error on connect failure probe: %w", err)
 	}
 
-	if err := evaluateConnectTimeoutBound(elapsed, 500*time.Millisecond, 1500*time.Millisecond); err != nil {
+	// Verify the failure occurred within bounded duration reflecting the short connect timeout
+	if err := evaluateTimeoutBound("connect timeout", elapsed, expectedConnectTimeout, expectedConnectSlack); err != nil {
 		return err
 	}
 
@@ -185,19 +256,11 @@ func testReliabilityShortConnectFailures(ctx context.Context, client *kubernetes
 	return nil
 }
 
-// evaluateConnectTimeoutBound verifies that an operation completed within the expected timeout plus allowable slack.
-func evaluateConnectTimeoutBound(elapsed time.Duration, expectedTimeout time.Duration, allowableSlack time.Duration) error {
+// evaluateTimeoutBound verifies that an operation completed within the expected timeout plus allowable slack.
+func evaluateTimeoutBound(name string, elapsed, expectedTimeout, allowableSlack time.Duration) error {
 	maxAllowed := expectedTimeout + allowableSlack
 	if elapsed > maxAllowed {
-		return fmt.Errorf("connect timeout took %v, exceeded max allowed %v (expected ~%v)", elapsed, maxAllowed, expectedTimeout)
-	}
-	return nil
-}
-
-// evaluateDistinctDeadlineResult checks that distinct deadline policies correctly separate fast and slow models.
-func evaluateDistinctDeadlineResult(fastElapsed, slowElapsed time.Duration, fastLimit time.Duration) error {
-	if fastElapsed > fastLimit+500*time.Millisecond {
-		return fmt.Errorf("fast model elapsed %v exceeded limit %v", fastElapsed, fastLimit)
+		return fmt.Errorf("%s took %v, exceeded max allowed %v (expected ~%v)", name, elapsed, maxAllowed, expectedTimeout)
 	}
 	return nil
 }
@@ -206,6 +269,10 @@ func evaluateDistinctDeadlineResult(fastElapsed, slowElapsed time.Duration, fast
 func isTimeoutOrConnectionError(err error) bool {
 	if err == nil {
 		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "timeout") ||

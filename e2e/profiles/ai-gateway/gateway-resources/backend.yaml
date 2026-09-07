@@ -71,3 +71,27 @@ spec:
     - fqdn:
         hostname: vllm-llama3-8b-instruct.default.svc.cluster.local
         port: 8000
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: timeout-unreachable-backend
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: timeout-unreachable-backend
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: timeout-unreachable-backend
+  namespace: default
+spec:
+  endpoints:
+    - fqdn:
+        hostname: 127.0.0.1
+        port: 19999

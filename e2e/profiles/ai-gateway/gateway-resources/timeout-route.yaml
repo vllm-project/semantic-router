@@ -1,0 +1,21 @@
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router-timeout-route
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-ai-eg-model
+              value: timeout-unreachable-backend
+      backendRefs:
+        - name: timeout-unreachable-backend
+      timeouts:
+        request: 2s
+        backendRequest: 2s

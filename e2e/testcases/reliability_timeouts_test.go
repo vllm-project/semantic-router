@@ -1,129 +1,112 @@
 package testcases
 
 import (
-	"context"
-	"fmt"
-	"net"
+	"errors"
 	"net/http"
-	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestEvaluateConnectTimeoutBound(t *testing.T) {
+func TestEvaluateTimeoutBound(t *testing.T) {
 	t.Parallel()
 
-	// Normal case: completed within timeout + slack
-	if err := evaluateConnectTimeoutBound(300*time.Millisecond, 500*time.Millisecond, 1*time.Second); err != nil {
+	// Normal case: completed well within timeout + slack
+	if err := evaluateTimeoutBound("test fast", 300*time.Millisecond, 500*time.Millisecond, 1*time.Second); err != nil {
 		t.Fatalf("expected nil for within bound, got %v", err)
 	}
 
-	// Exceeded case
-	if err := evaluateConnectTimeoutBound(2*time.Second, 500*time.Millisecond, 500*time.Millisecond); err == nil {
+	// Boundary case: completed exactly at timeout + slack
+	if err := evaluateTimeoutBound("test boundary", 1*time.Second, 500*time.Millisecond, 500*time.Millisecond); err != nil {
+		t.Fatalf("expected nil for exact boundary, got %v", err)
+	}
+
+	// Exceeded case: completed past timeout + slack
+	if err := evaluateTimeoutBound("test exceeded", 2*time.Second, 500*time.Millisecond, 500*time.Millisecond); err == nil {
 		t.Fatalf("expected error for exceeded bound, got nil")
 	}
 }
 
-func TestEvaluateDistinctDeadlineResult(t *testing.T) {
+func TestIsAllowedProbeStatusCode(t *testing.T) {
 	t.Parallel()
 
-	// Normal: fastElapsed is within limit + slack
-	if err := evaluateDistinctDeadlineResult(800*time.Millisecond, 2*time.Second, 1*time.Second); err != nil {
-		t.Fatalf("expected nil for within limit, got %v", err)
-	}
-
-	// Fast elapsed exceeds limit + slack
-	if err := evaluateDistinctDeadlineResult(2*time.Second, 5*time.Second, 1*time.Second); err == nil {
-		t.Fatalf("expected error for fast model exceeding limit, got nil")
-	}
-}
-
-func TestDistinctDeadlinesWithMockServer(t *testing.T) {
-	t.Parallel()
-
-	// Mock server that sleeps 150ms before responding
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(150 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"result":"ok"}`))
-	}))
-	defer server.Close()
-
-	// Client with short deadline (50ms) must fail
-	shortCtx, shortCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer shortCancel()
-	reqShort, _ := http.NewRequestWithContext(shortCtx, http.MethodGet, server.URL, nil)
-	_, errShort := http.DefaultClient.Do(reqShort)
-	if errShort == nil {
-		t.Fatalf("expected short deadline request to fail, but succeeded")
-	}
-
-	// Client with longer deadline (500ms) must succeed
-	longCtx, longCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer longCancel()
-	reqLong, _ := http.NewRequestWithContext(longCtx, http.MethodGet, server.URL, nil)
-	respLong, errLong := http.DefaultClient.Do(reqLong)
-	if errLong != nil {
-		t.Fatalf("expected long deadline request to succeed, got %v", errLong)
-	}
-	defer respLong.Body.Close()
-	if respLong.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", respLong.StatusCode)
-	}
-}
-
-func TestStalledStreamWithMockServer(t *testing.T) {
-	t.Parallel()
-
-	// Mock server that streams first chunk, then closes or stalls
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-			return
+	allowed := []int{http.StatusOK, http.StatusRequestTimeout, http.StatusGatewayTimeout}
+	for _, code := range allowed {
+		if !isAllowedProbeStatusCode(code) {
+			t.Errorf("expected status %d to be allowed", code)
 		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintf(w, "data: chunk 1\n\n")
-		flusher.Flush()
-		// Server stalls / returns
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("failed initial stream request: %v", err)
 	}
-	defer resp.Body.Close()
 
-	buf := make([]byte, 1024)
-	n, err := resp.Body.Read(buf)
-	if err != nil && n == 0 {
-		t.Fatalf("expected to read initial chunk: %v", err)
+	rejected := []int{
+		http.StatusBadRequest,
+		http.StatusNotFound,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+	}
+	for _, code := range rejected {
+		if isAllowedProbeStatusCode(code) {
+			t.Errorf("expected status %d to be rejected", code)
+		}
 	}
 }
 
-func TestShortConnectFailuresWithClosedPort(t *testing.T) {
+func TestScanStreamForCompletion(t *testing.T) {
 	t.Parallel()
 
-	d := net.Dialer{Timeout: 100 * time.Millisecond}
-	start := time.Now()
-	conn, err := d.DialContext(context.Background(), "tcp", "127.0.0.1:65531")
-	elapsed := time.Since(start)
-
-	if conn != nil {
-		_ = conn.Close()
+	// Complete SSE stream with [DONE]
+	completeStream := strings.NewReader("data: {\"choices\":[...]}\n\ndata: [DONE]\n\n")
+	chunks, hasDone := scanStreamForCompletion(completeStream)
+	if !hasDone {
+		t.Errorf("expected complete stream to have hasDone=true")
+	}
+	if chunks == 0 {
+		t.Errorf("expected chunks > 0, got %d", chunks)
 	}
 
-	if err == nil {
-		t.Fatalf("expected dial to fail on closed port")
+	// Stalled/truncated SSE stream without [DONE]
+	stalledStream := strings.NewReader("data: {\"choices\":[...]}\n\n")
+	chunksStalled, hasDoneStalled := scanStreamForCompletion(stalledStream)
+	if hasDoneStalled {
+		t.Errorf("expected stalled stream to have hasDone=false")
+	}
+	if chunksStalled == 0 {
+		t.Errorf("expected chunks > 0, got %d", chunksStalled)
 	}
 
-	if elapsed > 1*time.Second {
-		t.Fatalf("connect took %v, want fast failure (< 1s)", elapsed)
+	// Empty body
+	emptyStream := strings.NewReader("")
+	chunksEmpty, hasDoneEmpty := scanStreamForCompletion(emptyStream)
+	if hasDoneEmpty || chunksEmpty != 0 {
+		t.Errorf("expected (0, false) for empty body, got (%d, %t)", chunksEmpty, hasDoneEmpty)
+	}
+}
+
+func TestIsTimeoutOrConnectionError(t *testing.T) {
+	t.Parallel()
+
+	// Case 1: nil error
+	if isTimeoutOrConnectionError(nil) {
+		t.Errorf("expected nil error to return false")
+	}
+
+	// Case 2: Matched network/timeout error patterns
+	matchErrors := []error{
+		errors.New("context deadline exceeded"),
+		errors.New("dial tcp 127.0.0.1:19999: connect: connection refused"),
+		errors.New("read tcp 127.0.0.1:8000: connection reset by peer"),
+		errors.New("unexpected EOF"),
+		errors.New("i/o timeout"),
+	}
+	for _, err := range matchErrors {
+		if !isTimeoutOrConnectionError(err) {
+			t.Errorf("expected error %q to be recognized as timeout or connection error", err)
+		}
+	}
+
+	// Case 3: Unrelated error
+	unrelatedErr := errors.New("invalid JSON syntax at position 42")
+	if isTimeoutOrConnectionError(unrelatedErr) {
+		t.Errorf("expected unrelated error %q to return false", unrelatedErr)
 	}
 }

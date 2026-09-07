@@ -50,6 +50,10 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
+Per-model upstream timeout, retry, load balancing, and health checking policies belong
+beside each concrete model under `providers.models[].reliability`. See
+[Provider reliability](#provider-reliability).
+
 Use [Protocol Compatibility](protocol-compatibility) to choose the model's
 backend `api_format`. Then see
 [Backend Target Compatibility](backend-target-compatibility) before moving its
@@ -285,6 +289,77 @@ for built-in virtual models, CLI serving, backend binding, forking, packaging,
 and migration. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
+
+## Provider reliability
+
+Per-model upstream reliability policy is configured under `providers.models[].reliability`.
+It controls data-plane Envoy load balancing, timeouts, retries, and health checking
+for the physical backends assigned to a logical model.
+
+### Timeouts
+
+- `request_timeout`: Total deadline bound for an entire request attempt, translated to
+  the Envoy route `timeout`. Unsets or overrides inheritance from `listener.timeout`
+  (default `1200s`). Can be explicitly disabled with `"0s"` to allow unbounded execution
+  (e.g. for long-running reasoning models or high-token generations), which is valid
+  only when a positive `stream_idle_timeout` is configured.
+- `stream_idle_timeout`: Idle duration allowed between consecutive streaming chunks,
+  translated to the Envoy route `idleTimeout`. Unsets or overrides inheritance from
+  `listener.timeout` (default `1200s`). Guards against stalled upstreams during
+  token generation.
+- `connect_timeout`: Network connection establishment timeout for the backend cluster,
+  translated to the Envoy cluster `connect_timeout`. Must be strictly positive
+  (greater than `0s`), overriding the default `10s` connect timeout. Enables fast
+  failure when a backend endpoint is down or unreachable.
+
+### Compatibility and fallback behavior
+
+To preserve backwards compatibility with existing deployments and ensure robust multi-model routing, the reliability block adheres to the following contracts:
+
+- **Baseline inheritance**: When `request_timeout` or `stream_idle_timeout` is omitted, the model route inherits the global `listener.timeout` (default `1200s`). When `connect_timeout` is omitted, the cluster defaults to `10s`. Existing configurations without a reliability block continue to operate without changes.
+- **Unbounded reasoning guard**: Setting `request_timeout: "0s"` disables the total request deadline for extended reasoning models. To prevent stalled connection leaks, this setting is valid only when a positive `stream_idle_timeout` is configured.
+
+### Load balancing and retries
+
+- `lb_policy`: Load balancing policy across endpoints in `backend_refs`. Supported
+  options are `round_robin` (default) and `least_request`.
+- `retry_count`: Maximum number of retries (default `0`, maximum `5`).
+- `retry_on`: Comma-separated conditions that trigger an Envoy retry (default
+  `"connect-failure,refused-stream"`).
+
+### Outlier detection and health checking
+
+- `consecutive_5xx`: Number of consecutive 5xx responses that triggers passive
+  ejection of an unhealthy endpoint from the cluster (default `0`, which disables ejection).
+- `base_ejection_time`: Base duration an ejected endpoint remains evicted (default `"30s"`).
+- `max_ejection_percent`: Maximum percentage of endpoints that may be ejected simultaneously
+  (default `50`).
+- `health_check_path`: Path for active HTTP health checks (e.g. `"/health"` or `"/healthz"`).
+  When omitted, active health checking is disabled.
+- `health_check_interval`: Frequency of health checks (default `"10s"`).
+- `health_check_timeout`: Maximum time to wait for a health check probe (default `"2s"`).
+
+```yaml
+providers:
+  models:
+    - name: qwen3-8b
+      provider_model_id: qwen3-8b-instruct
+      backend_refs:
+        - endpoint: model-server-1.default.svc.cluster.local:8000
+          weight: 1
+        - endpoint: model-server-2.default.svc.cluster.local:8000
+          weight: 1
+      reliability:
+        lb_policy: least_request
+        request_timeout: 120s
+        stream_idle_timeout: 30s
+        connect_timeout: 5s
+        retry_count: 2
+        retry_on: connect-failure,refused-stream
+        consecutive_5xx: 5
+        base_ejection_time: 30s
+        health_check_path: /health
+```
 
 ## Configuration workflows
 
