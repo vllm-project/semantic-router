@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/redis/go-redis/v9"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
 // ConversationIndexFinalizationStats reports what one FinalizeConversationIndex
@@ -84,13 +82,13 @@ func (s *RedisStore) conversationIndexFinalized(ctx context.Context) (bool, erro
 //
 // Idempotent: a no-op, returning a zero-value stats, if already complete.
 // Safe to run concurrently with ordinary index-aware traffic — the sweep
-// only ZADDs, so a response indexed by its own StoreResponse call mid-sweep
+// only adds members, so a response indexed by its own StoreResponse call mid-sweep
 // is simply rediscovered and harmlessly re-added with the same score.
 //
 // Strict, unlike the per-conversation lazy backfill this reuses the scan
 // lease from: a missing payload (raced with an ordinary TTL expiry between
 // SCAN and GET) is benign and skipped, but any other GET failure, a
-// malformed payload, a scan error, or an index (ZADD) error is fatal and
+// malformed payload, a scan error, or an index write error is fatal and
 // aborts the whole sweep without setting completion — a completion record
 // this function sets is a permanent, whole-keyspace guarantee, never a
 // best-effort snapshot, so partial success must never be mistaken for
@@ -136,9 +134,9 @@ func (s *RedisStore) FinalizeConversationIndex(ctx context.Context) (Conversatio
 
 // sweepAndIndexAllConversations strictly scans every response payload
 // (scanResponsePayloads) and indexes each scanned batch's members
-// grouped by conversation, one bounded pipeline of independent ZADDs per
-// batch (pipelineIndexBatch) — never accumulating the whole sweep's
-// findings in memory first. Each batch's own
+// grouped by conversation, one bounded pipeline of independent single-key
+// index writes per batch (pipelineIndexBatch) — never accumulating the whole
+// sweep's findings in memory first. Each batch's own
 // grouping map is local to that batch's callback invocation, so this has no
 // shared mutable state to race on even when scanResponsePayloads'
 // ForEachMaster invokes it concurrently across Cluster masters — only the
@@ -146,16 +144,24 @@ func (s *RedisStore) FinalizeConversationIndex(ctx context.Context) (Conversatio
 func (s *RedisStore) sweepAndIndexAllConversations(ctx context.Context) (ConversationIndexFinalizationStats, error) {
 	var scanned, indexed atomic.Int64
 
-	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
+	storeTTL := s.ttlMillis()
+	err := s.scanResponsePayloads(ctx, func(batch []scannedResponse) error {
 		scanned.Add(int64(len(batch)))
 
-		byConversation := make(map[string][]redis.Z, len(batch))
-		for _, response := range batch {
+		byConversation := make(map[string]conversationIndexBatch, len(batch))
+		for _, entry := range batch {
+			response := entry.response
 			if response.ConversationID == "" {
 				continue
 			}
-			byConversation[response.ConversationID] = append(byConversation[response.ConversationID],
+			grouped := byConversation[response.ConversationID]
+			if grouped.members == nil {
+				grouped.lifetime = storeTTL
+			}
+			grouped.members = append(grouped.members,
 				redis.Z{Score: float64(response.CreatedAt), Member: response.ID})
+			grouped.lifetime = longerIndexLifetime(grouped.lifetime, entry.indexLifetime(storeTTL))
+			byConversation[response.ConversationID] = grouped
 		}
 		if len(byConversation) == 0 {
 			return nil
@@ -175,24 +181,37 @@ func (s *RedisStore) sweepAndIndexAllConversations(ctx context.Context) (Convers
 	return ConversationIndexFinalizationStats{ResponsesScanned: scanned.Load(), ResponsesIndexed: indexed.Load()}, nil
 }
 
-// pipelineIndexBatch ZADDs every conversation's members from one scanned
+// conversationIndexBatch is one scanned batch's members for a single
+// conversation, together with how long that conversation's index has to
+// remain readable to cover them — the longest lifetime among the payloads in
+// this group, never less than the store's own TTL. Grouping the two together
+// is what keeps the sweep from stamping every index it touches with s.ttl and
+// quietly retiring an index ahead of the 30-day payloads it names; see
+// extendConversationIndexLifetimeScript.
+type conversationIndexBatch struct {
+	members  []redis.Z
+	lifetime int64
+}
+
+// pipelineIndexBatch writes every conversation's members from one scanned
 // batch through a single pipeline of independent single-key commands — one
-// ZADD per conversation found in the batch, never a multi-key command, so
-// this stays Cluster safe regardless of how many different conversations
-// (and therefore slots) one batch happens to span. Each conversation's own
-// member slice is already bounded by the batch size
+// conversationIndexAddScript call per conversation found in the batch, never
+// a multi-key command, so this stays Cluster safe regardless of how many
+// different conversations (and therefore slots) one batch happens to span.
+// Each conversation's own member slice is already bounded by the batch size
 // (scanResponsePayloads never delivers more than redisBackfillBatchSize
 // responses per batch), so no further chunking is needed here.
-func (s *RedisStore) pipelineIndexBatch(ctx context.Context, byConversation map[string][]redis.Z) (int64, error) {
+//
+// Applying each batch's own bound is enough on its own: the extension only
+// ever raises an index's expiry, so successive batches for the same
+// conversation converge on the longest-lived payload across all of them,
+// whatever order they land in.
+func (s *RedisStore) pipelineIndexBatch(ctx context.Context, byConversation map[string]conversationIndexBatch) (int64, error) {
 	pipe := s.client.Pipeline()
 	var total int64
-	for conversationID, members := range byConversation {
-		indexKey := s.conversationIndexKey(conversationID)
-		pipe.ZAdd(ctx, indexKey, members...)
-		if s.ttl > 0 {
-			pipe.Expire(ctx, indexKey, s.ttl)
-		}
-		total += int64(len(members))
+	for conversationID, grouped := range byConversation {
+		queueConversationIndexMembers(ctx, pipe, s.conversationIndexKey(conversationID), grouped.lifetime, grouped.members)
+		total += int64(len(grouped.members))
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
 		return 0, fmt.Errorf("failed to index conversation batch during index finalization: %w", err)

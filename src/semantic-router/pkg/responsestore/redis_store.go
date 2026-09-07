@@ -446,6 +446,19 @@ func createRedisClient(cfg RedisStoreConfig) (redis.UniversalClient, error) {
 	}), nil
 }
 
+// ttlMillis is the store's configured data-retention TTL in milliseconds,
+// under the convention every lifetime argument in this package shares: a
+// non-positive value means "never expires". The floor at 1 matters for a
+// sub-millisecond TTL, which would otherwise round to 0 and be read as
+// "persistent" — the exact opposite of what was configured.
+func (s *RedisStore) ttlMillis() int64 {
+	millis := s.ttl.Milliseconds()
+	if s.ttl > 0 && millis == 0 {
+		return 1
+	}
+	return millis
+}
+
 // buildKey constructs a Redis key with the proper prefix.
 func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix

@@ -139,7 +139,7 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
+	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt, s.ttlMillis()); err != nil {
 		return s.rollbackStoredPayload(ctx, key, data, err)
 	}
 
@@ -208,7 +208,7 @@ func (s *RedisStore) compareDeleteResponsePayload(ctx context.Context, key strin
 // conversation than the one the caller attempted must not poison that
 // conversation's index.
 func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted *responseapi.StoredResponse) error {
-	stored, err := s.GetResponse(ctx, attempted.ID)
+	stored, lifetimeMillis, err := s.getResponseWithLifetime(ctx, attempted.ID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			// SETNX reported existence, but the payload is gone now (raced
@@ -227,7 +227,7 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, stored.ConversationID, stored.ID, stored.CreatedAt); err != nil {
+	if err := s.indexResponse(ctx, stored.ConversationID, stored.ID, stored.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("response already exists but failed to repair conversation index: %w", err)
 	}
 
@@ -296,7 +296,7 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	}
 
 	if response.ConversationID != "" {
-		if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt); err != nil {
+		if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt, s.ttlMillis()); err != nil {
 			return s.rollbackUpdatePayload(ctx, key, response.ID, data, snapshot, err)
 		}
 	}
@@ -320,12 +320,8 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 // another successful overlapping update had already superseded.
 func (s *RedisStore) replaceResponseAndSnapshot(ctx context.Context, key, responseID string, data []byte) (responseUpdateSnapshot, error) {
 	capturedAt := time.Now()
-	ttlMillis := s.ttl.Milliseconds()
-	if s.ttl > 0 && ttlMillis == 0 {
-		ttlMillis = 1
-	}
 
-	result, err := replaceAndSnapshotResponseScript.Run(ctx, s.client, []string{key}, data, ttlMillis).Result()
+	result, err := replaceAndSnapshotResponseScript.Run(ctx, s.client, []string{key}, data, s.ttlMillis()).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return responseUpdateSnapshot{}, ErrNotFound
@@ -415,7 +411,10 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 	switch result {
 	case compareRestoreRestored:
 		if snapshot.conversationID != "" {
-			if reindexErr := s.indexResponse(ctx, snapshot.conversationID, responseID, snapshot.createdAt); reindexErr != nil {
+			// The restored payload carries the snapshot's own remaining
+			// lifetime, not a fresh store TTL, so the index is extended to
+			// match what was actually put back.
+			if reindexErr := s.indexResponse(ctx, snapshot.conversationID, responseID, snapshot.createdAt, snapshot.remainingTTLMillis()); reindexErr != nil {
 				logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
 					responseID, snapshot.conversationID, reindexErr)
 			}

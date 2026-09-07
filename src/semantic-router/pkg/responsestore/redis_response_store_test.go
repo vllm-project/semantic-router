@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,6 +40,32 @@ func TestRedisStoreResponseRejectsDuplicate(t *testing.T) {
 	assert.Equal(t, []string{"resp_duplicate"}, conversationIndexMembers(t, store, "conv_duplicate"))
 }
 
+// indexWriteFailureHook fails the first conversation index write aimed at
+// indexKey, once. It matches the command by the key among its arguments rather
+// than by position, because that write is a Lua script call
+// (conversationIndexAddScript) whose key sits behind EVAL's own leading
+// arguments.
+type indexWriteFailureHook struct {
+	indexKey string
+	err      error
+	used     atomic.Bool
+}
+
+func (h *indexWriteFailureHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *indexWriteFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *indexWriteFailureHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if (cmd.Name() != "eval" && cmd.Name() != "evalsha") ||
+			!commandContainsArg(cmd, h.indexKey) || !h.used.CompareAndSwap(false, true) {
+			return next(ctx, cmd)
+		}
+		return h.err
+	}
+}
+
 // TestRedisStoreResponseRollsBackIndexFailure covers blueprint §2.3/§3.5: if
 // the payload write succeeds but indexing fails, StoreResponse must roll the
 // payload back via compare-delete rather than leave an orphan that a retry
@@ -48,8 +76,8 @@ func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 	ctx := context.Background()
 
 	injectedErr := errors.New("injected index failure")
-	store.client.AddHook(&pipelineFailureHook{
-		name: "zadd", key: store.conversationIndexKey("conv_rollback"), err: injectedErr,
+	store.client.AddHook(&indexWriteFailureHook{
+		indexKey: store.conversationIndexKey("conv_rollback"), err: injectedErr,
 	})
 
 	response := &responseapi.StoredResponse{
@@ -215,8 +243,8 @@ func TestRedisUpdateResponseRestoresOnIndexFailure(t *testing.T) {
 	require.Equal(t, []string{"resp_update_rollback"}, conversationIndexMembers(t, store, "conv_update_from"))
 
 	injectedErr := errors.New("injected update index failure")
-	store.client.AddHook(&pipelineFailureHook{
-		name: "zadd", key: store.conversationIndexKey("conv_update_to"), err: injectedErr,
+	store.client.AddHook(&indexWriteFailureHook{
+		indexKey: store.conversationIndexKey("conv_update_to"), err: injectedErr,
 	})
 
 	updated := *original
@@ -282,7 +310,7 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	newerData, err := json.Marshal(newer)
 	require.NoError(t, err)
 	require.NoError(t, store.client.Set(ctx, key, newerData, store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newer.CreatedAt))
+	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newer.CreatedAt, store.ttlMillis()))
 
 	injectedErr := errors.New("injected index failure")
 	err = store.rollbackUpdatePayload(ctx, key, responseID, failedUpdateData, snapshot, injectedErr)
@@ -335,7 +363,7 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 
 	// The first update can finish its index write while the second update is
 	// still in flight. The second update then fails and rolls itself back.
-	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, first.CreatedAt))
+	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, first.CreatedAt, store.ttlMillis()))
 	injectedErr := errors.New("injected second update index failure")
 	err = store.rollbackUpdatePayload(ctx, key, responseID, secondData, secondSnapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)

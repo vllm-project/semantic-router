@@ -274,7 +274,7 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	stored, err := s.GetResponse(ctx, responseID)
+	stored, lifetimeMillis, err := s.getResponseWithLifetime(ctx, responseID)
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	if err := s.indexResponse(ctx, conversationID, responseID, stored.CreatedAt); err != nil {
+	if err := s.indexResponse(ctx, conversationID, responseID, stored.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("failed to index response in Redis: %w", err)
 	}
 

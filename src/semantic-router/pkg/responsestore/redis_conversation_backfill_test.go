@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,46 +16,68 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// zaddObserverHook is a go-redis Hook that records the member count of
-// every ZADD it sees and, if callCount reaches failAt, fails that call
-// (short-circuiting before the real command runs) instead of letting it
-// through — a real fault-injection mechanism operating at the actual wire
-// command boundary, not a package-private override.
-type zaddObserverHook struct {
+// indexWriteObserverHook is a go-redis Hook that records the member count of
+// every conversation index write it sees and, if callCount reaches failAt,
+// fails that call (short-circuiting before the real command runs) instead of
+// letting it through — a real fault-injection mechanism operating at the
+// actual wire command boundary, not a package-private override.
+//
+// The write it watches for is conversationIndexAddScript, which carries the
+// ZADD: adding members and covering the index's lifetime have to happen in one
+// atomic step, since the script decides the lifetime from the key's expiry as
+// it stood *before* the members landed.
+type indexWriteObserverHook struct {
 	mu           sync.Mutex
 	memberCounts []int
 	callCount    int
 	failAt       int // 0 disables fault injection
 }
 
-func (h *zaddObserverHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *indexWriteObserverHook) DialHook(next redis.DialHook) redis.DialHook { return next }
 
-func (h *zaddObserverHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+func (h *indexWriteObserverHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		if cmd.Name() != "zadd" {
+		count, ok := indexWriteMemberCount(cmd)
+		if !ok {
 			return next(ctx, cmd)
 		}
 
 		h.mu.Lock()
 		h.callCount++
 		call := h.callCount
-		// ZADD key [score member]...: 2 leading args (command, key), then pairs.
-		memberCount := (len(cmd.Args()) - 2) / 2
-		h.memberCounts = append(h.memberCounts, memberCount)
+		h.memberCounts = append(h.memberCounts, count)
 		h.mu.Unlock()
 
 		if h.failAt != 0 && call == h.failAt {
-			return errors.New("injected zadd failure")
+			return errors.New("injected index write failure")
 		}
 		return next(ctx, cmd)
 	}
 }
 
-func (h *zaddObserverHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+func (h *indexWriteObserverHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return next
 }
 
-func (h *zaddObserverHook) totalMembers() int {
+// indexWriteMemberCount reports how many members one conversationIndexAddScript
+// call is adding. EVAL/EVALSHA lay out as: verb, script (or SHA), numkeys, the
+// one key this script takes, the requested lifetime, then score/member pairs.
+func indexWriteMemberCount(cmd redis.Cmder) (int, bool) {
+	if cmd.Name() != "eval" && cmd.Name() != "evalsha" {
+		return 0, false
+	}
+	args := cmd.Args()
+	if len(args) < 5 {
+		return 0, false
+	}
+	key, ok := args[3].(string)
+	if !ok || !strings.Contains(key, ConversationIndexKeyPrefix) {
+		return 0, false
+	}
+	return (len(args) - 5) / 2, true
+}
+
+func (h *indexWriteObserverHook) totalMembers() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	total := 0
@@ -64,7 +87,7 @@ func (h *zaddObserverHook) totalMembers() int {
 	return total
 }
 
-func (h *zaddObserverHook) maxBatch() int {
+func (h *indexWriteObserverHook) maxBatch() int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	max := 0
@@ -84,7 +107,7 @@ func TestLazyBackfillBoundedZaddBatches(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
-	hook := &zaddObserverHook{}
+	hook := &indexWriteObserverHook{}
 	store.client.AddHook(hook)
 
 	const total = redisBackfillBatchSize + 50
@@ -141,7 +164,7 @@ func TestLazyBackfillPartialZaddFailureLeavesNoProof(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
-	hook := &zaddObserverHook{failAt: 2} // let the first batch through, fail the second
+	hook := &indexWriteObserverHook{failAt: 2} // let the first batch through, fail the second
 	store.client.AddHook(hook)
 
 	const total = redisBackfillBatchSize + 50
@@ -188,7 +211,7 @@ func TestIndexBackfillBatchConcurrentCallersRaceFree(t *testing.T) {
 			for i := 0; i < perGoroutine; i++ {
 				members[i] = redis.Z{Score: float64(now), Member: fmt.Sprintf("resp_concurrent_batch_%d_%d", g, i)}
 			}
-			assert.NoError(t, store.indexBackfillBatch(ctx, "conv_concurrent_backfill", members))
+			assert.NoError(t, store.indexBackfillBatch(ctx, "conv_concurrent_backfill", members, store.ttlMillis()))
 		}(g)
 	}
 	wg.Wait()
