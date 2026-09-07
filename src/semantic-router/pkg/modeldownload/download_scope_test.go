@@ -34,6 +34,45 @@ func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T
 	}
 }
 
+// TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel keeps the narrowing
+// attached to the model when the config names it by a registry alias. The exclude map
+// is keyed and looked up by the canonical path, so it must match whether the collected
+// provisioning path is the literal alias or has already been canonicalized (#2828).
+func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T) {
+	for _, configured := range []string{
+		"models/mom-embedding-ultra", // models/-prefixed alias
+		testEmbeddingModelPath,       // canonical path
+	} {
+		t.Run(configured, func(t *testing.T) {
+			cfg := &config.RouterConfig{
+				MoMRegistry: config.ToLegacyRegistry(),
+				InlineModels: config.InlineModels{
+					EmbeddingModels: config.EmbeddingModels{MmBertModelPath: configured},
+				},
+			}
+
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatalf("BuildModelSpecs() error = %v", err)
+			}
+
+			found := false
+			for _, spec := range specs {
+				if config.ResolveModelPath(spec.LocalPath) != testEmbeddingModelPath {
+					continue
+				}
+				found = true
+				if !reflect.DeepEqual(spec.ExcludePatterns, onnxWeightExcludePatterns) {
+					t.Fatalf("%s ExcludePatterns = %#v, want %#v", spec.LocalPath, spec.ExcludePatterns, onnxWeightExcludePatterns)
+				}
+			}
+			if !found {
+				t.Fatalf("BuildModelSpecs() produced no spec resolving to %q; got %#v", testEmbeddingModelPath, specs)
+			}
+		})
+	}
+}
+
 // TestBuildModelSpecsKeepsFullSnapshotForOpenVINOBackend keeps ONNX deployments whole:
 // the OpenVINO embedding backend consumes the ONNX exports, so it must keep receiving
 // the unfiltered repository.

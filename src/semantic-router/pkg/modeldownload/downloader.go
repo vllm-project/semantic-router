@@ -118,8 +118,12 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 }
 
 // buildDownloadArgs assembles the huggingface-cli argument list for spec.
-// Exclude patterns are appended last because `--exclude` consumes every
-// positional value that follows it.
+//
+// Every exclude pattern gets its own `--exclude` flag. The typer-based `hf download`
+// takes `--exclude` as a repeatable single-value option, so `--exclude a b c` keeps
+// only `a` and treats `b` and `c` as extra positional filenames; the legacy
+// `huggingface-cli download` accepted `nargs=*`. Repeating the flag is the form both
+// CLIs parse the same way, whichever one the image ends up installing.
 func buildDownloadArgs(spec ModelSpec) []string {
 	args := []string{
 		"download",
@@ -132,9 +136,11 @@ func buildDownloadArgs(spec ModelSpec) []string {
 		args = append(args, "--revision", spec.Revision)
 	}
 
-	if len(spec.ExcludePatterns) > 0 {
-		args = append(args, "--exclude")
-		args = append(args, spec.ExcludePatterns...)
+	for _, pattern := range spec.ExcludePatterns {
+		if pattern == "" {
+			continue
+		}
+		args = append(args, "--exclude", pattern)
 	}
 
 	return args

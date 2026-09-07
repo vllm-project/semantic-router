@@ -134,7 +134,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 			RepoID:          repoID,
 			Revision:        "main",
 			RequiredFiles:   requiredFiles,
-			ExcludePatterns: excludePatternsByModel[path],
+			ExcludePatterns: excludePatternsByModel[config.ResolveModelPath(path)],
 		})
 	}
 
@@ -222,6 +222,12 @@ var onnxWeightExcludePatterns = []string{
 // the download exclude globs for artifacts the selected embedding backend never
 // loads. Only the candle backend is narrowed: OpenVINO consumes the ONNX exports
 // and the remote backend provisions no local embedding models.
+//
+// Keys are canonical registry paths (config.ResolveModelPath), matching how the
+// embedding runtime resolves the same fields before loading. Callers look the map
+// up by the resolved path too, so the narrowing holds whether the configured value
+// is the canonical directory or a registry alias, and whether or not the collected
+// provisioning paths have already been canonicalized upstream.
 func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]string {
 	excluded := make(map[string][]string)
 	if cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendCandle {
@@ -229,10 +235,11 @@ func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]
 	}
 
 	for path := range candleEmbeddingModelRequiredFiles(cfg) {
-		if path == "" || !strings.HasPrefix(path, "models/") {
+		resolved := config.ResolveModelPath(path)
+		if resolved == "" || !strings.HasPrefix(resolved, "models/") {
 			continue
 		}
-		excluded[path] = append([]string(nil), onnxWeightExcludePatterns...)
+		excluded[resolved] = append([]string(nil), onnxWeightExcludePatterns...)
 	}
 	return excluded
 }
