@@ -94,6 +94,23 @@ type RouterLearningProtectionTuning struct {
 	MinTurnsBeforeSwitch *int     `yaml:"min_turns_before_switch,omitempty"`
 	SwitchMargin         *float64 `yaml:"switch_margin,omitempty"`
 	StabilityWeight      *float64 `yaml:"stability_weight,omitempty"`
+
+	ProgressGate *ProgressGateTuning `yaml:"progress_gate,omitempty"`
+}
+
+// ProgressGateTuning gates session model switches on recent-window progress
+// evidence. Omitting the section leaves existing session behaviour unchanged.
+type ProgressGateTuning struct {
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	Mode    string `yaml:"mode,omitempty"` // observe | enforce
+
+	WindowSize                *int     `yaml:"window_size,omitempty"`
+	WindowTTLSeconds          *int     `yaml:"window_ttl_seconds,omitempty"`
+	MinWindowOutcomes         *int     `yaml:"min_window_outcomes,omitempty"`
+	MinConsecutiveRegressions *int     `yaml:"min_consecutive_regressions,omitempty"`
+	MinConsecutiveRecoveries  *int     `yaml:"min_consecutive_recoveries,omitempty"`
+	CooldownSeconds           *float64 `yaml:"cooldown_seconds,omitempty"`
+	MaxSwitchesPerWindow      *int     `yaml:"max_switches_per_window,omitempty"`
 }
 
 // DecisionAdaptationsConfig lets one matched decision control globally enabled

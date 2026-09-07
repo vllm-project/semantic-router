@@ -140,6 +140,10 @@ func sharedRecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 // capacity. Callers must hold the store lock.
 func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time) []TurnOutcome {
 	outcomes = pruneTurnOutcomes(outcomes, defaultRecentWindowTTL, now)
+	// A full window cannot accept an outcome older than everything in it.
+	if len(outcomes) >= defaultRecentWindowSize && outcome.Timestamp < outcomes[0].Timestamp {
+		return outcomes
+	}
 	i := len(outcomes)
 	for i > 0 && outcomes[i-1].Timestamp > outcome.Timestamp {
 		i--
@@ -153,9 +157,10 @@ func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Tim
 	return outcomes
 }
 
-// pruneTurnOutcomes drops every entry older than ttl, without assuming
-// ordering. A zero now returns an empty window rather than stale evidence;
-// entries without a usable timestamp are kept defensively.
+// pruneTurnOutcomes returns the entries newer than ttl, without assuming
+// ordering and without mutating the input. A zero now returns an empty window
+// rather than stale evidence; entries without a usable timestamp are kept
+// defensively.
 func pruneTurnOutcomes(outcomes []TurnOutcome, ttl time.Duration, now time.Time) []TurnOutcome {
 	if len(outcomes) == 0 || ttl <= 0 {
 		return outcomes
@@ -164,7 +169,7 @@ func pruneTurnOutcomes(outcomes []TurnOutcome, ttl time.Duration, now time.Time)
 		return nil
 	}
 	cutoff := now.Add(-ttl)
-	kept := outcomes[:0]
+	kept := make([]TurnOutcome, 0, len(outcomes))
 	for _, o := range outcomes {
 		ts := o.Time()
 		if ts.IsZero() || !ts.Before(cutoff) {
