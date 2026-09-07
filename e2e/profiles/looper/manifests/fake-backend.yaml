@@ -11,7 +11,10 @@ data:
     RESPONSES = {
         "ratings-model-a": ("answer-from-ratings-model-a", 3, 2),
         "ratings-model-b": ("answer-from-ratings-model-b", 7, 4),
+        "fusion-panel-valid": ("usable-fusion-panel-answer", 11, 3),
     }
+
+    FUSION_SYNTHESIZED_ANSWER = "unexpected-fusion-synthesized-answer"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -46,6 +49,52 @@ data:
                 return
 
             model = payload.get("model")
+            if model == "fusion-panel-empty":
+                self.send_json(200, {
+                    "id": "chatcmpl-looper-e2e-fusion-panel-empty",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": model,
+                    "choices": [],
+                    "usage": {
+                        "prompt_tokens": 13,
+                        "completion_tokens": 0,
+                        "total_tokens": 13,
+                    },
+                })
+                return
+            if model == "fusion-panel-fail":
+                self.send_json(502, {"error": {"message": "synthetic panel failure"}})
+                return
+            if model == "fusion-judge":
+                messages = payload.get("messages", [])
+                prompt = messages[-1].get("content", "") if messages else ""
+                content = FUSION_SYNTHESIZED_ANSWER
+                if "return only valid JSON" in prompt:
+                    content = json.dumps({
+                        "consensus": ["unexpected analysis"],
+                        "contradictions": [],
+                        "partial_coverage": [],
+                        "unique_insights": [],
+                        "blind_spots": [],
+                    })
+                self.send_json(200, {
+                    "id": "chatcmpl-looper-e2e-fusion-judge",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": model,
+                    "choices": [{
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content},
+                        "finish_reason": "stop",
+                    }],
+                    "usage": {
+                        "prompt_tokens": 17,
+                        "completion_tokens": 5,
+                        "total_tokens": 22,
+                    },
+                })
+                return
             if model not in RESPONSES:
                 self.send_json(400, {"error": {"message": "unknown model"}})
                 return

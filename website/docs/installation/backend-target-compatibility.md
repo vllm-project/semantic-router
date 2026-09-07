@@ -7,13 +7,23 @@ description: See which backend target forms survive Docker, Helm, Operator, Dash
 
 Semantic Router uses `providers.models[].backend_refs[]` as the canonical
 contract between a logical model name and one or more physical inference
-targets. The same document can move through the CLI, Helm, and Dashboard. The
-Operator instead accepts Kubernetes discovery inputs and translates the
-supported subset into canonical backend references.
+targets.
 
 This matrix covers **configuration production and preservation**. It does not
-claim that an endpoint is reachable, healthy, compatible with a particular
-model, or eligible for inference-aware replica selection.
+claim that an endpoint is reachable, healthy, or compatible with a particular
+model protocol.
+
+## Choose the right matrix
+
+| Question | Source of truth |
+| --- | --- |
+| Which client endpoints and backend wire protocols work together? | [Protocol Compatibility](protocol-compatibility) |
+| Which target fields survive CLI, Helm, Operator, Dashboard, and recipe workflows? | This page |
+| Which deployment stacks and integrations does the project maintain? | [Deployment Support](support-matrix) |
+
+The same canonical document can move through the CLI, Helm, and Dashboard. The
+Operator instead accepts Kubernetes discovery inputs and translates its
+supported subset into canonical backend references.
 
 ## Status meanings
 
@@ -57,6 +67,7 @@ providers:
   models:
     - name: local/general
       provider_model_id: Qwen/Qwen3-8B
+      api_format: openai
       backend_refs:
         - name: primary
           endpoint: model-server.default.svc.cluster.local:8000
@@ -72,6 +83,7 @@ providers:
   models:
     - name: hosted/reasoning
       provider_model_id: provider/model-id
+      api_format: openai
       backend_refs:
         - name: hosted-primary
           base_url: https://provider.example/v1
@@ -88,27 +100,21 @@ For portable configuration, do not put a URL scheme or path in `endpoint`.
 Some local generation paths accept those forms, but not every maintained
 producer agrees on their meaning. `base_url` is the canonical URL form.
 
+`api_format` belongs to the model, not to an individual backend ref. It selects
+the backend request and response codec; `protocol` on a backend ref selects the
+HTTP transport. See [Protocol Compatibility](protocol-compatibility) before
+choosing `api_format`.
+
 ## Producer behavior
 
-### Docker and local CLI
+| Producer | Behavior and boundary |
+| --- | --- |
+| Docker / local CLI | Translates refs into Envoy clusters and routes. It preserves host, port, HTTP or HTTPS, weight, a shared path prefix, environment-resolved authorization, and shared extra headers. Referenced model servers must already be reachable. |
+| Helm | `configOverride` renders one complete canonical mapping without merging sample provider defaults. Reachability and model compatibility remain runtime checks. |
+| Operator | `spec.vllmEndpoints[]` is a Kubernetes discovery adapter, not a copy of the full provider schema. It emits the supported canonical subset described below. |
+| Dashboard | Reads and writes the supported canonical backend inventory, including provider identity, URL, auth metadata, API version, chat path, extra headers, and environment-key references. |
 
-The CLI translates canonical refs into Envoy clusters and routes. It preserves
-host, port, HTTP or HTTPS, weight, a shared path prefix, environment-resolved
-authorization, and shared extra request headers. A custom configuration does
-not start the referenced model servers; they must already be reachable from
-the local stack.
-
-### Helm
-
-`configOverride` is the portable Helm input. The chart renders that complete
-mapping atomically instead of merging it with sample provider defaults. The
-chart preserves canonical backend fields, but endpoint reachability and model
-compatibility remain runtime checks.
-
-### Operator and Kubernetes discovery
-
-The Operator's `spec.vllmEndpoints[]` API is a discovery adapter, not a second
-copy of the full provider schema. It currently supports:
+The Operator currently discovers:
 
 - a named Kubernetes Service;
 - a KServe `InferenceService`; and
@@ -123,13 +129,6 @@ KServe discovery currently assumes the conventional
 `<InferenceService>-predictor.<namespace>.svc.cluster.local:8443` HTTPS target.
 It does not resolve `status.url` or inspect the generated Service, so custom or
 named-predictor service layouts require an explicit Service backend instead.
-
-### Dashboard
-
-The model editor reads and writes the canonical backend fields, including
-provider identity, `base_url`, auth metadata, API version, chat path, extra
-headers, and environment-key references. Saving a model preserves fields in
-that supported inventory even when their values are unchanged.
 
 Unknown-field and supported-version parity across producers is tracked in
 [#2469](https://github.com/vllm-project/semantic-router/issues/2469). Until that
@@ -152,5 +151,5 @@ The repository exercises this matrix at five layers:
   reference configuration, which exercises weighted direct and rich URL
   targets.
 
-These checks prove translation and preservation. They do not replace a live
-request through the chosen backend.
+These checks prove configuration translation and preservation. They do not
+replace a direct backend protocol check or a live request through the Router.

@@ -155,7 +155,6 @@ global:
       metrics:
         windowed_metrics:
           enabled: false
-          model_metrics: false
           queue_depth_estimation: false
       profiling:
         enabled: false

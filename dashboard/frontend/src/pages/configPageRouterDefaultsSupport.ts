@@ -475,10 +475,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Method', value: stringOrFallback(section?.method) },
-        {
-          label: 'Prompt prefixes',
-          value: `${Array.isArray(section?.prompt_prefixes) ? section.prompt_prefixes.length : 0}`,
-        },
       ]
     case 'observability':
       return [
@@ -677,12 +673,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           label: 'Similarity Threshold',
           type: 'percentage',
           placeholder: '70',
-        },
-        {
-          name: 'extraction_batch_size',
-          label: 'Extraction Batch Size',
-          type: 'number',
-          placeholder: '10',
         },
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
         { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
@@ -945,7 +935,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'modality_detector':
       return [
         { name: 'enabled', label: 'Enable Modality Detector', type: 'boolean' },
-        routerStructuredField(key, 'prompt_prefixes'),
         {
           name: 'method',
           label: 'Detection Method',

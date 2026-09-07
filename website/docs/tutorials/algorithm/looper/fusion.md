@@ -14,15 +14,28 @@ The same runtime also supports a direct Fusion model slug through `global.integr
 - Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
 - Lets clients override the judge, analysis panel, templates, trace flags, and
   grounding policy per request with `plugins[].id = fusion`.
-- Degrades on partial panel failures while preserving failed model metadata.
+- Continues after partial panel failures only when the remaining usable
+  responses meet quorum, while preserving failed model metadata.
 
 ## Algorithm Principle
 
 Fusion executes a three-stage flow:
 
-1. **Panel**: dispatch the original request to the configured analysis models in parallel.
+1. **Panel**: dispatch the original request to the configured analysis models in parallel and require the configured usable-response quorum.
 2. **Judge analysis**: ask the judge model for structured JSON covering consensus, contradictions, partial coverage, unique insights, and blind spots.
 3. **Final synthesis**: ask the judge/calling model to write the user-facing answer using the panel responses and structured analysis.
+
+A panel response is usable only when its assistant `content` or
+`reasoning_content` is non-empty after trimming whitespace. Fusion checks
+`min_successful_responses` against those usable responses before grounding,
+judge analysis, or final synthesis. `on_error: skip` skips an individual failed
+or unusable response; it does not allow synthesis below quorum.
+
+When Router Replay is enabled, a below-quorum failure records the aggregate
+panel token usage on the Replay record and stores the required count, usable
+count, and ordered per-attempt model, state, and reported token usage under
+`route_diagnostics.fusion_quorum`. These diagnostics do not store panel answer
+content, reasoning, prompt data, raw response bodies, or error text.
 
 ## Execution Flow
 
@@ -42,14 +55,15 @@ flowchart TD
     K --> H
     H --> L[Apply request plugin overrides]
     L --> M[Run analysis panel concurrently]
-    M --> N{Any panel success?}
-    N -- No --> O[Return typed Fusion error]
-    N -- Yes --> P[Judge structured analysis]
-    P --> Q{JSON parsed?}
-    Q -- Yes --> R[Final synthesis with structured analysis]
-    Q -- No --> S[Final synthesis from raw panel responses]
-    R --> T[Return final answer + optional fusion trace]
-    S --> T
+    M --> N{Usable responses meet quorum?}
+    N -- No --> O[Return typed Fusion quorum error]
+    N -- Yes --> P[Apply optional grounding]
+    P --> Q[Judge structured analysis]
+    Q --> R{JSON parsed?}
+    R -- Yes --> S[Final synthesis with structured analysis]
+    R -- No --> T[Final synthesis from raw panel responses]
+    S --> U[Return final answer + optional fusion trace]
+    T --> U
 ```
 
 ## What Problem Does It Solve?
@@ -222,11 +236,11 @@ Request-level override:
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
 | `round_timeout_seconds` | int | wait for all | Stop waiting for a panel round after this many seconds |
-| `min_successful_responses` | int | panel size | Continue once this many panel responses succeed |
+| `min_successful_responses` | int | panel size | Continue only after this many responses contain non-empty assistant content or reasoning after trimming whitespace |
 | `temperature` | float | request default | Temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Include structured judge analysis in the response trace |
 | `include_intermediate_responses` | bool | `true` | Include raw panel responses in the response trace |
-| `on_error` | string | `skip` | `skip` partial panel failures or `fail` on the first panel error |
+| `on_error` | string | `skip` | `skip` individual failed or unusable panel responses while still enforcing quorum, or `fail` on the first such response |
 | `analysis_template` | string | built-in | Custom judge analysis prompt with `{{original}}` and `{{responses}}` |
 | `synthesis_template` | string | built-in | Custom final prompt with `{{original}}`, `{{responses}}`, and `{{analysis}}` |
 | `judge_prompt_version` | string | `fusion-v1` | Version marker included in Fusion response trace |
@@ -239,6 +253,9 @@ Best practice:
 - Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
 - Keep `min_successful_responses` at or below the effective panel size. Invalid
   quorums are rejected; the Router does not lower them automatically.
+- A partial panel continues only when its usable responses still satisfy
+  `min_successful_responses`; otherwise Fusion returns an error without running
+  grounding or either judge call.
 
 ## Grounding-Aware Synthesis
 
@@ -255,6 +272,10 @@ Policy (how the scores are used):
 - `weight` (default) — keep every response and instruct the judge to weight each panel answer by its score, while explicitly protecting a correct lone dissenter.
 - `annotate` — keep every response and pass the scores to the judge as notes, without a weighting instruction.
 - `filter` — hard-drop responses scoring below `min_score` (always keeping `min_keep`); only this policy uses `min_score`/`min_keep`.
+
+The usable-response quorum is checked on the original panel before grounding.
+If the `filter` policy later removes responses, Fusion does not run a second
+quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 

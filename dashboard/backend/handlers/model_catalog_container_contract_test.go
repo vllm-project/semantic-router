@@ -19,8 +19,16 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		t,
 		filepath.Join(repositoryRoot, "dashboard", "backend", "Dockerfile"),
 	)
+	for _, platformArg := range []string{"TARGETARCH", "TARGETOS"} {
+		declaration := "ARG " + platformArg
+		if !strings.Contains(canonicalDockerfile, declaration+"\n") {
+			t.Fatalf("canonical Dashboard Dockerfile must inherit BuildKit automatic argument %s", platformArg)
+		}
+		if strings.Contains(canonicalDockerfile, declaration+"=") {
+			t.Fatalf("canonical Dashboard Dockerfile must not default BuildKit automatic argument %s", platformArg)
+		}
+	}
 	for _, required := range []string{
-		"ARG TARGETARCH=amd64",
 		"FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm",
 		"ENV PYTHONPATH=/app",
 		"COPY src/vllm-sr/requirements.txt /app/requirements.txt",

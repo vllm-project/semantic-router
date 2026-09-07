@@ -1,122 +1,109 @@
 ---
-title: Deployment and Hardware Support Matrix
-description: Understand which Semantic Router deployment options and hardware profiles are maintained, supported, experimental, or deprecated.
+title: Deployment Support
+description: See which deployment paths, integrations, examples, and hardware profiles the Semantic Router project maintains.
 ---
 
-# Deployment and Hardware Support Matrix
+# Deployment Support
 
-Use this page to choose a deployment option and understand what the Semantic
-Router project maintains. A documented option does not, by itself, make every
-platform version, image, model, or accelerator combination supported.
+Use this page to check which Router deployment paths and integrations the
+project maintains. It does not certify every platform, model server, model, or
+accelerator combination.
 
-For a task-oriented starting point, see [Choose a Deployment](deployment-options).
+If you are still choosing a topology, start with
+[Choose a Deployment](deployment-options). For wire formats and endpoint
+configuration, use [Protocol Compatibility](protocol-compatibility) and
+[Backend Target Compatibility](backend-target-compatibility).
 
-## Support levels
+## What each status means
 
-| Level | Project commitment |
+| Status | Meaning |
 | --- | --- |
-| Maintained reference stack | The project owns the installation or lifecycle contract and protects it with repository tests. Pin a Semantic Router release for production. |
-| Supported integration | The project maintains the Router-side attachment contract and documentation. The external platform keeps its own support matrix and lifecycle. |
-| Experimental example | The option demonstrates a feature or test topology. Review and adapt it; compatibility and production hardening are not guaranteed. |
-| Deprecated | The option remains temporarily for migration and has a documented replacement or removal path. |
+| Maintained reference stack | The project owns and tests the installation or lifecycle contract. |
+| Supported integration | The project tests the Router-side connection; the external platform owns its lifecycle. |
+| Experimental example | The files demonstrate a feature or test topology that you must qualify. |
+| Deprecated | The option remains temporarily for a documented migration. |
 
-Evidence labels describe the project's strongest recurring check. They do not
-prove that an arbitrary downstream environment passed:
+Evidence tags show the strongest recurring check: **PR CI** runs an end-to-end
+profile, **Contract** validates static contracts without the external platform,
+and **Manual** requires an opt-in environment.
 
-- **PR/full CI** means a registered end-to-end profile is selected in pull
-  request or full-CI coverage.
-- **Contract/build** means source, schema, rendering, image, or packaging
-  checks protect the option without running every external platform.
-- **Manual profile** means the project provides an opt-in test with external
-  prerequisites. It does not mean the profile passed in another environment.
-- **Documented example** means the project checks the files and documentation,
-  but operators own end-to-end qualification.
+## Use one tested version set
+
+For each linked option:
+
+1. use an external platform version named in its guide; if none is named,
+   treat your choice as unqualified until you test it;
+2. take every Semantic Router artifact you use—the CLI, chart, CRDs,
+   controller, and images—from one release; and
+3. test that exact set in your environment before upgrading any one component.
+
+Support covers that tested version set, not every version supported by the
+external project.
 
 ## Maintained reference stacks
 
-| Option | Classification | What the project maintains | Version, ownership, and evidence boundary |
-| --- | --- | --- | --- |
-| [Helm chart](configuration-workflows#helm) | Maintained reference stack | Router, optional Dashboard, ingress, autoscaling, persistence, and observability resources. | Use the chart from the same Semantic Router release and pin application images. The project owns the chart and Router lifecycle; the selected Gateway, Service, and storage remain separate. The [Helm safety gate](https://github.com/vllm-project/semantic-router/blob/main/tools/make/helm.mk) validates rendering, schema, and safety rules. |
-| [Local deployment](docker) | Maintained reference stack | Router, Envoy, Dashboard, and selected support services through `vllm-sr serve`. | Use same-release CLI and images; pin image digests for controlled deployments. The CLI owns the local stack lifecycle, while model endpoints remain separate. The [CLI integration workflow](https://github.com/vllm-project/semantic-router/blob/main/.github/workflows/integration-test-vllm-sr-cli.yml) exercises the lifecycle with real containers. Local defaults require hardening before production. |
-| [Kubernetes Operator](k8s/operator) | Maintained reference stack | Reconciliation of Router configuration, workload, Service, storage, autoscaling, and the project-owned `vllm.ai` routing APIs used by controllers and integrations. | Install the CRDs, controller, and Router images from one release. Kubernetes owns workload scheduling and the chosen gateway owns traffic. [Operator CI](https://github.com/vllm-project/semantic-router/blob/main/.github/workflows/operator-ci.yml) covers unit, generated-resource, image, API-schema, and cluster-reconciliation contracts. The routing APIs are components of these integrations, not a standalone deployment. |
+| Option | Classification | Project coverage |
+| --- | --- | --- |
+| [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract.** Router, optional Dashboard, ingress, autoscaling, persistence, and observability resources. Gateways and storage remain external. |
+| [Local deployment](docker) | Maintained reference stack | **PR CI.** The CLI manages Router, Envoy, Dashboard, and support services. You provide custom model endpoints and harden local defaults. |
+| [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract.** The project owns CRDs, reconciliation, Router workloads, Services, and routing APIs. Kubernetes schedules workloads; your gateway carries traffic. |
 
 ## Supported integrations
 
-Each linked guide is authoritative for its current external platform versions.
-Pin that compatibility set together with the selected Semantic Router release.
-
-| Integration | Classification | Ownership and version boundary | Evidence and limits |
-| --- | --- | --- | --- |
-| [agentgateway](k8s/agentgateway) | Supported integration | agentgateway owns the Gateway API data plane; Semantic Router supplies ExtProc policy. Use the versions pinned by the guide. | PR/full CI profile. agentgateway requires `FullDuplexStreamed` rather than `Streamed` request bodies. |
-| [Envoy AI Gateway](k8s/ai-gateway) | Supported integration | Envoy AI Gateway and Envoy Gateway own provider traffic; Semantic Router supplies routing policy. Use the versions pinned by the guide. | Default and full-CI profile. Provider compatibility changes independently; verify the selected provider. |
-| [AIBrix](k8s/aibrix) | Supported integration | AIBrix owns model deployment, autoscaling, and replica routing; Semantic Router selects the model or pool. | PR/full CI profile. Pin one AIBrix release and do not treat this integration as a replacement for AIBrix's cluster and accelerator support matrix. |
-| [NVIDIA Dynamo](k8s/dynamo) | Supported integration | Dynamo owns graphs, workers, and frontend lifecycle; Semantic Router selects a model target. Use the versions pinned by the guide. | Manual profile because it requires a prepared Dynamo/GPU environment. The repository also retains a pinned Dynamo `0.6.1.post1` model-deployment fixture for historical testing; it is not compatible with the guide's current platform and is not a production deployment. |
-| [Istio Gateway](k8s/istio) | Supported integration | Istio's Gateway API data plane carries requests; Semantic Router is the ExtProc policy service. Use the versions pinned by the guide. | PR/full CI profile. Supplied model workloads need NVIDIA GPU capacity and are examples, not a general GPU guarantee. |
-| [llm-d](k8s/llm-d) | Supported integration | Semantic Router selects a logical model or pool; the Gateway route targets its `InferencePool`, and llm-d owns discovery, endpoint picking, and replica routing. The repository supplies both Router values and scheduler-manifest examples. | PR/full CI profile plus contract/build coverage. Match the APIs and images to one llm-d release, and do not apply competing direct-Service routes for the same traffic. |
-| [Streaming with Envoy AI Gateway](k8s/streamed-extproc) | Supported integration | Envoy AI Gateway owns streamed transport; Semantic Router processes the configured ExtProc body mode. | PR/full CI streaming profile. Pin both releases and test the body mode because streaming capabilities differ across gateways. |
-| [Valkey agentic memory](valkey-memory) | Supported integration | Semantic Router owns memory configuration; Valkey owns persistence, availability, and Search-module compatibility. | Contract and manual integration coverage. Credentials, retention, backup, tenant isolation, and end-to-end qualification remain operator responsibilities. |
-| [Responses API state with Redis](../tutorials/global/api-and-observability#response-api) | Supported integration | Semantic Router owns Responses API configuration; Redis owns durable conversation state. | Manual Redis profiles. Validate the selected Redis topology; production authentication, encryption, persistence, and eviction policy are not supplied by the examples. |
-| [Response cache](../tutorials/plugin/response-cache) | Supported integration | Semantic Router owns cache behavior and configuration; the selected external backend owns storage and availability. | Contract/manual coverage. Pin the backend and Router release, validate serialization and expiry behavior, and treat cached prompts and responses as sensitive data. |
-| [Valkey vector store](storage-overview) | Supported integration | Semantic Router owns vector-store references; Valkey owns indexing, durability, and access control. | Manual vector-store profiles. Pin Valkey, its Search module, the embedding model, and the Router release as one tested set. |
+| Integration | Classification | Project coverage |
+| --- | --- | --- |
+| [agentgateway](k8s/agentgateway) | Supported integration | **PR CI.** Router supplies ExtProc policy; agentgateway owns the data plane. Set request bodies to `FullDuplexStreamed`. |
+| [Envoy AI Gateway](k8s/ai-gateway) | Supported integration | **PR CI.** Router supplies routing policy; the gateways own provider traffic. Verify your provider separately. |
+| [AIBrix](k8s/aibrix) | Supported integration | **PR CI.** Router selects a model or pool; AIBrix owns deployment, autoscaling, and replicas. Use AIBrix's hardware support matrix. |
+| [NVIDIA Dynamo](k8s/dynamo) | Supported integration | **Manual.** Router selects a target; Dynamo owns graphs, workers, and frontends. Use the guide version; the older fixture is test-only. |
+| [Istio Gateway](k8s/istio) | Supported integration | **PR CI.** Router supplies ExtProc policy; Istio carries requests. Supplied GPU workloads are examples only. |
+| [llm-d](k8s/llm-d) | Supported integration | **PR CI + Contract.** Router selects a model or pool; llm-d owns discovery and replica routing. Do not add a competing direct-Service route. |
+| [Streaming with Envoy AI Gateway](k8s/streamed-extproc) | Supported integration | **PR CI.** The gateway streams transport; Router uses the configured ExtProc body mode. Test that mode explicitly. |
+| [Valkey agentic memory](valkey-memory) | Supported integration | **Contract + Manual.** Router owns memory behavior; Valkey owns persistence and Search. You own security, retention, and backup. |
+| [Responses API state with Redis](../tutorials/global/api-and-observability#response-api) | Supported integration | **Manual.** Router owns Responses behavior; Redis stores state. You own Redis security, persistence, and eviction. |
+| [Response cache](../tutorials/plugin/response-cache) | Supported integration | **Contract + Manual.** Router owns cache behavior; your backend owns storage and availability. Treat cached data as sensitive. |
+| [Valkey vector store](storage-overview) | Supported integration | **Manual.** Router owns store references; Valkey owns indexes and durability. Pin Valkey, Search, and the embedding model together. |
 
 ## Experimental examples
 
-| Example | Classification | Purpose | Production boundary |
-| --- | --- | --- | --- |
-| KServe example | Experimental example | Demonstrates KServe integration while KServe and the cluster own model serving. | Documented example and smoke helpers. Review platform versions, images, credentials, storage, and cleanup before use. |
-| OpenShift example | Experimental example | Adapts Kubernetes resources to OpenShift Routes and security constraints. | Documented example. Review images, Route TLS, credentials, SCCs, caches, and persistent data. |
-| Anthropic-compatible backend fixture | Experimental example | Provides an Anthropic-compatible backend for integration tests. | Test fixture only; it is not a production model service. |
-| Hallucination policy demo | Experimental example | Exercises fact-check gating and warning behavior. | Manual profile with model prerequisites. Validate model quality and failure policy for the deployment domain. |
-| Jailbreak error-handling demo | Experimental example | Exercises jailbreak-classifier failure behavior. | Manual failure-path profile. Do not treat the unreachable test endpoint or permissive policy as production hardening. |
-| LLM Katan development backends | Experimental example | Supplies lightweight OpenAI-compatible development backends. | Test fixture only; it does not represent production model quality, capacity, or availability. |
-| Observability demo | Experimental example | Demonstrates Prometheus, Grafana, alerts, and Dashboard wiring in a development cluster. | Documented example. Replace example hostnames, TLS material, credentials, retention, and insecure defaults. |
-| Response jailbreak demo | Experimental example | Exercises response jailbreak detection on model output past the classifier window. | PR E2E profile with a window-limited stand-in classifier. It is a test topology, not a guardrail model or production hardening. |
-| Responses API Kubernetes demo | Experimental example | Demonstrates Responses API persistence and restart behavior with Redis. | Manual profile. Harden Redis networking, authentication, encryption, persistence, and eviction policy. |
-| Route action demo | Experimental example | Demonstrates route-action behavior through a focused Kubernetes topology. | Test/example coverage only; compose it into a maintained stack before production use. |
-| Router replay recovery demo | Experimental example | Exercises management-boundary replay and restart recovery. | Manual profile. It is a recovery test topology, not a supported deployment platform. |
-| Routing strategy demos | Experimental example | Demonstrates focused routing-strategy configurations and test traffic. | Test/example coverage only. Validate policy quality and backend capacity with representative traffic. |
-| Local tools database | Experimental example | Provides local tool definitions used by examples and tests. | Local example data only. Use an authenticated, durable tool registry for production. |
+| Example | Classification | Use it for / not for |
+| --- | --- | --- |
+| KServe example | Experimental example | KServe integration smoke testing; not a qualified KServe or model-serving deployment. |
+| OpenShift example | Experimental example | Adapting resources to Routes and security constraints; not a hardened OpenShift profile. |
+| Anthropic-compatible backend fixture | Experimental example | Protocol integration tests; not a production model service. |
+| Hallucination policy demo | Experimental example | Fact-check policy behavior; not a qualified guardrail or model. |
+| Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
+| LLM Katan development backends | Experimental example | Lightweight OpenAI-compatible test backends; not production inference. |
+| Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
+| Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |
+| Responses API Kubernetes demo | Experimental example | Redis persistence and restart behavior; not a hardened Redis deployment. |
+| Route action demo | Experimental example | Focused route-action behavior; compose it into a maintained stack before production. |
+| Router replay recovery demo | Experimental example | Replay and restart recovery; not a supported deployment platform. |
+| Routing strategy demos | Experimental example | Focused policy examples; qualify routing quality and backend capacity with representative traffic. |
+| Local tools database | Experimental example | Local tool definitions for examples and tests; use an authenticated, durable registry in production. |
 
-There are no currently shipped deployment options classified as **Deprecated**.
-Removed legacy behavior and migration guidance are recorded in
-[Upgrade and Rollback](upgrade-rollback). A future deprecated option must remain
-in this matrix until its documented removal.
+No shipped option is currently **Deprecated**. See
+[Upgrade and Rollback](upgrade-rollback) for migration guidance.
 
 ## Hardware overlays
 
-Hardware support applies to a deployment stack; it does not replace one.
-Semantic Router and the backend model server are also separate support
-boundaries.
+Hardware support applies to a deployment stack; it is not a separate Router
+topology. Router acceleration and backend model serving are also separate
+choices.
 
-| Hardware profile | Status | Deployment guidance | Qualification boundary |
-| --- | --- | --- | --- |
-| Linux x86-64 CPU | Maintained | Use the standard Router images, local CLI, Helm chart, or Operator. | The normal build, unit, CLI, and Kubernetes profiles provide the broadest recurring coverage. Backend model-server requirements are separate. |
-| Linux Arm64 CPU | Build-qualified | Standard Router, Dashboard, ExtProc, and Operator images are published as multi-architecture images where their release workflow declares Arm64. | Multi-architecture image publication is not a promise that every integration or optional native dependency passed on every Arm64 platform. |
-| NVIDIA CUDA on Linux x86-64 | Supported integration | Use the `vllm-sr-cuda` image for supported Router-side ONNX models, or keep the Router on CPU and connect a separately qualified NVIDIA vLLM backend. The current image is built on CUDA `12.4.1`. | Follow [NVIDIA CUDA](nvidia-cuda), verify the CUDA execution provider, and pin the image digest. GPU model serving follows vLLM's NVIDIA support matrix; presence here does not qualify every NVIDIA architecture. |
-| AMD ROCm on Linux x86-64 | Supported integration | Keep the Router on CPU or use the ROCm Router image for supported local models, and connect a separately qualified ROCm vLLM backend. | Follow [AMD ROCm](amd-rocm) and pin compatible Router, vLLM, ROCm, and model revisions. Hardware-specific runtime coverage is not a per-PR guarantee. |
-| AMD AI PC/NPU | Experimental, not qualified | Tracked by [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373). | No maintained deployment contract or compatibility promise yet. |
-| NVIDIA DGX Spark Arm64 | Experimental, not qualified | Tracked by [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374). | Arm64 image availability alone does not qualify CUDA, native dependencies, or end-to-end inference on this platform. |
-| Other accelerators and operating systems | Not qualified | No maintained Router deployment option is currently declared. | Open a qualification issue with reproducible hardware, software, image, and test evidence before documenting support. |
+| Hardware profile | Status | What is covered |
+| --- | --- | --- |
+| Linux x86-64 CPU | Maintained | The standard Router images, CLI, Helm chart, and Operator receive the broadest recurring coverage. Model-server requirements remain separate. |
+| Linux Arm64 CPU | Build-qualified | Release workflows publish multi-architecture images where declared. This does not qualify every integration or optional native dependency on Arm64. |
+| NVIDIA CUDA on Linux x86-64 | Supported integration | Follow [NVIDIA CUDA](nvidia-cuda) for supported Router-side models, or keep the Router on CPU and qualify a separate NVIDIA backend against vLLM's support matrix. |
+| AMD ROCm on Linux x86-64 | Supported integration | Follow [AMD ROCm](amd-rocm) for supported Router-side models and qualify the Router, vLLM, ROCm, and model revisions as one set. |
+| AMD AI PC/NPU | Experimental, not qualified | No maintained deployment contract yet; tracked by [issue #2373](https://github.com/vllm-project/semantic-router/issues/2373). |
+| NVIDIA DGX Spark Arm64 | Experimental, not qualified | Arm64 images do not qualify CUDA or end-to-end inference on this platform; tracked by [issue #2374](https://github.com/vllm-project/semantic-router/issues/2374). |
+| Other accelerators and operating systems | Not qualified | No maintained profile. Open a qualification issue with reproducible hardware, software, image, and test evidence. |
 
-## Configuration, dependencies, and security
+## Before production
 
-Use one canonical Router YAML document. The CLI may translate it into Helm
-values, and the Operator may reconcile it from a custom resource, but neither
-option should create a second hand-maintained routing schema. Runtime
-configuration examples are references consumed by complete configurations;
-they are not deployment manifests.
-
-External gateways, inference platforms, model servers, databases, storage
-classes, identity systems, and accelerator runtimes retain their own release
-and security policies. For production:
-
-1. pin the Semantic Router release, images or digests, external platform
-   versions, model revisions, and configuration together;
-2. test the backend directly before testing it through the Router;
-3. exercise health, streaming, failure, upgrade, and rollback behavior through
-   the actual data plane;
-4. move credentials into a secret manager and enable transport security,
-   network policy, authentication, and least privilege; and
-5. review [Security Hardening](security-hardening),
-   [Data and Storage](storage-overview), and
-   [Upgrade and Rollback](upgrade-rollback).
+Test the model endpoint directly, then exercise buffered, streaming, failure,
+upgrade, and rollback paths through the real data plane. Review
+[Security Hardening](security-hardening), [Data and Storage](storage-overview),
+and [Upgrade and Rollback](upgrade-rollback) for controls outside this matrix.
