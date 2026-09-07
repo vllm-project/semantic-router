@@ -176,7 +176,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	}
 
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
-	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
+	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
@@ -193,6 +193,13 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 
 func (c *Classifier) usesRoutingSignalType(signalType string) bool {
 	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
+}
+
+// usesJailbreakClassifier also counts the response-stage consumers, which
+// usesRoutingSignalType cannot see: decision rules never name a
+// response-direction rule, and the response_jailbreak plugin is not a rule.
+func (c *Classifier) usesJailbreakClassifier() bool {
+	return c != nil && c.Config != nil && c.Config.UsesJailbreakClassifierInReachableRouting()
 }
 
 func (c *Classifier) ownsDefaultAPIConsumer() bool {
