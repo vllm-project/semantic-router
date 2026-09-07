@@ -12,6 +12,7 @@ from pathlib import Path
 import cli.evaluation.router_learning_executor as learning_executor
 import pytest
 from cli.evaluation.execution_contract import ROUTER_LEARNING_REPLAY_EXECUTOR_ID
+from cli.evaluation.metric_analysis_catalog import resolve_metric_analysis
 from cli.evaluation.metric_router_learning import _cluster_interval
 from cli.evaluation.orchestrator import run_evaluation
 from cli.evaluation.router_learning_corpus import (
@@ -284,7 +285,30 @@ def test_python_replay_metrics_are_attested_by_go_reducer(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_router_learning_small_sample_interval():
+@pytest.mark.parametrize("policy_id", ROUTER_LEARNING_POLICY_IDS)
+@pytest.mark.parametrize(
+    "statistic,estimator",
+    [
+        ("solve_rate", "round-cluster-rate"),
+        ("hard_constraint_violation_rate", "round-cluster-rate"),
+        ("protection_violation_rate", "protected-round-cluster-rate"),
+        ("lifecycle_cost_mean_usd", "round-cluster-mean"),
+        ("latency_mean_ms", "round-cluster-mean"),
+        ("model_call_mean", "round-cluster-mean"),
+    ],
+)
+def test_router_learning_estimator_method_contract(policy_id, statistic, estimator):
+    specification = resolve_metric_analysis(
+        f"joint.router_learning.{policy_id}.{statistic}"
+    ).specification
+    assert specification.estimator_id == (
+        f"router-learning-{estimator}-student-t-95-df31"
+    )
+    assert specification.estimator_version == "v1"
+    assert specification.cluster_unit == "trial_id"
+    assert specification.weighting == "uniform_trial"
+    assert len(ROUTER_LEARNING_CORPUS.trial_seeds) == 32
+
     # Known sample: mean 15.5, unbiased variance 88, 31 degrees of freedom.
     margin = 2.0395134463964077 * sqrt(88 / 32)
     assert _cluster_interval(list(range(32))) == pytest.approx(
