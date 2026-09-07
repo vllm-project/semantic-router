@@ -314,17 +314,106 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 		}
 	}
 
-	// The new index write (if any) is now confirmed in place, so the
-	// previous entry — if the conversation actually changed — is safe to
-	// drop. Best-effort: a stale leftover here is pruned by the next listing.
+	// The new index write (if any) is now confirmed in place, so the previous
+	// entry — if the conversation actually changed — can be dropped. Never
+	// with a bare ZREM, though: by the time this runs the response may have
+	// been moved back by someone else, and the entry would be theirs. See
+	// removePreviousConversationMembership.
+	//
+	// Best-effort: a stale leftover here is pruned by the next listing.
 	if snapshot.conversationID != "" && snapshot.conversationID != response.ConversationID {
-		if err := s.unindexResponse(ctx, snapshot.conversationID, response.ID); err != nil {
+		if err := s.removePreviousConversationMembership(ctx, snapshot.conversationID, response.ID); err != nil {
 			logging.Warnf("RedisStore: failed to remove response %s from previous conversation %s index: %v",
 				response.ID, snapshot.conversationID, err)
 		}
 	}
 
 	return nil
+}
+
+// removePreviousConversationMembership drops responseID's entry in the
+// conversation it has just moved out of.
+//
+// Deliberately not an unconditional ZREM. A (conversation, response) index
+// entry is valid exactly while the response's stored payload names that
+// conversation, and the payload is the only thing that can say so — so this
+// reads the payload and removes the entry only once it can see the response
+// has genuinely moved on.
+//
+// Without that check the removal is an ABA hazard. An A->B update that pauses
+// here, while a concurrent B->A update runs to completion and legitimately
+// re-adds A's entry, resumes and deletes the membership that second update
+// just created. Both calls report success, GetResponse still answers with the
+// response in A, and listing A returns nothing. No prune repairs it, because
+// pruning only ever removes entries; no scan repairs it either once
+// FinalizeConversationIndex has sealed the store; and cascade-deleting A walks
+// an index that no longer names the payload, so it leaks.
+//
+// The read and the removal remain two round trips, and Redis Cluster forbids
+// collapsing them: the payload key (ResponseKeyPrefix) and the index key
+// (ConversationIndexKeyPrefix) share no hash tag and so hash to different
+// slots, which makes a compare-and-remove Lua script spanning both illegal —
+// Redis answers CROSSSLOT. Hash-tagging them into one slot is not available
+// either, since a response's conversation is precisely what changes here,
+// and tagging every key alike would collapse the whole keyspace onto a single
+// node.
+//
+// What closes the gap instead is re-reading afterwards and putting the entry
+// back if the response had moved home in the meantime. That is not atomicity
+// — a listing landing inside the window still misses the response — but every
+// interleaving converges on the index agreeing with the payload, which the
+// unconditional removal does not.
+//
+// Runs detached from the caller's context with its own deadline: a
+// cancellation arriving between the removal and the re-check would strand the
+// index in exactly the missing-membership state this exists to prevent.
+func (s *RedisStore) removePreviousConversationMembership(ctx context.Context, previousConversationID, responseID string) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
+	defer cancel()
+
+	stored, _, err := s.getResponseWithLifetime(cleanupCtx, responseID)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		// No payload at all now, so no conversation owns this response and
+		// the entry is stale whatever it once meant.
+	case err != nil:
+		return fmt.Errorf("failed to read response %s before dropping its previous conversation membership: %w",
+			responseID, err)
+	case stored.ConversationID == previousConversationID:
+		// It is in this conversation again (or never left). The entry is
+		// current, and removing it would erase live membership.
+		return nil
+	}
+
+	if err := s.unindexResponse(cleanupCtx, previousConversationID, responseID); err != nil {
+		return err
+	}
+
+	return s.restorePreviousConversationMembership(cleanupCtx, previousConversationID, responseID)
+}
+
+// restorePreviousConversationMembership undoes the removal above when the
+// response moved back into previousConversationID while that removal was in
+// flight — the residual window Redis Cluster's slot rules leave open.
+//
+// Re-indexes from the payload as it stands right now, never from what the
+// update that triggered the cleanup believed, so the restored entry's score
+// and the index's lifetime both come from the response that actually owns the
+// membership.
+func (s *RedisStore) restorePreviousConversationMembership(ctx context.Context, previousConversationID, responseID string) error {
+	stored, lifetimeMillis, err := s.getResponseWithLifetime(ctx, responseID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil
+		}
+		return fmt.Errorf("failed to re-read response %s after dropping its previous conversation membership: %w",
+			responseID, err)
+	}
+	if stored.ConversationID != previousConversationID {
+		return nil
+	}
+
+	return s.indexResponse(ctx, previousConversationID, responseID, stored.CreatedAt, lifetimeMillis)
 }
 
 // replaceResponseAndSnapshot serializes concurrent payload replacements at
