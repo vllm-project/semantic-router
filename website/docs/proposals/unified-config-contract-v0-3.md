@@ -125,7 +125,7 @@ live under:
 - `config/fragments/plugin/`.
 
 Runtime deployment examples remain separate from routing fragments. Contract tests
-and `make agent-lint` keep the reference config, schema, examples, and public docs
+and `make check` keep the reference config, schema, examples, and public docs
 aligned.
 
 ## Migration
