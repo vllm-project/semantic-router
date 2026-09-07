@@ -40,6 +40,7 @@ func (s *RedisStore) CreateConversation(ctx context.Context, conversation *respo
 
 	return nil
 }
+
 func (s *RedisStore) GetConversation(ctx context.Context, conversationID string) (*responseapi.StoredConversation, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -65,6 +66,7 @@ func (s *RedisStore) GetConversation(ctx context.Context, conversationID string)
 
 	return &conversation, nil
 }
+
 func (s *RedisStore) UpdateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
 	if !s.enabled {
 		return ErrStoreDisabled

@@ -233,6 +233,7 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 
 	return nil
 }
+
 func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
@@ -427,6 +428,7 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 
 	return wrapped
 }
+
 func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) error {
 	if !s.enabled {
 		return ErrStoreDisabled

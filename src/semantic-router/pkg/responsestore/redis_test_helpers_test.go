@@ -55,6 +55,7 @@ func (h *beforeCommandHook) ProcessHook(next redis.ProcessHook) redis.ProcessHoo
 		return next(ctx, cmd)
 	}
 }
+
 func (h *beforeCommandHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return next
 }
