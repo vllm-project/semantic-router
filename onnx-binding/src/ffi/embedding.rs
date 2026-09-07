@@ -3,11 +3,16 @@
 //! This module provides Foreign Function Interface (FFI) functions for
 //! mmBERT embedding generation with 2D Matryoshka support using ONNX Runtime.
 
+// These exported C ABI functions validate raw pointers before dereferencing
+// them. Keep their signatures safe for existing cgo callers.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, EmbeddingResult,
     EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch,
 };
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
+use ndarray::Array2;
 use parking_lot::Mutex;
 use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
@@ -306,21 +311,24 @@ pub extern "C" fn get_embeddings_batch(
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
-                let embedding = embeddings.row(i).to_vec();
+            let results = unsafe { std::slice::from_raw_parts_mut(results, num_texts as usize) };
+            for ((text, embedding), result) in text_strs
+                .iter()
+                .zip(embeddings.outer_iter())
+                .zip(results.iter_mut())
+            {
+                let embedding = embedding.to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
-                unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
-                        data,
-                        length,
-                        error: false,
-                        model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
-                        processing_time_ms: per_text_time,
-                    };
-                }
+                *result = EmbeddingResult {
+                    data,
+                    length,
+                    error: false,
+                    model_type: 0, // mmbert
+                    sequence_length: text.split_whitespace().count() as i32,
+                    processing_time_ms: per_text_time,
+                };
             }
 
             0
@@ -328,10 +336,9 @@ pub extern "C" fn get_embeddings_batch(
         Err(e) => {
             eprintln!("Error: batch embedding generation failed: {:?}", e);
             // Set error for all results
-            for i in 0..num_texts as usize {
-                unsafe {
-                    *results.offset(i as isize) = create_error_result();
-                }
+            let results = unsafe { std::slice::from_raw_parts_mut(results, num_texts as usize) };
+            for result in results {
+                *result = create_error_result();
             }
             -1
         }
@@ -422,6 +429,69 @@ pub extern "C" fn calculate_embedding_similarity(
     0
 }
 
+unsafe fn parse_candidates<'a>(
+    candidates: *const *const c_char,
+    num_candidates: usize,
+) -> Option<Vec<&'a str>> {
+    let mut candidate_strs = Vec::with_capacity(num_candidates);
+    for index in 0..num_candidates {
+        let candidate_ptr = unsafe { *candidates.add(index) };
+        if candidate_ptr.is_null() {
+            eprintln!("Error: null candidate at index {index}");
+            return None;
+        }
+        let candidate = unsafe { CStr::from_ptr(candidate_ptr) };
+        match candidate.to_str() {
+            Ok(value) => candidate_strs.push(value),
+            Err(error) => {
+                eprintln!("Error: invalid UTF-8 in candidate {index}: {error}");
+                return None;
+            }
+        }
+    }
+    Some(candidate_strs)
+}
+
+fn rank_similarities(embeddings: &Array2<f32>, top_k: i32) -> Vec<SimilarityMatch> {
+    let query_embedding = embeddings.row(0);
+    let mut similarities = Vec::with_capacity(embeddings.nrows().saturating_sub(1));
+    for (index, candidate_embedding) in embeddings.outer_iter().skip(1).enumerate() {
+        let dot_product: f32 = query_embedding
+            .iter()
+            .zip(candidate_embedding.iter())
+            .map(|(a, b)| a * b)
+            .sum();
+        let norm_query = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_candidate = candidate_embedding
+            .iter()
+            .map(|x| x * x)
+            .sum::<f32>()
+            .sqrt();
+        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
+            dot_product / (norm_query * norm_candidate)
+        } else {
+            0.0
+        };
+        similarities.push((index, similarity));
+    }
+    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let candidate_count = similarities.len();
+    let result_count = if top_k <= 0 || top_k as usize > candidate_count {
+        candidate_count
+    } else {
+        top_k as usize
+    };
+    similarities
+        .into_iter()
+        .take(result_count)
+        .map(|(index, similarity)| SimilarityMatch {
+            index: index as i32,
+            similarity,
+        })
+        .collect()
+}
+
 /// Calculate batch similarity: find top-k most similar candidates for a query
 ///
 /// # Parameters
@@ -464,30 +534,13 @@ pub extern "C" fn calculate_similarity_batch(
         }
     };
 
-    // Parse candidates
-    let mut candidate_strs = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates {
-        let candidate_ptr = unsafe { *candidates.offset(i as isize) };
-        if candidate_ptr.is_null() {
-            eprintln!("Error: null candidate at index {}", i);
-            unsafe {
-                *result = BatchSimilarityResult::default();
-            }
+    let candidate_strs = match unsafe { parse_candidates(candidates, num_candidates as usize) } {
+        Some(values) => values,
+        None => {
+            unsafe { *result = BatchSimilarityResult::default() };
             return -1;
         }
-
-        let candidate_str = unsafe {
-            match CStr::from_ptr(candidate_ptr).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in candidate {}: {}", i, e);
-                    *result = BatchSimilarityResult::default();
-                    return -1;
-                }
-            }
-        };
-        candidate_strs.push(candidate_str);
-    }
+    };
 
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
@@ -532,54 +585,7 @@ pub extern "C" fn calculate_similarity_batch(
         }
     };
 
-    // Extract query embedding (first one)
-    let query_embedding = embeddings.row(0);
-
-    // Calculate similarities with all candidates
-    let mut similarities = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates as usize {
-        let candidate_embedding = embeddings.row(i + 1);
-
-        // Cosine similarity
-        let dot_product: f32 = query_embedding
-            .iter()
-            .zip(candidate_embedding.iter())
-            .map(|(a, b)| a * b)
-            .sum();
-        let norm_query: f32 = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_candidate: f32 = candidate_embedding
-            .iter()
-            .map(|x| x * x)
-            .sum::<f32>()
-            .sqrt();
-
-        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
-            dot_product / (norm_query * norm_candidate)
-        } else {
-            0.0
-        };
-
-        similarities.push((i, similarity));
-    }
-
-    // Sort by similarity (descending)
-    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Take top-k
-    let k = if top_k <= 0 || top_k > num_candidates {
-        num_candidates as usize
-    } else {
-        top_k as usize
-    };
-
-    let top_matches: Vec<SimilarityMatch> = similarities
-        .iter()
-        .take(k)
-        .map(|(idx, sim)| SimilarityMatch {
-            index: *idx as i32,
-            similarity: *sim,
-        })
-        .collect();
+    let top_matches = rank_similarities(&embeddings, top_k);
 
     let num_matches = top_matches.len() as i32;
     let matches_ptr = Box::into_raw(top_matches.into_boxed_slice()) as *mut SimilarityMatch;
@@ -602,6 +608,12 @@ pub extern "C" fn calculate_similarity_batch(
 // ============================================================================
 // Information Functions
 // ============================================================================
+
+pub(crate) fn loaded_embedding_dimension_contract() -> Option<(usize, Vec<usize>)> {
+    let model_lock = GLOBAL_MMBERT_MODEL.get()?;
+    let model = model_lock.lock();
+    Some((model.embedding_dimension(), model.matryoshka_dimensions()))
+}
 
 /// Get information about the loaded mmBERT model
 ///

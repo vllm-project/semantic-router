@@ -15,36 +15,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.MemoryExtractor) {
-	if !isMemoryEnabled(cfg) {
-		return nil, nil
-	}
-
-	// publishRouterState publishes the store after the candidate commits.
-	memoryStore, err := createMemoryStore(cfg)
-	if err != nil {
-		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
-		return nil, nil
-	}
-
-	backend := cfg.Memory.Backend
-	if backend == "" {
-		backend = "milvus"
-	}
-	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
-		logging.Infof("Memory enabled with %s backend and Redis hot cache", backend)
-	} else {
-		logging.Infof("Memory enabled with %s backend", backend)
-	}
-
-	memoryExtractor := memory.NewMemoryChunkStore(memoryStore)
-	if memoryExtractor != nil {
-		logging.Infof("Memory chunk store enabled (direct conversation storage)")
-	}
-
-	return memoryStore, memoryExtractor
-}
-
 func isMemoryEnabled(cfg *config.RouterConfig) bool {
 	if cfg.Memory.Enabled {
 		return true

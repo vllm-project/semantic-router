@@ -21,7 +21,7 @@ const (
 // EmbeddingConfig holds the embedding model configuration
 type EmbeddingConfig struct {
 	Model     EmbeddingModelType
-	Dimension int // Target dimension for Matryoshka models (default: 256 for mmbert)
+	Dimension int // Target dimension; <= 0 resolves to the model contract's native dimension.
 	Layer     int // Target layer for 2D Matryoshka early exit (0 = full model, recommended for search/RAG)
 }
 
@@ -32,11 +32,17 @@ func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
 	}
 
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
+	effectiveDimension, err := candle_binding.ResolveEmbeddingDimension(modelName, cfg.Dimension)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Dimension = effectiveDimension
+
 	switch modelName {
 	case "qwen3":
-		return generateQwen3Embedding(text, modelName)
+		return generateQwen3Embedding(text, modelName, cfg.Dimension)
 	case "gemma":
-		return generateGemmaEmbedding(text, modelName)
+		return generateGemmaEmbedding(text, modelName, cfg.Dimension)
 	case "mmbert":
 		return generateMmBertEmbedding(text, modelName, cfg)
 	case "multimodal":
@@ -48,16 +54,16 @@ func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
 	}
 }
 
-func generateQwen3Embedding(text, modelName string) ([]float32, error) {
-	output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+func generateQwen3Embedding(text, modelName string, targetDim int) ([]float32, error) {
+	output, err := candle_binding.GetEmbeddingBatched(text, modelName, targetDim)
 	if err != nil {
 		return nil, fmt.Errorf("qwen3 embedding failed: %w", err)
 	}
 	return output.Embedding, nil
 }
 
-func generateGemmaEmbedding(text, modelName string) ([]float32, error) {
-	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+func generateGemmaEmbedding(text, modelName string, targetDim int) ([]float32, error) {
+	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, targetDim)
 	if err != nil {
 		return nil, fmt.Errorf("gemma embedding failed: %w", err)
 	}
@@ -65,11 +71,7 @@ func generateGemmaEmbedding(text, modelName string) ([]float32, error) {
 }
 
 func generateMmBertEmbedding(text, modelName string, cfg EmbeddingConfig) ([]float32, error) {
-	targetDim := cfg.Dimension
-	if targetDim <= 0 {
-		targetDim = 256
-	}
-	output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, cfg.Layer, targetDim)
+	output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, cfg.Layer, cfg.Dimension)
 	if err != nil {
 		return nil, fmt.Errorf("mmbert embedding failed: %w", err)
 	}
@@ -77,11 +79,7 @@ func generateMmBertEmbedding(text, modelName string, cfg EmbeddingConfig) ([]flo
 }
 
 func generateMultiModalEmbedding(text, modelName string, cfg EmbeddingConfig) ([]float32, error) {
-	targetDim := cfg.Dimension
-	if targetDim <= 0 {
-		targetDim = 384
-	}
-	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, targetDim)
+	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, cfg.Dimension)
 	if err != nil {
 		return nil, fmt.Errorf("multimodal embedding failed: %w", err)
 	}

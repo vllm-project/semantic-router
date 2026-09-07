@@ -87,7 +87,6 @@ global:
           description: Semantic Router response-cache vectors
           vector_field:
             name: embedding
-            dimension: 768
             metric_type: COSINE
           index:
             type: HNSW
@@ -105,8 +104,12 @@ global:
           verbose_errors: false
 ```
 
-Set `dimension` to the output dimension of `embedding_model`. A mismatch causes
-inserts or searches to fail.
+Leave `dimension` unset to use the loaded model's native width. If you set a
+positive value, it must be one of the model-declared Matryoshka dimensions.
+The router validates existing collections at startup and refuses to load a
+collection whose stored vector width differs. See the
+[Milvus dimension migration](../tutorials/plugin/response-cache.md#milvus-dimension-migration)
+when upgrading an existing 384-dimensional response cache.
 
 Enable the route plugin on decisions that may read or populate the cache:
 

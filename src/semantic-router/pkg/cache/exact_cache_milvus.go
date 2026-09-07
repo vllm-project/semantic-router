@@ -118,10 +118,7 @@ func (c *MilvusCache) AddExact(
 	if effectiveTTL > 0 {
 		expiresAt = now.Add(time.Duration(effectiveTTL) * time.Second).Unix()
 	}
-	dimension := semanticCacheEmbeddingDimension(
-		c.config.Collection.VectorField.Dimension,
-		c.embeddingModel,
-	)
+	dimension := c.embeddingDimension()
 	_, err := c.client.Upsert(
 		ctx,
 		c.collectionName,

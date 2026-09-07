@@ -9,7 +9,9 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -33,6 +35,9 @@ type MilvusStore struct {
 	// within this store so concurrent background retrieval batches cannot lose
 	// access-count increments by reading the same previous record.
 	retrievalUpdateMu sync.Mutex
+	// effectiveDimension is the resolved vector width used for the Milvus
+	// collection schema and existing-collection startup validation.
+	effectiveDimension int
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
@@ -82,17 +87,33 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{
+			Model: EmbeddingModelType(strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))),
+		}
+		if embeddingCfg.Model == "" {
+			embeddingCfg.Model = EmbeddingModelBERT
+		}
 	}
 
+	effectiveDimension, err := resolveMilvusStoreEmbeddingDimension(
+		embeddingCfg,
+		cfg.Milvus.Dimension,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve memory embedding dimension: %w", err)
+	}
+	embeddingCfg.Dimension = effectiveDimension
+	cfg.Milvus.Dimension = effectiveDimension
+
 	store := &MilvusStore{
-		client:          options.Client,
-		collectionName:  options.CollectionName,
-		config:          cfg,
-		enabled:         options.Enabled,
-		maxRetries:      DefaultMaxRetries,
-		retryBaseDelay:  DefaultRetryBaseDelay * time.Millisecond,
-		embeddingConfig: embeddingCfg,
+		client:             options.Client,
+		collectionName:     options.CollectionName,
+		config:             cfg,
+		enabled:            options.Enabled,
+		maxRetries:         DefaultMaxRetries,
+		retryBaseDelay:     DefaultRetryBaseDelay * time.Millisecond,
+		embeddingConfig:    embeddingCfg,
+		effectiveDimension: effectiveDimension,
 	}
 
 	// Auto-create collection if it doesn't exist
@@ -105,10 +126,37 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	logging.ComponentEvent("memory", "milvus_store_initialized", map[string]interface{}{
 		"collection_name": store.collectionName,
 		"embedding_model": store.embeddingConfig.Model,
-		"dimension":       store.config.Milvus.Dimension,
+		"dimension":       store.effectiveDimension,
 	})
 
 	return store, nil
+}
+
+func resolveMilvusStoreEmbeddingDimension(
+	embeddingCfg EmbeddingConfig,
+	configuredMilvusDimension int,
+) (int, error) {
+	if !deterministicEmbeddingsEnabled() {
+		return candle_binding.ResolveEmbeddingDimension(
+			string(embeddingCfg.Model),
+			embeddingCfg.Dimension,
+		)
+	}
+
+	// Deterministic integration mode intentionally runs without loading a
+	// native model. Preserve its configured vector width instead of querying a
+	// runtime contract that cannot exist in this mode.
+	dimension := embeddingCfg.Dimension
+	if dimension <= 0 {
+		dimension = configuredMilvusDimension
+	}
+	if dimension <= 0 {
+		dimension = deterministicEmbeddingDimension(embeddingCfg)
+	}
+	if dimension <= 0 {
+		return 0, fmt.Errorf("deterministic memory embedding dimension must be positive: %d", dimension)
+	}
+	return dimension, nil
 }
 
 func (m *MilvusStore) IsEnabled() bool {

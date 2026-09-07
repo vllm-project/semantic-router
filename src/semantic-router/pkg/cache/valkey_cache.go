@@ -61,12 +61,20 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	}
 
 	valkeyConfig := options.Config
+	effectiveDimension, err := semanticCacheEmbeddingDimension(
+		valkeyConfig.Index.VectorField.Dimension,
+		options.EmbeddingModel,
+	)
+	if err != nil {
+		return nil, err
+	}
+	valkeyConfig.Index.VectorField.Dimension = effectiveDimension
 	// Normalize metric type to uppercase so configs using e.g. "cosine" match the
 	// expected enum values (COSINE, IP, L2) without triggering fallback warnings.
 	valkeyConfig.Index.VectorField.MetricType = strings.ToUpper(valkeyConfig.Index.VectorField.MetricType)
 	logging.Debugf("ValkeyCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		valkeyConfig.Connection.Host, valkeyConfig.Connection.Port, valkeyConfig.Index.Name,
-		semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingModel))
+		effectiveDimension)
 
 	resolvedHost := normalizeLocalHostForContainerRuntimes(valkeyConfig.Connection.Host)
 	logging.Debugf("ValkeyCache: connecting to Valkey at %s:%d (configured host=%s)",
@@ -200,30 +208,34 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 		return nil, err
 	}
 	modelName := c.embeddingModel
+	dimension, err := c.embeddingDimension()
+	if err != nil {
+		return nil, err
+	}
 
 	switch modelName {
 	case "qwen3":
 		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, dimension)
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "gemma":
 		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, dimension)
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "mmbert":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, dimension)
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "multimodal":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, dimension)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +248,7 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 	}
 }
 
-func (c *ValkeyCache) embeddingDimension() int {
+func (c *ValkeyCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
 		return semanticCacheEmbeddingDimension(0, "")
 	}
@@ -247,7 +259,10 @@ func (c *ValkeyCache) embeddingDimension() int {
 func (c *ValkeyCache) createIndex() error {
 	ctx := context.Background()
 
-	actualDimension := c.embeddingDimension()
+	actualDimension, err := c.embeddingDimension()
+	if err != nil {
+		return err
+	}
 	c.config.Index.VectorField.Dimension = actualDimension
 
 	logging.Debugf("ValkeyCache.createIndex: using embedding dimension: %d", actualDimension)
@@ -300,7 +315,7 @@ func (c *ValkeyCache) createIndex() error {
 		}
 	}
 
-	_, err := c.client.CustomCommand(ctx, createCmd)
+	_, err = c.client.CustomCommand(ctx, createCmd)
 	if err != nil {
 		return fmt.Errorf("failed to create Valkey index: %w", err)
 	}
