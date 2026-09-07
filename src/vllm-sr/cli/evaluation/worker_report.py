@@ -209,9 +209,18 @@ class WorkerTrackReport(StrictModel):
     error: str | None = None
 
 
+class WorkerReportPrimaryMetric(StrictModel):
+    """Typed headline metric selected from the report metric registry."""
+
+    id: str
+    value: float
+    unit: str
+    confidence_interval: tuple[float, float] | None = None
+
+
 class WorkerReportSummary(StrictModel):
     verdict: DecisionVerdict
-    quality_score: float | None
+    primary_metric: WorkerReportPrimaryMetric | None
     latency_p95_ms: float | None
     runtime_cost: float | None
     capacity_tco: float | None

@@ -45,6 +45,13 @@ silently translated at runtime.
 
 `providers.defaults` owns the default provider behavior and default model.
 `providers.models[].backend_refs[]` owns physical backend bindings.
+`providers.models[].api_format` owns only the upstream wire format and never
+selects a Provider. A physical model in a Router-owned listener configuration
+must declare an explicit backend Provider; metadata-only external-gateway
+configuration and built-in virtual models may remain backendless.
+The local CLI serve path owns Envoy transport and rejects backendless physical
+models; external-gateway metadata-only configurations are deployed through the
+gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
 

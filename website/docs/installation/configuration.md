@@ -188,7 +188,7 @@ listeners:
 
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: my-served-model
@@ -196,6 +196,7 @@ providers:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
+          provider: vllm
 
 routing:
   strategy: priority
@@ -226,6 +227,52 @@ global:
       metrics:
         enabled: true
 ```
+
+### Catalog-backed models
+
+Built-in support is additive to the same `version: v0.3` hierarchy. Set the
+optional canonical `catalog` identity and use a stable Provider ID on the
+backend; the Router and CLI then materialize the Model Card, reasoning family,
+native model mapping, protocol, request path, and provider defaults:
+
+```yaml
+providers:
+  defaults:
+    model: production
+    reasoning_effort: medium
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
+      backend_refs:
+        - provider: openai
+          api_key_env: OPENAI_API_KEY
+```
+
+The `name` remains the request-facing alias. A handwritten override targets
+the canonical card with `routing.modelCards[].name: openai/gpt-5.6-sol`.
+Private or newly released vLLM/SGLang models simply omit `catalog` and may keep
+using a handwritten card under their alias. `api_format: openai|responses|anthropic`
+is unchanged and remains an explicit protocol override; it never chooses a
+Provider. If this config declares a listener, every physical model must define
+`backend_refs` with an explicit Provider ID. A metadata-only external-gateway
+config with `listeners: []`, and a built-in virtual model whose recipe resolves
+its pool, may remain backendless.
+The local `vllm-sr serve` workflow owns Envoy transport and therefore rejects a
+backendless physical model even when it supplies its legacy default listener
+for an empty listener list. Use the external-gateway deployment profile for
+state-only protocol metadata.
+If `providers.defaults.reasoning_effort` is omitted, each model uses its
+reasoning-family default; saved canonical YAML does not add an unconfigured
+global effort.
+
+Multiple `backend_refs` on one alias are homogeneous replicas. HTTP replicas
+may use different hosts, ports, and weights. HTTPS replicas may vary by port
+and weight but must keep one DNS hostname. Provider, wire protocol, native
+model ID, credential, headers, effective request path, and TLS semantics must
+also match. Use separate aliases for heterogeneous providers so request
+metadata always follows the upstream Envoy selects. See the
+[Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
+for the complete contribution and evaluation workflow.
 
 Classifier backend failures remain `Unknown` while the complete boolean tree
 is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
@@ -287,7 +334,7 @@ In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
+If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
 
 See

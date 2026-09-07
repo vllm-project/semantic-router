@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+)
 
 // Classifier represents the configuration for text classification.
 type Classifier struct {
@@ -341,13 +345,22 @@ type VLLMEndpoint struct {
 }
 
 type ProviderProfile struct {
-	Type         string            `yaml:"type"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
+	Type               string                          `yaml:"type"`
+	Protocol           string                          `yaml:"protocol,omitempty"`
+	ReasoningTransport modelcatalog.ReasoningTransport `yaml:"reasoning_transport,omitempty"`
+	// ReasoningModes and ReasoningEfforts are catalog-materialized provider API
+	// constraints. They are intentionally absent from the public config surface.
+	ReasoningModes   []string `yaml:"-"`
+	ReasoningEfforts []string `yaml:"-"`
+	BaseURL          string   `yaml:"base_url,omitempty"`
+	AuthHeader       string   `yaml:"auth_header,omitempty"`
+	AuthPrefix       string   `yaml:"auth_prefix,omitempty"`
+	// AuthPrefixSet distinguishes an omitted override from an explicit empty
+	// prefix after canonical config has been materialized.
+	AuthPrefixSet bool              `yaml:"-"`
+	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
+	APIVersion    string            `yaml:"api_version,omitempty"`
+	ChatPath      string            `yaml:"chat_path,omitempty"`
 }
 
 type ModelPricing struct {
@@ -363,17 +376,38 @@ type ModelParams struct {
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
 	ReasoningFamily    string              `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter       `yaml:"loras,omitempty"`
-	AccessKey          string              `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string              `yaml:"param_size,omitempty"`
-	ContextWindowSize  int                 `yaml:"context_window_size,omitempty"`
-	APIFormat          string              `yaml:"api_format,omitempty"`
-	Description        string              `yaml:"description,omitempty"`
-	Capabilities       []string            `yaml:"capabilities,omitempty"`
-	Tags               []string            `yaml:"tags,omitempty"`
-	QualityScore       float64             `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
-	Modality           string              `yaml:"modality,omitempty"`
+	// AuthoredModel preserves the typed user declaration across materialization.
+	// Effective catalog defaults must not leak into exported user YAML, and an
+	// api_key_env reference must not be replaced by its expanded secret value.
+	AuthoredModel     *CanonicalProviderModel             `yaml:"-" json:"-"`
+	LoRAs             []LoRAAdapter                       `yaml:"loras,omitempty"`
+	AccessKey         string                              `yaml:"access_key,omitempty" json:"-"`
+	AccessKeys        map[string]string                   `yaml:"-" json:"-"`
+	Catalog           string                              `yaml:"catalog,omitempty"`
+	ParamSize         string                              `yaml:"param_size,omitempty"`
+	ContextWindowSize int                                 `yaml:"context_window_size,omitempty"`
+	APIFormat         string                              `yaml:"api_format,omitempty"`
+	Description       string                              `yaml:"description,omitempty"`
+	Capabilities      []string                            `yaml:"capabilities,omitempty"`
+	Tags              []string                            `yaml:"tags,omitempty"`
+	Evaluations       []modelcatalog.UserEvaluation       `yaml:"-" json:"-"`
+	IndexResults      map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
+	QualityIndex      string                              `yaml:"-" json:"-"`
+	ExternalModelIDs  map[string]string                   `yaml:"external_model_ids,omitempty"`
+	Modality          string                              `yaml:"modality,omitempty"`
+}
+
+// EvidenceScore resolves a versioned static model index. Missing, failed, and
+// not-applicable results return ok=false and are never coerced to zero.
+func (params ModelParams) EvidenceScore(index string) (float64, bool) {
+	if index == "" {
+		index = params.QualityIndex
+	}
+	result, ok := params.IndexResults[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return 0, false
+	}
+	return *result.Score, true
 }
 
 type LoRAAdapter struct {
@@ -382,8 +416,15 @@ type LoRAAdapter struct {
 }
 
 type ReasoningFamilyConfig struct {
-	Type      string `yaml:"type"`
-	Parameter string `yaml:"parameter"`
+	Type                string            `yaml:"type"`
+	Parameter           string            `yaml:"parameter"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
 type PIIPolicy struct {
