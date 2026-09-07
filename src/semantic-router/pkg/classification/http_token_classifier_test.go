@@ -259,6 +259,73 @@ func TestHTTPTokenClassifierTruncatedAt(t *testing.T) {
 	})
 }
 
+// A provider that answers 200 with something other than a spans array must not
+// read as "no PII found" (Xunzhuo's review on #3498).
+func TestHTTPTokenClassifierRejectsMalformedEnvelopes(t *testing.T) {
+	rejected := []struct {
+		name string
+		body any
+		want string
+	}{
+		{"empty object", map[string]any{}, "no spans array"},
+		{"null body", json.RawMessage("null"), "array or object"},
+		{"error member", map[string]any{"error": "model unavailable"}, "reported an error"},
+		{"error beside spans", map[string]any{"spans": []any{}, "error": "degraded"}, "reported an error"},
+		{"spans null", map[string]any{"spans": nil}, "no spans array"},
+		{"spans object", map[string]any{"spans": map[string]any{}}, "must be an array"},
+		{"string body", "ok", "array or object"},
+	}
+	for _, tc := range rejected {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			entities, err := classifyThrough(t, tc.body, "Call Anna at anna@example.com")
+			if err == nil {
+				t.Fatalf("want an error, got %d entities", len(entities))
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error should mention %q: %v", tc.want, err)
+			}
+			if len(entities) != 0 {
+				t.Fatalf("no entities may be returned on a rejected response, got %d", len(entities))
+			}
+		})
+	}
+}
+
+// An explicit empty list, in either form, is the one legitimate way to say
+// "nothing found".
+func TestHTTPTokenClassifierAcceptsExplicitEmptyList(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body any
+	}{
+		{"empty envelope list", map[string]any{"spans": []any{}}},
+		{"empty bare list", []any{}},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			entities, err := classifyThrough(t, tc.body, "nothing sensitive here")
+			if err != nil {
+				t.Fatalf("an explicit empty list is a clean result, got %v", err)
+			}
+			if len(entities) != 0 {
+				t.Fatalf("want zero entities, got %d", len(entities))
+			}
+		})
+	}
+}
+
+// classifyThrough serves body from a test provider and classifies text against it.
+func classifyThrough(t *testing.T, body any, text string) ([]candle_binding.TokenEntity, error) {
+	t.Helper()
+	_, cfg := newTokenSpansServer(t, func(string) any { return body })
+	backend, err := newHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return backend.ClassifyTokens(text)
+}
+
 // HuggingFace pipeline spellings are accepted as aliases, and an explicit byte
 // pair must agree with the code-point pair.
 func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {

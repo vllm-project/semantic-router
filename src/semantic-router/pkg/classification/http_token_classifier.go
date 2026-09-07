@@ -92,9 +92,13 @@ type tokenSpanWire struct {
 	ByteEnd     *int     `json:"byte_end"`
 }
 
+// tokenSpansEnvelope is the object form. Spans and Error stay raw so that a
+// missing member, a null and a non-array are distinguishable from an empty
+// list; the decoder decides what each means.
 type tokenSpansEnvelope struct {
-	Spans       []tokenSpanWire `json:"spans"`
+	Spans       json.RawMessage `json:"spans"`
 	TruncatedAt *int            `json:"truncated_at"`
+	Error       json.RawMessage `json:"error"`
 	Model       string          `json:"model"`
 }
 
@@ -131,20 +135,52 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 
 // decodeTokenSpansResponse accepts either a bare JSON list of spans, which is
 // what a stock HuggingFace token-classification pipeline returns, or the
-// envelope form that can also carry truncated_at and model.
+// envelope form that can also carry truncated_at and model. Everything else is
+// rejected: an empty body, a bare object without a spans array, {"spans": null},
+// a spans member that is not an array, or a 200 that carries an error member.
+// None of those may become a clean zero-entity result, because PII would then
+// treat a broken provider as text with nothing to redact.
 func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
-	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return nil, nil, fmt.Errorf("token_spans response is empty")
+	}
+	if trimmed[0] == '[' {
 		var spans []tokenSpanWire
-		if err := json.Unmarshal(body, &spans); err != nil {
+		if err := json.Unmarshal(trimmed, &spans); err != nil {
 			return nil, nil, fmt.Errorf("failed to parse token_spans response: %w", err)
 		}
 		return spans, nil, nil
 	}
+	if trimmed[0] != '{' {
+		return nil, nil, fmt.Errorf("token_spans response must be a JSON array or object")
+	}
 	var env tokenSpansEnvelope
-	if err := json.Unmarshal(body, &env); err != nil {
+	if err := json.Unmarshal(trimmed, &env); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse token_spans response: %w", err)
 	}
-	return env.Spans, env.TruncatedAt, nil
+	if isPresentJSON(env.Error) {
+		return nil, nil, fmt.Errorf("token_spans provider reported an error: %s", bytes.TrimSpace(env.Error))
+	}
+	if !isPresentJSON(env.Spans) {
+		return nil, nil, fmt.Errorf("token_spans response has no spans array")
+	}
+	spansRaw := bytes.TrimSpace(env.Spans)
+	if spansRaw[0] != '[' {
+		return nil, nil, fmt.Errorf("token_spans spans member must be an array")
+	}
+	var spans []tokenSpanWire
+	if err := json.Unmarshal(spansRaw, &spans); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse token_spans spans: %w", err)
+	}
+	return spans, env.TruncatedAt, nil
+}
+
+// isPresentJSON reports whether a raw member was sent with a value other than
+// null. A missing member and an explicit null both count as absent.
+func isPresentJSON(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null"))
 }
 
 // alignTokenSpans validates every span against the contract and converts
