@@ -5,20 +5,6 @@
 
 package candle_binding
 
-import (
-	"encoding/base64"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"regexp"
-	"runtime"
-	"strings"
-	"sync"
-	"time"
-	"unsafe"
-)
-
 /*
 #cgo LDFLAGS: -L${SRCDIR}/target/release -lcandle_semantic_router -ldl -lm
 #include <stdlib.h>
@@ -467,6 +453,20 @@ extern void* candle_mlp_from_json_with_device_and_dtype(char* json, int device_t
 extern void candle_mlp_free_string(char* ptr);
 */
 import "C"
+
+import (
+	"encoding/base64"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"regexp"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+	"unsafe"
+)
 
 var (
 	initOnce                              sync.Once

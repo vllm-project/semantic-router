@@ -68,10 +68,12 @@ func (m *MockMilvusClient) HasCollection(ctx context.Context, coll string) (bool
 }
 
 // Stub out other required methods to satisfy client.Client interface
-func (m *MockMilvusClient) Close() error                                             { return nil }
+func (m *MockMilvusClient) Close() error { return nil }
+
 func (m *MockMilvusClient) CheckHealth(context.Context) (*entity.MilvusState, error) { return nil, nil }
 func (m *MockMilvusClient) UsingDatabase(context.Context, string) error              { return nil }
 func (m *MockMilvusClient) ListDatabases(context.Context) ([]entity.Database, error) { return nil, nil }
+
 func (m *MockMilvusClient) CreateDatabase(context.Context, string, ...client.CreateDatabaseOption) error {
 	return nil
 }
@@ -141,6 +143,7 @@ func (m *MockMilvusClient) AlterAlias(context.Context, string, string) error  { 
 func (m *MockMilvusClient) GetReplicas(context.Context, string) ([]*entity.ReplicaGroup, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) BackupRBAC(context.Context) (*entity.RBACMeta, error)   { return nil, nil }
 func (m *MockMilvusClient) RestoreRBAC(context.Context, *entity.RBACMeta) error    { return nil }
 func (m *MockMilvusClient) CreateCredential(context.Context, string, string) error { return nil }
@@ -330,6 +333,7 @@ func (m *MockMilvusClient) DropResourceGroup(context.Context, string) error { re
 func (m *MockMilvusClient) DescribeResourceGroup(context.Context, string) (*entity.ResourceGroup, error) {
 	return nil, nil
 }
+
 func (m *MockMilvusClient) ListResourceGroups(context.Context) ([]string, error)      { return nil, nil }
 func (m *MockMilvusClient) TransferNode(context.Context, string, string, int32) error { return nil }
 func (m *MockMilvusClient) TransferReplica(context.Context, string, string, string, int64) error {
