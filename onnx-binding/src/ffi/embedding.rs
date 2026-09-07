@@ -3,9 +3,10 @@
 //! This module provides Foreign Function Interface (FFI) functions for
 //! mmBERT embedding generation with 2D Matryoshka support using ONNX Runtime.
 
+use super::embedding_similarity::{batch_result, parse_candidates, rank_candidates};
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, EmbeddingResult,
-    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch,
+    EmbeddingSimilarityResult, MatryoshkaInfo,
 };
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
 use parking_lot::Mutex;
@@ -34,7 +35,10 @@ pub(super) static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = O
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
 #[no_mangle]
-pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
+pub unsafe extern "C" fn init_mmbert_embedding_model(
+    model_path: *const c_char,
+    use_cpu: bool,
+) -> bool {
     if model_path.is_null() {
         eprintln!("Error: model_path is null");
         return false;
@@ -111,10 +115,14 @@ fn create_error_result() -> EmbeddingResult {
 /// - `target_dim`: Target dimension (0 for default 768)
 /// - `result`: Output pointer for embedding result
 ///
+/// # Safety
+/// Non-null `text` must be a readable NUL-terminated string and non-null `result`
+/// must point to writable storage for one `EmbeddingResult`.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_embedding_2d_matryoshka(
+pub unsafe extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
     target_layer: i32,
     target_dim: i32,
@@ -201,11 +209,14 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 /// - `text`: Input text (C string)
 /// - `result`: Output pointer for embedding result
 ///
+/// # Safety
+/// The pointers must satisfy the requirements of `get_embedding_2d_matryoshka`.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
-    get_embedding_2d_matryoshka(text, 0, 0, result)
+pub unsafe extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
+    unsafe { get_embedding_2d_matryoshka(text, 0, 0, result) }
 }
 
 /// Get embedding with target dimension only (no layer early exit)
@@ -215,15 +226,18 @@ pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResul
 /// - `target_dim`: Target dimension (768, 512, 256, 128, or 64; 0 for default)
 /// - `result`: Output pointer for embedding result
 ///
+/// # Safety
+/// The pointers must satisfy the requirements of `get_embedding_2d_matryoshka`.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_embedding_with_dim(
+pub unsafe extern "C" fn get_embedding_with_dim(
     text: *const c_char,
     target_dim: i32,
     result: *mut EmbeddingResult,
 ) -> i32 {
-    get_embedding_2d_matryoshka(text, 0, target_dim, result)
+    unsafe { get_embedding_2d_matryoshka(text, 0, target_dim, result) }
 }
 
 // ============================================================================
@@ -239,10 +253,15 @@ pub extern "C" fn get_embedding_with_dim(
 /// - `target_dim`: Target dimension (0 for default 768)
 /// - `results`: Output array for embedding results (must be pre-allocated with num_texts elements)
 ///
+/// # Safety
+/// For a positive count, non-null `texts` and `results` must reference readable
+/// and writable arrays of `num_texts` elements, respectively. Each non-null text
+/// pointer must reference a readable NUL-terminated string.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_embeddings_batch(
+pub unsafe extern "C" fn get_embeddings_batch(
     texts: *const *const c_char,
     num_texts: i32,
     target_layer: i32,
@@ -257,7 +276,7 @@ pub extern "C" fn get_embeddings_batch(
     // Parse texts
     let mut text_strs = Vec::with_capacity(num_texts as usize);
     for i in 0..num_texts {
-        let text_ptr = unsafe { *texts.offset(i as isize) };
+        let text_ptr = unsafe { *texts.add(i as usize) };
         if text_ptr.is_null() {
             eprintln!("Error: null text at index {}", i);
             return -1;
@@ -306,18 +325,18 @@ pub extern "C" fn get_embeddings_batch(
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
+            for (i, text) in text_strs.iter().enumerate() {
                 let embedding = embeddings.row(i).to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
+                    *results.add(i) = EmbeddingResult {
                         data,
                         length,
                         error: false,
                         model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
+                        sequence_length: text.split_whitespace().count() as i32,
                         processing_time_ms: per_text_time,
                     };
                 }
@@ -330,7 +349,7 @@ pub extern "C" fn get_embeddings_batch(
             // Set error for all results
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = create_error_result();
+                    *results.add(i) = create_error_result();
                 }
             }
             -1
@@ -351,10 +370,14 @@ pub extern "C" fn get_embeddings_batch(
 /// - `target_dim`: Target dimension (0 for default 768)
 /// - `result`: Output pointer for similarity result
 ///
+/// # Safety
+/// Non-null text pointers must reference readable NUL-terminated strings and
+/// non-null `result` must point to writable `EmbeddingSimilarityResult` storage.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn calculate_embedding_similarity(
+pub unsafe extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
     text2: *const c_char,
     target_layer: i32,
@@ -433,10 +456,16 @@ pub extern "C" fn calculate_embedding_similarity(
 /// - `target_dim`: Target dimension (0 for default 768)
 /// - `result`: Output pointer for batch similarity result
 ///
+/// # Safety
+/// Non-null `query` must be a readable NUL-terminated string. For a positive
+/// count, `candidates` must reference `num_candidates` readable string pointers;
+/// each non-null entry must reference a readable NUL-terminated string.
+/// Non-null `result` must point to writable `BatchSimilarityResult` storage.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn calculate_similarity_batch(
+pub unsafe extern "C" fn calculate_similarity_batch(
     query: *const c_char,
     candidates: *const *const c_char,
     num_candidates: i32,
@@ -465,29 +494,16 @@ pub extern "C" fn calculate_similarity_batch(
     };
 
     // Parse candidates
-    let mut candidate_strs = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates {
-        let candidate_ptr = unsafe { *candidates.offset(i as isize) };
-        if candidate_ptr.is_null() {
-            eprintln!("Error: null candidate at index {}", i);
+    let candidate_strs = match unsafe { parse_candidates(candidates, num_candidates as usize) } {
+        Ok(texts) => texts,
+        Err(error) => {
+            eprintln!("Error: {}", error);
             unsafe {
                 *result = BatchSimilarityResult::default();
             }
             return -1;
         }
-
-        let candidate_str = unsafe {
-            match CStr::from_ptr(candidate_ptr).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in candidate {}: {}", i, e);
-                    *result = BatchSimilarityResult::default();
-                    return -1;
-                }
-            }
-        };
-        candidate_strs.push(candidate_str);
-    }
+    };
 
     // Get model
     let model_lock = match GLOBAL_MMBERT_MODEL.get() {
@@ -532,68 +548,10 @@ pub extern "C" fn calculate_similarity_batch(
         }
     };
 
-    // Extract query embedding (first one)
-    let query_embedding = embeddings.row(0);
-
-    // Calculate similarities with all candidates
-    let mut similarities = Vec::with_capacity(num_candidates as usize);
-    for i in 0..num_candidates as usize {
-        let candidate_embedding = embeddings.row(i + 1);
-
-        // Cosine similarity
-        let dot_product: f32 = query_embedding
-            .iter()
-            .zip(candidate_embedding.iter())
-            .map(|(a, b)| a * b)
-            .sum();
-        let norm_query: f32 = query_embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_candidate: f32 = candidate_embedding
-            .iter()
-            .map(|x| x * x)
-            .sum::<f32>()
-            .sqrt();
-
-        let similarity = if norm_query > 0.0 && norm_candidate > 0.0 {
-            dot_product / (norm_query * norm_candidate)
-        } else {
-            0.0
-        };
-
-        similarities.push((i, similarity));
-    }
-
-    // Sort by similarity (descending)
-    similarities.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Take top-k
-    let k = if top_k <= 0 || top_k > num_candidates {
-        num_candidates as usize
-    } else {
-        top_k as usize
-    };
-
-    let top_matches: Vec<SimilarityMatch> = similarities
-        .iter()
-        .take(k)
-        .map(|(idx, sim)| SimilarityMatch {
-            index: *idx as i32,
-            similarity: *sim,
-        })
-        .collect();
-
-    let num_matches = top_matches.len() as i32;
-    let matches_ptr = Box::into_raw(top_matches.into_boxed_slice()) as *mut SimilarityMatch;
-
-    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+    let top_matches = rank_candidates(&embeddings, num_candidates as usize, top_k);
 
     unsafe {
-        *result = BatchSimilarityResult {
-            matches: matches_ptr,
-            num_matches,
-            model_type: 0, // mmbert
-            processing_time_ms,
-            error: false,
-        };
+        *result = batch_result(top_matches, start_time.elapsed().as_secs_f32() * 1000.0);
     }
 
     0
@@ -608,10 +566,13 @@ pub extern "C" fn calculate_similarity_batch(
 /// # Parameters
 /// - `result`: Output pointer for model info result
 ///
+/// # Safety
+/// Non-null `result` must point to writable `EmbeddingModelsInfoResult` storage.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResult) -> i32 {
+pub unsafe extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResult) -> i32 {
     if result.is_null() {
         eprintln!("Error: null pointer passed to get_embedding_models_info");
         return -1;
@@ -684,10 +645,13 @@ pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResu
 /// # Parameters
 /// - `result`: Output pointer for MatryoshkaInfo
 ///
+/// # Safety
+/// Non-null `result` must point to writable `MatryoshkaInfo` storage.
+///
 /// # Returns
 /// 0 on success, -1 on error
 #[no_mangle]
-pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
+pub unsafe extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
     if result.is_null() {
         return -1;
     }
@@ -723,8 +687,12 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
 }
 
 /// Free MatryoshkaInfo
+///
+/// # Safety
+/// Non-null `info` must reference a writable result from `get_matryoshka_info`.
+/// Its owned strings must not have been modified or previously freed.
 #[no_mangle]
-pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
+pub unsafe extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
     if info.is_null() {
         return;
     }
