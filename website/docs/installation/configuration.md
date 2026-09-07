@@ -77,6 +77,17 @@ response contract. Omit `backend` to retain local behavior. The deprecated
 canonical configuration uses `variant: candle`, `variant: modernbert`, or
 `variant: mmbert32k`.
 
+Complexity attaches the same block under
+`global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
+two contracts, so `contract` cannot be defaulted and must be stated:
+`score.v1` for a regression model, where each rule turns the score into a
+verdict through its own `hard_above`/`easy_below` boundaries (or
+`hard_below`/`easy_above` for a score that falls as difficulty rises), and
+`label_distribution.v1` for a model that returns `hard`/`easy`/`medium`
+directly. `threshold` remains the symmetric shorthand for the local signed
+margin. `score.v1` reports no confidence, so decisions gated on those rules
+rank on the engine's structural default; the Router warns at startup.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.

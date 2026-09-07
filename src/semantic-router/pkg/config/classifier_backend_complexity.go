@@ -1,6 +1,11 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
 
 // ComplexityBackendContracts are the response shapes the complexity signal can
 // read. Both are supported because a difficulty model can be built either way,
@@ -28,6 +33,9 @@ func ValidateComplexityModelBackend(cfg *RouterConfig) error {
 	}
 	if err := ValidateComplexityRuleBoundaries(cfg); err != nil {
 		return err
+	}
+	for _, advisory := range ComplexityBackendAdvisories(cfg) {
+		logging.Warnf("%s", advisory)
 	}
 	backend := cfg.ComplexityModel.Backend
 	if backend == nil {
@@ -111,4 +119,50 @@ func complexityRuleRefs(cfg *RouterConfig) []complexityRuleRef {
 		}
 	}
 	return refs
+}
+
+// ComplexityBackendAdvisories reports consequences of a complexity backend
+// that are correct but easy to miss. They are advisories rather than errors:
+// each describes a configuration the runtime will honour exactly as written,
+// where the surprise is what the config no longer does.
+//
+// It returns the messages instead of logging them so the reasoning is
+// testable without capturing log output; ValidateComplexityModelBackend emits
+// them.
+func ComplexityBackendAdvisories(cfg *RouterConfig) []string {
+	if cfg == nil || cfg.ComplexityModel.Backend == nil {
+		return nil
+	}
+	advisories := make([]string, 0, 2)
+
+	// score.v1 reports no confidence by design, so any decision gated on one
+	// of these rules drops out of confidence-based ranking and competes on
+	// the engine's structural default instead. A rule alongside it on the
+	// local path still reports one, so the change is invisible in the config
+	// but visible in which decision wins.
+	if cfg.ComplexityModel.Backend.Contract == RemoteClassifierContractScore {
+		advisories = append(advisories, fmt.Sprintf(
+			"complexity.backend uses %s, which reports no confidence: decisions gated on a complexity rule "+
+				"will rank on the engine's structural default rather than a reported score. "+
+				"%s reports the winning label's probability if confidence-based ranking matters",
+			RemoteClassifierContractScore, RemoteClassifierContractLabelDistribution))
+	}
+
+	// The candidate lists are how the local path produces a score. With a
+	// backend they are never read, so editing them has no effect - worth
+	// saying once rather than leaving someone to discover it.
+	var withCandidates []string
+	for _, ref := range complexityRuleRefs(cfg) {
+		if len(ref.rule.Hard.Candidates) > 0 || len(ref.rule.Easy.Candidates) > 0 ||
+			len(ref.rule.Hard.ImageCandidates) > 0 || len(ref.rule.Easy.ImageCandidates) > 0 {
+			withCandidates = append(withCandidates, ref.prefix()+ref.rule.Name)
+		}
+	}
+	if len(withCandidates) > 0 {
+		advisories = append(advisories, fmt.Sprintf(
+			"complexity.backend supplies the score, so the hard/easy candidate lists on %s are never read; "+
+				"they can be removed",
+			strings.Join(withCandidates, ", ")))
+	}
+	return advisories
 }
