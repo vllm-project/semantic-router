@@ -11,6 +11,45 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
+// deleteEmptyConversationIndexScript deletes KEYS[1] only if it currently has
+// no members, reporting 1 when the key is gone and 0 when members are still
+// there.
+//
+// Redis runs a script atomically, so nothing can add a member between the
+// ZCARD and the DEL. That is the whole point: an unconditional DEL of a
+// conversation index is only ever destructive. On a clean cascade the last
+// ZREM already removed the key (Redis drops a zero-member sorted set), so the
+// DEL does nothing at all — except in the one case where it does something,
+// which is when a concurrent StoreResponse landed a member after the cascade's
+// final empty read, and the DEL erases it. That leaves a live payload with no
+// index entry pointing at it and, once the store is finalized, nothing that
+// will ever rescan to find it again.
+//
+// Single-key: KEYS[1] only, so it stays legal in Redis Cluster.
+var deleteEmptyConversationIndexScript = redis.NewScript(`
+if redis.call("ZCARD", KEYS[1]) == 0 then
+	redis.call("DEL", KEYS[1])
+	return 1
+end
+return 0
+`)
+
+// deleteEmptyConversationIndex removes a conversation's index key if and only
+// if it is empty at that instant, reporting whether it did. A false return is
+// not a failure: it means a member arrived after the caller last looked, and
+// the caller must go back and resolve it rather than delete it unread.
+func (s *RedisStore) deleteEmptyConversationIndex(ctx context.Context, indexKey string) (bool, error) {
+	res, err := deleteEmptyConversationIndexScript.Run(ctx, s.client, []string{indexKey}).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to delete conversation index %s: %w", indexKey, err)
+	}
+	deleted, ok := res.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected conversation index delete result type %T for %s", res, indexKey)
+	}
+	return deleted > 0, nil
+}
+
 // deleteConversationResponseBatch deletes one bounded batch of a
 // conversation's indexed responses, verifying ownership before deleting any
 // payload — never a GET-then-blind-DEL. A response's CURRENT stored

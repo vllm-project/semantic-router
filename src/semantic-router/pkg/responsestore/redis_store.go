@@ -159,6 +159,15 @@ const (
 	// whole conversation.
 	redisDeleteBatchSize = 256
 
+	// conversationIndexCascadeMaxRaceRounds bounds how many times a cascade
+	// delete will go back and drain responses that were written after it had
+	// already seen the conversation's index empty. Each round is a real
+	// concurrent write, not ordinary batch progress, so this does not limit
+	// how large a conversation may be — only how long the cascade will keep
+	// chasing a conversation that is still being actively written to before
+	// reporting that it could not finish.
+	conversationIndexCascadeMaxRaceRounds = 8
+
 	// conversationIndexRestoreTimeout bounds the compensating write that puts
 	// unresolved members back into a conversation index after a cascade
 	// batch removed them optimistically (restoreConversationIndexMembers).

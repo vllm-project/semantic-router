@@ -160,6 +160,16 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // applied. The failure is safely retryable: an already-resolved response's
 // index member is gone, so a retry's ZRange only ever re-reads the
 // responses still genuinely unresolved.
+//
+// An empty read is not on its own permission to delete the index. A
+// StoreResponse landing between that read and the delete has committed a real
+// member, and deleting the key unconditionally would erase it — leaving a live
+// payload nothing points at, which past finalization no rescan will ever
+// recover. So the delete is conditional on the index still being empty at the
+// instant it runs (deleteEmptyConversationIndex), and a member that beat it
+// there sends this back around to resolve that member like any other. Only a
+// conversation being written to faster than it can be drained gives up, and it
+// says so rather than reporting a cascade that silently left responses behind.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
 	indexKey := s.conversationIndexKey(conversationID)
 
@@ -167,25 +177,40 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 		return err
 	}
 
+	raced := 0
 	for {
 		candidates, err := s.client.ZRangeWithScores(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
 		if err != nil {
 			return fmt.Errorf("failed to list responses for deletion: %w", err)
 		}
-		if len(candidates) == 0 {
+
+		if len(candidates) > 0 {
+			if batchErr := s.deleteConversationResponseBatch(ctx, conversationID, candidates); batchErr != nil {
+				return batchErr
+			}
+			continue
+		}
+
+		emptied, deleteErr := s.deleteEmptyConversationIndex(ctx, indexKey)
+		if deleteErr != nil {
+			return deleteErr
+		}
+		if emptied {
 			break
 		}
 
-		if err := s.deleteConversationResponseBatch(ctx, conversationID, candidates); err != nil {
-			return err
+		// A write committed after the empty read above. Counted separately
+		// from ordinary batch progress, so draining a large conversation is
+		// never mistaken for losing this race.
+		raced++
+		if raced > conversationIndexCascadeMaxRaceRounds {
+			return fmt.Errorf("conversation %s kept receiving responses during cascade delete after %d attempts; retry",
+				conversationID, raced)
 		}
 	}
 
-	// Single-key deletes, never combined with each other or with the
-	// response keys above.
-	if err := s.client.Del(ctx, indexKey).Err(); err != nil {
-		return fmt.Errorf("failed to delete conversation index for %s: %w", conversationID, err)
-	}
+	// Single-key delete, never combined with the index or the response keys
+	// above.
 	if err := s.client.Del(ctx, s.conversationIndexMigratedKey(conversationID)).Err(); err != nil {
 		return fmt.Errorf("failed to delete conversation migrated marker for %s: %w", conversationID, err)
 	}

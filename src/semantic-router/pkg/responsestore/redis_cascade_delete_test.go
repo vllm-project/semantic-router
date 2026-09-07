@@ -492,3 +492,169 @@ func TestCascadeDeleteCancelledContextRestoresIndexMembers(t *testing.T) {
 	_, getErr = store.GetResponse(baseCtx, respID)
 	assert.ErrorIs(t, getErr, ErrNotFound, "the retry must actually delete the payload, not orphan it")
 }
+
+// cascadeRaceHook lands a complete, indexed response for conversationID the
+// moment the cascade has read its index empty — the window between that read
+// and whatever the cascade does about it.
+//
+// Anchoring on the empty read rather than on the delete that follows is
+// deliberate: it is the window the race actually lives in, and it exists in
+// any implementation, so this same hook reproduces the orphan against an
+// unconditional delete and shows it fixed against a guarded one.
+//
+// The write goes through a genuinely separate client, as a real concurrent
+// writer's would: reusing the client the hook is installed on makes the
+// injected commands reentrant into that same hook chain, which go-redis does
+// not handle as a simple nested call.
+type cascadeRaceHook struct {
+	indexKey   string
+	payloadKey string
+	response   *responseapi.StoredResponse
+	client     *redis.Client
+	always     bool
+	fired      atomic.Int64
+}
+
+func (h *cascadeRaceHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *cascadeRaceHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *cascadeRaceHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if err != nil || !h.emptiedIndexRead(cmd) {
+			return err
+		}
+		if !h.always && h.fired.Load() > 0 {
+			return err
+		}
+		h.fired.Add(1)
+
+		payload, marshalErr := json.Marshal(h.response)
+		if marshalErr != nil {
+			panic(marshalErr)
+		}
+		// Payload first, then the index member: exactly StoreResponse's own
+		// ordering, so what lands here is a write that has genuinely
+		// committed, not a half-written one.
+		if setErr := h.client.Set(context.Background(), h.payloadKey, payload, time.Minute).Err(); setErr != nil {
+			panic(setErr)
+		}
+		if zaddErr := h.client.ZAdd(context.Background(), h.indexKey,
+			redis.Z{Score: float64(h.response.CreatedAt), Member: h.response.ID}).Err(); zaddErr != nil {
+			panic(zaddErr)
+		}
+		return err
+	}
+}
+
+// emptiedIndexRead reports whether cmd is the cascade's own scored read of
+// this conversation's index, come back empty. The ZSliceCmd type is what
+// distinguishes it from a plain ZRANGE a test assertion might run against the
+// same key.
+func (h *cascadeRaceHook) emptiedIndexRead(cmd redis.Cmder) bool {
+	scored, ok := cmd.(*redis.ZSliceCmd)
+	if !ok || cmd.Name() != "zrange" || len(scored.Val()) != 0 {
+		return false
+	}
+	args := cmd.Args()
+	if len(args) < 2 {
+		return false
+	}
+	key, ok := args[1].(string)
+	return ok && key == h.indexKey
+}
+
+func newCascadeRaceHook(t *testing.T, store *RedisStore, conversationID, responseID string, always bool) *cascadeRaceHook {
+	t.Helper()
+
+	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	t.Cleanup(func() { _ = writer.Close() })
+
+	return &cascadeRaceHook{
+		indexKey:   store.conversationIndexKey(conversationID),
+		payloadKey: store.buildKey(ResponseKeyPrefix + responseID),
+		response: &responseapi.StoredResponse{
+			ID: responseID, ConversationID: conversationID,
+			Status: "completed", CreatedAt: time.Now().Unix() + 1,
+		},
+		client: writer,
+		always: always,
+		fired:  atomic.Int64{},
+	}
+}
+
+// TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead is the regression
+// for the cascade's last step. Reading the index empty and then deleting it
+// are two separate operations, and a StoreResponse that commits in between has
+// written a live payload and indexed it. Deleting the index key
+// unconditionally erases that membership, and since DeleteConversation goes on
+// to remove the conversation record too, nothing is left pointing at the
+// payload — permanently, once the store is finalized and no read ever rescans.
+//
+// Deterministic by construction: the racing write is injected in the instant
+// before the delete command reaches Redis, which is precisely the window that
+// cannot be hit reliably by timing.
+func TestCascadeDeleteDrainsWriteCommittedAfterFinalEmptyRead(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_final_race"
+		originalID     = "resp_cascade_original"
+		racingID       = "resp_cascade_racer"
+	)
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{
+		ID: conversationID, CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: originalID, ConversationID: conversationID, Status: "completed", CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+	hook := newCascadeRaceHook(t, store, conversationID, racingID, false)
+	store.client.AddHook(hook)
+
+	require.NoError(t, store.DeleteConversation(ctx, conversationID, true))
+	require.EqualValues(t, 1, hook.fired.Load(), "the race must actually have been injected for this assertion to mean anything")
+
+	_, err := store.GetResponse(ctx, racingID)
+	assert.ErrorIs(t, err, ErrNotFound,
+		"a response committed after the cascade's final empty read must be deleted with the rest, never left behind with its index entry erased")
+	assert.Empty(t, conversationIndexMembers(t, store, conversationID))
+	assert.Zero(t, exists(t, store, store.conversationIndexKey(conversationID)))
+}
+
+// TestCascadeDeleteReportsUnendingConcurrentWrites covers the other end of the
+// same loop: a conversation being written to faster than it can be drained
+// must be reported rather than either spun on forever or quietly reported as a
+// successful delete. What it must never do is leave a payload no index names —
+// the retry has to have something to find.
+func TestCascadeDeleteReportsUnendingConcurrentWrites(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const (
+		conversationID = "conv_cascade_unending"
+		racingID       = "resp_cascade_unending"
+	)
+	require.NoError(t, store.CreateConversation(ctx, &responseapi.StoredConversation{
+		ID: conversationID, CreatedAt: time.Now().Unix(),
+	}))
+	require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+	hook := newCascadeRaceHook(t, store, conversationID, racingID, true)
+	store.client.AddHook(hook)
+
+	err := store.DeleteConversation(ctx, conversationID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "kept receiving responses during cascade delete")
+	assert.EqualValues(t, conversationIndexCascadeMaxRaceRounds+1, hook.fired.Load(),
+		"the cascade must give up after a bounded number of racing writes, not spin on them")
+
+	_, getErr := store.GetConversation(ctx, conversationID)
+	assert.NoError(t, getErr, "the conversation record must survive a reported cascade failure, as the anchor for the retry")
+	assert.Equal(t, []string{racingID}, conversationIndexMembers(t, store, conversationID),
+		"the response that outran the cascade must still be indexed, so a retry can find and delete it")
+}
