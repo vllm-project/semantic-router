@@ -322,6 +322,11 @@ def test_entrypoints_must_reference_known_recipe():
     errors = validate_user_config(recipe_config(recipe_name="missing-recipe"))
 
     assert any("unknown recipe 'missing-recipe'" in error.message for error in errors)
+    assert any(
+        error.hint and "name of a recipe" in error.hint
+        for error in errors
+        if "unknown recipe 'missing-recipe'" in error.message
+    )
 
 
 def test_entrypoint_names_cannot_collide_with_provider_models():
@@ -331,6 +336,11 @@ def test_entrypoint_names_cannot_collide_with_provider_models():
     errors = validate_user_config(config)
 
     assert any("conflicts with a configured model" in error.message for error in errors)
+    assert any(
+        error.hint and "distinct entrypoint model name" in error.hint
+        for error in errors
+        if "conflicts with a configured model" in error.message
+    )
 
 
 def test_recipes_only_default_profile_is_allowed():
@@ -357,6 +367,11 @@ def test_explicit_default_recipe_conflicts_with_top_level_strategy():
     errors = validate_user_config(config)
 
     assert any("Duplicate recipe name 'default'" in error.message for error in errors)
+    assert any(
+        error.hint and "unique name" in error.hint
+        for error in errors
+        if "Duplicate recipe name 'default'" in error.message
+    )
 
 
 def test_decision_adaptation_mode_boundaries_apply_inside_recipes():
@@ -557,6 +572,11 @@ def test_default_looper_aliases_are_reserved_for_entrypoints():
     errors = validate_user_config(config)
 
     assert any("reserved alias" in error.message for error in errors)
+    assert any(
+        error.hint and "distinct entrypoint model name" in error.hint
+        for error in errors
+        if "reserved alias" in error.message
+    )
 
 
 def test_nullable_global_sections_do_not_crash_validation():
