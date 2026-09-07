@@ -17,6 +17,10 @@ from test_plugin_parsing import _write_config
 class TestExternalAPIRAGBackend:
     """Typed request-format contracts for `backend: external_api`."""
 
+    @pytest.mark.parametrize(
+        "request_format",
+        ["pinecone", "weaviate", "elasticsearch", "custom"],
+    )
     def test_external_api_accepts_router_supported_request_formats(
         self, request_format
     ):
