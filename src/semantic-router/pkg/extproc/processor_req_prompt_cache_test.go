@@ -57,8 +57,8 @@ func TestEncodeDispatchRequestInjectsAnthropicPromptCacheMarkers(t *testing.T) {
 	}
 
 	var wire promptCacheWireRequest
-	if err := json.Unmarshal(body, &wire); err != nil {
-		t.Fatalf("decode Anthropic request: %v", err)
+	if decodeErr := json.Unmarshal(body, &wire); decodeErr != nil {
+		t.Fatalf("decode Anthropic request: %v", decodeErr)
 	}
 	assertPromptCacheWireRequest(t, wire)
 	assertPromptCacheReceipt(t, ctx, promptCacheActionInserted, 2, 0)
