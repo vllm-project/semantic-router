@@ -206,3 +206,17 @@ Still manual, split into two targets so exit status stays meaningful:
 - Executable entrypoints: [../../tools/make/agent.mk](../../../tools/make/agent.mk)
 - Done criteria: [feature-complete-checklist.md](feature-complete-checklist.md)
 - Local testcase rules: [../../e2e/testcases/AGENTS.md](../../../e2e/testcases/AGENTS.md)
+
+## Agent Routing Protection CI
+
+The core `Test And Build` workflow runs `make bench-agent-routing-protection`
+after CPU native bindings are available and before external services or model
+downloads. A failing benchmark fails the core job. The workflow uploads
+`.agent-harness/agent-routing-protection/report.json` as the
+`agent-routing-protection` artifact with `if: always()` so assertion failures
+remain inspectable. Setup failures that prevent report creation remain job
+failures and produce an artifact warning.
+
+This production Go protection baseline is separate from the lightweight Python
+architecture evaluation in `router-learning-eval.yml`. Both retain their
+existing job ownership and PR gating paths.

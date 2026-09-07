@@ -191,6 +191,14 @@ class PRChangeClassifierTests(unittest.TestCase):
 
                 self.assertIn("core-tests", result.selected_jobs)
 
+    def test_protection_corpus_changes_select_core_benchmark_job(self) -> None:
+        result = classify(
+            [
+                "src/semantic-router/pkg/extproc/testdata/router_learning_sessions.v1.yaml"
+            ]
+        )
+        self.assertIn("core-tests", result.selected_jobs)
+
     def test_unrelated_website_docs_do_not_select_core_tests(self) -> None:
         """The api-docs rule must not drag ordinary docs edits into core-tests."""
         result = classify(["website/docs/community/development.md"])
