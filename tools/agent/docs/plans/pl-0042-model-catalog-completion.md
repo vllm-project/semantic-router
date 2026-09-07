@@ -36,13 +36,13 @@ runtime behavior.
 
 - [x] `TASK-01` Close metadata and reasoning-control audit findings.
 - [x] `TASK-02` Complete provider wire-contract and validation tests.
-- [ ] `TASK-03` Run local and AMD validation, fixing failures locally.
+- [x] `TASK-03` Run local and AMD validation, fixing failures locally.
 - [ ] `TASK-04` Rebase, push, and drive PR CI green.
-- [ ] `TASK-05` Deploy and inspect Website and Dashboard previews.
+- [x] `TASK-05` Deploy and inspect Website and Dashboard previews.
 
 ## Next Action
 
-Finish the AMD feature gates and live request validation, then rebase and push.
+Drive the latest rebased pull-request head through every required CI check.
 
 ## Operating Rules
 
