@@ -27,7 +27,6 @@ func TestHandleLooperExecution_TwoIndependentRequestsPauseResume(t *testing.T) {
 		config.WorkflowStateBackendFile,
 		config.WorkflowStateBackendRedis,
 	} {
-		backend := backend
 		t.Run(backend, func(t *testing.T) {
 			t.Parallel()
 			server, tracker := newWorkflowPauseResumeServer(t)
@@ -71,7 +70,6 @@ func TestHandleLooperExecution_WorkflowConcurrentTakeExactlyOnce(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	for i := 0; i < 2; i++ {
-		i := i
 		go func() {
 			defer wg.Done()
 			resp, err := routeWorkflowRequestErr(router, resumeBody)
