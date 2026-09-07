@@ -78,12 +78,16 @@ var _ = Describe("Response stage jailbreak signal", func() {
 		Expect(matched).To(BeTrue())
 	})
 
-	Describe("lowestResponseJailbreakThreshold", func() {
-		It("takes the most permissive rule so one call serves them all", func() {
-			Expect(lowestResponseJailbreakThreshold([]config.JailbreakRule{
-				{Name: "lenient", Threshold: 0.9},
-				{Name: "strict", Threshold: 0.4},
-			})).To(BeNumerically("~", 0.4, 1e-6))
-		})
+	// A rule that matched is enforced even when a stricter rule was left
+	// unresolved by the same partial scan: reporting the response as
+	// unresolved would send a real detection through the on_error policy.
+	It("reports a match even when another rule is unresolved", func() {
+		router, ctx := newRouter(responseRule, config.JailbreakRule{Name: "strict", Threshold: 0.95, Direction: config.SignalDirectionResponse})
+		ctx.VSRSignalErrors = map[string]string{"jailbreak:strict": "response_jailbreak_evaluation_failed"}
+		ctx.VSRMatchedResponseJailbreak = []string{"unsafe_completion"}
+
+		matched, resolved := router.responseJailbreakSignalOutcome(ctx)
+		Expect(matched).To(BeTrue())
+		Expect(resolved).To(BeTrue())
 	})
 })

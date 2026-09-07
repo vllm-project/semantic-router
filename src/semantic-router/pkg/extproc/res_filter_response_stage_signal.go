@@ -38,50 +38,38 @@ func (r *OpenAIRouter) evaluateResponseJailbreakSignal(ctx *RequestContext, assi
 	if classifier == nil || !classifier.IsJailbreakEnabled() {
 		// Declared but unbacked. Unresolved rather than clean, so the plugin
 		// applies its failure policy instead of reading silence as safe.
-		r.publishResponseJailbreakSignal(ctx, rules, 0, false)
+		r.publishResponseJailbreakSignal(ctx, rules, nil)
 		return
 	}
 	if assistantContent == "" {
 		// Nothing to score. semanticAssistantContent collects text and refusal
 		// blocks only, so a response made entirely of tool calls or media lands
 		// here, and "could not look" is not "looked and found nothing".
-		r.publishResponseJailbreakSignal(ctx, rules, 0, false)
+		r.publishResponseJailbreakSignal(ctx, rules, nil)
 		return
 	}
 
-	// One call serves every rule: they ask the same model the same question
-	// about the same text and differ only in where they draw the line. The
-	// threshold passed here only decides the boolean this call returns, which
-	// is discarded; each rule thresholds the score itself.
+	// One scan serves every rule: they ask the same model the same question
+	// about the same text and differ only in where they draw the line, so the
+	// scan draws none and each rule thresholds the score itself. It also
+	// reports whether the whole response was scored, which no single threshold
+	// can answer for every rule.
 	start := time.Now()
-	_, jailbreakType, _, riskScore, err := classifier.CheckForJailbreakRiskWithThreshold(
-		selectionRequestContext(ctx), assistantContent, lowestResponseJailbreakThreshold(rules))
+	scan, err := classifier.ScanJailbreakRisk(selectionRequestContext(ctx), assistantContent)
 	latency := time.Since(start).Seconds()
 
 	if err != nil {
 		logging.Errorf("Response jailbreak signal evaluation failed: %v", err)
 		metrics.RecordPluginError("response_jailbreak", "detection_error")
-		r.publishResponseJailbreakSignal(ctx, rules, 0, false)
+		r.publishResponseJailbreakSignal(ctx, rules, nil)
 		return
 	}
 	for _, rule := range rules {
 		metrics.RecordSignalExtraction(config.SignalTypeJailbreak, rule.Name, latency)
 	}
-	ctx.VSRResponseJailbreakType = jailbreakType
-	ctx.VSRResponseJailbreakRisk = riskScore
-	r.publishResponseJailbreakSignal(ctx, rules, riskScore, true)
-}
-
-// lowestResponseJailbreakThreshold returns the most permissive declared
-// threshold, so the single classify call is never the reason a rule misses.
-func lowestResponseJailbreakThreshold(rules []config.JailbreakRule) float32 {
-	lowest := float32(1)
-	for _, rule := range rules {
-		if rule.Threshold < lowest {
-			lowest = rule.Threshold
-		}
-	}
-	return lowest
+	ctx.VSRResponseJailbreakType = scan.Type
+	ctx.VSRResponseJailbreakRisk = scan.RiskScore
+	r.publishResponseJailbreakSignal(ctx, rules, &scan)
 }
 
 // responseJailbreakSignalDeclared reports whether the selected recipe declares
@@ -93,9 +81,17 @@ func (r *OpenAIRouter) responseJailbreakSignalDeclared(ctx *RequestContext) bool
 
 // responseJailbreakSignalOutcome reads the published signal back for the
 // plugin: whether any declared rule matched, and whether the detector resolved.
+//
+// A match outranks another rule's failure. A partial scan can match a
+// permissive rule and leave a stricter one unresolved, and reporting that as
+// unresolved would send a real detection through on_error, which under
+// on_error: allow would let the matched response through.
 func (r *OpenAIRouter) responseJailbreakSignalOutcome(ctx *RequestContext) (matched bool, resolved bool) {
 	if ctx == nil {
 		return false, false
+	}
+	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
+		return true, true
 	}
 	for _, rule := range r.responseJailbreakRules(ctx) {
 		if _, failed := ctx.VSRSignalErrors[signalKey(config.SignalTypeJailbreak, rule.Name)]; failed {

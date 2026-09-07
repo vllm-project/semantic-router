@@ -98,7 +98,11 @@ An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,
 rather than looking like a clean response. A response is clean only when every
 chunk of it was scored: a chunk the backend failed on leaves the rule
-unresolved unless another chunk matched. Streaming responses are not scored.
+unresolved unless the score the other chunks produced already matches it. The
+response is scored once and each rule draws its own line across that score, so
+a partial scan is resolved per rule: a score of 0.5 matches a rule at 0.4 and
+leaves a rule at 0.9 unresolved, because the chunk that was never scored is
+where a higher score would have been. Streaming responses are not scored.
 
 ## Dependencies and Limitations
 

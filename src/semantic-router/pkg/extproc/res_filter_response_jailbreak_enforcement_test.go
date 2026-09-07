@@ -151,15 +151,18 @@ func responseStageDecision(name, action string) config.Decision {
 }
 
 // newResponseStageRouter wires a single-profile router whose jailbreak backend
-// is server, with one response-direction jailbreak rule and one decision,
-// selected at request time by a keyword, whose response_jailbreak plugin
-// carries routeAction when it is set.
-func newResponseStageRouter(t *testing.T, server *httptest.Server, onError string, routeAction string) (*OpenAIRouter, *RequestContext) {
+// is server, with one decision selected at request time by a keyword, whose
+// response_jailbreak plugin carries routeAction when it is set, and the given
+// response-direction jailbreak rules (the single default rule when none).
+func newResponseStageRouter(t *testing.T, server *httptest.Server, onError string, routeAction string, rules ...config.JailbreakRule) (*OpenAIRouter, *RequestContext) {
 	t.Helper()
 
+	if len(rules) == 0 {
+		rules = []config.JailbreakRule{responseStageRule()}
+	}
 	cfg := responseStageGuardConfig(t, server, onError)
 	cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
-	cfg.JailbreakRules = []config.JailbreakRule{responseStageRule()}
+	cfg.JailbreakRules = rules
 	cfg.Decisions = []config.Decision{responseStageDecision(responseStageRouteName, routeAction)}
 
 	classifier, err := classification.NewClassifier(cfg, nil, nil, responseStageJailbreakMapping())
@@ -330,6 +333,39 @@ func TestResponseJailbreakPartialScanFailureIsNotClean(t *testing.T) {
 		}
 		assertBlocked(t, router, ctx, content)
 	})
+}
+
+// Two rules drawing different lines resolve one partial scan separately. The
+// score the scanned chunks produced clears the permissive rule, so that rule
+// matched; it says nothing about the strict rule, whose higher score could
+// have been in the chunk the backend never scored, so that rule is unresolved
+// rather than clean.
+func TestResponseJailbreakPartialScanIsResolvedPerRuleThreshold(t *testing.T) {
+	const strictRuleKey = "jailbreak:strict_completion"
+	content := responseStageFailingChunkMarker + " " +
+		strings.Repeat("Sailors used the stars, then the compass, then radio beacons. ", 60) +
+		"That is the whole history of navigation."
+
+	server, counts := newJailbreakPartialFailureServer(t, 0.5, 0.5)
+	router, ctx := newResponseStageRouter(t, server, config.OnErrorBlock, "block",
+		config.JailbreakRule{Name: responseStageRuleName, Threshold: 0.4, Direction: config.SignalDirectionResponse},
+		config.JailbreakRule{Name: "strict_completion", Threshold: 0.9, Direction: config.SignalDirectionResponse})
+
+	router.evaluateResponseJailbreakSignal(ctx, content)
+
+	if counts.failed.Load() == 0 || counts.scored.Load() == 0 {
+		t.Fatalf("fixture must fail one chunk and score another, backend saw failed=%d scored=%d", counts.failed.Load(), counts.scored.Load())
+	}
+	if got := ctx.VSRSignalErrors[strictRuleKey]; got != "response_jailbreak_evaluation_failed" {
+		t.Fatalf("strict rule error = %q, want the partial scan recorded under %s: 0.5 does not clear 0.9", got, strictRuleKey)
+	}
+	if _, ok := ctx.VSRSignalConfidences[strictRuleKey]; ok {
+		t.Fatal("a rule the scan could not clear must not report a score that reads as clean")
+	}
+	if len(ctx.VSRMatchedResponseJailbreak) != 1 || ctx.VSRMatchedResponseJailbreak[0] != responseStageRuleName {
+		t.Fatalf("matched response rules = %v, want [%s]: a match stands past a failed chunk", ctx.VSRMatchedResponseJailbreak, responseStageRuleName)
+	}
+	assertBlocked(t, router, ctx, content)
 }
 
 // A named entrypoint's recipe declares the response-direction rule and the

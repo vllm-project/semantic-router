@@ -259,11 +259,11 @@ func (r *OpenAIRouter) responseJailbreakWarningCode(ctx *RequestContext) string 
 // plugins read one shape.
 //
 // The plugin still enforces. This only publishes the evidence it acts on.
-func (r *OpenAIRouter) publishResponseJailbreakSignal(ctx *RequestContext, rules []config.JailbreakRule, riskScore float32, resolved bool) {
+func (r *OpenAIRouter) publishResponseJailbreakSignal(ctx *RequestContext, rules []config.JailbreakRule, scan *classification.JailbreakScan) {
 	if ctx == nil {
 		return
 	}
-	signal := classification.EvaluateResponseJailbreakSignal(rules, riskScore, resolved)
+	signal := classification.EvaluateResponseJailbreakSignal(rules, scan)
 	if signal == nil {
 		return
 	}
