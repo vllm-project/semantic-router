@@ -33,13 +33,15 @@ jobs:
         run: |
           # Keep the exporter stack compatible with OpenVINO 2025.1.
           # Newer NNCF releases require OpenVINO integer types added after 2025.1.
+          # Optimum 1.x also relies on pre-1.0 Hub APIs and the pre-2.9 ONNX layout.
           pip3 install --no-cache-dir \
             openvino==2025.1.0 \
             openvino-tokenizers==2025.1.0 \
             'optimum-intel[openvino]==1.23.0' \
             nncf==2.16.0 \
             Pillow \
-            'huggingface_hub[cli]<1.0'
+            'huggingface_hub[cli]<1.0' \
+            'torch<2.9'
 
       - name: Build OpenVINO C++ library
         run: |
