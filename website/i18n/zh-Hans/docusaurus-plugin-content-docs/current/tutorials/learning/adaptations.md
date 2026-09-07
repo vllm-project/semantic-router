@@ -2,7 +2,7 @@
 translation:
   source_commit: "ad233487"
   source_file: "docs/tutorials/learning/adaptations.md"
-  outdated: false
+  outdated: true
 ---
 
 # 自适应（Adaptation）
