@@ -37,7 +37,7 @@ func assertTransformationProtocolRoundTrip(t *testing.T, format llmprotocol.Wire
 		t.Fatal(err)
 	}
 	ir := ParseSemanticRequest(&request, Provenance{})
-	if err := ir.ApplySteps(context.Background(), []TransformationStep{{Kind: TransformReset}}); err != nil {
+	if err = ir.ApplySteps(context.Background(), []TransformationStep{{Kind: TransformReset}}); err != nil {
 		t.Fatal(err)
 	}
 	unchanged, err := engine.EncodeRequest(format, request, envelope)
@@ -47,7 +47,7 @@ func assertTransformationProtocolRoundTrip(t *testing.T, format llmprotocol.Wire
 	if !bytes.Equal(baseline.Body, unchanged.Body) {
 		t.Fatal("disabled plan changed provider bytes")
 	}
-	if err := ir.ApplySteps(context.Background(), []TransformationStep{removalStep(TransformSelectTurns, 0, 1)}); err != nil {
+	if err = ir.ApplySteps(context.Background(), []TransformationStep{removalStep(TransformSelectTurns, 0, 1)}); err != nil {
 		t.Fatal(err)
 	}
 	result, err := engine.EncodeRequest(format, request, envelope)
@@ -68,8 +68,10 @@ func assertTransformationProtocolRoundTrip(t *testing.T, format llmprotocol.Wire
 
 func TestTransformationRawHistoryRetainsUnknownFields(t *testing.T) {
 	body := map[string]interface{}{"model": "model", "vendor_extension": map[string]interface{}{"keep": true}, "messages": []interface{}{
-		map[string]interface{}{"role": "user", "content": "old"}, map[string]interface{}{"role": "assistant", "content": "answer"},
-		map[string]interface{}{"role": "user", "content": "second"}, map[string]interface{}{"role": "assistant", "content": "second answer"},
+		map[string]interface{}{"role": "user", "content": "old"},
+		map[string]interface{}{"role": "assistant", "content": "answer"},
+		map[string]interface{}{"role": "user", "content": "second"},
+		map[string]interface{}{"role": "assistant", "content": "second answer"},
 		map[string]interface{}{"role": "user", "content": "live", "vendor_metadata": "keep"},
 	}}
 	ir := ParseRequestIR(body, Provenance{})

@@ -29,7 +29,8 @@ func textMessage(role llmprotocol.Role, text string) llmprotocol.Message {
 }
 
 func removalStep(kind TransformationKind, ids ...int) TransformationStep {
-	return TransformationStep{Kind: kind, Enabled: true, FailureMode: FailureClosed,
+	return TransformationStep{
+		Kind: kind, Enabled: true, FailureMode: FailureClosed,
 		Propose: func(context.Context, TransformationView) (TransformationEdits, error) {
 			return TransformationEdits{RemoveMessages: ids}, nil
 		},
@@ -64,8 +65,12 @@ func TestTransformationRejectsPartialAndProtectedEdits(t *testing.T) {
 		ids        []int
 		protection Protection
 	}{
-		{"partial_turn", []int{0}, 0}, {"live_turn", []int{4}, 0}, {"unknown_message", []int{99}, 0},
-		{"duplicate_edit", []int{0, 0, 1}, 0}, {"authorization", []int{0, 1}, ProtectAuthorization}, {"safety", []int{0, 1}, ProtectSafety},
+		{"partial_turn", []int{0}, 0},
+		{"live_turn", []int{4}, 0},
+		{"unknown_message", []int{99}, 0},
+		{"duplicate_edit", []int{0, 0, 1}, 0},
+		{"authorization", []int{0, 1}, ProtectAuthorization},
+		{"safety", []int{0, 1}, ProtectSafety},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := historyFixture()
@@ -90,11 +95,13 @@ func TestTransformationFailureModesAndDetachedView(t *testing.T) {
 			request := historyFixture()
 			ir := ParseSemanticRequest(request, Provenance{})
 			calls := 0
-			steps := []TransformationStep{{Kind: TransformReset, Enabled: true, FailureMode: mode,
+			steps := []TransformationStep{{
+				Kind: TransformReset, Enabled: true, FailureMode: mode,
 				Propose: func(_ context.Context, view TransformationView) (TransformationEdits, error) {
 					view.Messages[0].Blocks[0].Text = "secret mutation"
 					return TransformationEdits{RemoveMessages: []int{0, 1}}, errors.New("private customer text")
-				}}, {Kind: TransformSelectTurns, Enabled: true, Propose: func(context.Context, TransformationView) (TransformationEdits, error) {
+				},
+			}, {Kind: TransformSelectTurns, Enabled: true, Propose: func(context.Context, TransformationView) (TransformationEdits, error) {
 				calls++
 				return TransformationEdits{}, nil
 			}}}
