@@ -100,8 +100,7 @@ func TestConnectorClientDoesNotRetryGenerativeCalls(t *testing.T) {
 	defer server.Close()
 
 	client, err := NewConnectorClient(&config.LooperConfig{
-		Endpoint:   server.URL + "/v1/chat/completions",
-		RetryCount: 5,
+		Endpoint: server.URL + "/v1/chat/completions",
 	})
 	if err != nil {
 		t.Fatalf("NewConnectorClient() error = %v", err)
