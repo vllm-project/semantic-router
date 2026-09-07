@@ -6,11 +6,14 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type routingYAMLDocument struct {
-	Routing config.CanonicalRouting `yaml:"routing"`
+	Routing     config.CanonicalRouting      `yaml:"routing"`
+	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
 }
 
 // EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
@@ -28,8 +31,11 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
+	canonical := config.CanonicalConfigFromRouterConfig(cfg)
 	doc := routingYAMLDocument{
-		Routing: config.CanonicalRoutingFromRouterConfig(cfg),
+		Routing:     canonical.Routing,
+		Entrypoints: canonical.Entrypoints,
+		Recipes:     canonical.Recipes,
 	}
 	return yaml.Marshal(doc)
 }
@@ -39,6 +45,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d := &decompiler{cfg: cfg}
 	d.pluginTemplates = make(map[string]*pluginTemplate)
 	d.extractPluginTemplates()
+	d.decompileRoutingStrategy()
 
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
@@ -63,11 +70,19 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 // DecompileRoutingToAST converts runtime config to a routing-only AST.
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
-	prog := &Program{}
+	prog := &Program{Strategy: string(cfg.Strategy)}
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
+}
+
+func (d *decompiler) decompileRoutingStrategy() {
+	if d.cfg.Strategy == "" {
+		return
+	}
+	d.writeSection("ROUTING PROFILE")
+	d.write("ROUTING {\n  strategy: %s\n}\n\n", d.cfg.Strategy)
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {
@@ -231,11 +246,8 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if model.QualityScore != 0 {
-		d.write(
-			"  quality_score: %s\n",
-			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
-		)
+	if len(model.Evaluations) > 0 {
+		d.write("  evaluations: %s\n", formatDSLFieldValue(evaluationsValue(model.Evaluations)))
 	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
@@ -299,13 +311,40 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
 	}
-	if model.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.QualityScore}
+	if len(model.Evaluations) > 0 {
+		fields["evaluations"] = evaluationsValue(model.Evaluations)
 	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
+}
+
+func evaluationsValue(evaluations []modelcatalog.UserEvaluation) ArrayValue {
+	items := make([]Value, 0, len(evaluations))
+	for _, evaluation := range evaluations {
+		fields := map[string]Value{
+			"benchmark": StringValue{V: evaluation.Benchmark},
+		}
+		if len(evaluation.Metrics) > 0 {
+			metrics := make(map[string]Value, len(evaluation.Metrics))
+			for name, value := range evaluation.Metrics {
+				metrics[name] = FloatValue{V: value}
+			}
+			fields["metrics"] = ObjectValue{Fields: metrics}
+		}
+		if evaluation.Source != "" {
+			fields["source"] = StringValue{V: evaluation.Source}
+		}
+		if evaluation.MeasuredAt != "" {
+			fields["measured_at"] = StringValue{V: evaluation.MeasuredAt}
+		}
+		if len(evaluation.Metadata) > 0 {
+			fields["metadata"] = interfaceMapObjectValue(evaluation.Metadata)
+		}
+		items = append(items, ObjectValue{Fields: fields})
+	}
+	return ArrayValue{Items: items}
 }
 
 func quotedStringArray(values []string) string {

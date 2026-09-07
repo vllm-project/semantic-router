@@ -21,6 +21,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -32,6 +33,30 @@ const emaAlpha = 0.2
 // same Decision group that are still considered part of the same session.
 // Records separated by more than this duration start a new pseudo-session.
 const sessionWindowDuration = 30 * time.Minute
+
+type handoffTransition struct {
+	recipeScope string
+	fromModel   string
+	toModel     string
+}
+
+func (t handoffTransition) lookupKey() Key {
+	return ScopedHandoffPenaltyKey(t.recipeScope, t.fromModel, t.toModel)
+}
+
+type handoffAccumulator struct {
+	ema         float64
+	sampleCount int
+}
+
+func (a *handoffAccumulator) observe(delta float64) {
+	if a.sampleCount == 0 {
+		a.ema = delta
+	} else {
+		a.ema = emaAlpha*delta + (1-emaAlpha)*a.ema
+	}
+	a.sampleCount++
+}
 
 // Builder derives lookup table entries from router replay records.
 //
@@ -115,14 +140,15 @@ func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry,
 		if r.Category == "" || r.SelectedModel == "" || r.ConfidenceScore == 0 {
 			continue
 		}
-		if _, ok := acc[r.Category]; !ok {
-			acc[r.Category] = make(map[string]*scoreAcc)
+		category := config.RoutingNamespaceKey(config.RecipeName(r.Recipe), r.Category)
+		if _, ok := acc[category]; !ok {
+			acc[category] = make(map[string]*scoreAcc)
 		}
-		if _, ok := acc[r.Category][r.SelectedModel]; !ok {
-			acc[r.Category][r.SelectedModel] = &scoreAcc{}
+		if _, ok := acc[category][r.SelectedModel]; !ok {
+			acc[category][r.SelectedModel] = &scoreAcc{}
 		}
-		acc[r.Category][r.SelectedModel].sum += r.ConfidenceScore
-		acc[r.Category][r.SelectedModel].n++
+		acc[category][r.SelectedModel].sum += r.ConfidenceScore
+		acc[category][r.SelectedModel].n++
 	}
 
 	for category, models := range acc {
@@ -164,7 +190,8 @@ func groupIntoSessions(records []store.Record) [][]store.Record {
 	// Group by Decision first.
 	byDecision := make(map[string][]store.Record)
 	for _, r := range records {
-		byDecision[r.Decision] = append(byDecision[r.Decision], r)
+		decision := config.RoutingDecisionKey(config.RecipeName(r.Recipe), r.Decision)
+		byDecision[decision] = append(byDecision[decision], r)
 	}
 
 	var sessions [][]store.Record
@@ -191,50 +218,66 @@ func groupIntoSessions(records []store.Record) [][]store.Record {
 // deriveHandoffPenalties detects model switches within pseudo-sessions and
 // computes the associated cost delta via EMA.
 func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]Entry, window string) {
-	sessions := groupIntoSessions(records)
-
-	// (from, to) → EMA value + sample count
-	type switchAcc struct {
-		ema float64
-		n   int
-	}
-	acc := make(map[[2]string]*switchAcc)
-
-	for _, recs := range sessions {
-		for i := 1; i < len(recs); i++ {
-			prev, cur := recs[i-1], recs[i]
-			if prev.SelectedModel == "" || cur.SelectedModel == "" {
-				continue
-			}
-			if prev.SelectedModel == cur.SelectedModel {
-				continue
-			}
-			// Model switch detected. Skip when cost data is missing on either
-			// side to avoid biasing the EMA toward zero for unknown costs.
-			delta, ok := costDelta(prev, cur)
-			if !ok {
-				continue
-			}
-			pair := [2]string{prev.SelectedModel, cur.SelectedModel}
-			if _, ok := acc[pair]; !ok {
-				acc[pair] = &switchAcc{ema: delta}
-			} else {
-				acc[pair].ema = emaAlpha*delta + (1-emaAlpha)*acc[pair].ema
-			}
-			acc[pair].n++
-		}
-	}
-
-	for pair, a := range acc {
-		key := HandoffPenaltyKey(pair[0], pair[1])
-		batch[key] = Entry{
-			Value:             a.ema,
+	accumulators := accumulateHandoffPenalties(groupIntoSessions(records))
+	updatedAt := time.Now()
+	for transition, accumulator := range accumulators {
+		batch[transition.lookupKey()] = Entry{
+			Value:             accumulator.ema,
 			Source:            SourceReplayDerived,
-			UpdatedAt:         time.Now(),
-			SampleCount:       a.n,
+			UpdatedAt:         updatedAt,
+			SampleCount:       accumulator.sampleCount,
 			AggregationWindow: window,
 		}
 	}
+}
+
+func accumulateHandoffPenalties(sessions [][]store.Record) map[handoffTransition]*handoffAccumulator {
+	accumulators := make(map[handoffTransition]*handoffAccumulator)
+	for _, records := range sessions {
+		accumulateSessionHandoffs(records, accumulators)
+	}
+	return accumulators
+}
+
+func accumulateSessionHandoffs(
+	records []store.Record,
+	accumulators map[handoffTransition]*handoffAccumulator,
+) {
+	for index := 1; index < len(records); index++ {
+		transition, delta, ok := handoffSample(records[index-1], records[index])
+		if !ok {
+			continue
+		}
+		accumulator := accumulators[transition]
+		if accumulator == nil {
+			accumulator = &handoffAccumulator{}
+			accumulators[transition] = accumulator
+		}
+		accumulator.observe(delta)
+	}
+}
+
+func handoffSample(previous, current store.Record) (handoffTransition, float64, bool) {
+	if previous.SelectedModel == "" || current.SelectedModel == "" || previous.SelectedModel == current.SelectedModel {
+		return handoffTransition{}, 0, false
+	}
+	// Unknown costs must not bias the EMA toward zero.
+	delta, ok := costDelta(previous, current)
+	if !ok {
+		return handoffTransition{}, 0, false
+	}
+	return handoffTransition{
+		recipeScope: handoffRecipeScope(previous.Recipe),
+		fromModel:   previous.SelectedModel,
+		toModel:     current.SelectedModel,
+	}, delta, true
+}
+
+func handoffRecipeScope(recipe string) string {
+	if recipe == string(config.DefaultRecipeName) {
+		return ""
+	}
+	return recipe
 }
 
 // deriveRemainingTurnPriors estimates the expected number of remaining turns
@@ -257,7 +300,7 @@ func (b *Builder) deriveRemainingTurnPriors(records []store.Record, batch map[Ke
 		seen := make(map[string]bool)
 		for _, r := range recs {
 			if r.Category != "" {
-				seen[r.Category] = true
+				seen[config.RoutingNamespaceKey(config.RecipeName(r.Recipe), r.Category)] = true
 			}
 		}
 		for cat := range seen {

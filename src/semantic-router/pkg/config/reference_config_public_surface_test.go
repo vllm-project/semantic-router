@@ -12,23 +12,37 @@ func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface
 func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface{}) {
 	providers := mustMapAt(t, root, "providers")
 	defaults := mustMapAt(t, providers, "defaults")
-	reasoningFamilies := mustMapAt(t, defaults, "reasoning_families")
 	models := mustSliceAt(t, providers, "models")
 
 	assertMapCoversStructFields(t, providers, reflect.TypeOf(CanonicalProviders{}), "providers")
 	assertMapCoversStructFields(t, defaults, reflect.TypeOf(CanonicalProviderDefaults{}), "providers.defaults")
+	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
-		mapValuesToSlice(t, reasoningFamilies, "providers.defaults.reasoning_families"),
-		reflect.TypeOf(ReasoningFamilyConfig{}),
-		"providers.defaults.reasoning_families",
+		collectChildMapsFromSlice(t, models, "reasoning", "providers.models"),
+		reflect.TypeOf(CanonicalReasoning{}),
+		"providers.models[].reasoning",
 	)
-	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
 		reflect.TypeOf(CanonicalBackendRef{}),
 		"providers.models[].backend_refs",
+	)
+}
+
+func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, root, "entrypoints"),
+		reflect.TypeOf(CanonicalEntrypoint{}),
+		"entrypoints",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		mustSliceAt(t, root, "recipes"),
+		reflect.TypeOf(CanonicalRecipe{}),
+		"recipes",
 	)
 }
 
@@ -79,6 +93,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "events"), reflect.TypeOf(EventRule{}), "routing.signals.events")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "routing.signals.input_modality")
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {

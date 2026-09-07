@@ -198,7 +198,11 @@
     right: calc(0.75rem + env(safe-area-inset-right, 0px));
     bottom: calc(5.25rem + env(safe-area-inset-bottom, 0px));
     left: auto;
-    width: min(304px, calc(100vw - 1.5rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    box-sizing: border-box;
+    width: min(
+      304px,
+      calc(100% - 1.5rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))
+    );
     transform-origin: bottom right;
   }
 }

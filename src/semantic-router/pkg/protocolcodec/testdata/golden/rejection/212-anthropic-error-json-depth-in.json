@@ -1,0 +1,9 @@
+{
+  "operation": "error",
+  "limits": {"json_depth": 1},
+  "body": {
+    "type": "error",
+    "error": {"type": "overloaded_error", "message": "overloaded"},
+    "request_id": "req_depth"
+  }
+}

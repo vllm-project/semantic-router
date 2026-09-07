@@ -1,108 +1,56 @@
-# Semantic Router Test Suite
+# Specialized and legacy test utilities
 
-This test suite provides a progressive approach to testing the Semantic Router, following the data flow from client request to final response.
+This directory contains manual Python integration scripts and supporting test
+servers that predate or sit outside the Go E2E profile runner.
 
-## Test Flow
+For maintained Kubernetes profile coverage, start with
+[`e2e/README.md`](../README.md) and `make e2e-test`. Do not infer current CI
+coverage from a numbered script or a saved check mark in this directory.
 
-1. **00-client-request-test.py** - Basic client request tests ✅
-   - Tests sending requests to the Envoy proxy
-   - Verifies basic request formatting and endpoint availability
-   - Tests malformed request validation
-   - Tests content-based smart routing (math → Model-B, creative → Model-A)
+## Contents
 
-2. **01-envoy-extproc-test.py** - Envoy ExtProc interaction tests ✅
-   - Tests that Envoy correctly forwards requests to the ExtProc
-   - Checks header propagation and body modification
-   - Tests ExtProc error handling and performance impact
+- [`llm-katan/`](llm-katan/) provides a lightweight OpenAI-compatible test
+  server and echo backend.
+- [`anthropic-shim/`](anthropic-shim/) translates a llama.cpp-style backend to
+  the Anthropic Messages shape for a manual profile.
+- [`hallucination-demo/`](hallucination-demo/) runs a focused mock-tool demo.
+- [`vllm-sr-cli/`](vllm-sr-cli/) documents CLI unit and container integration
+  tests.
+- `run_response_api_suite.sh` drives the manual Responses API storage matrix.
+- numbered Python scripts probe individual API or routing paths and may require
+  a separately started Router, Envoy, or provider account.
 
-3. **02-router-classification-test.py** - Router classification tests ✅
-   - Tests category-based classification with auto model selection
-   - Verifies queries route to appropriate specialized models
-   - Tests classification consistency across identical requests
-   - Validates metrics collection for classification operations
+## Local manual stack
 
-4. **03-classification-api-test.py** - Classification API tests ✅
-   - Tests standalone Classification API service (port 8080)
-   - Validates intent classification for different query types
-   - Tests batch classification endpoint
-   - Verifies classification accuracy without LLM routing
-
-5. **04-model-routing-test.py** - TBD (To Be Developed)
-   - Tests that requests are routed to the correct backend model
-   - Verifies model header modifications
-
-6. **04-cache-test.py** - TBD (To Be Developed)
-   - Tests cache hit/miss behavior
-   - Verifies similarity thresholds
-   - Tests cache TTL
-
-7. **05-e2e-category-test.py** - TBD (To Be Developed)
-   - Tests math queries route to the math-specialized model
-   - Tests creative queries route to the creative-specialized model
-   - Tests other domain-specific routing
-
-8. **06-metrics-test.py** - TBD (To Be Developed)
-   - Tests Prometheus metrics endpoints
-   - Verifies correct metrics are being recorded
-
-9. **08-rag-openai-test.py** - RAG OpenAI E2E (direct_search and tool_based modes).
-
-10. **09-openai-api-validation-test.py** - OpenAI API validation E2E
-    - Validates Files, Vector Stores, and Vector Store Search API contract against upstream.
-    - Requires `OPENAI_API_KEY`. Skips all tests when not set.
-    - Run: `OPENAI_API_KEY=sk-... python e2e/testing/09-openai-api-validation-test.py`
-
-## Running Tests
-
-### Development Workflow (LLM Katan - Recommended)
-
-For fast development and testing with real tiny models (no GPU required):
+Use this only for a script that explicitly requires it:
 
 ```bash
-# Terminal 1: Start LLM Katan servers (shows request logs, Ctrl+C to stop)
-./e2e/testing/start-llm-katan.sh
+# Terminal 1: lightweight model backends
+e2e/testing/start-llm-katan.sh
 
-# Or manually start individual servers:
-llm-katan --model Qwen/Qwen3-0.6B --port 8000 --served-model-name "Model-A"
-llm-katan --model Qwen/Qwen3-0.6B --port 8001 --served-model-name "Model-B"
-
-# Terminal 2: Start Envoy proxy
+# Terminal 2: Envoy
 make run-envoy
 
-# Terminal 3: Start semantic router
+# Terminal 3: Router with the E2E config
 make run-router-e2e
-
-# Terminal 4: Run tests
-python e2e/testing/00-client-request-test.py    # Individual test
-python e2e/testing/run_all_tests.py             # All available tests
 ```
 
-**Note**: The LLM Katan servers use real tiny models for actual inference while being lightweight enough for development. The script runs in foreground mode, allowing you to see real-time request logs and use Ctrl+C to stop all servers cleanly.
-
-### Future: Production Testing (Real vLLM)
-
-Will be added in future PRs for testing with actual model inference.
-
-## Available Tests
-
-Currently implemented:
-
-- **00-client-request-test.py** ✅ - Complete client request validation and smart routing
-- **01-envoy-extproc-test.py** ✅ - Envoy ExtProc interaction and processing tests
-- **02-router-classification-test.py** ✅ - Router classification and model selection tests
-- **03-classification-api-test.py** ✅ - Standalone Classification API service tests
-
-Individual tests can be run with:
+Then run the named script, for example:
 
 ```bash
-python e2e/testing/00-client-request-test.py
-python e2e/testing/01-envoy-extproc-test.py
-python e2e/testing/02-router-classification-test.py
-python e2e/testing/03-classification-api-test.py
+python3 e2e/testing/00-client-request-test.py
 ```
 
-Or run all available tests with:
+Read the script before running it. Ports, credentials, dependencies, and
+assertion strength vary; some utilities are diagnostic rather than blocking.
 
-```bash
-python e2e/testing/run_all_tests.py
-```
+`09-openai-api-validation-test.py` sends requests to an external provider and
+requires `OPENAI_API_KEY`. It may incur cost and transfer test content outside
+the local environment.
+
+## Adding coverage
+
+Prefer a registered Go test case and profile when the behavior is a supported
+Kubernetes contract. Keep a standalone script only for a distinct runtime,
+provider, or manual diagnostic, and state its prerequisites and pass/fail
+condition beside it.

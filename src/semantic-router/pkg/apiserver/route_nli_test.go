@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +43,7 @@ func (s *nliTestService) DetectPII(_ services.PIIRequest) (*services.PIIResponse
 	panic("not implemented")
 }
 
-func (s *nliTestService) CheckSecurity(_ services.SecurityRequest) (*services.SecurityResponse, error) {
+func (s *nliTestService) CheckSecurity(_ context.Context, _ services.SecurityRequest) (*services.SecurityResponse, error) {
 	panic("not implemented")
 }
 

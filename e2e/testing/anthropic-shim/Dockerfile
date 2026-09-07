@@ -12,6 +12,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY anthropic_shim/ ./anthropic_shim/
+COPY schema_contract.json ./
 COPY pyproject.toml ./
 COPY README.md ./
 
@@ -23,9 +24,10 @@ USER shim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ANTHROPIC_SHIM_HOST=0.0.0.0 \
-    ANTHROPIC_SHIM_PORT=9080 \
-    ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8080
+    ANTHROPIC_SHIM_PORT=8080 \
+    ANTHROPIC_SHIM_UPSTREAM_URL=http://127.0.0.1:8081 \
+    ANTHROPIC_SHIM_OPENAI_UPSTREAM=true
 
-EXPOSE 9080
+EXPOSE 8080
 
 CMD ["python", "-m", "anthropic_shim"]

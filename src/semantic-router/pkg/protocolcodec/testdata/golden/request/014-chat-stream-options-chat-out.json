@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "content": "stream this",
+      "role": "user"
+    }
+  ],
+  "model": "routed-model",
+  "stream": true,
+  "stream_options": {
+    "include_obfuscation": true,
+    "include_usage": false
+  }
+}

@@ -6,7 +6,6 @@ type LooperConfig struct {
 	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
 	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
 	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
-	RetryCount         int                 `yaml:"retry_count,omitempty"`
 	Headers            map[string]string   `yaml:"headers,omitempty"`
 	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
 	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
@@ -210,7 +209,7 @@ type MilvusConfig struct {
 	} `json:"development" yaml:"development"`
 }
 
-type SemanticCache struct {
+type ResponseCacheStoreConfig struct {
 	BackendType         string        `yaml:"backend_type,omitempty"`
 	Enabled             bool          `yaml:"enabled"`
 	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
@@ -222,7 +221,13 @@ type SemanticCache struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	// PolarityGuard configures the negation/antonym guard; nil means the
+	// lexical default with the NLI tier off.
+	PolarityGuard *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
 }
+
+// SemanticCache is retained for source compatibility.
+type SemanticCache = ResponseCacheStoreConfig
 
 // QdrantConfig defines the complete configuration structure for Qdrant cache backend.
 type QdrantConfig struct {
@@ -245,7 +250,6 @@ type MemoryConfig struct {
 	Qdrant                     *MemoryQdrantConfig        `yaml:"qdrant,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
-	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
 	DefaultSimilarityThreshold float32                    `yaml:"default_similarity_threshold,omitempty"`
 	HybridSearch               bool                       `yaml:"hybrid_search,omitempty"`
@@ -372,13 +376,12 @@ type ResponseAPIRedisConfig struct {
 }
 
 // RouterReplayConfig controls routing-decision replay record storage.
-// StoreBackend defaults to "postgres" for durable, SQL-queryable storage
-// that survives router restarts. Supported backends: "postgres", "redis",
-// "milvus", "qdrant", "memory". Use "redis" for lightweight deployments that already
-// run Redis. Set to "memory" only for local development — all replay
-// records are lost when the router process exits.
+// Replay is disabled by default and uses an in-memory store when a decision
+// explicitly opts in without a global storage configuration. Supported
+// backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
+// deployments should explicitly enable replay and configure a durable backend.
 type RouterReplayConfig struct {
-	Enabled      bool                        `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Enabled      bool                        `json:"enabled" yaml:"enabled"`
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`

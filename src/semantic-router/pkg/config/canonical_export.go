@@ -3,6 +3,9 @@ package config
 import (
 	"fmt"
 	"sort"
+	"strings"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 // CanonicalConfigFromRouterConfig exports the canonical v0.3 config surface
@@ -18,22 +21,25 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
 				DefaultModel:           cfg.DefaultModel,
-				ReasoningFamilies:      copyReasoningFamilies(cfg.ReasoningFamilies),
 				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
-		Routing: CanonicalRoutingFromRouterConfig(cfg),
-		Global:  CanonicalGlobalFromRouterConfig(cfg),
+		Routing:     CanonicalRoutingFromRouterConfig(cfg),
+		Entrypoints: canonicalEntrypointsFromRouterConfig(cfg),
+		Recipes:     canonicalRecipesFromRouterConfig(cfg),
+		Global:      CanonicalGlobalFromRouterConfig(cfg),
 	}
 }
 
 // CanonicalStaticConfigFromRouterConfig exports the static canonical base used
 // by K8s CRD reconciliation. Dynamic routing state is expected to come from the
-// CRDs, so the routing block is intentionally left empty.
+// CRDs, so the routing block, entrypoints, and recipes are left empty.
 func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	canonical := CanonicalConfigFromRouterConfig(cfg)
 	canonical.Routing = CanonicalRouting{}
+	canonical.Entrypoints = nil
+	canonical.Recipes = nil
 	return canonical
 }
 
@@ -47,44 +53,190 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 
 	return CanonicalRouting{
 		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
 		Decisions:   copyDecisions(cfg.Decisions),
+		Strategy:    cfg.Strategy,
 	}
 }
 
-func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
+func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 	return CanonicalSignals{
-		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
-		Domains:       append([]Category(nil), cfg.Categories...),
-		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
-		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
-		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
-		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
-		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
-		Context:       append([]ContextRule(nil), cfg.ContextRules...),
-		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
-		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
-		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
-		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
-		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
-		PII:           append([]PIIRule(nil), cfg.PIIRules...),
-		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
-		Conversation:  append([]ConversationRule(nil), cfg.ConversationRules...),
-		EventRules:    append([]EventRule(nil), cfg.EventRules...),
+		Keywords:      append([]KeywordRule(nil), signals.KeywordRules...),
+		Embeddings:    append([]EmbeddingRule(nil), signals.EmbeddingRules...),
+		Domains:       append([]Category(nil), signals.Categories...),
+		FactCheck:     append([]FactCheckRule(nil), signals.FactCheckRules...),
+		UserFeedbacks: append([]UserFeedbackRule(nil), signals.UserFeedbackRules...),
+		Reasks:        append([]ReaskRule(nil), signals.ReaskRules...),
+		Preferences:   append([]PreferenceRule(nil), signals.PreferenceRules...),
+		Language:      append([]LanguageRule(nil), signals.LanguageRules...),
+		Context:       append([]ContextRule(nil), signals.ContextRules...),
+		Structure:     append([]StructureRule(nil), signals.StructureRules...),
+		Complexity:    append([]ComplexityRule(nil), signals.ComplexityRules...),
+		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
+		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
+		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		PII:           append([]PIIRule(nil), signals.PIIRules...),
+		KB:            append([]KBSignalRule(nil), signals.KBRules...),
+		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
+		EventRules:    append([]EventRule(nil), signals.EventRules...),
+		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
+		Classifiers:   append([]ClassifierSignalRule(nil), signals.ClassifierRules...),
+		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 	}
 }
 
-func canonicalProjectionsFromRouterConfig(cfg *RouterConfig) CanonicalProjections {
+func canonicalProjectionsFromProjections(projections Projections) CanonicalProjections {
 	return CanonicalProjections{
-		Partitions: append([]ProjectionPartition(nil), cfg.Projections.Partitions...),
-		Scores:     append([]ProjectionScore(nil), cfg.Projections.Scores...),
-		Mappings:   append([]ProjectionMapping(nil), cfg.Projections.Mappings...),
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
 	}
 }
 
 func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
+	if cfg.EffectiveModelRegistry != nil {
+		return routingModelOverridesFromEffectiveRegistry(cfg)
+	}
+	return routingModelsFromRuntimeConfig(cfg)
+}
+
+func routingModelOverridesFromEffectiveRegistry(cfg *RouterConfig) []RoutingModel {
+	modelsByCard := make(map[string]RoutingModel)
+	for _, effective := range cfg.EffectiveModelRegistry.Models() {
+		if !hasOperatorModelCardData(effective.Card) {
+			continue
+		}
+		if _, exported := modelsByCard[effective.Catalog]; exported {
+			continue
+		}
+		modelsByCard[effective.Catalog] = routingModelFromEffectiveModel(effective)
+	}
+	models := make([]RoutingModel, 0, len(modelsByCard))
+	for _, model := range modelsByCard {
+		models = append(models, model)
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
+	return models
+}
+
+func hasOperatorModelCardData(card modelcatalog.EffectiveModelCard) bool {
+	if len(card.LoRAs) > 0 || len(card.Evaluations) > 0 {
+		return true
+	}
+	for _, source := range card.Provenance {
+		if source == "operator" {
+			return true
+		}
+	}
+	return false
+}
+
+func routingModelFromEffectiveModel(effective modelcatalog.EffectiveModel) RoutingModel {
+	card := effective.Card.Card
+	provenance := effective.Card.Provenance
+	model := RoutingModel{
+		Name:        effective.Catalog,
+		Evaluations: cloneUserEvaluations(effective.Card.Evaluations),
+		LoRAs:       routingLoRAsFromEffectiveCard(effective.Card),
+	}
+	if provenance["display_name"] == "operator" {
+		model.DisplayName = card.DisplayName
+	}
+	if provenance["publisher"] == "operator" {
+		model.Publisher = card.Publisher
+	}
+	if provenance["presentation"] == "operator" {
+		presentation := card.Presentation
+		model.Presentation = &presentation
+	}
+	if provenance["distribution"] == "operator" {
+		distribution := card.Distribution
+		model.Distribution = &distribution
+	}
+	if provenance["family"] == "operator" {
+		model.Family = card.Family
+	}
+	if provenance["parameter_size"] == "operator" {
+		model.ParamSize = card.ParameterSize
+	}
+	if provenance["description"] == "operator" {
+		model.Description = card.Description
+	}
+	applyOperatorModelCardRelease(&model, card, provenance)
+	applyOperatorModelCardLimits(&model, card, provenance)
+	applyOperatorModelCardCollections(&model, card, provenance)
+	if provenance["runtime_modality"] == "operator" {
+		model.Modality = effective.Card.RuntimeModality
+	}
+	return model
+}
+
+func applyOperatorModelCardRelease(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["revision"] == "operator" {
+		model.Revision = card.Revision
+	}
+	if provenance["released_at"] == "operator" {
+		model.ReleasedAt = card.ReleasedAt
+	}
+	if provenance["knowledge_cutoff"] == "operator" {
+		model.KnowledgeCutoff = card.KnowledgeCutoff
+	}
+	if provenance["lifecycle"] == "operator" {
+		model.Lifecycle = card.Lifecycle
+	}
+}
+
+func applyOperatorModelCardLimits(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["limits.context_window_size"] == "operator" {
+		model.ContextWindowSize = card.Limits.ContextWindowSize
+	}
+	if provenance["limits.max_output_tokens"] == "operator" {
+		model.MaxOutputTokens = card.Limits.MaxOutputTokens
+	}
+}
+
+func applyOperatorModelCardCollections(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["capabilities"] == "operator" {
+		model.Capabilities = append([]string(nil), card.Capabilities...)
+	}
+	if provenance["modalities"] == "operator" {
+		modalities := card.Modalities
+		model.Modalities = &modalities
+	}
+	if provenance["tags"] == "operator" {
+		model.Tags = append([]string(nil), card.Tags...)
+	}
+}
+
+func routingLoRAsFromEffectiveCard(card modelcatalog.EffectiveModelCard) []LoRAAdapter {
+	return loraAdaptersFromEffectiveCard(card)
+}
+
+func loraAdaptersFromEffectiveCard(card modelcatalog.EffectiveModelCard) []LoRAAdapter {
+	if len(card.LoRAs) == 0 {
+		return nil
+	}
+	loras := make([]LoRAAdapter, 0, len(card.LoRAs))
+	for _, lora := range card.LoRAs {
+		loras = append(loras, LoRAAdapter{Name: lora.Name, Description: lora.Description})
+	}
+	return loras
+}
+
+func routingModelsFromRuntimeConfig(cfg *RouterConfig) []RoutingModel {
 	modelNames := make(map[string]bool)
 	for name := range cfg.ModelConfig {
 		modelNames[name] = true
@@ -110,15 +262,19 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 	models := make([]RoutingModel, 0, len(names))
 	for _, name := range names {
 		params := cfg.ModelConfig[name]
+		cardName := params.Catalog
+		if cardName == "" {
+			cardName = name
+		}
 		models = append(models, RoutingModel{
-			Name:              name,
+			Name:              cardName,
 			ParamSize:         params.ParamSize,
 			ContextWindowSize: params.ContextWindowSize,
 			Description:       params.Description,
 			Capabilities:      append([]string(nil), params.Capabilities...),
 			LoRAs:             copyLoRAAdapters(params.LoRAs),
 			Tags:              append([]string(nil), params.Tags...),
-			QualityScore:      params.QualityScore,
+			Evaluations:       cloneUserEvaluations(params.Evaluations),
 			Modality:          params.Modality,
 		})
 	}
@@ -137,7 +293,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
 			Strategy:                  cfg.Strategy,
 			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            append([]string(nil), cfg.AutoModelNames...),
+			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
 			ClearRouteCache:           cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
@@ -155,11 +311,12 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Observability: cfg.Observability,
 			Authz:         cfg.Authz,
 			RateLimit:     cfg.RateLimit,
+			ManagementAPI: cfg.ManagementAPI,
 			RouterReplay:  cfg.RouterReplay,
 			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
-			SemanticCache: cfg.SemanticCache,
+			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 		},
@@ -173,7 +330,23 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	return global
 }
 
+func canonicalAutoModelNames(names []string) *[]string {
+	if names == nil {
+		return nil
+	}
+	cloned := append([]string{}, names...)
+	return &cloned
+}
+
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
+	categoryModel := cfg.CategoryModel
+	if err := normalizeCanonicalCategoryVariant(&categoryModel); err != nil {
+		// Export is intentionally non-validating. Preserve an invalid runtime
+		// value so the normal configuration validator reports the actionable
+		// error instead of silently changing it during serialization.
+		categoryModel = cfg.CategoryModel
+	}
+
 	return CanonicalModelCatalog{
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
@@ -187,8 +360,9 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
 			FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 		},
-		External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
-		KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		External:  append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
+		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
@@ -197,7 +371,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Classifier: CanonicalClassifierModule{
 				Domain: CanonicalCategoryModule{
-					CategoryModel: cfg.CategoryModel,
+					CategoryModel: categoryModel,
 					ModelRef:      "domain_classifier",
 				},
 				MCP: cfg.MCPCategoryModel,
@@ -209,8 +383,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Complexity: cfg.ComplexityModel.WithDefaults(),
 			HallucinationMitigation: CanonicalHallucinationModule{
-				Enabled:                 cfg.HallucinationMitigation.Enabled,
-				OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
+				Enabled: cfg.HallucinationMitigation.Enabled,
 				FactCheck: CanonicalFactCheckModule{
 					FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
 					ModelRef:             "fact_check_classifier",
@@ -307,11 +480,16 @@ func canonicalProviderModelFromRuntime(
 	endpointsByModel map[string][]VLLMEndpoint,
 	profiles map[string]ProviderProfile,
 ) CanonicalProviderModel {
+	if authored := cloneCanonicalProviderModel(params.AuthoredModel); authored != nil {
+		authored.Name = name
+		return *authored
+	}
 	providerModel := CanonicalProviderModel{
 		Name:             name,
-		ReasoningFamily:  params.ReasoningFamily,
+		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
+		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
 		BackendRefs: canonicalProviderBackendRefs(
 			name,
@@ -327,14 +505,48 @@ func canonicalProviderModelFromRuntime(
 	return providerModel
 }
 
-func canonicalProviderModelID(externalModelIDs map[string]string) string {
-	if len(externalModelIDs) != 1 {
-		return ""
+func cloneCanonicalReasoning(reasoning *CanonicalReasoning) *CanonicalReasoning {
+	if reasoning == nil {
+		return nil
 	}
-	for _, modelID := range externalModelIDs {
+	clone := *reasoning
+	clone.EffortFlags = copyStringMap(reasoning.EffortFlags)
+	clone.Levels = append([]string(nil), reasoning.Levels...)
+	clone.Modes = append([]string(nil), reasoning.Modes...)
+	return &clone
+}
+
+func cloneCanonicalProviderModel(model *CanonicalProviderModel) *CanonicalProviderModel {
+	if model == nil {
+		return nil
+	}
+	clone := *model
+	clone.Reasoning = cloneCanonicalReasoning(model.Reasoning)
+	clone.ExternalModelIDs = copyStringMap(model.ExternalModelIDs)
+	clone.BackendRefs = make([]CanonicalBackendRef, len(model.BackendRefs))
+	for index, backend := range model.BackendRefs {
+		clone.BackendRefs[index] = backend
+		clone.BackendRefs[index].ExtraHeaders = copyStringMap(backend.ExtraHeaders)
+	}
+	return &clone
+}
+
+func canonicalProviderModelID(externalModelIDs map[string]string) string {
+	if modelID := strings.TrimSpace(externalModelIDs["default"]); modelID != "" {
 		return modelID
 	}
-	return ""
+	var candidate string
+	for _, modelID := range externalModelIDs {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			continue
+		}
+		if candidate != "" && candidate != modelID {
+			return ""
+		}
+		candidate = modelID
+	}
+	return candidate
 }
 
 func canonicalProviderBackendRefs(
@@ -373,14 +585,19 @@ func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string
 		Name:       endpoint.Name,
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
-		Type:       endpoint.Type,
 		Provider:   profile.Type,
 		BaseURL:    profile.BaseURL,
 		AuthHeader: profile.AuthHeader,
-		AuthPrefix: profile.AuthPrefix,
 		APIVersion: profile.APIVersion,
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
+	}
+	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
+		prefix := profile.AuthPrefix
+		ref.AuthPrefix = &prefix
+	}
+	if ref.Provider == "" {
+		ref.Provider = endpoint.Type
 	}
 	if endpoint.Address != "" {
 		ref.Endpoint = endpoint.Address

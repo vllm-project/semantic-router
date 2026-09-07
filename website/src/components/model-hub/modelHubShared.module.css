@@ -1,0 +1,215 @@
+.catalogMark {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.35rem;
+  height: 2.35rem;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--hub-border, var(--ifm-color-emphasis-300));
+  border-radius: 0.68rem;
+  background: color-mix(in srgb, var(--ifm-color-emphasis-100) 72%, transparent);
+  color: var(--ifm-font-color-base);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.catalogMarkLarge {
+  width: 3.35rem;
+  height: 3.35rem;
+  border-radius: 0.9rem;
+}
+
+.catalogMark img {
+  width: 1.3rem;
+  height: 1.3rem;
+  object-fit: contain;
+}
+
+.catalogMarkLarge img {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.2rem 0.44rem;
+  border: 1px solid var(--hub-border, var(--ifm-color-emphasis-300));
+  border-radius: 999px;
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  font-size: 0.75rem;
+  line-height: 1.15;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.badge_native,
+.badge_reproduced,
+.badge_active,
+.badge_required {
+  border-color: rgb(34 197 94 / 35%);
+  background: rgb(34 197 94 / 8%);
+  color: #16a34a;
+}
+
+.badge_compatible,
+.badge_virtual,
+.badge_router_recipe {
+  border-color: color-mix(in srgb, var(--ifm-color-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--ifm-color-primary) 8%, transparent);
+  color: var(--ifm-color-primary);
+}
+
+.badge_runtime,
+.badge_physical,
+.badge_open_weights {
+  border-color: rgb(168 85 247 / 35%);
+  background: rgb(168 85 247 / 8%);
+  color: #a855f7;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.tags > span {
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.38rem;
+  background: color-mix(in srgb, var(--ifm-color-emphasis-100) 75%, transparent);
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  font-size: 0.75rem;
+}
+
+.selectControl {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.selectShell {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--hub-border, var(--ifm-color-emphasis-300));
+  border-radius: 0.62rem;
+  background: var(--ifm-background-color);
+}
+
+.selectShell:focus-within {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ifm-color-primary) 12%, transparent);
+}
+
+.selectShell select {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.2rem;
+  padding: 0.4rem 1.65rem 0.4rem 0.6rem;
+  border: 0;
+  outline: none;
+  appearance: none;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  font: inherit;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.selectShell i {
+  position: absolute;
+  top: 50%;
+  right: 0.58rem;
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  font-style: normal;
+  transform: translateY(-55%);
+  pointer-events: none;
+}
+
+.pagination {
+  display: flex;
+  min-height: 3.7rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  font-size: 0.75rem;
+}
+
+.pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.pagination button {
+  min-width: 1.9rem;
+  height: 1.9rem;
+  padding: 0.2rem;
+  border: 1px solid var(--hub-border, var(--ifm-color-emphasis-300));
+  border-radius: 0.48rem;
+  background: var(--ifm-background-surface-color);
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  cursor: pointer;
+}
+
+.pagination button:hover:not(:disabled),
+.pagination .currentPage {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+}
+
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.empty {
+  display: grid;
+  min-height: 9rem;
+  place-content: center;
+  gap: 0.28rem;
+  padding: 1.5rem;
+  border: 1px dashed var(--hub-border, var(--ifm-color-emphasis-300));
+  border-radius: 0.8rem;
+  color: var(--hub-muted, var(--ifm-color-emphasis-650));
+  text-align: center;
+}
+
+.empty strong {
+  color: var(--ifm-font-color-base);
+}
+
+.empty p {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pagination > div {
+    justify-content: center;
+  }
+}

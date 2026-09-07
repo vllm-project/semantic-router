@@ -1,6 +1,7 @@
 .container {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: auto;
   background: #050505;
@@ -34,18 +35,19 @@
   position: relative;
   z-index: 1;
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3.5rem 1.5rem;
+  padding: 2rem 1.25rem;
 }
 
 .shell {
-  width: min(1160px, 100%);
+  width: min(1040px, 100%);
   display: grid;
-  grid-template-columns: minmax(320px, 1.05fr) minmax(0, 0.95fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 0.9fr);
+  gap: 1rem;
   align-items: stretch;
 }
 
@@ -54,9 +56,10 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background: #101012;
+  background: rgba(15, 16, 19, 0.96);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.34);
 }
 
 .storyPanel::before,
@@ -65,25 +68,31 @@
 }
 
 .storyPanel {
-  padding: 1.55rem;
+  min-height: 540px;
+  padding: 1.6rem;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 1.3rem;
+  background:
+    radial-gradient(circle at 20% 80%, rgba(86, 130, 255, 0.17), transparent 37%),
+    radial-gradient(circle at 90% 5%, rgba(153, 92, 255, 0.13), transparent 31%),
+    rgba(14, 15, 18, 0.96);
 }
 
 .heroBadge {
   display: inline-flex;
   align-items: center;
   gap: 0.8rem;
-  min-height: 54px;
+  min-height: 38px;
   width: fit-content;
   max-width: 100%;
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: #18181b;
-  color: #f7f8fb;
-  font-size: 0.95rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.78rem;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
@@ -112,18 +121,19 @@
 .storyTitle {
   margin: 0;
   color: #ffffff;
-  font-size: clamp(2rem, 3.4vw, 3.3rem);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-  max-width: 12ch;
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  font-weight: 570;
+  line-height: 0.93;
+  letter-spacing: -0.065em;
+  max-width: none;
 }
 
 .storyDescription,
 .stageDescription {
   margin: 0;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 1rem;
-  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
 .progressRail {
@@ -186,6 +196,27 @@
   gap: 0.85rem;
 }
 
+.storyIdentity {
+  width: fit-content;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.storyIdentity span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.storyIdentity small {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.65rem;
+}
+
 .storyMetric,
 .summaryCard {
   display: grid;
@@ -204,7 +235,7 @@
 }
 
 .card {
-  padding: 1.55rem;
+  padding: 1.7rem;
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
@@ -219,7 +250,7 @@
 .stageTitle {
   margin: 0;
   color: #ffffff;
-  font-size: clamp(1.55rem, 2.4vw, 2.25rem);
+  font-size: clamp(1.75rem, 2.4vw, 2rem);
   line-height: 1.08;
   letter-spacing: -0.03em;
 }
@@ -238,12 +269,12 @@
 
 .input {
   width: 100%;
-  min-height: 58px;
+  min-height: 50px;
   padding: 0 1rem;
   box-sizing: border-box;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: #09090a;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #090a0c;
   color: #ffffff;
   font-size: 1rem;
 }
@@ -281,8 +312,8 @@
 .button,
 .secondaryButton {
   flex: 1 1 0;
-  min-height: 52px;
-  border-radius: 6px;
+  min-height: 48px;
+  border-radius: 8px;
   padding: 0 1.2rem;
   font-size: 0.95rem;
   font-weight: 650;

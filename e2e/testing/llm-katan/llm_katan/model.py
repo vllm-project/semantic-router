@@ -7,14 +7,18 @@ Signed-off-by: Yossi Ovadia <yovadia@redhat.com>
 """
 
 import asyncio
+import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
+from typing import Any, ClassVar
 
 from .config import ServerConfig
 
 logger = logging.getLogger(__name__)
+
+QUERY_CONTEXT_WORD_THRESHOLD = 6
 
 
 class ModelBackend(ABC):
@@ -31,18 +35,90 @@ class ModelBackend(ABC):
     @abstractmethod
     async def generate(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         stream: bool = False,
-    ) -> AsyncGenerator[Dict, None]:
+    ) -> AsyncGenerator[dict, None]:
         """Generate response from messages"""
         pass
 
     @abstractmethod
-    def get_model_info(self) -> Dict[str, any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model information"""
         pass
+
+
+def _chat_completion_response(
+    *,
+    response_id: str,
+    created: int,
+    model: str,
+    fingerprint: str,
+    content: str,
+    usage: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "id": response_id,
+        "object": "chat.completion",
+        "created": created,
+        "model": model,
+        "system_fingerprint": fingerprint,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "logprobs": None,
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": usage,
+    }
+
+
+async def _emit_chat_completion(
+    response: dict[str, Any],
+    *,
+    stream: bool,
+    delay: float,
+) -> AsyncGenerator[dict, None]:
+    if not stream:
+        yield response
+        return
+
+    content = response["choices"][0]["message"]["content"]
+    words = content.split()
+    for index, word in enumerate(words):
+        yield {
+            "id": response["id"],
+            "object": "chat.completion.chunk",
+            "created": response["created"],
+            "model": response["model"],
+            "system_fingerprint": response["system_fingerprint"],
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {
+                        "content": word + " " if index < len(words) - 1 else word
+                    },
+                    "logprobs": None,
+                    "finish_reason": None,
+                }
+            ],
+        }
+        await asyncio.sleep(delay)
+
+    yield {
+        "id": response["id"],
+        "object": "chat.completion.chunk",
+        "created": response["created"],
+        "model": response["model"],
+        "system_fingerprint": response["system_fingerprint"],
+        "choices": [
+            {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
+        ],
+        "usage": response["usage"],
+    }
 
 
 class TransformersBackend(ModelBackend):
@@ -58,8 +134,12 @@ class TransformersBackend(ModelBackend):
         logger.info(f"Loading model {self.config.model_name} with transformers backend")
 
         try:
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
+            # These heavy dependencies remain optional for the echo-only test image.
+            import torch  # noqa: PLC0415
+            from transformers import (  # noqa: PLC0415
+                AutoModelForCausalLM,
+                AutoTokenizer,
+            )
         except ImportError as e:
             raise ImportError(
                 "transformers and torch are required for TransformersBackend. "
@@ -122,11 +202,11 @@ class TransformersBackend(ModelBackend):
 
     async def generate(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         stream: bool = False,
-    ) -> AsyncGenerator[Dict, None]:
+    ) -> AsyncGenerator[dict, None]:
         """Generate response using transformers"""
         if self.model is None or self.tokenizer is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
@@ -159,80 +239,27 @@ class TransformersBackend(ModelBackend):
         full_response = self.tokenizer.decode(response, skip_special_tokens=True)
         generated_text = full_response[len(prompt) :].strip()
 
-        # Create response in OpenAI format
-        response_data = {
-            "id": f"chatcmpl-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": self.config.served_model_name,
-            "system_fingerprint": "llm-katan-transformers",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": generated_text},
-                    "logprobs": None,
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
+        created = int(time.time())
+        response_data = _chat_completion_response(
+            response_id=f"chatcmpl-{created}",
+            created=created,
+            model=self.config.served_model_name,
+            fingerprint="llm-katan-transformers",
+            content=generated_text,
+            usage={
                 "prompt_tokens": prompt_tokens,
                 "completion_tokens": completion_tokens,
                 "total_tokens": total_tokens,
                 "prompt_tokens_details": {"cached_tokens": 0},
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
-        }
+        )
+        async for event in _emit_chat_completion(
+            response_data, stream=stream, delay=0.05
+        ):
+            yield event
 
-        # Add token_usage as alias for better SDK compatibility
-        response_data["token_usage"] = response_data["usage"]
-
-        if stream:
-            # For streaming, yield chunks
-            words = generated_text.split()
-            for i, word in enumerate(words):
-                chunk = {
-                    "id": response_data["id"],
-                    "object": "chat.completion.chunk",
-                    "created": response_data["created"],
-                    "model": self.config.served_model_name,
-                    "system_fingerprint": "llm-katan-transformers",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": word + " " if i < len(words) - 1 else word
-                            },
-                            "logprobs": None,
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-                yield chunk
-                await asyncio.sleep(0.05)  # Simulate streaming delay
-
-            # Final chunk
-            final_chunk = {
-                "id": response_data["id"],
-                "object": "chat.completion.chunk",
-                "created": response_data["created"],
-                "model": self.config.served_model_name,
-                "system_fingerprint": "llm-katan-transformers",
-                "choices": [
-                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
-                ],
-                "usage": {
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": total_tokens,
-                    "prompt_tokens_details": {"cached_tokens": 0},
-                    "completion_tokens_details": {"reasoning_tokens": 0},
-                },
-            }
-            yield final_chunk
-        else:
-            yield response_data
-
-    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+    def _messages_to_prompt(self, messages: list[dict[str, str]]) -> str:
         """Convert OpenAI messages format to prompt string"""
         # Simple prompt format - can be enhanced for specific models
         prompt = ""
@@ -250,7 +277,7 @@ class TransformersBackend(ModelBackend):
 
     def _generate_sync(self, inputs, max_tokens: int, temperature: float):
         """Synchronous generation for executor"""
-        import torch
+        import torch  # noqa: PLC0415 - optional runtime dependency
 
         with torch.no_grad():
             output = self.model.generate(
@@ -262,7 +289,7 @@ class TransformersBackend(ModelBackend):
             )
         return output[0]
 
-    def get_model_info(self) -> Dict[str, any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model information"""
         return {
             "id": self.config.served_model_name,
@@ -287,8 +314,7 @@ class VLLMBackend(ModelBackend):
         logger.info(f"Loading model {self.config.model_name} with vLLM backend")
 
         try:
-            from vllm import LLM
-            from vllm.sampling_params import SamplingParams
+            from vllm import LLM  # noqa: PLC0415 - optional runtime dependency
         except ImportError as e:
             raise ImportError(
                 "vLLM is required for VLLMBackend. Install with: pip install vllm"
@@ -304,16 +330,18 @@ class VLLMBackend(ModelBackend):
 
     async def generate(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         stream: bool = False,
-    ) -> AsyncGenerator[Dict, None]:
+    ) -> AsyncGenerator[dict, None]:
         """Generate response using vLLM"""
         if self.engine is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
-        from vllm.sampling_params import SamplingParams
+        from vllm.sampling_params import (  # noqa: PLC0415
+            SamplingParams,
+        )
 
         max_tokens = max_tokens or self.config.max_tokens
         temperature = (
@@ -337,82 +365,29 @@ class VLLMBackend(ModelBackend):
         output = outputs[0]
         generated_text = output.outputs[0].text.strip()
 
-        # Create response in OpenAI format
-        response_data = {
-            "id": f"chatcmpl-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": self.config.served_model_name,
-            "system_fingerprint": "llm-katan-vllm",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": generated_text},
-                    "logprobs": None,
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": len(output.prompt_token_ids),
-                "completion_tokens": len(output.outputs[0].token_ids),
-                "total_tokens": len(output.prompt_token_ids)
-                + len(output.outputs[0].token_ids),
+        prompt_tokens = len(output.prompt_token_ids)
+        completion_tokens = len(output.outputs[0].token_ids)
+        created = int(time.time())
+        response_data = _chat_completion_response(
+            response_id=f"chatcmpl-{created}",
+            created=created,
+            model=self.config.served_model_name,
+            fingerprint="llm-katan-vllm",
+            content=generated_text,
+            usage={
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
                 "prompt_tokens_details": {"cached_tokens": 0},
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
-        }
+        )
+        async for event in _emit_chat_completion(
+            response_data, stream=stream, delay=0.05
+        ):
+            yield event
 
-        # Add token_usage as alias for better SDK compatibility
-        response_data["token_usage"] = response_data["usage"]
-
-        if stream:
-            # For streaming, yield chunks (simplified for now)
-            words = generated_text.split()
-            for i, word in enumerate(words):
-                chunk = {
-                    "id": response_data["id"],
-                    "object": "chat.completion.chunk",
-                    "created": response_data["created"],
-                    "model": self.config.served_model_name,
-                    "system_fingerprint": "llm-katan-vllm",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": word + " " if i < len(words) - 1 else word
-                            },
-                            "logprobs": None,
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-                yield chunk
-                await asyncio.sleep(0.05)
-
-            # Final chunk
-            final_chunk = {
-                "id": response_data["id"],
-                "object": "chat.completion.chunk",
-                "created": response_data["created"],
-                "model": self.config.served_model_name,
-                "system_fingerprint": "llm-katan-vllm",
-                "choices": [
-                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
-                ],
-                "usage": {
-                    "prompt_tokens": len(output.prompt_token_ids),
-                    "completion_tokens": len(output.outputs[0].token_ids),
-                    "total_tokens": len(output.prompt_token_ids)
-                    + len(output.outputs[0].token_ids),
-                    "prompt_tokens_details": {"cached_tokens": 0},
-                    "completion_tokens_details": {"reasoning_tokens": 0},
-                },
-            }
-            yield final_chunk
-        else:
-            yield response_data
-
-    def _messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+    def _messages_to_prompt(self, messages: list[dict[str, str]]) -> str:
         """Convert OpenAI messages format to prompt string"""
         prompt = ""
         for message in messages:
@@ -427,7 +402,7 @@ class VLLMBackend(ModelBackend):
         prompt += "Assistant: "
         return prompt
 
-    def get_model_info(self) -> Dict[str, any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model information"""
         return {
             "id": self.config.served_model_name,
@@ -460,7 +435,7 @@ class EchoBackend(ModelBackend):
     # Keywords to extract as facts (keyword -> fact template)
     # Format: "User's X is Y" to match query rewrites like "User's X"
     # Note: Include common nouns (dog, car) as well as specific values (max, tesla)
-    EXTRACTION_KEYWORDS = {
+    EXTRACTION_KEYWORDS: ClassVar[dict[str, tuple[str, str]]] = {
         # Car-related facts
         "car": ("semantic", "User's car is a blue Tesla Model 3 from 2023"),
         "tesla": ("semantic", "User's car is a blue Tesla Model 3 from 2023"),
@@ -576,7 +551,7 @@ class EchoBackend(ModelBackend):
         logger.info("🔊 Echo backend ready (no model to load)")
         logger.info("   Smart extraction: enabled (detects extraction prompts)")
 
-    def _is_extraction_prompt(self, messages: List[Dict[str, str]]) -> bool:
+    def _is_extraction_prompt(self, messages: list[dict[str, str]]) -> bool:
         """Check if this is a memory extraction prompt."""
         for msg in messages:
             content = msg.get("content", "").lower()
@@ -586,7 +561,7 @@ class EchoBackend(ModelBackend):
                 return True
         return False
 
-    def _is_query_rewrite_prompt(self, messages: List[Dict[str, str]]) -> bool:
+    def _is_query_rewrite_prompt(self, messages: list[dict[str, str]]) -> bool:
         """Check if this is a query rewriting prompt."""
         for msg in messages:
             content = msg.get("content", "").lower()
@@ -595,8 +570,8 @@ class EchoBackend(ModelBackend):
         return False
 
     def _extract_facts_from_messages(
-        self, messages: List[Dict[str, str]]
-    ) -> List[Dict]:
+        self, messages: list[dict[str, str]]
+    ) -> list[dict]:
         """Extract facts from conversation using keyword matching.
 
         IMPORTANT: Only searches USER messages, not system prompts.
@@ -622,7 +597,50 @@ class EchoBackend(ModelBackend):
         )
         return facts
 
-    def _rewrite_query(self, messages: List[Dict[str, str]]) -> str:
+    @staticmethod
+    def _parse_rewrite_input(
+        messages: list[dict[str, str]],
+    ) -> tuple[str, list[str]]:
+        history_context = []
+        for message in messages:
+            if message.get("role") != "user":
+                continue
+            query, history = EchoBackend._parse_rewrite_message(
+                message.get("content", "")
+            )
+            history_context.extend(history)
+            if query:
+                return query, history_context
+        return "", history_context
+
+    @staticmethod
+    def _parse_rewrite_message(content: str) -> tuple[str, list[str]]:
+        query = ""
+        history_context = []
+        in_history = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("History:"):
+                in_history = True
+                continue
+            if stripped.startswith("Query:") and "Rewritten" not in stripped:
+                query = stripped.removeprefix("Query:").strip()
+                in_history = False
+                continue
+            if in_history and "[user]:" in stripped:
+                user_message = stripped.split("[user]:", 1)[-1].strip()
+                if user_message:
+                    history_context.append(user_message)
+        return query, history_context
+
+    @staticmethod
+    def _last_user_query(messages: list[dict[str, str]]) -> str:
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                return message.get("content", "").partition("\n")[0].strip()
+        return ""
+
+    def _rewrite_query(self, messages: list[dict[str, str]]) -> str:
         """Query rewriting - enrich query with conversation context.
 
         Production behavior (from queryRewriteSystemPrompt):
@@ -642,47 +660,9 @@ class EchoBackend(ModelBackend):
         - Query: "Which hotel should I choose?"
         - Rewritten: "Which hotel should I choose for my trip to Israel with $50K budget?"
         """
-        query = ""
-        history_context = []
-
-        # Parse the user message to extract History and Query
-        for msg in messages:
-            if msg.get("role") != "user":
-                continue
-            content = msg.get("content", "")
-            lines = content.split("\n")
-
-            in_history = False
-            for line in lines:
-                stripped = line.strip()
-
-                # Start of history section
-                if stripped.startswith("History:"):
-                    in_history = True
-                    continue
-
-                # Query line - end of history
-                if stripped.startswith("Query:") and "Rewritten" not in stripped:
-                    query = stripped.replace("Query:", "").strip()
-                    in_history = False
-                    continue
-
-                # Collect history context (look for user messages)
-                if in_history and "[user]:" in stripped:
-                    # Extract the user's message from history
-                    user_msg = stripped.split("[user]:", 1)[-1].strip()
-                    if user_msg:
-                        history_context.append(user_msg)
-
-            if query:
-                break
-
-        # Fallback: return last user message content
+        query, history_context = self._parse_rewrite_input(messages)
         if not query:
-            for msg in reversed(messages):
-                if msg.get("role") == "user":
-                    query = msg.get("content", "").split("\n")[0].strip()
-                    break
+            query = self._last_user_query(messages)
 
         if not query:
             return ""
@@ -697,7 +677,7 @@ class EchoBackend(ModelBackend):
         context_summary = " ".join(history_context[-2:])  # Use last 2 history items
 
         # Only add context if query seems to need it (short or has pronouns)
-        if len(query.split()) < 6 or any(
+        if len(query.split()) < QUERY_CONTEXT_WORD_THRESHOLD or any(
             word in query.lower() for word in ["it", "that", "this", "my"]
         ):
             # Append context in parentheses to keep query structure intact
@@ -709,81 +689,14 @@ class EchoBackend(ModelBackend):
         logger.info(f"🔄 Query unchanged (self-contained): '{query}'")
         return query
 
-        # Pattern: "When is my X?" → "User's X is" (e.g., "When is my wedding?" → "User's wedding is")
-        match = re.match(r"(?:When is my )(.+?)[\?\.]*$", query, re.IGNORECASE)
-        if match:
-            topic = match.group(1).strip()
-            rewritten = f"User's {topic} is"
-            logger.info(f"🔄 Rewrote query: '{query}' → '{rewritten}'")
-            return rewritten
-
-        # Pattern: "Where did I go to X?" → "User graduated from" or "User's X"
-        # e.g., "Where did I go to college?" → "User graduated from"
-        match = re.match(
-            r"(?:Where did I (?:go to|attend) )(.+?)[\?\.]*$", query, re.IGNORECASE
-        )
-        if match:
-            topic = match.group(1).strip()
-            if (
-                "college" in topic.lower()
-                or "university" in topic.lower()
-                or "school" in topic.lower()
-            ):
-                rewritten = "User graduated from"
-            else:
-                rewritten = f"User's {topic}"
-            logger.info(f"🔄 Rewrote query: '{query}' → '{rewritten}'")
-            return rewritten
-
-        # Pattern: "Where does X live?" → "X lives in" (e.g., "Where does she live?" → "lives in")
-        # For pronouns, we return a generic location query
-        match = re.match(
-            r"(?:Where does (?:she|he|my friend|sarah) live)[\?\.]*$",
-            query,
-            re.IGNORECASE,
-        )
-        if match:
-            rewritten = "lives in Boston"  # Return something that matches stored facts
-            logger.info(f"🔄 Rewrote query: '{query}' → '{rewritten}'")
-            return rewritten
-
-        # Pattern: "How much can I spend on X?" → "User's budget is"
-        match = re.match(
-            r"(?:How much (?:can I|do I|should I) (?:spend|budget|afford)).*[\?\.]*$",
-            query,
-            re.IGNORECASE,
-        )
-        if match:
-            rewritten = "User's budget is"
-            logger.info(f"🔄 Rewrote query: '{query}' → '{rewritten}'")
-            return rewritten
-
-        # Pattern: "How many X?" → "User's X" or specific patterns
-        # e.g., "How many guests are we expecting?" → "guests"
-        match = re.match(
-            r"(?:How many )(.+?)(?:are we|do we|will we|expecting).*[\?\.]*$",
-            query,
-            re.IGNORECASE,
-        )
-        if match:
-            topic = match.group(1).strip()
-            rewritten = f"{topic}"  # Just the topic for semantic matching
-            logger.info(f"🔄 Rewrote query: '{query}' → '{rewritten}'")
-            return rewritten
-
-        # No rewrite needed
-        return query
-
     async def generate(
         self,
-        messages: List[Dict[str, str]],
-        max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         stream: bool = False,
-    ) -> AsyncGenerator[Dict, None]:
+    ) -> AsyncGenerator[dict, None]:
         """Echo back all messages - with smart handling for extraction prompts."""
-        import json
-
         # Check for special prompt types
         if self._is_extraction_prompt(messages):
             # Return valid JSON facts for extraction
@@ -806,73 +719,27 @@ class EchoBackend(ModelBackend):
         # Calculate rough token count
         token_count = len(echo_content.split())
 
-        response_data = {
-            "id": f"echo-{int(time.time())}",
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": self.config.served_model_name,
-            "system_fingerprint": "llm-katan-echo",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": echo_content},
-                    "logprobs": None,
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
+        created = int(time.time())
+        response_data = _chat_completion_response(
+            response_id=f"echo-{created}",
+            created=created,
+            model=self.config.served_model_name,
+            fingerprint="llm-katan-echo",
+            content=echo_content,
+            usage={
                 "prompt_tokens": token_count,
                 "completion_tokens": token_count,
                 "total_tokens": token_count * 2,
                 "prompt_tokens_details": {"cached_tokens": 0},
                 "completion_tokens_details": {"reasoning_tokens": 0},
             },
-        }
+        )
+        async for event in _emit_chat_completion(
+            response_data, stream=stream, delay=0.01
+        ):
+            yield event
 
-        # Add token_usage as alias for better SDK compatibility
-        response_data["token_usage"] = response_data["usage"]
-
-        if stream:
-            # For streaming, yield the content in chunks
-            words = echo_content.split()
-            for i, word in enumerate(words):
-                chunk = {
-                    "id": response_data["id"],
-                    "object": "chat.completion.chunk",
-                    "created": response_data["created"],
-                    "model": self.config.served_model_name,
-                    "system_fingerprint": "llm-katan-echo",
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {
-                                "content": word + " " if i < len(words) - 1 else word
-                            },
-                            "logprobs": None,
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-                yield chunk
-                await asyncio.sleep(0.01)  # Fast streaming for tests
-
-            # Final chunk
-            final_chunk = {
-                "id": response_data["id"],
-                "object": "chat.completion.chunk",
-                "created": response_data["created"],
-                "model": self.config.served_model_name,
-                "system_fingerprint": "llm-katan-echo",
-                "choices": [
-                    {"index": 0, "delta": {}, "logprobs": None, "finish_reason": "stop"}
-                ],
-                "usage": response_data["usage"],
-            }
-            yield final_chunk
-        else:
-            yield response_data
-
-    def get_model_info(self) -> Dict[str, any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model information"""
         return {
             "id": self.config.served_model_name,

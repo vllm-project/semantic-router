@@ -1,0 +1,10 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_image_reject_4\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n",
+    "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"image_generation_call\",\"id\":\"ig_reject_4\",\"status\":\"in_progress\",\"result\":null}}\n\n",
+    "event: response.image_generation_call.partial_image\ndata: {\"type\":\"response.image_generation_call.partial_image\",\"sequence_number\":2,\"output_index\":0,\"item_id\":\"ig_reject_4\",\"partial_image_index\":0,\"partial_image_b64\":\"not-base64\"}\n\n"
+  ]
+}

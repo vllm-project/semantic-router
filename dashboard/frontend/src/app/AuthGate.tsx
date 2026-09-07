@@ -1,7 +1,7 @@
 import React from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import SetupStatusPage from './SetupStatusPage'
+import ProductLoadingState from '../components/ProductLoadingState'
 
 /** Requires authentication; redirects to login with return path. */
 const AuthGate: React.FC = () => {
@@ -9,17 +9,7 @@ const AuthGate: React.FC = () => {
   const location = useLocation()
 
   if (isLoading) {
-    return (
-      <SetupStatusPage
-        title="Authenticating"
-        description="Checking session state..."
-        actionLabel="Retry"
-        variant="loading"
-        onAction={() => {
-          window.location.reload()
-        }}
-      />
-    )
+    return <ProductLoadingState label="Opening your workspace" />
   }
 
   if (!isAuthenticated) {

@@ -1,5 +1,10 @@
 """Pydantic models for vLLM Semantic Router configuration."""
 
+import json
+import math
+import re
+import warnings
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -9,10 +14,24 @@ from pydantic import (
     Field,
     StrictBool,
     StrictStr,
+    field_validator,
     model_validator,
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .config_contract import (
+    CLASSIFIER_TYPE_LLM,
+    CLASSIFIER_TYPE_LOCAL,
+    ClassifierSignalType,
+    UnknownPolicy,
+)
+
+RoutingStrategy = Literal["priority", "confidence"]
+LOCAL_CLASSIFIER_LABEL_COUNT = 2
+SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
+PROMPT_MIN_CANDIDATES = 2
+MAX_DECISION_ANNOTATIONS = 32
+MAX_DECISION_ANNOTATION_BYTES = 4096
 
 
 class Listener(BaseModel):
@@ -208,6 +227,25 @@ class NumericPredicate(BaseModel):
     lt: Optional[float] = None
     lte: Optional[float] = None
 
+    @model_validator(mode="after")
+    def validate_contract(self):
+        for value in (self.gt, self.gte, self.lt, self.lte):
+            if value is not None and not math.isfinite(value):
+                raise ValueError("numeric predicate values must be finite")
+        if all(value is None for value in (self.gt, self.gte, self.lt, self.lte)):
+            raise ValueError("numeric predicate requires at least one comparator")
+        if self.gt is not None and self.gte is not None:
+            raise ValueError("numeric predicate cannot set both gt and gte")
+        if self.lt is not None and self.lte is not None:
+            raise ValueError("numeric predicate cannot set both lt and lte")
+        lower = self.gt if self.gt is not None else self.gte
+        upper = self.lt if self.lt is not None else self.lte
+        if lower is not None and upper is not None:
+            strict = self.gt is not None or self.lt is not None
+            if lower > upper or (lower == upper and strict):
+                raise ValueError("numeric predicate defines an empty range")
+        return self
+
 
 class StructureRule(BaseModel):
     """Request-shape routing signal configuration."""
@@ -304,6 +342,7 @@ class EmbeddingEndpointConfig(BaseModel):
     api_key_env: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=None, ge=0)
     max_retries: Optional[int] = Field(default=None, ge=0)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
@@ -335,6 +374,10 @@ class JailbreakRule(BaseModel):
     threshold: float
     method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
+    # "request" (default) scores the prompt; "response" scores the model's
+    # output once it has answered, for the selected decision's
+    # response_jailbreak plugin to enforce on.
+    direction: Optional[Literal["request", "response"]] = None
     jailbreak_patterns: Optional[list[str]] = (
         None  # Known jailbreak prompts (contrastive KB)
     )
@@ -409,6 +452,128 @@ class Reask(BaseModel):
     lookback_turns: Optional[int] = None
 
 
+class MetadataPredicate(BaseModel):
+    """Comparator for untrusted request metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    equals: Optional[str] = None
+    in_: Optional[List[str]] = Field(default=None, alias="in")
+    exists: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_comparator(self):
+        configured = sum(
+            (
+                self.equals is not None,
+                bool(self.in_),
+                self.exists is not None,
+            )
+        )
+        if configured != 1:
+            raise ValueError("exactly one of equals, in, or exists is required")
+        return self
+
+
+class MetadataRule(BaseModel):
+    """Matches caller-provided request metadata without granting authorization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    key: str
+    predicate: MetadataPredicate
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("metadata signal name must be nonempty and trimmed")
+        if not self.key.strip() or self.key != self.key.strip():
+            raise ValueError("metadata key must be nonempty and trimmed")
+        return self
+
+
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
+class ClassifierSignal(BaseModel):
+    """Generic label-score classifier signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    type: ClassifierSignalType
+    model: Optional[str] = None
+    model_path: Optional[str] = None
+    labels: List[str]
+    instructions: Optional[str] = None
+    use_cpu: bool = False
+
+    @model_validator(mode="after")
+    def validate_classifier(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("classifier signal name must be nonempty and trimmed")
+        if ":" in self.name:
+            raise ValueError("classifier signal name cannot contain ':'")
+        if not self.labels or any(not label.strip() for label in self.labels):
+            raise ValueError("labels cannot be empty")
+        if any(label != label.strip() or ":" in label for label in self.labels):
+            raise ValueError("labels must be trimmed and cannot contain ':'")
+        if len(set(self.labels)) != len(self.labels):
+            raise ValueError("labels cannot contain duplicates")
+
+        if self.type == CLASSIFIER_TYPE_LOCAL:
+            self._validate_local()
+        elif self.type == CLASSIFIER_TYPE_LLM:
+            self._validate_llm()
+        else:
+            self._validate_sequence()
+        return self
+
+    def _validate_local(self):
+        if not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.model or self.instructions:
+            raise ValueError("local classifiers do not accept model or instructions")
+
+    def _validate_llm(self):
+        if not self.model:
+            raise ValueError("llm classifiers require model")
+        if not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.model_path or self.use_cpu:
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+    def _validate_sequence(self):
+        if not self.model:
+            raise ValueError("sequence_classifier classifiers require model")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError(
+                "sequence_classifier classifiers require at least two labels"
+            )
+        if self.model_path or self.use_cpu or self.instructions:
+            raise ValueError(
+                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+            )
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -430,6 +595,26 @@ class Signals(BaseModel):
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
     events: Optional[List[EventRule]] = []
+    metadata: Optional[List[MetadataRule]] = []
+    classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
+
+    @model_validator(mode="after")
+    def validate_rule_names(self):
+        for family in type(self).model_fields:
+            seen: set[str] = set()
+            for signal in getattr(self, family) or []:
+                name = (
+                    signal.name.lower()
+                    if family in {"metadata", "classifiers", "input_modality"}
+                    else signal.name
+                )
+                if name in seen:
+                    raise ValueError(
+                        f"{family} signal names must be unique within a recipe"
+                    )
+                seen.add(name)
+        return self
 
 
 class Condition(BaseModel):
@@ -437,12 +622,24 @@ class Condition(BaseModel):
 
     type: Optional[str] = None
     name: Optional[str] = None
+    label: Optional[str] = None
+    predicate: Optional[NumericPredicate] = None
+    on_error: Optional[Literal["no_match", "match"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
     @model_validator(mode="after")
     def validate_node_shape(self):
-        has_leaf_fields = self.type is not None or self.name is not None
+        has_leaf_fields = any(
+            (
+                self.type is not None,
+                self.name is not None,
+                self.label is not None,
+                self.predicate is not None,
+                self.on_error is not None,
+            )
+        )
         has_operator = self.operator is not None
 
         if has_leaf_fields and has_operator:
@@ -451,22 +648,34 @@ class Condition(BaseModel):
             )
 
         if has_operator:
-            if not self.conditions:
-                raise ValueError(
-                    "composite condition node requires non-empty conditions"
-                )
-            op = self.operator.strip().upper()
-            if op not in {"AND", "OR", "NOT"}:
-                raise ValueError("operator must be one of: AND, OR, NOT")
-            if op == "NOT" and len(self.conditions) != 1:
-                raise ValueError("NOT operator must have exactly one child condition")
-            return self
+            return self._validate_composite_node()
+        return self._validate_leaf_node()
 
-        # Leaf node validation
+    def _validate_composite_node(self):
+        if not self.conditions:
+            raise ValueError("composite condition node requires non-empty conditions")
+        op = self.operator.strip().upper()
+        if op not in {"AND", "OR", "NOT"}:
+            raise ValueError("operator must be one of: AND, OR, NOT")
+        if op == "NOT" and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly one child condition")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
+        return self
+
+    def _validate_leaf_node(self):
         if self.type is None or self.name is None:
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
             raise ValueError("leaf condition node cannot define child conditions")
+        if self.label is not None and self.type != "classifier":
+            raise ValueError("label is only valid for classifier conditions")
+        if self.type == "classifier" and (self.label is None or self.predicate is None):
+            raise ValueError("classifier conditions require label and predicate")
+        if self.on_error is not None and self.type != "classifier":
+            raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 
@@ -482,7 +691,8 @@ class Rules(BaseModel):
     """
 
     operator: str = "AND"
-    conditions: List[Condition] = []
+    conditions: List[Condition] = Field(default_factory=list)
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -492,33 +702,74 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {"type": data["type"], "name": data.get("name", "")}
-            return {"operator": "AND", "conditions": [leaf]}
+            leaf = {
+                key: data[key]
+                for key in ("type", "name", "label", "predicate", "on_error")
+                if key in data
+            }
+            leaf.setdefault("name", "")
+            rules = {"operator": "AND", "conditions": [leaf]}
+            if "on_unknown" in data:
+                rules["on_unknown"] = data["on_unknown"]
+            return rules
         return data
 
 
 class PluginType(str, Enum):
     """Supported plugin types."""
 
-    SEMANTIC_CACHE = "semantic-cache"
+    RESPONSE_CACHE = "response_cache"
     SYSTEM_PROMPT = "system_prompt"
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
-    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
+    CONTEXT_COMPRESSION = "context_compression"
 
 
-class SemanticCachePluginConfig(BaseModel):
-    """Configuration for semantic-cache plugin."""
+class ResponseCacheSemanticConfig(BaseModel):
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class ResponseCacheRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["no-cache", "no-store", "bypass", "max-age", "ttl"]] = Field(
+        default_factory=list
+    )
+    max_ttl_seconds: Optional[int] = Field(default=None, ge=0)
+
+
+class ResponseCachePersonalizedConfig(BaseModel):
+    mode: Literal["disabled", "exact"] = "disabled"
+
+
+class ResponseCacheRevisionConfig(BaseModel):
+    cache_epoch: Optional[str] = None
+    model_revision: Optional[str] = None
+    prompt_revision: Optional[str] = None
+    policy_revision: Optional[str] = None
+
+
+class ResponseCachePluginConfig(BaseModel):
+    """Configuration for response_cache plugin."""
 
     enabled: bool
+    mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
+    scope: Literal["user", "team", "tenant", "global"] = "user"
+    semantic: Optional[ResponseCacheSemanticConfig] = None
+    request_controls: Optional[ResponseCacheRequestControlsConfig] = None
+    personalized: Optional[ResponseCachePersonalizedConfig] = None
+    revision: Optional[ResponseCacheRevisionConfig] = None
+    # Deprecated flat compatibility fields.
+    allow_request_controls: bool = False
+    control_header: Optional[str] = None
     similarity_threshold: Optional[float] = Field(
         default=None,
         ge=0.0,
@@ -528,6 +779,131 @@ class SemanticCachePluginConfig(BaseModel):
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
+
+    @model_validator(mode="after")
+    def validate_compatibility_fields(self):
+        if self.semantic is not None and self.similarity_threshold is not None:
+            raise ValueError(
+                "semantic.similarity_threshold conflicts with similarity_threshold"
+            )
+        if self.request_controls is not None and (
+            self.allow_request_controls or self.control_header is not None
+        ):
+            raise ValueError(
+                "request_controls conflicts with deprecated request-control fields"
+            )
+        return self
+
+
+SemanticCachePluginConfig = ResponseCachePluginConfig
+
+
+CompressionTokenLimit = Literal["auto"] | int
+
+
+class ContextCompressionBudgetConfig(BaseModel):
+    trigger_tokens: Optional[CompressionTokenLimit] = None
+    target_tokens: Optional[CompressionTokenLimit] = None
+    reserve_output_tokens: Optional[CompressionTokenLimit] = None
+
+    @model_validator(mode="after")
+    def validate_budget(self):
+        values = (
+            self.trigger_tokens,
+            self.target_tokens,
+            self.reserve_output_tokens,
+        )
+        if any(isinstance(value, int) and value < 0 for value in values):
+            raise ValueError("compression token limits cannot be negative")
+        if (
+            isinstance(self.trigger_tokens, int)
+            and isinstance(self.target_tokens, int)
+            and self.trigger_tokens > 0
+            and self.target_tokens >= self.trigger_tokens
+        ):
+            raise ValueError("budget.target_tokens must be less than trigger_tokens")
+        return self
+
+
+class ContextCompressionTargetConfig(BaseModel):
+    mode: Literal["preserve", "extractive", "recoverable"] = "preserve"
+    min_tokens: Optional[int] = Field(default=None, ge=0)
+    target_tokens: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_target_budget(self):
+        if (
+            self.min_tokens
+            and self.target_tokens
+            and self.target_tokens >= self.min_tokens
+        ):
+            raise ValueError("target_tokens must be less than min_tokens")
+        return self
+
+
+class ContextCompressionTargetsConfig(BaseModel):
+    tool_outputs: ContextCompressionTargetConfig = Field(
+        default_factory=lambda: ContextCompressionTargetConfig(
+            mode="extractive", min_tokens=2000, target_tokens=1000
+        )
+    )
+    history: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    rag: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+    memory: ContextCompressionTargetConfig = Field(
+        default_factory=ContextCompressionTargetConfig
+    )
+
+
+class ContextCompressionScoringConfig(BaseModel):
+    method: Literal["bm25", "embedding", "hybrid"] = "bm25"
+    embedding_model_ref: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_embedding_model(self):
+        if self.method != "bm25" and not self.embedding_model_ref:
+            raise ValueError("embedding_model_ref is required for embedding scoring")
+        return self
+
+
+class ContextCompressionRecoveryConfig(BaseModel):
+    enabled: bool = False
+    store: Optional[Literal["redis", "valkey", "response_cache"]] = None
+    ttl_seconds: int = Field(default=900, ge=0)
+    max_bytes_per_request: int = Field(default=10 * 1024 * 1024, ge=0)
+    max_total_bytes: int = Field(default=256 * 1024 * 1024, ge=0)
+    max_retrievals: int = Field(default=8, ge=0)
+
+    @model_validator(mode="after")
+    def validate_store(self):
+        if self.enabled and self.store is None:
+            raise ValueError("recovery.store is required when recovery is enabled")
+        return self
+
+
+class ContextCompressionRequestControlsConfig(BaseModel):
+    enabled: bool = False
+    header: Optional[str] = None
+    allowed: List[Literal["bypass", "target"]] = Field(default_factory=list)
+    max_target_tokens: int = Field(default=16000, ge=0)
+
+
+class ContextCompressionPluginConfig(BaseModel):
+    """Configuration for context_compression plugin."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    mode: Literal["auto", "always"] = "auto"
+    budget: Optional[ContextCompressionBudgetConfig] = None
+    targets: Optional[ContextCompressionTargetsConfig] = None
+    scoring: Optional[ContextCompressionScoringConfig] = None
+    recovery: Optional[ContextCompressionRecoveryConfig] = None
+    request_controls: Optional[ContextCompressionRequestControlsConfig] = None
+    failure_mode: Literal["fail_open", "fail_closed"] = "fail_open"
 
 
 class FastResponsePluginConfig(BaseModel):
@@ -553,14 +929,78 @@ class ResponseJailbreakPluginConfig(BaseModel):
     action: Optional[Literal["block", "header", "none"]] = None
 
 
+class ToolsDynamicRetrievalWeights(BaseModel):
+    """Per-source weights for decision-scoped dynamic tool retrieval."""
+
+    semantic: Optional[float] = None
+    history: Optional[float] = None
+    decision_prior: Optional[float] = None
+    repetition_penalty: Optional[float] = None
+
+
+class ToolsDynamicRetrievalConfig(BaseModel):
+    """History-aware retrieval settings owned by the tools plugin."""
+
+    enabled: bool
+    strategy: str = "semantic_only"
+    history_window: Optional[int] = None
+    weights: Optional[ToolsDynamicRetrievalWeights] = None
+    min_history_confidence: Optional[float] = None
+    fallback_on_low_confidence: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_enabled_contract(self):
+        if not self.enabled:
+            return self
+        if self.strategy not in ("", "semantic_only", "hybrid_history"):
+            raise ValueError(
+                "dynamic_retrieval.strategy must be semantic_only or hybrid_history"
+            )
+        if self.strategy == "hybrid_history" and (
+            self.history_window is None or self.history_window < 1
+        ):
+            raise ValueError(
+                "history_window must be at least 1 when dynamic_retrieval.strategy=hybrid_history"
+            )
+        if self.min_history_confidence is not None and not (
+            0.0 <= self.min_history_confidence <= 1.0
+        ):
+            raise ValueError("min_history_confidence must be between 0.0 and 1.0")
+        if self.weights is not None:
+            for name, value in self.weights.model_dump(exclude_none=True).items():
+                if value < 0.0:
+                    raise ValueError(
+                        f"dynamic_retrieval.weights.{name} must be non-negative"
+                    )
+        return self
+
+
 class ToolsPluginConfig(BaseModel):
     """Configuration for tools plugin."""
 
     enabled: bool
-    mode: Literal["none", "passthrough", "filtered"] = "passthrough"
+    mode: str = "passthrough"
     semantic_selection: Optional[bool] = None
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
+    strip_tool_history: Optional[bool] = None
+    strategy: Optional[str] = None
+    dynamic_retrieval: Optional[ToolsDynamicRetrievalConfig] = None
+
+    @model_validator(mode="after")
+    def validate_mode_contract(self):
+        if not self.enabled:
+            return self
+        if self.mode not in ("none", "passthrough", "filtered"):
+            raise ValueError("mode must be none, passthrough, or filtered")
+        has_filters = bool(self.allow_tools or self.block_tools)
+        if self.mode == "filtered" and not has_filters:
+            raise ValueError("mode=filtered requires allow_tools or block_tools")
+        if self.mode != "filtered" and has_filters:
+            raise ValueError("allow_tools and block_tools require mode=filtered")
+        if self.strip_tool_history and self.mode != "none":
+            raise ValueError("strip_tool_history requires mode=none")
+        return self
 
 
 class ToolFilteringWeights(BaseModel):
@@ -812,6 +1252,23 @@ class PluginConfig(BaseModel):
     type: PluginType
     configuration: Dict[str, Any]
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_response_cache_aliases(cls, value):
+        if isinstance(value, dict) and value.get("type") in {
+            "semantic-cache",
+            "semantic_cache",
+            "response-cache",
+        }:
+            warnings.warn(
+                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            value = dict(value)
+            value["type"] = PluginType.RESPONSE_CACHE.value
+        return value
+
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
         # Use mode='python' to get Python native types, then convert enum
@@ -824,19 +1281,6 @@ class PluginConfig(BaseModel):
         elif hasattr(data.get("type"), "value"):
             data["type"] = data["type"].value
         return data
-
-
-class ImageGenPluginConfig(BaseModel):
-    """Configuration for image_gen plugin."""
-
-    enabled: bool
-    backend: str
-    backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
-    default_width: Optional[int] = Field(default=None, ge=1)
-    default_height: Optional[int] = Field(default=None, ge=1)
-    max_inference_steps: Optional[int] = Field(default=None, ge=1)
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class DecisionLearningAdaptationConfig(BaseModel):
@@ -866,6 +1310,25 @@ class DecisionAdaptationsConfig(BaseModel):
     mode: Optional[Literal["apply", "observe", "bypass"]] = None
     adaptation: Optional[DecisionLearningAdaptationConfig] = None
     protection: Optional[DecisionLearningProtectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_mode_boundaries(self):
+        component_modes = [
+            ("adaptation", self.adaptation.mode if self.adaptation else None),
+            ("protection", self.protection.mode if self.protection else None),
+        ]
+        for component, component_mode in component_modes:
+            if component_mode is None:
+                continue
+            if self.mode == "bypass" and component_mode != "bypass":
+                raise ValueError(
+                    f"{component}.mode cannot be {component_mode!r} when mode is 'bypass'"
+                )
+            if self.mode == "observe" and component_mode == "apply":
+                raise ValueError(
+                    f"{component}.mode cannot be 'apply' when mode is 'observe'"
+                )
+        return self
 
 
 class RouterLearningAdaptationConfig(BaseModel):
@@ -917,6 +1380,36 @@ class RouterLearningProtectionConfig(BaseModel):
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
 
 
+class RouterLearningRedisStateStoreConfig(BaseModel):
+    """Redis connectivity for shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: str
+    password: Optional[str] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[str] = None
+
+
+class RouterLearningStateStoreConfig(BaseModel):
+    """Optional shared Router Learning protection state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: int = Field(default=86400, ge=0)
+    timeout_ms: int = Field(default=50, ge=0)
+    redis: Optional[RouterLearningRedisStateStoreConfig] = None
+
+    @model_validator(mode="after")
+    def validate_redis(self):
+        if self.backend == "redis" and self.redis is None:
+            raise ValueError(
+                "redis config is required when state_store.backend is redis"
+            )
+        return self
+
+
 class RouterLearningConfig(BaseModel):
     """Global Router Learning controls."""
 
@@ -925,6 +1418,7 @@ class RouterLearningConfig(BaseModel):
     enabled: Optional[StrictBool] = None
     adaptation: Optional[RouterLearningAdaptationConfig] = None
     protection: Optional[RouterLearningProtectionConfig] = None
+    state_store: Optional[RouterLearningStateStoreConfig] = None
 
 
 class OutputContractChoiceSetSpec(BaseModel):
@@ -977,17 +1471,7 @@ class OutputContractNormalizeSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    field_order: Optional[List[str]] = None
     defaults: Optional[Dict[str, str]] = None
-
-
-class OutputContractViolationPolicy(BaseModel):
-    """Repair and fallback policy when output contract enforcement fails."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    repair: Optional[StrictBool] = None
-    fallback: Optional[str] = None
 
 
 class OutputContractPostprocess(BaseModel):
@@ -1010,8 +1494,31 @@ class OutputContractSpec(BaseModel):
     render: Optional[OutputContractRenderSpec] = None
     extract: Optional[OutputContractExtractSpec] = None
     normalize: Optional[OutputContractNormalizeSpec] = None
-    on_violation: Optional[OutputContractViolationPolicy] = None
     postprocess: Optional[List[OutputContractPostprocess]] = None
+
+
+def _conditions_reference_signal(conditions, signal_type):
+    for condition in conditions or []:
+        if (condition.type or "").lower() == signal_type:
+            return True
+        if _conditions_reference_signal(condition.conditions, signal_type):
+            return True
+    return False
+
+
+class DecisionAction(BaseModel):
+    """Explicit action a matched decision applies instead of candidate ranking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["route"]
+    destination: str
+
+    @model_validator(mode="after")
+    def validate_destination(self):
+        if not self.destination.strip():
+            raise ValueError("action.destination is required")
+        return self
 
 
 class Decision(BaseModel):
@@ -1020,15 +1527,82 @@ class Decision(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str
-    description: str
+    description: Optional[str] = None
     priority: int
-    rules: Rules
+    tier: int = Field(default=0, ge=0)
+    # A decision without an explicit rule is the canonical match-all fallback.
+    # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
+    rules: Rules = Field(default_factory=Rules)
+    action: Optional[DecisionAction] = None
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
+    annotations: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_action(self):
+        if self.action is None:
+            return self
+        if not _conditions_reference_signal(self.rules.conditions, "jailbreak"):
+            raise ValueError(
+                "a route action requires an explicit jailbreak condition in rules"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
+        if (
+            self.algorithm
+            and self.algorithm.type == "prompt"
+            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
+        ):
+            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
+        if self.algorithm and self.algorithm.type == "prompt":
+            model_names = [model_ref.model for model_ref in self.modelRefs]
+            if len(model_names) != len(set(model_names)):
+                raise ValueError("algorithm.type=prompt requires unique modelRefs")
+            effective_names = [
+                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
+            ]
+            if len(effective_names) != len(set(effective_names)):
+                raise ValueError(
+                    "algorithm.type=prompt requires unique effective model identities"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_annotation_bounds(self):
+        if self.annotations is None:
+            return self
+        if len(self.annotations) > MAX_DECISION_ANNOTATIONS:
+            raise ValueError(
+                f"annotations cannot contain more than {MAX_DECISION_ANNOTATIONS} entries"
+            )
+        encoded = json.dumps(
+            self.annotations,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(encoded) > MAX_DECISION_ANNOTATION_BYTES:
+            raise ValueError(
+                f"annotations cannot exceed {MAX_DECISION_ANNOTATION_BYTES} encoded bytes"
+            )
+        return self
 
 
 class ModelPricing(BaseModel):
@@ -1036,21 +1610,180 @@ class ModelPricing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    currency: Optional[str] = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+
+
+class ProviderReliability(BaseModel):
+    """Generated Envoy reliability policy for one provider model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    retry_count: int = Field(default=0, ge=0, le=5)
+    retry_on: str = "connect-failure,refused-stream"
+    consecutive_5xx: int = Field(default=0, ge=0)
+    base_ejection_time: str = "30s"
+    max_ejection_percent: int = Field(default=50, ge=0, le=100)
+    health_check_path: Optional[str] = None
+    health_check_interval: str = "10s"
+    health_check_timeout: str = "2s"
+
+
+class Reasoning(BaseModel):
+    """Built-in family reference or inline behavior for a custom model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    family: Optional[str] = None
+    type: Optional[
+        Literal[
+            "chat_template_kwargs",
+            "reasoning_effort",
+            "reasoning_mode",
+            "top_level_reasoning_effort",
+        ]
+    ] = None
+    parameter: Optional[str] = None
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]] = Field(
+        default_factory=list
+    )
+    default_mode: Optional[Literal["enabled", "disabled", "adaptive"]] = None
+    disabled: Optional[str] = None
+
+    def _has_inline_fields(self) -> bool:
+        return bool(
+            self.type
+            or self.parameter
+            or self.activation_parameter
+            or self.effort_flags
+            or self.levels
+            or self.default
+            or self.modes
+            or self.default_mode
+            or self.disabled
+        )
+
+    def _validate_reference_shape(self, inline: bool) -> None:
+        if self.family and inline:
+            raise ValueError(
+                "family and inline reasoning fields are mutually exclusive"
+            )
+        if not self.family and not inline:
+            raise ValueError(
+                "reasoning must reference a family or define inline behavior"
+            )
+        if inline and (not self.type or not self.parameter):
+            raise ValueError("inline reasoning requires type and parameter")
+
+    def _validate_activation_parameter(self) -> None:
+        if self.activation_parameter:
+            if not self.activation_parameter.strip():
+                raise ValueError(
+                    "inline reasoning activation_parameter cannot be blank"
+                )
+            if self.activation_parameter == self.parameter:
+                raise ValueError(
+                    "inline reasoning activation_parameter must differ from parameter"
+                )
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning activation_parameter requires reasoning_effort type"
+                )
+
+    def _validate_effort_flags(self) -> None:
+        if self.effort_flags:
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning effort_flags requires reasoning_effort type"
+                )
+            if not self.activation_parameter:
+                raise ValueError(
+                    "inline reasoning effort_flags requires activation_parameter"
+                )
+            if any(effort not in self.levels for effort in self.effort_flags):
+                raise ValueError(
+                    "inline reasoning effort_flags keys must be listed in levels"
+                )
+            parameters = list(self.effort_flags.values())
+            if any(not parameter.strip() for parameter in parameters):
+                raise ValueError("inline reasoning effort_flags values cannot be blank")
+            if len(parameters) != len(set(parameters)):
+                raise ValueError("inline reasoning effort_flags values must be unique")
+            if self.parameter in parameters or self.activation_parameter in parameters:
+                raise ValueError(
+                    "inline reasoning effort_flags values must differ from parameter and activation_parameter"
+                )
+            active_levels = [level for level in self.levels if level != self.disabled]
+            if len(active_levels) - len(self.effort_flags) > 1:
+                raise ValueError(
+                    "inline reasoning effort_flags cannot leave multiple levels indistinguishable by omission"
+                )
+
+    def _validate_effort_levels(self) -> None:
+        if self.levels and self.default is not None and self.default not in self.levels:
+            raise ValueError("inline reasoning default must be listed in levels")
+        if (
+            self.type
+            in {
+                "reasoning_effort",
+                "top_level_reasoning_effort",
+            }
+            and not self.levels
+        ):
+            raise ValueError("inline effort-based reasoning requires levels")
+        # Operator-authored families may omit the mode contract entirely. This
+        # keeps the user-facing custom-model form small for the common cases
+        # where a boolean activation flag or an effort value already describes
+        # the complete wire behavior. Built-in families are validated strictly
+        # by the catalog generator.
+
+    def _validate_modes(self) -> None:
+        if not self.modes and self.default_mode is not None:
+            raise ValueError(
+                "inline reasoning modes are required when default_mode is set"
+            )
+        if self.modes and self.default_mode is None:
+            raise ValueError(
+                "inline reasoning default_mode is required when modes are set"
+            )
+        if self.default_mode is not None and self.default_mode not in self.modes:
+            raise ValueError("inline reasoning default_mode must be listed in modes")
+        if self.disabled and self.modes and "disabled" not in self.modes:
+            raise ValueError("inline reasoning disabled value requires disabled mode")
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        inline = self._has_inline_fields()
+        self._validate_reference_shape(inline)
+        if not inline:
+            return self
+        self._validate_activation_parameter()
+        self._validate_effort_flags()
+        self._validate_effort_levels()
+        self._validate_modes()
+        return self
 
 
 class Model(BaseModel):
-    """Provider model binding for canonical providers.models entries."""
+    """Provider model binding under the existing providers.models hierarchy."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
-    reasoning_family: Optional[str] = None
+    catalog: Optional[str] = None
+    reasoning: Optional[Reasoning] = None
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
+    reliability: Optional[ProviderReliability] = None
     api_format: Optional[str] = None
     external_model_ids: Optional[Dict[str, str]] = None
 
@@ -1062,18 +1795,101 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
+class ModelEvaluation(BaseModel):
+    """Small operator-authored benchmark result attached to one model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark: str = Field(
+        min_length=1,
+        pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
+    )
+    benchmark_profile: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    metrics: Dict[str, float]
+    source: Optional[str] = None
+    measured_at: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_measurement(self):
+        if not self.metrics:
+            raise ValueError("metrics cannot be empty")
+        if any(
+            not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", key) or not math.isfinite(value)
+            for key, value in self.metrics.items()
+        ):
+            raise ValueError("metrics must contain named finite numbers")
+        if any(
+            isinstance(value, (dict, list, tuple, set))
+            or (isinstance(value, float) and not math.isfinite(value))
+            for value in self.metadata.values()
+        ):
+            raise ValueError("metadata values must be scalar")
+        if any(not key.strip() for key in self.metadata):
+            raise ValueError("metadata keys cannot be empty")
+        if self.measured_at:
+            try:
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.measured_at):
+                    raise ValueError
+                date.fromisoformat(self.measured_at)
+            except ValueError as error:
+                raise ValueError("measured_at must use YYYY-MM-DD") from error
+        return self
+
+
+class RoutingModelPresentation(BaseModel):
+    """Optional product presentation for a handwritten model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logo: str
+    monogram: str
+    monochrome: bool = False
+
+
+class RoutingModelDistribution(BaseModel):
+    """Distribution metadata for a handwritten physical or virtual model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["open_weights", "proprietary_api", "router_recipe"]
+    source: str
+    license: Optional[str] = None
+
+
 class RoutingModel(BaseModel):
-    """Semantic model catalog entry exposed to routing/DSL."""
+    """Handwritten custom card or explicit overlay of a built-in card."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
+    display_name: Optional[str] = None
+    publisher: Optional[str] = None
+    presentation: Optional[RoutingModelPresentation] = None
+    distribution: Optional[RoutingModelDistribution] = None
+    family: Optional[str] = None
+    revision: Optional[str] = None
+    released_at: Optional[str] = None
+    knowledge_cutoff: Optional[str] = None
+    lifecycle: Optional[str] = None
     param_size: Optional[str] = None
     context_window_size: Optional[int] = Field(default=None, ge=1)
+    max_output_tokens: Optional[int] = Field(default=None, ge=1)
     description: Optional[str] = None
     capabilities: Optional[List[str]] = None
     loras: Optional[List[LoRAAdapter]] = None
     tags: Optional[List[str]] = None
-    quality_score: Optional[float] = Field(default=None, ge=0, le=1)
+    modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
+    evaluations: List[ModelEvaluation] = Field(default_factory=list)
+
+    @field_validator("released_at", "knowledge_cutoff", mode="before")
+    @classmethod
+    def normalize_date_metadata(cls, value: Any) -> Any:
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        return value
 
 
 class ReasoningFamily(BaseModel):
@@ -1081,18 +1897,26 @@ class ReasoningFamily(BaseModel):
 
     type: str
     parameter: str
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]]
+    default_mode: Literal["enabled", "disabled", "adaptive"]
+    disabled: Optional[str] = None
 
 
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = None
     endpoint: Optional[str] = None
     protocol: str = "http"
-    weight: int = 1
-    type: Optional[str] = None
+    weight: int = Field(default=1, ge=0)
     base_url: Optional[str] = None
-    provider: Optional[str] = None
+    provider: str = "vllm"
     auth_header: Optional[str] = None
     auth_prefix: Optional[str] = None
     extra_headers: Optional[Dict[str, str]] = None
@@ -1114,41 +1938,97 @@ class BackendRef(BaseModel):
 class ProviderDefaults(BaseModel):
     """Provider-wide defaults that should not be mixed into per-model access bindings."""
 
-    default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
-        default_factory=dict
-    )
-    default_reasoning_effort: Optional[str] = "high"
+    model_config = ConfigDict(extra="forbid")
+
+    model: Optional[str] = None
+    reasoning_effort: Optional[str] = None
 
 
 class Providers(BaseModel):
     """Provider configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
     models: List[Model] = Field(default_factory=list)
 
     @property
     def default_model(self) -> Optional[str]:
-        return self.defaults.default_model
-
-    @property
-    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
-        return self.defaults.reasoning_families or {}
+        return self.defaults.model
 
     @property
     def default_reasoning_effort(self) -> Optional[str]:
-        return self.defaults.default_reasoning_effort
+        return self.defaults.reasoning_effort
 
 
 class Routing(BaseModel):
     """Canonical routing block."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
+
+
+class Entrypoint(BaseModel):
+    """Request-facing virtual model names mapped to one routing recipe."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_names: List[str] = Field(min_length=1)
+    recipe: str = Field(min_length=1)
+
+    @field_validator("model_names", mode="before")
+    @classmethod
+    def normalize_model_names(cls, value):
+        if not isinstance(value, list):
+            return value
+        if any(not isinstance(item, str) for item in value):
+            raise ValueError("model_names entries must be strings")
+        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        if not normalized:
+            raise ValueError("model_names must contain at least one non-empty name")
+        return normalized
+
+    @field_validator("recipe")
+    @classmethod
+    def normalize_recipe(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("recipe must not be empty")
+        return normalized
+
+
+class RecipeRouting(BaseModel):
+    """Recipe-owned routing profile; the shared model catalog stays top-level."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
+    decisions: List[Decision] = Field(default_factory=list)
+    strategy: Optional[RoutingStrategy] = None
+
+
+class Recipe(BaseModel):
+    """Named routing profile selected through an entrypoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    description: Optional[str] = None
+    routing: RecipeRouting = Field(default_factory=RecipeRouting)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name must not be empty")
+        return normalized
 
 
 class EmbeddingModelsConfig(BaseModel):
@@ -1194,6 +2074,8 @@ class UserConfig(BaseModel):
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
     routing: Routing = Field(default_factory=Routing)
+    entrypoints: List[Entrypoint] = Field(default_factory=list)
+    recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 

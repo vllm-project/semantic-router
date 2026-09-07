@@ -11,17 +11,21 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: MoM
+      model: MoM
     models:
       - name: MoM
+        # The selected backend accepts Anthropic Messages. Keep this explicit:
+        # the Router owns semantic mutation and emits the backend-native wire
+        # contract, while the gateway owns transport and transparent delivery.
+        api_format: anthropic
         backend_refs:
           - name: anthropic-backend-qwen
-            # The shim's Service exposes port 9080 (the Python FastAPI layer).
-            # Requests from the router arrive as Anthropic Messages bodies;
-            # the shim forwards them to llama-server after translation.
-            endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:9080
+            # The shim's Service exposes port 8080 (the Python FastAPI layer).
+            # The shim forwards Anthropic Messages to llama-server after
+            # translating them to its OpenAI-compatible API.
+            endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:8080
             weight: 1
-            type: anthropic
+            provider: anthropic
   routing:
     decisions:
       - name: route_to_anthropic_shim
@@ -51,7 +55,10 @@ config:
         description: Qwen2.5-0.5B-Instruct via llama.cpp + anthropic-shim
         capabilities:
           - chat
-        quality_score: 0.5
+        evaluations:
+          - benchmark: vllm-sr/operator-rating@1.0.0
+            metrics:
+              score: 0.5
   global:
     model_catalog:
       kbs: []
@@ -59,6 +66,11 @@ config:
       clear_route_cache: true
       strategy: priority
     services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
       observability:
         metrics:
           enabled: true
@@ -70,7 +82,7 @@ config:
           concurrency_threshold: 5
           max_concurrency: 8
     stores:
-      semantic_cache:
+      response_cache:
         enabled: false
         embedding_model: mmbert
       memory:

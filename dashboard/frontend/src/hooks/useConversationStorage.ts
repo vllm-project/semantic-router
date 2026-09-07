@@ -5,15 +5,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DEFAULT_MAX_CONVERSATIONS,
   normalizeStoredConversations,
+  prepareStoredConversationsForPersistence,
   pruneStoredConversations,
   type StoredConversation,
 } from './conversationStorage'
 
 export type { StoredConversation } from './conversationStorage'
 
-interface UseConversationStorageOptions {
+interface UseConversationStorageOptions<T> {
   storageKey?: string
   maxConversations?: number
+  maxStorageBytes?: number
+  preparePayloadForPersistence?: (payload: T) => T | null
 }
 
 const DEFAULT_STORAGE_KEY = 'sr:chat:conversations'
@@ -22,8 +25,11 @@ const PERSIST_DEBOUNCE_MS = 350
 export const useConversationStorage = <T>({
   storageKey = DEFAULT_STORAGE_KEY,
   maxConversations = DEFAULT_MAX_CONVERSATIONS,
-}: UseConversationStorageOptions = {}) => {
+  maxStorageBytes,
+  preparePayloadForPersistence,
+}: UseConversationStorageOptions<T> = {}) => {
   const [conversations, setConversations] = useState<StoredConversation<T>[]>([])
+  const [isHydrated, setIsHydrated] = useState(false)
   const pendingPersistenceRef = useRef<StoredConversation<T>[] | null>(null)
   const persistenceTimerRef = useRef<number | null>(null)
 
@@ -32,16 +38,20 @@ export const useConversationStorage = <T>({
       if (typeof window === 'undefined') return
 
       try {
-        if (next.length === 0) {
+        const persisted = prepareStoredConversationsForPersistence(next, {
+          maxBytes: maxStorageBytes,
+          preparePayload: preparePayloadForPersistence,
+        })
+        if (persisted.length === 0) {
           window.localStorage.removeItem(storageKey)
         } else {
-          window.localStorage.setItem(storageKey, JSON.stringify(next))
+          window.localStorage.setItem(storageKey, JSON.stringify(persisted))
         }
       } catch (err) {
         console.error('Failed to save conversations to localStorage', err)
       }
     },
-    [storageKey],
+    [maxStorageBytes, preparePayloadForPersistence, storageKey],
   )
 
   const flushPendingPersistence = useCallback(() => {
@@ -90,6 +100,8 @@ export const useConversationStorage = <T>({
       setConversations(restored)
     } catch (err) {
       console.error('Failed to load conversations from localStorage', err)
+    } finally {
+      setIsHydrated(true)
     }
   }, [maxConversations, storageKey])
 
@@ -156,6 +168,19 @@ export const useConversationStorage = <T>({
     [updateAndPersist],
   )
 
+  const renameConversation = useCallback(
+    (id: string, title: string) => {
+      const normalizedTitle = title.trim().slice(0, 80)
+      if (!normalizedTitle) return
+      updateAndPersist((prev) =>
+        prev.map((conversation) =>
+          conversation.id === id ? { ...conversation, title: normalizedTitle } : conversation,
+        ),
+      )
+    },
+    [updateAndPersist],
+  )
+
   const clearAll = useCallback(() => {
     updateAndPersist(() => [])
   }, [updateAndPersist])
@@ -172,7 +197,9 @@ export const useConversationStorage = <T>({
 
   return {
     conversations,
+    isHydrated,
     saveConversation,
+    renameConversation,
     deleteConversation,
     clearAll,
     getConversation,

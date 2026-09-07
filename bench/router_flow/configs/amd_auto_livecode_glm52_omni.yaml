@@ -17,7 +17,7 @@ global:
 
 providers:
   defaults:
-    default_model: glm52-finalizer
+    model: glm52-finalizer
   models:
     - name: glm52-solver-a
       provider_model_id: z-ai/glm-5.2
@@ -89,28 +89,40 @@ routing:
       context_window_size: 1048576
       description: GLM 5.2 solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:glm52]
     - name: glm52-solver-b
       context_window_size: 1048576
       description: GLM 5.2 solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:glm52]
     - name: glm52-solver-c
       context_window_size: 1048576
       description: GLM 5.2 solver alias for independent LiveCodeBench sampling.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker, base:glm52]
     - name: glm52-finalizer
       context_window_size: 1048576
       description: GLM 5.2 final synthesis alias for LiveCodeBench loop recipes.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.91
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.91
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:synthesis, base:glm52]
 

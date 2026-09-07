@@ -1,5 +1,13 @@
+import {
+  DEFAULT_SETUP_PROVIDER_ID,
+  DEFAULT_SETUP_RUNTIME_BASE_URL,
+  getSetupProviderOption,
+  isSetupRuntimeProvider,
+  type ProviderKind,
+} from "./setupWizardProviderCatalog";
+
 export type SetupStep = 0 | 1 | 2;
-export type ProviderKind = "vllm" | "openai-compatible" | "anthropic";
+export type { ProviderKind } from "./setupWizardProviderCatalog";
 export type SetupValidationState = "idle" | "validating" | "valid" | "error";
 export type SetupActivationState = "idle" | "activating" | "error";
 export type SetupRoutingMode = "scratch" | "remote" | "preset";
@@ -56,17 +64,10 @@ interface BuiltModel {
     endpoint?: string;
     protocol: "http" | "https";
     base_url?: string;
-    provider?: "openai" | "anthropic";
+    provider: ProviderKind;
     api_key?: string;
   }>;
-  api_format?: "anthropic";
-}
-
-export interface ProviderOption {
-  id: ProviderKind;
-  label: string;
-  description: string;
-  placeholder: string;
+  api_format?: "responses" | "anthropic";
 }
 
 export interface SetupConfigCounts {
@@ -82,30 +83,6 @@ export interface ImportedSetupConfig {
   counts: SetupConfigCounts;
 }
 
-export const PROVIDER_OPTIONS: ProviderOption[] = [
-  {
-    id: "vllm",
-    label: "Local vLLM",
-    description:
-      "Best for first-run with a local or self-hosted OpenAI-compatible endpoint.",
-    placeholder: "vllm:8000",
-  },
-  {
-    id: "openai-compatible",
-    label: "OpenAI-compatible API",
-    description:
-      "Works for hosted endpoints that expose the OpenAI chat/completions surface.",
-    placeholder: "https://api.openai.com",
-  },
-  {
-    id: "anthropic",
-    label: "Anthropic Messages API",
-    description:
-      "Uses Anthropic-compatible request translation inside the router.",
-    placeholder: "https://api.anthropic.com",
-  },
-];
-
 export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
   ["1", "Connect model"],
   ["2", "Choose routing"],
@@ -113,10 +90,9 @@ export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
 ];
 
 export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
-  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
+  "https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml";
 
 const DEFAULT_MODEL_NAME = "qwen/qwen3.5-rocm";
-const DEFAULT_VLLM_BASE_URL = "vllm:8000";
 export const SETUP_MODELS_PER_PAGE = 4;
 
 export function createSetupRequestGuard(): SetupRequestGuard {
@@ -235,23 +211,27 @@ export function createModelDraft(
   return {
     id: `model-${Date.now()}-${seed}`,
     name: existingModels.length === 0 ? DEFAULT_MODEL_NAME : "",
-    providerKind: "vllm",
-    baseUrl: nextVllmBaseUrl(existingModels),
+    providerKind: DEFAULT_SETUP_PROVIDER_ID,
+    baseUrl: nextRuntimeBaseUrl(existingModels),
     accessKey: "",
     endpointName: "primary",
   };
 }
 
-function nextVllmBaseUrl(existingModels: ModelDraft[]): string {
+function nextRuntimeBaseUrl(existingModels: ModelDraft[]): string {
   const usedEndpoints = new Set(
     existingModels
-      .map((model) => normalizeVllmEndpoint(model))
+      .map((model) => normalizeRuntimeEndpoint(model))
       .filter((endpoint): endpoint is string => Boolean(endpoint)),
   );
 
   let port = 8000;
-  let candidate = DEFAULT_VLLM_BASE_URL;
-  while (usedEndpoints.has(normalizeBaseUrl(candidate, "vllm") ?? "")) {
+  let candidate = DEFAULT_SETUP_RUNTIME_BASE_URL;
+  while (
+    usedEndpoints.has(
+      normalizeBaseUrl(candidate, DEFAULT_SETUP_PROVIDER_ID) ?? "",
+    )
+  ) {
     port += 1;
     candidate = `vllm:${port}`;
   }
@@ -263,10 +243,10 @@ function normalizeModelName(value: string): string {
   return value.trim().toLowerCase();
 }
 
-function normalizeVllmEndpoint(
+function normalizeRuntimeEndpoint(
   model: Pick<ModelDraft, "baseUrl" | "providerKind">,
 ): string | null {
-  if (model.providerKind !== "vllm") {
+  if (!isSetupRuntimeProvider(model.providerKind)) {
     return null;
   }
 
@@ -296,10 +276,6 @@ function inferProtocol(
   endpoint: string,
   providerKind: ProviderKind,
 ): "http" | "https" {
-  if (providerKind === "anthropic") {
-    return "https";
-  }
-
   if (
     endpoint.startsWith("localhost") ||
     endpoint.startsWith("127.0.0.1") ||
@@ -310,6 +286,10 @@ function inferProtocol(
   }
 
   if (endpoint.includes(":80")) {
+    return "http";
+  }
+
+  if (getSetupProviderOption(providerKind).initialBaseUrl.startsWith("http://")) {
     return "http";
   }
 
@@ -393,7 +373,7 @@ export function getModelDraftFieldErrors(
       return;
     }
 
-    if (model.providerKind !== "vllm") {
+    if (!isSetupRuntimeProvider(model.providerKind)) {
       return;
     }
 
@@ -467,7 +447,7 @@ export function getStepOneErrors(
           model.baseUrl,
           model.providerKind,
         ).endpoint;
-        if (model.providerKind === "vllm") {
+        if (isSetupRuntimeProvider(model.providerKind)) {
           const endpointKey = parsedEndpoint.toLowerCase();
           if (localEndpoints.has(endpointKey)) {
             errors.push(
@@ -529,11 +509,30 @@ export function summarizeSetupConfig(
     config.routing && typeof config.routing === "object"
       ? (config.routing as Record<string, unknown>)
       : {};
+  const recipeRoutings = Array.isArray(config.recipes)
+    ? config.recipes.flatMap((recipe) => {
+        if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) {
+          return [];
+        }
+        const scopedRouting = (recipe as Record<string, unknown>).routing;
+        return scopedRouting &&
+          typeof scopedRouting === "object" &&
+          !Array.isArray(scopedRouting)
+          ? [scopedRouting as Record<string, unknown>]
+          : [];
+      })
+    : [];
+  const routingProfiles = [routing, ...recipeRoutings];
   const models = Array.isArray(providers.models) ? providers.models.length : 0;
-  const decisions = Array.isArray(routing.decisions)
-    ? routing.decisions.length
-    : 0;
-  const signals = countConfigSignals(routing.signals);
+  const decisions = routingProfiles.reduce(
+    (total, profile) =>
+      total + (Array.isArray(profile.decisions) ? profile.decisions.length : 0),
+    0,
+  );
+  const signals = routingProfiles.reduce(
+    (total, profile) => total + countConfigSignals(profile.signals),
+    0,
+  );
 
   return createSetupConfigCounts({
     models,
@@ -557,30 +556,34 @@ export function buildSetupConfig(
       `${slugify(model.name) || `model-${index + 1}`}-primary`;
     const apiKey = model.accessKey.trim() || undefined;
     const trimmedBaseUrl = model.baseUrl.trim().replace(/\/$/, "");
-    const backendRef: BuiltModel["backend_refs"][number] =
-      model.providerKind === "vllm"
-        ? {
-            name: endpointName,
-            weight: 100,
-            endpoint,
-            protocol,
-            api_key: apiKey,
-          }
-        : {
-            name: endpointName,
-            weight: 100,
-            protocol,
-            base_url: trimmedBaseUrl,
-            provider:
-              model.providerKind === "anthropic" ? "anthropic" : "openai",
-            api_key: apiKey,
-          };
+    const provider = getSetupProviderOption(model.providerKind);
+    const backendRef: BuiltModel["backend_refs"][number] = isSetupRuntimeProvider(
+      model.providerKind,
+    )
+      ? {
+          name: endpointName,
+          weight: 100,
+          endpoint,
+          protocol,
+          provider: model.providerKind,
+          api_key: apiKey,
+        }
+      : {
+          name: endpointName,
+          weight: 100,
+          protocol,
+          base_url: trimmedBaseUrl,
+          provider: model.providerKind,
+          api_key: apiKey,
+        };
 
     return {
       name: model.name.trim(),
       provider_model_id: model.name.trim(),
       backend_refs: [backendRef],
-      api_format: model.providerKind === "anthropic" ? "anthropic" : undefined,
+      ...(provider.apiFormat === "openai"
+        ? {}
+        : { api_format: provider.apiFormat }),
     };
   });
 
@@ -614,14 +617,10 @@ export function buildSetupConfig(
     providers: {
       models: builtModels,
       defaults: {
-        default_model: defaultModel.name,
+        model: defaultModel.name,
       },
     },
     routing: {
-      modelCards: builtModels.map((model) => ({
-        name: model.name,
-        modality: "text",
-      })),
       decisions: [catchAllDecision],
     },
   };

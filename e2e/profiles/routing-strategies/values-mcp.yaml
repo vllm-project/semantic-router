@@ -3,25 +3,13 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/gpt-oss-20b
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: openai/gpt-oss-20b
+      reasoning_effort: high
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: mock-vllm
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -101,9 +89,10 @@ config:
           - type: system_prompt
             configuration:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
+              scope: global
               similarity_threshold: 0.75
     signals:
       domains:
@@ -184,7 +173,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

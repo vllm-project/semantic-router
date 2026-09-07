@@ -1,68 +1,67 @@
-# vLLM Semantic Router Agent Entry
+# vLLM Semantic Router agent entry
 
-This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
+vLLM Semantic Router is an Envoy ExtProc router for LLM inference. A public
+entrypoint resolves to an isolated recipe; its signals and projections feed a
+decision and algorithm, which select a backend and recipe-scoped plugins.
 
-## Read First
+## Start here
 
-1. [docs/agent/README.md](docs/agent/README.md)
-2. [docs/agent/repo-map.md](docs/agent/repo-map.md)
-3. [docs/agent/environments.md](docs/agent/environments.md)
-4. [docs/agent/change-surfaces.md](docs/agent/change-surfaces.md)
-5. `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
+- Read the nearest `AGENTS.md` only for directories you change.
+- Use `tools/agent/docs/change-surfaces.md` when a user-visible router contract
+  crosses configuration, runtime, deployment, or documentation.
+- `tools/agent/domains.yaml` is the single changed-path registry for ownership,
+  minimum checks, CI jobs, images, and E2E profiles.
 
-## Native Discovery vs Routed Context
+```bash
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
+make verify DOMAIN=<domain>       # explicit integration check
+make verify PROFILE=<e2e-profile>
+make ci-full                      # complete local PR baseline
+```
 
-- Root startup should always discover this [AGENTS.md](AGENTS.md) entrypoint and the thin repo-native bridge at [.agents/skills/harness/SKILL.md](.agents/skills/harness/SKILL.md).
-- Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning still come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
-- `tools/agent/**` remains the canonical harness source; `.agents/skills/**` is only a discovery bridge.
+Use `make harness-check` after changing the registry, workflows, harness code,
+or these instructions. `impact` reports facts; it does not select a skill,
+prescribe a work loop, or decide when the task is complete.
 
-If you need real AMD model deployment details instead of the minimal smoke path, also read [deploy/amd/README.md](deploy/amd/README.md) and [deploy/recipes/balance.yaml](deploy/recipes/balance.yaml).
+## Repository map
 
-## Supported Environments
+- `src/semantic-router/`: Go router, ExtProc runtime, routing, and APIs
+- `src/vllm-sr/`: Python CLI and local stack orchestration
+- `config/`: canonical configuration, fragments, schemas, and recipes
+- `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`: inference bindings
+- `dashboard/`: React frontend and Go management backend
+- `deploy/`: deployment artifacts and operator
+- `e2e/`: end-to-end framework and profiles
+- `tools/`: build, development, release, security, and harness tooling
+- `website/`: public documentation
 
-- `cpu-local`: `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never`
-- `amd-local`: `make vllm-sr-dev VLLM_SR_PLATFORM=amd`, then `vllm-sr serve --image-pull-policy never --platform amd`
-- `nvidia-local`: `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`, then `vllm-sr serve --platform nvidia --config <recipe>` (selects the CUDA image + flips `use_cpu` to false, at parity with `--platform amd`; see [docs/agent/nvidia-local.md](docs/agent/nvidia-local.md))
-- `ci-k8s`: `make e2e-test`
+## Durable constraints
 
-## Non-Negotiable Rules
+- Use the existing `vllm-sr serve` local-image flow for local runtime behavior.
+- Keep steady-state configuration canonical. Legacy layouts belong in explicit
+  migration tooling, not the runtime parser.
+- A behavior-visible routing, startup, config, Docker, CLI, or API change needs
+  an appropriate integration or E2E assertion. Pure refactors do not.
+- Generated artifacts and public docs change with their source contract.
+- Numeric file, function, nesting, and interface limits are review signals, not
+  architecture. Forbidden dependencies, new cycles, generated invariants, and
+  unowned root files remain blocking checks.
+- Prefer cohesive modules. Split or extract when ownership becomes mixed, not
+  to satisfy a line-count target.
+- Use an execution plan only for genuinely resumable multi-session work. Prefer
+  GitHub issues for tracked debt; keep repository-only architectural risks in
+  `tools/agent/docs/architecture-risks.md`.
+- PR commits use `git commit -s`. Keep unrelated changes out of the branch.
+- Never publish credentials, private hostnames, or private fleet details.
 
-- Use the local image flow for local-dev behavior. Do not invent another serve path.
-- Start from one project-level primary skill. Cross-cutting guidance belongs in change surfaces, canonical docs, or maintainer support skills.
-- Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
-- Use `make agent-pr-gate` when you need a repo-native local reproduction of the baseline PR requirements.
-- Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
-- Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
-- Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
-- Maintainer release, issue, PR, stale-work, and daily-board workflows live in [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md) and write local state only under `.agent-harness/maintainer/` unless an explicit reviewed apply step mutates GitHub.
-- Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
-- If the work needs multiple resumable loops across sessions or contributors, use the indexed current execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes. Historical plans are not kept in the current tree.
-- If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.
-- Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
-- Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.
-- Read the nearest local `AGENTS.md` before editing hotspot trees under `src/semantic-router/pkg/config/`, `src/semantic-router/pkg/extproc/`, `src/vllm-sr/cli/`, `src/fleet-sim/fleet_sim/optimizer/`, `deploy/operator/api/v1alpha1/`, `deploy/operator/controllers/`, `dashboard/frontend/src/`, `dashboard/frontend/src/pages/`, `dashboard/frontend/src/components/`, and `dashboard/backend/handlers/`.
+## Optional repository skills
 
-## Canonical Commands
+Choose a skill by the semantics of the task, not by an automatic path match:
 
-- `make agent-bootstrap`
-- `make agent-validate`
-- `make agent-scorecard`
-- `make agent-dev ENV=cpu|amd`
-- `make agent-serve-local ENV=cpu|amd`
-- `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
-- `make agent-lint CHANGED_FILES="..."`
-- `make agent-ci-gate CHANGED_FILES="..."`
-- `make agent-pr-gate`
-- `make test-and-build-local`
-- `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."`
-- `make agent-e2e-affected CHANGED_FILES="..."`
+- `router-contract-change`: request-visible config/signal/decision/algorithm/plugin changes
+- `routing-calibration`: live maintained-recipe probe and calibration work
+- `maintainer-ops`: reviewed issue, PR, release, or GitHub mutation workflows
 
-## Rule Layers
-
-- Entry and navigation: [docs/agent/README.md](docs/agent/README.md), [docs/agent/governance.md](docs/agent/governance.md)
-- Architecture and boundaries: [docs/agent/architecture-guardrails.md](docs/agent/architecture-guardrails.md), nearest local `AGENTS.md`
-- Testing and done criteria: [docs/agent/feature-complete-checklist.md](docs/agent/feature-complete-checklist.md)
-- Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
-- Maintainer ops: [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml)
-
-Temporary working notes can exist when needed, but they are not part of the canonical harness unless promoted into the docs or executable rule layer above.
+Canonical contributor and GitHub metadata remain in `CONTRIBUTING.md`, the
+issue and PR templates, and `.prowlabels.yaml`.

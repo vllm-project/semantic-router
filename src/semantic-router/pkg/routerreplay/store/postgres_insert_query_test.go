@@ -49,6 +49,31 @@ func TestPostgresInsertQueryColumnArgsAlignment(t *testing.T) {
 	}
 }
 
+// TestPostgresInsertSelectColumnAlignment pins the write path against the read
+// path. postgresRecordRow.scanDestinations() is positional, so it only decodes
+// correctly while postgresRecordSelectColumns lists the same columns in the same
+// order as the INSERT statement. A column added to one list but not the other
+// round trips as a zero value instead of failing loudly.
+func TestPostgresInsertSelectColumnAlignment(t *testing.T) {
+	insertCols := extractInsertColumns(t, postgresInsertQueryTemplate)
+	selectCols := splitColumnList(postgresRecordSelectColumns)
+
+	if len(insertCols) != len(selectCols) {
+		t.Fatalf("insert / select column count mismatch: %d vs %d\ninsert=%v\nselect=%v",
+			len(insertCols), len(selectCols), insertCols, selectCols)
+	}
+	for i := range insertCols {
+		if insertCols[i] != selectCols[i] {
+			t.Errorf("column #%d differs: insert=%q select=%q", i+1, insertCols[i], selectCols[i])
+		}
+	}
+
+	row := postgresRecordRow{}
+	if got := len(row.scanDestinations()); got != len(selectCols) {
+		t.Errorf("scanDestinations() returns %d destinations for %d selected columns", got, len(selectCols))
+	}
+}
+
 // extractInsertColumns parses the column list between
 // `INSERT INTO %s (` and `) VALUES`.
 func extractInsertColumns(t *testing.T, tmpl string) []string {
@@ -62,7 +87,12 @@ func extractInsertColumns(t *testing.T, tmpl string) []string {
 	if end < 0 {
 		return nil
 	}
-	raw := tmpl[start : start+end]
+	return splitColumnList(tmpl[start : start+end])
+}
+
+// splitColumnList turns a comma-separated SQL column list into trimmed names,
+// dropping the whitespace and newlines both literals are formatted with.
+func splitColumnList(raw string) []string {
 	parts := strings.Split(raw, ",")
 	cols := make([]string, 0, len(parts))
 	for _, p := range parts {

@@ -14,7 +14,10 @@ interface UseTestQueryResult {
   clearResult: () => void
 }
 
-export function useTestQuery(topologyData: ParsedTopology | null): UseTestQueryResult {
+export function useTestQuery(
+  topologyData: ParsedTopology | null,
+  routingModel?: string,
+): UseTestQueryResult {
   const [testQuery, setTestQuery] = useState('')
   const [testResult, setTestResult] = useState<TestQueryResult | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -25,7 +28,7 @@ export function useTestQuery(topologyData: ParsedTopology | null): UseTestQueryR
 
     setIsLoading(true)
     try {
-      const result = await testQueryDryRun(testQuery)
+      const result = await testQueryDryRun(testQuery, routingModel)
       setTestResult({ ...result, mode: 'dry-run', isAccurate: true })
     } catch (error) {
       console.warn('Backend verification failed, falling back to simulation:', error)
@@ -42,7 +45,7 @@ export function useTestQuery(topologyData: ParsedTopology | null): UseTestQueryR
     } finally {
       setIsLoading(false)
     }
-  }, [testQuery, topologyData])
+  }, [testQuery, topologyData, routingModel])
 
   const clearResult = useCallback(() => {
     setTestResult(null)

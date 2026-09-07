@@ -10,6 +10,11 @@ DOCKER_REGISTRY="${DOCKER_REGISTRY:-ghcr.io/vllm-project/semantic-router}"
 DOCKER_TAG="${DOCKER_TAG:-latest}"
 VLLM_SR_IMAGE="${VLLM_SR_IMAGE:-ghcr.io/vllm-project/semantic-router/vllm-sr:latest}"
 VLLM_SR_STACK_NAME="${VLLM_SR_STACK_NAME:-vllm-sr}"
+VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
+if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
+    echo "VLLM_SR_PORT_OFFSET must be a non-negative integer" >&2
+    exit 1
+fi
 if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
     VLLM_SR_NETWORK="${VLLM_SR_NETWORK:-vllm-sr-network}"
 else
@@ -21,7 +26,9 @@ PID_FILE="${TEST_DIR}/serve.pid"
 SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
-ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:$((8080 + VLLM_SR_PORT_OFFSET))/ready}"
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT:-http://localhost:$((8888 + VLLM_SR_PORT_OFFSET))}"
+LLM_KATAN_HOST_PORT="${LLM_KATAN_HOST_PORT:-8000}"
 MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
@@ -242,12 +249,12 @@ echo "Milvus connected to ${VLLM_SR_NETWORK} as vllm-sr-milvus"
 "${CONTAINER_RUNTIME}" run -d --name llm-katan \
     --network "${VLLM_SR_NETWORK}" \
     --network-alias llm-katan \
-    -p 8000:8000 \
+    -p "${LLM_KATAN_HOST_PORT}:8000" \
     "${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}" \
     llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null
 
 for _ in $(seq 1 30); do
-    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
+    if curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
         echo "llm-katan ready"
         break
     fi
@@ -261,7 +268,7 @@ for _ in $(seq 1 30); do
     sleep 1
 done
 
-if ! curl -s http://localhost:8000/health >/dev/null 2>&1; then
+if ! curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
     echo "llm-katan did not become healthy"
     "${CONTAINER_RUNTIME}" logs llm-katan || true
     exit 1
@@ -306,7 +313,7 @@ fi
 
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
-ROUTER_ENDPOINT=http://localhost:8888 \
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
 MILVUS_COLLECTION=memory_test_ci \

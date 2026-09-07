@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-最新算法教程与 `config/algorithm/` 下的片段目录一致。
+最新算法教程与 `config/fragments/algorithm/` 下的片段目录一致。
 
 算法仅在**决策已匹配**且 `modelRefs` 暴露多个候选模型之后才有意义；路由器随后用 `decision.algorithm` 选择或协调这些候选。
 
@@ -18,7 +18,7 @@ translation:
 - 将路由资格与模型选择策略分离。
 - 一条决策可保留多个候选模型，而不内联排序逻辑。
 - 支持单模型排序与多模型编排。
-- 与仓库片段树一致：`config/algorithm/selection/` 与 `config/algorithm/looper/` 下每种算法一页教程。
+- 与仓库片段树一致：`config/fragments/algorithm/selection/` 与 `config/fragments/algorithm/looper/` 下每种算法一页教程。
 
 ## 解决什么问题？
 

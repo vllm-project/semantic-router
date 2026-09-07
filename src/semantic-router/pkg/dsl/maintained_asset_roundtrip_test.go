@@ -8,14 +8,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
-		t.Fatalf("failed to read deploy/recipes/balance.yaml: %v", err)
+		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
 	}
 
 	cfg, err := config.ParseYAMLBytes(data)
@@ -41,10 +43,10 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 }
 
 func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
-		t.Fatalf("failed to read deploy/recipes/balance.yaml: %v", err)
+		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
 	}
 
 	cfg, err := config.ParseYAMLBytes(data)
@@ -52,10 +54,10 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 		t.Fatalf("ParseYAMLBytes error: %v", err)
 	}
 	if len(cfg.Projections.Partitions) == 0 {
-		t.Fatal("expected deploy/recipes/balance.yaml to include at least one projection partition")
+		t.Fatal("expected config/recipes/balance/config.yaml to include at least one projection partition")
 	}
 	if len(cfg.Projections.Scores) == 0 || len(cfg.Projections.Mappings) == 0 {
-		t.Fatalf("expected deploy/recipes/balance.yaml to include derived projection scores and mappings, got %+v", cfg.Projections)
+		t.Fatalf("expected config/recipes/balance/config.yaml to include derived projection scores and mappings, got %+v", cfg.Projections)
 	}
 	assertMaintainedBalanceDomainPartition(t, cfg.Projections.Partitions)
 	assertMaintainedBalanceIntentPartition(t, cfg.Projections.Partitions)
@@ -70,19 +72,19 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 }
 
 func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
-	dslPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.dsl")
-	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	dslPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "recipe.dsl")
+	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 
 	prog := mustLoadMaintainedBalanceDSLProgram(t, dslPath)
 	want := mustCompileMaintainedRoutingDSL(t, prog)
 	got := mustLoadMaintainedBalanceRoutingYAML(t, yamlPath)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("maintained DSL/YAML examples diverged\nwant: %+v\ngot: %+v", want, got)
+		t.Fatalf("maintained DSL/YAML examples diverged (-want +got):\n%s", cmp.Diff(want, got))
 	}
 }
 
 func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.T) {
-	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
 
 	for _, routeName := range []string{
@@ -97,7 +99,7 @@ func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.
 }
 
 func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {
-	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
+	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 	cfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
 
 	dslText, err := DecompileRouting(cfg)
@@ -159,7 +161,7 @@ func assertMaintainedBalanceDomainPartition(t *testing.T, groups []config.Projec
 		}
 	}
 	if domainPartition == nil {
-		t.Fatal("expected deploy/recipes/balance.yaml to define balance_domain_partition")
+		t.Fatal("expected config/recipes/balance/config.yaml to define balance_domain_partition")
 	}
 	gotMembers := append([]string(nil), domainPartition.Members...)
 	wantMembers := config.SupportedRoutingDomainNames()
@@ -184,7 +186,7 @@ func assertMaintainedBalanceIntentPartition(t *testing.T, groups []config.Projec
 		}
 	}
 	if intentPartition == nil {
-		t.Fatal("expected deploy/recipes/balance.yaml to define balance_intent_partition")
+		t.Fatal("expected config/recipes/balance/config.yaml to define balance_intent_partition")
 	}
 
 	wantMembers := []string{
@@ -273,7 +275,7 @@ func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, nam
 			return
 		}
 	}
-	t.Fatalf("expected deploy/recipes/balance.yaml to include %s route", name)
+	t.Fatalf("expected config/recipes/balance/config.yaml to include %s route", name)
 }
 
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
@@ -366,7 +368,7 @@ func mustFindMaintainedBalanceDecision(t *testing.T, decisions []config.Decision
 			return &decisions[i]
 		}
 	}
-	t.Fatalf("expected deploy/recipes/balance.yaml to include %s route", name)
+	t.Fatalf("expected config/recipes/balance/config.yaml to include %s route", name)
 	return nil
 }
 

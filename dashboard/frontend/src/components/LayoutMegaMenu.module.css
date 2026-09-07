@@ -111,6 +111,11 @@
   color: #e31b23;
 }
 
+.categoryArrow {
+  width: 14px;
+  height: 14px;
+}
+
 .panel {
   min-width: 0;
   min-height: 100%;
@@ -234,12 +239,33 @@
   background: #e31b23;
 }
 
+.itemLabel {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.62rem;
+}
+
+.itemLabel svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: #747478;
+}
+
+.item:hover .itemLabel svg,
+.item:focus-visible .itemLabel svg,
+.itemActive .itemLabel svg {
+  color: #181818;
+}
+
 .itemArrow {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
   color: #8b8b8e;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
   opacity: 0;
-  transform: translate(-3px, 3px);
+  transform: translateX(-3px);
   transition:
     opacity 110ms ease,
     transform 110ms ease;

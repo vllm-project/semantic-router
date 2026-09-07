@@ -11,7 +11,7 @@ translation:
 
 `hallucination` 是路由局部插件：决策已匹配后的事实核查与响应质量筛查。
 
-对应 `config/plugin/hallucination/fact-check.yaml`。
+对应 `config/fragments/plugin/hallucination/fact-check.yaml`。
 
 ## 主要优势
 

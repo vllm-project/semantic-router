@@ -39,6 +39,9 @@ export const ConfigSectionRoute: React.FC<{
       decisions: 'decisions',
       endpoints: 'models',
       models: 'models',
+      entrypoints: 'entrypoints-recipes',
+      recipes: 'entrypoints-recipes',
+      'entrypoints-recipes': 'entrypoints-recipes',
       mcp: 'mcp',
     }
 

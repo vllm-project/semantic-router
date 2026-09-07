@@ -9,7 +9,7 @@ import (
 )
 
 func TestMaintainedFeedbackRecipeParsesAndDecompilesWithoutError(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "feedback", "feedback-router.yaml")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "feedback", "config.yaml")
 	cfg, err := config.Parse(assetPath)
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
@@ -26,7 +26,7 @@ func TestMaintainedFeedbackRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 }
 
 func TestMaintainedFeedbackRecipeDSLRoundTrip(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "feedback", "feedback-router.dsl")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "feedback", "recipe.dsl")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
 		t.Skipf("feedback recipe DSL not found at %s: %v", assetPath, err)
@@ -63,7 +63,7 @@ func TestMaintainedFeedbackRecipeDSLRoundTrip(t *testing.T) {
 }
 
 func TestMaintainedFeedbackRecipeValidates(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "feedback", "feedback-router.dsl")
+	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "feedback", "recipe.dsl")
 	data, err := os.ReadFile(assetPath)
 	if err != nil {
 		t.Skipf("feedback recipe DSL not found: %v", err)

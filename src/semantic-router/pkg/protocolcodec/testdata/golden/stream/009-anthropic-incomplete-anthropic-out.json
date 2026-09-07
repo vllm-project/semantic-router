@@ -1,0 +1,72 @@
+{
+  "frames": [
+    {
+      "event": "message_start",
+      "data": {
+        "message": {
+          "container": null,
+          "content": [],
+          "id": "incomplete_1",
+          "model": "public-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": null,
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 0,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "type": "message_start"
+      }
+    },
+    {
+      "event": "content_block_start",
+      "data": {
+        "content_block": {
+          "text": "",
+          "type": "text"
+        },
+        "index": 0,
+        "type": "content_block_start"
+      }
+    },
+    {
+      "event": "content_block_delta",
+      "data": {
+        "delta": {
+          "text": "partial",
+          "type": "text_delta"
+        },
+        "index": 0,
+        "type": "content_block_delta"
+      }
+    },
+    {
+      "event": "error",
+      "data": {
+        "error": {
+          "message": "upstream stream ended before completion",
+          "type": "api_error"
+        },
+        "type": "error"
+      }
+    }
+  ]
+}

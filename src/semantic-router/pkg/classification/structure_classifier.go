@@ -23,6 +23,7 @@ type StructureMatch struct {
 	Value       float64
 	Confidence  float64
 	Description string
+	Matched     bool
 }
 
 func NewStructureClassifier(
@@ -52,25 +53,44 @@ func NewStructureClassifier(
 	}, nil
 }
 
-func (c *StructureClassifier) Classify(text string) ([]StructureMatch, error) {
-	if strings.TrimSpace(text) == "" {
-		return nil, nil
+func (c *StructureClassifier) Classify(text string, uncompressedText ...string) ([]StructureMatch, error) {
+	evaluated, err := c.EvaluateAll(text, uncompressedText...)
+	if err != nil {
+		return nil, err
 	}
-
-	matches := make([]StructureMatch, 0, len(c.rules))
-	for _, rule := range c.rules {
-		value, matched := c.evaluateRule(rule, text)
-		if !matched {
-			continue
+	matches := make([]StructureMatch, 0, len(evaluated))
+	for _, result := range evaluated {
+		if result.Matched {
+			matches = append(matches, result)
 		}
-		matches = append(matches, StructureMatch{
+	}
+	return matches, nil
+}
+
+// EvaluateAll returns one raw value per configured rule, including rules whose
+// signal-level predicate did not match. Decision predicates consume these raw
+// values independently from boolean signal membership.
+func (c *StructureClassifier) EvaluateAll(
+	text string,
+	uncompressedText ...string,
+) ([]StructureMatch, error) {
+	results := make([]StructureMatch, 0, len(c.rules))
+	for _, rule := range c.rules {
+		ruleText := text
+		if strings.EqualFold(strings.TrimSpace(rule.Feature.Source.Type), "text_bytes") &&
+			len(uncompressedText) > 0 {
+			ruleText = uncompressedText[0]
+		}
+		value, matched := c.evaluateRule(rule, ruleText)
+		results = append(results, StructureMatch{
 			RuleName:    rule.Name,
 			Value:       value,
 			Confidence:  structureConfidence(value, rule.Predicate),
 			Description: rule.Description,
+			Matched:     matched,
 		})
 	}
-	return matches, nil
+	return results, nil
 }
 
 func (c *StructureClassifier) evaluateRule(rule structureRuntimeRule, text string) (float64, bool) {
@@ -122,6 +142,8 @@ func structureSourceCount(rule structureRuntimeRule, text string) int {
 			return 1
 		}
 		return 0
+	case "text_bytes":
+		return len(text)
 	default:
 		return 0
 	}

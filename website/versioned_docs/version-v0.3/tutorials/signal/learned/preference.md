@@ -2,11 +2,11 @@
 
 ## Overview
 
-`preference` infers user response-style preferences from examples and classifier settings. It maps to `config/signal/preference/` and is declared under `routing.signals.preferences`.
+`preference` infers user response-style preferences from examples and classifier settings. It maps to `config/fragments/signal/preference/` and is declared under `routing.signals.preferences`.
 
 This family is learned: it uses the preference-classification path under `global.model_catalog.modules.classifier.preference`.
 
-If `global.model_catalog.modules.classifier.preference.use_contrastive` is omitted, vSR now defaults it to `true`. That means a profile like `deploy/recipes/balance.yaml` can rely on preference signals without adding a separate global classifier block unless it wants to disable contrastive mode explicitly.
+If `global.model_catalog.modules.classifier.preference.use_contrastive` is omitted, vSR now defaults it to `true`. That means a profile like `config/recipes/balance/config.yaml` can rely on preference signals without adding a separate global classifier block unless it wants to disable contrastive mode explicitly.
 
 ## Key Advantages
 
@@ -32,7 +32,7 @@ Use `preference` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/preference/`
+Source fragment family: `config/fragments/signal/preference/`
 
 ```yaml
 routing:

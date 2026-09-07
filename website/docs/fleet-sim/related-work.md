@@ -2,288 +2,113 @@
 title: Research Context
 ---
 
-# Research Context
-
-This page is optional. It exists to position `vllm-sr-sim` relative to adjacent
-research systems and planning tools; most users can skip it and start with
-[Getting started](./getting-started.md) or [Capacity planning scenarios](./use-cases.md).
-
-`vllm-sr-sim` sits at the intersection of several active research threads.
-Each related work answers a *different* question than this simulator.
+# Research context
 
----
-
-## Mélange — heterogeneous GPU type selection
-
-**Griggs et al., UC Berkeley, 2024 · [arXiv:2404.14527](https://arxiv.org/abs/2404.14527)**
-
-Mélange shows that the optimal GPU type is determined by three interacting factors:
-request size (short requests favour cheap GPUs; long ones favour high-end GPUs),
-arrival rate (low rates allow right-sizing to cheaper hardware), and SLO tightness
-(strict latency requires fast GPUs regardless of cost). It formulates GPU allocation
-as cost-aware bin packing — GPUs are bins, workload slices are items — and uses an
-ILP to find the minimum-cost multi-GPU-type allocation. Achieves up to 77% cost
-reduction vs. a single GPU type.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | Mélange | vllm-sr-sim |
-|---|---|---|
-| Input | Empirical throughput profiles per (GPU, request-size bucket, SLO) | Physics-derived `W`/`H` from `HardwareSpec` + `ModelSpec`; no GPU required |
-| Output | Optimal mix of GPU *types* (how many A10G, A100, H100 …) | Optimal number of GPU *instances* per pool + routing topology |
-| Routing | None — bins requests by size, assigns bins to GPU types | Explicit routing policies: length, semantic, C+R, model |
-| Serving model | Single pool per GPU type, no pool routing | Multi-pool with inter-pool routing and SLO verification |
-| SLO metric | Average TPOT | P99 TTFT (also supports TPOT via profile) |
-| Validation | Benchmark runs on real hardware | Analytical Erlang-C + discrete-event simulation |
-
-**When to use Mélange:** You have a homogeneous workload and want to know which cloud
-GPU SKU to rent. Mélange selects the type; `vllm-sr-sim` then tells you how
-many of that type you need, given your length-distribution and routing strategy.
-
----
-
-## SageServe — forecast-aware runtime auto-scaling
-
-**Jaiswal et al., Microsoft O365, 2025 · [arXiv:2502.14617](https://arxiv.org/abs/2502.14617)**
-
-SageServe is a **runtime controller** for an existing fleet. It characterises
-production O365 workloads (10 M+ requests/day across 3 US regions, 4 models),
-observes strong diurnal periodicity in interactive (IW) traffic and opportunistic
-non-interactive (NIW) batch jobs, and proposes: (1) a unified GPU VM pool shared
-across IW and NIW instead of siloed pools; (2) ARIMA-based hourly traffic forecasting;
-(3) an ILP to compute optimal instance count changes (δ) that minimise VM cold-start
-overhead; (4) a reactive heuristic that fine-tunes based on live memory utilisation.
-Saves 25% GPU-hours and reduces cold-start waste by 80%.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | SageServe | vllm-sr-sim |
-|---|---|---|
-| Problem | How many instances to run *right now* given current traffic | How many GPUs to provision *in total* for a target traffic level |
-| Time horizon | Minutes to hours (dynamic scaling loop) | Static capacity plan (peak-hour sizing) |
-| Traffic model | Production traces + ARIMA forecast | Poisson arrivals / CDF workload / trace replay |
-| Multi-tier workloads | IW-Fast, IW-Normal, NIW with different SLAs | Single SLO per pool (multi-SLO via multi-pool config) |
-| Routing | Memory-utilisation-based cross-region routing | Length / semantic / model / C+R content-based routing |
-| Performance model | Empirical TPS profiles per (model, GPU) | Physics-based roofline from specs |
-| Hardware requirement | Real production traces from O365 GPT models | Self-contained; works without any hardware or traces |
-
-**When to use SageServe:** You already have a deployed fleet and need to scale it
-up/down through a 24-hour demand cycle. Use `vllm-sr-sim` first to size the
-peak-hour fleet; then apply SageServe-style policies to scale down during off-peak
-hours to save 20–30% GPU-hours.
-
----
-
-## AIConfigurator — kernel-level configuration search for disaggregated clusters
-
-**Xu et al., NVIDIA, 2025 · [arXiv:2601.06288](https://arxiv.org/abs/2601.06288)**
-
-AIConfigurator decomposes LLM inference into fundamental operations (GEMM, attention,
-all-reduce, P2P transfer) and maintains a **calibrated kernel performance database**
-across Ampere/Hopper/Blackwell GPUs and popular models (GPT, Qwen, DeepSeek, Llama,
-Mistral). Given a workload descriptor and SLA targets, it searches the combinatorial
-space of TP/PP/EP degrees, batch sizes, CUDA-graph flags, and KV-cache fractions in
-under 30 seconds, producing Pareto-optimal throughput-vs-latency frontiers and
-ready-to-launch config files for vLLM, SGLang, and TRT-LLM. Reports up to 40%
-improvement for dense models and 50% for MoE (DeepSeek-V3) vs. default configs.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | AIConfigurator | vllm-sr-sim |
-|---|---|---|
-| Output | Optimal TP/PP/EP, batch size, engine flags for **one cluster** | Optimal number of GPU instances across **N pools** |
-| Granularity | Intra-cluster parallelism degrees and runtime flags | Fleet-level pool count and routing topology |
-| Models | GEMM/attention/communication ops on real silicon | Roofline W/H model (embeds AIConf. calibration constants) |
-| Frameworks | vLLM, SGLang, TRT-LLM, Dynamo launch files | Framework-agnostic Python simulation |
-| SLA scope | TTFT + TPOT per cluster configuration | P99 TTFT across the whole multi-pool fleet |
-| MoE support | Native kernel DB for DeepSeek-V3, Qwen3 MoE | Embedded silicon-measured kernel table from AIConf. |
-
-**Relationship:** `vllm-sr-sim` embeds AIConfigurator's empirical constants
-(`ALPHA_BW = 0.80`, `LAYER_OVERHEAD_US = 3 µs`, MoE kernel table) so that its
-`ProfileBuilder` produces calibrated W/H values without requiring hardware access.
-Use AIConfigurator to find the optimal TP/EP config for a single node group; feed
-that into `ProfileBuilder` as `ServingConfig.tp` to size the full fleet.
-
----
-
-## DistServe — foundational disaggregated prefill/decode serving
-
-**Zhong et al., Peking University + UCSD, OSDI 2024 · [arXiv:2401.09670](https://arxiv.org/abs/2401.09670)**
-
-DistServe identifies that colocating prefill (compute-bound) and decode
-(memory-bandwidth-bound) phases causes mutual interference: a single prefill batch
-can inflate TPOT by 3–10×, and decoding jobs inflate TTFT. It routes prefill and
-decode to physically separate GPUs, allows each to adopt its own TP/PP configuration
-independently, and uses an M/D/1 queuing model to find the optimal prefill-to-decode
-GPU ratio. Achieves 4.48× more requests or 10.2× tighter SLO vs. vLLM on A100s.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | DistServe | vllm-sr-sim |
-|---|---|---|
-| Output | Optimal (TP, PP, batch strategy) for each phase | Optimal `n_prefill`, `n_decode` GPU counts at fleet scale |
-| Scope | One model replica / cluster | Fleet of N replicated pool pairs |
-| Queuing model | M/D/1 per phase (uniform request lengths) | M/G/c Erlang-C (variable service times from W, H, CDF) |
-| KV transfer | Explicit NVLink/InfiniBand bandwidth modelling | Captured via `BETA_TTFT = 1.80` empirical multiplier |
-| Routing | No content-based routing | Length, semantic, C+R, model routing on top of PD split |
-| Phase performance | Empirical throughput measurement | Physics-derived via `ProfileBuilder` with `phase=` flag |
-
-**When to use together:** DistServe determines the right TP/PP config for each phase.
-`DisaggFleetOptimizer` then determines how many prefill and decode workers you need
-to meet your P99 TTFT SLO at a given arrival rate.
-
----
-
-## Splitwise — heterogeneous hardware co-design for PD-split clusters
-
-**Patel et al., University of Washington + Microsoft, ISCA 2024 · [arXiv:2311.18677](https://arxiv.org/abs/2311.18677)**
-
-Splitwise observes that token generation (decode) does not need the high FLOPs of
-the latest GPUs — it is memory-bandwidth bound. H100 has 3.4× more compute than
-A100 but only 1.6× more memory bandwidth. So pairing H100 (prompt) with A100 (token)
-achieves better cost efficiency than two H100s. It designs three cluster archetypes
-optimised for throughput, cost, and power, all using fast InfiniBand for KV-cache
-state transfer. Achieves 1.4× higher throughput at 20% lower cost, or 2.35×
-throughput at the same power budget.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | Splitwise | vllm-sr-sim |
-|---|---|---|
-| Key insight | Different GPUs for prompt vs. token phase saves cost/power | Different GPU counts per pool, with any GPU type |
-| Hardware | Heterogeneous GPU types within one cluster | Heterogeneous GPU types across separate pools |
-| Optimisation | Cluster topology for throughput/cost/power | Fleet sizing for SLO-constrained minimum cost |
-| KV transfer | Explicit InfiniBand bandwidth modelling | Modelled via empirical β multiplier |
-| Routing | Load-balancing across instances | Content-aware: length, semantic, model, C+R |
-| Configuration | Requires profiling on real hardware | Self-contained physics model |
-
-**When to use together:** Use Splitwise's cluster archetypes to choose the GPU mix
-within a pool node group (e.g., H100 prefillers + A100 decoders), then feed each
-pool's GPU type into `ProfileBuilder` and run `DisaggFleetOptimizer` to find the
-prefill-to-decode ratio and total GPU count.
-
----
-
-## TokenScale — Token Velocity autoscaling for disaggregated fleets
-
-**Lai et al., 2024 · [arXiv:2512.03416](https://arxiv.org/abs/2512.03416)**
-
-TokenScale addresses the **runtime autoscaling** problem for PD-disaggregated fleets
-under bursty traffic. It identifies that GPU utilisation and RPS are lagging indicators
-that react only after SLO violations occur. It introduces **Token Velocity** — the
-maximum token-processing rate at each stage (prefill, network, decode) — as a leading
-indicator that exposes backpressure before it causes degradation. A paired mechanism
-called **Convertible Decoders** lets decode GPUs temporarily serve prefill tasks
-during bursts, absorbing spikes without cold-starting new instances. Improves SLO
-attainment from 50–88% to 80–96% and reduces costs by 4–14% over DistServe and
-AIBrix.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | TokenScale | vllm-sr-sim |
-|---|---|---|
-| Problem | React to traffic bursts in an already-deployed PD fleet | Size the fleet before deployment |
-| Time scale | Seconds (burst detection, Convertible Decoder activation) | Minutes to hours (planning phase) |
-| Key metric | Token Velocity per stage (real-time) | P99 TTFT SLO (planning) |
-| Scaling trigger | Token arrival rate vs. stage velocity ratio | Erlang-C wait ≤ SLO budget |
-| Hardware assumption | Fixed GPU cluster, dynamic role assignment | GPU count is the decision variable |
-| Burst model | Empirical burst statistics from Azure/OpenAI traces | Poisson arrival process |
-
-**When to use together:** `vllm-sr-sim` gives the steady-state fleet size
-(minimum GPUs for P99 TTFT ≤ T at rate λ). TokenScale then operates at runtime,
-handling short-term bursts above λ using Convertible Decoders rather than expensive
-over-provisioning.
-
----
-
-## Vidur — high-fidelity single-instance LLM inference simulator
-
-**Agrawal et al., Microsoft Research, 2024 · [arXiv:2405.05465](https://arxiv.org/abs/2405.05465)**
-
-Vidur simulates the full inference stack of **one model deployment**: operator-level
-profiling (GEMM, attention, MLP, communication), KV-cache block management,
-continuous batching, chunked prefill, and preemption. It uses a profiling +
-ML-regression approach to predict per-iteration latency with &lt;9% error. A companion
-tool, **Vidur-Search**, explores hundreds of deployment configurations (TP, PP, batch
-size, chunk size, scheduler) in ~1 CPU-hour, vs. ~42 000 GPU-hours for empirical
-search. Targets per-engine configuration optimisation, not multi-pool fleet sizing.
-
-**Key differences from `vllm-sr-sim`:**
-
-| | Vidur | vllm-sr-sim |
-|---|---|---|
-| Scope | One model instance | N-pool fleet with inter-pool routing |
-| Fidelity | Operator-level (GEMM, attention, NCCL profiled) | Request-level M/G/c queuing (W, H from roofline) |
-| Configuration search | TP, PP, batch size, chunk size, scheduler | Pool count, GPU type, routing policy, γ compression |
-| Input requirement | GPU profiling data per model | Only model spec + hardware spec (no GPU needed) |
-| Fleet routing | None | Length, semantic, C+R, model, round-robin |
-| Multi-pool analysis | None | First-class: two-pool, N-pool, disaggregated |
-| SLO metric | TTFT, TBT, E2E latency | P99 TTFT, SLO attainment %, cost/year |
-
-**When to use together:** Use Vidur-Search to determine the best scheduler and
-batching parameters for one engine replica. Feed its throughput/latency measurements
-into `ManualProfile` and pass it to `FleetOptimizer` to size and validate the full
-fleet of replicas.
-
----
-
-## One-line positioning
-
-| Tool | Core question answered |
-|---|---|
-| **Vidur** | What batching/scheduling config maximises per-GPU goodput? |
-| **AIConfigurator** | What TP/EP/engine flags maximise throughput for one cluster? |
-| **Mélange** | Which GPU types to mix for minimum cost at given SLO? |
-| **Splitwise** | Which GPU generations to use for prefill vs. decode? |
-| **DistServe** | How many prefill vs. decode GPUs per cluster replica? |
-| **TokenScale** | How to scale prefill/decode pools in real time under bursts? |
-| **SageServe** | How many VM instances to run through a 24-hour demand cycle? |
-| **vllm-sr-sim** | How many GPU pools, which routing policy, what fleet cost to meet P99 TTFT? |
-
----
-
-## Decision tree — which tool to use first
-
-Use the [Fleet Sim guide](./guide.md) for the consolidated reading pack, or follow
-the flowchart below.
-
-```mermaid
-flowchart TD
-    START([What is your goal?])
-
-    START --> A{New fleet or existing?}
-
-    A -->|Managing existing fleet| B{Challenge?}
-    B -->|Scale VMs through day| SAGE[SageServe]
-    B -->|Burst handling in PD fleet| TOK[TokenScale]
-    B -->|Re-size after traffic growth| IFS_M[FleetOptimizer]
-
-    A -->|Planning new fleet| C{GPU type chosen?}
-    C -->|No - need optimal GPU mix| MEL[Melange]
-    MEL -->|GPU type decided| D
-    C -->|Yes| D{Engine config tuned?}
-
-    D -->|No, PD disaggregated| AIC[AIConfigurator]
-    D -->|No, monolithic| VID[Vidur-Search]
-    AIC -->|Config known| E
-    VID -->|Config known| E
-
-    D -->|Yes| E{PD disaggregated serving?}
-
-    E -->|No| IFS[FleetOptimizer]
-    E -->|Yes, heterogeneous HW| SPL[Splitwise]
-    E -->|Yes, homogeneous HW| DS[DistServe]
-    SPL --> DS
-    DS --> IFS_D[DisaggFleetOptimizer]
-
-    style IFS   fill:#3b2f7f,stroke:#7c6af7,color:#e0e0ff
-    style IFS_M fill:#3b2f7f,stroke:#7c6af7,color:#e0e0ff
-    style IFS_D fill:#3b2f7f,stroke:#7c6af7,color:#e0e0ff
-    style MEL   fill:#14532d,stroke:#4ade80,color:#dcfce7
-    style AIC   fill:#164e63,stroke:#22d3ee,color:#cffafe
-    style VID   fill:#1e3a5f,stroke:#60a5fa,color:#dbeafe
-    style SPL   fill:#7c2d12,stroke:#fb923c,color:#ffedd5
-    style DS    fill:#500724,stroke:#f472b6,color:#fce7f3
-    style SAGE  fill:#713f12,stroke:#fbbf24,color:#fef9c3
-    style TOK   fill:#713f12,stroke:#fbbf24,color:#fef9c3
-```
+Fleet Sim is a fleet-planning tool. It borrows familiar abstractions from
+queueing, inference simulation, heterogeneous serving, and disaggregated
+prefill/decode research, but it does not reproduce any one research system.
+
+This page helps choose the right level of tool. It deliberately avoids copying
+paper benchmark numbers into product guidance; performance claims are tied to
+each paper's workload and evaluation environment.
+
+## Where Fleet Sim fits
+
+| Layer | Primary question | Fleet Sim coverage |
+| --- | --- | --- |
+| Serving engine | How should one replica batch and schedule tokens? | Represented through a calibrated profile, not simulated at kernel fidelity |
+| Replica configuration | Which tensor/pipeline parallel and runtime settings should one replica use? | Input assumption; `ComputedProfile` can explore rough sensitivity |
+| Fleet planning | How many pool instances are needed and how should traffic be split? | Primary scope |
+| Runtime control | When should a live fleet scale, spill traffic, or reduce load? | Can evaluate static scenarios; does not operate the controller |
+| Facility energy | What is the whole-system power and grid impact? | GPU board-power estimate only |
+
+Use a profiler or high-fidelity engine simulator to calibrate a replica, Fleet
+Sim to compare fleet topologies, and a production load test to accept the
+result.
+
+## Adjacent research
+
+### Heterogeneous fleet selection
+
+[Mélange](https://arxiv.org/abs/2404.14527) studies cost-aware selection of GPU
+types across workload slices. Its core question is which measured hardware
+profiles to combine. Fleet Sim focuses on pool counts, routing, and queueing
+once performance profiles and costs have been supplied.
+
+The common lesson is that a GPU SKU cannot be ranked without workload size,
+arrival rate, SLO, model, and price. Fleet Sim's built-in profile names should
+therefore be treated as inputs to replace, not a universal hardware ranking.
+
+### Per-replica and engine simulation
+
+[Vidur](https://arxiv.org/abs/2405.05465) uses profiled operation-level models
+to simulate an LLM serving engine and search its configuration. This is a
+higher-fidelity layer than Fleet Sim's `W`/`H` request-level profile.
+
+[AIConfigurator](https://arxiv.org/abs/2601.06288) explores model and engine
+configuration using hardware- and operation-level performance information.
+Fleet Sim's computed profile has a roofline-style decomposition, but that does
+not make it a validated substitute for AIConfigurator or a kernel database.
+
+Measurements or selected settings from this class of tool can be converted
+into a `ManualProfile` before fleet sizing.
+
+### Disaggregated prefill and decode
+
+[DistServe](https://arxiv.org/abs/2401.09670) and
+[Splitwise](https://arxiv.org/abs/2311.18677) study systems that separate the
+prefill and decode phases. They model or measure details such as phase
+interference, parallel configuration, placement, and KV transfer.
+
+Fleet Sim's `disagg` command is much narrower: it applies fixed phase
+degradation and TTFT correction factors while sweeping prefill and decode
+worker counts. It is useful for a first sensitivity study, not for validating
+network topology or KV-transfer latency.
+
+### Autoscaling and burst control
+
+[SageServe](https://arxiv.org/abs/2502.14617) considers forecast-aware runtime
+capacity control, while [TokenScale](https://arxiv.org/abs/2512.03416) considers
+runtime scaling for disaggregated inference using stage-level token demand.
+
+Fleet Sim does not implement either control loop. Its `whatif` output can help
+identify static rates and fleet shapes that a separate controller should test,
+but it does not model startup time, forecast error, control delay, or live
+backpressure.
+
+### Power-aware inference
+
+Power-aware serving work, including
+[GPU-to-Grid](https://arxiv.org/abs/2602.05116), motivates studying the latency
+effect of concurrency caps. Fleet Sim's `grid-flex` command represents this as
+a fitted or estimated batch-versus-board-power curve plus analytical and
+optional DES latency.
+
+It does not measure facility power or implement demand response. See the
+[power model](./power-model) for calibration and reporting boundaries.
+
+## Queueing foundation
+
+Analytical sizing uses Erlang-C waiting probability and a Kimura-style M/G/c
+tail approximation. The DES then evaluates selected candidates with explicit
+synthetic arrivals and KV-slot admission.
+
+These models answer a different question from kernel or serving-engine
+simulation: they estimate fleet queueing once a service-time distribution is
+known. Their assumptions—stationary Poisson arrivals, approximate independent
+service times, and logical KV slots—must be checked against the deployment.
+
+## Selecting a tool
+
+| If you need to decide... | Start with... |
+| --- | --- |
+| batching, scheduler, or parallel settings for one replica | a serving-engine benchmark or high-fidelity simulator |
+| which measured GPU/model profile is cheapest | heterogeneous configuration search |
+| short/long pool counts and routing sensitivity | Fleet Sim `optimize`, `pareto`, and `simulate` |
+| prefill/decode worker-count sensitivity | Fleet Sim `disagg`, followed by a disaggregated-system test |
+| second-by-second scaling behavior | a runtime autoscaling/controller model |
+| board-power sensitivity to concurrency | Fleet Sim power commands after measurement |
+| production capacity approval | a production-shaped load test |
+
+No tool in this table removes the need to preserve its workload, model,
+hardware, runtime, and measurement assumptions with the result.
