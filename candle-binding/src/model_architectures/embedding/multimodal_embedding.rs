@@ -1058,13 +1058,18 @@ impl MultiModalEmbeddingModel {
         // Audio encoder: weights under audio_encoder.encoder.* (optional)
         let audio_encoder = WhisperEncoder::load(vb.pp("audio_encoder.encoder"), config).ok();
 
+        let mut matryoshka_config = MultiModalMatryoshkaConfig::default();
+        if !config.matryoshka_dims.is_empty() {
+            matryoshka_config.dimensions = config.matryoshka_dims.clone();
+        }
+
         Ok(Self {
             text_encoder,
             image_encoder,
             image_projection,
             audio_encoder,
             config: config.clone(),
-            matryoshka_config: MultiModalMatryoshkaConfig::default(),
+            matryoshka_config,
             device: device.clone(),
         })
     }
@@ -1518,6 +1523,30 @@ mod tests {
             SigLIPVisionEncoder::load(vb, &config).is_err(),
             "encoder load must fail loudly when head weights are missing"
         );
+    }
+
+    #[test]
+    fn test_loaded_dimensions_follow_model_configuration() {
+        let config = MultiModalEmbeddingConfig {
+            embedding_dim: 8,
+            text_hidden_size: 8,
+            text_num_layers: 0,
+            text_num_heads: 2,
+            text_intermediate_size: 16,
+            text_vocab_size: 8,
+            audio_hidden_size: 8,
+            audio_num_layers: 0,
+            audio_num_heads: 2,
+            matryoshka_dims: vec![8, 4],
+            ..tiny_image_config()
+        };
+        let device = Device::Cpu;
+        let vb = VarBuilder::zeros(DType::F32, &device);
+        let model = MultiModalEmbeddingModel::load_with_vb("test", &config, vb, &device)
+            .expect("synthetic model must load");
+        assert_eq!(model.get_embedding_dimension(), config.embedding_dim);
+        assert_eq!(model.get_matryoshka_dimensions(), config.matryoshka_dims);
+        assert!(!model.matryoshka_config().validate_dimension(384));
     }
 
     #[test]

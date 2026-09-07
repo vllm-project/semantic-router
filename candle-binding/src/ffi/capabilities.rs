@@ -1,9 +1,10 @@
-//! Static embedding capability discovery for the Candle binding.
+//! Embedding capability discovery for the Candle binding.
 //!
-//! The query in this module deliberately does not inspect loaded model state.
-//! It reports facts owned by the compiled native binding and is safe to call
-//! before any model factory has been initialized.
+//! Static binding facts are available before initialization. Dimensions are an
+//! observed snapshot of the loaded model; an unloaded model has an explicit
+//! dimension state, so callers must query again after preparation to use them.
 
+use super::capability_dimensions::{self, EmbeddingDimensions};
 use std::{slice, str};
 
 pub const EMBEDDING_CAPABILITIES_VERSION_V1: u32 = 1;
@@ -11,6 +12,10 @@ pub const EMBEDDING_CAPABILITIES_VERSION_V1: u32 = 1;
 pub const CAPABILITY_STATUS_OK: i32 = 0;
 pub const CAPABILITY_STATUS_UNSUPPORTED_MODEL: i32 = 1;
 pub const CAPABILITY_STATUS_INVALID_INPUT: i32 = 2;
+pub const CAPABILITY_STATUS_INVALID_METADATA: i32 = 3;
+
+pub const DIMENSIONS_NOT_LOADED: u32 = 0;
+pub const DIMENSIONS_AVAILABLE: u32 = 1;
 
 pub const BACKEND_CANDLE: u32 = 1;
 
@@ -29,12 +34,12 @@ pub const DEVICE_METAL: u32 = 1 << 3;
 
 /// Version 1 of the stable C representation returned to Go.
 ///
-/// `supported_dimensions` is borrowed native memory. The caller must copy it
-/// before returning from the FFI call and must never free it. Version 1 returns
-/// a null pointer and zero length because the current inference entrypoints do
-/// not impose a finite dimension allowlist.
+/// `supported_dimensions` is an owned u32 slice. Copy it before releasing the
+/// descriptor with `candle_free_embedding_capabilities_v1`. A null pointer and
+/// zero length mean DIMENSIONS_NOT_LOADED, never unrestricted dimension support.
+/// V1 versions this ABI descriptor, not an embedding task contract.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct EmbeddingCapabilitiesV1 {
     pub version: u32,
     pub struct_size: u32,
@@ -44,6 +49,8 @@ pub struct EmbeddingCapabilitiesV1 {
     pub reserved: [u8; 3],
     pub modalities: u32,
     pub devices: u32,
+    pub dimension_state: u32,
+    pub native_dimension: u32,
     pub supported_dimensions: *const u32,
     pub num_supported_dimensions: usize,
 }
@@ -59,9 +66,45 @@ impl Default for EmbeddingCapabilitiesV1 {
             reserved: [0; 3],
             modalities: 0,
             devices: supported_devices(),
+            dimension_state: DIMENSIONS_NOT_LOADED,
+            native_dimension: 0,
             supported_dimensions: std::ptr::null(),
             num_supported_dimensions: 0,
         }
+    }
+}
+
+impl EmbeddingCapabilitiesV1 {
+    fn set_dimensions(&mut self, dimensions: Option<EmbeddingDimensions>) {
+        if let Some(dimensions) = dimensions {
+            self.dimension_state = DIMENSIONS_AVAILABLE;
+            self.native_dimension = dimensions.native;
+            self.num_supported_dimensions = dimensions.supported.len();
+            self.supported_dimensions = Box::into_raw(dimensions.supported) as *const u32;
+        }
+    }
+}
+
+/// Release the dimension buffer owned by a successful capability query.
+///
+/// The result must come from `candle_embedding_capabilities_v1` and must not
+/// be modified or released more than once through copied descriptors. Releasing
+/// the same descriptor twice is safe because the first release resets it.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn candle_free_embedding_capabilities_v1(result: *mut EmbeddingCapabilitiesV1) {
+    if result.is_null() {
+        return;
+    }
+    unsafe {
+        let result = &mut *result;
+        if !result.supported_dimensions.is_null() {
+            drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                result.supported_dimensions as *mut u32,
+                result.num_supported_dimensions,
+            )));
+        }
+        *result = EmbeddingCapabilitiesV1::default();
     }
 }
 
@@ -93,7 +136,7 @@ fn descriptor_for(model_type: &str) -> Option<(u32, bool, u32)> {
     }
 }
 
-/// Return versioned static capabilities for a request-facing embedding model type.
+/// Return binding facts and observed dimensions for an embedding model type.
 ///
 /// The input is pointer-and-length rather than a C string so embedded NUL bytes
 /// cannot be truncated into a different, valid model type.
@@ -136,10 +179,16 @@ pub extern "C" fn candle_embedding_capabilities_v1(
         return CAPABILITY_STATUS_UNSUPPORTED_MODEL;
     };
 
+    let dimensions = match capability_dimensions::for_model(model_type) {
+        Ok(dimensions) => dimensions,
+        Err(()) => return CAPABILITY_STATUS_INVALID_METADATA,
+    };
+
     unsafe {
         (*result).model_type = model_type;
         (*result).supports_batching = u8::from(supports_batching);
         (*result).modalities = modalities;
+        (*result).set_dimensions(dimensions);
     }
     CAPABILITY_STATUS_OK
 }
@@ -147,6 +196,39 @@ pub extern "C" fn candle_embedding_capabilities_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_dimension_state(result: &EmbeddingCapabilitiesV1) {
+        if result.dimension_state == DIMENSIONS_NOT_LOADED {
+            assert_eq!(result.native_dimension, 0);
+            assert!(result.supported_dimensions.is_null());
+            assert_eq!(result.num_supported_dimensions, 0);
+        } else {
+            assert_eq!(result.dimension_state, DIMENSIONS_AVAILABLE);
+            let values = unsafe {
+                slice::from_raw_parts(result.supported_dimensions, result.num_supported_dimensions)
+            };
+            assert!(values.contains(&result.native_dimension));
+        }
+    }
+
+    #[test]
+    fn observed_dimension_buffer_roundtrip() {
+        let mut result = EmbeddingCapabilitiesV1::default();
+        assert_dimension_state(&result);
+        // A non-default model width must not be inferred from list ordering.
+        let dimensions = EmbeddingDimensions::from_model(960, &[640, 320, 640]).unwrap();
+        result.set_dimensions(Some(dimensions));
+        assert_eq!(result.dimension_state, DIMENSIONS_AVAILABLE);
+        assert_eq!(result.native_dimension, 960);
+        let values = unsafe {
+            slice::from_raw_parts(result.supported_dimensions, result.num_supported_dimensions)
+        };
+        assert_eq!(values, &[960u32, 640, 320]);
+        candle_free_embedding_capabilities_v1(&mut result);
+        assert_dimension_state(&result);
+        candle_free_embedding_capabilities_v1(&mut result);
+        candle_free_embedding_capabilities_v1(std::ptr::null_mut());
+    }
 
     fn query(value: &[u8]) -> (i32, EmbeddingCapabilitiesV1) {
         let mut result = EmbeddingCapabilitiesV1::default();
@@ -156,21 +238,21 @@ mod tests {
 
     #[test]
     fn normalizes_known_model_types() {
-        let (status, result) = query(b"  Qwen3  ");
+        let (status, mut result) = query(b"  Qwen3  ");
         assert_eq!(status, CAPABILITY_STATUS_OK);
         assert_eq!(result.version, EMBEDDING_CAPABILITIES_VERSION_V1);
         assert_eq!(result.backend, BACKEND_CANDLE);
         assert_eq!(result.model_type, MODEL_TYPE_QWEN3);
         assert_eq!(result.supports_batching, 1);
         assert_eq!(result.modalities, MODALITY_TEXT);
-        assert!(result.supported_dimensions.is_null());
-        assert_eq!(result.num_supported_dimensions, 0);
+        assert_dimension_state(&result);
         assert_ne!(result.devices & DEVICE_CPU, 0);
+        candle_free_embedding_capabilities_v1(&mut result);
     }
 
     #[test]
     fn reports_multimodal_modalities() {
-        let (status, result) = query(b"multimodal");
+        let (status, mut result) = query(b"multimodal");
         assert_eq!(status, CAPABILITY_STATUS_OK);
         assert_eq!(result.model_type, MODEL_TYPE_MULTIMODAL);
         assert_eq!(
@@ -178,6 +260,7 @@ mod tests {
             MODALITY_TEXT | MODALITY_IMAGE | MODALITY_AUDIO
         );
         assert_eq!(result.supports_batching, 0);
+        candle_free_embedding_capabilities_v1(&mut result);
     }
 
     #[test]

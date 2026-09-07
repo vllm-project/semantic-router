@@ -78,7 +78,8 @@ pub(crate) fn truncate_embedding_to_dimension(
 
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
-fn get_multimodal_refs() -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
+pub(super) fn get_multimodal_refs(
+) -> Option<(&'static MultiModalEmbeddingModel, &'static MmTokenizer)> {
     if let Some((model, tokenizer, _)) = STANDALONE_MULTIMODAL.get() {
         return Some((model, tokenizer));
     }

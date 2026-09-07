@@ -40,14 +40,29 @@ const (
 )
 
 type EmbeddingCapabilities struct {
-	Version             uint32
-	Backend             Backend
-	ModelType           ModelType
-	SupportsBatching    bool
-	Modalities          []Modality
+	Version          uint32
+	Backend          Backend
+	ModelType        ModelType
+	SupportsBatching bool
+	Modalities       []Modality
+	// DimensionState distinguishes an unloaded model from an observed contract.
+	DimensionState DimensionState
+	// NativeDimension is the loaded model's default width, independent of list order.
+	NativeDimension int
+	// SupportedDimensions includes NativeDimension and model-declared widths.
+	// An empty list means dimensions are not yet available, never unrestricted.
 	SupportedDimensions []int
 	SupportedDevices    []Device
 }
+
+// DimensionState describes availability of model-resolved dimension facts.
+// Other capability fields remain usable before model initialization.
+type DimensionState string
+
+const (
+	DimensionStateNotLoaded DimensionState = "not_loaded"
+	DimensionStateAvailable DimensionState = "available"
+)
 
 var (
 	ErrBackendUnavailable    = errors.New("onnx: native backend unavailable for this build")

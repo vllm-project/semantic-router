@@ -1,6 +1,7 @@
 //! Foreign Function Interface (FFI) for Go bindings
 
 pub mod capabilities;
+mod capability_dimensions;
 pub mod classification;
 pub mod embedding;
 pub mod memory;

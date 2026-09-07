@@ -15,6 +15,8 @@ typedef struct {
     uint8_t reserved[3];
     uint32_t modalities;
     uint32_t devices;
+    uint32_t dimension_state;
+    uint32_t native_dimension;
     const uint32_t* supported_dimensions;
     size_t num_supported_dimensions;
 } EmbeddingCapabilitiesV1;
@@ -24,6 +26,7 @@ extern int32_t onnx_embedding_capabilities_v1(
     size_t model_type_len,
     EmbeddingCapabilitiesV1* result
 );
+extern void onnx_free_embedding_capabilities_v1(EmbeddingCapabilitiesV1* result);
 */
 import "C"
 
@@ -32,8 +35,10 @@ import (
 	"unsafe"
 )
 
-// EmbeddingCapabilitiesFor returns versioned static capabilities owned by the
-// compiled ONNX runtime. It rejects legacy arbitrary-name fallback aliases.
+// EmbeddingCapabilitiesFor returns static binding facts and a snapshot of
+// model-owned dimensions. Before initialization, DimensionState is DimensionStateNotLoaded;
+// batching and model identity remain usable. Query again after preparation to
+// consume dimensions, outside request handling.
 func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
 	modelTypeBytes := []byte(modelType)
 	cModelType := C.CBytes(modelTypeBytes)
@@ -42,6 +47,7 @@ func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
 	}
 
 	var result C.EmbeddingCapabilitiesV1
+	defer C.onnx_free_embedding_capabilities_v1(&result)
 	status := int(C.onnx_embedding_capabilities_v1(
 		(*C.uint8_t)(cModelType),
 		C.size_t(len(modelTypeBytes)),
@@ -54,6 +60,8 @@ func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
 		return EmbeddingCapabilities{}, fmt.Errorf("%w: %q", ErrUnsupportedModelType, modelType)
 	case 2:
 		return EmbeddingCapabilities{}, fmt.Errorf("%w: invalid model type encoding", ErrUnsupportedModelType)
+	case 3:
+		return EmbeddingCapabilities{}, fmt.Errorf("%w: invalid model dimension metadata", ErrMalformedCapabilities)
 	default:
 		return EmbeddingCapabilities{}, fmt.Errorf("%w: unexpected native status %d", ErrMalformedCapabilities, status)
 	}
@@ -84,6 +92,10 @@ func marshalEmbeddingCapabilities(result C.EmbeddingCapabilitiesV1, expectedBack
 	if err != nil {
 		return EmbeddingCapabilities{}, err
 	}
+	dimensionState, err := dimensionStateFromNative(uint32(result.dimension_state), int(result.native_dimension), dimensions)
+	if err != nil {
+		return EmbeddingCapabilities{}, err
+	}
 
 	return EmbeddingCapabilities{
 		Version:             uint32(result.version),
@@ -91,6 +103,8 @@ func marshalEmbeddingCapabilities(result C.EmbeddingCapabilitiesV1, expectedBack
 		ModelType:           modelType,
 		SupportsBatching:    result.supports_batching != 0,
 		Modalities:          modalities,
+		DimensionState:      dimensionState,
+		NativeDimension:     int(result.native_dimension),
 		SupportedDimensions: dimensions,
 		SupportedDevices:    devices,
 	}, nil

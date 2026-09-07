@@ -4135,6 +4135,7 @@ func TestMultiModalEmbeddingInit(t *testing.T) {
 		}
 		t.Log("Multi-modal model verified functional via MultiModalEncodeText")
 	}
+	assertLoadedMultimodalCapabilities(t)
 }
 
 // TestMultiModalEncodeText tests text encoding via the multi-modal model
@@ -4855,9 +4856,7 @@ func TestEmbeddingCapabilitiesConformance(t *testing.T) {
 			if fmt.Sprint(got.Modalities) != fmt.Sprint(tc.wantModalities) {
 				t.Errorf("EmbeddingCapabilitiesFor(%q) modalities = %v, want %v", tc.modelType, got.Modalities, tc.wantModalities)
 			}
-			if len(got.SupportedDimensions) != 0 {
-				t.Errorf("EmbeddingCapabilitiesFor(%q) dimensions = %v, want no finite inference allowlist", tc.modelType, got.SupportedDimensions)
-			}
+			assertCapabilityDimensions(t, got)
 			if len(got.SupportedDevices) == 0 || got.SupportedDevices[0] != DeviceCPU {
 				t.Errorf("EmbeddingCapabilitiesFor(%q) devices = %v, want CPU first", tc.modelType, got.SupportedDevices)
 			}

@@ -3,7 +3,8 @@
 #![allow(dead_code)]
 
 // FFI modules
-pub mod capabilities; // static embedding capability discovery
+pub mod capabilities; // binding capability discovery
+mod capability_dimensions;
 pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier

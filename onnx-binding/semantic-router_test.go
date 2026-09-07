@@ -699,9 +699,7 @@ func assertEmbeddingCapabilities(t *testing.T, input string, wantModelType Model
 	if fmt.Sprint(got.Modalities) != fmt.Sprint(wantModalities) {
 		t.Errorf("EmbeddingCapabilitiesFor(%q) modalities = %v, want %v", input, got.Modalities, wantModalities)
 	}
-	if len(got.SupportedDimensions) != 0 {
-		t.Errorf("EmbeddingCapabilitiesFor(%q) dimensions = %v, want no finite inference allowlist", input, got.SupportedDimensions)
-	}
+	assertCapabilityDimensions(t, got)
 	if len(got.SupportedDevices) == 0 || got.SupportedDevices[0] != DeviceCPU {
 		t.Errorf("EmbeddingCapabilitiesFor(%q) devices = %v, want CPU first", input, got.SupportedDevices)
 	}
@@ -714,6 +712,7 @@ func TestGetEmbeddingWithModelType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
+	assertLoadedMmBertCapabilities(t)
 
 	for _, modelType := range []string{string(DefaultEmbeddingModelType), "  MMBERT  "} {
 		t.Run(fmt.Sprintf("ModelType_%s", modelType), func(t *testing.T) {

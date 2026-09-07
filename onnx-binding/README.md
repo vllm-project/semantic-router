@@ -71,6 +71,22 @@ layer and dimension. Supported values come from the model artifact, not a
 universal list in this module. Initialize a classifier before calling its
 matching `Classify*` function.
 
+## Embedding capabilities
+
+`EmbeddingCapabilitiesFor` exposes the same Go capability shape as Candle.
+Static binding facts are available before model initialization, while
+`DimensionStateNotLoaded` explicitly marks dimensions as unavailable.
+After preparation, query again for `DimensionStateAvailable`,
+`NativeDimension`, and `SupportedDimensions` from the loaded ONNX model.
+The list includes the native width and model-declared widths; an empty list
+never means unrestricted support, and list ordering does not define the default.
+Resolve these facts during construction, outside request handling.
+
+The Go wrapper copies and releases the native dimension buffer. Direct C
+callers must use `onnx_free_embedding_capabilities_v1` before reusing or
+discarding a result. V1 identifies the ABI descriptor, not a task-contract
+identity or version.
+
 ## Benchmarking
 
 The examples under [`examples/`](examples/) measure the checked-out code and
