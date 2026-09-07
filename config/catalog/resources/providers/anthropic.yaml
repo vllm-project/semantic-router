@@ -1,0 +1,79 @@
+id: anthropic
+display_name: Anthropic
+description: Claude models through the native Messages API.
+category: model_api
+support_tier: native
+default_base_url: https://api.anthropic.com
+protocols:
+- anthropic/messages@1
+default_protocol: anthropic/messages@1
+supported_operations:
+- anthropic/messages@1#create
+- anthropic/messages@1#list_models
+reasoning_transport: output_config_effort
+default_headers:
+  anthropic-version: '2023-06-01'
+auth:
+  strategy: api_key_header
+  header: x-api-key
+  prefix: ''
+  injected_header: x-user-anthropic-key
+presentation:
+  logo: package:anthropic
+  monogram: A
+  monochrome: true
+  featured: true
+conformance:
+  status: fixture_verified
+  verified_at: 2026-09-04
+models:
+- catalog: anthropic/claude-sonnet-5
+  relationship: first_party
+  id: claude-sonnet-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-4.8
+  relationship: first_party
+  id: claude-opus-4-8
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-opus-5
+  relationship: first_party
+  id: claude-opus-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+- catalog: anthropic/claude-fable-5.1
+  relationship: first_party
+  id: claude-fable-5-1
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://www.anthropic.com/claude/fable
+- catalog: anthropic/claude-fable-5
+  relationship: first_party
+  id: claude-fable-5
+  protocols:
+  - anthropic/messages@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.anthropic.com/en/docs/about-claude/models/overview

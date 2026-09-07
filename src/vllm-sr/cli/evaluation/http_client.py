@@ -9,7 +9,11 @@ from typing import Any
 
 import requests
 
-from cli.evaluation.broker_client import BrokerProtocolError, worker_broker
+from cli.evaluation.broker_client import (
+    BrokerProtocolError,
+    parse_broker_timestamp,
+    worker_broker,
+)
 
 _HTTP_SUCCESS_MIN = 200
 _HTTP_SUCCESS_MAX = 300
@@ -90,7 +94,7 @@ class EvaluationHTTPClient:
             headers=response["headers"],
             error=response["error"],
             broker_receipt=response["broker_receipt"],
-            fetched_at=datetime.fromisoformat(response["fetched_at"]),
+            fetched_at=parse_broker_timestamp(response["fetched_at"]),
         )
 
     @staticmethod

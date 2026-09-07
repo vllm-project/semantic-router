@@ -24,7 +24,7 @@ PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
 OLLAMA_BACKEND = {
     "base_url": "http://localhost:11435/v1",
-    "provider": "openai",
+    "provider": "ollama",
     "chat_path": "/chat/completions",
 }
 
@@ -38,7 +38,6 @@ def _ollama_provider_model(name: str) -> dict:
             {
                 "name": f"ollama-{name.replace(':', '-')}",
                 "weight": 100,
-                "type": "chat",
                 **OLLAMA_BACKEND,
             }
         ],
@@ -52,7 +51,12 @@ def _model_card(name: str) -> dict:
         "context_window_size": 32768,
         "description": f"Local Ollama model {name} for the grounded-fusion benchmark.",
         "capabilities": ["chat", "reasoning"],
-        "quality_score": 0.7,
+        "evaluations": [
+            {
+                "benchmark": "vllm-sr/operator-rating@1.0.0",
+                "metrics": {"score": 0.7},
+            }
+        ],
         "modality": "ar",
         "tags": ["bench", "ollama"],
     }

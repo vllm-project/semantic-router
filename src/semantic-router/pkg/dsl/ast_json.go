@@ -154,6 +154,7 @@ type ModelDeclJSON struct {
 type ModelRefJSON struct {
 	Model     string   `json:"model"`
 	Reasoning *bool    `json:"reasoning,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
 	Effort    string   `json:"effort,omitempty"`
 	LoRA      string   `json:"lora,omitempty"`
 	ParamSize string   `json:"paramSize,omitempty"`
@@ -407,6 +408,7 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		rj.Models = append(rj.Models, &ModelRefJSON{
 			Model:     m.Model,
 			Reasoning: m.Reasoning,
+			Mode:      m.Mode,
 			Effort:    m.Effort,
 			LoRA:      m.LoRA,
 			ParamSize: m.ParamSize,
