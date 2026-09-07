@@ -4,7 +4,7 @@
     "description": "spanish_language matches a clearly Spanish-language request (English translation: \"Could you help me plan a beach vacation this summer?\")",
     "query": "¿Podrías ayudarme a planificar unas vacaciones en la playa este verano?",
     "expected_decision": "spanish_language",
-    "expected_matched_language": "es",
+    "expected_matched_signal": "es",
     "should_match": true
   },
   {
@@ -12,7 +12,7 @@
     "description": "spanish_language matches a second, unrelated Spanish-language request (English translation: \"I need advice on how to better care for my houseplants.\")",
     "query": "Necesito consejos sobre cómo cuidar mejor mis plantas de interior.",
     "expected_decision": "spanish_language",
-    "expected_matched_language": "es",
+    "expected_matched_signal": "es",
     "should_match": true
   },
   {
@@ -20,7 +20,7 @@
     "description": "An English request should not trigger spanish_language. expected_decision is left empty because the test only checks that the actual decision is not spanish_language, not what it actually is",
     "query": "What's the best way to organize a bookshelf by color?",
     "expected_decision": "",
-    "expected_matched_language": "",
+    "expected_matched_signal": "",
     "should_match": false
   }
 ]
