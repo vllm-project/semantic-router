@@ -8,9 +8,10 @@ import (
 	"reflect"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -71,10 +72,10 @@ func testAnthropicMessagesContextManagement(
 		return fmt.Errorf("buffered /v1/messages with context_management failed: %w", err)
 	}
 	var parsed map[string]any
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	if err = json.Unmarshal(body, &parsed); err != nil {
 		return fmt.Errorf("buffered response is not valid JSON: %w (body=%s)", err, truncateString(string(body), 200))
 	}
-	if err := validateForwardedContextManagement(ctx, backendSession, sessionID); err != nil {
+	if err = validateForwardedContextManagement(ctx, backendSession, sessionID); err != nil {
 		return fmt.Errorf("buffered dispatch lost context_management: %w", err)
 	}
 
@@ -120,7 +121,7 @@ func validateForwardedContextManagement(
 			ContextManagement any `json:"context_management"`
 		} `json:"body"`
 	}
-	if err := json.Unmarshal(forwarded, &debug); err != nil {
+	if err = json.Unmarshal(forwarded, &debug); err != nil {
 		return fmt.Errorf("decode provider request: %w", err)
 	}
 	var expected any
@@ -128,7 +129,7 @@ func validateForwardedContextManagement(
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(canonical, &expected); err != nil {
+	if err = json.Unmarshal(canonical, &expected); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(debug.Body.ContextManagement, expected) {
