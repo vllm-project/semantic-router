@@ -169,7 +169,7 @@ func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key string, data
 
 	deleted, rollbackErr := s.compareDeleteResponsePayload(ctx, key, data)
 	if rollbackErr != nil {
-		return fmt.Errorf("%w (rollback failed: %v)", wrapped, rollbackErr)
+		return fmt.Errorf("%w (rollback failed: %w)", wrapped, rollbackErr)
 	}
 	if !deleted {
 		return fmt.Errorf("%w (payload changed before rollback, left in place)", wrapped)
@@ -405,7 +405,7 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 
 	result, restoreErr := s.compareRestoreResponsePayload(ctx, key, failedData, snapshot.data, snapshot.remainingTTLMillis())
 	if restoreErr != nil {
-		return fmt.Errorf("%w (rollback failed: %v)", wrapped, restoreErr)
+		return fmt.Errorf("%w (rollback failed: %w)", wrapped, restoreErr)
 	}
 
 	switch result {
