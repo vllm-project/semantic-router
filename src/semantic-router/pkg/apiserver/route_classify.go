@@ -198,10 +198,11 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 }
 
 func (s *ClassificationAPIServer) maxBatchSize() int {
-	if s.config == nil {
+	cfg := s.currentConfig()
+	if cfg == nil {
 		return 0
 	}
-	return s.config.API.BatchClassification.MaxBatchSize
+	return cfg.API.BatchClassification.MaxBatchSize
 }
 
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {
