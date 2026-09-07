@@ -164,10 +164,22 @@ func (s *RedisStore) handleDuplicateResponse(ctx context.Context, response *resp
 // payload if it is still exactly what this call wrote, so a concurrent
 // writer that stored a new value after this payload's TTL expired is never
 // clobbered (the ABA race the blueprint calls out).
+//
+// Detached from the caller's context, with its own deadline. The likeliest
+// reason the index write failed at all is that the caller's context was
+// cancelled — an HTTP client disconnecting cancels the request context
+// mid-call — and rolling back on that same context fails for exactly the same
+// reason, leaving the payload durably stored with no index entry naming it.
+// That response is invisible to every listing, and once
+// FinalizeConversationIndex has sealed the store, to every scan that could
+// have rediscovered it.
 func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key string, data []byte, indexErr error) error {
 	wrapped := fmt.Errorf("failed to index response in Redis: %w", indexErr)
 
-	deleted, rollbackErr := s.compareDeleteResponsePayload(ctx, key, data)
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
+	defer cancel()
+
+	deleted, rollbackErr := s.compareDeleteResponsePayload(rollbackCtx, key, data)
 	if rollbackErr != nil {
 		return fmt.Errorf("%w (rollback failed: %w)", wrapped, rollbackErr)
 	}
@@ -404,7 +416,17 @@ func (s *RedisStore) compareRestoreResponsePayload(ctx context.Context, key stri
 func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID string, failedData []byte, snapshot responseUpdateSnapshot, indexErr error) error {
 	wrapped := fmt.Errorf("failed to index updated response in Redis: %w", indexErr)
 
-	result, restoreErr := s.compareRestoreResponsePayload(ctx, key, failedData, snapshot.data, snapshot.remainingTTLMillis())
+	// Detached, for the reason spelled out on rollbackStoredPayload: a
+	// cancellation that arrives after the payload replacement commits fails
+	// the index write and would fail this rollback too, stranding the response
+	// under its new conversation with neither conversation's index naming it.
+	// The compensating reindex below runs on the same detached context, since
+	// restoring the payload without restoring its membership just moves the
+	// inconsistency rather than repairing it.
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
+	defer cancel()
+
+	result, restoreErr := s.compareRestoreResponsePayload(rollbackCtx, key, failedData, snapshot.data, snapshot.remainingTTLMillis())
 	if restoreErr != nil {
 		return fmt.Errorf("%w (rollback failed: %w)", wrapped, restoreErr)
 	}
@@ -415,7 +437,7 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 			// The restored payload carries the snapshot's own remaining
 			// lifetime, not a fresh store TTL, so the index is extended to
 			// match what was actually put back.
-			if reindexErr := s.indexResponse(ctx, snapshot.conversationID, responseID, snapshot.createdAt, snapshot.remainingTTLMillis()); reindexErr != nil {
+			if reindexErr := s.indexResponse(rollbackCtx, snapshot.conversationID, responseID, snapshot.createdAt, snapshot.remainingTTLMillis()); reindexErr != nil {
 				logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
 					responseID, snapshot.conversationID, reindexErr)
 			}
