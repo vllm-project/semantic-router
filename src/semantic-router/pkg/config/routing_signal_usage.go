@@ -107,7 +107,66 @@ func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
 // NeedsJailbreakMappingForRouting returns true when routing actually depends on
 // the local file-backed jailbreak classifier assets.
 func (c *RouterConfig) NeedsJailbreakMappingForRouting() bool {
-	return c != nil && c.IsPromptGuardEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypeJailbreak)
+	return c != nil && c.IsPromptGuardEnabled() && c.UsesJailbreakClassifierInReachableRouting()
+}
+
+// UsesJailbreakClassifierInReachableRouting reports whether a request-reachable
+// routing profile depends on the jailbreak classifier. It has three consumers:
+// a decision rule that reads a request-direction jailbreak rule, a
+// response-direction rule that the selected decision's response_jailbreak
+// plugin consumes, and a response_jailbreak plugin that classifies the
+// response itself because no rule is declared. Decision rules never name a
+// response-direction rule, so the signal-type walk alone misses both
+// response-stage consumers; the mapping then stays unloaded, the plugin never
+// runs, and an http_classify prompt_guard refuses to build at startup.
+func (c *RouterConfig) UsesJailbreakClassifierInReachableRouting() bool {
+	if c == nil {
+		return false
+	}
+	if c.UsesSignalTypeInReachableRouting(SignalTypeJailbreak) {
+		return true
+	}
+	for _, signals := range c.reachableRoutingSignals() {
+		for _, rule := range signals.JailbreakRules {
+			if rule.Stage() == SignalStageResponse {
+				return true
+			}
+		}
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetResponseJailbreakConfig()
+		if plugin != nil && plugin.Enabled {
+			return true
+		}
+	}
+	return false
+}
+
+// reachableRoutingSignals is the signal-declaration counterpart of
+// routingConsumerDecisions: the signals of every request-reachable routing
+// profile.
+func (c *RouterConfig) reachableRoutingSignals() []Signals {
+	if c == nil {
+		return nil
+	}
+	if c.RoutingScope != "" {
+		return []Signals{c.Signals}
+	}
+	if len(c.Recipes) == 0 {
+		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
+			return nil
+		}
+		return []Signals{c.Signals}
+	}
+
+	signals := make([]Signals, 0, len(c.Recipes))
+	for _, recipe := range c.ReachableRoutingRecipes() {
+		if recipe != nil {
+			signals = append(signals, recipe.Profile.Signals)
+		}
+	}
+	return signals
 }
 
 // NeedsFactCheckModelForAPI reports whether the default public fact-check API

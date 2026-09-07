@@ -1,0 +1,413 @@
+- id: independent/north-mini-code-critpt@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/north-mini-code-gdpval-aa@2.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    elo: 492.21
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/north-mini-code-artificial-analysis-long-context-reasoning@1.1.0
+  model: cohere/north-mini-code-1.0
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    score: 0.373333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/north-mini-code-omniscience@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    index: -48.5833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/north-mini-code-humanitys-last-exam@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    accuracy: 0.110750695088044
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/north-mini-code-terminalbench-v2-1@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    resolved: 0.355805243445693
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/north-mini-code-gpqa-diamond@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    accuracy: 0.756565656565657
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/north-mini-code-tau3-banking@1.0.0
+  model: cohere/north-mini-code-1.0
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: North Mini Code
+    source_model_slug: north-mini-code
+    run_kind: independent
+  metrics:
+    score: 0.0639175257731959
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/command-a-plus-critpt@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/command-a-plus-gdpval-aa@2.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    elo: 661.27
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/command-a-plus-artificial-analysis-long-context-reasoning@1.1.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    score: 0.526666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/command-a-plus-omniscience@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    index: -4.01666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/command-a-plus-humanitys-last-exam@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    accuracy: 0.119555143651529
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/command-a-plus-terminalbench-v2-1@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    resolved: 0.228464419475655
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/command-a-plus-gpqa-diamond@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    accuracy: 0.760606060606061
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/command-a-plus-scicode@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    score: 0.385416666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/command-a-plus-tau3-banking@1.0.0
+  model: cohere/command-a-plus-05-2026
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Command A+
+    source_model_slug: command-a-plus
+    run_kind: independent
+  metrics:
+    score: 0.0597938144329897
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/tiny-aya-global-critpt@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Tiny Aya Global
+    source_model_slug: tiny-aya-global
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/tiny-aya-global-artificial-analysis-long-context-reasoning@1.1.0
+  model: cohere/tiny-aya-global
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Tiny Aya Global
+    source_model_slug: tiny-aya-global
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/tiny-aya-global-omniscience@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Tiny Aya Global
+    source_model_slug: tiny-aya-global
+    run_kind: independent
+  metrics:
+    index: -84.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/tiny-aya-global-humanitys-last-exam@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Tiny Aya Global
+    source_model_slug: tiny-aya-global
+    run_kind: independent
+  metrics:
+    accuracy: 0.0523632993512512
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/tiny-aya-global-gpqa-diamond@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Tiny Aya Global
+    source_model_slug: tiny-aya-global
+    run_kind: independent
+  metrics:
+    accuracy: 0.305050505050505
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: cohere/tiny-aya-global-hf-eval-gpqa-diamond@1.0.0
+  model: cohere/tiny-aya-global
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: tiny-aya-global
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.2828
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/CohereLabs/tiny-aya-global
+    redistributable: true

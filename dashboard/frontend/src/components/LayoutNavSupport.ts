@@ -64,6 +64,7 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
+          { kind: 'route', label: 'Model Hub', icon: 'model', to: '/models' },
           { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',

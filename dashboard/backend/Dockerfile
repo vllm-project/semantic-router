@@ -59,9 +59,9 @@ WORKDIR /app
 # Pipe falls back to direct on any proxy error; comma only on 404 and 410
 ENV GOPROXY="https://proxy.golang.org|direct"
 
-# Accept build arguments for target architecture
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+# Use BuildKit-provided target platform arguments
+ARG TARGETARCH
+ARG TARGETOS
 ARG DASHBOARD_VERSION
 
 RUN set -eux; \
@@ -83,6 +83,7 @@ RUN set -eux; \
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
+COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/

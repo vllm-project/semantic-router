@@ -52,9 +52,9 @@ func TestMultiFactor_PicksHighestQualityWhenQualityDominant(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.Weights = MultiFactorWeights{Quality: 1.0}
 	params := map[string]config.ModelParams{
-		"a": {QualityScore: 0.5},
-		"b": {QualityScore: 0.9},
-		"c": {QualityScore: 0.3},
+		"a": modelParamsWithTestQuality(0.5),
+		"b": modelParamsWithTestQuality(0.9),
+		"c": modelParamsWithTestQuality(0.3),
 	}
 	s := buildMFSelector(cfg, params,
 		func(string) int { return 0 },
@@ -133,8 +133,8 @@ func TestMultiFactor_SLOExcludesViolators(t *testing.T) {
 	cfg.SLO.MaxTPOTMs = 100
 	cfg.Weights = MultiFactorWeights{Quality: 1.0}
 	params := map[string]config.ModelParams{
-		"slow_high_q": {QualityScore: 0.99},
-		"fast_low_q":  {QualityScore: 0.3},
+		"slow_high_q": modelParamsWithTestQuality(0.99),
+		"fast_low_q":  modelParamsWithTestQuality(0.3),
 	}
 	tpot := map[string]float64{
 		"slow_high_q": 0.5,
