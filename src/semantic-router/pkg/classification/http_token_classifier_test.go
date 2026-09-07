@@ -119,7 +119,6 @@ func newTokenSpansServer(t *testing.T, respond func(inputs string) any) (*httpte
 
 func TestHTTPTokenClassifierFixtures(t *testing.T) {
 	for _, tc := range loadTokenSpansFixtures(t) {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			runTokenSpansFixture(t, tc)
 		})
@@ -276,7 +275,6 @@ func TestHTTPTokenClassifierRejectsMalformedEnvelopes(t *testing.T) {
 		{"string body", "ok", "array or object"},
 	}
 	for _, tc := range rejected {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			entities, err := classifyThrough(t, tc.body, "Call Anna at anna@example.com")
 			if err == nil {
@@ -302,7 +300,6 @@ func TestHTTPTokenClassifierAcceptsExplicitEmptyList(t *testing.T) {
 		{"empty envelope list", map[string]any{"spans": []any{}}},
 		{"empty bare list", []any{}},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			entities, err := classifyThrough(t, tc.body, "nothing sensitive here")
 			if err != nil {
@@ -350,8 +347,10 @@ func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {
 
 	t.Run("agreeing byte pair accepted", func(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
-			return []map[string]any{{"label": "PERSON", "text": "José Alvarez", "score": 0.9,
-				"start": start, "end": end, "byte_start": bStart, "byte_end": bEnd}}
+			return []map[string]any{{
+				"label": "PERSON", "text": "José Alvarez", "score": 0.9,
+				"start": start, "end": end, "byte_start": bStart, "byte_end": bEnd,
+			}}
 		})
 		backend, _ := newHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
 		if _, err := backend.ClassifyTokens(text); err != nil {
@@ -361,8 +360,10 @@ func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {
 
 	t.Run("disagreeing byte pair rejected", func(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
-			return []map[string]any{{"label": "PERSON", "text": "José Alvarez", "score": 0.9,
-				"start": start, "end": end, "byte_start": start, "byte_end": end}}
+			return []map[string]any{{
+				"label": "PERSON", "text": "José Alvarez", "score": 0.9,
+				"start": start, "end": end, "byte_start": start, "byte_end": end,
+			}}
 		})
 		backend, _ := newHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
 		if _, err := backend.ClassifyTokens(text); err == nil {
