@@ -1204,6 +1204,7 @@ export interface JailbreakSignal {
   threshold?: number
   method?: string
   include_history?: boolean
+  direction?: 'request' | 'response'
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
   description?: string
@@ -1365,6 +1366,7 @@ export interface AddSignalFormState {
   composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
+  jailbreak_direction?: string
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
