@@ -1,9 +1,12 @@
 package tools
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"sort"
 	"strings"
 
@@ -11,20 +14,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+// errTrailingJSON reports input whose top-level JSON value is followed by
+// more bytes. json.Unmarshal rejects that on its own; a json.Decoder stops
+// at the first value instead, so canonicalizeJSON re-asserts the check
+// explicitly. Without it, a schema followed by arbitrary trailing bytes
+// would canonicalize to the schema alone — a fingerprint collision between
+// inputs that are not the same document.
+var errTrailingJSON = errors.New("unexpected trailing data after top-level JSON value")
+
 // canonicalizeJSON re-marshals raw JSON bytes so object keys are sorted and
 // whitespace is normalized: encoding/json.Marshal already sorts
-// map[string]interface{} keys, and the Unmarshal-then-Marshal round trip is
+// map[string]interface{} keys, and the decode-then-Marshal round trip is
 // what extends that guarantee to arbitrary input bytes (a tool's raw
 // InputSchema) rather than only to values this package constructs itself.
 // Two semantically identical JSON documents that differ only in key order
 // or whitespace canonicalize to the same bytes.
+//
+// Numbers decode through Decoder.UseNumber, which keeps each numeric
+// literal as a json.Number that Marshal writes back verbatim. Decoding into
+// a plain interface{} instead would route every number through float64,
+// whose 53-bit mantissa silently rounds larger integers: distinct valid
+// schema integers past that precision (an authorization-shaped const or
+// maximum, say) would then canonicalize to identical bytes, and a catalog
+// fingerprint that cannot see the change lets sticky state survive a real
+// tool-schema change.
+//
+// Preserving literals exactly makes canonicalization literal-sensitive in
+// return: 100, 1e2, and 100.0 canonicalize distinctly rather than
+// collapsing to 100. That is the safe direction — it can only invalidate
+// sticky state that a byte-identical schema would have kept, never preserve
+// state across a schema that actually changed — and normalizing the
+// literals is precisely what would reintroduce the precision loss.
 func canonicalizeJSON(raw json.RawMessage) (json.RawMessage, error) {
 	if len(raw) == 0 {
 		return json.RawMessage("null"), nil
 	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
 	var generic interface{}
-	if err := json.Unmarshal(raw, &generic); err != nil {
+	if err := decoder.Decode(&generic); err != nil {
 		return nil, err
+	}
+	// A second Decode must hit clean end-of-input: anything else is either
+	// a further value or malformed bytes, neither of which the single-value
+	// contract of an InputSchema allows.
+	if err := decoder.Decode(new(interface{})); !errors.Is(err, io.EOF) {
+		return nil, errTrailingJSON
 	}
 	canonical, err := json.Marshal(generic)
 	if err != nil {
