@@ -87,6 +87,21 @@ func ValidateComplexityRuleBoundaries(cfg *RouterConfig) error {
 					"To invert it locally, swap the hard and easy candidate lists",
 				ref.prefix(), ref.rule.Name, RemoteClassifierContractScore)
 		}
+		// A remote score arrives in the model's own units. `threshold` is
+		// symmetric about zero, which only means something for the local
+		// signed margin - against a [0,1] scorer it puts every request past
+		// the hard cut and makes easy unreachable. Declaring nothing collapses
+		// both cut points onto zero, with the same effect. Either way the
+		// config looks reasonable and the verdicts are wrong, so require the
+		// explicit pair.
+		if scored && !ref.rule.declaresBoundaryPair() {
+			return fmt.Errorf(
+				"%scomplexity rule %q needs an explicit boundary pair under %s: "+
+					"a remote score is in the model's own units, so threshold - which is symmetric "+
+					"about zero for the local margin - cannot convert it. Use hard_above with "+
+					"easy_below, or hard_below with easy_above",
+				ref.prefix(), ref.rule.Name, RemoteClassifierContractScore)
+		}
 	}
 	return nil
 }
@@ -165,4 +180,11 @@ func ComplexityBackendAdvisories(cfg *RouterConfig) []string {
 			strings.Join(withCandidates, ", ")))
 	}
 	return advisories
+}
+
+// validateComplexityModelBackendContracts is the config-load entry point,
+// registered in globalConfigContractValidators so the same checks the
+// classifier construction seam runs also reject a bad document at load time.
+func validateComplexityModelBackendContracts(cfg *RouterConfig) error {
+	return ValidateComplexityModelBackend(cfg)
 }

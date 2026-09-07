@@ -32,6 +32,22 @@ type ComplexityClassifier struct {
 	hasImageCandidates bool   // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
 	provider           embedding.Provider
+
+	// boundaries holds each rule's resolved cut points, keyed by rule name.
+	// Resolving at construction means a malformed pair fails at startup rather
+	// than on every request, and keeps the per-request path allocation-free.
+	boundaries map[string]config.ComplexityBoundaries
+}
+
+// boundariesFor returns a rule's resolved boundaries, falling back to the
+// symmetric reading of its threshold for a classifier built without the
+// resolved map (a direct construction in a test, say).
+func (c *ComplexityClassifier) boundariesFor(rule config.ComplexityRule) config.ComplexityBoundaries {
+	if bounds, ok := c.boundaries[rule.Name]; ok {
+		return bounds
+	}
+	threshold := float64(rule.Threshold)
+	return config.ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}
 }
 
 type ComplexityRuleResult struct {
@@ -86,6 +102,15 @@ func NewComplexityClassifier(
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 		provider:                provider,
+	}
+
+	c.boundaries = make(map[string]config.ComplexityBoundaries, len(rules))
+	for _, rule := range rules {
+		bounds, err := rule.EffectiveBoundaries()
+		if err != nil {
+			return nil, err
+		}
+		c.boundaries[rule.Name] = bounds
 	}
 
 	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{

@@ -124,8 +124,9 @@ func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInferenc
 // label_distribution.v1 reuses the shared sequence backend with the verdict
 // vocabulary declared inline, exactly as the generic classifier signal does.
 func (b *classifierOptionBuilder) addComplexityBackend() error {
-	// Same validator as config load, so a directly-built classifier cannot
-	// bypass the backend and boundary checks.
+	// The same validator globalConfigContractValidators runs at config load, so
+	// a directly-built classifier cannot bypass the backend and boundary
+	// checks either.
 	if err := config.ValidateComplexityModelBackend(b.cfg); err != nil {
 		return err
 	}

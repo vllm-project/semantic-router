@@ -229,3 +229,75 @@ func TestValidateComplexityModelBackend_RejectsOverlappingBands(t *testing.T) {
 		t.Fatal("expected an overlapping band to be reported by the signal validator")
 	}
 }
+
+// The validator has to run at config load, not only when a classifier is
+// constructed. Otherwise validate-config tooling, the apiserver and the DSL
+// paths all accept an unresolvable backend and the error surfaces much later,
+// which is exactly what the comment at the construction seam claims cannot
+// happen.
+func TestComplexityBackendIsValidatedAtConfigLoad(t *testing.T) {
+	cfg := complexityBackendConfig(&RemoteClassifierBackend{
+		Protocol: RemoteClassifierProtocolHTTPClassify,
+		Contract: RemoteClassifierContractScore,
+		Model:    "not-in-the-catalog",
+	})
+
+	err := runConfigContractValidators(cfg, globalConfigContractValidators)
+	if err == nil {
+		t.Fatal("an unresolvable complexity backend must be rejected by the config-load validators")
+	}
+	if !strings.Contains(err.Error(), "not-in-the-catalog") {
+		t.Errorf("error %q should name the unresolvable model", err.Error())
+	}
+}
+
+// A score arrives in the model's own units, so the symmetric threshold - which
+// only means anything for a signed margin centred on zero - cannot convert it.
+// Left unchecked, a rule carrying threshold: 0.10 against a [0,1] scorer makes
+// easy unreachable and calls nearly everything hard.
+func TestValidateComplexityModelBackend_RejectsThresholdUnderScoreContract(t *testing.T) {
+	cfg := complexityBackendConfig(&RemoteClassifierBackend{
+		Protocol: RemoteClassifierProtocolHTTPClassify,
+		Contract: RemoteClassifierContractScore,
+		Model:    "difficulty-scorer",
+	})
+	cfg.ComplexityRules = []ComplexityRule{{Name: "needs_reasoning", Threshold: 0.10}}
+
+	err := ValidateComplexityModelBackend(cfg)
+	if err == nil {
+		t.Fatal("expected threshold to be rejected against a score.v1 backend")
+	}
+	if !strings.Contains(err.Error(), "needs_reasoning") {
+		t.Errorf("error %q should name the rule", err.Error())
+	}
+}
+
+// A rule declaring no boundaries at all collapses to hard-above-zero, which
+// makes every positive score hard and easy unreachable.
+func TestValidateComplexityModelBackend_RejectsNoBoundariesUnderScoreContract(t *testing.T) {
+	cfg := complexityBackendConfig(&RemoteClassifierBackend{
+		Protocol: RemoteClassifierProtocolHTTPClassify,
+		Contract: RemoteClassifierContractScore,
+		Model:    "difficulty-scorer",
+	})
+	cfg.ComplexityRules = []ComplexityRule{{Name: "needs_reasoning"}}
+
+	if err := ValidateComplexityModelBackend(cfg); err == nil {
+		t.Fatal("expected a rule with no boundaries to be rejected against a score.v1 backend")
+	}
+}
+
+// The label contract reads no boundaries at all, so threshold is irrelevant
+// there rather than wrong.
+func TestValidateComplexityModelBackend_ThresholdIsFineUnderTheLabelContract(t *testing.T) {
+	cfg := complexityBackendConfig(&RemoteClassifierBackend{
+		Protocol: RemoteClassifierProtocolHTTPClassify,
+		Contract: RemoteClassifierContractLabelDistribution,
+		Model:    "difficulty-scorer",
+	})
+	cfg.ComplexityRules = []ComplexityRule{{Name: "needs_reasoning", Threshold: 0.10}}
+
+	if err := ValidateComplexityModelBackend(cfg); err != nil {
+		t.Fatalf("the label contract consults no boundaries: %v", err)
+	}
+}

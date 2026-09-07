@@ -103,3 +103,9 @@ func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
 	threshold := float64(r.Threshold)
 	return ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}, nil
 }
+
+// declaresBoundaryPair reports whether a rule states its cut points
+// explicitly, rather than relying on the symmetric threshold shorthand.
+func (r ComplexityRule) declaresBoundaryPair() bool {
+	return r.HardAbove != nil || r.EasyBelow != nil || r.HardBelow != nil || r.EasyAbove != nil
+}
