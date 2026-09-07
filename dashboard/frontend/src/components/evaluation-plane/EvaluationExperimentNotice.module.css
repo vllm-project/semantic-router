@@ -1,0 +1,9 @@
+.contractWarning {
+  padding: 0.7rem 0 0.7rem 0.85rem;
+  border-left: 2px solid rgba(251, 191, 36, 0.52);
+  border-radius: 0;
+  background: transparent;
+  color: #f9d38b;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}

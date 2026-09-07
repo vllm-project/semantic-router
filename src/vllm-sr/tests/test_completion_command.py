@@ -26,6 +26,8 @@ def test_completion_show_bash_outputs_script():
     assert result.exit_code == 0
     assert "_VLLM_SR_COMPLETE" in result.output
     assert "bash" in result.output.lower()
+    assert result.stderr == ""
+    assert "\x1b[" not in result.stdout
 
 
 def test_completion_show_zsh_outputs_script():
@@ -36,6 +38,7 @@ def test_completion_show_zsh_outputs_script():
     assert result.exit_code == 0
     assert "_VLLM_SR_COMPLETE" in result.output
     assert "zsh" in result.output.lower()
+    assert result.stderr == ""
 
 
 def test_completion_show_fish_outputs_script():
@@ -46,6 +49,7 @@ def test_completion_show_fish_outputs_script():
     assert result.exit_code == 0
     assert "_VLLM_SR_COMPLETE" in result.output
     assert "fish" in result.output.lower()
+    assert result.stderr == ""
 
 
 def test_completion_show_auto_detects_bash_shell():
@@ -74,9 +78,10 @@ def test_completion_show_fails_when_shell_undetectable():
     with patch.dict("os.environ", {"SHELL": ""}, clear=False):
         result = runner.invoke(main, ["completion", "show"])
 
-    # The error is logged via the logger (not Click echo), so it won't appear
-    # in result.output.  The important contract is the non-zero exit code.
     assert result.exit_code != 0
+    assert result.stdout == ""
+    assert "Error: Could not detect shell" in result.stderr
+    assert " - ERROR - " not in result.stderr
 
 
 def test_completion_show_invalid_shell_rejected():

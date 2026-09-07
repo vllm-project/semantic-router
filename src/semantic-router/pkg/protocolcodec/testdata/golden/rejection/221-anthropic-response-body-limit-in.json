@@ -1,0 +1,24 @@
+{
+  "operation": "response",
+  "limits": {
+    "body_bytes": 16
+  },
+  "body": {
+    "id": "msg_1",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [
+      {
+        "type": "text",
+        "text": "hello"
+      }
+    ],
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 1,
+      "output_tokens": 1
+    }
+  }
+}

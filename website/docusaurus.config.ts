@@ -2,6 +2,7 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import blogSearchIndexPlugin from './src/plugins/blogSearchIndex'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
@@ -9,14 +10,14 @@ const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
-  = 'We believe Mixture-of-Models is the next-generation model architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
+  = 'Mixture-of-Models is a serving-system architecture for heterogeneous LLM inference. vLLM Semantic Router makes it executable.'
 const siteSocialTitle
   = 'Mixture-of-Models for Heterogeneous LLM Inference | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'Building Mixture-of-Models: The Next-Generation Model Architecture for Heterogeneous LLM Inference',
+  tagline: 'Building a Mixture-of-Models Serving Architecture for Heterogeneous LLM Inference',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
@@ -49,7 +50,36 @@ const config: Config = {
       onBrokenMarkdownLinks: 'warn',
     },
   },
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+    [
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true, // cache-bust the index between deploys
+        indexDocs: true,
+        indexBlog: true,
+        indexPages: false, // homepage/community are marketing pages, not docs
+        docsRouteBasePath: '/docs',
+        blogRouteBasePath: '/blog',
+        searchBarShortcut: true,
+        searchBarShortcutHint: true,
+        // The site ships a full zh-Hans locale, so the index needs a Chinese
+        // tokenizer as well: Chinese is written without spaces and the default
+        // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
+        // native module that ships prebuilt binaries.
+        language: ['en', 'zh'],
+        // v1 scope: index the current docs version only, per the decision on #2737.
+        // To make archived versions searchable later, drop this and add
+        // searchContextByPaths: ['docs', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // so results stay scoped to the version the reader is on.
+        // NOTE: ignoreFiles matches the route *without* a leading slash (the
+        // plugin strips baseUrl, which is "/" here, off the front) and without
+        // the base URL itself, so the pattern must not anchor on "/".
+        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        // styling is handled in a later phase
+      },
+    ],
+  ],
 
   presets: [
     [
@@ -119,6 +149,9 @@ const config: Config = {
   ],
 
   plugins: [
+    // Publishes every published blog post as global data so the blog list page can
+    // search the whole archive instead of just the posts on the current page.
+    blogSearchIndexPlugin,
     [
       '@docusaurus/plugin-client-redirects',
       {
@@ -136,6 +169,10 @@ const config: Config = {
             to: '/docs/installation/',
           },
           {
+            from: '/docs/installation/models-and-recipes',
+            to: '/docs/tutorials/global/models-entrypoints-serving',
+          },
+          {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
@@ -146,6 +183,22 @@ const config: Config = {
           {
             from: '/docs/tutorials/signal/heuristic/modality',
             to: '/docs/tutorials/signal/learned/modality',
+          },
+          {
+            from: '/docs/tutorials/plugin/semantic-cache',
+            to: '/docs/tutorials/plugin/response-cache',
+          },
+          {
+            from: '/docs/tutorials/signal/learned/embedding-design-principles',
+            to: '/docs/tutorials/signal/learned/embedding',
+          },
+          {
+            from: '/docs/overview/collective-intelligence',
+            to: '/docs/overview/mom-model-family',
+          },
+          {
+            from: '/blog/multi-objective-mom-on-amd-developer-cloud',
+            to: '/docs/overview/mom-model-family',
           },
         ],
       },
@@ -188,9 +241,12 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
+      // No `style` — the navbar follows the reader's color mode. The homepage
+      // opts back into dark chrome in shell.css, where its palette is pinned.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        src: 'img/vllm-sr-logo.white.png',
+        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
+        src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
@@ -206,94 +262,54 @@ const config: Config = {
           dropdownActiveClassDisabled: true,
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
-          position: 'left',
           label: 'Docs',
-          items: [
-            { label: 'Quick Start', to: '/docs/intro' },
-            { label: 'Installation', to: '/docs/installation/' },
-            {
-              label: 'Core Concepts',
-              to: '/docs/overview/semantic-router-overview',
-            },
-            { label: 'Tutorials', to: '/docs/tutorials/algorithm/overview' },
-            { label: 'API Reference', to: '/docs/api/router' },
-            {
-              label: 'Troubleshooting',
-              to: '/docs/troubleshooting/common-errors',
-            },
-          ],
+          to: '/docs/intro',
+          className: 'nav-primary',
+          position: 'left',
         },
         {
-          type: 'dropdown',
-          className: 'nav-primary',
           label: 'Research',
+          to: '/publications',
+          className: 'nav-primary',
           position: 'left',
-          items: [
-            {
-              label: 'Papers & Talks',
-              to: '/publications',
-            },
-            {
-              label: 'White Paper',
-              to: '/white-paper',
-            },
-            {
-              label: 'Vision Paper',
-              to: '/vision-paper',
-            },
-            {
-              label: 'Engineering Blog',
-              to: '/blog',
-            },
-          ],
         },
         {
-          type: 'dropdown',
+          label: 'Blog',
+          to: '/blog',
           className: 'nav-primary',
-          label: 'Community',
           position: 'left',
+        },
+        {
+          label: 'Community',
+          to: '/community/team',
+          className: 'nav-primary',
+          position: 'left',
+        },
+        // Secondary destinations live in one overflow menu so the bar fits on a
+        // 1024px laptop instead of collapsing to a hamburger at 1340px.
+        {
+          type: 'dropdown',
+          label: 'More',
+          className: 'nav-utility',
+          position: 'right',
           items: [
             {
-              label: 'Project Team',
-              to: '/community/team',
-            },
-            {
-              label: 'Steering Committee',
-              to: '/community/steering-committee',
-            },
-            {
-              label: 'Roles & Governance',
-              to: '/community/governance',
-            },
-            {
-              label: 'Working Groups',
-              to: '/community/work-groups',
-            },
-            {
-              label: 'Contributing Guide',
-              to: '/community/contributing',
-            },
-            {
-              label: 'Contributor Leaderboard',
-              to: '/community/contributors',
-            },
-            {
-              label: 'GitHub Repository',
+              label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },
             {
-              label: 'Models',
+              label: 'Hugging Face',
               href: 'https://huggingface.co/LLM-Semantic-Router',
             },
+            {
+              label: 'Discussions',
+              href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
           ],
-        },
-        {
-          label: 'GitHub',
-          href: 'https://github.com/vllm-project/semantic-router',
-          className: 'nav-utility',
-          position: 'right',
         },
         {
           label: 'Dashboard',
@@ -310,11 +326,11 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Quick Start',
+              label: 'Introduction',
               to: '/docs/intro',
             },
             {
-              label: 'Installation',
+              label: 'Quick Start',
               to: '/docs/installation',
             },
             {
@@ -383,12 +399,39 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
+      // Only applies when the OS states no preference.
       defaultMode: 'light',
-      disableSwitch: true,
-      respectPrefersColorScheme: false,
+      disableSwitch: false,
+      // Sets the default from the OS. Upstream also uses this flag to make the
+      // navbar button a three-way cycle; the swizzle in
+      // `src/theme/Navbar/ColorModeToggle` keeps it at two states.
+      respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {
+        light: 'neutral',
+        dark: 'dark',
+      },
     },
   } satisfies Preset.ThemeConfig,
   headTags: [
+    // Inter + JetBrains Mono. Preconnect first so the font CSS and the font
+    // files resolve in parallel rather than in a serial @import waterfall.
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+      },
+    },
     {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },

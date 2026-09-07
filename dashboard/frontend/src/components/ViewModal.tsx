@@ -2,6 +2,7 @@ import React from 'react'
 
 import styles from './ViewModal.module.css'
 import ViewPanel, { type ViewField, type ViewPanelAction, type ViewSection } from './ViewPanel'
+import { transitionFromViewToEdit } from './viewModalSupport'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 
 interface ViewModalProps {
@@ -12,11 +13,6 @@ interface ViewModalProps {
   sections: ViewSection[]
   actions?: ViewPanelAction[]
   closeLabel?: string
-}
-
-export function transitionFromViewToEdit(onClose: () => void, onEdit?: () => void) {
-  onClose()
-  onEdit?.()
 }
 
 const ViewModal: React.FC<ViewModalProps> = ({
@@ -32,9 +28,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
 
   if (!isOpen) return null
 
-  const handleEdit = onEdit
-    ? () => transitionFromViewToEdit(onClose, onEdit)
-    : undefined
+  const handleEdit = onEdit ? () => transitionFromViewToEdit(onClose, onEdit) : undefined
 
   return (
     <div className={styles.overlay} onClick={onClose}>

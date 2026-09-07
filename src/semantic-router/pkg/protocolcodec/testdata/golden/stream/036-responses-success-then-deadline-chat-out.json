@@ -1,0 +1,66 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_deadline",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_deadline",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "provisional"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_deadline",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "error": {
+          "code": "stream_timeout",
+          "message": "stream deadline was exceeded",
+          "param": null,
+          "type": "server_error"
+        }
+      }
+    }
+  ]
+}

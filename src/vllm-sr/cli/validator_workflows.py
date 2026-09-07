@@ -3,14 +3,17 @@
 from cli.validation_error import ValidationError
 
 
-def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationError]:
+def validate_static_workflow_roles(
+    decision, workflows_cfg, field_prefix: str = "decisions"
+) -> list[ValidationError]:
     errors: list[ValidationError] = []
+    base_field = f"{field_prefix}.{decision.name}.algorithm.workflows"
     roles = workflows_cfg.roles or []
     if not roles:
         return [
             ValidationError(
                 f"Decision '{decision.name}' uses workflows mode=static but does not set roles",
-                field=f"decisions.{decision.name}.algorithm.workflows.roles",
+                field=f"{base_field}.roles",
             )
         ]
 
@@ -24,7 +27,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
             errors.append(
                 ValidationError(
                     f"Decision '{decision.name}' workflows role at index {role_index} has empty name",
-                    field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.name",
+                    field=f"{base_field}.roles.{role_index}.name",
                 )
             )
         seen_models: set[str] = set()
@@ -33,7 +36,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' has empty model",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.models.{model_index}",
+                        field=f"{base_field}.roles.{role_index}.models.{model_index}",
                     )
                 )
                 continue
@@ -41,7 +44,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' duplicates model '{model}'",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.models",
+                        field=f"{base_field}.roles.{role_index}.models",
                     )
                 )
             seen_models.add(model)
@@ -49,7 +52,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' references model '{model}' outside modelRefs",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.models.{model_index}",
+                        field=f"{base_field}.roles.{role_index}.models.{model_index}",
                     )
                 )
 
@@ -59,7 +62,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' has empty access_list entry",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.access_list.{access_index}",
+                        field=f"{base_field}.roles.{role_index}.access_list.{access_index}",
                     )
                 )
                 continue
@@ -68,7 +71,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' duplicates access_list target '{normalized_target}'",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.access_list",
+                        field=f"{base_field}.roles.{role_index}.access_list",
                     )
                 )
             seen_access.add(normalized_target)
@@ -76,7 +79,7 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' workflows role '{role.name}' access_list references unknown or future role/agent '{normalized_target}'",
-                        field=f"decisions.{decision.name}.algorithm.workflows.roles.{role_index}.access_list.{access_index}",
+                        field=f"{base_field}.roles.{role_index}.access_list.{access_index}",
                     )
                 )
         _register_workflow_access_ids(previous_access_ids, role_id, role.models or [])
@@ -84,7 +87,9 @@ def validate_static_workflow_roles(decision, workflows_cfg) -> list[ValidationEr
     return errors
 
 
-def validate_workflow_final_model(decision, workflows_cfg) -> list[ValidationError]:
+def validate_workflow_final_model(
+    decision, workflows_cfg, field_prefix: str = "decisions"
+) -> list[ValidationError]:
     final_model = getattr(workflows_cfg.final, "model", None)
     if not final_model:
         return []
@@ -96,7 +101,7 @@ def validate_workflow_final_model(decision, workflows_cfg) -> list[ValidationErr
     return [
         ValidationError(
             f"Decision '{decision.name}' workflows final model '{final_model}' is outside modelRefs",
-            field=f"decisions.{decision.name}.algorithm.workflows.final.model",
+            field=f"{field_prefix}.{decision.name}.algorithm.workflows.final.model",
         )
     ]
 

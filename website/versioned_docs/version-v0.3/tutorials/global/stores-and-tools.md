@@ -96,7 +96,7 @@ For full deployment instructions, see:
 
 - [Valkey Agentic Memory](../../installation/valkey-memory.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - [Qdrant](../../installation/qdrant.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
-- `deploy/examples/runtime/memory/` for backend-specific configuration references
+- `config/runtime/memory/` for backend-specific configuration references
 
 ### Vector Store
 
@@ -125,5 +125,5 @@ global:
     tools:
       enabled: true
       top_k: 3
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
 ```

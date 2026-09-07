@@ -2,7 +2,9 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -18,7 +20,10 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
-	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
+	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
+		return nil, err
+	}
+	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +67,20 @@ func (c *Classifier) InitializeRuntime() error {
 	}
 
 	c.logHeuristicClassifierInitialization()
-	tasks := c.runtimeTasks()
+	return c.executeRuntimeTasks(c.runtimeTasks())
+}
+
+// InitializeDefaultAPIRuntime initializes only model dependencies owned by
+// default public APIs. It is used when auto/direct aliases are disabled, so the
+// default routing profile itself is unreachable but its APIs remain available.
+func (c *Classifier) InitializeDefaultAPIRuntime() error {
+	if c == nil {
+		return fmt.Errorf("classifier is nil")
+	}
+	return c.executeRuntimeTasks(c.defaultAPIRuntimeTasks())
+}
+
+func (c *Classifier) executeRuntimeTasks(tasks []modelruntime.Task) error {
 	if len(tasks) == 0 {
 		return nil
 	}
@@ -75,6 +93,11 @@ func (c *Classifier) InitializeRuntime() error {
 		OnEvent:        logRuntimeInitializationEvent,
 	})
 	if err != nil {
+		if closeErr := c.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("classifier", "runtime_initialization_rollback_failed", map[string]interface{}{
+				"error": closeErr.Error(),
+			})
+		}
 		return err
 	}
 
@@ -82,6 +105,59 @@ func (c *Classifier) InitializeRuntime() error {
 		"tasks": len(tasks),
 	})
 	return nil
+}
+
+func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
+	if !c.ownsDefaultAPIConsumer() {
+		return nil
+	}
+
+	tasks := make([]modelruntime.Task, 0, 3)
+	appendTask := func(name string, enabled bool, init func() error) {
+		if !enabled {
+			return
+		}
+		tasks = append(tasks, modelruntime.Task{
+			Name:       name,
+			BestEffort: true,
+			Run: func(context.Context) error {
+				return init()
+			},
+		})
+	}
+	appendTask("classifier.fact_check", c.Config.NeedsFactCheckModelForAPI(), c.initializeFactCheckClassifier)
+	appendTask("classifier.hallucination", c.Config.NeedsHallucinationDetectorForDefaultRuntime(), c.initializeHallucinationDetector)
+	appendTask("classifier.feedback", c.Config.NeedsFeedbackModelForAPI(), c.initializeFeedbackDetector)
+	return tasks
+}
+
+// Close releases the classifier's runtime resources.
+func (c *Classifier) Close() error {
+	if c == nil {
+		return nil
+	}
+	var closeErrors []error
+	closeResource := func(name string, resource interface{}) {
+		closer, ok := resource.(interface{ Close() error })
+		if !ok || closer == nil {
+			return
+		}
+		if err := closer.Close(); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("close %s: %w", name, err))
+		}
+	}
+
+	closeResource("MCP category classifier", c.mcpCategoryInitializer)
+	closeResource("jailbreak classifier", c.jailbreakInference)
+	genericNames := make([]string, 0, len(c.genericClassifiers))
+	for name := range c.genericClassifiers {
+		genericNames = append(genericNames, name)
+	}
+	sort.Strings(genericNames)
+	for _, name := range genericNames {
+		closeResource("generic classifier "+name, c.genericClassifiers[name])
+	}
+	return errors.Join(closeErrors...)
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
@@ -100,13 +176,16 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	}
 
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
-	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
+	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.complexity_model", false, c.usesRoutingSignalType(config.SignalTypeComplexity) && c.IsComplexityModelEnabled(), c.initializeComplexityModelClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
-	appendTask("classifier.fact_check", true, c.IsFactCheckEnabled(), c.initializeFactCheckClassifier)
-	appendTask("classifier.hallucination", true, c.IsHallucinationDetectionEnabled(), c.initializeHallucinationDetector)
-	appendTask("classifier.feedback", true, c.IsFeedbackDetectorEnabled(), c.initializeFeedbackDetector)
+	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
+	appendTask("classifier.hallucination", true, c.needsHallucinationDetectorForRuntime(), c.initializeHallucinationDetector)
+	// Not best-effort: an NLI polarity mode with an unloadable model must fail
+	// startup rather than silently serve unverified cache hits.
+	appendTask("classifier.semantic_cache_nli", false, c.needsSemanticCacheNLIForRuntime(), c.initializeSemanticCacheNLI)
+	appendTask("classifier.feedback", true, c.needsFeedbackModelForRuntime(), c.initializeFeedbackDetector)
 	appendTask("classifier.preference", true, c.IsPreferenceClassifierEnabled(), c.initializePreferenceClassifier)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
@@ -114,7 +193,20 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 }
 
 func (c *Classifier) usesRoutingSignalType(signalType string) bool {
-	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInRouting(signalType)
+	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
+}
+
+// usesJailbreakClassifier also counts the response-stage consumers, which
+// usesRoutingSignalType cannot see: decision rules never name a
+// response-direction rule, and the response_jailbreak plugin is not a rule.
+func (c *Classifier) usesJailbreakClassifier() bool {
+	return c != nil && c.Config != nil && c.Config.UsesJailbreakClassifierInReachableRouting()
+}
+
+func (c *Classifier) ownsDefaultAPIConsumer() bool {
+	return c != nil &&
+		c.Config != nil &&
+		(c.Config.RoutingScope == "" || c.Config.RoutingScope == config.DefaultRecipeName)
 }
 
 func (c *Classifier) initializeConfiguredCategoryRuntime() error {

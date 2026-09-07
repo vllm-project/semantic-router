@@ -19,6 +19,9 @@ func TestStatusPathFromConfigPathUsesConfigDirWhenWritable(t *testing.T) {
 }
 
 func TestStatusPathFromConfigPathFallsBackForReadOnlyDir(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory mode bits")
+	}
 	configDir := filepath.Join(t.TempDir(), "readonly")
 	if err := os.MkdirAll(configDir, 0o555); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)

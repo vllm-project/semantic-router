@@ -106,14 +106,40 @@ func TestRecordTurn_ResponseAPI(t *testing.T) {
 		PromptTokens:     1,
 		CompletionTokens: 1,
 		ResponseAPI: &ResponseAPIInput{
-			ConversationID: "conv_1",
-			HistoryLen:     2,
+			ConversationID:    "conv_1",
+			SessionTrackingID: "respapi:conversation:conv_1",
+			HistoryLen:        2,
 		},
 	})
 	mu.Lock()
 	defer mu.Unlock()
-	st, ok := store["respapi:conv_1"]
+	st, ok := store["respapi:conversation:conv_1"]
 	require.True(t, ok)
+	assert.Equal(t, int64(1), st.cumulativePrompt)
+}
+
+// TestRecordTurn_ResponseAPI_LineageOnlyStillRecords covers the case a
+// previous_response_id-only continuation (no explicit conversation_id) must
+// still be recorded: ConversationID is empty, SessionTrackingID must not be.
+func TestRecordTurn_ResponseAPI_LineageOnlyStillRecords(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+
+	RecordTurn(TurnParams{
+		RequestID:        "r1",
+		Model:            "m",
+		Domain:           "unknown",
+		PromptTokens:     1,
+		CompletionTokens: 1,
+		ResponseAPI: &ResponseAPIInput{
+			SessionTrackingID: "respapi:lineage:resp_root",
+			HistoryLen:        1,
+		},
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	st, ok := store["respapi:lineage:resp_root"]
+	require.True(t, ok, "lineage-only turn with empty ConversationID must still be recorded")
 	assert.Equal(t, int64(1), st.cumulativePrompt)
 }
 
@@ -349,8 +375,9 @@ func TestRecordTurn_ResponseAPI_PricingCostAccumulation(t *testing.T) {
 		CompletionTokens: 200,
 		Pricing:          pricing,
 		ResponseAPI: &ResponseAPIInput{
-			ConversationID: "conv_pricing_1",
-			HistoryLen:     0,
+			ConversationID:    "conv_pricing_1",
+			SessionTrackingID: "respapi:conversation:conv_pricing_1",
+			HistoryLen:        0,
 		},
 	})
 	RecordTurn(TurnParams{
@@ -361,14 +388,15 @@ func TestRecordTurn_ResponseAPI_PricingCostAccumulation(t *testing.T) {
 		CompletionTokens: 300,
 		Pricing:          pricing,
 		ResponseAPI: &ResponseAPIInput{
-			ConversationID: "conv_pricing_1",
-			HistoryLen:     2,
+			ConversationID:    "conv_pricing_1",
+			SessionTrackingID: "respapi:conversation:conv_pricing_1",
+			HistoryLen:        2,
 		},
 	})
 
 	mu.Lock()
 	defer mu.Unlock()
-	st, ok := store["respapi:conv_pricing_1"]
+	st, ok := store["respapi:conversation:conv_pricing_1"]
 	require.True(t, ok)
 
 	// cumulative cost: ((500*3+200*12) + (800*3+300*12)) / 1e6

@@ -1,87 +1,104 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import styles from './ChatComponent.module.css'
-import ThinkingAnimation from './ThinkingAnimation'
-import HeaderReveal from './HeaderReveal'
 import ClawRoomChat from './ClawRoomChat'
 import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentConversationViewport from './ChatComponentConversationViewport'
+import ChatComponentErrors from './ChatComponentErrors'
 import ChatComponentInputBar from './ChatComponentInputBar'
 import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import ChatTaskQueue from './ChatTaskQueue'
 import { runPlaygroundTask } from './chatTaskExecution'
 import {
-  CLAW_MODE_STORAGE_KEY,
-  type ConversationPreview,
   generateConversationId,
   generateMessageId,
-  generatePlaygroundTaskId,
   type PlaygroundTask,
   type Message,
 } from './ChatComponentTypes'
+import {
+  buildConversationPreviews,
+  type ChatComponentProps,
+  type ClawPlaygroundView,
+  findQueuedErrorConversationId,
+  getLiveThinkingProcess,
+  readActiveConversationPreference,
+  readClawModePreference,
+  writeActiveConversationPreference,
+  writeClawModePreference,
+} from './chatComponentSupport'
 import { useToolRegistry } from '../tools'
 import { isOpenClawMCPToolName, useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
+import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { canManageMCP } from '../utils/accessControl'
 import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
 import { usePlaygroundRoutingModel } from './usePlaygroundRoutingModel'
-
-interface ChatComponentProps {
-  endpoint?: string
-  isFullscreenMode?: boolean
-}
-
-type ClawPlaygroundView = 'control' | 'room'
+import {
+  usePlaygroundInvocation,
+  type ActivePlaygroundInvocationDraft,
+} from './usePlaygroundInvocation'
+import { usePlaygroundTaskSubmission } from './usePlaygroundTaskSubmission'
+import { sanitizeMessagesForPersistence } from './chatPersistenceSupport'
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
+  invocation = null,
   isFullscreenMode = false,
+  onInvocationConsumed,
 }: ChatComponentProps) => {
   const [conversationMessages, setConversationMessages] = useState<Record<string, Message[]>>({})
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
+  const [probeDraft, setProbeDraft] = useState<ActivePlaygroundInvocationDraft | null>(null)
   const {
     model,
+    models: routingModels,
     retry: retryRoutingModelDiscovery,
+    setModel,
     status: routingModelStatus,
   } = usePlaygroundRoutingModel(endpoint)
   const isRoutingModelReady = routingModelStatus === 'ready'
   const {
     conversationErrors,
     conversationThinking,
-    headerRevealStates,
     setConversationError,
-    setConversationHeaderReveal,
     setConversationThinkingState,
   } = useChatConversationState()
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
-  const [enableClawMode, setEnableClawMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    const saved = window.localStorage.getItem(CLAW_MODE_STORAGE_KEY)
-    if (saved === null) return false
-    return saved === 'true'
-  })
+  const [enableClawMode, setEnableClawMode] = useState<boolean>(readClawModePreference)
   const [isTogglingClawMode, setIsTogglingClawMode] = useState(false)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [clawView, setClawView] = useState<ClawPlaygroundView>(() => 'control')
   const [teamRoomCreateToken, setTeamRoomCreateToken] = useState(0)
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { user, isLoading: authLoading } = useAuth()
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllersRef = useRef<Record<string, AbortController>>({})
   const hasHydratedConversation = useRef(false)
   const activeTasksRef = useRef<Record<string, PlaygroundTask>>({})
   const conversationIdRef = useRef(conversationId)
+  const persistedConversationMessagesRef = useRef<Record<string, Message[]>>({})
+  const hydratingConversationMessagesRef = useRef<Record<string, Message[]> | null>(null)
 
-  const { conversations, saveConversation, getConversation, deleteConversation } = useConversationStorage<Message[]>({
+  const {
+    conversations,
+    isHydrated: areConversationsHydrated,
+    saveConversation,
+    getConversation,
+    deleteConversation,
+    renameConversation,
+  } = useConversationStorage<Message[]>({
     storageKey: 'sr:chat:conversations',
     maxConversations: 20,
+    preparePayloadForPersistence: sanitizeMessagesForPersistence,
   })
   const {
     clearConversationQueue,
@@ -128,24 +145,30 @@ const ChatComponent = ({
     setActiveTasks(next)
   }, [])
 
-  const clearActiveTaskForConversation = useCallback((targetConversationId: string, taskId: string) => {
-    const currentTask = activeTasksRef.current[targetConversationId]
-    if (!currentTask || currentTask.id !== taskId) {
-      return
-    }
-    const next = { ...activeTasksRef.current }
-    delete next[targetConversationId]
-    activeTasksRef.current = next
-    setActiveTasks(next)
-  }, [])
+  const clearActiveTaskForConversation = useCallback(
+    (targetConversationId: string, taskId: string) => {
+      const currentTask = activeTasksRef.current[targetConversationId]
+      if (!currentTask || currentTask.id !== taskId) {
+        return
+      }
+      const next = { ...activeTasksRef.current }
+      delete next[targetConversationId]
+      activeTasksRef.current = next
+      setActiveTasks(next)
+    },
+    [],
+  )
 
-  const registerAbortController = useCallback((targetConversationId: string, controller: AbortController | null) => {
-    if (controller) {
-      abortControllersRef.current[targetConversationId] = controller
-      return
-    }
-    delete abortControllersRef.current[targetConversationId]
-  }, [])
+  const registerAbortController = useCallback(
+    (targetConversationId: string, controller: AbortController | null) => {
+      if (controller) {
+        abortControllersRef.current[targetConversationId] = controller
+        return
+      }
+      delete abortControllersRef.current[targetConversationId]
+    },
+    [],
+  )
 
   useEffect(() => {
     conversationIdRef.current = conversationId
@@ -167,24 +190,15 @@ const ChatComponent = ({
   })
 
   const baseOtherToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => !isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions]
+    () => otherToolDefinitions.filter((def) => !isOpenClawMCPToolName(def.function.name)),
+    [otherToolDefinitions],
   )
   const clawToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => isOpenClawMCPToolName(def.function.name)),
-    [otherToolDefinitions]
+    () => otherToolDefinitions.filter((def) => isOpenClawMCPToolName(def.function.name)),
+    [otherToolDefinitions],
   )
-  const clawManagementDisabled = readonlyLoading || isReadonly
-  const currentHeaderRevealState = headerRevealStates[conversationId]
-
-  useEffect(() => {
-    if (!currentHeaderRevealState || currentHeaderRevealState.visible) {
-      return
-    }
-
-    setConversationHeaderReveal(conversationId, currentHeaderRevealState.headers, true)
-  }, [conversationId, currentHeaderRevealState, setConversationHeaderReveal])
-
+  const clawManagementDisabled =
+    authLoading || readonlyLoading || serverReadonly || !canManageMCP(user)
   // Toggle fullscreen mode by adding/removing class to body
   useEffect(() => {
     if (isFullscreen) {
@@ -199,8 +213,7 @@ const ChatComponent = ({
   }, [isFullscreen])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(CLAW_MODE_STORAGE_KEY, String(enableClawMode))
+    writeClawModePreference(enableClawMode)
   }, [enableClawMode])
 
   useEffect(() => {
@@ -222,7 +235,7 @@ const ChatComponent = ({
         await refreshMCPTools()
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to enable Claw Mode'
-        console.warn(`[ClawOS] UI mode enabled, but MCP bootstrap failed: ${message}`)
+        console.warn(`[OpenClaw] UI mode enabled, but MCP bootstrap failed: ${message}`)
       } finally {
         if (isCurrent) {
           setIsTogglingClawMode(false)
@@ -243,60 +256,66 @@ const ChatComponent = ({
     }
   }, [enableClawMode, clawView])
 
-  // Hydrate the most recent conversation from localStorage once
+  // Hydrate saved conversations once. Only restore a conversation the user
+  // explicitly selected; otherwise keep the stable blank starting state.
   useEffect(() => {
-    if (hasHydratedConversation.current) return
+    if (hasHydratedConversation.current || !areConversationsHydrated) return
 
-    if (conversations.length === 0) return
+    const restoredConversationMessages = conversations.reduce<Record<string, Message[]>>(
+      (acc, conv) => {
+        if (Array.isArray(conv.payload)) {
+          acc[conv.id] = restoreMessages(conv.payload)
+        }
+        return acc
+      },
+      {},
+    )
 
-    const restoredConversationMessages = conversations.reduce<Record<string, Message[]>>((acc, conv) => {
-      if (Array.isArray(conv.payload)) {
-        acc[conv.id] = restoreMessages(conv.payload)
-      }
-      return acc
-    }, {})
-
+    hydratingConversationMessagesRef.current = restoredConversationMessages
     setConversationMessages(restoredConversationMessages)
 
-    const latestConversation = getConversation()
-    if (latestConversation?.payload && Array.isArray(latestConversation.payload)) {
-      setConversationId(latestConversation.id)
+    const selectedConversationId = readActiveConversationPreference(conversations)
+    if (selectedConversationId) {
+      conversationIdRef.current = selectedConversationId
+      setConversationId(selectedConversationId)
     }
 
     hasHydratedConversation.current = true
-  }, [conversations, getConversation, restoreMessages])
+  }, [areConversationsHydrated, conversations, restoreMessages])
+
+  useEffect(() => {
+    if (!hasHydratedConversation.current) return
+    writeActiveConversationPreference(conversationId)
+  }, [conversationId])
 
   // Persist changed conversations whenever in-memory messages change
   useEffect(() => {
+    const hydratedMessages = hydratingConversationMessagesRef.current
+    if (hydratedMessages) {
+      if (conversationMessages === hydratedMessages) {
+        persistedConversationMessagesRef.current = conversationMessages
+        hydratingConversationMessagesRef.current = null
+      }
+      return
+    }
+
     Object.entries(conversationMessages).forEach(([id, payload]) => {
-      if (payload.length === 0) {
+      if (payload.length === 0 || persistedConversationMessagesRef.current[id] === payload) {
         return
       }
       saveConversation(id, payload)
     })
+    persistedConversationMessagesRef.current = conversationMessages
   }, [conversationMessages, saveConversation])
 
-  const conversationPreviews = useMemo<ConversationPreview[]>(() => {
-    return [...conversations]
-      .sort((a, b) => a.createdAt - b.createdAt)
-      .map(conv => {
-        const firstUserMessage = Array.isArray(conv.payload)
-          ? conv.payload.find(msg => msg.role === 'user')
-          : undefined
-        const title = (firstUserMessage?.content || 'New conversation').trim()
-        const preview = title.length > 60 ? `${title.slice(0, 60)}…` : title || 'New conversation'
-
-        return {
-          id: conv.id,
-          updatedAt: conv.updatedAt || conv.createdAt,
-          preview,
-        }
-      })
-  }, [conversations])
+  const conversationPreviews = useMemo(
+    () => buildConversationPreviews(conversations),
+    [conversations],
+  )
 
   const messages = useMemo(
     () => conversationMessages[conversationId] ?? getStoredMessagesForConversation(conversationId),
-    [conversationId, conversationMessages, getStoredMessagesForConversation]
+    [conversationId, conversationMessages, getStoredMessagesForConversation],
   )
   const queuedTasks = useMemo(() => getQueue(conversationId), [conversationId, getQueue])
   const generateId = generateMessageId
@@ -310,49 +329,37 @@ const ChatComponent = ({
       enableWebSearch,
       model,
     }),
-    [clawManagementDisabled, enableClawMode, enableWebSearch, model]
+    [clawManagementDisabled, enableClawMode, enableWebSearch, model],
   )
 
   const buildTaskTools = useCallback(
     (task: PlaygroundTask) => {
-      const otherTools = task.requestOptions.enableClawMode && !clawManagementDisabled
-        ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
-        : baseOtherToolDefinitions
+      const otherTools =
+        task.requestOptions.enableClawMode && !clawManagementDisabled
+          ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
+          : baseOtherToolDefinitions
 
-      return [
-        ...otherTools,
-        ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : []),
-      ]
+      return [...otherTools, ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : [])]
     },
-    [
-      baseOtherToolDefinitions,
-      clawManagementDisabled,
-      clawToolDefinitions,
-      searchToolDefinitions,
-    ]
+    [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, searchToolDefinitions],
   )
-
-  const handleThinkingComplete = useCallback(() => {}, [])
-
-  const handleHeaderRevealComplete = useCallback(() => {
-    setConversationHeaderReveal(conversationId, null)
-  }, [conversationId, setConversationHeaderReveal])
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      const target = conversations.find(conv => conv.id === id)
+      const target = conversations.find((conv) => conv.id === id)
       if (!target) return
 
       setConversationId(target.id)
       setInputValue('')
+      setProbeDraft(null)
       setExpandedToolCards(new Set())
     },
-    [conversations]
+    [conversations],
   )
 
   const handleDeleteConversation = useCallback(
     (id: string) => {
-      const remaining = conversations.filter(conv => conv.id !== id)
+      const remaining = conversations.filter((conv) => conv.id !== id)
       const deletingActiveConversation = Boolean(activeTasksRef.current[id])
 
       clearConversationQueue(id)
@@ -367,11 +374,11 @@ const ChatComponent = ({
       registerAbortController(id, null)
       setConversationError(id, null)
       setConversationThinkingState(id, false)
-      setConversationHeaderReveal(id, null)
 
       if (id === conversationId) {
         setExpandedToolCards(new Set())
         setInputValue('')
+        setProbeDraft(null)
 
         const next = remaining[0]
         if (next) {
@@ -390,160 +397,207 @@ const ChatComponent = ({
       removeConversationMessages,
       registerAbortController,
       setConversationError,
-      setConversationHeaderReveal,
       setConversationThinkingState,
-    ]
+    ],
   )
 
-  const executeTask = useCallback((task: PlaygroundTask) => runPlaygroundTask({
-    buildTaskTools,
-    clawManagementDisabled,
-    clearConversationActiveTask: clearActiveTaskForConversation,
-    endpoint,
-    executeTools,
-    expandedToolCardCount: expandedToolCards.size,
-    generateId,
-    getConversationMessagesSnapshot,
-    getCurrentConversationId: () => conversationIdRef.current,
-    registerAbortController,
-    setConversationError,
-    setConversationHeaderReveal,
-    setConversationThinking: setConversationThinkingState,
-    setExpandedToolCards,
-    task,
-    updateConversationMessages,
-  }), [
-    buildTaskTools,
-    clawManagementDisabled,
-    clearActiveTaskForConversation,
-    endpoint,
-    executeTools,
-    expandedToolCards.size,
-    generateId,
-    getConversationMessagesSnapshot,
-    registerAbortController,
-    setConversationError,
-    setConversationHeaderReveal,
-    setConversationThinkingState,
-    setExpandedToolCards,
-    updateConversationMessages,
-  ])
+  const handleRenameConversation = useCallback(
+    (id: string, title: string) => renameConversation(id, title),
+    [renameConversation],
+  )
 
-  const startTask = useCallback((task: PlaygroundTask) => {
-    if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
-      return
-    }
+  const executeTask = useCallback(
+    (task: PlaygroundTask) =>
+      runPlaygroundTask({
+        buildTaskTools,
+        clawManagementDisabled,
+        clearConversationActiveTask: clearActiveTaskForConversation,
+        endpoint,
+        executeTools,
+        expandedToolCardCount: expandedToolCards.size,
+        generateId,
+        getConversationMessagesSnapshot,
+        registerAbortController,
+        setConversationError,
+        setConversationThinking: setConversationThinkingState,
+        setExpandedToolCards,
+        task,
+        updateConversationMessages,
+      }),
+    [
+      buildTaskTools,
+      clawManagementDisabled,
+      clearActiveTaskForConversation,
+      endpoint,
+      executeTools,
+      expandedToolCards.size,
+      generateId,
+      getConversationMessagesSnapshot,
+      registerAbortController,
+      setConversationError,
+      setConversationThinkingState,
+      setExpandedToolCards,
+      updateConversationMessages,
+    ],
+  )
 
-    const reboundTask = task.requestOptions.model === model
-      ? task
-      : {
-          ...task,
-          requestOptions: {
-            ...task.requestOptions,
-            model,
-          },
-        }
+  const startTask = useCallback(
+    (task: PlaygroundTask) => {
+      if (!isRoutingModelReady || activeTasksRef.current[task.conversationId]) {
+        return
+      }
 
-    setActiveTaskForConversation(reboundTask)
-    void executeTask(reboundTask)
-  }, [executeTask, isRoutingModelReady, model, setActiveTaskForConversation])
+      setActiveTaskForConversation(task)
+      void executeTask(task)
+    },
+    [executeTask, isRoutingModelReady, setActiveTaskForConversation],
+  )
 
-  const handleSend = useCallback(() => {
-    if (!isRoutingModelReady) return
-    const trimmedInput = inputValue.trim()
-    if (!trimmedInput && pendingAttachments.length === 0) return
-
-    const attachmentsForTask = copyPendingAttachmentsForTask()
-    const nextTask: PlaygroundTask = {
-      id: generatePlaygroundTaskId(),
-      conversationId,
-      prompt: trimmedInput,
-      attachments: attachmentsForTask.length > 0 ? attachmentsForTask : undefined,
-      createdAt: Date.now(),
-      requestOptions: buildTaskRequestOptions(),
-    }
-
-    if (!conversations.some(conv => conv.id === conversationId)) {
+  const activateProbeConversation = useCallback(
+    (targetConversationId: string, initialMessages: Message[]) => {
       hasHydratedConversation.current = true
-      saveConversation(conversationId, getConversationMessagesSnapshot(conversationId))
-    }
+      conversationIdRef.current = targetConversationId
+      clearPendingAttachments()
+      setEnableClawMode(false)
+      setEnableWebSearch(false)
+      setExpandedToolCards(new Set())
+      setConversationMessages((current) => ({
+        ...current,
+        [targetConversationId]: initialMessages,
+      }))
+      setConversationId(targetConversationId)
+    },
+    [clearPendingAttachments],
+  )
 
-    setConversationError(conversationId, null)
-    setInputValue('')
-    clearPendingAttachments()
+  const focusComposer = useCallback(() => {
+    if (typeof window === 'undefined') return
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      const promptLength = inputRef.current?.value.length ?? 0
+      inputRef.current?.setSelectionRange(promptLength, promptLength)
+    })
+  }, [])
 
-    if (!activeTasksRef.current[conversationId]) {
-      startTask(nextTask)
-      return
-    }
-    enqueueTask(nextTask)
-  }, [
+  usePlaygroundInvocation({
+    invocation,
+    isRoutingModelReady,
+    onInvocationConsumed,
+    routingModels,
+    activateConversation: activateProbeConversation,
+    focusComposer,
+    setConversationError,
+    setDraft: setProbeDraft,
+    setInputValue,
+    setModel,
+    startTask,
+  })
+
+  const handleSend = usePlaygroundTaskSubmission({
+    activeTasksRef,
     buildTaskRequestOptions,
+    clearPendingAttachments,
     conversationId,
     conversations,
+    copyPendingAttachmentsForTask,
     enqueueTask,
     getConversationMessagesSnapshot,
+    hasHydratedConversation,
     inputValue,
     isRoutingModelReady,
+    model,
     pendingAttachments,
-    clearPendingAttachments,
-    copyPendingAttachmentsForTask,
+    probeDraft,
     saveConversation,
     setConversationError,
+    setInputValue,
+    setProbeDraft,
     startTask,
-  ])
+  })
 
   useEffect(() => {
     if (!isRoutingModelReady) {
       return
     }
+    let activatedOrphanQueue = false
     Object.entries(queues).forEach(([targetConversationId, queue]) => {
       if (queue.length === 0 || activeTasksRef.current[targetConversationId]) {
         return
       }
 
-      const nextTask = queue.reduce<PlaygroundTask>((earliestTask, task) => (
-        task.createdAt < earliestTask.createdAt ? task : earliestTask
-      ), queue[0])
+      const nextTask = queue.reduce<PlaygroundTask>(
+        (earliestTask, task) => (task.createdAt < earliestTask.createdAt ? task : earliestTask),
+        queue[0],
+      )
+      if (!routingModels.some((modelOption) => modelOption.id === nextTask.requestOptions.model)) {
+        setConversationError(
+          targetConversationId,
+          `Queued model "${nextTask.requestOptions.model}" is no longer available. Delete the queued task and resend it with an available model.`,
+        )
+        if (
+          !activatedOrphanQueue &&
+          conversationIdRef.current !== targetConversationId &&
+          !conversations.some((conversation) => conversation.id === targetConversationId)
+        ) {
+          activatedOrphanQueue = true
+          conversationIdRef.current = targetConversationId
+          setConversationId(targetConversationId)
+          setInputValue('')
+          setProbeDraft(null)
+          setExpandedToolCards(new Set())
+        }
+        return
+      }
 
       removeQueuedTask(targetConversationId, nextTask.id)
       startTask(nextTask)
     })
   }, [
     activeTasks,
-    executeTask,
+    conversations,
     isRoutingModelReady,
     queues,
     removeQueuedTask,
+    routingModels,
+    setConversationError,
     startTask,
   ])
 
-  const handleDeleteQueuedTask = useCallback((taskId: string) => {
-    removeQueuedTask(conversationId, taskId)
-  }, [conversationId, removeQueuedTask])
+  const handleDeleteQueuedTask = useCallback(
+    (taskId: string) => {
+      removeQueuedTask(conversationId, taskId)
+    },
+    [conversationId, removeQueuedTask],
+  )
 
-  const handleEditQueuedTask = useCallback((taskId: string) => {
-    const taskToEdit = queuedTasks.find(task => task.id === taskId)
-    if (!taskToEdit) {
-      return
-    }
+  const handleEditQueuedTask = useCallback(
+    (taskId: string) => {
+      const taskToEdit = queuedTasks.find((task) => task.id === taskId)
+      if (!taskToEdit) {
+        return
+      }
 
-    removeQueuedTask(conversationId, taskId)
-    setInputValue(taskToEdit.prompt)
-    restorePendingAttachments(taskToEdit.attachments)
+      removeQueuedTask(conversationId, taskId)
+      setInputValue(taskToEdit.prompt)
+      restorePendingAttachments(taskToEdit.attachments)
 
-    if (typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => {
-        inputRef.current?.focus()
-        const promptLength = taskToEdit.prompt.length
-        inputRef.current?.setSelectionRange(promptLength, promptLength)
-      })
-    }
-  }, [conversationId, queuedTasks, removeQueuedTask, restorePendingAttachments])
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          inputRef.current?.focus()
+          const promptLength = taskToEdit.prompt.length
+          inputRef.current?.setSelectionRange(promptLength, promptLength)
+        })
+      }
+    },
+    [conversationId, queuedTasks, removeQueuedTask, restorePendingAttachments],
+  )
 
-  const handleReorderQueuedTasks = useCallback((sourceTaskId: string, targetTaskId: string) => {
-    reorderTasks(conversationId, sourceTaskId, targetTaskId)
-  }, [conversationId, reorderTasks])
+  const handleReorderQueuedTasks = useCallback(
+    (sourceTaskId: string, targetTaskId: string) => {
+      reorderTasks(conversationId, sourceTaskId, targetTaskId)
+    },
+    [conversationId, reorderTasks],
+  )
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -558,6 +612,7 @@ const ChatComponent = ({
 
   const handleNewConversation = useCallback(() => {
     setInputValue('')
+    setProbeDraft(null)
     clearPendingAttachments()
     setExpandedToolCards(new Set())
     setConversationId(generateConversationId())
@@ -574,22 +629,28 @@ const ChatComponent = ({
     setConversationError(conversationId, null)
   }, [conversationId, enableClawMode, hasRunningTasks, isTogglingClawMode, setConversationError])
 
-  const isTeamRoomView = enableClawMode && clawView === 'room', roomCreateDisabled = isTeamRoomView && clawManagementDisabled
-  const modeToggleDisabled = hasRunningTasks || isTogglingClawMode || readonlyLoading
+  const isTeamRoomView = enableClawMode && clawView === 'room',
+    roomCreateDisabled = isTeamRoomView && clawManagementDisabled
+  const hasActiveProbeDraft = probeDraft?.conversationId === conversationId
+  const modeToggleDisabled =
+    hasRunningTasks || isTogglingClawMode || clawManagementDisabled || hasActiveProbeDraft
 
-  const handleToggleTeamView = useCallback(() => { if (!enableClawMode || modeToggleDisabled) return; setClawView(prev => (prev === 'room' ? 'control' : 'room')) }, [enableClawMode, modeToggleDisabled])
+  const handleToggleTeamView = useCallback(() => {
+    if (!enableClawMode || modeToggleDisabled) return
+    setClawView((prev) => (prev === 'room' ? 'control' : 'room'))
+  }, [enableClawMode, modeToggleDisabled])
 
   const handleTopBarCreate = useCallback(() => {
     if (roomCreateDisabled) return
     if (isTeamRoomView) {
-      setTeamRoomCreateToken(prev => prev + 1)
+      setTeamRoomCreateToken((prev) => prev + 1)
       return
     }
     handleNewConversation()
   }, [handleNewConversation, isTeamRoomView, roomCreateDisabled])
 
   const handleToggleToolCard = useCallback((toolCallId: string) => {
-    setExpandedToolCards(prev => {
+    setExpandedToolCards((prev) => {
       const next = new Set(prev)
       if (next.has(toolCallId)) {
         next.delete(toolCallId)
@@ -600,31 +661,18 @@ const ChatComponent = ({
     })
   }, [])
 
-  const liveThinkingProcess = messages.reduceRight((thinking, message) =>
-    thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
-  const visibleError = conversationErrors[conversationId] ?? null
+  const liveThinkingProcess = getLiveThinkingProcess(messages)
+  const queuedErrorConversationId = findQueuedErrorConversationId(queues, conversationErrors)
+  const visibleErrorConversationId = conversationErrors[conversationId]
+    ? conversationId
+    : queuedErrorConversationId
+  const visibleError = visibleErrorConversationId
+    ? conversationErrors[visibleErrorConversationId]
+    : null
   const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
-  const shouldShowHeaderReveal = !isTeamRoomView
-    && Boolean(currentHeaderRevealState?.visible)
-    && Boolean(currentHeaderRevealState?.headers)
-
+  const isConversationEmpty = !isTeamRoomView && messages.length === 0 && !shouldShowThinking
   return (
     <>
-      {shouldShowThinking && (
-        <ThinkingAnimation
-          onComplete={handleThinkingComplete}
-          thinkingProcess={liveThinkingProcess}
-        />
-      )}
-
-      {shouldShowHeaderReveal && currentHeaderRevealState?.headers && (
-        <HeaderReveal
-          headers={currentHeaderRevealState.headers}
-          onComplete={handleHeaderRevealComplete}
-          displayDuration={2000}
-        />
-      )}
-
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
           <ChatComponentSidebarShell
@@ -632,24 +680,25 @@ const ChatComponent = ({
             isOpen={isSidebarOpen}
             isTeamRoomView={isTeamRoomView}
             onCreate={handleTopBarCreate}
-            onToggleSidebar={() => setIsSidebarOpen(prev => !prev)}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
           >
             {!isTeamRoomView ? (
               <ChatConversationSidebar
                 conversationId={conversationId}
                 conversationPreviews={conversationPreviews}
                 onDeleteConversation={handleDeleteConversation}
+                onRenameConversation={handleRenameConversation}
                 onSelectConversation={handleSelectConversation}
               />
             ) : null}
           </ChatComponentSidebarShell>
 
-          <div className={styles.chatArea}>
+          <div className={`${styles.chatArea} ${isConversationEmpty ? styles.chatAreaEmpty : ''}`}>
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}
                 createRoomRequestToken={teamRoomCreateToken}
-                inputModeControls={(
+                inputModeControls={
                   <ChatComposerAddMenu
                     clawModeDisabled={modeToggleDisabled}
                     clawModeEnabled={enableClawMode}
@@ -663,42 +712,28 @@ const ChatComponent = ({
                     webSearchEnabled
                     webSearchLocked
                   />
-                )}
+                }
               />
             ) : (
               <>
-                {routingModelStatus === 'error' && !visibleError ? (
-                  <div className={styles.error} role="alert">
-                    <span className={styles.errorIcon}>⚠️</span>
-                    <span>The automatic routing model is unavailable.</span>
-                    <button
-                      type="button"
-                      className={styles.errorAction}
-                      onClick={retryRoutingModelDiscovery}
-                    >
-                      Retry discovery
-                    </button>
-                  </div>
-                ) : null}
-                {visibleError && (
-                  <div className={styles.error}>
-                    <span className={styles.errorIcon}>⚠️</span>
-                    <span>{visibleError}</span>
-                    <button
-                      className={styles.errorDismiss}
-                      onClick={() => {
-                        setConversationError(conversationId, null)
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
+                <ChatComponentErrors
+                  overlay={isConversationEmpty}
+                  onDismissError={() => {
+                    if (visibleErrorConversationId) {
+                      setConversationError(visibleErrorConversationId, null)
+                    }
+                  }}
+                  onRetryRoutingModelDiscovery={retryRoutingModelDiscovery}
+                  routingModelStatus={routingModelStatus}
+                  visibleError={visibleError}
+                />
                 <ChatComponentConversationViewport
                   conversationId={conversationId}
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}
+                  thinking={shouldShowThinking}
+                  thinkingProcess={liveThinkingProcess}
                 />
                 <ChatTaskQueue
                   queuedTasks={queuedTasks}
@@ -708,7 +743,7 @@ const ChatComponent = ({
                 />
                 <ChatComponentInputBar
                   attachments={pendingAttachments}
-                  attachFilesDisabled={readonlyLoading || isReadonly}
+                  attachFilesDisabled={readonlyLoading || serverReadonly || hasActiveProbeDraft}
                   enableClawMode={enableClawMode}
                   enableWebSearch={enableWebSearch}
                   inputRef={inputRef}
@@ -716,20 +751,29 @@ const ChatComponent = ({
                   isLoading={isCurrentConversationRunning}
                   isTogglingClawMode={isTogglingClawMode}
                   modeToggleDisabled={modeToggleDisabled}
-                  voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || isReadonly}
+                  modelOptions={routingModels}
+                  modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
+                  selectedModel={model}
+                  voiceInputDisabled={
+                    isCurrentConversationRunning || readonlyLoading || serverReadonly
+                  }
+                  webSearchDisabled={hasActiveProbeDraft}
                   onAttachFiles={handleAttachFiles}
                   onChangeInput={setInputValue}
                   onKeyDown={handleKeyDown}
+                  onModelChange={setModel}
                   onRemoveAttachment={handleRemoveAttachment}
                   onSend={handleSend}
                   onStop={handleStop}
                   onToggleClawMode={handleToggleClawMode}
                   onToggleClawRoom={handleToggleTeamView}
-                  onToggleWebSearch={() => setEnableWebSearch(prev => !prev)}
+                  onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
                   sendDisabled={!isRoutingModelReady}
-                  sendDisabledReason={routingModelStatus === 'error'
-                    ? 'Retry model discovery before sending'
-                    : 'Discovering an available router model'}
+                  sendDisabledReason={
+                    routingModelStatus === 'error'
+                      ? 'Retry model discovery before sending'
+                      : 'Discovering an available router model'
+                  }
                   showClawRoom={enableClawMode}
                 />
               </>

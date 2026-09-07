@@ -9,7 +9,7 @@ from cli.config_contract import (
     LEGACY_PROVIDER_DEFAULT_KEYS,
     LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
-    iter_named_signal_entries,
+    iter_routing_profiles,
 )
 from cli.models import RouterLearningConfig, UserConfig
 from cli.utils import get_logger
@@ -166,7 +166,7 @@ def _unsupported_router_learning_fields(data: Dict[str, Any]) -> list[str]:
     fields.extend(
         _unknown_fields(
             learning,
-            {"enabled", "adaptation", "protection"},
+            {"enabled", "adaptation", "protection", "state_store"},
             "global.router.learning",
         )
     )
@@ -416,6 +416,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "`global.router.learning.enabled`, "
             "`global.router.learning.adaptation`, "
             "`global.router.learning.protection`, and "
+            "`global.router.learning.state_store`, plus "
             "`routing.decisions[].adaptations`."
         )
 
@@ -434,12 +435,14 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         )
 
 
-def parse_user_config(config_path: str) -> UserConfig:
+def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConfig:
     """
     Parse and validate user configuration file.
 
     Args:
         config_path: Path to config.yaml
+        log_summary: Emit the human-readable parse summary. Machine-readable
+            callers disable this so stdout remains a valid document.
 
     Returns:
         UserConfig: Validated user configuration
@@ -461,7 +464,6 @@ def parse_user_config(config_path: str) -> UserConfig:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
         raise ConfigParseError(f"Failed to read configuration file: {e}")
-
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
@@ -470,11 +472,22 @@ def parse_user_config(config_path: str) -> UserConfig:
     # Validate with Pydantic
     try:
         config = UserConfig(**data)
-        log.info("Configuration parsed successfully")
-        log.info(f"  Version: {config.version}")
-        log.info(f"  Listeners: {len(config.listeners)}")
-        log.info(f"  Decisions: {len(config.decisions)}")
-        log.info(f"  Models: {len(config.providers.models)}")
+        if log_summary:
+            log.info("Configuration parsed successfully")
+            log.info(f"  Version: {config.version}")
+            log.info(f"  Listeners: {len(config.listeners)}")
+            recipe_decisions = sum(
+                len(profile.decisions)
+                for name, profile in iter_routing_profiles(config)
+                if name != "default"
+            )
+            log.info(f"  Entrypoints: {len(config.entrypoints)}")
+            log.info(f"  Recipes: {len(config.recipes)}")
+            log.info(
+                f"  Decisions: {len(config.decisions) + recipe_decisions} total "
+                f"({len(config.decisions)} default, {recipe_decisions} recipe-owned)"
+            )
+            log.info(f"  Models: {len(config.providers.models)}")
         return config
     except ValidationError as e:
         # Format validation errors nicely
@@ -488,26 +501,6 @@ def parse_user_config(config_path: str) -> UserConfig:
         raise ConfigParseError(error_msg)
     except Exception as e:
         raise ConfigParseError(f"Unexpected error during validation: {e}")
-
-
-def detect_config_format(data: Dict[str, Any]) -> str:
-    """
-    Detect configuration format (new vs legacy).
-
-    Args:
-        data: Configuration data dictionary
-
-    Returns:
-        str: "new" or "legacy"
-    """
-    # New format has 'version' field starting with 'v'
-    if (
-        "version" in data
-        and isinstance(data["version"], str)
-        and data["version"].startswith("v")
-    ):
-        return "new"
-    return "legacy"
 
 
 def load_config_file(config_path: str) -> Dict[str, Any]:
@@ -536,75 +529,3 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
         raise ConfigParseError(f"Failed to read configuration file: {e}")
-
-
-def validate_signal_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that signal names are unique across all signal types.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-    seen = {}
-
-    if not config.signals:
-        return errors
-
-    for family, signal_name in iter_named_signal_entries(config.signals):
-        if signal_name in seen:
-            errors.append(
-                f"Duplicate signal name '{signal_name}' in {family} "
-                f"(already defined in {seen[signal_name]})"
-            )
-        seen[signal_name] = family
-
-    return errors
-
-
-def validate_domain_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that domain names are unique.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-
-    if not config.signals or not config.signals.domains:
-        return errors
-
-    seen = set()
-    for domain in config.signals.domains:
-        if domain.name in seen:
-            errors.append(f"Duplicate domain name '{domain.name}'")
-        seen.add(domain.name)
-
-    return errors
-
-
-def validate_model_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that model names are unique.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-    seen = set()
-
-    for model in config.providers.models:
-        if model.name in seen:
-            errors.append(f"Duplicate model name '{model.name}'")
-        seen.add(model.name)
-
-    return errors

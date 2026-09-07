@@ -1,0 +1,93 @@
+{
+  "status": "ok",
+  "body": {
+    "frames": [
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "role": "assistant"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "reasoning_content": "inspect the evidence"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {
+                "content": "final answer"
+              },
+              "finish_reason": null,
+              "index": 0
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "choices": [
+            {
+              "delta": {},
+              "finish_reason": "stop",
+              "index": 0
+            }
+          ],
+          "id": "chatcmpl_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk"
+        },
+        "event": ""
+      },
+      {
+        "data": {
+          "id": "chatcmpl_1",
+          "model": "public-model",
+          "object": "chat.completion.chunk",
+          "usage": {
+            "completion_tokens": 5,
+            "completion_tokens_details": {
+              "reasoning_tokens": 3
+            },
+            "prompt_tokens": 2,
+            "total_tokens": 7
+          }
+        },
+        "event": ""
+      },
+      {
+        "data": "[DONE]",
+        "event": ""
+      }
+    ]
+  }
+}

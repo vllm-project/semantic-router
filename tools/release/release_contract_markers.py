@@ -94,14 +94,18 @@ def sim_upgrade_docs_markers(sim_version: str) -> MarkerSet:
 
 def candle_crate_workflow_markers() -> MarkerSet:
     return (
-        ("Candle crate tag trigger", "- 'v*'"),
+        ("Candle crate reusable publisher", "name: Candle Crate Publisher"),
         (
             "Candle crate version guard",
-            "CRATE_VERSION=$(cargo metadata --no-deps --format-version 1",
+            'CRATE_VERSION="$(',
         ),
         (
-            "Candle crate tag version guard",
-            'TAG_VERSION="${{ steps.extract_tag.outputs.version }}"',
+            "Candle crate release input",
+            "RELEASE_VERSION: ${{ inputs.version }}",
+        ),
+        (
+            "Candle crate tag input",
+            "RELEASE_TAG: ${{ inputs.tag }}",
         ),
         ("Candle crate CPU API smoke tests", "cargo test --no-default-features"),
         ("Candle crate CPU check", "cargo check --no-default-features --verbose"),

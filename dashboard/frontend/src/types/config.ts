@@ -15,7 +15,7 @@
 export interface ProviderEndpoint {
   name: string
   weight: number
-  endpoint: string  // e.g., "host.docker.internal:8000" or "api.openai.com"
+  endpoint: string // e.g., "host.docker.internal:8000" or "api.openai.com"
   protocol: 'http' | 'https'
   base_url?: string
   provider?: 'openai' | 'anthropic'
@@ -24,7 +24,7 @@ export interface ProviderEndpoint {
 }
 
 export interface ProviderModel {
-  name: string  // e.g., "openai/gpt-oss-120b"
+  name: string // e.g., "openai/gpt-oss-120b"
   reasoning_family?: string
   provider_model_id?: string
   backend_refs?: ProviderEndpoint[]
@@ -39,6 +39,17 @@ export interface ProviderModel {
     cache_write_per_1m?: number
     completion_per_1m?: number
   }
+  reliability?: {
+    lb_policy?: 'round_robin' | 'least_request'
+    retry_count?: number
+    retry_on?: string
+    consecutive_5xx?: number
+    base_ejection_time?: string
+    max_ejection_percent?: number
+    health_check_path?: string
+    health_check_interval?: string
+    health_check_timeout?: string
+  }
 }
 
 export interface ProviderDefaults {
@@ -49,7 +60,7 @@ export interface ProviderDefaults {
 
 export interface ReasoningFamily {
   type: 'reasoning_effort' | 'chat_template_kwargs'
-  parameter: string  // e.g., "reasoning_effort", "enable_thinking"
+  parameter: string // e.g., "reasoning_effort", "enable_thinking"
 }
 
 export interface Providers {
@@ -112,8 +123,10 @@ export interface LanguageSignal {
 
 export interface ContextSignal {
   name: string
-  min_tokens: string
-  max_tokens: string
+  /** Inclusive lower bound. Defaults to 0 when omitted. */
+  min_tokens?: string
+  /** Inclusive upper bound. Omit for an open-ended band (no upper limit). */
+  max_tokens?: string
   description?: string
 }
 
@@ -142,6 +155,47 @@ export interface StructureSignal {
   description?: string
   feature: StructureFeature
   predicate?: NumericPredicate
+}
+
+export interface ConversationSignal {
+  name: string
+  description?: string
+  feature: {
+    type: 'count' | 'exists'
+    source: {
+      type: string
+      role?: string
+    }
+  }
+  predicate?: NumericPredicate
+}
+
+export interface MetadataSignal {
+  name: string
+  description?: string
+  key: string
+  predicate: {
+    equals?: string
+    in?: string[]
+    exists?: boolean
+  }
+}
+
+export interface ClassifierSignal {
+  name: string
+  description?: string
+  type: 'local' | 'llm' | 'sequence_classifier'
+  model?: string
+  model_path?: string
+  labels: string[]
+  instructions?: string
+  use_cpu?: boolean
+}
+
+export interface InputModalitySignal {
+  name: string
+  description?: string
+  modality: 'text' | 'image' | 'audio' | 'video'
 }
 
 export interface ComplexityCandidates {
@@ -187,6 +241,7 @@ export interface JailbreakSignal {
   threshold: number
   method?: string // "classifier" (default) or "contrastive"
   include_history?: boolean
+  direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
   jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
   benign_patterns?: string[] // Known benign prompts (contrastive KB)
   description?: string
@@ -216,22 +271,51 @@ export interface Signals {
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
+  conversation?: ConversationSignal[]
+  metadata?: MetadataSignal[]
+  classifiers?: ClassifierSignal[]
+  input_modality?: InputModalitySignal[]
 }
 
 // =============================================================================
 // DECISIONS - Routing logic
 // =============================================================================
 
-
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'reask' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
+export type DecisionConditionType =
+  | 'keyword'
+  | 'domain'
+  | 'preference'
+  | 'user_feedback'
+  | 'reask'
+  | 'embedding'
+  | 'fact_check'
+  | 'language'
+  | 'context'
+  | 'structure'
+  | 'complexity'
+  | 'modality'
+  | 'authz'
+  | 'jailbreak'
+  | 'pii'
+  | 'kb'
+  | 'conversation'
+  | 'event'
+  | 'metadata'
+  | 'classifier'
+  | 'input_modality'
+  | 'projection'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string
+  label?: string
+  predicate?: NumericPredicate
+  on_error?: 'no_match' | 'match'
 }
 
 export interface DecisionRules {
   operator: 'AND' | 'OR' | 'NOT'
   conditions: DecisionCondition[]
+  on_unknown?: 'no_match' | 'match' | 'fail_request'
 }
 
 export interface ModelRef {
@@ -245,28 +329,39 @@ export interface ModelRef {
 
 export interface PluginConfig {
   type:
-    | 'semantic-cache'
+    | 'response_cache'
     | 'memory'
     | 'system_prompt'
     | 'header_mutation'
     | 'hallucination'
     | 'router_replay'
     | 'rag'
-    | 'image_gen'
     | 'fast_response'
     | 'tools'
     | 'request_params'
     | 'response_jailbreak'
+    | 'context_compression'
   configuration: Record<string, unknown>
 }
 
 export interface Decision {
   name: string
-  description: string
+  description?: string
   priority: number
   rules: DecisionRules
   modelRefs: ModelRef[]
   plugins?: PluginConfig[]
+  algorithm?: {
+    type: string
+    on_error?: string
+    prompt?: {
+      model: string
+      instructions: string
+      timeout_seconds?: number
+    }
+    [key: string]: unknown
+  }
+  annotations?: Record<string, unknown>
 }
 
 // =============================================================================
@@ -330,13 +425,21 @@ export interface LegacyConfig {
     pii_model?: LegacyModelConfig
   }
   prompt_guard?: LegacyModelConfig & { enabled: boolean }
-  semantic_cache?: {
+  response_cache?: {
     enabled: boolean
     backend_type?: string
     similarity_threshold: number
     max_entries: number
     ttl_seconds: number
     eviction_policy?: string
+  }
+  /** @deprecated Use response_cache. */
+  semantic_cache?: {
+    enabled: boolean
+    backend_type?: string
+    similarity_threshold?: number
+    max_entries?: number
+    ttl_seconds?: number
   }
   tools?: {
     enabled: boolean
@@ -424,7 +527,7 @@ export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyC
  * Detect the config format based on key indicators
  */
 const asUnknownConfigRecord = (value: unknown): UnknownConfigRecord | null =>
-  value && typeof value === 'object' ? value as UnknownConfigRecord : null
+  value && typeof value === 'object' ? (value as UnknownConfigRecord) : null
 
 export function detectConfigFormat(config: unknown): ConfigFormat {
   const root = asUnknownConfigRecord(config)

@@ -9,7 +9,6 @@ RUNTIME_CONTAINERS=(
   vllm-sr-router-container
   vllm-sr-envoy-container
   vllm-sr-dashboard-container
-  vllm-sr-sim-container
   vllm-sr-prometheus
   vllm-sr-grafana
   vllm-sr-jaeger

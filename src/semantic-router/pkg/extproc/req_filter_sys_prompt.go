@@ -2,9 +2,12 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -20,7 +23,7 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	decision := r.decisionByName(categoryName)
+	decision := ctx.VSRSelectedDecision
 	if decision == nil {
 		return modifiedBody, nil
 	}
@@ -79,78 +82,66 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode 
 		return requestBody, false, nil
 	}
 
-	requestMap, messages, ok, err := parseRequestMessages(requestBody)
-	if err != nil {
-		return nil, false, err
+	if !gjson.ValidBytes(requestBody) {
+		return nil, false, fmt.Errorf("request body is not valid JSON")
 	}
-	if !ok {
+	messagesResult := gjson.GetBytes(requestBody, "messages")
+	if !messagesResult.Exists() || !messagesResult.IsArray() {
 		return requestBody, false, nil
 	}
+	messages := messagesResult.Array()
 
 	existingSystemContent, hasSystemMessage := firstSystemMessage(messages)
 	finalSystemContent, logMessage := systemPromptContent(systemPrompt, mode, existingSystemContent, hasSystemMessage)
-	requestMap["messages"] = upsertSystemMessage(messages, finalSystemContent, hasSystemMessage)
+	updatedMessages, err := upsertSystemMessage(messages, finalSystemContent, hasSystemMessage)
+	if err != nil {
+		return nil, false, err
+	}
+	encoded, err := json.Marshal(updatedMessages)
+	if err != nil {
+		return nil, false, err
+	}
+	modifiedBody, err := sjson.SetRawBytes(requestBody, "messages", encoded)
+	if err != nil {
+		return nil, false, err
+	}
 
 	logging.Infof("%s (mode: %s)", logMessage, mode)
-
-	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
 }
 
-func parseRequestMessages(requestBody []byte) (map[string]interface{}, []interface{}, bool, error) {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
-		return nil, nil, false, err
-	}
-	messagesInterface, ok := requestMap["messages"]
-	if !ok {
-		return requestMap, nil, false, nil
-	}
-	messages, ok := messagesInterface.([]interface{})
-	return requestMap, messages, ok, nil
-}
-
-func firstSystemMessage(messages []interface{}) (string, bool) {
+func firstSystemMessage(messages []gjson.Result) (string, bool) {
 	if len(messages) == 0 {
 		return "", false
 	}
-	firstMsg, ok := messages[0].(map[string]interface{})
-	if !ok {
+	if messages[0].Get("role").String() != "system" {
 		return "", false
 	}
-	role, ok := firstMsg["role"].(string)
-	if !ok || role != "system" {
-		return "", false
-	}
-	return systemMessageContentText(firstMsg["content"]), true
+	return systemMessageContentText(messages[0].Get("content")), true
 }
 
 // systemMessageContentText returns the text of a system message whose content
 // may be a plain string or an array of content parts (both valid OpenAI input).
 // Without handling the structured form, the content was coerced to "" and the
 // original system instructions were silently dropped during insert-mode merging.
-func systemMessageContentText(content interface{}) string {
-	switch v := content.(type) {
-	case string:
-		return v
-	case []interface{}:
-		parts := make([]string, 0, len(v))
-		for _, item := range v {
-			m, ok := item.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if t, ok := m["type"].(string); ok && t != "" && t != "text" && t != "input_text" {
-				continue
-			}
-			if txt, ok := m["text"].(string); ok && txt != "" {
-				parts = append(parts, txt)
-			}
-		}
-		return strings.Join(parts, "\n")
-	default:
+func systemMessageContentText(content gjson.Result) string {
+	if content.Type == gjson.String {
+		return content.String()
+	}
+	if !content.IsArray() {
 		return ""
 	}
+	parts := make([]string, 0, len(content.Array()))
+	for _, item := range content.Array() {
+		itemType := item.Get("type").String()
+		if itemType != "" && itemType != "text" && itemType != "input_text" {
+			continue
+		}
+		if text := item.Get("text").String(); text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 func systemPromptContent(systemPrompt string, mode string, existingSystemContent string, hasSystemMessage bool) (string, string) {
@@ -172,14 +163,27 @@ func systemPromptContent(systemPrompt string, mode string, existingSystemContent
 	}
 }
 
-func upsertSystemMessage(messages []interface{}, content string, hasSystemMessage bool) []interface{} {
-	systemMessage := map[string]interface{}{
-		"role":    "system",
-		"content": content,
-	}
+func upsertSystemMessage(messages []gjson.Result, content string, hasSystemMessage bool) ([]json.RawMessage, error) {
+	updated := make([]json.RawMessage, 0, len(messages)+1)
 	if hasSystemMessage {
-		messages[0] = systemMessage
-		return messages
+		first, err := sjson.SetBytes([]byte(messages[0].Raw), "content", content)
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, json.RawMessage(first))
+		messages = messages[1:]
+	} else {
+		systemMessage, err := json.Marshal(map[string]string{
+			"role":    "system",
+			"content": content,
+		})
+		if err != nil {
+			return nil, err
+		}
+		updated = append(updated, json.RawMessage(systemMessage))
 	}
-	return append([]interface{}{systemMessage}, messages...)
+	for _, message := range messages {
+		updated = append(updated, json.RawMessage(message.Raw))
+	}
+	return updated, nil
 }

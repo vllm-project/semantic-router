@@ -3,18 +3,23 @@ import type {
   ConfigData,
   LoRAAdapter,
   ModelPricing,
+  ProviderReliability,
 } from './configPageSupport'
 
 export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
   if (!Array.isArray(value)) return []
 
   return value
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
+    )
     .map((entry) => ({
       name: typeof entry.name === 'string' ? entry.name.trim() : '',
-      description: typeof entry.description === 'string' && entry.description.trim()
-        ? entry.description.trim()
-        : undefined,
+      description:
+        typeof entry.description === 'string' && entry.description.trim()
+          ? entry.description.trim()
+          : undefined,
     }))
     .filter((entry) => entry.name)
 }
@@ -23,30 +28,47 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
   if (!Array.isArray(value)) return []
 
   return value
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
+    )
     .map((entry) => {
       const normalized: BackendRefEntry = {}
       if (typeof entry.name === 'string' && entry.name.trim()) normalized.name = entry.name.trim()
-      if (typeof entry.endpoint === 'string' && entry.endpoint.trim()) normalized.endpoint = entry.endpoint.trim()
+      if (typeof entry.endpoint === 'string' && entry.endpoint.trim())
+        normalized.endpoint = entry.endpoint.trim()
       if (entry.protocol === 'https') normalized.protocol = 'https'
       else if (entry.protocol === 'http') normalized.protocol = 'http'
-      if (typeof entry.weight === 'number' && Number.isFinite(entry.weight)) normalized.weight = entry.weight
+      if (typeof entry.weight === 'number' && Number.isFinite(entry.weight))
+        normalized.weight = entry.weight
       if (typeof entry.type === 'string' && entry.type.trim()) normalized.type = entry.type.trim()
-      if (typeof entry.base_url === 'string' && entry.base_url.trim()) normalized.base_url = entry.base_url.trim()
-      if (typeof entry.provider === 'string' && entry.provider.trim()) normalized.provider = entry.provider.trim()
-      if (typeof entry.auth_header === 'string' && entry.auth_header.trim()) normalized.auth_header = entry.auth_header.trim()
-      if (typeof entry.auth_prefix === 'string' && entry.auth_prefix.trim()) normalized.auth_prefix = entry.auth_prefix.trim()
-      if (entry.extra_headers && typeof entry.extra_headers === 'object' && !Array.isArray(entry.extra_headers)) {
+      if (typeof entry.base_url === 'string' && entry.base_url.trim())
+        normalized.base_url = entry.base_url.trim()
+      if (typeof entry.provider === 'string' && entry.provider.trim())
+        normalized.provider = entry.provider.trim()
+      if (typeof entry.auth_header === 'string' && entry.auth_header.trim())
+        normalized.auth_header = entry.auth_header.trim()
+      if (typeof entry.auth_prefix === 'string' && entry.auth_prefix.trim())
+        normalized.auth_prefix = entry.auth_prefix.trim()
+      if (
+        entry.extra_headers &&
+        typeof entry.extra_headers === 'object' &&
+        !Array.isArray(entry.extra_headers)
+      ) {
         normalized.extra_headers = Object.fromEntries(
           Object.entries(entry.extra_headers as Record<string, unknown>)
             .filter(([, nestedValue]) => typeof nestedValue === 'string')
             .map(([key, nestedValue]) => [key, nestedValue as string]),
         )
       }
-      if (typeof entry.api_version === 'string' && entry.api_version.trim()) normalized.api_version = entry.api_version.trim()
-      if (typeof entry.chat_path === 'string' && entry.chat_path.trim()) normalized.chat_path = entry.chat_path.trim()
-      if (typeof entry.api_key === 'string' && entry.api_key.trim()) normalized.api_key = entry.api_key.trim()
-      if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim()) normalized.api_key_env = entry.api_key_env.trim()
+      if (typeof entry.api_version === 'string' && entry.api_version.trim())
+        normalized.api_version = entry.api_version.trim()
+      if (typeof entry.chat_path === 'string' && entry.chat_path.trim())
+        normalized.chat_path = entry.chat_path.trim()
+      if (typeof entry.api_key === 'string' && entry.api_key.trim())
+        normalized.api_key = entry.api_key.trim()
+      if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
+        normalized.api_key_env = entry.api_key_env.trim()
       return normalized
     })
 }
@@ -65,15 +87,52 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
 
   const pricing = value as Record<string, unknown>
   const normalized: ModelPricing = {}
-  if (typeof pricing.currency === 'string' && pricing.currency.trim()) normalized.currency = pricing.currency.trim()
-  if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m)) normalized.prompt_per_1m = pricing.prompt_per_1m
-  if (typeof pricing.cached_input_per_1m === 'number' && Number.isFinite(pricing.cached_input_per_1m)) {
+  if (typeof pricing.currency === 'string' && pricing.currency.trim())
+    normalized.currency = pricing.currency.trim()
+  if (typeof pricing.prompt_per_1m === 'number' && Number.isFinite(pricing.prompt_per_1m))
+    normalized.prompt_per_1m = pricing.prompt_per_1m
+  if (
+    typeof pricing.cached_input_per_1m === 'number' &&
+    Number.isFinite(pricing.cached_input_per_1m)
+  ) {
     normalized.cached_input_per_1m = pricing.cached_input_per_1m
   }
-  if (typeof pricing.cache_write_per_1m === 'number' && Number.isFinite(pricing.cache_write_per_1m)) {
+  if (
+    typeof pricing.cache_write_per_1m === 'number' &&
+    Number.isFinite(pricing.cache_write_per_1m)
+  ) {
     normalized.cache_write_per_1m = pricing.cache_write_per_1m
   }
-  if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m)) normalized.completion_per_1m = pricing.completion_per_1m
+  if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m))
+    normalized.completion_per_1m = pricing.completion_per_1m
+  return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+export function normalizeModelReliability(value: unknown): ProviderReliability | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+
+  const source = value as Record<string, unknown>
+  const normalized: ProviderReliability = {}
+  const stringFields = [
+    'lb_policy',
+    'retry_on',
+    'base_ejection_time',
+    'health_check_path',
+    'health_check_interval',
+    'health_check_timeout',
+  ] as const
+  const numberFields = ['retry_count', 'consecutive_5xx', 'max_ejection_percent'] as const
+
+  for (const field of stringFields) {
+    if (typeof source[field] === 'string' && source[field].trim()) {
+      normalized[field] = source[field].trim()
+    }
+  }
+  for (const field of numberFields) {
+    if (typeof source[field] === 'number' && Number.isFinite(source[field])) {
+      normalized[field] = source[field]
+    }
+  }
   return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
@@ -99,5 +158,6 @@ export function buildProviderModelPayload(
     external_model_ids: normalizeModelStringMap(data.external_model_ids),
     backend_refs: normalizeModelBackendRefs(data.backend_refs),
     pricing: normalizeModelPricing(data.pricing),
+    reliability: normalizeModelReliability(data.reliability),
   }
 }

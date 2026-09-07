@@ -1,30 +1,39 @@
-# KServe Examples
+# KServe inference examples
 
-This directory contains example KServe resource configurations for deploying vLLM models on OpenShift AI.
+These manifests provide small deployment targets for Semantic Router platform
+testing on OpenShift AI. They assume the corresponding KServe or
+`LLMInferenceService` CRDs and accelerator operators are already installed.
 
-## Files
+| Files | Use case | Hardware |
+| --- | --- | --- |
+| `servingruntime-granite32-8b.yaml` + `inferenceservice-granite32-8b.yaml` | Granite 3.2 8B with a dedicated KServe runtime | NVIDIA GPU |
+| `inferenceservice-llm-d-sim-model-a.yaml` + `inferenceservice-llm-d-sim-model-b.yaml` | Two lightweight llm-d routing targets backed by `facebook/opt-125m` | CPU-friendly |
+| `inferenceservice-qwen-0.6b-gpu.yaml` | Qwen3 0.6B through the alpha `LLMInferenceService` API | NVIDIA GPU |
 
-- `servingruntime-granite32-8b.yaml` - ServingRuntime configuration for vLLM with Granite 3.2 8B
-- `inferenceservice-granite32-8b.yaml` - InferenceService to deploy the Granite 3.2 8B model
-- `inferenceservice-llm-d-sim-model-a.yaml` - LLMInferenceService simulator (Model-A, CPU-friendly)
-- `inferenceservice-llm-d-sim-model-b.yaml` - LLMInferenceService simulator (Model-B, CPU-friendly)
-- `inferenceservice-qwen-0.6b-gpu.yaml` - LLMInferenceService for Qwen 0.6B on GPU
-
-## Usage
+Apply only the pair or standalone example you intend to use. From this
+directory:
 
 ```bash
-# Deploy the ServingRuntime
+# Granite KServe runtime and model
 oc apply -f servingruntime-granite32-8b.yaml
-
-# Deploy the InferenceService
 oc apply -f inferenceservice-granite32-8b.yaml
 
-# Or deploy the llm-d simulators (Model-A and Model-B)
+# Or two simulator targets
 oc apply -f inferenceservice-llm-d-sim-model-a.yaml
 oc apply -f inferenceservice-llm-d-sim-model-b.yaml
 
-# Get the internal service URL for use in semantic router config
-oc get inferenceservice granite32-8b -o jsonpath='{.status.components.predictor.address.url}'
+# Or the small GPU-backed LLMInferenceService
+oc apply -f inferenceservice-qwen-0.6b-gpu.yaml
 ```
 
-These examples can be customized for your specific models and resource requirements. The simulator LLMInferenceServices use a small HF model (opt-125m) to satisfy the LLMISVC `model.uri`.
+Inspect the Granite predictor URL with:
+
+```bash
+oc get inferenceservice granite32-8b \
+  -o jsonpath='{.status.components.predictor.address.url}'
+```
+
+Use the resulting service address as a provider backend only after the
+resource reports ready. Review namespaces, model URIs, images, storage,
+accelerator selectors, and resource requests before using these example
+manifests outside a test cluster.

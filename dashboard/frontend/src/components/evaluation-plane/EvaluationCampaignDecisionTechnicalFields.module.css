@@ -1,0 +1,118 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.grid > div {
+  min-width: 0;
+  padding: 0.68rem 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.grid > div:nth-child(-n + 3) {
+  border-top: 0;
+}
+
+.grid > div:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.grid dt {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+.grid dd {
+  margin: 0.18rem 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grid .mono {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+}
+
+.copyableValue {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.copyableValue > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copyButton {
+  flex: 0 0 auto;
+  width: var(--control-height-compact);
+  padding: 0;
+}
+
+.copyButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.copyButton svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid > div,
+  .grid > div:nth-child(3n + 1) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .grid > div:nth-child(-n + 2) {
+    border-top: 0;
+  }
+
+  .grid > div:nth-child(odd) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid > div,
+  .grid > div:nth-child(3n + 1),
+  .grid > div:nth-child(odd) {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .grid > div:first-child {
+    border-top: 0;
+  }
+}

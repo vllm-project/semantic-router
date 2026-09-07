@@ -150,7 +150,7 @@ spec:
       complexity_mapping_path: "models/mom-complexity-classifier/category_mapping.json"
 
     # Semantic cache configuration
-    semantic_cache:
+    response_cache:
       enabled: true
       backend_type: "memory"
       embedding_model: "mmbert"

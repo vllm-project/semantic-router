@@ -1,23 +1,19 @@
 import type { DecisionRule, RouterConfig } from './dashboardPageTypes'
+import {
+  collectScopedDecisions,
+  countSignalsAcrossScopes,
+  type RoutingScopedConfigLike,
+} from '../utils/routingScopes'
+
+const scopedConfig = (config: RouterConfig): RoutingScopedConfigLike =>
+  config as RouterConfig & RoutingScopedConfigLike
 
 export function countSignals(cfg: RouterConfig): { total: number; byType: Record<string, number> } {
-  const byType: Record<string, number> = {}
-  let total = 0
-  const signals = cfg.routing?.signals ?? cfg.signals
-  if (signals) {
-    for (const [type, arr] of Object.entries(signals)) {
-      if (Array.isArray(arr)) {
-        byType[type] = arr.length
-        total += arr.length
-      }
-    }
-  }
-  return { total, byType }
+  return countSignalsAcrossScopes(scopedConfig(cfg))
 }
 
 export function countDecisions(cfg: RouterConfig): number {
-  const decisions = cfg.routing?.decisions ?? cfg.decisions
-  return Array.isArray(decisions) ? decisions.length : 0
+  return getAllDecisions(cfg).length
 }
 
 export function countModels(cfg: RouterConfig): number {
@@ -34,12 +30,24 @@ export function countModels(cfg: RouterConfig): number {
 }
 
 export function countPlugins(cfg: RouterConfig): number {
-  const decisions = cfg.routing?.decisions ?? cfg.decisions
-  if (Array.isArray(decisions)) {
-    return decisions.reduce((count, decision) => count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0), 0)
+  const decisions = getAllDecisions(cfg)
+  if (decisions.length > 0) {
+    return decisions.reduce(
+      (count, decision) =>
+        count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0),
+      0,
+    )
   }
   if (!cfg.plugins || typeof cfg.plugins !== 'object') return 0
   return Object.keys(cfg.plugins).length
+}
+
+export function getAllDecisions(cfg: RouterConfig): DecisionRule[] {
+  return collectScopedDecisions<DecisionRule>(scopedConfig(cfg)).map(({ scope, value }) => ({
+    ...value,
+    routingScope: scope.id,
+    routingEntrypoints: scope.entrypointModelNames,
+  }))
 }
 
 /** Classify decision by priority range */
@@ -73,7 +81,7 @@ export function categorizeDecisions(config: RouterConfig | null): {
   routing: DecisionRule[]
   fallbacks: DecisionRule[]
 } {
-  const decisions = config?.routing?.decisions ?? config?.decisions
+  const decisions = config ? getAllDecisions(config) : []
   if (!decisions) return { guardrails: [], routing: [], fallbacks: [] }
   const guardrails: DecisionRule[] = []
   const routing: DecisionRule[] = []

@@ -1,0 +1,7 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": []
+  }
+}

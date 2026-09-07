@@ -7,7 +7,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
@@ -74,10 +73,10 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	// not double-count the image FFI cost into the text-rule sample.
 	var bestConfidence float64
 	if textResult != nil {
-		bestConfidence = recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
+		bestConfidence = c.recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
 	}
 	if imageResult != nil {
-		bestConfidence = recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
+		bestConfidence = c.recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
 	}
 	results.Metrics.Embedding.Confidence = bestConfidence
 }
@@ -95,7 +94,7 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 // image-bearing requests.
 //
 // Caller must hold the mu used to guard results.
-func recordEmbeddingResult(results *SignalResults, detailedResult *EmbeddingClassificationResult, elapsed time.Duration, bestConfidence float64) float64 {
+func (c *Classifier) recordEmbeddingResult(results *SignalResults, detailedResult *EmbeddingClassificationResult, elapsed time.Duration, bestConfidence float64) float64 {
 	for _, score := range detailedResult.Scores {
 		if score.Score > bestConfidence {
 			bestConfidence = score.Score
@@ -106,8 +105,8 @@ func recordEmbeddingResult(results *SignalResults, detailedResult *EmbeddingClas
 		results.SignalValues["embedding:"+score.Name+":prototype_count"] = float64(score.PrototypeCount)
 	}
 	for _, mr := range detailedResult.Matches {
-		metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
+		c.recordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
+		c.recordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
 		results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
 		results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
 

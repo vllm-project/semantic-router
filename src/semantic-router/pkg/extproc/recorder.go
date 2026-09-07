@@ -2,11 +2,13 @@ package extproc
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -19,7 +21,7 @@ import (
 func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
 	effortForMetrics := ""
 	if reasoningEnabled && decisionName != "" {
-		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
+		effortForMetrics = r.getReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
 	}
 
 	logging.ComponentEvent("extproc", "routing_decision", map[string]interface{}{
@@ -51,8 +53,8 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		"decision_reason":   reasoningDecision.DecisionReason,
 	})
 
-	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
-	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
+	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
+	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
 	// Keep legacy attributes for backward compatibility
 	tracing.SetSpanAttributes(routingSpan,
@@ -113,7 +115,7 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	populateReplaySessionIfNeeded(ctx)
 
-	recorder := r.resolveReplayRecorder(decisionName)
+	recorder := r.resolveReplayRecorder(ctx, decisionName)
 	if recorder == nil {
 		return
 	}
@@ -132,35 +134,21 @@ func shouldStartRouterReplay(ctx *RequestContext) bool {
 	return ctx.RouterReplayID == ""
 }
 
-// populateReplaySessionIfNeeded fills ChatCompletionMessages and session fields
-// when startRouterReplay runs before prepareRequestForModelRouting (e.g.
-// fast_response, semantic-cache hit, looper-internal).
+// populateReplaySessionIfNeeded derives session fields from neutral state when
+// replay starts before the regular request-preparation phase.
 func populateReplaySessionIfNeeded(ctx *RequestContext) {
-	if ctx == nil {
+	if ctx == nil || ctx.SemanticRequest == nil {
 		return
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		populateSessionTransitionFields(ctx)
-		return
-	}
-	if len(ctx.ChatCompletionMessages) > 0 {
-		populateSessionTransitionFields(ctx)
-		return
-	}
-	body := ctx.OriginalRequestBody
-	if len(body) == 0 {
-		return
-	}
-	openAIRequest, err := parseOpenAIRequest(body)
-	if err != nil {
-		return
-	}
-	ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
 	populateSessionTransitionFields(ctx)
 }
 
-func (r *OpenAIRouter) resolveReplayRecorder(decisionName string) *routerreplay.Recorder {
-	recorder := r.ReplayRecorders[decisionName]
+func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName string) *routerreplay.Recorder {
+	recipeName := config.DefaultRecipeName
+	if ctx != nil && ctx.Routing.RecipeName() != "" {
+		recipeName = ctx.Routing.RecipeName()
+	}
+	recorder := r.ReplayRecorders[config.RoutingDecisionKey(recipeName, decisionName)]
 	if recorder != nil {
 		return recorder
 	}
@@ -193,11 +181,12 @@ func buildReplayRoutingRecord(
 		SessionID:         ctx.SessionID,
 		TurnIndex:         ctx.TurnIndex,
 		Decision:          decisionName,
+		Recipe:            string(ctx.Routing.RecipeName()),
 		DecisionTier:      decisionTier,
 		DecisionPriority:  decisionPriority,
 		Category:          ctx.VSRSelectedCategory,
 		OriginalModel:     originalModel,
-		SelectedModel:     replaySelectedModel(originalModel, selectedModel),
+		SelectedModel:     replaySelectedModel(selectedModel),
 		ReasoningMode:     replayReasoningMode(ctx),
 		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
 		SelectionMethod:   ctx.VSRSelectionMethod,
@@ -235,24 +224,25 @@ func buildReplayRoutingRecord(
 		RAGContextLength:     len(ctx.RAGRetrievedContext),
 		RAGSimilarityScore:   ctx.RAGSimilarityScore,
 		CacheSimilarity:      ctx.VSRCacheSimilarity,
+		CacheHitKind:         ctx.VSRCacheHitKind,
+		CacheSource:          ctx.VSRCacheSource,
+		CacheEntryAgeSeconds: ctx.VSRCacheEntryAgeSeconds,
+		CacheTTLSeconds:      ctx.VSRCacheTTLSeconds,
 		ContextTokenCount:    ctx.VSRContextTokenCount,
 		HallucinationEnabled: hallucinationEnabled,
 	}
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		record.PreviousResponseID = ctx.ResponseAPICtx.PreviousResponseID
-		record.ConversationID = ctx.ResponseAPICtx.ConversationID
+	if state := ctx.ResponseObjectState; state != nil {
+		record.PreviousResponseID = state.PreviousResponseID
+		record.ConversationID = state.ConversationID
 	}
-	if len(ctx.OriginalRequestBody) > 0 {
-		record.RequestBody = string(ctx.OriginalRequestBody)
+	if ctx.SemanticRequest != nil {
+		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
+			record.RequestBody = string(requestBody)
+		}
 	}
 
-	// Extract structured prompt and tool-definition fields from the full
-	// request body *before* body truncation occurs in AddRecord.
-	if isResponseAPIRequest(ctx) {
-		record.Prompt, record.ToolDefinitions = extractResponseAPIPromptAndTools(ctx)
-	} else {
-		record.Prompt, record.ToolDefinitions = extractChatCompletionPromptAndTools(ctx.OriginalRequestBody)
-	}
+	// Extract structured fields from neutral IR before recorder truncation.
+	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
 
 	return record
 }
@@ -271,33 +261,33 @@ func replayReasoningMode(ctx *RequestContext) string {
 	return ctx.VSRReasoningMode
 }
 
-func replaySelectedModel(originalModel string, selectedModel string) string {
-	if selectedModel == "" {
-		return originalModel
-	}
+func replaySelectedModel(selectedModel string) string {
 	return selectedModel
 }
 
 func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 	return routerreplay.Signal{
-		Keyword:      ctx.VSRMatchedKeywords,
-		Embedding:    ctx.VSRMatchedEmbeddings,
-		Domain:       ctx.VSRMatchedDomains,
-		FactCheck:    ctx.VSRMatchedFactCheck,
-		UserFeedback: ctx.VSRMatchedUserFeedback,
-		Reask:        ctx.VSRMatchedReask,
-		Preference:   ctx.VSRMatchedPreference,
-		Language:     ctx.VSRMatchedLanguage,
-		Context:      ctx.VSRMatchedContext,
-		Structure:    ctx.VSRMatchedStructure,
-		Complexity:   ctx.VSRMatchedComplexity,
-		Modality:     ctx.VSRMatchedModality,
-		Authz:        ctx.VSRMatchedAuthz,
-		Jailbreak:    ctx.VSRMatchedJailbreak,
-		PII:          ctx.VSRMatchedPII,
-		KB:           ctx.VSRMatchedKB,
-		Conversation: ctx.VSRMatchedConversation,
-		Event:        ctx.VSRMatchedEvent,
+		Keyword:       ctx.VSRMatchedKeywords,
+		Embedding:     ctx.VSRMatchedEmbeddings,
+		Domain:        ctx.VSRMatchedDomains,
+		FactCheck:     ctx.VSRMatchedFactCheck,
+		UserFeedback:  ctx.VSRMatchedUserFeedback,
+		Reask:         ctx.VSRMatchedReask,
+		Preference:    ctx.VSRMatchedPreference,
+		Language:      ctx.VSRMatchedLanguage,
+		Context:       ctx.VSRMatchedContext,
+		Structure:     ctx.VSRMatchedStructure,
+		Complexity:    ctx.VSRMatchedComplexity,
+		Modality:      ctx.VSRMatchedModality,
+		Authz:         ctx.VSRMatchedAuthz,
+		Jailbreak:     ctx.VSRMatchedJailbreak,
+		PII:           ctx.VSRMatchedPII,
+		KB:            ctx.VSRMatchedKB,
+		Conversation:  ctx.VSRMatchedConversation,
+		Event:         ctx.VSRMatchedEvent,
+		Metadata:      ctx.VSRMatchedMetadata,
+		Classifier:    ctx.VSRMatchedClassifier,
+		InputModality: ctx.VSRMatchedInputModality,
 	}
 }
 
@@ -387,6 +377,33 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 	}
 }
 
+func (r *OpenAIRouter) finalizeRouterReplay(
+	ctx *RequestContext,
+	state string,
+	reason string,
+) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
+		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"state":      state,
+			"error":      err.Error(),
+		})
+	}
+}
+
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
 	if ctx == nil || ctx.RouterReplayID == "" {
@@ -414,6 +431,13 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	}
 
 	if isFinal {
+		state := routerreplay.LifecycleCompleted
+		reason := "response_complete"
+		if ctx.UpstreamStatusCode >= 400 {
+			state = routerreplay.LifecycleFailed
+			reason = "upstream_error_response"
+		}
+		r.finalizeRouterReplay(ctx, state, reason)
 		if rec, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			logging.ComponentEvent(
 				"extproc",
@@ -484,6 +508,82 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 			"error":      err.Error(),
 		})
 	}
+}
+
+// recordRouterReplayResponseJailbreak appends the response-stage jailbreak
+// observation to the replay record, one outcome per response-direction rule.
+// The record is written while the request is routed, before the model has
+// answered, so the request-stage signal maps it carries cannot hold this;
+// outcomes are the append-only post-route channel every store implements.
+// Each outcome names the rule under the signal key a request-direction rule
+// uses, its verdict (detected, not_detected, unavailable), the score it
+// thresholded or the failure code when it could not resolve, and the action
+// the selected decision's plugin applied.
+func (r *OpenAIRouter) recordRouterReplayResponseJailbreak(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+	rules := r.responseJailbreakRules(ctx)
+	if len(rules) == 0 {
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+	now := time.Now().UTC()
+	action := r.responseJailbreakPluginAction(ctx)
+	for _, rule := range rules {
+		outcome := responseJailbreakReplayOutcome(ctx, rule, now, action)
+		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_response_jailbreak_outcome_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"replay_id":  ctx.RouterReplayID,
+				"rule":       rule.Name,
+				"error":      err.Error(),
+			})
+		}
+	}
+}
+
+func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRule, now time.Time, action string) routerreplay.Outcome {
+	key := signalKey(config.SignalTypeJailbreak, rule.Name)
+	outcome := routerreplay.Outcome{
+		Timestamp: now,
+		Source:    "router",
+		Target:    key,
+		Verdict:   "not_detected",
+		Metadata: map[string]string{
+			"signal":    config.SignalTypeJailbreak,
+			"direction": config.SignalDirectionResponse,
+			"threshold": strconv.FormatFloat(float64(rule.Threshold), 'f', -1, 32),
+		},
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
+	}
+	if action != "" {
+		outcome.Metadata["action"] = action
+	}
+	if code, failed := ctx.VSRSignalErrors[key]; failed {
+		outcome.Verdict = "unavailable"
+		outcome.Reason = code
+		return outcome
+	}
+	outcome.Score = ctx.VSRSignalConfidences[key]
+	for _, matched := range ctx.VSRMatchedResponseJailbreak {
+		if matched == rule.Name {
+			outcome.Verdict = "detected"
+			if ctx.VSRResponseJailbreakType != "" {
+				outcome.Metadata["type"] = ctx.VSRResponseJailbreakType
+			}
+			break
+		}
+	}
+	return outcome
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {

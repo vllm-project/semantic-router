@@ -38,13 +38,16 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
 		b.buildEventClassifierOption,
+		b.buildGenericClassifiersOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {
 		return nil, err
 	}
 	b.options = append(b.options, parallelOptions...)
-	b.addCategoryClassifier(categoryMapping)
+	if err := b.addCategoryClassifier(categoryMapping); err != nil {
+		return nil, err
+	}
 	b.addMCPCategoryClassifier()
 	if err := b.addComplexityModelClassifier(); err != nil {
 		return nil, err

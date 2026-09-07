@@ -475,7 +475,7 @@ SUSPICIOUS_TLDS = {
 }
 
 # Default-allow: domains commonly referenced from legitimate codebases.
-# Projects extend this via a `.security-scan-allowlist` file in repo root
+# Projects extend this via `tools/security/ast-scan-allowlist.txt`
 # (one domain per line, `#` for comments).
 ALLOWED_URL_DOMAINS = {
     # Loopback / local
@@ -627,7 +627,7 @@ def _load_url_allowlist(root: Path):
     """Load URL domain allowlist: built-in defaults + project overrides."""
     global _url_allowlist
     _url_allowlist = {d.lower() for d in ALLOWED_URL_DOMAINS}
-    allowlist_file = root / ".security-scan-allowlist"
+    allowlist_file = root / "tools" / "security" / "ast-scan-allowlist.txt"
     if allowlist_file.is_file():
         try:
             for line in allowlist_file.read_text().splitlines():
@@ -966,7 +966,7 @@ def _check_url(node, filepath: str, is_test: bool, result: ScanResult):
         filepath,
         node.start_point.row + 1,
         f"URL domain not in allowlist: {domain} "
-        f"(add to .security-scan-allowlist to suppress)",
+        f"(add to tools/security/ast-scan-allowlist.txt to suppress)",
         text[:150],
         _ast_path(node),
     )

@@ -898,7 +898,7 @@ data:
               - other
         complexity:
           - name: needs_reasoning
-            threshold: 0.7
+            threshold: 0.10
             description: Escalate difficult or multi-step prompts.
             hard:
               candidates:
@@ -2137,8 +2137,6 @@ routing:
             use_reasoning: false
       - name: psychology
         system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.92
         model_scores:
           - model: qwen3
             score: 0.6
@@ -2163,16 +2161,12 @@ routing:
             use_reasoning: false
       - name: other
         system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.75
         model_scores:
           - model: qwen3
             score: 0.7
             use_reasoning: false
       - name: health
         system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.95
         model_scores:
           - model: qwen3
             score: 0.5
@@ -3201,7 +3195,7 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
 ---
 version: v0.3
@@ -3308,19 +3302,6 @@ routing:
       modelRefs:
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
 global:
   stores:
     semantic_cache:
@@ -3453,19 +3434,6 @@ routing:
       modelRefs:
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_and_image
       description: Route hybrid text+image requests to both models in parallel.
       priority: 190
@@ -3479,19 +3447,6 @@ routing:
           use_reasoning: false
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_generation
       description: Default text routing for AR requests.
       priority: 1
@@ -4010,7 +3965,7 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
 ---
 version: v0.3
@@ -5235,7 +5190,7 @@ data:
               - other
         complexity:
           - name: needs_reasoning
-            threshold: 0.7
+            threshold: 0.10
             description: Escalate difficult or multi-step prompts.
             hard:
               candidates:
@@ -6474,8 +6429,6 @@ routing:
             use_reasoning: false
       - name: psychology
         system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.92
         model_scores:
           - model: qwen3
             score: 0.6
@@ -6500,16 +6453,12 @@ routing:
             use_reasoning: false
       - name: other
         system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.75
         model_scores:
           - model: qwen3
             score: 0.7
             use_reasoning: false
       - name: health
         system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
-        semantic_cache_enabled: true
-        semantic_cache_similarity_threshold: 0.95
         model_scores:
           - model: qwen3
             score: 0.5
@@ -7538,7 +7487,7 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
 ---
 version: v0.3
@@ -7645,19 +7594,6 @@ routing:
       modelRefs:
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
 global:
   stores:
     semantic_cache:
@@ -7790,19 +7726,6 @@ routing:
       modelRefs:
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_and_image
       description: Route hybrid text+image requests to both models in parallel.
       priority: 190
@@ -7816,19 +7739,6 @@ routing:
           use_reasoning: false
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_generation
       description: Default text routing for AR requests.
       priority: 1
@@ -8347,7 +8257,7 @@ global:
       enabled: true
       top_k: 3
       similarity_threshold: 0.2
-      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
 ---
 version: v0.3

@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -40,12 +41,17 @@ func (s *ClassificationAPIServer) loadStartupState() *startupstatus.State {
 		return s.startupStateLoader()
 	}
 
-	cfg := s.currentConfig()
-	if cfg != nil && cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
+	var startupConfig *config.StartupStatusConfig
+	if s.startupStatusConfig != nil {
+		startupConfig = s.startupStatusConfig
+	} else if cfg := s.currentConfig(); cfg != nil {
+		startupConfig = &cfg.StartupStatus
+	}
+	if startupConfig != nil && startupConfig.StoreBackend == "redis" && startupConfig.Redis != nil {
 		client := redis.NewClient(&redis.Options{
-			Addr:     cfg.StartupStatus.Redis.Address,
-			Password: cfg.StartupStatus.Redis.Password,
-			DB:       cfg.StartupStatus.Redis.DB,
+			Addr:     startupConfig.Redis.Address,
+			Password: startupConfig.Redis.Password,
+			DB:       startupConfig.Redis.DB,
 		})
 		defer func() { _ = client.Close() }()
 

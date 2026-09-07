@@ -94,7 +94,7 @@ The current implementation supports:
 
 ## Balance Recipe Example
 
-The maintained [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/recipes/balance.yaml) recipe shows the intended pattern:
+The maintained [`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml) recipe shows the intended pattern:
 
 - `balance_domain_partition` resolves one winning domain across the maintained routing domains
 - `balance_intent_partition` resolves one winning embedding intent lane

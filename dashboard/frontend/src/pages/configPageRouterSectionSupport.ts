@@ -18,7 +18,7 @@ export type OpenViewModal = (
 
 export type RouterConfigSectionData = Pick<
   ConfigData,
-  'embedding_models' | 'semantic_cache' | 'tools' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
+  'embedding_models' | 'response_cache' | 'tools' | 'prompt_guard' | 'classifier' | 'api' | 'observability'
 >
 
 export interface RouterSectionBaseProps {

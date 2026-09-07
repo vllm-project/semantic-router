@@ -58,7 +58,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.92
@@ -130,7 +130,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.95
@@ -248,7 +248,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true
@@ -270,7 +270,7 @@ config:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
@@ -280,6 +280,14 @@ config:
               system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
               mode: replace
     signals:
+      keywords:
+        - name: thinking
+          operator: OR
+          keywords:
+            - think
+            - reason
+            - step by step
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -323,7 +331,7 @@ config:
         tracing:
           enabled: false
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

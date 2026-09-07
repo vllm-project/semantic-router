@@ -339,8 +339,8 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		ProcessingTimeMs: result.ProcessingTimeMs,
 	}
 
-	logging.Infof("Calculated batch similarity: query='%s', %d candidates, top-%d matches (model: %s, took: %.2fms)",
-		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+	logging.Infof("Calculated batch similarity: query=%s, %d candidates, top-%d matches (model: %s, took: %.2fms)",
+		logging.ContentDescriptor(req.Query), len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }

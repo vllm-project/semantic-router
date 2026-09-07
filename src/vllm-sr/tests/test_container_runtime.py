@@ -132,6 +132,39 @@ def test_detect_container_runtime_falls_back_to_podman_when_only_podman_exists(
     assert container_runtime.get_container_runtime() == "podman"
 
 
+def test_detect_container_runtime_falls_back_to_podman_on_macos_when_only_podman_exists(
+    monkeypatch,
+):
+    """Reproduces #2954: macOS with only Podman installed (podman machine running)."""
+    monkeypatch.setattr(container_runtime.sys, "platform", "darwin")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/opt/homebrew/bin/podman" if name == "podman" else None,
+    )
+    _stub_podman_info(monkeypatch)
+
+    assert container_runtime.get_container_runtime() == "podman"
+
+
+def test_detect_container_runtime_reports_unreachable_when_macos_podman_machine_stopped(
+    monkeypatch,
+):
+    """A stopped `podman machine` should fail as unreachable, not unsupported."""
+    monkeypatch.setattr(container_runtime.sys, "platform", "darwin")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/opt/homebrew/bin/podman" if name == "podman" else None,
+    )
+    _stub_podman_info(monkeypatch, ok=False)
+
+    with pytest.raises(SystemExit):
+        container_runtime.get_container_runtime()
+
+
 def test_detect_container_runtime_falls_back_to_podman_when_docker_is_podman_symlink(
     monkeypatch,
 ):
@@ -211,3 +244,50 @@ def test_resolve_container_cli_path_returns_none_for_podman_shim(monkeypatch):
     )
 
     assert container_runtime.resolve_container_cli_path("/usr/local/bin/docker") is None
+
+
+def test_container_image_exists_accepts_digest_pinned_images(monkeypatch):
+    """#3277: `images -q` does not resolve repo@sha256 references, so a
+    digest-pinned image present locally read as missing and
+    `--image-pull-policy never` refused to start it. The presence check must
+    use `image inspect`, which resolves digests, and must report presence
+    through the exit status rather than stdout."""
+    digest_ref = "ghcr.io/vllm-project/semantic-router@sha256:" + "a" * 64
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen["cmd"] = cmd
+
+        class Result:
+            # `image inspect` writes the manifest to stdout on success; the old
+            # implementation keyed off stdout from `images -q`, which is empty
+            # for a digest reference even when the image is present.
+            returncode = 0
+            stdout = '[{"Id":"sha256:deadbeef"}]'
+            stderr = ""
+
+        return Result()
+
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_runtime.subprocess, "run", fake_run)
+
+    assert container_runtime.container_image_exists(digest_ref) is True
+    assert seen["cmd"] == ["docker", "image", "inspect", digest_ref]
+
+
+def test_container_image_exists_reports_missing_on_nonzero_exit(monkeypatch):
+    """A genuinely absent image must still read as absent, including when the
+    runtime writes diagnostics to stdout."""
+
+    def fake_run(cmd, **kwargs):
+        class Result:
+            returncode = 1
+            stdout = "[]\n"
+            stderr = "Error: No such image"
+
+        return Result()
+
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(container_runtime.subprocess, "run", fake_run)
+
+    assert container_runtime.container_image_exists("missing:latest") is False

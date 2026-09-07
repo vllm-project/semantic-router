@@ -15,6 +15,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -152,7 +153,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		// Create base config
 		cfg = CreateTestConfig()
 		// Disable PII detection for tool selection tests (not needed and avoids model loading issues)
-		cfg.InlineModels.Classifier.PIIModel.ModelID = ""
+		cfg.PIIModel.ModelID = ""
 	})
 
 	AfterEach(func() {
@@ -162,10 +163,10 @@ var _ = Describe("Tool Selection Request Filter", func() {
 	Describe("Tools Database Loading", func() {
 		Context("with valid tools database path", func() {
 			It("should load tools from toolsDBPath successfully", func() {
-				cfg.ToolSelection.Tools.Enabled = true
-				cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-				cfg.ToolSelection.Tools.TopK = 3
-				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+				cfg.Tools.Enabled = true
+				cfg.Tools.ToolsDBPath = toolsDBPath
+				cfg.Tools.TopK = 3
+				cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 				var err error
 				router, err = CreateTestRouter(cfg)
@@ -190,9 +191,9 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		Context("with invalid tools database path", func() {
 			It("should return error when file does not exist", func() {
-				cfg.ToolSelection.Tools.Enabled = true
-				cfg.ToolSelection.Tools.ToolsDBPath = "/nonexistent/tools.json"
-				cfg.ToolSelection.Tools.TopK = 3
+				cfg.Tools.Enabled = true
+				cfg.Tools.ToolsDBPath = "/nonexistent/tools.json"
+				cfg.Tools.TopK = 3
 
 				_, err := CreateTestRouter(cfg)
 				Expect(err).To(HaveOccurred())
@@ -203,9 +204,9 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				err := os.WriteFile(badJSONPath, []byte("{invalid json"), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg.ToolSelection.Tools.Enabled = true
-				cfg.ToolSelection.Tools.ToolsDBPath = badJSONPath
-				cfg.ToolSelection.Tools.TopK = 3
+				cfg.Tools.Enabled = true
+				cfg.Tools.ToolsDBPath = badJSONPath
+				cfg.Tools.TopK = 3
 
 				_, err = CreateTestRouter(cfg)
 				Expect(err).To(HaveOccurred())
@@ -214,8 +215,8 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		Context("when tools database is disabled", func() {
 			It("should not load tools", func() {
-				cfg.ToolSelection.Tools.Enabled = false
-				cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
+				cfg.Tools.Enabled = false
+				cfg.Tools.ToolsDBPath = toolsDBPath
 
 				var err error
 				router, err = CreateTestRouter(cfg)
@@ -229,9 +230,9 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 	Describe("Top-K Tool Selection", func() {
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
 			router, err = CreateTestRouter(cfg)
@@ -239,7 +240,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-1 tool when topK=1", func() {
-			cfg.ToolSelection.Tools.TopK = 1
+			cfg.Tools.TopK = 1
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("What's the weather like?", 1)
 			Expect(err).NotTo(HaveOccurred())
@@ -248,7 +249,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-2 tools when topK=2", func() {
-			cfg.ToolSelection.Tools.TopK = 2
+			cfg.Tools.TopK = 2
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("search weather forecast", 2)
 			Expect(err).NotTo(HaveOccurred())
@@ -257,7 +258,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should select top-3 tools when topK=3", func() {
-			cfg.ToolSelection.Tools.TopK = 3
+			cfg.Tools.TopK = 3
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("calculate math and search", 3)
 			Expect(err).NotTo(HaveOccurred())
@@ -266,7 +267,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should limit results to available tools when topK > tool count", func() {
-			cfg.ToolSelection.Tools.TopK = 10
+			cfg.Tools.TopK = 10
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 10)
 			Expect(err).NotTo(HaveOccurred())
@@ -275,7 +276,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should return most relevant tools first", func() {
-			cfg.ToolSelection.Tools.TopK = 3
+			cfg.Tools.TopK = 3
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast temperature", 3)
 			Expect(err).NotTo(HaveOccurred())
@@ -287,9 +288,9 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 	Describe("Similarity Threshold Filtering", func() {
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.TopK = 5
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.TopK = 5
 
 			var err error
 			router, err = CreateTestRouter(cfg)
@@ -297,7 +298,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should filter out tools below threshold with threshold=0.7", func() {
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.7}[0]
+			cfg.Tools.SimilarityThreshold = &[]float32{0.7}[0]
 
 			// Recreate router with new threshold
 			var err error
@@ -315,7 +316,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should include more tools with lower threshold=0.2", func() {
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			// Recreate router with new threshold
 			var err error
@@ -329,7 +330,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should return empty list when no tools meet high threshold", func() {
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
+			cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
 			// Recreate router with new threshold
 			var err error
@@ -343,8 +344,8 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should respect both topK and threshold constraints", func() {
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.5}[0]
-			cfg.ToolSelection.Tools.TopK = 2
+			cfg.Tools.SimilarityThreshold = &[]float32{0.5}[0]
+			cfg.Tools.TopK = 2
 
 			// Recreate router with new threshold
 			var err error
@@ -360,29 +361,23 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 	Describe("Fallback Strategy", func() {
 		var (
-			openAIRequest *openai.ChatCompletionNewParams
-			response      *ext_proc.ProcessingResponse
-			ctx           *RequestContext
+			request  *llmprotocol.Request
+			response *ext_proc.ProcessingResponse
+			ctx      *RequestContext
 		)
 
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.TopK = 3
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.TopK = 3
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
 			router, err = CreateTestRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create a basic request with tool_choice=auto by unmarshaling JSON
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": "What's the weather?"}],
-				"tool_choice": "auto"
-			}`)
-			openAIRequest, err = parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request = testNeutralRequest("test-model", "What's the weather?")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 
 			response = &ext_proc.ProcessingResponse{
 				Response: &ext_proc.ProcessingResponse_RequestBody{
@@ -405,27 +400,27 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		Context("with fallbackToEmpty=true", func() {
 			It("should return empty tools when no tools meet threshold", func() {
-				cfg.ToolSelection.Tools.FallbackToEmpty = true
-				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
+				cfg.Tools.FallbackToEmpty = true
+				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
 				testRouter, err := CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
+				err = testRouter.handleToolSelection(request, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(openAIRequest.Tools).To(BeNil())
-				Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
+				Expect(request.Tools).To(BeEmpty())
+				Expect(request.ToolChoice.Mode).To(Equal(llmprotocol.ToolChoiceAuto))
 			})
 
 			It("should return empty tools on database error", func() {
-				cfg.ToolSelection.Tools.FallbackToEmpty = true
+				cfg.Tools.FallbackToEmpty = true
 				// Corrupt the database by making it disabled
 				router.ToolsDatabase = tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 					Enabled:             false,
 					SimilarityThreshold: 0.2,
 				})
 
-				err := router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+				err := router.handleToolSelection(request, "weather", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
 				// Should handle gracefully and return empty
 			})
@@ -433,75 +428,52 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		Context("with fallbackToEmpty=false", func() {
 			It("should keep original tools when no tools meet threshold", func() {
-				cfg.ToolSelection.Tools.FallbackToEmpty = false
-				cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.99}[0]
+				cfg.Tools.FallbackToEmpty = false
+				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
 				testRouter, err := CreateTestRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Set initial tools
-				originalTools := []openai.ChatCompletionToolParam{
-					{
-						Type: "function",
-						Function: openai.FunctionDefinitionParam{
-							Name: "original_tool",
-						},
-					},
-				}
-				openAIRequest.Tools = originalTools
+				request.Tools = []llmprotocol.Tool{{Name: "original_tool", InputSchema: []byte(`{"type":"object"}`)}}
 
-				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
+				err = testRouter.handleToolSelection(request, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
-				// Should not be nil but empty array
-				Expect(openAIRequest.Tools).NotTo(BeNil())
+				Expect(request.Tools).NotTo(BeNil())
 			})
 		})
 	})
 
 	Describe("Tool choice normalization", func() {
 		It("clears auto tool_choice when no tools remain", func() {
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": "你好"}],
-				"tool_choice": "auto"
-			}`)
-			openAIRequest, err := parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request := testNeutralRequest("test-model", "你好")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 
-			changed := clearToolChoiceWhenNoTools(openAIRequest)
+			changed := clearSemanticToolChoiceWhenNoTools(request)
 
 			Expect(changed).To(BeTrue())
-			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeTrue())
-			Expect(openAIRequest.ToolChoice.OfChatCompletionNamedToolChoice).To(BeNil())
+			Expect(request.ToolChoice).To(Equal(llmprotocol.ToolChoice{}))
 		})
 
 		It("keeps tool_choice when tools are present", func() {
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": "天气如何"}],
-				"tool_choice": "auto",
-				"tools": [{
-					"type": "function",
-					"function": {"name": "lookup_weather"}
-				}]
-			}`)
-			openAIRequest, err := parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request := testNeutralRequest("test-model", "天气如何")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+			request.Tools = []llmprotocol.Tool{{Name: "lookup_weather", InputSchema: []byte(`{"type":"object"}`)}}
 
-			changed := clearToolChoiceWhenNoTools(openAIRequest)
+			changed := clearSemanticToolChoiceWhenNoTools(request)
 
 			Expect(changed).To(BeFalse())
-			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
+			Expect(request.ToolChoice.Mode).To(Equal(llmprotocol.ToolChoiceAuto))
 		})
 	})
 
 	Describe("Tool Selection Integration", func() {
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.TopK = 3
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-			cfg.ToolSelection.Tools.FallbackToEmpty = true
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.TopK = 3
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.FallbackToEmpty = true
 
 			var err error
 			router, err = CreateTestRouter(cfg)
@@ -565,11 +537,11 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		)
 
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.TopK = 3
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
-			cfg.ToolSelection.Tools.FallbackToEmpty = true
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.TopK = 3
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.FallbackToEmpty = true
 
 			var err error
 			router, err = CreateTestRouter(cfg)
@@ -595,56 +567,41 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		})
 
 		It("should only process requests with tool_choice=auto", func() {
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": "What's the weather?"}],
-				"tool_choice": {"type": "function", "function": {"name": "specific_function"}}
-			}`)
-			openAIRequest, err := parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request := testNeutralRequest("test-model", "What's the weather?")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceNamed, Name: "specific_function"}
 
-			err = router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+			err := router.handleToolSelection(request, "weather", []string{}, &response, ctx)
 			Expect(err).NotTo(HaveOccurred())
 			// Should not modify tools when tool_choice is not auto
 		})
 
 		It("should skip processing when content is empty", func() {
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": ""}],
-				"tool_choice": "auto"
-			}`)
-			openAIRequest, err := parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request := testNeutralRequest("test-model", "")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 
-			err = router.handleToolSelection(openAIRequest, "", []string{}, &response, ctx)
+			err := router.handleToolSelection(request, "", []string{}, &response, ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should skip processing when tools database is disabled", func() {
-			cfg.ToolSelection.Tools.Enabled = false
+			cfg.Tools.Enabled = false
 			testRouter, err := CreateTestRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			requestJSON := []byte(`{
-				"model": "test-model",
-				"messages": [{"role": "user", "content": "What's the weather?"}],
-				"tool_choice": "auto"
-			}`)
-			openAIRequest, err := parseOpenAIRequest(requestJSON)
-			Expect(err).NotTo(HaveOccurred())
+			request := testNeutralRequest("test-model", "What's the weather?")
+			request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
 
-			err = testRouter.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+			err = testRouter.handleToolSelection(request, "weather", []string{}, &response, ctx)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 
 	Describe("Category and Tag-Based Filtering", func() {
 		BeforeEach(func() {
-			cfg.ToolSelection.Tools.Enabled = true
-			cfg.ToolSelection.Tools.ToolsDBPath = toolsDBPath
-			cfg.ToolSelection.Tools.TopK = 5
-			cfg.ToolSelection.Tools.SimilarityThreshold = &[]float32{0.2}[0]
+			cfg.Tools.Enabled = true
+			cfg.Tools.ToolsDBPath = toolsDBPath
+			cfg.Tools.TopK = 5
+			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
 			router, err = CreateTestRouter(cfg)

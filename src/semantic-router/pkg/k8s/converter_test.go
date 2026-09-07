@@ -9,11 +9,58 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apis/vllm.ai/v1alpha1"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestConvertDecisionPreservesNestedContextCompression(t *testing.T) {
+	converter := &CRDConverter{}
+	decision, err := converter.convertDecision(v1alpha1.Decision{
+		Name: "compressed",
+		Plugins: []v1alpha1.DecisionPlugin{{
+			Type: config.DecisionPluginContextCompression,
+			Configuration: &runtime.RawExtension{Raw: []byte(`{
+				"enabled": true,
+				"mode": "auto",
+				"targets": {
+					"tool_outputs": {
+						"mode": "extractive",
+						"min_tokens": 2000,
+						"target_tokens": 1000
+					}
+				}
+			}`)},
+		}},
+	})
+	require.NoError(t, err)
+	require.Len(t, decision.Plugins, 1)
+	var pluginConfig config.ContextCompressionPluginConfig
+	require.NoError(
+		t,
+		config.UnmarshalPluginConfig(
+			decision.Plugins[0].Configuration,
+			&pluginConfig,
+		),
+	)
+	require.NotNil(t, pluginConfig.Targets)
+	assert.Equal(t, 1000, pluginConfig.Targets.ToolOutputs.TargetTokens)
+}
+
+func TestConvertDecisionPreservesOnUnknown(t *testing.T) {
+	converter := &CRDConverter{}
+	decision, err := converter.convertDecision(v1alpha1.Decision{
+		Name: "guarded",
+		Signals: v1alpha1.SignalCombination{
+			Operator:  "AND",
+			OnUnknown: "fail_request",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, config.RuleOnUnknownFailRequest, decision.Rules.OnUnknown)
+}
 
 // TestConverterWithTestData tests the converter with input/output test data
 // This test reads YAML files from testdata/input, converts them, and writes output to testdata/output
@@ -364,4 +411,40 @@ func TestCRDValidationErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.wantError)
 		})
 	}
+}
+
+func TestCRDConverterConvertsOpenEndedContextRule(t *testing.T) {
+	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
+	route := &v1alpha1.IntelligentRoute{
+		Spec: v1alpha1.IntelligentRouteSpec{
+			Signals: v1alpha1.Signals{
+				ContextRules: []v1alpha1.ContextRule{
+					{Name: "short_context", MinTokens: "0", MaxTokens: "8K"},
+					{Name: "overflow_context", MinTokens: "8001"},
+				},
+			},
+			Decisions: []v1alpha1.Decision{
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "test-model"}},
+					v1alpha1.SignalCondition{Type: "context", Name: "overflow_context"},
+				),
+			},
+		},
+	}
+
+	require.NoError(t, validateCRDs(pool, route, testValidationBaseConfig()))
+
+	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
+	require.NoError(t, err)
+	require.Len(t, outputConfig.Routing.Signals.Context, 2)
+
+	overflow := outputConfig.Routing.Signals.Context[1]
+	assert.Equal(t, "overflow_context", overflow.Name)
+	assert.Equal(t, config.TokenCount("8001"), overflow.MinTokens)
+	assert.False(t, overflow.MaxTokens.IsSet())
+
+	bounds, err := overflow.Bounds()
+	require.NoError(t, err)
+	assert.True(t, bounds.Unbounded)
+	assert.True(t, bounds.Matches(1<<40))
 }

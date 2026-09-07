@@ -31,10 +31,6 @@ describe('dashboard route manifest', () => {
       path: '/taxonomy',
       to: '/knowledge-bases/bases',
     })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/openclaw',
-      to: '/clawos',
-    })
   })
 
   it('routes unknown paths to setup only while setup mode is active', () => {

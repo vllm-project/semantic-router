@@ -139,6 +139,9 @@ func (d *decompiler) decompileLanguageSignals() {
 func (d *decompiler) decompileContextSignals() {
 	for _, ctx := range d.cfg.ContextRules {
 		d.write("SIGNAL context %s {\n", quoteName(ctx.Name))
+		if ctx.Description != "" {
+			d.write("  description: %q\n", ctx.Description)
+		}
 		if ctx.MinTokens != "" {
 			d.write("  min_tokens: %q\n", string(ctx.MinTokens))
 		}
@@ -172,6 +175,65 @@ func (d *decompiler) decompileConversationSignals() {
 		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
 		if conv.Predicate != nil {
 			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+		}
+		d.write("}\n\n")
+	}
+}
+
+func (d *decompiler) decompileMetadataSignals() {
+	for _, rule := range d.cfg.MetadataRules {
+		d.write("SIGNAL metadata %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  key: %q\n", rule.Key)
+		predicate := map[string]interface{}{}
+		switch {
+		case rule.Predicate.Equals != nil:
+			predicate["equals"] = *rule.Predicate.Equals
+		case len(rule.Predicate.In) > 0:
+			predicate["in"] = rule.Predicate.In
+		case rule.Predicate.Exists != nil:
+			predicate["exists"] = *rule.Predicate.Exists
+		}
+		d.write(
+			"  predicate: %s\n",
+			formatPluginConfigValue(predicate),
+		)
+		d.write("}\n\n")
+	}
+}
+
+func (d *decompiler) decompileInputModalitySignals() {
+	for _, rule := range d.cfg.InputModalityRules {
+		d.write("SIGNAL input_modality %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  modality: %q\n", rule.Modality)
+		d.write("}\n\n")
+	}
+}
+
+func (d *decompiler) decompileClassifierSignals() {
+	for _, rule := range d.cfg.ClassifierRules {
+		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		d.write("  type: %q\n", rule.Type)
+		if rule.Model != "" {
+			d.write("  model: %q\n", rule.Model)
+		}
+		if rule.ModelPath != "" {
+			d.write("  model_path: %q\n", rule.ModelPath)
+		}
+		d.write("  labels: %s\n", formatStringArray(rule.Labels))
+		if rule.Instructions != "" {
+			d.write("  instructions: %q\n", rule.Instructions)
+		}
+		if rule.UseCPU {
+			d.write("  use_cpu: true\n")
 		}
 		d.write("}\n\n")
 	}
@@ -246,6 +308,9 @@ func (d *decompiler) decompileJailbreakSignals() {
 		}
 		if jb.IncludeHistory {
 			d.write("  include_history: true\n")
+		}
+		if jb.Direction != "" {
+			d.write("  direction: %q\n", jb.Direction)
 		}
 		if jb.Description != "" {
 			d.write("  description: %q\n", jb.Description)

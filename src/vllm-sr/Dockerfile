@@ -270,7 +270,10 @@ RUN set -eux; \
 
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
-    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub==1.16.4' 'click>=8.1.7'
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
+      'huggingface_hub==1.16.4' \
+      'click>=8.1.7' \
+      'pyyaml>=6.0.2'
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
@@ -283,6 +286,7 @@ WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 

@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"context"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -11,7 +13,7 @@ type intentClassificationService interface {
 	ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error)
 	ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error)
 	DetectPII(req services.PIIRequest) (*services.PIIResponse, error)
-	CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error)
+	CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error)
 }
 
 type batchClassificationService interface {
@@ -32,6 +34,13 @@ type classificationReadinessService interface {
 	HasHallucinationDetector() bool
 	HasHallucinationExplainer() bool
 	HasFeedbackDetector() bool
+}
+
+type classificationInventoryReadinessService interface {
+	HasAnyFactCheckClassifier() bool
+	HasAnyHallucinationDetector() bool
+	HasAnyHallucinationExplainer() bool
+	HasAnyFeedbackDetector() bool
 }
 
 type configUpdateService interface {
@@ -86,8 +95,8 @@ func (s *liveClassificationService) DetectPII(req services.PIIRequest) (*service
 	return s.current().DetectPII(req)
 }
 
-func (s *liveClassificationService) CheckSecurity(req services.SecurityRequest) (*services.SecurityResponse, error) {
-	return s.current().CheckSecurity(req)
+func (s *liveClassificationService) CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
+	return s.current().CheckSecurity(ctx, req)
 }
 
 func (s *liveClassificationService) ClassifyBatchUnifiedWithOptions(
@@ -137,6 +146,38 @@ func (s *liveClassificationService) HasHallucinationExplainer() bool {
 
 func (s *liveClassificationService) HasFeedbackDetector() bool {
 	return s.current().HasFeedbackDetector()
+}
+
+func (s *liveClassificationService) HasAnyFactCheckClassifier() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyFactCheckClassifier()
+	}
+	return current.HasFactCheckClassifier()
+}
+
+func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyHallucinationDetector()
+	}
+	return current.HasHallucinationDetector()
+}
+
+func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyHallucinationExplainer()
+	}
+	return current.HasHallucinationExplainer()
+}
+
+func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
+	current := s.current()
+	if inventory, ok := current.(classificationInventoryReadinessService); ok {
+		return inventory.HasAnyFeedbackDetector()
+	}
+	return current.HasFeedbackDetector()
 }
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {

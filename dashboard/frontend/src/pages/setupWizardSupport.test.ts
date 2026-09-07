@@ -154,4 +154,29 @@ describe("setup wizard model drafts", () => {
       }),
     ).toEqual({ models: 2, decisions: 1, signals: 2, canActivate: true });
   });
+
+  it("summarizes entrypoint-only recipe routing collections", () => {
+    expect(
+      summarizeSetupConfig({
+        providers: { models: [{ name: "shared" }] },
+        routing: { decisions: [], signals: {} },
+        recipes: [
+          {
+            name: "balanced",
+            routing: {
+              decisions: [{ name: "balanced-route" }],
+              signals: { keywords: [{ name: "balanced-keyword" }] },
+            },
+          },
+          {
+            name: "private",
+            routing: {
+              decisions: [{ name: "private-route" }],
+              signals: { pii: [{ name: "private-pii" }] },
+            },
+          },
+        ],
+      }),
+    ).toEqual({ models: 1, decisions: 2, signals: 2, canActivate: true });
+  });
 });

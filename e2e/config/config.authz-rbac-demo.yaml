@@ -100,7 +100,7 @@ global:
         user_id_header: x-jwt-sub
         user_groups_header: x-jwt-groups
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
       embedding_model: mmbert
     memory:

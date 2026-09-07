@@ -133,20 +133,22 @@ spec:
                               as a raw JSON object
                             x-kubernetes-preserve-unknown-fields: true
                           type:
-                            description: Type is the plugin type (fast_response, hallucination,
-                              header_mutation, image_gen, memory, rag, request_params,
-                              response_jailbreak, router_replay, semantic-cache, system_prompt,
-                              tools)
+                            description: |-
+                              Type is the plugin type. response_cache is canonical; semantic-cache,
+                              semantic_cache, and response-cache are deprecated aliases.
                             enum:
+                            - context_compression
                             - fast_response
                             - hallucination
                             - header_mutation
-                            - image_gen
                             - memory
                             - rag
                             - request_params
                             - response_jailbreak
                             - router_replay
+                            - response_cache
+                            - response-cache
+                            - semantic_cache
                             - semantic-cache
                             - system_prompt
                             - tools
@@ -199,6 +201,14 @@ spec:
                           maxItems: 50
                           minItems: 1
                           type: array
+                        on_unknown:
+                          description: OnUnknown resolves a terminal unknown result
+                            after the signal tree is evaluated.
+                          enum:
+                          - no_match
+                          - match
+                          - fail_request
+                          type: string
                         operator:
                           description: |-
                             Operator defines the logical operator for combining conditions (AND/OR/NOT)
@@ -237,13 +247,17 @@ spec:
                           maxLength: 500
                           type: string
                         maxTokens:
-                          description: MaxTokens is the maximum token count (supports
-                            K/M suffixes)
+                          description: |-
+                            MaxTokens is the inclusive maximum token count (supports K/M suffixes).
+                            Omit it to make the band open-ended so every request at or above
+                            MinTokens matches. Equal MinTokens and MaxTokens match exactly one count.
                           pattern: ^[0-9]+(\.[0-9]+)?[KMkm]?$
                           type: string
                         minTokens:
-                          description: MinTokens is the minimum token count (supports
-                            K/M suffixes)
+                          description: |-
+                            MinTokens is the inclusive minimum token count (supports K/M suffixes).
+                            Omit it to start the band at 0. At least one of MinTokens and MaxTokens
+                            must be set.
                           pattern: ^[0-9]+(\.[0-9]+)?[KMkm]?$
                           type: string
                         name:
@@ -252,8 +266,6 @@ spec:
                           minLength: 1
                           type: string
                       required:
-                      - maxTokens
-                      - minTokens
                       - name
                       type: object
                     type: array

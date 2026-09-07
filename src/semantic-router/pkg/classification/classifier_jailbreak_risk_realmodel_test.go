@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func setupRealJailbreakClassifier(t *testing.T) *Classifier {
 	cfg.PromptGuard.Enabled = true
 	cfg.PromptGuard.ModelID = modelPath
 	cfg.PromptGuard.JailbreakMappingPath = mappingPath
-	cfg.PromptGuard.UseMmBERT32K = true
+	cfg.PromptGuard.Variant = config.PromptGuardVariantMmBERT32K
 	cfg.PromptGuard.Threshold = 0.7
 
 	classifier, err := newClassifierWithOptions(cfg,
@@ -103,7 +104,7 @@ func TestJailbreakRiskRealModelContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isJailbreak, jbType, confidence, risk, err := classifier.CheckForJailbreakWithRisk(tt.text)
+			isJailbreak, jbType, confidence, risk, err := classifier.CheckForJailbreakWithRisk(context.Background(), tt.text)
 			if err != nil {
 				t.Fatalf("CheckForJailbreakWithRisk: %v", err)
 			}

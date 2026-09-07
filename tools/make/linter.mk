@@ -4,13 +4,13 @@
 
 ##@ Linter
 
-# codespell is installed into .venv-agent by tools/make/agent.mk (agent-venv-install).
-AGENT_VENV ?= $(CURDIR)/.venv-agent
+# codespell is installed into .venv-agent by tools/make/agent.mk.
+AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
 
-markdown-lint: ## Lint all markdown files in the project
+markdown-lint: harness-markdown-bootstrap ## Lint all markdown files in the project
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
@@ -21,9 +21,9 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore models \
 		--ignore vsr
 
-markdown-lint-fix: ## Auto-fix markdown lint issues
+markdown-lint-fix: harness-markdown-bootstrap ## Auto-fix markdown lint issues
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \

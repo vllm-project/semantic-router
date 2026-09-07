@@ -271,7 +271,7 @@ func (s *SessionAwareSelector) decisionDriftDetected(selCtx *SelectionContext, s
 	if selCtx.DecisionName == "" || session.LastDecisionName == "" {
 		return false
 	}
-	return selCtx.DecisionName != session.LastDecisionName
+	return selCtx.ScopedRoutingName(selCtx.DecisionName) != session.LastDecisionName
 }
 
 func (s *SessionAwareSelector) selectBase(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {

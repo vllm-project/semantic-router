@@ -1,0 +1,18 @@
+routing:
+  signals:
+    complexity:
+      # A rule can instead use a trained 3-class classifier via `method: model`
+      # (requires global.model_catalog.modules.complexity.classifier). See docs: signal/learned/complexity.
+      - name: needs_reasoning
+        threshold: 0.10
+        description: Escalate multi-step reasoning or synthesis-heavy prompts.
+        hard:
+          candidates:
+            - solve this step by step
+            - compare multiple tradeoffs
+            - analyze the root cause
+        easy:
+          candidates:
+            - answer briefly
+            - quick summary
+            - simple rewrite

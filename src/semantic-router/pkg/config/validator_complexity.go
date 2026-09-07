@@ -36,7 +36,7 @@ func validateComplexityContracts(cfg *RouterConfig) error {
 		return err
 	}
 	declared := collectComplexityRuleNames(cfg.ComplexityRules)
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateDecisionComplexityReferences(decision.Name, &decision.Rules, declared); err != nil {
 			return err
 		}

@@ -1,0 +1,12 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "chat_duplicate_index",
+    "object": "chat.completion",
+    "model": "provider-model",
+    "choices": [
+      {"index": 0, "message": {"role": "assistant", "content": "first"}, "finish_reason": "stop"},
+      {"index": 0, "message": {"role": "assistant", "content": "second"}, "finish_reason": "stop"}
+    ]
+  }
+}

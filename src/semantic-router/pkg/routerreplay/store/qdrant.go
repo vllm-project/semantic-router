@@ -24,10 +24,9 @@ type QdrantStore struct {
 	asyncWrites    bool
 	asyncChan      chan asyncOp
 	done           chan struct{}
-	closeOnce      sync.Once
-	wg             sync.WaitGroup
-	pendingWrites  map[string]struct{}
-	mu             sync.RWMutex
+	writerDone     chan struct{}
+	updateMu       sync.Mutex
+	lifecycle      *storageLifecycle
 }
 
 func NewQdrantStore(cfg *QdrantConfig, ttlSeconds int, asyncWrites bool) (*QdrantStore, error) {
@@ -65,7 +64,7 @@ func NewQdrantStore(cfg *QdrantConfig, ttlSeconds int, asyncWrites bool) (*Qdran
 		ttl:            time.Duration(ttlSeconds) * time.Second,
 		asyncWrites:    asyncWrites,
 		done:           make(chan struct{}),
-		pendingWrites:  make(map[string]struct{}),
+		lifecycle:      newStorageLifecycle(),
 	}
 
 	if err := s.ensureCollection(context.Background()); err != nil {
@@ -75,6 +74,7 @@ func NewQdrantStore(cfg *QdrantConfig, ttlSeconds int, asyncWrites bool) (*Qdran
 
 	if asyncWrites {
 		s.asyncChan = make(chan asyncOp, 100)
+		s.writerDone = make(chan struct{})
 		go s.asyncWriter()
 	}
 
@@ -110,6 +110,7 @@ func (q *QdrantStore) ensureCollection(ctx context.Context) error {
 }
 
 func (q *QdrantStore) asyncWriter() {
+	defer close(q.writerDone)
 	for {
 		select {
 		case op := <-q.asyncChan:
@@ -117,7 +118,6 @@ func (q *QdrantStore) asyncWriter() {
 			if op.err != nil {
 				op.err <- err
 			}
-			q.wg.Done()
 		case <-q.done:
 			return
 		}
@@ -125,6 +125,14 @@ func (q *QdrantStore) asyncWriter() {
 }
 
 func (q *QdrantStore) Add(ctx context.Context, record Record) (string, error) {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
+	}
 	if record.ID == "" {
 		id, err := generateID()
 		if err != nil {
@@ -139,17 +147,9 @@ func (q *QdrantStore) Add(ctx context.Context, record Record) (string, error) {
 	fn := func() error { return q.upsert(ctx, record) }
 
 	if q.asyncWrites {
-		q.mu.Lock()
-		q.pendingWrites[record.ID] = struct{}{}
-		q.mu.Unlock()
-		q.wg.Add(1)
-		q.asyncChan <- asyncOp{fn: func() error {
-			err := fn()
-			q.mu.Lock()
-			delete(q.pendingWrites, record.ID)
-			q.mu.Unlock()
-			return err
-		}}
+		if err := runAsyncOp(ctx, q.asyncChan, fn); err != nil {
+			return "", fmt.Errorf("failed to add record: %w", err)
+		}
 		return record.ID, nil
 	}
 
@@ -160,12 +160,18 @@ func (q *QdrantStore) Add(ctx context.Context, record Record) (string, error) {
 }
 
 func (q *QdrantStore) Get(ctx context.Context, id string) (Record, bool, error) {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return Record{}, false, err
+	}
+	defer release()
+	return q.getRecord(ctx, id)
+}
+
+func (q *QdrantStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
 	if q.asyncWrites {
-		q.mu.RLock()
-		_, pending := q.pendingWrites[id]
-		q.mu.RUnlock()
-		if pending {
-			q.wg.Wait()
+		if err := runAsyncOp(ctx, q.asyncChan, func() error { return nil }); err != nil {
+			return Record{}, false, err
 		}
 	}
 
@@ -184,8 +190,19 @@ func (q *QdrantStore) Get(ctx context.Context, id string) (Record, bool, error) 
 }
 
 func (q *QdrantStore) List(ctx context.Context) ([]Record, error) {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return q.listRecords(ctx)
+}
+
+func (q *QdrantStore) listRecords(ctx context.Context) ([]Record, error) {
 	if q.asyncWrites {
-		q.wg.Wait()
+		if err := runAsyncOp(ctx, q.asyncChan, func() error { return nil }); err != nil {
+			return nil, err
+		}
 	}
 
 	var records []Record
@@ -227,6 +244,26 @@ func (q *QdrantStore) UpdateStatus(ctx context.Context, id string, status int, f
 		}
 		r.FromCache = r.FromCache || fromCache
 		r.Streaming = r.Streaming || streaming
+	})
+}
+
+func (q *QdrantStore) UpdateLifecycle(
+	ctx context.Context,
+	id string,
+	state string,
+	endedAt time.Time,
+	durationMS int64,
+	reason string,
+) error {
+	return q.updateRecordIf(ctx, id, func(record *Record) bool {
+		if record.LifecycleState != "" && record.LifecycleState != LifecycleInProgress {
+			return false
+		}
+		record.LifecycleState = state
+		record.EndedAt = cloneTimePtr(&endedAt)
+		record.DurationMS = durationMS
+		record.TerminalReason = reason
+		return true
 	})
 }
 
@@ -280,34 +317,44 @@ func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace Tool
 	})
 }
 
-func (q *QdrantStore) Close() (err error) {
-	q.closeOnce.Do(func() {
+func (q *QdrantStore) Close() error {
+	return q.lifecycle.close(func() error {
 		if q.asyncWrites {
-			q.wg.Wait()
-			close(q.done)
+			return closeAsyncWriter(q.asyncChan, q.done, q.writerDone, q.client.Close)
 		}
-		err = q.client.Close()
+		return q.client.Close()
 	})
-	return err
 }
 
 func (q *QdrantStore) updateRecord(ctx context.Context, id string, mutate func(*Record)) error {
-	record, found, err := q.Get(ctx, id)
+	return q.updateRecordIf(ctx, id, func(record *Record) bool {
+		mutate(record)
+		return true
+	})
+}
+
+func (q *QdrantStore) updateRecordIf(ctx context.Context, id string, mutate func(*Record) bool) error {
+	release, err := q.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	q.updateMu.Lock()
+	defer q.updateMu.Unlock()
+	record, found, err := q.getRecord(ctx, id)
 	if err != nil {
 		return err
 	}
 	if !found {
 		return fmt.Errorf("record with ID %s not found", id)
 	}
-	mutate(&record)
-
-	fn := func() error { return q.upsert(ctx, record) }
-	if q.asyncWrites {
-		q.wg.Add(1)
-		q.asyncChan <- asyncOp{fn: fn}
+	if !mutate(&record) {
 		return nil
 	}
-	return fn()
+	// Read-modify-write updates are synchronous even when bulk writes are
+	// configured async. Qdrant stores a whole JSON record, so queueing stale
+	// snapshots can otherwise drop usage, trace, or terminal fields.
+	return q.upsert(ctx, record)
 }
 
 func (q *QdrantStore) upsert(ctx context.Context, record Record) error {
@@ -315,8 +362,10 @@ func (q *QdrantStore) upsert(ctx context.Context, record Record) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal record: %w", err)
 	}
+	wait := true
 	_, err = q.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: q.collectionName,
+		Wait:           &wait,
 		Points: []*qdrant.PointStruct{
 			{
 				Id:      arbitraryIDToUUID(record.ID),

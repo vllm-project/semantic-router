@@ -127,6 +127,58 @@ fn test_security_lora_security_lora_classifier_parallel_detect(
     }
 }
 
+/// classify_with_index_and_probabilities must agree with classify_with_index's
+/// top-1 prediction and return a full, normalized distribution across all
+/// classes, regardless of which backend (BERT or ModernBERT/mmBERT) is loaded.
+#[rstest]
+#[serial]
+fn test_security_lora_classify_with_index_and_probabilities_matches_top1(
+    cached_security_classifier: Option<Arc<SecurityLoRAClassifier>>,
+) {
+    if let Some(classifier) = cached_security_classifier {
+        println!("Testing classify_with_index_and_probabilities with cached model!");
+
+        let jailbreak_texts = jailbreak_texts();
+        let test_text = jailbreak_texts[0];
+
+        let (top1_class, top1_confidence, top1_label) = classifier
+            .classify_with_index(test_text)
+            .expect("classify_with_index failed");
+        let (probs_class, probs_confidence, probs_label, probabilities) = classifier
+            .classify_with_index_and_probabilities(test_text)
+            .expect("classify_with_index_and_probabilities failed");
+
+        assert_eq!(
+            top1_class, probs_class,
+            "argmax class must match classify_with_index"
+        );
+        assert!(
+            (top1_confidence - probs_confidence).abs() < 1e-6,
+            "confidence must match classify_with_index"
+        );
+        assert_eq!(
+            top1_label, probs_label,
+            "label must match classify_with_index"
+        );
+        assert!(
+            !probabilities.is_empty(),
+            "distribution must cover at least one class"
+        );
+        let sum: f32 = probabilities.iter().sum();
+        assert!(
+            (sum - 1.0).abs() < 1e-3,
+            "probabilities must sum to ~1.0, got {}",
+            sum
+        );
+        assert!(
+            (probabilities[probs_class] - probs_confidence).abs() < 1e-6,
+            "probability at predicted class must equal reported confidence"
+        );
+    } else {
+        println!("Cached Security classifier not available, skipping with-probabilities test");
+    }
+}
+
 /// Test SecurityLoRAClassifier error handling
 #[rstest]
 fn test_security_lora_security_lora_classifier_error_handling() {

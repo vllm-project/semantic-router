@@ -9,7 +9,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -28,7 +27,7 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 	}
 
 	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypePreference, preferenceName, latencySeconds)
+	c.recordSignalExtraction(config.SignalTypePreference, preferenceName, latencySeconds)
 
 	// Record metrics (use microseconds for better precision)
 	results.Metrics.Preference.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
@@ -49,7 +48,7 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 		return
 	}
 
-	recordPreferenceMatchMetrics(preferenceName)
+	c.recordPreferenceMatchMetrics(preferenceName)
 	details := c.contrastivePreferenceDetails(text)
 
 	mu.Lock()
@@ -107,6 +106,6 @@ func recordPreferenceDetailValues(results *SignalResults, details *PreferenceCla
 	}
 }
 
-func recordPreferenceMatchMetrics(preferenceName string) {
-	metrics.RecordSignalMatch(config.SignalTypePreference, preferenceName)
+func (c *Classifier) recordPreferenceMatchMetrics(preferenceName string) {
+	c.recordSignalMatch(config.SignalTypePreference, preferenceName)
 }

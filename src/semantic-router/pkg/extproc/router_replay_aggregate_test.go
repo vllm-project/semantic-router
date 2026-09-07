@@ -15,7 +15,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 
 	response := router.handleRouterReplayAPI(
 		"GET",
-		"/v1/router_replay?decision=decision-b&cache_status=streamed&limit=10",
+		"/v1/router_replay?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
 	)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
@@ -40,6 +40,13 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	}
 
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	assertReplayAggregateSummary(t, body)
+	assertReplayAggregateCharts(t, body)
+	assertReplayAggregateOptions(t, body)
+}
+
+func assertReplayAggregateSummary(t *testing.T, body map[string]interface{}) {
+	t.Helper()
 	if got := body["object"]; got != "router_replay.aggregate" {
 		t.Fatalf("expected aggregate object, got %#v", got)
 	}
@@ -57,7 +64,10 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	if got := int(summary["excluded_record_count"].(float64)); got != 1 {
 		t.Fatalf("expected excluded_record_count=1, got %d", got)
 	}
+}
 
+func assertReplayAggregateCharts(t *testing.T, body map[string]interface{}) {
+	t.Helper()
 	modelSelection := body["model_selection"].([]interface{})
 	if got := modelSelection[0].(map[string]interface{})["name"]; got != "gpt-4o" {
 		t.Fatalf("expected alphabetical tie-breaker for model_selection, got %#v", got)
@@ -70,8 +80,16 @@ func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 
 	tokenBreakdown := body["token_breakdown"].(map[string]interface{})
 	byDecision := tokenBreakdown["by_decision"].([]interface{})
-	if got := byDecision[0].(map[string]interface{})["name"]; got != "decision-b" {
+	if got := byDecision[0].(map[string]interface{})["name"]; got != "beta::decision-b" {
 		t.Fatalf("expected highest token decision first, got %#v", got)
+	}
+}
+
+func assertReplayAggregateOptions(t *testing.T, body map[string]interface{}) {
+	t.Helper()
+	availableRecipes := body["available_recipes"].([]interface{})
+	if len(availableRecipes) != 2 || availableRecipes[0] != "alpha" || availableRecipes[1] != "beta" {
+		t.Fatalf("expected sorted recipe options, got %#v", availableRecipes)
 	}
 
 	availableModels := body["available_models"].([]interface{})
@@ -104,6 +122,27 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 	}
 }
 
+func TestRouterReplayAggregateExcludesNonCompletedCostAndReportsLifecycle(t *testing.T) {
+	cost := 1.25
+	records := []routerreplay.RoutingRecord{
+		{LifecycleState: routerreplay.LifecycleCompleted, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleFailed, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleAborted, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleInProgress, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+		{LifecycleState: routerreplay.LifecycleUnknown, ActualCost: &cost, BaselineCost: &cost, CostSavings: &cost},
+	}
+
+	payload := buildRouterReplayAggregatePayload(records, records)
+	if payload.Summary.CostRecordCount != 1 || payload.Summary.ExcludedRecordCount != 4 || payload.Summary.ActualSpend != cost {
+		t.Fatalf("cost summary = %+v", payload.Summary)
+	}
+	if payload.Lifecycle.Completed != 1 || payload.Lifecycle.Failed != 1 ||
+		payload.Lifecycle.Aborted != 1 || payload.Lifecycle.InProgress != 1 ||
+		payload.Lifecycle.Unknown != 1 {
+		t.Fatalf("lifecycle summary = %+v", payload.Lifecycle)
+	}
+}
+
 func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 
@@ -124,9 +163,11 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			ID:               "replay-1",
 			Timestamp:        time.Unix(1, 0).UTC(),
 			RequestID:        "req-alpha",
+			Recipe:           "alpha",
 			Decision:         "decision-a",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o-mini",
+			LifecycleState:   routerreplay.LifecycleCompleted,
 			FromCache:        true,
 			PromptTokens:     &promptA,
 			CompletionTokens: &completionA,
@@ -145,9 +186,11 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			ID:               "replay-2",
 			Timestamp:        time.Unix(2, 0).UTC(),
 			RequestID:        "req-beta",
+			Recipe:           "beta",
 			Decision:         "decision-b",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o",
+			LifecycleState:   routerreplay.LifecycleCompleted,
 			Streaming:        true,
 			PromptTokens:     &promptB,
 			CompletionTokens: &completionB,

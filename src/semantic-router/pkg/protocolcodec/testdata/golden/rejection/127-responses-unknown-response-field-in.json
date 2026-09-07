@@ -1,0 +1,12 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "resp_1",
+    "object": "response",
+    "created_at": 100,
+    "model": "provider-model",
+    "status": "completed",
+    "output": [],
+    "future_field": true
+  }
+}

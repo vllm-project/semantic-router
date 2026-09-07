@@ -23,7 +23,7 @@ func convertRouterResponse(req TestQueryRequest, routerResp *RouterEvalResponse,
 	appendSignalGroupHighlights(result)
 	applyRouterDecision(result, routerResp)
 	applyRecommendedModels(result, routerResp.RecommendedModels)
-	appendEvaluatedRulesFromConfig(result, configPath)
+	appendEvaluatedRulesFromConfig(result, configPath, req.Model)
 
 	return result
 }
@@ -170,12 +170,13 @@ func applyRecommendedModels(result *TestQueryResult, recommendedModels []string)
 	}
 }
 
-func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath string) {
+func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath, requestModel string) {
 	parsedConfig, err := routerconfig.Parse(configPath)
 	if err != nil || parsedConfig == nil {
 		return
 	}
 
+	parsedConfig = topologyConfigForRequestModel(parsedConfig, requestModel)
 	matchedSignalNames := buildMatchedSignalNameSet(result.MatchedSignals)
 	for _, decision := range parsedConfig.IntelligentRouting.Decisions {
 		if result.MatchedDecision != "" && decision.Name == result.MatchedDecision {
@@ -183,6 +184,24 @@ func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath string) 
 		}
 		result.EvaluatedRules = append(result.EvaluatedRules, buildEvaluatedRule(decision, matchedSignalNames))
 	}
+}
+
+func topologyConfigForRequestModel(
+	parsedConfig *routerconfig.RouterConfig,
+	requestModel string,
+) *routerconfig.RouterConfig {
+	if parsedConfig == nil {
+		return nil
+	}
+	recipe, ok := parsedConfig.RecipeForRoutingModel(requestModel)
+	if !ok {
+		return parsedConfig
+	}
+	scoped := parsedConfig.ConfigForRecipe(recipe)
+	if scoped == nil {
+		return parsedConfig
+	}
+	return scoped
 }
 
 func buildMatchedSignalNameSet(signals []MatchedSignal) map[string]bool {

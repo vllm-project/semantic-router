@@ -7,7 +7,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // evaluateComplexitySignal evaluates all complexity rules. Embedding-mode rules use the
@@ -53,8 +52,8 @@ func (c *Classifier) evaluateEmbeddingComplexityRules(results *SignalResults, mu
 	defer mu.Unlock()
 	for _, result := range classifyResults {
 		matchName := fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty)
-		metrics.RecordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeComplexity, matchName)
+		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
+		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
 		results.SignalConfidences["complexity:"+matchName] = result.Confidence
 		results.SignalValues["complexity:"+result.RuleName+":text_hard_score"] = result.TextHardScore
@@ -110,8 +109,8 @@ func (c *Classifier) evaluateModelComplexityRules(results *SignalResults, mu *sy
 			ruleDifficulty = "medium"
 		}
 		matchName := fmt.Sprintf("%s:%s", rule.Name, ruleDifficulty)
-		metrics.RecordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeComplexity, matchName)
+		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
+		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
 		results.SignalConfidences["complexity:"+matchName] = confidence
 		results.SignalValues["complexity:"+rule.Name+":margin"] = signedComplexityMargin(ruleDifficulty, confidence)

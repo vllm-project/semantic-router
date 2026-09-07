@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "chunks": [
+    "event: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"sequence_number\":0,\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"part\":{\"type\":\"output_text\",\"text\":\"x\",\"annotations\":[]}}\n\n"
+  ]
+}
