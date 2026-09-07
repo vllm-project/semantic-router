@@ -75,7 +75,7 @@ for recipe in "${recipe_names[@]}"; do
     collect_logs "${recipe}"
     exit 1
   fi
-  if ! python3 "${ROOT_DIR}/tools/agent/scripts/recipe_conformance.py" \
+  if ! python3 "${ROOT_DIR}/tools/dev/router-calibration/recipe_conformance.py" \
     --output-dir "${REPORT_ROOT}" \
     eval \
     --recipe "${recipe}" \
