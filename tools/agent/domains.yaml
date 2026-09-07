@@ -278,7 +278,7 @@ domains:
       - tools/make/models.mk
       - tools/models/train-mmbert32k-gpu.sh
       - website/docs/training/**
-    checks: []
+    checks: [make test-training-contracts]
     ci_jobs: []
 
 images:
