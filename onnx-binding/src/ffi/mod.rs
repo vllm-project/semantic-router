@@ -4,7 +4,6 @@ pub mod capabilities;
 mod capability_dimensions;
 pub mod classification;
 pub mod embedding;
-mod embedding_similarity;
 pub mod memory;
 #[cfg(test)]
 mod memory_test;
