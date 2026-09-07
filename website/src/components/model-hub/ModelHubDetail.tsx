@@ -99,14 +99,14 @@ export function ModelHubDetail({
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <aside ref={dialogRef} className={styles.detail} role="dialog" aria-modal="true" aria-labelledby="model-detail-title" aria-describedby="model-detail-description" tabIndex={-1}>
-        <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label="Close model details">×</button>
         <header className={styles.detailHero}>
           <CatalogMark presentation={model.presentation} large />
           <span>
-            <small>{model.publisher}</small>
+            <span className={styles.eyebrow}>{model.publisher}</span>
             <h2 id="model-detail-title">{model.display_name}</h2>
             <code>{model.id}</code>
           </span>
+          <button ref={closeRef} type="button" className={styles.closeButton} onClick={onClose} aria-label="Close model details">×</button>
         </header>
         <p id="model-detail-description" className={styles.description}>{model.description}</p>
         <div className={styles.badges}>
@@ -179,13 +179,6 @@ export function ModelHubDetail({
                     <strong>{model.roles?.length ?? 0}</strong>
                   </span>
                 </div>
-                <div className={styles.poolEntrypoint}>
-                  <CatalogMark presentation={model.presentation} />
-                  <span>
-                    <strong>{model.display_name}</strong>
-                    <small>Request entrypoint</small>
-                  </span>
-                </div>
                 <div className={styles.roleGrid}>
                   {(model.roles ?? []).map(role => (
                     <article key={role.name} className={styles.roleCard}>
@@ -195,6 +188,7 @@ export function ModelHubDetail({
                       </header>
                       <small>
                         Minimum
+                        {' '}
                         {role.minimum_candidates}
                       </small>
                       <ul>
@@ -294,7 +288,7 @@ export function ModelHubDetail({
               )
             : <p>No published measurements.</p>}
         </DetailSection>
-        <a className={styles.sourceLink} href={model.distribution.source} target="_blank" rel="noreferrer">Official model ↗</a>
+        <a className={`site-btn site-btn--primary ${styles.sourceLink}`} href={model.distribution.source} target="_blank" rel="noreferrer">Official model ↗</a>
       </aside>
     </div>
   )
