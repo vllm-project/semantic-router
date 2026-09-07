@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -250,4 +251,181 @@ func TestConversationIndexScanLeaseSequentialWaitersEachGetATurn(t *testing.T) {
 	wg.Wait()
 
 	assert.EqualValues(t, 1, maxActive.Load(), "waiters must be admitted one at a time, never concurrently")
+}
+
+// renewalGateHook holds the first lease-renewal round-trip open, so a test
+// can place work's completion *inside* the window where a renewal is
+// genuinely in flight. It matches the renewal by conditionalRefreshScript's
+// SHA, which is what distinguishes it from the compare-delete script the
+// release path runs against the very same lease key.
+//
+// It releases the round-trip when the command's own context is cancelled —
+// which is precisely the wrapper's normal shutdown after fn returns — so the
+// gated renewal fails the way the real one does, rather than by a contrived
+// error the production path never produces.
+type renewalGateHook struct {
+	hash     string
+	inFlight chan struct{}
+	used     atomic.Bool
+}
+
+func newRenewalGateHook() *renewalGateHook {
+	return &renewalGateHook{
+		hash:     conditionalRefreshScript.Hash(),
+		inFlight: make(chan struct{}),
+	}
+}
+
+func (h *renewalGateHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *renewalGateHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *renewalGateHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if h.matches(cmd) && h.used.CompareAndSwap(false, true) {
+			close(h.inFlight)
+			select {
+			case <-ctx.Done():
+			case <-time.After(5 * time.Second):
+				// Never wedge the suite if the wrapper stops cancelling.
+			}
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func (h *renewalGateHook) matches(cmd redis.Cmder) bool {
+	args := cmd.Args()
+	if cmd.Name() != "evalsha" || len(args) < 2 {
+		return false
+	}
+	sha, ok := args[1].(string)
+	return ok && sha == h.hash
+}
+
+// warmScanLeaseScripts runs one real renewal so the Lua script is cached
+// server-side. Without it the first renewal under test answers NOSCRIPT and
+// re-runs the work as a follow-up EVAL, which renewalGateHook's one-shot
+// EVALSHA match would have already spent on the failed attempt.
+func warmScanLeaseScripts(t *testing.T, store *RedisStore, token string) {
+	t.Helper()
+
+	ctx := context.Background()
+	acquired, err := store.acquireConversationIndexScanLease(ctx, token)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	renewed, err := store.renewConversationIndexScanLease(ctx, token)
+	require.NoError(t, err)
+	require.True(t, renewed)
+}
+
+// TestConversationIndexScanLeaseCompletionSurvivesRenewalCancellation is the
+// regression for the completion/renewal race: fn publishes its irreversible
+// completion marker while a renewal is in flight, and the wrapper then
+// cancels the lease context as its normal shutdown. That cancellation fails
+// the in-flight renewal, and the failure must not be reported as a lost
+// lease — the sweep finalized, and callers like FinalizeConversationIndex
+// would otherwise return an error (and zero stats) for work that durably
+// completed and can never be re-run, since the completion key it just wrote
+// short-circuits every later call.
+//
+// Deterministic by construction: fn cannot return until the gate proves a
+// renewal round-trip is open, and the gate cannot return until the wrapper's
+// shutdown cancels it.
+func TestConversationIndexScanLeaseCompletionSurvivesRenewalCancellation(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	token, err := randomScanLeaseToken()
+	require.NoError(t, err)
+	warmScanLeaseScripts(t, store, token)
+
+	gate := newRenewalGateHook()
+	store.client.AddHook(gate)
+
+	completionKey := store.conversationIndexCompletionKey()
+	runErr := store.runWithConversationIndexScanLeaseEvery(ctx, token, 20*time.Millisecond, func(leaseCtx context.Context) error {
+		<-gate.inFlight
+		return store.client.Set(leaseCtx, completionKey, conversationIndexCompletionValue, 0).Err()
+	})
+
+	require.NoError(t, runErr, "a scan that published its completion marker must not be reported as having lost its lease, merely because the wrapper's own shutdown cancelled a renewal that was still in flight")
+
+	value, err := store.client.Get(ctx, completionKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, conversationIndexCompletionValue, value, "the completion marker the scan published must still stand")
+}
+
+// TestScanLeaseRenewerDiscardsVerdictAfterStop pins the ordering rule that
+// makes the race above impossible rather than merely unlikely: a renewal
+// verdict is authoritative only while the work is still running. Once stop
+// has run, a verdict that arrives late — the round-trip the shutdown itself
+// aborted, or a genuine loss whose answer landed after fn's last write —
+// must neither flip the outcome nor cancel work that already finished.
+func TestScanLeaseRenewerDiscardsVerdictAfterStop(t *testing.T) {
+	newRenewer := func() (*scanLeaseRenewer, *atomic.Int64) {
+		var cancels atomic.Int64
+		renewer := &scanLeaseRenewer{
+			stopCh: make(chan struct{}),
+			done:   make(chan struct{}),
+			cancel: func() { cancels.Add(1) },
+		}
+		// No renewal goroutine: these cases drive the handle directly.
+		close(renewer.done)
+		return renewer, &cancels
+	}
+
+	t.Run("verdict during work is authoritative", func(t *testing.T) {
+		renewer, cancels := newRenewer()
+
+		assert.True(t, renewer.markLost(), "a loss observed while the work is still running must be recorded")
+		assert.EqualValues(t, 1, cancels.Load(), "recording a loss must cancel the work still running under that lease")
+		assert.True(t, renewer.stop(), "a loss recorded during the work must be reported to the caller")
+	})
+
+	t.Run("verdict after stop is discarded", func(t *testing.T) {
+		renewer, cancels := newRenewer()
+
+		require.False(t, renewer.stop())
+		before := cancels.Load()
+
+		assert.False(t, renewer.markLost(), "a renewal verdict landing after the work completed must be discarded")
+		assert.Equal(t, before, cancels.Load(), "a discarded verdict must not cancel anything")
+		assert.False(t, renewer.stop(), "the outcome must stay settled once the work is complete")
+	})
+}
+
+// TestConversationIndexScanLeaseStillFailsWhenLostDuringWork guards the other
+// direction: narrowing the lost-lease rule to "while fn was still running"
+// must not soften it. A lease taken over mid-scan still has to cancel the
+// scan's context and surface as an error even when fn itself returns nil,
+// which is what keeps lazyBackfillConversationIndex and
+// FinalizeConversationIndex from publishing a proof built by a scan that was
+// not exclusive for its whole duration.
+func TestConversationIndexScanLeaseStillFailsWhenLostDuringWork(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	token, err := randomScanLeaseToken()
+	require.NoError(t, err)
+	acquired, err := store.acquireConversationIndexScanLease(ctx, token)
+	require.NoError(t, err)
+	require.True(t, acquired)
+
+	runErr := store.runWithConversationIndexScanLeaseEvery(ctx, token, 20*time.Millisecond, func(leaseCtx context.Context) error {
+		// Another holder takes the lease over while this scan is still
+		// working, exactly as an expiry-then-reacquisition would.
+		require.NoError(t, store.client.Set(ctx, store.conversationIndexScanLeaseKey(), "other-holder", time.Minute).Err())
+
+		select {
+		case <-leaseCtx.Done():
+		case <-time.After(5 * time.Second):
+			t.Error("the renewer must cancel a scan whose lease was taken over")
+		}
+		return nil
+	})
+
+	require.Error(t, runErr, "a scan that lost its lease mid-flight must fail even when fn returns nil")
+	assert.Contains(t, runErr.Error(), "lost mid-scan")
 }
