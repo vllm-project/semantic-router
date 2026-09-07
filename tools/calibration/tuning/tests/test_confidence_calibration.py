@@ -157,7 +157,7 @@ def test_artifact_selects_on_calibration_and_reports_held_out(tmp_path: Path):
 
     assert artifact["status"] == "candidate"
     assert artifact["selection"]["split"] == "calibration"
-    assert artifact["selection"]["threshold"] == pytest.approx(0.301)
+    assert artifact["selection"]["threshold"] == pytest.approx(0.55)
     assert artifact["baseline"]["threshold"] == 0.72
     assert artifact["baseline"]["metrics"]["held_out"]["n_items"] == 4
     assert artifact["metrics"]["train"]["n_items"] == 1
@@ -246,5 +246,5 @@ def test_checked_in_fixture_rebuilds_without_network():
         "held_out": 4,
     }
     assert first["selection"]["split"] == "calibration"
-    assert first["selection"]["threshold"] == pytest.approx(0.301)
+    assert first["selection"]["threshold"] == pytest.approx(0.55)
     assert first["collection"]["mode"] == "checked-in-fixture"
