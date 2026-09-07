@@ -104,3 +104,45 @@ func TestAnthropicStreamMessageStartAcceptsContextManagement(t *testing.T) {
 		t.Fatalf("message_start did not produce a response-started event: %+v", events)
 	}
 }
+
+// In production the applied edit report arrives on the final message_delta as
+// a top-level sibling of delta and usage, not inside the message object.
+func TestAnthropicStreamMessageDeltaAcceptsContextManagement(t *testing.T) {
+	decoder := AnthropicMessagesCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	start, err := encodeSSE("message_start", map[string]any{
+		"type": "message_start",
+		"message": map[string]any{
+			"id": "msg_1", "type": "message", "role": "assistant", "model": "provider-model",
+			"content": []any{}, "stop_reason": nil, "stop_sequence": nil,
+			"usage": map[string]any{"input_tokens": 3, "output_tokens": 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := decoder.Push(start); err != nil {
+		t.Fatal(err)
+	}
+	delta, err := encodeSSE("message_delta", map[string]any{
+		"type":  "message_delta",
+		"delta": map[string]any{"stop_reason": "end_turn", "stop_sequence": nil},
+		"usage": map[string]any{"input_tokens": 3, "output_tokens": 6},
+		"context_management": map[string]any{"applied_edits": []any{
+			map[string]any{"type": "clear_thinking_20251015", "cleared_input_tokens": 4096, "cleared_tool_uses": 0},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, diagnostics, err := decoder.Push(delta)
+	if err != nil {
+		t.Fatalf("streamed message_delta carrying context_management was rejected: %v", err)
+	}
+	if len(events) != 1 || events[0].Type != llmprotocol.EventUsageUpdated {
+		t.Fatalf("message_delta did not produce a usage event: %+v", events)
+	}
+	assertDiagnosticFields(t, diagnostics, "stream.context_management")
+}
