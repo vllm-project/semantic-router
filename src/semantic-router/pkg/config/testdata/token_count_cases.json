@@ -161,6 +161,18 @@
     {"scalar": "18446744073709551616", "text": "1.8446744073709552e+19", "error": "token count is too large", "note": "beyond uint64, so yaml.v2 reads a float"},
     {"scalar": "99999999999999999999", "text": "1e+20", "error": "token count is too large"},
     {"scalar": "1e20", "text": "1e+20", "error": "token count is too large"},
-    {"scalar": "-9223372036854775809", "text": "-9.223372036854776e+18", "error": "token count must not be negative", "note": "below int64, so yaml.v2 reads a float"}
+    {"scalar": "-9223372036854775809", "text": "-9.223372036854776e+18", "error": "token count must not be negative", "note": "below int64, so yaml.v2 reads a float"},
+    {"scalar": "+0123", "text": "83", "value": 83},
+    {"scalar": "0_x10", "text": "16", "value": 16, "note": "underscores are removed before the prefix is read"},
+    {"scalar": "0123K", "text": "0123K", "value": 123000, "note": "a suffix stops implicit typing, so the leading zero is not octal"},
+    {"scalar": "1.e3", "text": "1000", "value": 1000},
+    {"scalar": ".5_0", "text": "0.5", "value": 0},
+    {"scalar": "08.5", "text": "8.5", "value": 8},
+    {"scalar": "!!float 0123", "text": "83", "value": 83, "note": "yaml.v2 types the text under an explicit tag too"},
+    {"scalar": "!!int 0x10", "text": "16", "value": 16},
+    {"scalar": "!!str 0123", "text": "0123", "value": 123, "note": "an explicit string tag keeps the literal text"},
+    {"scalar": "-0x10", "text": "-16", "error": "token count must not be negative"},
+    {"scalar": "0b102", "text": "0b102", "error": "invalid token count format", "note": "not binary, so a string on both sides"},
+    {"scalar": "0x", "text": "0x", "error": "invalid token count format"}
   ]
 }

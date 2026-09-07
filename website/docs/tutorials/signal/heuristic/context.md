@@ -72,6 +72,10 @@ and `1:30` is not a number. Quote a value to keep it literal, so `'0123'` is
 123. The `vllm-sr` CLI applies the same typing, so its validation matches what
 the Router loads from the forwarded file.
 
+A limit may reference an environment variable, such as `${CTX_MIN}`. The
+Router expands it when the config loads, so the CLI accepts that band with a
+warning instead of checking it.
+
 ```yaml
 routing:
   signals:

@@ -170,3 +170,50 @@ func assertTokenCountError(t *testing.T, label, wantPrefix string, got int, err 
 		t.Fatalf("%s error = %q, want prefix %q", label, err.Error(), wantPrefix)
 	}
 }
+
+// parseContextBand loads doc through ParseYAMLBytes and returns the bounds of
+// its only context rule.
+func parseContextBand(t *testing.T, doc string) ContextBounds {
+	t.Helper()
+	cfg, err := ParseYAMLBytes([]byte(doc))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes: %v", err)
+	}
+	if len(cfg.ContextRules) != 1 {
+		t.Fatalf("parsed %d context rules, want 1", len(cfg.ContextRules))
+	}
+	bounds, err := cfg.ContextRules[0].Bounds()
+	if err != nil {
+		t.Fatalf("Bounds: %v", err)
+	}
+	return bounds
+}
+
+// TestContextBandTokenCountsExpandEnvironment pins the loader behaviour the
+// CLI relies on when it defers a limit that references the environment: the
+// reference is expanded before the count is parsed, and an unset variable
+// leaves the limit empty.
+func TestContextBandTokenCountsExpandEnvironment(t *testing.T) {
+	t.Setenv("CTX_PROBE_MIN", "8001")
+	if got := parseContextBand(t, contextBandYAML("${CTX_PROBE_MIN}")); got.Min != 8001 {
+		t.Fatalf("min_tokens: ${CTX_PROBE_MIN} parsed as %d, want 8001", got.Min)
+	}
+	doc := "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: 8001\n        max_tokens: ${CTX_PROBE_UNSET}\n"
+	if got := parseContextBand(t, doc); !got.Unbounded {
+		t.Fatalf("max_tokens: ${CTX_PROBE_UNSET} parsed as %+v, want an open-ended band", got)
+	}
+}
+
+// TestContextBandAnchorIsTypedEverywhere shows that yaml.v2 typing follows
+// the scalar, not the field: an anchored 0123 reaches every alias as 83.
+func TestContextBandAnchorIsTypedEverywhere(t *testing.T) {
+	doc := "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: &count 0123\n        max_tokens: 100M\n        description: *count\n"
+	cfg, err := ParseYAMLBytes([]byte(doc))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes: %v", err)
+	}
+	rule := cfg.ContextRules[0]
+	if string(rule.MinTokens) != "83" || rule.Description != "83" {
+		t.Fatalf("min_tokens = %q, description = %q, want both 83", string(rule.MinTokens), rule.Description)
+	}
+}

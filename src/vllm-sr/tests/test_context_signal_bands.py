@@ -5,6 +5,7 @@ CLI accepts also loads in the Router.
 """
 
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -16,7 +17,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.config_yaml import safe_load_router_config  # noqa: E402
-from cli.context_bands import parse_go_float, parse_token_count  # noqa: E402
+from cli.context_bands import (  # noqa: E402
+    parse_go_float,
+    parse_token_count,
+    references_environment,
+)
 from cli.goyaml_scalars import format_go_float, router_scalar_text  # noqa: E402
 from cli.models import ContextRule, UserConfig  # noqa: E402
 from cli.parser import (  # noqa: E402
@@ -337,19 +342,36 @@ def test_safe_load_router_config_types_token_counts_only_in_context_rules():
     assert data["elsewhere"] == {"min_tokens": 83, "other": 90}
 
 
-def test_safe_load_router_config_leaves_quoted_and_tagged_scalars_literal():
+def test_safe_load_router_config_types_explicit_tags_like_yaml_v2():
     data = safe_load_router_config(
         "routing:\n"
         "  signals:\n"
         "    context:\n"
         "      - {name: a, min_tokens: '0123', max_tokens: \"1:30\"}\n"
-        "      - {name: b, min_tokens: !!str 0123, max_tokens: !!int 0123}\n"
+        "      - {name: b, min_tokens: !!str 0123, max_tokens: !!float 0123}\n"
     )
 
     quoted, tagged = data["routing"]["signals"]["context"]
     assert (quoted["min_tokens"], quoted["max_tokens"]) == ("0123", "1:30")
-    # An explicit tag that matches implicit typing re-emits like yaml.v2 too.
+    # yaml.v2 types the text under any tag but !!str, so !!float 0123 is 83.
     assert (tagged["min_tokens"], tagged["max_tokens"]) == ("0123", "83")
+
+
+def test_anchor_shared_with_another_field_is_typed_everywhere():
+    """yaml.v2 typing follows the scalar, so an alias of 0123 is 83 in every field."""
+    data = safe_load_router_config(
+        "version: '0.3'\n"
+        "routing:\n"
+        "  signals:\n"
+        "    context:\n"
+        "      - name: probe\n"
+        "        min_tokens: &count 0123\n"
+        "        max_tokens: 100M\n"
+        "        description: *count\n"
+    )
+
+    rule = UserConfig(**data).routing.signals.context[0]
+    assert (rule.min_tokens, rule.description) == ("83", "83")
 
 
 def test_safe_load_router_config_matches_safe_load_for_empty_document():
@@ -447,3 +469,68 @@ def test_parse_user_config_reads_yaml_typed_token_count_like_router(tmp_path):
 
     raw = load_config_file(str(config_path))
     assert raw["routing"]["signals"]["context"][0]["min_tokens"] == "83"
+
+
+# ---------------------------------------------------------------------------
+# Environment references: the Router expands ${NAME} and $NAME in every config
+# string before it parses a token count, so the CLI defers such a limit.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value", ["${CTX_MIN}", "$CTX_MIN", "${CTX_MIN:-8K}", "${CTX_MIN}K", "$$$CTX_MIN"]
+)
+def test_environment_reference_is_deferred_to_the_router(value):
+    assert references_environment(value)
+    assert (
+        ContextRule(name="deferred", min_tokens=value, max_tokens="64K").min_tokens
+        == value
+    )
+    # A deferred limit takes part in no ordering check, even against 1M.
+    assert (
+        ContextRule(name="deferred", min_tokens="1M", max_tokens=value).max_tokens
+        == value
+    )
+    assert ContextRule(name="deferred", min_tokens=value).max_tokens is None
+
+
+@pytest.mark.parametrize("value", ["$$5", "5$", "${CTX", "$", "$-5"])
+def test_escaped_or_broken_dollar_is_a_literal_on_both_sides(value):
+    assert not references_environment(value)
+    with pytest.raises(ValidationError, match="min_tokens: invalid token count format"):
+        ContextRule(name="literal", min_tokens=value)
+
+
+def test_deferred_limit_does_not_skip_the_other_limit():
+    with pytest.raises(
+        ValidationError, match="max_tokens: invalid token count format: abc"
+    ):
+        ContextRule(name="half", min_tokens="${CTX_MIN}", max_tokens="abc")
+    with pytest.raises(ValidationError, match="min_tokens: token count is too large"):
+        ContextRule(name="half", min_tokens="1e100", max_tokens="${CTX_MAX}")
+
+
+def test_environment_reference_passes_the_yaml_boundary_untouched():
+    data = safe_load_router_config(_context_band_document("${CTX_MIN}"))
+    assert data["routing"]["signals"]["context"][0]["min_tokens"] == "${CTX_MIN}"
+
+
+def test_parse_user_config_warns_for_environment_referenced_limit(tmp_path, caplog):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        _minimal_config_with_context_band("${CTX_MIN}", "$CTX_MAX"), encoding="utf-8"
+    )
+
+    with caplog.at_level(logging.WARNING, logger="cli.parser"):
+        config = parse_user_config(str(config_path), log_summary=False)
+
+    band = config.routing.signals.context[0]
+    assert (band.min_tokens, band.max_tokens) == ("${CTX_MIN}", "$CTX_MAX")
+    assert (
+        "routing.signals.context[probe].min_tokens references the environment: ${CTX_MIN}"
+        in caplog.text
+    )
+    assert (
+        "routing.signals.context[probe].max_tokens references the environment: $CTX_MAX"
+        in caplog.text
+    )

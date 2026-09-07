@@ -40,6 +40,12 @@ _GO_HEX_FLOAT = re.compile(
 # so "9223372036854775807" rounds up to 2**63 and is rejected on both sides.
 ROUTER_MAX_TOKEN_COUNT = float(2**63 - 1)
 
+# The Router expands environment references in every config string before it
+# parses token counts (pkg/config/env_substitution.go): ${NAME},
+# ${NAME:-default}, ${NAME-default}, $NAME, and $$ for a literal dollar. A
+# braced reference needs its closing brace; any other dollar stays literal.
+_ENV_REFERENCE = re.compile(r"\$\{[^}]*\}|\$[A-Za-z0-9_]+")
+
 
 def normalize_token_count(value: object, field: str) -> str | None:
     """Return the string form of a token count, or None when omitted.
@@ -58,6 +64,17 @@ def normalize_token_count(value: object, field: str) -> str | None:
     if isinstance(value, str):
         return value
     raise ValueError(f"{field} must be a token count such as 8001 or 64K")
+
+
+def references_environment(value: str | None) -> bool:
+    """Report whether the Router would expand an environment reference in value.
+
+    The CLI cannot see the Router's environment, so such a limit is deferred:
+    the Router expands and validates it when the config loads.
+    """
+    return (
+        value is not None and _ENV_REFERENCE.search(value.replace("$$", "")) is not None
+    )
 
 
 def trim_space(value: str) -> str:
@@ -156,25 +173,31 @@ def validate_context_band(min_tokens: str | None, max_tokens: str | None) -> Non
 
     A band needs at least one limit. An omitted min_tokens means 0 and an
     omitted max_tokens makes the band open-ended. Equal limits are an
-    exact-match band, so only min_tokens above max_tokens is an error.
+    exact-match band, so only min_tokens above max_tokens is an error. A limit
+    that references the environment is left for the Router, which expands it
+    before parsing, so only the other limit is checked.
     """
     min_set = token_count_is_set(min_tokens)
     max_set = token_count_is_set(max_tokens)
     if not min_set and not max_set:
         raise ValueError("min_tokens or max_tokens must be set")
-    try:
-        min_value = parse_token_count(min_tokens)
-    except ValueError as error:
-        raise ValueError(f"min_tokens: {error}") from None
+    min_value = _parse_limit(min_tokens, "min_tokens")
     if not max_set:
         return
-    try:
-        max_value = parse_token_count(max_tokens)
-    except ValueError as error:
-        raise ValueError(f"max_tokens: {error}") from None
-    if min_value > max_value:
+    max_value = _parse_limit(max_tokens, "max_tokens")
+    if min_value is not None and max_value is not None and min_value > max_value:
         raise ValueError(
             f"min_tokens ({trim_space(min_tokens)}) must not exceed max_tokens "
             f"({trim_space(max_tokens)}); use equal values for an exact match "
             "or omit max_tokens for no upper bound"
         )
+
+
+def _parse_limit(value: str | None, field: str) -> int | None:
+    """Parse one limit with the field name in the error, or None when deferred."""
+    if references_environment(value):
+        return None
+    try:
+        return parse_token_count(value)
+    except ValueError as error:
+        raise ValueError(f"{field}: {error}") from None

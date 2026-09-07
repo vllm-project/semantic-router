@@ -29,6 +29,7 @@ TOKEN_COUNT_KEYS = frozenset({"min_tokens", "max_tokens"})
 
 _STR_TAG = "tag:yaml.org,2002:str"
 _NULL_TAG = "tag:yaml.org,2002:null"
+_BINARY_TAG = "tag:yaml.org,2002:binary"
 
 
 def safe_load_router_config(stream: str | bytes | IO[str] | IO[bytes]) -> Any:
@@ -48,33 +49,42 @@ def safe_load_router_config(stream: str | bytes | IO[str] | IO[bytes]) -> Any:
 def type_token_counts_like_router(root: yaml.Node, loader: yaml.SafeLoader) -> None:
     """Rewrite every plain context band token count under *root* in place.
 
-    A plain scalar whose tag came from implicit resolution becomes the string
-    yaml.v2 would emit for it, or null when yaml.v2 reads it as null. Quoted
-    scalars, block scalars, and explicit tags are left alone: yaml.v2 does not
-    type those either, and PyYAML already constructs them literally. Mappings
-    and sequences are left for the schema to reject on both sides.
+    A plain scalar becomes the string yaml.v2 would emit for its text, or
+    null when yaml.v2 reads it as null. Quoted and block scalars, and scalars
+    tagged ``!!str`` or ``!!binary``, are left alone: yaml.v2 does not type
+    those either, and PyYAML already constructs them literally. Mappings and
+    sequences are left for the schema to reject on both sides.
     """
     for rule in _context_rule_nodes(root, loader):
         for key, value_node in _mapping_items(rule, loader):
-            if key in TOKEN_COUNT_KEYS and _is_plain_implicit_scalar(
-                value_node, loader
-            ):
+            if key in TOKEN_COUNT_KEYS and _is_plain_typed_scalar(value_node, loader):
                 text = router_scalar_text(value_node.value)
                 value_node.tag = _NULL_TAG if text is None else _STR_TAG
                 value_node.value = "" if text is None else text
 
 
-def _is_plain_implicit_scalar(node: yaml.Node, loader: yaml.SafeLoader) -> bool:
-    """A plain scalar carrying the tag implicit resolution gives it.
+def _is_plain_typed_scalar(node: yaml.Node, loader: yaml.SafeLoader) -> bool:
+    """A plain scalar yaml.v2 types: any tag except ``!!str`` and ``!!binary``.
 
-    An explicit tag that happens to match the implicit one (``!!int 8001``) is
-    treated as implicit, which yaml.v2 resolves the same way.
+    yaml.v2 resolves the text of a plain scalar even under an explicit tag, so
+    ``!!float 0123`` is 83 to the Router and the CLI reads it the same way.
+    PyYAML does not record whether a tag was written, so a ``!!str`` tag counts
+    as explicit only when implicit resolution would have chosen another tag;
+    a plain ``1e3`` is implicitly a string to PyYAML but a float to yaml.v2,
+    and must still be typed. A tag that contradicts the text, such as
+    ``!!bool 8001``, makes the Router refuse the file while the CLI reads the
+    number; that is the one remaining difference, and no working config
+    carries such a tag.
     """
-    return (
-        isinstance(node, yaml.ScalarNode)
-        and node.style is None
-        and node.tag == loader.resolve(yaml.ScalarNode, node.value, (True, False))
-    )
+    if (
+        not isinstance(node, yaml.ScalarNode)
+        or node.style is not None
+        or node.tag == _BINARY_TAG
+    ):
+        return False
+    if node.tag != _STR_TAG:
+        return True
+    return loader.resolve(yaml.ScalarNode, node.value, (True, False)) == _STR_TAG
 
 
 def _context_rule_nodes(
