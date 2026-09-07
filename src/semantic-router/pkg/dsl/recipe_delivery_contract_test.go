@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
