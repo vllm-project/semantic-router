@@ -3,17 +3,24 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: base-model
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy and
+      # logs a correctly selected backend - which is what made this look like a
+      # router bug rather than a routing one.
+      default_model: general-expert
     models:
-      - name: base-model
-        provider_model_id: base-model
+      - name: general-expert
+        provider_model_id: general-expert
         backend_refs:
           - name: local-vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
     modelCards:
-      - name: base-model
+      - name: general-expert
     signals:
       domains:
         - name: math
@@ -28,7 +35,7 @@ config:
             - type: domain
               name: math
         modelRefs:
-          - model: base-model
+          - model: general-expert
             use_reasoning: false
       - name: default-route
         description: Fallback route for non-math requests
@@ -37,7 +44,7 @@ config:
           operator: AND
           conditions: []
         modelRefs:
-          - model: base-model
+          - model: general-expert
             use_reasoning: false
   global:
     router:
