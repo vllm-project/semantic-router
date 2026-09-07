@@ -273,16 +273,21 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire responsesEventWire
-	if err := decodeProviderWire(data, &wire, decoder.policy); err != nil {
+	vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
 	if err := decoder.validateResponsesEventResource(wire, data); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
-	return decoder.decodeResponsesEvent(wire, frame)
+	events, eventDiagnostics, err := decoder.decodeResponsesEvent(wire, frame)
+	diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, decoder.policy.Limits.Diagnostics)
+	return events, diagnostics, err
 }
 
 func (decoder *responsesStreamDecoder) validateResponsesEventResource(wire responsesEventWire, body []byte) error {
