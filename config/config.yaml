@@ -1946,7 +1946,6 @@ global:
         key_prefix: "memory_cache:"
         password: ""
       embedding_model: bert
-      extraction_batch_size: 16
       default_retrieval_limit: 10
       default_similarity_threshold: 0.74
       hybrid_search: true
@@ -2105,7 +2104,6 @@ global:
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120
-      retry_count: 2
       headers:
         X-Trace-Source: looper
       remom:
