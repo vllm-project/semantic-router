@@ -118,18 +118,41 @@ class FileLineCountTests(unittest.TestCase):
 
 
 class TypeScriptStructureTests(unittest.TestCase):
-    def test_collects_arrow_function_metrics(self) -> None:
+    def test_numeric_function_limits_are_advisory(self) -> None:
         parser = structure_check.build_parser("typescript")
         source = b"const choose = () => {\n  if (ready) {\n    return 1\n  }\n  return 0\n}\n"
+        rules = {
+            "limits": {
+                "function_lines": {"warn": 2},
+                "nesting": {"warn": 0},
+                "interface_methods": {"warn": 5},
+            }
+        }
 
-        metrics = structure_check.collect_function_metrics(
-            parser.parse(source), "typescript", source
+        findings = structure_check.evaluate_ast_rules(
+            "src/example.ts", "typescript", source, rules, parser
         )
 
-        self.assertEqual(len(metrics), 1)
-        metric = next(iter(metrics.values()))
-        self.assertEqual(metric.lines, 6)
-        self.assertEqual(metric.nesting, 1)
+        self.assertEqual(len(findings), 2)
+        self.assertTrue(all(finding.level == "WARN" for finding in findings))
+
+    def test_numeric_interface_limit_is_advisory(self) -> None:
+        parser = structure_check.build_parser("typescript")
+        source = b"interface Store {\n  get(): void\n  put(): void\n}\n"
+        rules = {
+            "limits": {
+                "function_lines": {"warn": 100},
+                "nesting": {"warn": 4},
+                "interface_methods": {"warn": 1},
+            }
+        }
+
+        findings = structure_check.evaluate_ast_rules(
+            "src/store.ts", "typescript", source, rules, parser
+        )
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].level, "WARN")
 
 
 if __name__ == "__main__":

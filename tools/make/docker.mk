@@ -476,11 +476,11 @@ vllm-sr-start: vllm-sr-dev
 # Tests are located in e2e/testing/vllm-sr-cli/
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
-vllm-sr-install-cli: agent-venv-install
+vllm-sr-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli: agent-venv-install
+vllm-sr-sim-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
 
 vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
