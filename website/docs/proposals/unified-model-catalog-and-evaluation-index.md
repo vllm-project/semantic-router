@@ -903,22 +903,25 @@ recommended backend pool.
 
 ### Benchmark-specific comparisons
 
-There is no composite model rank. A comparison is valid only after selecting
-one benchmark version, profile, and metric. Each exact model-and-reasoning-
-effort record appears as an individually colored bar with its creator logo and
-effort label; models without that measurement are omitted instead of being
-assigned zero. The methodology panel shows the selected benchmark identity,
-metric, direction, range, profile, and source metadata. Changing any selector
-produces a different comparison rather than mixing unlike benchmark runs. A
-benchmark comparison is never paginated: every exact result matching the
-selected tuple and current model filters is rendered in one horizontally
-scrollable chart. Search and creator/provider filters narrow that one comparison
-without splitting it into disconnected pages. The comparison picker admits an
-exact benchmark/profile/metric tuple only when at least ten distinct catalog
-models have an available result; multiple reasoning-effort rows for one model do
-not inflate that coverage. Lower-coverage records remain in the source catalog
-for audit and routing, but are removed from every public Model Hub view,
-including per-model details.
+There is no composite model rank. Model Hub renders a benchmark gallery and
+shows every admitted benchmark by default. Catalog-owned domain tags narrow the
+gallery without inventing a second UI taxonomy; model search and creator filters
+apply across all visible panels. Each benchmark pins one deterministic,
+widest-coverage version/profile/metric tuple so unlike runs are never mixed.
+
+Each exact model-and-reasoning-effort record appears as an individually colored
+bar with its creator logo and effort label; models without that measurement are
+omitted instead of being assigned zero. A panel shows the benchmark identity,
+metric, direction, profile, source, and result count. It is never paginated:
+every exact result matching the pinned tuple and current filters is rendered in
+one horizontally scrollable chart. Desktop lays out two benchmark panels per
+row; narrower screens collapse to one panel while retaining touch scrolling.
+
+The gallery admits an exact benchmark/profile/metric tuple only when at least
+ten distinct catalog models have an available result; multiple reasoning-effort
+rows for one model do not inflate that coverage. Lower-coverage records remain
+in the source catalog for audit and routing, but are removed from every public
+Model Hub view, including per-model details.
 
 The UI filters providers by tier and models by kind, creator, serving provider,
 capability, and distribution, with search and pagination on both tables. The
