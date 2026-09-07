@@ -108,6 +108,7 @@ export interface ComplexitySignalConfig {
 export interface JailbreakSignalConfig {
   threshold?: number
   include_history?: boolean
+  direction?: 'request' | 'response'
 }
 
 // Modality is detected by the modality_detector inline model; no extra params needed.
@@ -279,7 +280,8 @@ export interface PluginConfig {
 export interface ModelRefConfig {
   model: string
   use_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+  reasoning_effort?: string
   lora_name?: string
   reasoning_family?: string
 }
@@ -516,6 +518,7 @@ export interface ConfigData {
     name: string
     threshold?: number
     include_history?: boolean
+    direction?: 'request' | 'response'
     description?: string
   }>
   pii?: Array<{
@@ -670,6 +673,7 @@ export interface ConfigData {
       name: string
       threshold?: number
       include_history?: boolean
+      direction?: 'request' | 'response'
       description?: string
     }>
     pii?: Array<{
@@ -712,7 +716,8 @@ export interface ConfigData {
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean
-      reasoning_effort?: 'low' | 'medium' | 'high'
+      reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+      reasoning_effort?: string
       lora_name?: string
     }>
     plugins?: Array<{
@@ -723,11 +728,18 @@ export interface ConfigData {
   }>
   providers?: {
     defaults?: {
-      default_model?: string
+      model?: string
     }
     models?: Array<{
       name: string
-      reasoning_family?: string
+      catalog?: string
+      reasoning?: {
+        family?: string
+        type?: string
+        parameter?: string
+        levels?: string[]
+        default?: string
+      }
     }>
   }
   routing?: {

@@ -77,6 +77,63 @@ function stringListField({
   }
 }
 
+function jailbreakFormFields(): FieldConfig<AddSignalFormState>[] {
+  return [
+    {
+      name: 'jailbreak_method',
+      label: 'Method (jailbreak only)',
+      type: 'select',
+      options: ['classifier', 'contrastive'],
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'jailbreak_threshold',
+      label: 'Threshold (jailbreak only)',
+      type: 'number',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      placeholder: '0.65',
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'jailbreak_direction',
+      label: 'Direction (jailbreak only)',
+      type: 'select',
+      options: ['request', 'response'],
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'include_history',
+      label: 'Include History (jailbreak only)',
+      type: 'boolean',
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    stringListField({
+      name: 'jailbreak_patterns',
+      label: 'Jailbreak Patterns (contrastive only)',
+      signalType: 'Jailbreak',
+      addLabel: 'Add jailbreak pattern',
+      emptyLabel: 'No jailbreak patterns configured.',
+      itemLabel: 'Jailbreak pattern',
+      placeholder: 'Ignore all previous instructions',
+      shouldHide: (formData) =>
+        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
+    }),
+    stringListField({
+      name: 'benign_patterns',
+      label: 'Benign Patterns (contrastive only)',
+      signalType: 'Jailbreak',
+      addLabel: 'Add benign pattern',
+      emptyLabel: 'No benign patterns configured.',
+      itemLabel: 'Benign pattern',
+      placeholder: 'Help me write an email',
+      shouldHide: (formData) =>
+        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
+    }),
+  ]
+}
+
 export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
   return [
     {
@@ -391,51 +448,7 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       customRender: (value, onChange) => <SignalSubjectsEditor value={value} onChange={onChange} />,
       shouldHide: hideUnless('Authz'),
     },
-    {
-      name: 'jailbreak_method',
-      label: 'Method (jailbreak only)',
-      type: 'select',
-      options: ['classifier', 'contrastive'],
-      shouldHide: hideUnless('Jailbreak'),
-    },
-    {
-      name: 'jailbreak_threshold',
-      label: 'Threshold (jailbreak only)',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.65',
-      shouldHide: hideUnless('Jailbreak'),
-    },
-    {
-      name: 'include_history',
-      label: 'Include History (jailbreak only)',
-      type: 'boolean',
-      shouldHide: hideUnless('Jailbreak'),
-    },
-    stringListField({
-      name: 'jailbreak_patterns',
-      label: 'Jailbreak Patterns (contrastive only)',
-      signalType: 'Jailbreak',
-      addLabel: 'Add jailbreak pattern',
-      emptyLabel: 'No jailbreak patterns configured.',
-      itemLabel: 'Jailbreak pattern',
-      placeholder: 'Ignore all previous instructions',
-      shouldHide: (formData) =>
-        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
-    }),
-    stringListField({
-      name: 'benign_patterns',
-      label: 'Benign Patterns (contrastive only)',
-      signalType: 'Jailbreak',
-      addLabel: 'Add benign pattern',
-      emptyLabel: 'No benign patterns configured.',
-      itemLabel: 'Benign pattern',
-      placeholder: 'Help me write an email',
-      shouldHide: (formData) =>
-        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
-    }),
+    ...jailbreakFormFields(),
     {
       name: 'pii_threshold',
       label: 'Threshold (PII only)',
