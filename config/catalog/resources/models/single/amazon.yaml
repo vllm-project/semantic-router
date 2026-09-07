@@ -1,0 +1,122 @@
+- id: amazon/nova-2-lite
+  display_name: Amazon Nova 2 Lite
+  description: Amazon's second-generation efficient multimodal Nova model.
+  kind: physical
+  publisher: Amazon
+  presentation:
+    logo: package:nova
+    monogram: AWS
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
+  family: nova-2
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Amazon
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-2-lite.html
+  tags:
+  - proprietary
+  - efficient
+  - multimodal
+  released_at: '2025-12-02'
+- id: amazon/nova-premier-v1
+  display_name: Amazon Nova Premier
+  description: Amazon's most capable Nova 1 multimodal model for complex tasks.
+  kind: physical
+  publisher: Amazon
+  presentation:
+    logo: package:nova
+    monogram: AWS
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  family: nova-1
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 10000
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Amazon
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  tags:
+  - proprietary
+  - frontier
+  - multimodal
+  - enterprise
+  released_at: '2025-04-30'
+- id: amazon/nova-pro-v1
+  display_name: Amazon Nova Pro
+  description: Amazon's multimodal model for complex reasoning and code generation.
+  kind: physical
+  publisher: Amazon
+  presentation:
+    logo: package:nova
+    monogram: AWS
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  family: nova-1
+  lifecycle: active
+  limits:
+    context_window_size: 300000
+    max_output_tokens: 10000
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Amazon
+    status: claimed
+    verified_at: 2026-09-05
+    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  tags:
+  - proprietary
+  - multimodal
+  - enterprise
+  released_at: '2024-12-02'

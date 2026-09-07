@@ -44,7 +44,7 @@ func (c *Classifier) collectJailbreakClassifierContents(jailbreakText string, no
 			contents = append(contents, s)
 		}
 	}
-	for _, rule := range c.Config.JailbreakRules {
+	for _, rule := range c.Config.RequestJailbreakRules() {
 		if rule.Method == "contrastive" {
 			continue
 		}
@@ -82,7 +82,7 @@ func (c *Classifier) evaluateJailbreakSignal(ctx context.Context, results *Signa
 
 	// Step 3: Evaluate all rules concurrently.
 	var ruleWg sync.WaitGroup
-	for _, rule := range c.Config.JailbreakRules {
+	for _, rule := range c.Config.RequestJailbreakRules() {
 		ruleWg.Add(1)
 		go func() {
 			defer ruleWg.Done()
