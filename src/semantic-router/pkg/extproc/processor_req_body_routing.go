@@ -72,12 +72,22 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		}
 		dispatch = rerouted
 		ctx.ImmediateProtocolError = nil
+		// The reasoning mode is model-scoped (family/effort come from the
+		// model's reasoning config), so a reroute must re-apply it against the
+		// rerouted model. System prompt and request params are decision-scoped
+		// and were already applied to the shared request, so they are not
+		// re-applied here.
+		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+			r.applySemanticReasoningMode(
+				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+			)
+		}
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
-		"model":       logicalModel,
+		"model":       dispatch.logicalModel,
 		"backend":     dispatch.backendName,
 		"wire_format": dispatch.targetFormat,
 	})

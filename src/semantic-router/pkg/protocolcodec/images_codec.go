@@ -167,7 +167,16 @@ func rejectUnsupportedTools(request llmprotocol.Request) error {
 		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support function tools"))
 	}
 	switch request.ToolChoice.Mode {
-	case "", llmprotocol.ToolChoiceImageGeneration:
+	case "", llmprotocol.ToolChoiceAuto:
+		// auto (which applyRequestSemanticDefaults fills in when a pure
+		// image request omits tool_choice) may only invoke the hosted
+		// image_generation operation; a named function tool is not
+		// expressible on the images wire.
+		if request.ToolChoice.Name != "" {
+			return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support named tool choice %q", request.ToolChoice.Name))
+		}
+		return nil
+	case llmprotocol.ToolChoiceImageGeneration:
 		return nil
 	default:
 		return unsupportedDownstreamTranslation(fmt.Errorf("images wire does not support tool choice %q", request.ToolChoice.Mode))

@@ -353,6 +353,54 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	if ctx.TargetFormat != llmprotocol.OpenAIImagesV1 {
 		t.Fatalf("ctx.TargetFormat = %s, want %s", ctx.TargetFormat, llmprotocol.OpenAIImagesV1)
 	}
+	if request.Model != "provider-image" {
+		t.Fatalf("request.Model = %s, want %s (reroute must carry the final dispatch model)", request.Model, "provider-image")
+	}
+	if ctx.SemanticRequest != request {
+		t.Fatalf("ctx.SemanticRequest must be the prepared request after reroute")
+	}
+}
+
+// A pure image request that omits tool_choice is defaulted to auto by
+// applyRequestSemanticDefaults (engine.DecodeRequest). That default must not
+// be rejected: auto (with no function tools) may only invoke the hosted
+// image_generation operation, so the request reroutes to the images sibling
+// and the final dispatch model flows through request state (Xun review
+// 5122438902).
+func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	imageBackend := "image-backend"
+	router.Config.ModelConfig[imageBackend] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatImages,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary},
+			{Model: imageBackend},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto} // what the engine fills in when omitted
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+
+	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	if err != nil {
+		t.Fatalf("defaulted auto tool choice must reroute to images sibling, got error: %v", err)
+	}
+	if dispatch.logicalModel != imageBackend {
+		t.Fatalf("logical model = %s, want %s (rerouted to images backend)", dispatch.logicalModel, imageBackend)
+	}
+	if request.Model != "provider-image" {
+		t.Fatalf("request.Model = %s, want %s (final dispatch model must reach request state)", request.Model, "provider-image")
+	}
+	if ctx.TargetFormat != llmprotocol.OpenAIImagesV1 {
+		t.Fatalf("ctx.TargetFormat = %s, want %s", ctx.TargetFormat, llmprotocol.OpenAIImagesV1)
+	}
 }
 
 // An explicit tool_choice: none forbids all tools, including the hosted

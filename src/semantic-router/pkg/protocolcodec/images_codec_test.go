@@ -168,6 +168,14 @@ func TestImagesCodecEncodeRequestRejectsMixedTools(t *testing.T) {
 	if _, _, err := codec.EncodeRequest(pure, llmprotocol.Envelope{}, llmprotocol.Policy{}); err != nil {
 		t.Fatalf("image_generation tool choice must encode: %v", err)
 	}
+	// A pure image request that omits tool_choice is defaulted to auto by
+	// applyRequestSemanticDefaults; auto (without a named function) may only
+	// invoke the hosted image_generation operation, so it must encode.
+	omitted := base()
+	omitted.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}
+	if _, _, err := codec.EncodeRequest(omitted, llmprotocol.Envelope{}, llmprotocol.Policy{}); err != nil {
+		t.Fatalf("defaulted auto tool choice on pure image request must encode: %v", err)
+	}
 }
 
 // Images-native neutral options must reach the wire untouched; only the
