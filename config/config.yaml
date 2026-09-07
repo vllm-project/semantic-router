@@ -422,6 +422,13 @@ routing:
         benign_patterns:
           - explain the policy
           - summarize the safety rules
+      # direction: response scores the model's output instead of the prompt, so
+      # this rule only exists once the model has answered; the selected
+      # decision's response_jailbreak plugin enforces on it.
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
 
     pii:
       - name: restricted_pii
@@ -1946,7 +1953,6 @@ global:
         key_prefix: "memory_cache:"
         password: ""
       embedding_model: bert
-      extraction_batch_size: 16
       default_retrieval_limit: 10
       default_similarity_threshold: 0.74
       hybrid_search: true
@@ -2105,7 +2111,6 @@ global:
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120
-      retry_count: 2
       headers:
         X-Trace-Source: looper
       remom:

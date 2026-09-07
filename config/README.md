@@ -132,14 +132,14 @@ runtime dependency; they do not define routing behavior by themselves.
 When a public config field or supported routing surface changes, update its
 fragment, the exhaustive reference, affected recipes, and the matching website
 page together. Run `go test ./pkg/config/...` from `src/semantic-router`, then
-run `make agent-lint` from the repository root:
+run `make check` from the repository root:
 
 ```bash
 cd src/semantic-router
 go test ./pkg/config/...
 
 cd ../..
-make agent-lint
+make check
 ```
 
 Complete routing scenarios belong in `config/recipes/`; backend support files
