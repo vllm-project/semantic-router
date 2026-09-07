@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -283,7 +284,7 @@ func (h *renewalGateHook) ProcessPipelineHook(next redis.ProcessPipelineHook) re
 
 func (h *renewalGateHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
-		if h.matches(cmd) && h.used.CompareAndSwap(false, true) {
+		if matchesScriptSHA(cmd, h.hash) && h.used.CompareAndSwap(false, true) {
 			close(h.inFlight)
 			select {
 			case <-ctx.Done():
@@ -295,13 +296,16 @@ func (h *renewalGateHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook 
 	}
 }
 
-func (h *renewalGateHook) matches(cmd redis.Cmder) bool {
+// matchesScriptSHA identifies one specific Lua script's EVALSHA. The scan
+// lease's renewal and its release run different scripts against the very same
+// key, so the SHA — not the key — is what tells them apart.
+func matchesScriptSHA(cmd redis.Cmder, hash string) bool {
 	args := cmd.Args()
 	if cmd.Name() != "evalsha" || len(args) < 2 {
 		return false
 	}
 	sha, ok := args[1].(string)
-	return ok && sha == h.hash
+	return ok && sha == hash
 }
 
 // warmScanLeaseScripts runs one real renewal so the Lua script is cached
@@ -357,13 +361,12 @@ func TestConversationIndexScanLeaseCompletionSurvivesRenewalCancellation(t *test
 	assert.Equal(t, conversationIndexCompletionValue, value, "the completion marker the scan published must still stand")
 }
 
-// TestScanLeaseRenewerDiscardsVerdictAfterStop pins the ordering rule that
-// makes the race above impossible rather than merely unlikely: a renewal
-// verdict is authoritative only while the work is still running. Once stop
-// has run, a verdict that arrives late — the round-trip the shutdown itself
-// aborted, or a genuine loss whose answer landed after fn's last write —
-// must neither flip the outcome nor cancel work that already finished.
-func TestScanLeaseRenewerDiscardsVerdictAfterStop(t *testing.T) {
+// TestScanLeaseRenewerVerdictHandling pins the rule that decides which late
+// renewal verdicts count, and it is not a rule about timing: a verdict Redis
+// actually answered is evidence about who holds the lease and is recorded
+// however late it lands, while a round-trip that was merely aborted is
+// evidence about nothing and is discarded once the work has stopped.
+func TestScanLeaseRenewerVerdictHandling(t *testing.T) {
 	newRenewer := func() (*scanLeaseRenewer, *atomic.Int64) {
 		var cancels atomic.Int64
 		renewer := &scanLeaseRenewer{
@@ -376,24 +379,147 @@ func TestScanLeaseRenewerDiscardsVerdictAfterStop(t *testing.T) {
 		return renewer, &cancels
 	}
 
-	t.Run("verdict during work is authoritative", func(t *testing.T) {
+	t.Run("unanswered renewal during work is a loss", func(t *testing.T) {
 		renewer, cancels := newRenewer()
 
-		assert.True(t, renewer.markLost(), "a loss observed while the work is still running must be recorded")
+		assert.True(t, renewer.record(scanLeaseUnknown),
+			"a renewal that could not be confirmed while the work is still running must fail safe")
 		assert.EqualValues(t, 1, cancels.Load(), "recording a loss must cancel the work still running under that lease")
 		assert.True(t, renewer.stop(), "a loss recorded during the work must be reported to the caller")
 	})
 
-	t.Run("verdict after stop is discarded", func(t *testing.T) {
+	t.Run("unanswered renewal after stop is discarded", func(t *testing.T) {
 		renewer, cancels := newRenewer()
 
 		require.False(t, renewer.stop())
 		before := cancels.Load()
 
-		assert.False(t, renewer.markLost(), "a renewal verdict landing after the work completed must be discarded")
+		assert.False(t, renewer.record(scanLeaseUnknown),
+			"the round-trip the wrapper's own shutdown aborted proves nothing and must be discarded")
 		assert.Equal(t, before, cancels.Load(), "a discarded verdict must not cancel anything")
 		assert.False(t, renewer.stop(), "the outcome must stay settled once the work is complete")
 	})
+
+	t.Run("answered loss after stop is still reported", func(t *testing.T) {
+		renewer, cancels := newRenewer()
+
+		require.False(t, renewer.stop())
+		before := cancels.Load()
+
+		assert.True(t, renewer.record(scanLeaseReleased),
+			"Redis answering that the lease is no longer ours proves exclusivity was broken while fn ran, whenever that answer lands")
+		assert.Equal(t, before+1, cancels.Load())
+		assert.True(t, renewer.stop(), "an authoritative loss must be reported to the caller even after the work completed")
+	})
+
+	t.Run("confirmed renewal records nothing", func(t *testing.T) {
+		renewer, cancels := newRenewer()
+
+		assert.False(t, renewer.record(scanLeaseHeld))
+		assert.Zero(t, cancels.Load())
+		assert.False(t, renewer.stop())
+	})
+}
+
+// TestClassifyScanLeaseRenewal needs no Redis: it pins the one distinction
+// the whole shutdown/loss separation rests on — an error means Redis never
+// answered, so it can never be read as proof about who holds the lease.
+func TestClassifyScanLeaseRenewal(t *testing.T) {
+	assert.Equal(t, scanLeaseHeld, classifyScanLeaseRenewal(true, nil))
+	assert.Equal(t, scanLeaseReleased, classifyScanLeaseRenewal(false, nil))
+	assert.Equal(t, scanLeaseUnknown, classifyScanLeaseRenewal(false, context.Canceled))
+	assert.Equal(t, scanLeaseUnknown, classifyScanLeaseRenewal(false, errors.New("connection reset")),
+		"a transport failure is not an answer, however it is reported")
+}
+
+// answeredRenewalGateHook holds the first lease-renewal round-trip open until
+// the wrapper's own shutdown cancels it, and only then lets it reach Redis —
+// on a context detached from that cancellation, so Redis genuinely answers.
+//
+// That is the interleaving no amount of sleeping can force: a renewal sent
+// while fn was still working, whose authoritative "this lease is not yours"
+// answer arrives after fn has already published its completion marker.
+// renewalGateHook is its counterpart, letting the cancellation abort the
+// round-trip so it is never answered at all.
+type answeredRenewalGateHook struct {
+	hash     string
+	inFlight chan struct{}
+	used     atomic.Bool
+}
+
+func newAnsweredRenewalGateHook() *answeredRenewalGateHook {
+	return &answeredRenewalGateHook{
+		hash:     conditionalRefreshScript.Hash(),
+		inFlight: make(chan struct{}),
+	}
+}
+
+func (h *answeredRenewalGateHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *answeredRenewalGateHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *answeredRenewalGateHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if !matchesScriptSHA(cmd, h.hash) || !h.used.CompareAndSwap(false, true) {
+			return next(ctx, cmd)
+		}
+
+		close(h.inFlight)
+		select {
+		case <-ctx.Done():
+		case <-time.After(5 * time.Second):
+			// Never wedge the suite if the wrapper stops cancelling.
+		}
+		// Detached on purpose: the round-trip was already at Redis when the
+		// shutdown cancelled it, so Redis still answers.
+		return next(context.WithoutCancel(ctx), cmd)
+	}
+}
+
+// TestConversationIndexScanLeaseReportsAuthoritativeLossAfterCompletion is the
+// regression for discarding too much: narrowing "lost" to exclude the
+// shutdown's own aborted renewal must not also swallow a renewal Redis
+// answered. A lease taken over while fn was working is a real loss of
+// exclusivity, and the answer proving it commonly lands after fn's last
+// write — the sweep's whole point is that the completion marker is fn's final
+// act. Reporting it is what stops FinalizeConversationIndex from returning
+// success for a sweep that was not exclusive for its whole duration.
+//
+// Deterministic by construction: fn cannot return until the gate proves a
+// renewal round-trip is open, the gate cannot let that round-trip reach Redis
+// until the wrapper's shutdown cancels it, and the lease is stolen before the
+// first renewal is ever sent, so the answer is always "not yours".
+func TestConversationIndexScanLeaseReportsAuthoritativeLossAfterCompletion(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	token, err := randomScanLeaseToken()
+	require.NoError(t, err)
+	warmScanLeaseScripts(t, store, token)
+
+	// Another holder owns the lease before the first renewal goes out, so
+	// conditionalRefreshScript answers 0 rather than failing.
+	require.NoError(t, store.client.Set(ctx, store.conversationIndexScanLeaseKey(), "other-holder", time.Minute).Err())
+
+	gate := newAnsweredRenewalGateHook()
+	store.client.AddHook(gate)
+
+	completionKey := store.conversationIndexCompletionKey()
+	runErr := store.runWithConversationIndexScanLeaseEvery(ctx, token, 20*time.Millisecond, func(leaseCtx context.Context) error {
+		<-gate.inFlight
+		return store.client.Set(leaseCtx, completionKey, conversationIndexCompletionValue, 0).Err()
+	})
+
+	require.Error(t, runErr, "a lease Redis confirmed was taken over must be reported, even though the answer landed after fn published its marker")
+	assert.Contains(t, runErr.Error(), "lost mid-scan")
+
+	// The marker is irreversible, which is exactly why the error matters: it
+	// is the only signal an operator gets that this completion was published
+	// by a scan that was not exclusive throughout.
+	value, err := store.client.Get(ctx, completionKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, conversationIndexCompletionValue, value)
 }
 
 // TestConversationIndexScanLeaseStillFailsWhenLostDuringWork guards the other
