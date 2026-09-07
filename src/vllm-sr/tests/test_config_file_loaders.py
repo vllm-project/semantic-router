@@ -31,11 +31,13 @@ def write_minimal_config(path: Path) -> None:
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
                 "providers": {
-                    "defaults": {"default_model": "demo-model"},
+                    "defaults": {"model": "demo-model"},
                     "models": [
                         {
                             "name": "demo-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                            "backend_refs": [
+                                {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                            ],
                         }
                     ],
                 },
@@ -611,7 +613,7 @@ def test_load_config_file_returns_mapping(tmp_path: Path) -> None:
     loaded = load_config_file(str(config_path))
 
     assert loaded["version"] == "v0.3"
-    assert loaded["providers"]["defaults"]["default_model"] == "demo-model"
+    assert loaded["providers"]["defaults"]["model"] == "demo-model"
 
 
 def test_find_config_file_returns_explicit_file_path(tmp_path: Path) -> None:
