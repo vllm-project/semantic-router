@@ -2,7 +2,9 @@
 
 ## File and Function Shape
 
-- Prefer files under 400 lines; 800 lines is a hard stop
+- Treat files over 800 lines as a review signal, not a merge failure
+- Split a file only when the result has a clearer responsibility or seam; do
+  not fragment a cohesive module solely to reduce its line count
 - Prefer functions under 40-60 lines; 100 lines is a hard stop
 - Keep nesting shallow; 4 levels is the maximum
 
@@ -97,9 +99,11 @@
 - shallow wrapper layers that simply re-express the same backend bootstrap logic in multiple packages
 - leaking test or docs dependencies into production code
 
-## Structural Exceptions
+## Known Hotspots
 
-These files are existing structural debt, not acceptable targets for new growth:
+These files need responsibility-focused review because they have historically
+combined multiple concerns. Their size alone neither requires nor justifies a
+split:
 
 - `src/semantic-router/pkg/config/config.go`
 - `src/semantic-router/pkg/config/validator.go`
@@ -128,8 +132,8 @@ When touching one of these files:
 
 - prefer extraction-first edits that move types, helpers, or display-only code into adjacent modules
 - do not add a second major responsibility into the same hotspot file
-- treat any net reduction in file size or complexity as part of the acceptance bar for the change
-- the structural gate applies a ratchet here: these files may still be over global limits, but they must not grow, and touched code should move toward the standard shape
+- judge extraction by responsibility, coupling, and interface clarity rather than net line-count reduction
+- file length remains advisory; applicable function, nesting, and interface rules continue to describe the executable ratchet
 - for config hotspots, keep schema families, canonical conversion, plugin-family contracts, and semantic validation on separate seams
 - for classifier hotspots, keep model discovery, family-specific mapping or backend logic, and request-time orchestration on separate seams
 - for CLI orchestration hotspots, keep top-level command routing and user-facing flow in the main orchestration seams but move docker/runtime helpers, container wiring, and support types into adjacent modules; keep adapter barrels such as `docker_cli.py` thin

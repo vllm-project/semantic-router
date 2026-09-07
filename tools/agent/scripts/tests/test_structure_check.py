@@ -95,6 +95,28 @@ class DependencyRuleTests(unittest.TestCase):
         self.assertEqual(findings[0].level, "WARN")
 
 
+class FileLineCountTests(unittest.TestCase):
+    def test_oversized_file_is_advisory(self) -> None:
+        rules = {"limits": {"file_lines": {"warn": 800}}}
+
+        findings = structure_check.evaluate_file_line_count(
+            "src/cohesive_module.py", 1200, rules
+        )
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].level, "WARN")
+        self.assertIn("review cohesion before splitting", findings[0].message)
+
+    def test_file_at_advisory_limit_passes(self) -> None:
+        rules = {"limits": {"file_lines": {"warn": 800}}}
+
+        findings = structure_check.evaluate_file_line_count(
+            "src/cohesive_module.py", 800, rules
+        )
+
+        self.assertEqual(findings, [])
+
+
 class TypeScriptStructureTests(unittest.TestCase):
     def test_collects_arrow_function_metrics(self) -> None:
         parser = structure_check.build_parser("typescript")
