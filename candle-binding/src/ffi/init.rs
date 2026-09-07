@@ -295,9 +295,7 @@ pub extern "C" fn init_modernbert_classifier(model_id: *const c_char, use_cpu: b
     // Try to initialize the actual ModernBERT model using traditional architecture
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_CLASSIFIER
-                .set(Arc::new(model))
-                .is_ok()
+            get_registry().register("modernbert_classifier", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT classifier: {}", e);
@@ -322,7 +320,7 @@ pub extern "C" fn init_modernbert_pii_classifier(model_id: *const c_char, use_cp
     // Try to initialize the actual ModernBERT PII model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry().register("legacy_bert_pii", model).is_ok()
+            get_registry().register("legacy_bert_pii", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT PII classifier: {}", e);
@@ -379,7 +377,7 @@ pub extern "C" fn init_modernbert_jailbreak_classifier(
     // Try to initialize the actual ModernBERT jailbreak model
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNget_registry().register("legacy_bert_jailbreak", model).is_ok()
+            get_registry().register("legacy_bert_jailbreak", model).is_ok()
         }
         Err(e) => {
             eprintln!("Failed to initialize ModernBERT jailbreak classifier: {}", e);
@@ -852,8 +850,8 @@ pub extern "C" fn is_mmbert_32k_model(config_path: *const c_char) -> bool {
 /// ```
 #[no_mangle]
 pub extern "C" fn init_fact_check_classifier(model_id: *const c_char, use_cpu: bool) -> bool {
-    // Check if already initialized - return true if so (idempotent)
-    if crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.get().is_some() {
+    // Check if already initialized
+    if get_registry().get::<crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier>("fact_check_classifier").is_some() {
         println!("Fact-check classifier already initialized");
         return true;
     }
@@ -872,7 +870,7 @@ pub extern "C" fn init_fact_check_classifier(model_id: *const c_char, use_cpu: b
 
     match crate::model_architectures::traditional::modernbert::TraditionalModernBertClassifier::load_from_directory(model_id, use_cpu) {
         Ok(model) => {
-            match crate::model_architectures::traditional::modernbert::TRADITIONAL_MODERNBERT_FACT_CHECK_CLASSIFIER.set(Arc::new(model)) {
+            match get_registry().register("fact_check_classifier", model) {
                 Ok(_) => {
                     println!("Fact-check classifier initialized successfully");
                     true
@@ -1229,9 +1227,7 @@ pub extern "C" fn init_candle_bert_classifier(
                 use_cpu,
             ) {
                 Ok(classifier) => {
-                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_CLASSIFIER
-                        .set(Arc::new(classifier))
-                        .is_ok()
+                    get_registry().register("legacy_bert", classifier).is_ok()
                 }
                 Err(e) => {
                     eprintln!("Failed to initialize Candle BERT classifier: {}", e);
@@ -1294,8 +1290,7 @@ pub extern "C" fn init_candle_bert_token_classifier(
         }
         ModelType::Traditional => {
             // Check if already initialized
-            if crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
-                .get()
+            if get_registry().get::<crate::model_architectures::traditional::bert::TraditionalBertTokenClassifier>("legacy_bert_token")
                 .is_some()
             {
                 return true; // Already initialized, return success
@@ -1308,9 +1303,7 @@ pub extern "C" fn init_candle_bert_token_classifier(
                 use_cpu,
             ) {
                 Ok(classifier) => {
-                    crate::model_architectures::traditional::bert::TRADITIONAL_BERT_TOKEN_CLASSIFIER
-                        .set(Arc::new(classifier))
-                        .is_ok()
+                    get_registry().register("legacy_bert_token", classifier).is_ok()
                 }
                 Err(e) => {
                     eprintln!(
