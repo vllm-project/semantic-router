@@ -198,7 +198,6 @@ Either way, the `hard` and `easy` candidate lists are never read once a backend
 supplies the score, and the router says so at startup rather than leaving you
 to edit examples that have no effect.
 
-
 ## Dependencies and Limitations
 
 - Complexity uses the configured semantic embedding runtime. A remote embedding
