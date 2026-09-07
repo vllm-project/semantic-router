@@ -168,6 +168,16 @@ const (
 	// reporting that it could not finish.
 	conversationIndexCascadeMaxRaceRounds = 8
 
+	// responseCompensationTimeout bounds the compensating writes that repair a
+	// response whose update or store only partly landed: an update's rollback
+	// and reindex, and the removal of a membership the response has moved out
+	// of.
+	//
+	// Those all run on a context detached from the caller's, so they need a
+	// deadline of their own rather than inheriting one — the same reasoning,
+	// and the same bound, as conversationIndexRestoreTimeout below.
+	responseCompensationTimeout = 5 * time.Second
+
 	// conversationIndexRestoreTimeout bounds the compensating write that puts
 	// unresolved members back into a conversation index after a cascade
 	// batch removed them optimistically (restoreConversationIndexMembers).
