@@ -32,7 +32,7 @@ def build_maps(graph):
     return out2node, name2node
 
 
-def find_attention_blocks(graph, out2node):
+def find_attention_blocks(graph, out2node):  # noqa: C901,PLR0912
     blocks = []
     softmaxes = [n for n in graph.node if n.op_type == "Softmax"]
 
@@ -151,7 +151,7 @@ def classify_mask(mask_tensor_name, local_mask_name=None):
     return "unknown"
 
 
-def find_mask_only_nodes(graph, out2node):
+def find_mask_only_nodes(graph, out2node):  # noqa: C901
     """Find nodes that are exclusively part of the 2-D mask computation."""
     mask_roots = set()
     for n in graph.node:
@@ -179,7 +179,6 @@ def find_mask_only_nodes(graph, out2node):
                 trace_back(inp)
     ancestors.update(mask_roots)
 
-    all_node_names = {n.name for n in graph.node}
     mask_only = set()
     for name in ancestors:
         node = next((n for n in graph.node if n.name == name), None)
@@ -297,11 +296,84 @@ def create_1d_padding_bias_nodes(graph):
     return nodes, unsqueeze_out
 
 
-def rewrite(model_path, output_path, hdim=64, local_attention=128):
+def weight_precision(initializers):
+    """Return the one floating-point elem_type every weight tensor shares.
+
+    Integer initializers (shapes, gather indices) carry no precision and are
+    ignored. A graph with no floating-point weights, with more than one
+    floating-point precision, or with a precision the CK kernel does not take
+    (only FLOAT and FLOAT16 are) is refused, since neither name would describe
+    it.
+    """
+    counts = {}
+    for tensor in initializers:
+        if tensor.data_type in _FLOAT_TYPES:
+            counts[tensor.data_type] = counts.get(tensor.data_type, 0) + 1
+    if not counts:
+        raise ValueError("the graph holds no floating-point weight tensors")
+    if len(counts) > 1:
+        found = ", ".join(
+            f"{n} {TensorProto.DataType.Name(t)}" for t, n in sorted(counts.items())
+        )
+        raise ValueError(f"the graph mixes weight precisions: {found}")
+    (elem_type,) = counts
+    if elem_type not in (TensorProto.FLOAT, TensorProto.FLOAT16):
+        raise ValueError(
+            f"the graph holds {TensorProto.DataType.Name(elem_type)} weights; "
+            "CKFlashAttention takes FLOAT or FLOAT16"
+        )
+    return elem_type
+
+
+_FLOAT_TYPES = (
+    TensorProto.FLOAT,
+    TensorProto.FLOAT16,
+    TensorProto.BFLOAT16,
+    TensorProto.DOUBLE,
+)
+
+
+def output_precision_conflict(output_path, model_is_fp16):
+    """Return a message when the output name claims a precision the graph lacks.
+
+    find_onnx_models ranks candidates by filename and puts model_fa_fp16.onnx
+    first whenever CK Flash Attention is available, so the name is a contract
+    rather than a label. The rewriter keeps the weights as it finds them and,
+    for an FP32 graph, only casts around each CKFlashAttention node. Running it
+    on model.onnx under an fp16 name is what produced the FP32
+    model_fa_fp16.onnx in five of the six published 32K heads (#3256): a valid
+    graph with twice the memory of the file its name promises.
+    """
+    name = os.path.basename(output_path).lower()
+    if "fp16" in name and not model_is_fp16:
+        return (
+            f"{output_path}: the input graph holds FP32 weights, so this file would "
+            "hold FP32 weights under an fp16 name. Name an FP32 rewrite "
+            "model_fa.onnx; an fp16 name needs an FP16 input graph."
+        )
+    return None
+
+
+def enforce_output_precision(output_path, model_is_fp16):
+    """Exit on an fp16 name over FP32 weights; warn on the reverse."""
+    conflict = output_precision_conflict(output_path, model_is_fp16)
+    if conflict:
+        print(f"error: {conflict}", file=sys.stderr)
+        sys.exit(1)
+    if model_is_fp16 and "fp16" not in os.path.basename(output_path).lower():
+        print(
+            f"warning: {output_path} will hold FP16 weights but its name does not "
+            "say so; find_onnx_models ranks FP16 candidates by name."
+        )
+
+
+def rewrite(  # noqa: C901,PLR0912,PLR0915
+    model_path, output_path, hdim=64, local_attention=128
+):
     model = onnx.load(model_path)
     graph = model.graph
 
-    out2node, name2node = build_maps(graph)
+    out2node, _name2node = build_maps(graph)
     blocks = find_attention_blocks(graph, out2node)
 
     if not blocks:
@@ -337,26 +409,26 @@ def rewrite(model_path, output_path, hdim=64, local_attention=128):
     # Create 1-D padding bias nodes
     pad_bias_nodes, pad_bias_tensor = create_1d_padding_bias_nodes(graph)
 
-    # Build value_info type map for precision detection
-    vi_type_map = {}
-    for vi in graph.value_info:
-        if vi.type.HasField("tensor_type"):
-            vi_type_map[vi.name] = vi.type.tensor_type.elem_type
-
-    # Detect model precision from Q tensor of first block
-    first_q = blocks[0]["q_tensor"]
-    model_is_fp16 = vi_type_map.get(first_q) == TensorProto.FLOAT16
+    # Detect model precision from the weights themselves. value_info is
+    # optional and describes activations, so a valid FP16 export that carries
+    # none would read as FP32, and one activation cannot vouch for every weight.
+    try:
+        model_is_fp16 = weight_precision(graph.initializer) == TensorProto.FLOAT16
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)
     if model_is_fp16:
         print("  Model precision: FP16 (skipping input/output Cast nodes)")
     else:
         print("  Model precision: FP32 (adding fp32↔fp16 Cast nodes)")
+
+    enforce_output_precision(output_path, model_is_fp16)
 
     # Collect nodes to remove (attention subgraph)
     nodes_to_remove = set()
     new_nodes = []
 
     for i, blk in enumerate(blocks):
-        layer_name = blk["softmax"].name.rsplit("/", 1)[0]
         mask_type = classify_mask(blk["mask_tensor"], local_mask_name)
 
         for key in (
