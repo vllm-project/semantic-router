@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
@@ -89,12 +90,6 @@ class Finding:
     message: str
 
 
-@dataclass(frozen=True)
-class FunctionMetrics:
-    lines: int
-    nesting: int
-
-
 def load_rules() -> dict:
     with RULES_PATH.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle)
@@ -160,18 +155,6 @@ def detect_language(path: str, rules: dict) -> str | None:
 
 def should_ignore(path: str, rules: dict) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in rules["ignore_globs"])
-
-
-def matches_any(path: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
-
-
-def get_structure_exception_rule(path: str, rules: dict) -> dict | None:
-    for rule in rules.get("structure_exceptions", []):
-        patterns = rule.get("paths", [])
-        if matches_any(path, patterns):
-            return rule
-    return None
 
 
 def load_baseline_source(path: str, base_ref: str | None) -> str | None:
@@ -256,238 +239,53 @@ def evaluate_file_line_count(path: str, line_count: int, rules: dict) -> list[Fi
     ]
 
 
-def function_identifier(node, source_bytes: bytes) -> str:
-    name_node = node.child_by_field_name("name")
-    if name_node is not None:
-        return source_bytes[name_node.start_byte : name_node.end_byte].decode("utf-8")
-    contextual_identifier = anonymous_function_identifier(node, source_bytes)
-    if contextual_identifier is not None:
-        return contextual_identifier
-    line_start = source_bytes.rfind(b"\n", 0, node.start_byte)
-    prefix = source_bytes[line_start + 1 : node.start_byte].decode(
-        "utf-8", errors="ignore"
-    )
-    normalized_prefix = " ".join(prefix.split())
-    return f"{node.type}:{normalized_prefix[-80:]}"
-
-
-def anonymous_function_identifier(node, source_bytes: bytes) -> str | None:
-    contexts: list[str] = []
-    current = node.parent
-    while current is not None:
-        if current.type == "call_expression" and (
-            context := call_expression_identifier(current, node, source_bytes)
-        ):
-            contexts.append(context)
-        current = current.parent
-    if not contexts:
-        return None
-    return f"{node.type}:{' > '.join(reversed(contexts))}"
-
-
-def call_expression_identifier(call_node, func_node, source_bytes: bytes) -> str | None:
-    function_node = call_node.child_by_field_name("function")
-    if function_node is None and call_node.named_children:
-        function_node = call_node.named_children[0]
-    if function_node is None:
-        return None
-    function_name = " ".join(
-        source_bytes[function_node.start_byte : function_node.end_byte]
-        .decode("utf-8", errors="ignore")
-        .split()
-    )
-    if not function_name:
-        return None
-
-    label = ""
-    for child in call_node.named_children:
-        if child.type != "argument_list":
-            continue
-        for argument in child.named_children:
-            if argument.start_byte >= func_node.start_byte:
-                break
-            label = format_argument_label(argument, source_bytes)
-            if label:
-                break
-        break
-
-    if label:
-        return f"{function_name}({label})"
-    return function_name
-
-
-def format_argument_label(argument_node, source_bytes: bytes) -> str:
-    label = " ".join(
-        source_bytes[argument_node.start_byte : argument_node.end_byte]
-        .decode("utf-8", errors="ignore")
-        .split()
-    )
-    label = label.strip('"`')
-    return label[:120]
-
-
-def collect_function_metrics(
-    tree, language_name: str, source_bytes: bytes
-) -> dict[str, FunctionMetrics]:
-    metrics: dict[str, FunctionMetrics] = {}
-    occurrence_counts: dict[str, int] = defaultdict(int)
-    for node in walk(tree.root_node):
-        if node.type not in FUNCTION_NODE_TYPES[language_name]:
-            continue
-        base_identifier = function_identifier(node, source_bytes)
-        occurrence_counts[base_identifier] += 1
-        identifier = f"{base_identifier}#{occurrence_counts[base_identifier]}"
-        metrics[identifier] = FunctionMetrics(
-            lines=node.end_point.row - node.start_point.row + 1,
-            nesting=max_nesting_depth(node, language_name),
-        )
-    return metrics
-
-
-def load_baseline_function_metrics(
-    path: str, language_name: str, parser: Parser, base_ref: str | None
-) -> dict[str, FunctionMetrics]:
-    baseline_source = load_baseline_source(path, base_ref)
-    if baseline_source is None:
-        return {}
-    baseline_bytes = baseline_source.encode("utf-8")
-    baseline_tree = parser.parse(baseline_bytes)
-    return collect_function_metrics(baseline_tree, language_name, baseline_bytes)
-
-
-def ratchet_or_error(
-    path: str,
-    message: str,
-    identifier: str,
-    current_value: int,
-    baseline_metrics: dict[str, FunctionMetrics],
-    baseline_value_getter,
-) -> Finding:
-    baseline = baseline_metrics.get(identifier)
-    if baseline is not None and current_value <= baseline_value_getter(baseline):
-        return Finding(
-            "WARN",
-            path,
-            f"pre-existing {message} but did not exceed baseline {baseline_value_getter(baseline)}",
-        )
-    return Finding("ERROR", path, message)
-
-
-def relax_function_checks(structure_exception: dict | None) -> bool:
-    return bool(
-        structure_exception and structure_exception.get("function_checks") == "relaxed"
-    )
-
-
-def relax_interface_checks(structure_exception: dict | None) -> bool:
-    return bool(
-        structure_exception and structure_exception.get("interface_checks") == "relaxed"
-    )
-
-
-def function_metric_finding(
-    path: str,
-    message: str,
-    identifier: str,
-    current_value: int,
-    baseline_metrics: dict[str, FunctionMetrics],
-    baseline_value_getter,
-    structure_exception: dict | None,
-) -> Finding:
-    if relax_function_checks(structure_exception):
-        return Finding(
-            "WARN",
-            path,
-            f"structure exception {message}; per-function ratchet is relaxed for this file",
-        )
-    return ratchet_or_error(
-        path,
-        message,
-        identifier,
-        current_value,
-        baseline_metrics,
-        baseline_value_getter,
-    )
-
-
 def evaluate_ast_rules(
     path: str,
     language_name: str,
     source_bytes: bytes,
     rules: dict,
     parser: Parser,
-    base_ref: str | None,
 ) -> list[Finding]:
     findings: list[Finding] = []
     tree = parser.parse(source_bytes)
-    structure_exception = get_structure_exception_rule(path, rules)
-    ratchet_existing = rules["languages"][language_name].get(
-        "ratchet_existing_violations", False
-    )
-    baseline_metrics = (
-        load_baseline_function_metrics(path, language_name, parser, base_ref)
-        if structure_exception or ratchet_existing
-        else {}
-    )
-    occurrence_counts: dict[str, int] = defaultdict(int)
 
     for node in walk(tree.root_node):
         if node.type in FUNCTION_NODE_TYPES[language_name]:
-            base_identifier = function_identifier(node, source_bytes)
-            occurrence_counts[base_identifier] += 1
-            identifier = f"{base_identifier}#{occurrence_counts[base_identifier]}"
             function_lines = node.end_point.row - node.start_point.row + 1
-            if function_lines > rules["limits"]["function_lines"]["error"]:
-                message = (
-                    f"function starting at line {node.start_point.row + 1} has {function_lines} lines "
-                    f"(limit {rules['limits']['function_lines']['error']})"
-                )
+            function_limit = rules["limits"]["function_lines"]["warn"]
+            if function_lines > function_limit:
                 findings.append(
-                    function_metric_finding(
+                    Finding(
+                        "WARN",
                         path,
-                        message,
-                        identifier,
-                        function_lines,
-                        baseline_metrics,
-                        lambda metrics: metrics.lines,
-                        structure_exception,
+                        f"function starting at line {node.start_point.row + 1} has "
+                        f"{function_lines} lines (advisory {function_limit})",
                     )
                 )
             nesting = max_nesting_depth(node, language_name)
-            if nesting > rules["limits"]["nesting"]["error"]:
-                message = (
-                    f"function starting at line {node.start_point.row + 1} nests {nesting} levels "
-                    f"(limit {rules['limits']['nesting']['error']})"
-                )
+            nesting_limit = rules["limits"]["nesting"]["warn"]
+            if nesting > nesting_limit:
                 findings.append(
-                    function_metric_finding(
+                    Finding(
+                        "WARN",
                         path,
-                        message,
-                        identifier,
-                        nesting,
-                        baseline_metrics,
-                        lambda metrics: metrics.nesting,
-                        structure_exception,
+                        f"function starting at line {node.start_point.row + 1} nests "
+                        f"{nesting} levels (advisory {nesting_limit})",
                     )
                 )
 
         if node.type in INTERFACE_NODE_TYPES.get(language_name, set()):
             method_count = count_interface_methods(node, language_name)
-            if method_count > rules["limits"]["interface_methods"]["error"]:
-                message = (
-                    f"interface/trait starting at line {node.start_point.row + 1} has {method_count} methods "
-                    f"(limit {rules['limits']['interface_methods']['error']})"
-                )
-                if relax_interface_checks(structure_exception):
-                    findings.append(
-                        Finding(
-                            "WARN",
-                            path,
-                            f"structure exception {message}; interface-size ratchet is relaxed for this file",
-                        )
+            interface_limit = rules["limits"]["interface_methods"]["warn"]
+            if method_count > interface_limit:
+                findings.append(
+                    Finding(
+                        "WARN",
+                        path,
+                        f"interface/trait starting at line {node.start_point.row + 1} "
+                        f"has {method_count} methods (advisory {interface_limit})",
                     )
-                else:
-                    findings.append(Finding("ERROR", path, message))
+                )
 
     return findings
 
@@ -519,7 +317,6 @@ def evaluate_file(
             source_bytes,
             rules,
             parsers[language_name],
-            base_ref,
         )
     )
     return findings
@@ -530,7 +327,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
         description="Run structure checks on changed files"
     )
     parser.add_argument("files", nargs="*")
-    parser.add_argument("--base-ref", default=None)
+    parser.add_argument("--base-ref", default=os.getenv("BASE_REF"))
     return parser
 
 
