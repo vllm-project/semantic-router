@@ -251,12 +251,12 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "encode provider request")
 	}
 	body, err = r.adaptProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
-		return nil, status.Errorf(codes.Internal, "adapt provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "adapt provider request")
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -276,6 +276,20 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// A ProtocolError is a client error, so it is returned unwrapped for
+// processBodyRoutingError to turn into a clean 400. status.Errorf formats with
+// Sprintf, which would flatten it and hide it from errors.As.
+func dispatchWireError(err error, ctx *RequestContext, reason string) error {
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) {
+		if ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
+		return err
+	}
+	return status.Errorf(codes.Internal, "%s: %v", reason, err)
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(

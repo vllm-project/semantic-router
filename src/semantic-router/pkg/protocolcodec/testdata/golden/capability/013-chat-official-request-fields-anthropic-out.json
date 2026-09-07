@@ -105,15 +105,36 @@
     {
       "name": "messages",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "lossy_translation"
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "system": [
+            {
+              "text": "be concise",
+              "type": "text"
+            }
+          ]
         },
         "diagnostics": [
           {
             "field": "max_tokens",
             "action": "generated"
+          },
+          {
+            "field": "instructions.role",
+            "action": "approximated"
           }
         ]
       }

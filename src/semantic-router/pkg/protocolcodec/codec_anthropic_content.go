@@ -577,10 +577,13 @@ func encodeAnthropicInstructions(
 	}
 	contents := make([]llmprotocol.Content, 0)
 	for _, instruction := range request.Instructions {
+		// Messages has one system channel, so developer authority collapses into
+		// it. The instruction text survives, so this approximates, not drops.
 		if instruction.Role == llmprotocol.RoleDeveloper {
-			if err := appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "instructions.role", "Messages cannot preserve developer authority"); err != nil {
-				return err
-			}
+			appendApproximation(
+				diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1,
+				"instructions.role", "Messages folds developer authority into its single system block",
+			)
 		}
 		contents = append(contents, instruction.Content...)
 	}

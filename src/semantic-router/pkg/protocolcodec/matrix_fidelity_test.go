@@ -74,9 +74,18 @@ func TestPolicyEnumsAndEveryLimitAreClosed(t *testing.T) {
 
 func TestCrossFormatFidelityAndCapabilityFailuresAreExplicit(t *testing.T) {
 	engine := NewBuiltinEngine()
+	// Messages has one system channel, so developer authority collapses into it.
+	// The text must survive and the collapse must be recorded, not silent.
 	developer := []byte(`{"model":"source-model","messages":[{"role":"developer","content":"preserve authority"},{"role":"user","content":"hello"}],"max_tokens":8}`)
-	if _, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, developer, nil); err == nil {
-		t.Fatal("developer authority was silently collapsed")
+	translatedDeveloper, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, developer, nil)
+	if err != nil {
+		t.Fatalf("developer instructions were rejected: %v", err)
+	}
+	if !bytes.Contains(translatedDeveloper.Body, []byte("preserve authority")) {
+		t.Fatalf("developer instruction text was dropped: %s", translatedDeveloper.Body)
+	}
+	if !hasDiagnostic(translatedDeveloper.Diagnostics, "instructions.role", llmprotocol.DiagnosticApproximated) {
+		t.Fatalf("developer authority was silently collapsed: %+v", translatedDeveloper.Diagnostics)
 	}
 	strictTool := []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"max_tokens":8,"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"},"strict":true}}]}`)
 	translatedTool, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, strictTool, nil)
