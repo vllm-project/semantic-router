@@ -10,12 +10,10 @@ Release intent, architecture debt, and changing GitHub state have different
 lifecycles. The local board gives maintainers one current view without copying
 daily issue and pull-request state into versioned plans.
 
-The canonical state split is:
-
-- release intent lives in `tools/agent/docs/plans/`
-- architecture gaps live in `tools/agent/docs/tech-debt/`
-- durable operating rules live in the relevant governance docs
-- daily issue and PR state lives in `.agent-harness/maintainer/`
+Release intent may use a focused file under `tools/agent/docs/plans/` when the
+work genuinely spans sessions. Owned work and debt belong in GitHub issues;
+the compact repository-only fallback is `architecture-risks.md`. Daily issue
+and PR state lives only in `.agent-harness/maintainer/`.
 
 ## Local Board
 
@@ -152,7 +150,7 @@ release-plan tasks that do not already match an open milestone issue unless
 
 ```text
 Run semantic-router maintainer ops for MILESTONE_NAME. Use
-tools/agent/docs/maintainer-ops.md and the maintainer release skill. Sync GitHub
+tools/agent/docs/maintainer-ops.md and the maintainer-ops skill. Sync GitHub
 issues, PRs, milestones, labels, review state, and CI state. Regenerate
 .agent-harness/maintainer/current.json, today.md, milestone notes,
 release-readiness.md, and proposed-actions.json. Compare the active release
