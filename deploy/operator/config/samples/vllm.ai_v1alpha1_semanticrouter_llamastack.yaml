@@ -19,7 +19,8 @@ spec:
     # Example 1: Llama Stack service discovery by labels
     - name: llama-3-3-70b-endpoint
       model: llama-3.3-70b-instruct
-      reasoningFamily: gpt
+      reasoning:
+        family: gpt
       backend:
         type: llamastack
         discoveryLabels:
@@ -31,7 +32,8 @@ spec:
     # Example 2: Another Llama Stack model
     - name: llama-3-1-8b-endpoint
       model: llama-3.1-8b-instruct
-      reasoningFamily: gpt
+      reasoning:
+        family: gpt
       backend:
         type: llamastack
         discoveryLabels:
@@ -42,7 +44,8 @@ spec:
     # Example 3: Mix with KServe backend
     - name: kserve-qwen-endpoint
       model: qwen2.5-7b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: qwen-2-5-7b
@@ -50,7 +53,8 @@ spec:
     # Example 4: Direct vLLM service as fallback
     - name: vllm-fallback
       model: llama-3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
@@ -131,15 +135,7 @@ spec:
         use_cpu: true
 
     # Reasoning families for different model types
-    reasoning_families:
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-
-    default_reasoning_effort: medium
+    reasoning_effort: medium
 
   # ====================
   # Tools Database

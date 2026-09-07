@@ -3,30 +3,19 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: general-expert
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         pricing:
           currency: USD
           prompt_per_1m: 0.10
           completion_per_1m: 0.30
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -94,7 +83,7 @@ config:
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
       - name: retention_probe_decision
-        description: Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009).
+        description: "Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009)."
         priority: 600
         rules:
           operator: OR

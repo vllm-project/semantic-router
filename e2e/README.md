@@ -55,7 +55,7 @@ make build-e2e
 ./bin/e2e -help
 ```
 
-[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
 records CI ownership, selection mode, and path triggers. Profile code remains
 the source of truth for deployment behavior and its exact test list.
 
@@ -143,18 +143,18 @@ until the selected cases are known to be isolated.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
-- **response-jailbreak**: manual response_jailbreak coverage for LLM output carrying jailbreak content past the classifier's sequence window.
+- **response-jailbreak**: response-direction jailbreak signal and response_jailbreak plugin coverage for LLM output carrying jailbreak content past the classifier's sequence window, and the streamed-response pass-through contract.
 
 ### Coverage Ownership Matrix
 
 | Selection | Meaning | Source of truth |
 | --- | --- | --- |
-| Default local | Runs when no profile is specified | `default_local: true` in the test-domain registry |
-| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the test-domain registry |
-| Affected | Selected when owned paths change | `selection: pr` and `paths` in the test-domain registry |
-| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the test-domain registry |
+| Default local | Runs when no profile is specified | `default_local: true` in the domain registry |
+| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the domain registry |
+| Affected | Selected only by declared contract paths | `selection: pr` and `paths` in the domain registry |
+| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the domain registry |
 
-[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
 owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
@@ -176,7 +176,7 @@ errors, incomplete streams, and midstream failures.
    access.
 3. Register it in `e2e/profiles/all/imports.go`.
 4. Add its ownership and selection mode to
-   `tools/agent/test-domain-registry.yaml`.
+   `tools/agent/domains.yaml`.
 5. Reuse test cases where the contract is shared; add a new test only for a new
    externally visible behavior.
 6. Add deterministic assertions. A request that merely returned any response
@@ -189,12 +189,11 @@ For test-case boundaries, read [`testcases/AGENTS.md`](testcases/AGENTS.md).
 ```bash
 make build-e2e
 (cd e2e && go test ./...)
-make agent-report ENV=cpu CHANGED_FILES='e2e/...'
+make impact ENV=cpu CHANGED_FILES='e2e/...'
 ```
 
-Then run the smallest affected profile. Use
-`make agent-e2e-affected CHANGED_FILES='...'` when the repository harness can
-resolve the profile set from changed paths.
+Then run the relevant profile explicitly with
+`make verify PROFILE=<profile>`.
 
 ## Diagnose a failed run
 

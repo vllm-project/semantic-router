@@ -275,7 +275,7 @@ func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
 	yamlA := []byte(`version: v0.3
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
 routing:
   modelCards:
     - name: test-model
@@ -301,7 +301,7 @@ routing:
     - name: test-model
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
 version: v0.3
 `)
 
@@ -610,8 +610,8 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 		t.Error("providers.models[].backend_refs should be preserved after deploy")
 	}
 
-	if !contains(configStr, "default_model: test-model") {
-		t.Error("providers.defaults.default_model should be preserved after deploy")
+	if !contains(configStr, "model: test-model") {
+		t.Error("providers.defaults.model should be preserved after deploy")
 	}
 	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
 		t.Error("routing signals from deploy should be present")
@@ -629,17 +629,15 @@ listeners:
     port: 9901
 providers:
   defaults:
-    default_model: imported-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: imported-model
   models:
     - name: imported-model
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: imported-model
       backend_refs:
         - name: imported-endpoint
+          provider: vllm
           endpoint: 192.168.1.10:9000
           protocol: http
 routing:
@@ -700,8 +698,8 @@ global:
 
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
-	if !contains(configStr, "default_model: imported-model") {
-		t.Fatalf("expected imported base providers.defaults.default_model to be preserved:\n%s", configStr)
+	if !contains(configStr, "model: imported-model") {
+		t.Fatalf("expected imported base providers.defaults.model to be preserved:\n%s", configStr)
 	}
 	if !contains(configStr, "endpoint: 192.168.1.10:9000") {
 		t.Fatalf("expected imported backend_refs to be preserved:\n%s", configStr)
@@ -709,7 +707,7 @@ global:
 	if !contains(configStr, "name: deployed-route") || !contains(configStr, "name: deployed") {
 		t.Fatalf("expected deployed routing fragment to be merged onto imported base:\n%s", configStr)
 	}
-	if contains(configStr, "default_model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
+	if contains(configStr, "model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
 		t.Fatalf("expected current on-disk config to be replaced as merge base when imported base is provided:\n%s", configStr)
 	}
 }
@@ -721,12 +719,13 @@ func TestDeployPreviewHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
 	importedBase := `version: v0.3
 providers:
   defaults:
-    default_model: imported-model
+    model: imported-model
   models:
     - name: imported-model
       provider_model_id: imported-model
       backend_refs:
         - name: imported-endpoint
+          provider: vllm
           endpoint: 10.0.0.1:9000
           protocol: http
 routing:
@@ -773,10 +772,10 @@ routing:
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode preview response: %v", err)
 	}
-	if !contains(resp.Current, "default_model: test-model") {
+	if !contains(resp.Current, "model: test-model") {
 		t.Fatalf("expected current preview to show on-disk config, got:\n%s", resp.Current)
 	}
-	if !contains(resp.Preview, "default_model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
+	if !contains(resp.Preview, "model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
 		t.Fatalf("expected preview to use imported base config, got:\n%s", resp.Preview)
 	}
 	if !contains(resp.Preview, "name: previewed") {
@@ -1128,11 +1127,12 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
 routing:

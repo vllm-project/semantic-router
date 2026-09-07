@@ -365,7 +365,7 @@ vllm-sr-dev:
 	@echo "1. Cleaning up old containers..."
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@echo ""
-	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+	@set -e; if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
 		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
 		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
@@ -383,7 +383,7 @@ vllm-sr-dev:
 		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
-	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+	@set -e; if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "3. Ensuring official Envoy image is available..."; \
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -476,11 +476,11 @@ vllm-sr-start: vllm-sr-dev
 # Tests are located in e2e/testing/vllm-sr-cli/
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
-vllm-sr-install-cli: agent-venv-install
+vllm-sr-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli: agent-venv-install
+vllm-sr-sim-install-cli: harness-venv-install
 	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
 
 vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
