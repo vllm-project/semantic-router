@@ -2,10 +2,8 @@ package sessiontelemetry
 
 import "time"
 
-// TurnOutcomeCategory classifies one observed session-turn outcome for the
-// evidence-calibrated switch gate (PL-0041 / issue #3377). Categories carry
-// failure attribution: provider and tool failures are infrastructure noise
-// and must never be counted as model regressions.
+// TurnOutcomeCategory classifies a session-turn outcome. Provider and tool
+// failures are environment noise, never model regressions.
 type TurnOutcomeCategory string
 
 const (
@@ -23,17 +21,13 @@ const (
 	TurnSourceOutcomeIngest  = "outcome_ingest"  // derived from the learning outcome ingest
 )
 
-// Recent-window bounds for the evidence-calibrated switch gate. These are
-// package defaults; PL-0041 TASK-07 will wire them to progress_gate config.
+// Recent-window package defaults; PL-0041 TASK-07 wires these to config.
 const (
 	defaultRecentWindowSize = 8
 	defaultRecentWindowTTL  = 15 * time.Minute
 )
 
-// categoryAttributable is the single source of truth for failure attribution:
-// only categories that describe the model's own generated output count as model
-// evidence. Provider, tool, and missing outcomes are environment noise and must
-// never be read as model regressions.
+// categoryAttributable is the single source of truth for failure attribution.
 func categoryAttributable(category TurnOutcomeCategory) bool {
 	switch category {
 	case TurnProgress, TurnNoProgress, TurnRegression:
@@ -45,12 +39,9 @@ func categoryAttributable(category TurnOutcomeCategory) bool {
 	}
 }
 
-// TurnOutcome is a content-minimal, typed fact about one session turn.
-// It stores only enums and scalars — never prompt or response text — so the
-// window can gate switches without retaining private conversation content.
-//
-// ModelAttributable is always derived from Category by RecordTurnOutcome;
-// callers cannot set an attribution that contradicts the category.
+// TurnOutcome is a content-minimal typed fact about one session turn: enums
+// and scalars only, never prompt or response text. ModelAttributable is
+// derived from Category, not caller-supplied.
 type TurnOutcome struct {
 	TurnIndex         int                 `json:"turn_index"`
 	Timestamp         int64               `json:"timestamp_unix_ms"` // unix milliseconds
@@ -72,10 +63,9 @@ func (o TurnOutcome) Time() time.Time {
 }
 
 // RecordTurnOutcome appends one typed turn outcome to the session's bounded
-// recent window. It leaves turn/switch/cost counters alone — those stay owned
-// by RecordSessionDecision/RecordSessionUsage.
-//
-
+// recent window. Callers pass the event time (when the outcome occurred);
+// outcome ingest may deliver an older event after newer ones arrived, so
+// insertion is by event time. Outcomes older than the window TTL are rejected.
 func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Time) {
 	if sessionID == "" {
 		return
@@ -95,7 +85,6 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 
 	s := globalRouterSessionMemory
 	s.mu.Lock()
-
 	if s.nowFn().Sub(ts) > defaultRecentWindowTTL {
 		s.mu.Unlock()
 		return
@@ -110,14 +99,9 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 	persistRouterSessionState(sessionID)
 }
 
-// RecentTurnOutcomes returns a pruned, cloned copy of the session's recent
-// outcome window ordered oldest → newest. Unknown, expired, or empty sessions
-// return an empty window, which the gate reads as cold start.
-//
-// This reads the window directly instead of going through
-// GetRouterSessionSnapshot: the gate runs on every turn and does not need the
-// full snapshot clone (counters, model turns, policy map). A zero `now` falls
-// back to the store clock so TTL pruning can never be silently skipped.
+// RecentTurnOutcomes returns a pruned, cloned copy of the recent window ordered
+// oldest → newest; unknown or expired sessions return an empty window (cold
+// start). A zero now falls back to the store clock.
 func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	if sessionID == "" {
 		return nil
@@ -141,9 +125,8 @@ func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	return pruneTurnOutcomes(window, defaultRecentWindowTTL, now)
 }
 
-// sharedRecentTurnOutcomes recovers a window from the shared store on a local
-// miss. It reuses the snapshot loader so hydration and TTL semantics stay in
-// one place, and stays fail-open when no shared store is configured.
+// sharedRecentTurnOutcomes recovers the window from the shared store on a
+// local miss.
 func sharedRecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	snapshot, ok := loadSharedRouterSessionSnapshot(sessionID, now)
 	if !ok {
@@ -152,22 +135,27 @@ func sharedRecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	return pruneTurnOutcomes(snapshot.RecentOutcomes, defaultRecentWindowTTL, now)
 }
 
-// appendTurnOutcome applies both window bounds in order: TTL prune, append,
-// capacity trim. Callers must hold the store lock.
+// appendTurnOutcome prunes by TTL, inserts by event time (capture and ingest
+// are independent writers, so arrival order cannot be assumed), then trims to
+// capacity. Callers must hold the store lock.
 func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time) []TurnOutcome {
 	outcomes = pruneTurnOutcomes(outcomes, defaultRecentWindowTTL, now)
-	outcomes = append(outcomes, outcome)
+	i := len(outcomes)
+	for i > 0 && outcomes[i-1].Timestamp > outcome.Timestamp {
+		i--
+	}
+	outcomes = append(outcomes, TurnOutcome{})
+	copy(outcomes[i+1:], outcomes[i:])
+	outcomes[i] = outcome
 	if len(outcomes) > defaultRecentWindowSize {
 		outcomes = outcomes[len(outcomes)-defaultRecentWindowSize:]
 	}
 	return outcomes
 }
 
-// pruneTurnOutcomes drops entries older than ttl. Entries without a usable
-// timestamp are kept (defensive: capture always sets one). A zero `now` is
-// treated as "no reference clock available" and returns an empty window rather
-// than an unpruned one: callers must never see stale evidence as fresh.
-// The input slice is assumed to be owned by the caller.
+// pruneTurnOutcomes drops every entry older than ttl, without assuming
+// ordering. A zero now returns an empty window rather than stale evidence;
+// entries without a usable timestamp are kept defensively.
 func pruneTurnOutcomes(outcomes []TurnOutcome, ttl time.Duration, now time.Time) []TurnOutcome {
 	if len(outcomes) == 0 || ttl <= 0 {
 		return outcomes
@@ -176,23 +164,17 @@ func pruneTurnOutcomes(outcomes []TurnOutcome, ttl time.Duration, now time.Time)
 		return nil
 	}
 	cutoff := now.Add(-ttl)
-	keep := 0
-	for keep < len(outcomes) {
-		ts := outcomes[keep].Time()
-		if !ts.IsZero() && ts.Before(cutoff) {
-			keep++
-			continue
+	kept := outcomes[:0]
+	for _, o := range outcomes {
+		ts := o.Time()
+		if ts.IsZero() || !ts.Before(cutoff) {
+			kept = append(kept, o)
 		}
-		break
 	}
-	if keep == 0 {
-		return outcomes
-	}
-	return outcomes[keep:]
+	return kept
 }
 
-// cloneTurnOutcomes returns a deep copy so snapshot readers cannot mutate
-// store-internal state.
+// cloneTurnOutcomes returns a deep copy so readers cannot mutate store state.
 func cloneTurnOutcomes(in []TurnOutcome) []TurnOutcome {
 	if len(in) == 0 {
 		return nil
