@@ -262,6 +262,9 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		if modelRef.UseReasoning == nil {
 			return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
 		}
+		if err := validateModelRefReasoningControl(cfg, decision.Name, i, modelRef); err != nil {
+			return err
+		}
 		if modelRef.LoRAName == "" {
 			continue
 		}

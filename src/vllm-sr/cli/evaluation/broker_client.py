@@ -32,6 +32,10 @@ _MIN_SUCCESS_STATUS = 200
 _MAX_SUCCESS_STATUS_EXCLUSIVE = 300
 _MILLISECONDS_PER_SECOND = 1000
 _UINT64_MAX = (1 << 64) - 1
+_RFC3339_NANO_TIMESTAMP = re.compile(
+    r"^(?P<seconds>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
+    r"(?P<fraction>\.\d{1,9})?(?P<zone>Z|[+-]\d{2}:\d{2})$"
+)
 _OPERATIONS = frozenset(
     {
         "models.list",
@@ -410,16 +414,34 @@ def _validate_timing(latency: Any, fetched_at: Any) -> None:
         or latency < 0
     ):
         raise BrokerProtocolError("Dashboard HTTP broker latency is invalid")
-    if not isinstance(fetched_at, str):
+    parse_broker_timestamp(fetched_at)
+
+
+def parse_broker_timestamp(value: Any) -> datetime:
+    """Parse the Go broker's RFC3339Nano timestamp on every supported Python."""
+
+    if not isinstance(value, str):
         raise BrokerProtocolError("Dashboard HTTP broker fetched_at is invalid")
+    match = _RFC3339_NANO_TIMESTAMP.fullmatch(value)
+    if match is None:
+        raise BrokerProtocolError("Dashboard HTTP broker fetched_at is invalid")
+    # Python 3.10 accepts neither RFC3339's UTC ``Z`` suffix nor more than six
+    # fractional digits. Preserve all validation at the wire boundary, then
+    # truncate Go's nanosecond precision to Python's datetime resolution.
+    fraction = match.group("fraction") or ""
+    if fraction:
+        fraction = fraction[:7]
+    zone = "+00:00" if match.group("zone") == "Z" else match.group("zone")
+    normalized = match.group("seconds") + fraction + zone
     try:
-        parsed_fetched_at = datetime.fromisoformat(fetched_at)
+        parsed_fetched_at = datetime.fromisoformat(normalized)
     except ValueError as exc:
         raise BrokerProtocolError(
             "Dashboard HTTP broker fetched_at is invalid"
         ) from exc
     if parsed_fetched_at.tzinfo is None or parsed_fetched_at.utcoffset() is None:
         raise BrokerProtocolError("Dashboard HTTP broker fetched_at is invalid")
+    return parsed_fetched_at
 
 
 def _validate_headers(headers: Any) -> None:
