@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -9,9 +10,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
+func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
-	classifyResults, err := c.complexityClassifier.classifyDetailedWithImageCached(text, imageURL, imgCache)
+	classifyResults, err := c.classifyComplexity(ctx, text, imageURL, imgCache)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -31,7 +32,13 @@ func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.M
 		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
 		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
-		results.SignalConfidences["complexity:"+matchName] = result.Confidence
+		// A signal that reports no confidence leaves the key absent, which the
+		// decision engine reads as its structural default while marking the
+		// pool unscored. Writing a zero here would instead rank the decision
+		// last among scored competitors.
+		if result.ConfidenceReported {
+			results.SignalConfidences["complexity:"+matchName] = result.Confidence
+		}
 		results.SignalValues["complexity:"+result.RuleName+":text_hard_score"] = result.TextHardScore
 		results.SignalValues["complexity:"+result.RuleName+":text_easy_score"] = result.TextEasyScore
 		results.SignalValues["complexity:"+result.RuleName+":text_margin"] = result.TextMargin
@@ -39,10 +46,40 @@ func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.M
 		results.SignalValues["complexity:"+result.RuleName+":image_easy_score"] = result.ImageEasyScore
 		results.SignalValues["complexity:"+result.RuleName+":image_margin"] = result.ImageMargin
 		results.SignalValues["complexity:"+result.RuleName+":margin"] = result.FusedMargin
-		if result.Confidence > bestConfidence {
+		if result.ConfidenceReported && result.Confidence > bestConfidence {
 			bestConfidence = result.Confidence
 		}
 	}
 	results.Metrics.Complexity.Confidence = bestConfidence
 	mu.Unlock()
+}
+
+// classifyComplexity picks the path that produces the rule results. Both
+// remote contracts return the same shape as the local classifier, so
+// everything downstream - match names, metrics, published values - is shared
+// rather than reimplemented per path.
+func (c *Classifier) classifyComplexity(
+	ctx context.Context,
+	text string,
+	imageURL string,
+	imgCache *requestImageEmbeddingCache,
+) ([]ComplexityRuleResult, error) {
+	switch {
+	case c.complexityScoreBackend != nil:
+		return evaluateComplexityScore(ctx, c.complexityScoreBackend, text, c.complexityRules())
+	case c.complexityLabelBackend != nil:
+		return evaluateComplexityLabels(ctx, c.complexityLabelBackend, text, c.complexityRules())
+	default:
+		return c.complexityClassifier.classifyDetailedWithImageCached(text, imageURL, imgCache)
+	}
+}
+
+// complexityRules reads the rules the remote paths interpret. Only those paths
+// need them - the local classifier already holds its own copy - so this is not
+// consulted when no backend is configured.
+func (c *Classifier) complexityRules() []config.ComplexityRule {
+	if c.Config == nil {
+		return nil
+	}
+	return c.Config.ComplexityRules
 }

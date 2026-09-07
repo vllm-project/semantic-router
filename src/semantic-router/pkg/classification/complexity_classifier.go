@@ -46,6 +46,14 @@ type ComplexityRuleResult struct {
 	FusedMargin    float64
 	Confidence     float64
 	SignalSource   string
+	// ConfidenceReported distinguishes a real confidence from the absence of
+	// one. The local path and label_distribution.v1 both report one; score.v1
+	// deliberately does not, because a score just short of a boundary is the
+	// least certain position rather than a strong one. The publisher leaves
+	// SignalConfidences untouched when this is false, so the decision engine
+	// falls back to its structural default and marks the pool unscored - the
+	// same treatment keyword, language and pii already get.
+	ConfidenceReported bool
 }
 
 // NewComplexityClassifier creates a new ComplexityClassifier with precomputed candidate embeddings.
