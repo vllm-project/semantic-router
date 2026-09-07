@@ -1,4 +1,3 @@
-# tools/make/e2e.mk
 # ======== e2e.mk ========
 # = E2E Testing Framework =
 # ======== e2e.mk ========

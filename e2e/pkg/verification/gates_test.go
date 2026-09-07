@@ -2,10 +2,11 @@
 
 package verification
 
-// The gates below enforce the three execution-graph invariants frozen for
-// issue #2379 PR1. Registration side effects are provided here, at the test
-// entrypoint, via the blank imports — the verification package itself owns
-// no registration.
+// The gates in this file enforce the execution-graph invariants frozen for
+// issue #2379 PR1 (Gates A-C); Gate D, the explicit CI override layer of the
+// derived contract, lives in gates_ci_test.go. Registration side effects are
+// provided here, at the test entrypoint, via the blank imports — the
+// verification package itself owns no registration.
 
 import (
 	"os"
@@ -17,7 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
-
 	_ "github.com/vllm-project/semantic-router/e2e/profiles/all"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -29,6 +29,15 @@ func buildInventoryForTest(t *testing.T) Inventory {
 		t.Fatalf("building runtime execution inventory: %v", err)
 	}
 	return inventory
+}
+
+func repoRootForTest(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolving caller path for repo root")
+	}
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
 }
 
 // Gate A: registered-but-unreachable is an exact bounded debt ratchet.
@@ -98,12 +107,13 @@ func TestGateBSelectedButUnregisteredIsEmpty(t *testing.T) {
 	}
 }
 
-// Gate C: runtime profile registration and the CI/profile registry agree
-// exactly. This replaces source-regex reasoning about the Go execution side
-// with actual runtime registration; the existing Python validation lane keeps
-// its transitive registry <-> repo-manifest checks unchanged.
-func TestGateCRuntimeProfilesMatchTestDomainRegistry(t *testing.T) {
-	registryProfiles := loadTestDomainRegistryProfiles(t)
+// Gate C: runtime profile registration and the repository domain registry
+// (tools/agent/domains.yaml, the successor of test-domain-registry.yaml)
+// agree exactly. This replaces source-regex reasoning about the Go execution
+// side with actual runtime registration; the existing Python validation lane
+// keeps its transitive registry <-> repo checks unchanged.
+func TestGateCRuntimeProfilesMatchDomainRegistry(t *testing.T) {
+	registryProfiles := loadDomainRegistryProfiles(t)
 
 	runtimeProfiles := make(map[string]bool)
 	for _, name := range framework.RegisteredProfileNames() {
@@ -118,7 +128,7 @@ func TestGateCRuntimeProfilesMatchTestDomainRegistry(t *testing.T) {
 	}
 	sort.Strings(missingFromRegistry)
 	for _, name := range missingFromRegistry {
-		t.Errorf("runtime-registered profile %q is missing from tools/agent/test-domain-registry.yaml", name)
+		t.Errorf("runtime-registered profile %q is missing from tools/agent/domains.yaml", name)
 	}
 
 	missingFromRuntime := make([]string, 0)
@@ -129,19 +139,14 @@ func TestGateCRuntimeProfilesMatchTestDomainRegistry(t *testing.T) {
 	}
 	sort.Strings(missingFromRuntime)
 	for _, name := range missingFromRuntime {
-		t.Errorf("tools/agent/test-domain-registry.yaml profile %q has no runtime registration in e2e/profiles/all", name)
+		t.Errorf("tools/agent/domains.yaml profile %q has no runtime registration in e2e/profiles/all", name)
 	}
 }
 
-func loadTestDomainRegistryProfiles(t *testing.T) map[string]bool {
+func loadDomainRegistryProfiles(t *testing.T) map[string]bool {
 	t.Helper()
 
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolving caller path for repo root")
-	}
-	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..")
-	registryPath := filepath.Join(repoRoot, "tools", "agent", "test-domain-registry.yaml")
+	registryPath := filepath.Join(repoRootForTest(t), "tools", "agent", "domains.yaml")
 
 	raw, err := os.ReadFile(registryPath)
 	if err != nil {
