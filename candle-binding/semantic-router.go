@@ -1911,9 +1911,9 @@ func getNativeEmbeddingDimensionContract(modelType string) (EmbeddingDimensionCo
 	cModelType := C.CString(normalizedModelType)
 	defer C.free(unsafe.Pointer(cModelType))
 
-	var result C.EmbeddingDimensionContractResult
-	status := C.get_embedding_dimension_contract(cModelType, &result)
-	defer C.free_embedding_dimension_contract(&result)
+	result := new(C.EmbeddingDimensionContractResult)
+	status := C.get_embedding_dimension_contract(cModelType, result)
+	defer C.free_embedding_dimension_contract(result)
 
 	if status != 0 || bool(result.error) {
 		return EmbeddingDimensionContract{}, fmt.Errorf(
