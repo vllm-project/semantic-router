@@ -1,0 +1,124 @@
+name: Image Routing Calibration
+
+# Exact-head trust gate for the image-routing threshold pack (issue #2165).
+# Reruns cmd/image-routing-calibration over every fixture in its calibration
+# set and fails unless each shipped threshold in
+# config/fragments/signal/embedding/image-routing.yaml equals the value the
+# report selects. Runs as a PR check only when that file changes, so a
+# threshold cannot be edited without the calibration reproducing it; it can
+# also be dispatched by hand against any ref. The Markdown report lands in
+# the job summary and both reports upload as an artifact.
+on:
+  pull_request:
+    paths:
+      - config/fragments/signal/embedding/image-routing.yaml
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to calibrate (defaults to the dispatching ref)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  calibrate:
+    name: Calibrate image-routing thresholds
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MODEL_REPO: llm-semantic-router/multi-modal-embed-small
+      MODEL_DIR: models/mom-embedding-multimodal
+      # Snapshot the shipped thresholds were calibrated on; a different
+      # snapshot is reported as a warning in the summary, not a failure.
+      CALIBRATED_REVISION: fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.90
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make build-essential pkg-config
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            candle-binding/target/
+            ml-binding/target/
+            nlp-binding/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('candle-binding/Cargo.lock', 'ml-binding/Cargo.lock', 'nlp-binding/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # rust-ci builds candle-binding, ml-binding, and nlp-binding; the router
+      # module links all three, so the tool needs every target dir on the
+      # runtime library path below.
+      - name: Build Rust libraries (CPU-only, no CUDA)
+        run: make rust-ci
+
+      - name: Install HuggingFace CLI
+        run: pip install -U "huggingface_hub[cli]"
+
+      - name: Download the multimodal embedding model
+        run: |
+          set -euo pipefail
+          hf download "${MODEL_REPO}" \
+            config.json model.safetensors tokenizer.json tokenizer_config.json special_tokens_map.json \
+            --local-dir "${MODEL_DIR}"
+          test -f "${MODEL_DIR}/model.safetensors"
+
+      - name: Run the calibration gate
+        run: |
+          set -euo pipefail
+          REVISION="$(head -n1 "${MODEL_DIR}/.cache/huggingface/download/model.safetensors.metadata" 2>/dev/null || echo unknown)"
+          mkdir -p image-routing-calibration
+          cd src/semantic-router
+          go run ./cmd/image-routing-calibration \
+            -model "${GITHUB_WORKSPACE}/${MODEL_DIR}" \
+            -artifact-revision "${REVISION}" \
+            -expect-artifact-revision "${CALIBRATED_REVISION}" \
+            -rules ../../config/fragments/signal/embedding/image-routing.yaml \
+            -cases ./cmd/image-routing-calibration/testdata/calibration-set.json \
+            -fixture-root ../.. \
+            -output "${GITHUB_WORKSPACE}/image-routing-calibration/report.json" \
+            -markdown "${GITHUB_WORKSPACE}/image-routing-calibration/report.md" \
+            -check | tee "${GITHUB_WORKSPACE}/image-routing-calibration/gate.txt"
+          {
+            echo "## Image-routing calibration gate"
+            echo
+            echo '```'
+            cat "${GITHUB_WORKSPACE}/image-routing-calibration/gate.txt"
+            echo '```'
+            echo
+            cat "${GITHUB_WORKSPACE}/image-routing-calibration/report.md"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        env:
+          CGO_ENABLED: 1
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release:${{ github.workspace }}/ml-binding/target/release:${{ github.workspace }}/nlp-binding/target/release
+
+      - name: Upload calibration reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-routing-calibration
+          path: image-routing-calibration/
+          if-no-files-found: ignore

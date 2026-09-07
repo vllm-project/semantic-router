@@ -30,6 +30,11 @@
 // multimodal-routing E2E IntelligentRoute CRD
 // (TestImageRoutingPack_MatchesMultimodalE2EProfile enforces the lockstep).
 //
+// -check turns the run into a gate (exit 2 unless every shipped threshold
+// equals the report-selected value). The manually dispatched workflow
+// .github/workflows/image-routing-calibration.yml runs it that way at a
+// chosen ref and uploads the reports, so reviewers get exact-head evidence.
+//
 // Known state at snapshot fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4:
 // identifier_document_imagery (0.61) and ambient_office_imagery (0.54) are
 // separable with ~0.10 and ~0.14 cosine headroom on each side.
@@ -81,10 +86,11 @@ import (
 	"sort"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"gopkg.in/yaml.v2"
 )
 
 const modelRepository = "llm-semantic-router/multi-modal-embed-small"
@@ -180,6 +186,8 @@ func main() {
 	artifactRevision := flag.String("artifact-revision", "", "resolved model snapshot commit (required for reproducible reports)")
 	output := flag.String("output", "image-routing-calibration.json", "JSON report path")
 	markdown := flag.String("markdown", "image-routing-calibration.md", "Markdown report path")
+	check := flag.Bool("check", false, "gate mode: exit 2 unless every rule's report-selected threshold equals the shipped value")
+	expectRevision := flag.String("expect-artifact-revision", "", "snapshot the shipped thresholds were calibrated on; a different -artifact-revision is reported as a warning, not a failure")
 	flag.Parse()
 	if *modelPath == "" || *artifactRevision == "" || *casesPath == "" {
 		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
@@ -216,16 +224,64 @@ func main() {
 		report.Rules = append(report.Rules, calibrateRule(rule, report.Fixtures))
 	}
 
+	writeReports(report, *output, *markdown)
+	if *check {
+		os.Exit(checkShippedThresholds(report, *artifactRevision, *expectRevision))
+	}
+}
+
+func writeReports(report calibrationReport, output, markdown string) {
 	data, err := json.MarshalIndent(report, "", "  ")
 	if err != nil {
 		fatal("marshal report: %v", err)
 	}
-	if err := os.WriteFile(*output, append(data, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(output, append(data, '\n'), 0o644); err != nil {
 		fatal("write JSON report: %v", err)
 	}
-	if err := os.WriteFile(*markdown, []byte(renderMarkdown(report)), 0o644); err != nil {
+	if err := os.WriteFile(markdown, []byte(renderMarkdown(report)), 0o644); err != nil {
 		fatal("write Markdown report: %v", err)
 	}
+}
+
+// shippedThresholdTolerance absorbs float32 storage of the YAML value and the
+// tool's two-decimal rounding of a separable midpoint; anything larger means
+// the shipped value is not the report's pick.
+const shippedThresholdTolerance = 5e-5
+
+// checkShippedThresholds is the trust gate behind -check: the checked-in
+// thresholds must be exactly what this run selects, so a CI run of this
+// command is reproducible evidence rather than a contributor's local claim.
+// Returns the process exit code (0 pass, 2 mismatch). A model snapshot that
+// differs from the one the thresholds were calibrated on is a warning: the
+// calibration should be rerun, but the gate only asserts what it can verify.
+func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision string) int {
+	code := 0
+	fmt.Println("image-routing calibration gate")
+	fmt.Printf("  fixtures=%d repo_commit=%s dirty=%t artifact_revision=%s\n",
+		len(report.Fixtures), report.Source.Commit, report.Source.Dirty, gotRevision)
+	if wantRevision != "" && wantRevision != gotRevision {
+		fmt.Printf("  WARNING: model snapshot %s differs from calibrated snapshot %s; rerun the calibration and refresh the docs\n",
+			gotRevision, wantRevision)
+	}
+	if report.Source.Dirty {
+		fmt.Println("  WARNING: uncommitted changes under the fixture roots; this run is not reproducible from its commit")
+	}
+	for _, rule := range report.Rules {
+		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
+		status := "ok"
+		if diff := shipped - selected; diff > shippedThresholdTolerance || diff < -shippedThresholdTolerance {
+			status = "MISMATCH"
+			code = 2
+		}
+		fmt.Printf("  %-32s shipped=%.4f selected=%.4f separable=%t F1=%.3f FP=%d FN=%d  %s\n",
+			rule.Name, shipped, selected, rule.Selected.Separable, rule.Selected.F1, rule.Selected.FP, rule.Selected.FN, status)
+	}
+	if code != 0 {
+		fmt.Println("  FAIL: a shipped threshold is not the report-selected value; rerun the calibration and ship what it selects")
+	} else {
+		fmt.Println("  PASS: every shipped threshold equals the report-selected value")
+	}
+	return code
 }
 
 func loadRules(path string) []config.EmbeddingRule {
