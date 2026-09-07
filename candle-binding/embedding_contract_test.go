@@ -65,3 +65,9 @@ func TestResolveEmbeddingDimensionPreservesLegacyConfiguration(t *testing.T) {
 		t.Fatalf("unsupported dimension error = %v", err)
 	}
 }
+
+func TestGetEmbeddingDimensionContractWithoutLoadedModel(t *testing.T) {
+	if _, err := GetEmbeddingDimensionContract("qwen3"); err == nil {
+		t.Fatal("GetEmbeddingDimensionContract() error = nil, want unloaded-model error")
+	}
+}

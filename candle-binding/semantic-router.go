@@ -1911,9 +1911,21 @@ func getNativeEmbeddingDimensionContract(modelType string) (EmbeddingDimensionCo
 	cModelType := C.CString(normalizedModelType)
 	defer C.free(unsafe.Pointer(cModelType))
 
-	result := new(C.EmbeddingDimensionContractResult)
+	result := (*C.EmbeddingDimensionContractResult)(C.calloc(
+		1,
+		C.size_t(unsafe.Sizeof(C.EmbeddingDimensionContractResult{})),
+	))
+	if result == nil {
+		return EmbeddingDimensionContract{}, fmt.Errorf(
+			"failed to allocate embedding dimension contract for model %q",
+			normalizedModelType,
+		)
+	}
 	status := C.get_embedding_dimension_contract(cModelType, result)
-	defer C.free_embedding_dimension_contract(result)
+	defer func() {
+		C.free_embedding_dimension_contract(result)
+		C.free(unsafe.Pointer(result))
+	}()
 
 	if status != 0 || bool(result.error) {
 		return EmbeddingDimensionContract{}, fmt.Errorf(
