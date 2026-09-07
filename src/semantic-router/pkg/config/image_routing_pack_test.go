@@ -49,7 +49,7 @@ func TestImageRoutingPack_StructuralContract(t *testing.T) {
 		}
 		// This pack ships 8 candidates per rule. Pinning the floor at
 		// 8 catches silent reduction during future edits. Other shipped
-		// fragment files (e.g., config/signal/embedding/support.yaml)
+		// fragment files (e.g., config/fragments/signal/embedding/support.yaml)
 		// ship fewer candidates and are not subject to this pin.
 		if got := len(rule.Candidates); got < 8 {
 			t.Errorf("rule %q: candidate count = %d, want at least 8 (this pack's shipped per-rule floor)", rule.Name, got)
@@ -91,13 +91,13 @@ func TestImageRoutingPack_ValidatorRejectsUnderTextOnlyModel(t *testing.T) {
 	}
 }
 
-// loadImageRoutingPackRules reads config/signal/embedding/image-routing.yaml
+// loadImageRoutingPackRules reads config/fragments/signal/embedding/image-routing.yaml
 // from the repo root and returns the parsed embedding rules. Test-internal
 // helper; production code paths use the full canonical config loader.
 func loadImageRoutingPackRules(t *testing.T) []EmbeddingRule {
 	t.Helper()
 	root := repoRootFromTestFile(t)
-	path := filepath.Join(root, "config", "signal", "embedding", "image-routing.yaml")
+	path := filepath.Join(root, "config", "fragments", "signal", "embedding", "image-routing.yaml")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", path, err)

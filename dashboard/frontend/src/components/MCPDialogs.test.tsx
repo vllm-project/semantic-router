@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { MCPServerDialog } from './MCPServerDialog'
 import { MCPToolDetailModal } from './MCPToolDetailModal'
+import { MCP_REDACTED_ARGUMENTS } from './mcpConfigPanelUtils'
 import type { UnifiedTool } from './mcpConfigPanelTypes'
 
 describe('MCP dialog accessibility contracts', () => {
@@ -57,6 +58,33 @@ describe('MCP dialog accessibility contracts', () => {
     expect(markup).not.toContain('one per line')
   })
 
+  it('shows hidden stdio arguments as an explicit preserve-or-replace state', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MCPServerDialog, {
+        server: {
+          id: 'filesystem',
+          name: 'Filesystem server',
+          transport: 'stdio',
+          enabled: true,
+          connection: {
+            command: 'npx',
+            args: [MCP_REDACTED_ARGUMENTS],
+          },
+        },
+        onClose: vi.fn(),
+        onSave: vi.fn(async () => undefined),
+        onTest: vi.fn(async () => ({ success: true })),
+      }),
+    )
+
+    expect(markup).toContain('Configured arguments are hidden and will be preserved.')
+    expect(markup).toContain('Replace or clear arguments')
+    expect(markup).toContain(
+      'Transport cannot be changed after creation. Create a new server instead.',
+    )
+    expect(markup).not.toContain(MCP_REDACTED_ARGUMENTS)
+  })
+
   it('labels tool details with their name and description', () => {
     const tool: UnifiedTool = {
       id: 'mcp-search',
@@ -86,5 +114,10 @@ describe('MCP dialog accessibility contracts', () => {
     expect(panelSource).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
     expect(panelSource).not.toContain('console.error')
     expect(panelSource).toContain('createLatestMCPRequestRunner')
+    expect(panelSource).toContain(
+      'authLoading || readonlyLoading || serverReadonly || !canManageServers',
+    )
+    expect(panelSource).not.toContain('runtimeConfigWritable')
+    expect(panelSource).toContain('server-wide read-only policy disables MCP server changes')
   })
 })

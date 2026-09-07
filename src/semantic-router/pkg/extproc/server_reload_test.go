@@ -247,7 +247,7 @@ func amdDeployConfigPath(t *testing.T) string {
 	if !ok {
 		t.Fatal("failed to resolve test file path")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../deploy/recipes/balance.yaml"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../config/recipes/balance/config.yaml"))
 }
 
 func loadRouterConfigFixture(t *testing.T, path string) *config.RouterConfig {

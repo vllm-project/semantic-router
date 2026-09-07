@@ -4,7 +4,7 @@
 
 `router_dc` is a semantic selection algorithm that matches queries to models using **embedding similarity** via dual-contrastive learning.
 
-It aligns to `config/algorithm/selection/router-dc.yaml`.
+It aligns to `config/fragments/algorithm/selection/router-dc.yaml`.
 
 **Paper**: [Query-Based Router by Dual Contrastive Learning](https://arxiv.org/abs/2409.19886)
 

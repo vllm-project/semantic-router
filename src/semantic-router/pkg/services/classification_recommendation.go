@@ -3,23 +3,33 @@ package services
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func (s *ClassificationService) getRecommendedModel(category string, _ float64) string {
-	if s.classifier != nil {
-		model := s.classifier.SelectBestModelForCategory(category)
+	classifier, runtimeConfig := s.runtimeSnapshot()
+	return recommendedModelFromRuntime(classifier, runtimeConfig, category)
+}
+
+func recommendedModelFromRuntime(
+	classifier *classification.Classifier,
+	runtimeConfig *config.RouterConfig,
+	category string,
+) string {
+	if classifier != nil {
+		model := classifier.SelectBestModelForCategory(category)
 		if model != "" {
 			return model
 		}
 	}
-	if s.config == nil {
+	if runtimeConfig == nil {
 		return ""
 	}
-	if model := recommendedModelFromDecisions(s.config.Decisions, category); model != "" {
+	if model := recommendedModelFromDecisions(runtimeConfig.Decisions, category); model != "" {
 		return model
 	}
-	return s.config.DefaultModel
+	return runtimeConfig.DefaultModel
 }
 
 func recommendedModelFromDecisions(decisions []config.Decision, category string) string {

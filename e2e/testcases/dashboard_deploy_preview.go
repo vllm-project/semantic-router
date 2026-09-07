@@ -29,7 +29,9 @@ func testDashboardDeployPreview(ctx context.Context, client *kubernetes.Clientse
 	}
 	defer stop()
 
-	payload := map[string]string{"yaml": "default_model: \"MoM\"\n"}
+	payload := map[string]string{
+		"yaml": "routing:\n  strategy: priority\n",
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal preview payload: %w", err)

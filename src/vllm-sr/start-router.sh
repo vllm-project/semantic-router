@@ -8,8 +8,9 @@ CONFIG_FILE="${1:-/app/config.yaml}"
 echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
 
-# Container-local management listener: bind all interfaces for docker-network
-# peers (dashboard/envoy). Host publish remains a separate Phase 4 concern.
+# Mark wildcard management listeners as container-internal. The listener's
+# actual bind address and port remain authoritative in canonical config; host
+# publication is independently constrained by the split-stack launcher.
 export VLLM_SR_MANAGEMENT_INTERNAL_LISTENER=true
 
 # Preserve setup-mode behavior from the historical single-container entrypoint.
@@ -31,6 +32,4 @@ echo "Starting router..."
 exec /usr/local/bin/router \
     -config="$CONFIG_FILE" \
     -port=50051 \
-    -enable-api=true \
-    -api-port=8080 \
-    -api-bind=0.0.0.0
+    -enable-api=true

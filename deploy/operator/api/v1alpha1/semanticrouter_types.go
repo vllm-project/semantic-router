@@ -272,7 +272,11 @@ type ConfigSpec struct {
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
 
-	// Semantic cache configuration
+	// Response cache configuration.
+	// +optional
+	ResponseCache *SemanticCacheConfig `json:"response_cache,omitempty"`
+
+	// SemanticCache is the deprecated response-cache field.
 	// +optional
 	SemanticCache *SemanticCacheConfig `json:"semantic_cache,omitempty"`
 
@@ -301,14 +305,11 @@ type ConfigSpec struct {
 	// +optional
 	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
-	// Reasoning families
+	// ReasoningEffort is the default reasoning effort for model bindings that do
+	// not select a different effort. The selected model family validates the
+	// value because built-in and custom families may expose different ladders.
 	// +optional
-	ReasoningFamilies map[string]ReasoningFamily `json:"reasoning_families,omitempty"`
-
-	// Default reasoning effort
-	// +kubebuilder:validation:Enum=low;medium;high
-	// +optional
-	DefaultReasoningEffort string `json:"default_reasoning_effort,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
 	// API configuration
 	// +optional
@@ -549,11 +550,6 @@ type RedisCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // ValkeyCacheConfig defines Valkey cache backend configuration.
@@ -722,11 +718,6 @@ type ValkeyCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // MilvusCacheConfig defines Milvus cache backend configuration.
@@ -743,14 +734,6 @@ type MilvusCacheConfig struct {
 	// Search settings for Milvus queries
 	// +optional
 	Search MilvusCacheSearch `json:"search,omitempty"`
-
-	// Performance tuning for Milvus
-	// +optional
-	Performance MilvusCachePerformance `json:"performance,omitempty"`
-
-	// DataManagement settings for TTL and compaction
-	// +optional
-	DataManagement MilvusCacheDataManagement `json:"data_management,omitempty"`
 
 	// Development settings for Milvus cache
 	// +optional
@@ -963,97 +946,6 @@ type MilvusCacheSearchParams struct {
 	Ef int `json:"ef,omitempty"`
 }
 
-// MilvusCachePerformance defines performance tuning.
-type MilvusCachePerformance struct {
-	// ConnectionPool settings
-	// +optional
-	ConnectionPool MilvusCacheConnectionPool `json:"connection_pool,omitempty"`
-
-	// Batch settings for operations
-	// +optional
-	Batch MilvusCacheBatch `json:"batch,omitempty"`
-}
-
-// MilvusCacheConnectionPool defines connection pool settings.
-type MilvusCacheConnectionPool struct {
-	// MaxConnections in the pool
-	// +kubebuilder:default=10
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	MaxConnections int `json:"max_connections,omitempty"`
-
-	// MaxIdleConnections to keep
-	// +kubebuilder:default=5
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxIdleConnections int `json:"max_idle_connections,omitempty"`
-
-	// AcquireTimeout in seconds
-	// +kubebuilder:default=30
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	AcquireTimeout int `json:"acquire_timeout,omitempty"`
-}
-
-// MilvusCacheBatch defines batch operation settings.
-type MilvusCacheBatch struct {
-	// InsertBatchSize for bulk inserts
-	// +kubebuilder:default=100
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	InsertBatchSize int `json:"insert_batch_size,omitempty"`
-
-	// Timeout for batch operations in seconds
-	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Timeout int `json:"timeout,omitempty"`
-}
-
-// MilvusCacheDataManagement defines data lifecycle settings.
-type MilvusCacheDataManagement struct {
-	// TTL settings for automatic expiration
-	// +optional
-	TTL MilvusCacheTTL `json:"ttl,omitempty"`
-
-	// Compaction settings
-	// +optional
-	Compaction MilvusCacheCompaction `json:"compaction,omitempty"`
-}
-
-// MilvusCacheTTL defines time-to-live settings.
-type MilvusCacheTTL struct {
-	// Enabled controls whether TTL is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// TimestampField is the field used for TTL calculation
-	// +kubebuilder:default="created_at"
-	// +optional
-	TimestampField string `json:"timestamp_field,omitempty"`
-
-	// CleanupInterval in seconds between cleanup runs
-	// +kubebuilder:default=3600
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	CleanupInterval int `json:"cleanup_interval,omitempty"`
-}
-
-// MilvusCacheCompaction defines compaction settings.
-type MilvusCacheCompaction struct {
-	// Enabled controls whether auto-compaction is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Interval in seconds between compaction runs
-	// +kubebuilder:default=86400
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Interval int `json:"interval,omitempty"`
-}
-
 // MilvusCacheDevelopment defines development-mode settings.
 type MilvusCacheDevelopment struct {
 	// DropCollectionOnStartup clears the collection when router starts (for testing)
@@ -1065,11 +957,6 @@ type MilvusCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateCollection bool `json:"auto_create_collection,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // HNSWCacheConfig defines HNSW index configuration for hybrid/in-memory backends.
@@ -1156,8 +1043,9 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetDimension int `json:"target_dimension,omitempty"`
 
-	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+	// Evaluate the latency and quality trade-off on representative deployment data.
 	// +kubebuilder:validation:Enum=3;6;11;22
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
@@ -1197,6 +1085,11 @@ type EmbeddingEndpointConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxRetries int `json:"max_retries,omitempty"`
+
+	// MaxResponseBytes caps the size of each embedding response body.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxResponseBytes int64 `json:"max_response_bytes,omitempty"`
 
 	// Dimensions requests a provider-side output dimension when supported.
 	// +kubebuilder:validation:Minimum=1
@@ -1299,6 +1192,11 @@ type RuleCombinationConfig struct {
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
+	// OnUnknown resolves a terminal unknown result after the rule tree is evaluated.
+	// +optional
+	// +kubebuilder:validation:Enum=no_match;match;fail_request
+	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty"`
+
 	// Conditions is the list of rule references to evaluate
 	Conditions []RuleConditionConfig `json:"conditions" yaml:"conditions"`
 }
@@ -1326,7 +1224,13 @@ type ModelRefConfig struct {
 	// +optional
 	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
 
-	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// ReasoningMode selects the model's reasoning activation mode when the
+	// family supports more than a boolean switch.
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	ReasoningMode string `json:"reasoning_mode,omitempty" yaml:"reasoning_mode,omitempty"`
+
+	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
@@ -1357,9 +1261,18 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// +kubebuilder:default=false
+	// Variant selects a local Candle-backed model variant. It is mutually
+	// exclusive with Protocol. When both fields are omitted, the operator uses
+	// mmbert32k.
+	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
-	UseModernBERT bool `json:"use_modernbert,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	// Protocol selects a remote HTTP backend's wire contract. Mutually
+	// exclusive with Variant. Requires an external model configured via a
+	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// +kubebuilder:validation:Enum=http_chat;http_classify
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
@@ -1373,6 +1286,20 @@ type PromptGuardConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	JailbreakMappingPath string `json:"jailbreak_mapping_path,omitempty"`
+	// PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
+	// for a custom backend whose positive class isn't named "jailbreak"
+	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
+	// +optional
+	PositiveLabels []string `json:"positive_labels,omitempty"`
+	// OnError selects what a prompt-guard classifier failure does to the rule
+	// that failed to evaluate. "allow" (the default) tolerates the failure and
+	// treats the content as not matching; "block" treats it as a positive
+	// detection, because an inference failure means the content could not be
+	// verified safe. Without this field on the CRD the setting is pruned by the
+	// API server and an operator-managed deployment silently fails open.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration
@@ -1413,14 +1340,6 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
-}
-
-// ReasoningFamily defines reasoning family configuration
-type ReasoningFamily struct {
-	// +optional
-	Type string `json:"type,omitempty"`
-	// +optional
-	Parameter string `json:"parameter,omitempty"`
 }
 
 // APIConfig defines API configuration
@@ -1682,9 +1601,15 @@ type VLLMEndpointSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model"`
 
-	// Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt")
+	// Catalog optionally selects a repository built-in Model Card. Model remains
+	// the request-facing alias.
 	// +optional
-	ReasoningFamily string `json:"reasoningFamily,omitempty"`
+	Catalog string `json:"catalog,omitempty"`
+
+	// Reasoning optionally selects a built-in family or defines inline wire
+	// behavior for this self-hosted model. Catalog-backed models normally omit it.
+	// +optional
+	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
 	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
 	// +optional
@@ -1698,6 +1623,45 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// ModelReasoningSpec selects a catalog reasoning family or defines the request
+// projection for a custom self-hosted model. Family and inline fields are
+// mutually exclusive and are validated by the Router's canonical compiler.
+type ModelReasoningSpec struct {
+	// +optional
+	Family string `json:"family,omitempty"`
+
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;reasoning_mode;top_level_reasoning_effort
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// +optional
+	Parameter string `json:"parameter,omitempty"`
+
+	// +optional
+	ActivationParameter string `json:"activationParameter,omitempty"`
+
+	// EffortFlags maps a logical effort to a boolean chat-template parameter.
+	// +optional
+	EffortFlags map[string]string `json:"effortFlags,omitempty"`
+
+	// +optional
+	Levels []string `json:"levels,omitempty"`
+
+	// +optional
+	Default string `json:"default,omitempty"`
+
+	// +kubebuilder:validation:items:Enum=enabled;disabled;adaptive
+	// +optional
+	Modes []string `json:"modes,omitempty"`
+
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	DefaultMode string `json:"defaultMode,omitempty"`
+
+	// +optional
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.

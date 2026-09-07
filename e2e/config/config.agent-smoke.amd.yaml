@@ -8,12 +8,13 @@ listeners:
 
 providers:
   defaults:
-    default_model: "smoke-model"
+    model: "smoke-model"
   models:
     - name: "smoke-model"
       provider_model_id: "smoke-model"
       backend_refs:
         - name: "primary"
+          provider: vllm
           weight: 100
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
@@ -35,7 +36,7 @@ routing:
 
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: false
   model_catalog:
     embeddings:
@@ -51,7 +52,6 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""

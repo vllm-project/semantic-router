@@ -1,10 +1,21 @@
+from typing import get_args
+
+import pytest
+from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    UNKNOWN_POLICY_VALUES,
+    UnknownPolicy,
     build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
 from cli.models import Decision, Projections, Signals
+
+
+def test_unknown_policy_literal_matches_allowed_values():
+    assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
+    assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")
 
 
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
@@ -41,19 +52,26 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
 
     signal_names = build_signal_reference_index(signals)
 
-    assert "difficulty:easy" in signal_names
-    assert "difficulty:medium" in signal_names
-    assert "difficulty:hard" in signal_names
-    assert "admin-access" in signal_names
-    assert "critical_event" in signal_names
+    assert signal_names["complexity"] == {
+        "difficulty:easy",
+        "difficulty:medium",
+        "difficulty:hard",
+    }
+    assert signal_names["authz"] == {"admin-access"}
+    assert signal_names["event"] == {"critical_event"}
 
 
-def test_signal_reference_exists_strips_suffixes_for_non_complexity_signals():
-    signal_names = {"security", "admin-access"}
+def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():
+    signal_names = {
+        "keyword": {"security"},
+        "authz": {"admin-access"},
+    }
 
-    assert signal_reference_exists(signal_names, "keyword", "security:match")
+    assert signal_reference_exists(signal_names, "keyword", "security")
+    assert not signal_reference_exists(signal_names, "keyword", "security:match")
     assert signal_reference_exists(signal_names, "authz", "admin-access")
     assert not signal_reference_exists(signal_names, "complexity", "security:match")
+    assert not signal_reference_exists(signal_names, "authz", "security")
 
 
 def test_projection_reference_index_collects_mapping_outputs():
@@ -96,6 +114,36 @@ def test_decision_accepts_typed_output_contract_spec():
     assert decision.output_contract_spec is not None
     assert decision.output_contract_spec.choice_set is not None
     assert decision.output_contract_spec.choice_set.values == ["A", "B", "C", "D"]
+
+
+def test_decision_without_rules_is_a_match_all_fallback():
+    decision = Decision(
+        name="fallback",
+        description="terminal route",
+        priority=1,
+        modelRefs=[{"model": "model-a", "use_reasoning": False}],
+    )
+
+    assert decision.rules.operator == "AND"
+    assert decision.rules.conditions == []
+
+
+def test_decision_enforces_minimum_candidates_after_materialization():
+    with pytest.raises(ValueError, match="minimum_candidates=2"):
+        Decision(
+            name="panel",
+            priority=1,
+            modelRefs=[{"model": "model-a", "use_reasoning": False}],
+            algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+        )
+
+    model_free = Decision(
+        name="model-free-panel",
+        priority=1,
+        modelRefs=[],
+        algorithm=AlgorithmConfig(type="fusion", minimum_candidates=2),
+    )
+    assert model_free.modelRefs == []
 
 
 def test_decision_accepts_terminal_action_output_contract_spec():

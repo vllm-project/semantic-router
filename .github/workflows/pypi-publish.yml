@@ -1,229 +1,179 @@
-name: Publish Python Package to PyPI
+name: vllm-sr Python Publisher
 
 on:
-  push:
-    branches:
-      - main  # Triggers on every push to main branch
-    tags:
-      - 'v*'  # Also triggers on version tags like v0.1.0, v0.2.0, etc.
-  workflow_dispatch:  # Allow manual triggering
+  workflow_call:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.1.0)'
+        description: Stable version without a leading v.
+        required: true
+        type: string
+      tag:
+        description: Stable tag with a leading v.
+        required: true
+        type: string
+      catalog_snapshot:
+        description: Immutable built-in catalog snapshot derived from the release minor.
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish to TestPyPI.
+        required: true
+        type: string
+      tag:
+        description: Optional source tag label.
         required: false
+        default: ""
+        type: string
+      catalog_snapshot:
+        description: Optional built-in snapshot; defaults to v<major>.<minor>.
+        required: false
+        default: ""
         type: string
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
-  publish:
-    if: github.repository == 'vllm-project/semantic-router'
+  build:
+    name: Build vllm-sr package
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write  # Required for trusted publishing to PyPI
-
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Extract version from tag, input, or pyproject.toml
-        id: extract_version
+      - name: Validate package version
+        id: contract
         working-directory: src/vllm-sr
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          INPUT_CATALOG_SNAPSHOT: ${{ inputs.catalog_snapshot }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ -n "${{ inputs.version }}" ]; then
-              VERSION="${{ inputs.version }}"
-              echo "version=$VERSION" >> $GITHUB_OUTPUT
-              echo "tag=v$VERSION" >> $GITHUB_OUTPUT
-              echo "is_dev=false" >> $GITHUB_OUTPUT
-            else
-              echo "::error::Version input is required for manual dispatch"
-              exit 1
-            fi
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # Extract from tag - this is a release version
-            TAG="${GITHUB_REF#refs/tags/}"
-            VERSION="${TAG#v}"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
-            echo "is_dev=false" >> $GITHUB_OUTPUT
-          else
-            # Push to main - generate development version
-            BASE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-            TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
-
-            # Generate dev version: 0.1.0.dev20240115123456
-            # Note: PyPI doesn't allow local version identifiers (+git.xxx)
-            DEV_VERSION="${BASE_VERSION}.dev${TIMESTAMP}"
-
-            echo "version=$DEV_VERSION" >> $GITHUB_OUTPUT
-            echo "tag=v$DEV_VERSION" >> $GITHUB_OUTPUT
-            echo "is_dev=true" >> $GITHUB_OUTPUT
-            echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-            echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
-
-            echo "Publishing development version: $DEV_VERSION (commit: ${{ github.sha }})"
-          fi
-
-      - name: Verify package version matches tag
-        if: github.event_name != 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/')
-        working-directory: src/vllm-sr
-        run: |
-          PACKAGE_VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-          TAG_VERSION="${{ steps.extract_version.outputs.version }}"
-          echo "Package version: $PACKAGE_VERSION"
-          echo "Tag version: $TAG_VERSION"
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Package version ($PACKAGE_VERSION) does not match tag version ($TAG_VERSION)"
-            echo "::error::Please update version in src/vllm-sr/pyproject.toml to $TAG_VERSION"
+          PACKAGE_VERSION="$(
+            sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1
+          )"
+          if [[ "$PACKAGE_VERSION" != "$RELEASE_VERSION" ]]; then
+            echo "::error::Package version '$PACKAGE_VERSION' does not match '$RELEASE_VERSION'"
             exit 1
           fi
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] &&
+             [[ "$RELEASE_TAG" != "v${RELEASE_VERSION}" ]]; then
+            echo "::error::Release tag '$RELEASE_TAG' does not match package version"
+            exit 1
+          fi
+          IFS=. read -r VERSION_MAJOR VERSION_MINOR _ <<< "$RELEASE_VERSION"
+          EXPECTED_CATALOG_SNAPSHOT="v${VERSION_MAJOR}.${VERSION_MINOR}"
+          CATALOG_SNAPSHOT="${INPUT_CATALOG_SNAPSHOT:-$EXPECTED_CATALOG_SNAPSHOT}"
+          if [[ "$CATALOG_SNAPSHOT" != "$EXPECTED_CATALOG_SNAPSHOT" ]]; then
+            echo "::error::Catalog snapshot '$CATALOG_SNAPSHOT' does not match '$EXPECTED_CATALOG_SNAPSHOT'"
+            exit 1
+          fi
+          if [[ ! -d "../../config/recipes/built-in/$CATALOG_SNAPSHOT" ]]; then
+            echo "::error::Missing release catalog snapshot 'config/recipes/built-in/$CATALOG_SNAPSHOT'"
+            exit 1
+          fi
+          echo "catalog_snapshot=$CATALOG_SNAPSHOT" >> "$GITHUB_OUTPUT"
 
-      - name: Install build dependencies
+      - name: Build and verify package
+        working-directory: src/vllm-sr
+        env:
+          CATALOG_SNAPSHOT: ${{ steps.contract.outputs.catalog_snapshot }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python -m pip install --upgrade pip
           pip install build twine
-
-      - name: Update version in pyproject.toml for dev builds
-        if: steps.extract_version.outputs.is_dev == 'true'
-        working-directory: src/vllm-sr
-        run: |
-          echo "Updating version to ${{ steps.extract_version.outputs.version }}"
-          sed -i.bak 's/^version = .*/version = "${{ steps.extract_version.outputs.version }}"/' pyproject.toml
-          echo "Updated pyproject.toml:"
-          grep '^version = ' pyproject.toml
-
-      - name: Build package
-        working-directory: src/vllm-sr
-        run: |
-          echo "Building vllm-sr package..."
+          python ../../tools/release/snapshot_model_catalog.py \
+            --check --version "$RELEASE_VERSION"
+          python ../../tools/release/sync_model_catalog.py --check
           python -m build
-          echo "Package built successfully!"
-          ls -la dist/
-
-      - name: Verify package contents
-        working-directory: src/vllm-sr
-        run: |
-          echo "Verifying package contents..."
-          echo ""
-          echo "=== Wheel contents ==="
-          unzip -l dist/*.whl | grep -E "(cli/templates|\.yaml|\.json|\.ini)" || echo "WARNING: No template files found!"
-          echo ""
-          echo "=== Checking required template files ==="
+          twine check dist/*
           REQUIRED_FILES=(
             "cli/templates/config.template.yaml"
             "cli/templates/envoy.template.yaml"
             "cli/templates/tools_db.json"
             "cli/templates/grafana.serve.ini"
-            "cli/templates/grafana-datasource.serve.yaml"
-            "cli/templates/grafana-datasource-jaeger.serve.yaml"
-            "cli/templates/grafana-dashboard.serve.yaml"
-            "cli/templates/llm-router-dashboard.serve.json"
             "cli/templates/prometheus.serve.yaml"
           )
-          MISSING_FILES=()
-          for file in "${REQUIRED_FILES[@]}"; do
-            if unzip -l dist/*.whl | grep -q "$file"; then
-              echo "✓ Found: $file"
-            else
-              echo "✗ Missing: $file"
-              MISSING_FILES+=("$file")
-            fi
-          done
-          if [ ${#MISSING_FILES[@]} -gt 0 ]; then
-            echo ""
-            echo "ERROR: Missing required template files in package!"
-            echo "Please check pyproject.toml and MANIFEST.in configuration."
+          WHEEL_PATH="$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          if [[ -z "$WHEEL_PATH" ]]; then
+            echo "::error::Package build produced no wheel"
             exit 1
           fi
-          echo ""
-          echo "✓ All required template files are present in the package"
+          mkdir wheel-unpacked
+          unzip -q "$WHEEL_PATH" -d wheel-unpacked
+          for catalog_version in latest "$CATALOG_SNAPSHOT"; do
+            SNAPSHOT_DIR="../../config/recipes/built-in/$catalog_version"
+            mapfile -t SNAPSHOT_FILES < <(
+              find "$SNAPSHOT_DIR" -type f -printf '%P\n' | sort
+            )
+            if [[ "${#SNAPSHOT_FILES[@]}" -eq 0 ]]; then
+              echo "::error::Catalog snapshot '$catalog_version' contains no packaged resources"
+              exit 1
+            fi
+            for file in "${SNAPSHOT_FILES[@]}"; do
+              package_file="cli/model_assets/$catalog_version/$file"
+              REQUIRED_FILES+=("$package_file")
+              cmp -s "$SNAPSHOT_DIR/$file" "wheel-unpacked/$package_file" || {
+                echo "::error::Packaged model resource drifted: '$package_file'"
+                exit 1
+              }
+            done
+          done
+          unzip -Z1 "$WHEEL_PATH" > wheel-files.txt
+          for file in "${REQUIRED_FILES[@]}"; do
+            grep -Fqx "$file" wheel-files.txt || {
+              echo "::error::Missing package file '$file'"
+              exit 1
+            }
+          done
 
-      - name: Check package with twine
-        working-directory: src/vllm-sr
-        run: |
-          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vllm-sr-dist
+          path: src/vllm-sr/dist/*
+          retention-days: 7
 
-      - name: Publish to Test PyPI (dry run)
-        if: github.event_name == 'workflow_dispatch'
-        working-directory: src/vllm-sr
+  testpypi:
+    name: Publish vllm-sr to TestPyPI
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vllm-sr-dist
+          path: dist
+
+      - run: pip install twine
+
+      - name: Publish explicit test package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        run: |
-          echo "Publishing to Test PyPI..."
-          twine upload --repository testpypi dist/* --verbose || true
-          echo ""
-          echo "Test installation command:"
-          echo "pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ vllm-sr==${{ steps.extract_version.outputs.version }}"
+        run: twine upload --repository testpypi dist/*
 
-      - name: Publish to PyPI
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-        working-directory: src/vllm-sr
+  pypi:
+    name: Publish stable vllm-sr to PyPI
+    if: >-
+      github.event_name == 'push'
+      && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vllm-sr-dist
+          path: dist
+
+      - run: pip install twine
+
+      - name: Publish stable package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          echo "Publishing to PyPI..."
-          twine upload dist/* --skip-existing --verbose
-
-      # Attach the built wheel/sdist to the GitHub Release that release.yml creates.
-      # We intentionally omit body/generate_release_notes here: release.yml is the
-      # canonical release-notes creator to avoid a race condition where multiple
-      # workflows overwrite each other's release body.
-      - name: Attach artifacts to GitHub Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.extract_version.outputs.tag }}
-          draft: false
-          prerelease: false
-          files: |
-            src/vllm-sr/dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Summary
-        run: |
-          echo "## 🎉 Package Published Successfully!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ steps.extract_version.outputs.is_dev }}" = "true" ]; then
-            echo "**Type:** Development Release 🚧" >> $GITHUB_STEP_SUMMARY
-            echo "**Base Version:** ${{ steps.extract_version.outputs.base_version }}" >> $GITHUB_STEP_SUMMARY
-            echo "**Commit:** [\`${{ steps.extract_version.outputs.commit_sha }}\`](https://github.com/${{ github.repository }}/commit/${{ steps.extract_version.outputs.commit_sha }})" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Type:** Stable Release ✅" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Installation" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ steps.extract_version.outputs.is_dev }}" = "true" ]; then
-            echo "# Install this specific development version:" >> $GITHUB_STEP_SUMMARY
-            echo "pip install vllm-sr==${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "# Or install the latest development version:" >> $GITHUB_STEP_SUMMARY
-            echo "pip install --pre vllm-sr" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "pip install vllm-sr==${{ steps.extract_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Links" >> $GITHUB_STEP_SUMMARY
-          echo "- [PyPI Package](https://pypi.org/project/vllm-sr/${{ steps.extract_version.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
-
-          if [ "${{ steps.extract_version.outputs.is_dev }}" = "false" ]; then
-            echo "- [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ steps.extract_version.outputs.tag }})" >> $GITHUB_STEP_SUMMARY
-          fi
+        run: twine upload dist/* --skip-existing

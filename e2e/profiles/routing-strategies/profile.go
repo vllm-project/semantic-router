@@ -85,6 +85,9 @@ func (p *Profile) GetTestCases() []string {
 		"keyword-routing",
 		"entropy-routing",
 		"routing-fallback",
+		"decision-scoped-multi-factor",
+		"metadata-routing",
+		"input-modality-routing",
 	}
 }
 
@@ -111,7 +114,7 @@ func (p *Profile) startMCPServers(ctx context.Context) error {
 	p.log("Starting stdio MCP server (keyword-based)")
 	p.mcpStdioProcess = exec.CommandContext(ctx,
 		"python3",
-		"deploy/examples/mcp-classifier-server/server_keyword.py")
+		"tools/mcp-classifier-server/server_keyword.py")
 	if p.verbose {
 		p.mcpStdioProcess.Stdout = os.Stdout
 		p.mcpStdioProcess.Stderr = os.Stderr
@@ -125,7 +128,7 @@ func (p *Profile) startMCPServers(ctx context.Context) error {
 	p.log("Starting HTTP MCP server (embedding-based)")
 	p.mcpHTTPProcess = exec.CommandContext(ctx,
 		"python3",
-		"deploy/examples/mcp-classifier-server/server_embedding.py",
+		"tools/mcp-classifier-server/server_embedding.py",
 		"--port", "8090")
 	if p.verbose {
 		p.mcpHTTPProcess.Stdout = os.Stdout

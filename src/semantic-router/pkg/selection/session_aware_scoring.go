@@ -89,7 +89,7 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	trace SessionCandidateTrace,
 ) (float64, SessionCandidateTrace) {
 	qualityGap := s.lookupQualityGap(selCtx, current, model)
-	handoffPenalty := s.lookupHandoffPenalty(current, model)
+	handoffPenalty := s.lookupHandoffPenalty(selCtx, current, model)
 	prefixPenalty := s.prefixCachePenalty(session, current, model, idleExpired, continuationMass)
 	frontierMultiplier := s.cacheCostMultiplier(current, model)
 	toolPenalty := 0.0
@@ -181,9 +181,8 @@ func (s *SessionAwareSelector) modelCostPressure(model string) float64 {
 	if maxCost > 0 && modelCost > 0 {
 		return clamp01(modelCost / maxCost)
 	}
-	if params, ok := s.modelParams[model]; ok && params.QualityScore > 0 {
-		return clamp01(params.QualityScore)
-	}
+	// Unknown price is not inferred from model quality. Cost pressure remains
+	// neutral until an explicit price is available.
 	return 0.5
 }
 
@@ -218,7 +217,7 @@ func (s *SessionAwareSelector) lookupQualityGap(selCtx *SelectionContext, curren
 		if family == "" {
 			continue
 		}
-		if gap, ok := s.lookupTable.QualityGap(family, current, candidate); ok {
+		if gap, ok := s.lookupTable.QualityGap(selCtx.ScopedRoutingName(family), current, candidate); ok {
 			return gap
 		}
 	}
@@ -278,7 +277,7 @@ func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext
 		if family == "" {
 			continue
 		}
-		entry, ok := s.lookupTable.Get(lookuptable.RemainingTurnPriorKey(family))
+		entry, ok := s.lookupTable.Get(lookuptable.RemainingTurnPriorKey(selCtx.ScopedRoutingName(family)))
 		if !ok {
 			continue
 		}
@@ -306,10 +305,13 @@ func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext
 	return rejected
 }
 
-func (s *SessionAwareSelector) lookupHandoffPenalty(current, candidate string) float64 {
-	if s.lookupTable != nil {
-		if penalty, ok := s.lookupTable.HandoffPenalty(current, candidate); ok {
-			return penalty
+func (s *SessionAwareSelector) lookupHandoffPenalty(selCtx *SelectionContext, current, candidate string) float64 {
+	if s.lookupTable != nil && selCtx != nil {
+		entry, ok := s.lookupTable.Get(
+			lookuptable.ScopedHandoffPenaltyKey(selCtx.RoutingScope(), current, candidate),
+		)
+		if ok {
+			return entry.Value
 		}
 	}
 	return s.config.DefaultHandoffPenalty

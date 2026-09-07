@@ -1,0 +1,742 @@
+/*
+ * Search.
+ *
+ * The navbar trigger and the ⌘K palette are ours (see
+ * `src/theme/SearchBar/index.tsx`), which replaced the search theme's anchored
+ * autocomplete dropdown. The plugin still owns the index, the ranking, and the
+ * standalone `/search` page — the `[class*=]` selectors at the bottom of this
+ * file target that page's hashed CSS-module class names.
+ *
+ * Everything the search surface needs lives in this one file so it can be
+ * deleted wholesale if the search theme is ever swapped out.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Section chip palette
+ *
+ * One hue per indexed section, so a result's origin is readable at a glance
+ * without reading the breadcrumb. Only Docs and Blog are indexed — see the
+ * note on SECTIONS in theme/SearchBar/index.tsx — and `pages` is the neutral
+ * chip for anything that appears if `indexPages` is ever turned on.
+ *
+ * Foregrounds clear 4.5:1 against their own tint in the mode they belong to;
+ * the tints are alpha so they sit correctly on both --site-surface and on the
+ * selected row.
+ * ------------------------------------------------------------------ */
+
+:root {
+  --search-chip-docs-fg: #0b6ab8;
+  --search-chip-docs-bg: rgba(48, 162, 255, 0.13);
+  --search-chip-blog-fg: #96590a;
+  --search-chip-blog-bg: rgba(217, 145, 6, 0.15);
+  --search-chip-pages-fg: var(--site-muted-bright);
+  --search-chip-pages-bg: var(--site-badge-bg);
+}
+
+html[data-theme='dark'],
+[data-theme='dark'] {
+  --search-chip-docs-fg: #7cc6ff;
+  --search-chip-docs-bg: rgba(48, 162, 255, 0.18);
+  --search-chip-blog-fg: #fbbf24;
+  --search-chip-blog-bg: rgba(217, 145, 6, 0.2);
+}
+
+/* ------------------------------------------------------------------ *
+ * Navbar trigger
+ *
+ * Built on the --search-navbar-* group rather than on content tokens
+ * directly: shell.css points that group at the color-mode tokens everywhere
+ * and at dark literals on the dark-committed homepage, so the trigger follows
+ * the navbar it sits in without a second rule here. The values below are the
+ * fallback for a shell.css that no longer sets them.
+ * ------------------------------------------------------------------ */
+
+.navbar {
+  --search-navbar-surface: var(--site-surface-alt);
+  --search-navbar-surface-hover: var(--site-surface-raised);
+  --search-navbar-border: var(--site-border-strong);
+  --search-navbar-text: var(--site-text);
+  --search-navbar-muted: var(--site-muted);
+}
+
+.site-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 2rem;
+  min-width: 12rem;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--search-navbar-border);
+  border-radius: var(--radius-md);
+  background: var(--search-navbar-surface);
+  color: var(--search-navbar-muted);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+.site-search-trigger:hover {
+  border-color: var(--site-hover-border);
+  background: var(--search-navbar-surface-hover);
+  color: var(--search-navbar-text);
+}
+
+.site-search-trigger:focus-visible {
+  outline: none;
+  border-color: var(--site-accent);
+  box-shadow: 0 0 0 3px var(--site-accent-soft);
+}
+
+.site-search-trigger__label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.site-search-trigger__key {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid var(--search-navbar-border);
+  border-radius: var(--radius-sm);
+  background: var(--search-navbar-surface-hover);
+  color: var(--search-navbar-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+/*
+ * The landing page is a marketing surface with its own calls to action, so it
+ * carries no search — the same call shell.css already makes for the color-mode
+ * toggle. theme/SearchBar/index.tsx renders nothing here and binds no ⌘K or
+ * "/" shortcut, so the missing control is not hiding a live capability.
+ *
+ * This rule removes what is left: Docusaurus renders the search container
+ * around the component, and an emptied container is still a flex item that
+ * would leave a stray gap in the navbar's right-hand group.
+ */
+.site-root--home .navbar__inner [class*='navbarSearchContainer_'] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Navbar placement
+ *
+ * shell.css hides `.navbar__items--right` below 1340px, which would take the
+ * search control with it on every tablet and phone. Restore the container —
+ * and only the container — so search stays reachable; the README treats mobile
+ * as first class. Everything else in that group stays hidden as before.
+ * ------------------------------------------------------------------ */
+
+@media (max-width: 1180px) {
+  /* Icon-only square once the navbar gets tight. ⌘K still works everywhere. */
+  .site-search-trigger {
+    min-width: 0;
+    justify-content: center;
+    width: 2rem;
+    padding: 0;
+  }
+
+  .site-search-trigger__label,
+  .site-search-trigger__key {
+    display: none;
+  }
+}
+
+@media (max-width: 1339px) {
+  .navbar__inner .navbar__items--right {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  /* Keep search + theme toggle reachable; hide the rest of the right group. */
+  .navbar__inner .navbar__items--right > :not([class*='navbarSearchContainer_']):not(.navbar-color-mode-toggle) {
+    display: none;
+  }
+
+  .navbar__inner .navbar-color-mode-toggle {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 996px) {
+  /*
+   * Docusaurus absolutely pins search to the navbar edge below 996px. Keep
+   * search + theme toggle in normal flow instead so the toggle stays at the
+   * extreme right and nothing overlaps.
+   */
+  .navbar__inner [class*='navbarSearchContainer_'] {
+    position: relative;
+    top: auto;
+    right: auto;
+    transform: none;
+  }
+
+  .site-search-trigger {
+    margin-left: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Palette shell
+ *
+ * Portalled to document.body, so it sits outside `.site-root` and follows the
+ * content tokens on <html> rather than the navbar's chrome.
+ * ------------------------------------------------------------------ */
+
+.site-search-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh var(--space-4) var(--space-4);
+  background: rgba(4, 8, 14, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.site-search-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 36rem);
+  max-height: 62vh;
+  overflow: hidden;
+  border: 1px solid var(--site-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
+  box-shadow: var(--site-shadow-raised);
+  animation: site-search-pop 160ms var(--site-ease-out);
+}
+
+@keyframes site-search-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.985);
+  }
+}
+
+/*
+ * One left edge for the whole panel: the field icon, the section chip, the row
+ * glyph, the see-all row and the footer all start at 16px, and every title
+ * starts at 45px — flush with the text the reader types.
+ */
+
+.site-search-modal__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--site-border);
+}
+
+.site-search-modal__icon {
+  flex: 0 0 17px;
+  color: var(--site-muted);
+}
+
+.site-search-modal__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--site-text-strong);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--text-base);
+}
+
+/* Sentence case, at the same size as the text the reader types over it. */
+.site-search-modal__input::placeholder {
+  color: var(--site-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.site-search-modal__results {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* No padding-top: the sticky group header supplies it, and a padded
+     scrollport would let rows show through above a header stuck at top: 0. */
+  padding: 0 var(--space-1) var(--space-1);
+  scrollbar-width: thin;
+  scrollbar-color: var(--site-border-strong) transparent;
+}
+
+/* ------------------------------------------------------------------ *
+ * Section groups
+ * ------------------------------------------------------------------ */
+
+/* Sticky so the section a row belongs to stays on screen while the list
+   scrolls under it. */
+.site-search-group__head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-3) var(--space-1);
+  background: var(--site-surface);
+}
+
+.site-search-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.68rem;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.07em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.site-search-chip--docs {
+  background: var(--search-chip-docs-bg);
+  color: var(--search-chip-docs-fg);
+}
+
+.site-search-chip--blog {
+  background: var(--search-chip-blog-bg);
+  color: var(--search-chip-blog-fg);
+}
+
+.site-search-chip--pages {
+  background: var(--search-chip-pages-bg);
+  color: var(--search-chip-pages-fg);
+}
+
+.site-search-group__count {
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------------ *
+ * Result rows
+ * ------------------------------------------------------------------ */
+
+.site-search-hit,
+.site-search-seeall {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+/*
+ * One active state for both hover and arrow-key navigation — the component
+ * moves the cursor on pointer move, so the two can never disagree. The inset
+ * rail mirrors `.menu__link--active` in shell.css and keeps keyboard position
+ * readable as position, not just as a tint.
+ */
+.site-search-hit[aria-selected='true'],
+.site-search-seeall[aria-selected='true'] {
+  background: var(--site-accent-soft);
+  box-shadow: inset 2px 0 var(--site-accent);
+}
+
+/*
+ * A bare glyph in a slot the width of the field's search icon, rather than a
+ * boxed badge: it keeps every title on the same left edge as the query, and
+ * the section chip above already carries the row's colour.
+ */
+.site-search-hit__kind {
+  flex: 0 0 17px;
+  align-self: flex-start;
+  margin-top: 1px;
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.site-search-hit__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * Two lines, because a content hit shows a windowed sentence rather than a
+ * heading. Page and heading hits are short and stay on one line.
+ */
+.site-search-hit__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.site-search-hit__title mark {
+  background: transparent;
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-semibold);
+}
+
+/* ------------------------------------------------------------------ *
+ * Breadcrumb: sidebar trail › page › heading
+ *
+ * Laid out as parts rather than one joined string so the tail — the page and
+ * the heading the reader actually needs — survives a narrow panel. The
+ * ancestors shrink first and by far the most; the heading never shrinks.
+ * ------------------------------------------------------------------ */
+
+.site-search-hit__trail {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin-top: 2px;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+/* min-width: 0 or these never shrink — a flex item's automatic minimum size is
+   its min-content width, which for nowrap text is the whole string. */
+.site-search-hit__trail > * {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.site-search-hit__trail > * + *::before {
+  content: '›';
+  margin-right: 0.3rem;
+  color: var(--site-muted);
+  opacity: 0.7;
+}
+
+.site-search-hit__ancestors {
+  flex: 0 8 auto;
+  color: var(--site-muted);
+}
+
+.site-search-hit__page {
+  flex: 0 2 auto;
+  color: var(--site-muted-bright);
+  font-weight: var(--site-font-weight-medium);
+}
+
+.site-search-hit__section {
+  flex: 0 0 auto;
+  max-width: 55%;
+  color: var(--site-muted);
+}
+
+/* The ⏎ affordance is noise on every row; surface it on the active one. */
+.site-search-hit__enter {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0 0.3rem;
+  border: 1px solid var(--site-accent);
+  border-radius: var(--radius-sm);
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  opacity: 0;
+}
+
+[aria-selected='true'] > .site-search-hit__enter {
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ *
+ * See all results
+ *
+ * The last selectable row, so the standalone /search page stays reachable
+ * from the keyboard even though Tab is trapped in the field.
+ * ------------------------------------------------------------------ */
+
+.site-search-seeall {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--site-border);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.site-search-seeall__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding-left: calc(17px + var(--space-3));
+  color: var(--site-muted-bright);
+  font-size: var(--text-xs);
+}
+
+/* ------------------------------------------------------------------ *
+ * Empty, loading and no-results states
+ * ------------------------------------------------------------------ */
+
+.site-search-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.site-search-state__title {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
+  /* A long query must wrap rather than widen the panel. */
+  overflow-wrap: anywhere;
+}
+
+.site-search-state__hint {
+  margin: 0;
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+}
+
+.site-search-state__spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--site-border-strong);
+  border-top-color: var(--site-accent);
+  border-radius: var(--radius-full);
+  animation: site-search-spin 700ms linear infinite;
+}
+
+@keyframes site-search-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.site-search-state__action {
+  margin-top: var(--space-1);
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--site-surface-alt);
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast);
+}
+
+.site-search-state__action:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-surface-raised);
+}
+
+.site-search-state__action:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Footer
+ *
+ * Keyboard hints only. The result count lives on the group headers and is not
+ * repeated here — with one group on screen the two read as the same number
+ * printed twice.
+ * ------------------------------------------------------------------ */
+
+.site-search-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--site-border);
+  background: var(--site-surface-alt);
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+}
+
+/*
+ * Moving within the list on the left, leaving it on the right — the split the
+ * Claude Code and LangChain palettes use. Escape is the one hint that is not
+ * about the results, so it does not sit in their run.
+ */
+.site-search-modal__footer > :last-child {
+  margin-left: auto;
+}
+
+.site-search-modal__footer kbd {
+  margin-right: var(--space-1);
+  padding: 1px 5px;
+  border: 1px solid var(--site-border-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--ifm-font-family-monospace);
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .site-search-scrim {
+    padding: 6vh var(--space-2) var(--space-2);
+  }
+
+  .site-search-modal {
+    max-height: 80vh;
+  }
+
+  /*
+   * Only the way out earns the width here. Dropping the two navigation hints
+   * rather than the last one also means the survivor is the one that still
+   * makes sense on a touch screen.
+   */
+  .site-search-modal__footer > :not(:last-child) {
+    display: none;
+  }
+
+  .site-search-modal__footer > :last-child {
+    margin-left: 0;
+  }
+}
+/* ------------------------------------------------------------------ *
+ * /search — the standalone results page
+ *
+ * A "page" route, so it follows the active content palette (light/dark).
+ * The plugin puts no stable class on the page wrapper, hence the :has()
+ * scope (shell.css already relies on :has() elsewhere).
+ * ------------------------------------------------------------------ */
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) {
+  max-width: var(--site-doc-max);
+}
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) > h1 {
+  margin-bottom: var(--space-5);
+  font-size: var(--site-text-h1);
+  line-height: var(--site-leading-tight);
+}
+
+.main-wrapper .container:has(input[class*='searchQueryInput_']) > p {
+  margin-bottom: var(--space-2);
+  color: var(--site-muted);
+  font-size: var(--site-text-caption);
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+input[class*='searchQueryInput_'] {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--site-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
+  color: var(--site-text);
+  font-family: var(--ifm-font-family-base);
+  font-size: var(--site-text-body);
+  transition:
+    border-color var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+input[class*='searchQueryInput_']::placeholder {
+  color: var(--site-muted);
+}
+
+input[class*='searchQueryInput_']:hover {
+  border-color: var(--site-hover-border);
+}
+
+input[class*='searchQueryInput_']:focus {
+  border-color: var(--site-accent);
+  box-shadow: var(--site-hover-inset);
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+article[class*='searchResultItem_'] {
+  margin: 0 -0.9rem;
+  padding: 1.15rem 0.9rem;
+  border-bottom: 1px solid var(--site-border);
+  transition: background var(--site-transition-fast);
+}
+
+article[class*='searchResultItem_']:hover {
+  background: var(--site-hover-row-bg);
+}
+
+article[class*='searchResultItem_']:last-child {
+  border-bottom: 0;
+}
+
+article[class*='searchResultItem_'] > h2 {
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+article[class*='searchResultItem_'] > h2 a {
+  color: var(--site-text-strong);
+  transition: color var(--site-transition-fast);
+}
+
+article[class*='searchResultItem_'] > h2 a:hover {
+  color: var(--site-accent-strong);
+  text-decoration: underline;
+}
+
+article[class*='searchResultItem_'] > h2 a:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+p[class*='searchResultItemPath_'] {
+  color: var(--site-muted);
+  font-size: var(--site-text-caption);
+}
+
+p[class*='searchResultItemSummary_'] {
+  color: var(--site-muted-bright);
+  font-size: var(--site-text-small);
+  font-style: normal;
+  line-height: var(--site-leading-normal);
+}
+
+/* The plugin marks matches on this page but never styles them, so they fall
+   back to the browser's yellow default. */
+article[class*='searchResultItem_'] mark {
+  padding: 0 0.15em;
+  border-radius: var(--radius-sm);
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
+}
+
+/* ------------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .site-search-modal {
+    animation: none;
+  }
+
+  .site-search-state__spinner {
+    animation: none;
+  }
+
+  .site-search-trigger,
+  .site-search-state__action,
+  input[class*='searchQueryInput_'],
+  article[class*='searchResultItem_'],
+  article[class*='searchResultItem_'] > h2 a {
+    transition: none;
+  }
+}

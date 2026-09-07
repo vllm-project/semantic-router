@@ -8,6 +8,9 @@ type ContentPart struct {
 	// Text is the text content (for text types)
 	Text string `json:"text,omitempty"`
 
+	// Refusal is the refusal text for a refusal content block.
+	Refusal string `json:"refusal,omitempty"`
+
 	// Annotations for the content
 	Annotations []Annotation `json:"annotations,omitempty"`
 
@@ -21,18 +24,11 @@ type ContentPart struct {
 
 // Annotation represents an annotation on content.
 type Annotation struct {
-	Type         string        `json:"type"`
-	Text         string        `json:"text,omitempty"`
-	StartIdx     int           `json:"start_index,omitempty"`
-	EndIdx       int           `json:"end_index,omitempty"`
-	FileID       string        `json:"file_id,omitempty"`
-	FileCitation *FileCitation `json:"file_citation,omitempty"`
-}
-
-// FileCitation represents a file citation annotation.
-type FileCitation struct {
-	FileID string `json:"file_id"`
-	Quote  string `json:"quote,omitempty"`
+	Type     string `json:"type"`
+	URL      string `json:"url"`
+	Title    string `json:"title"`
+	StartIdx int64  `json:"start_index"`
+	EndIdx   int64  `json:"end_index"`
 }
 
 // Tool represents a tool definition.
@@ -106,7 +102,14 @@ type Usage struct {
 	InputTokens         int                  `json:"input_tokens"`
 	OutputTokens        int                  `json:"output_tokens"`
 	TotalTokens         int                  `json:"total_tokens"`
+	InputTokensDetails  *InputTokensDetails  `json:"input_tokens_details,omitempty"`
 	OutputTokensDetails *OutputTokensDetails `json:"output_tokens_details,omitempty"`
+}
+
+// InputTokensDetails provides the cache-accounting breakdown for input tokens.
+type InputTokensDetails struct {
+	CachedTokens     int `json:"cached_tokens"`
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
 }
 
 // OutputTokensDetails provides detailed breakdown of output tokens.
@@ -155,6 +158,7 @@ const (
 	ItemTypeMessage             = "message"
 	ItemTypeFunctionCall        = "function_call"
 	ItemTypeFunctionCallOutput  = "function_call_output"
+	ItemTypeReasoning           = "reasoning"
 	ItemTypeItemReference       = "item_reference"
 	ItemTypeImageGenerationCall = "image_generation_call"
 )

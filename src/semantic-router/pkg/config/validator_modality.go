@@ -3,13 +3,27 @@ package config
 import "fmt"
 
 func validateModalityContracts(cfg *RouterConfig) error {
+	if err := validateGlobalModalityContracts(cfg); err != nil {
+		return err
+	}
+	return validateRoutingModalityContracts(cfg)
+}
+
+func validateGlobalModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
 	if cfg.ModalityDetector.Enabled {
 		if err := cfg.ModalityDetector.Validate(); err != nil {
 			return fmt.Errorf("modality_detector: %w", err)
 		}
 	}
-	if err := validateImageGenBackends(cfg); err != nil {
-		return err
+	return nil
+}
+
+func validateRoutingModalityContracts(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
 	}
 	if err := validateModalityDecisions(cfg); err != nil {
 		return err
@@ -34,7 +48,7 @@ func validateModalityRules(rules []ModalityRule) error {
 // validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
 // Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
 func validateModalityDecisions(cfg *RouterConfig) error {
-	for _, decision := range cfg.Decisions {
+	for _, decision := range cfg.AllRoutingDecisions() {
 		for _, cond := range decision.Rules.Conditions {
 			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
 				continue
@@ -70,41 +84,5 @@ func validateBothModalityDecision(cfg *RouterConfig, decision Decision) error {
 	if !hasAR || !hasDiffusion {
 		return fmt.Errorf("decision %q uses modality condition \"BOTH\" but modelRefs must include both an AR model (modality: \"ar\") and a diffusion model (modality: \"diffusion\"), or an omni model (modality: \"omni\")", decision.Name)
 	}
-	return nil
-}
-
-// validateImageGenBackends validates image_gen_backends entries and model_config references.
-func validateImageGenBackends(cfg *RouterConfig) error {
-	validTypes := map[string]bool{"vllm_omni": true, "openai": true}
-
-	for name, entry := range cfg.ImageGenBackends {
-		if entry.Type == "" {
-			return fmt.Errorf("image_gen_backends[%s]: type is required (one of \"vllm_omni\", \"openai\")", name)
-		}
-		if !validTypes[entry.Type] {
-			return fmt.Errorf("image_gen_backends[%s]: unknown type %q (must be \"vllm_omni\" or \"openai\")", name, entry.Type)
-		}
-
-		switch entry.Type {
-		case "vllm_omni":
-			if entry.BaseURL == "" {
-				return fmt.Errorf("image_gen_backends[%s]: base_url is required for vllm_omni", name)
-			}
-		case "openai":
-			if entry.APIKey == "" {
-				return fmt.Errorf("image_gen_backends[%s]: api_key is required for openai", name)
-			}
-		}
-	}
-
-	for modelName, params := range cfg.ModelConfig {
-		if params.ImageGenBackend == "" {
-			continue
-		}
-		if _, ok := cfg.ImageGenBackends[params.ImageGenBackend]; !ok {
-			return fmt.Errorf("model_config[%s]: image_gen_backend %q not found in image_gen_backends", modelName, params.ImageGenBackend)
-		}
-	}
-
 	return nil
 }

@@ -1,731 +1,230 @@
 ---
-sidebar_position: 5
+title: Milvus
+sidebar_label: Milvus
+description: Use Milvus as the durable vector backend for response cache and other Router storage features.
 ---
 
-# Milvus Semantic Cache
+# Milvus
 
-This guide covers deploying Milvus as the semantic cache backend for the Semantic Router in Kubernetes. Milvus provides persistent, scalable vector storage compared to the default in-memory cache.
+Milvus is a distributed vector database that Semantic Router can use for a
+durable response cache and other vector-backed features. Choose it when the
+dataset must outgrow a single Router process, survive restarts, or be shared by
+several Router replicas.
 
-:::note
-Milvus is optional. The router works with the default memory backend out of the box. Use Milvus when you need persistence, horizontal scaling, or cache sharing across router replicas.
-:::
+For a small local deployment, an in-memory cache is simpler. Valkey or Redis
+may be a better fit when your team already operates their vector-search
+extensions. Qdrant is another dedicated vector-store option. See
+[Data and Storage](storage-overview) before selecting a backend.
 
-## Deployment Options
+## What this page configures
 
-Two approaches are available:
+The examples below use Milvus for `global.stores.response_cache`. A decision
+still needs a `response_cache` plugin before requests use that store.
 
-- **Helm**: Quick start and parameterized deployments
-- **Milvus Operator**: Production-grade lifecycle management, rolling upgrades, health checks, and dependency orchestration
+Milvus can also back agentic memory or the general vector store, but those
+features have separate schemas and retention requirements. Use distinct
+collections when their data lifecycle differs.
 
 ## Prerequisites
 
-- Kubernetes cluster with `kubectl` configured
-- Default `StorageClass` available
-- Helm 3.x installed
+- a Kubernetes cluster and Helm, or an existing reachable Milvus deployment
+- persistent storage appropriate for your durability target
+- private network access from every Router replica to Milvus gRPC (19530 by
+  default)
+- an embedding dimension that matches the Router's selected embedding model
 
-:::note[ServiceMonitor Requirement]
-The default Helm values enable ServiceMonitor for Prometheus metrics collection, which requires [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed first.
+## Deploy Milvus with Helm
 
-**For testing without Prometheus Operator**, disable ServiceMonitor using `--set metrics.serviceMonitor.enabled=false` (see deployment commands below).
-:::
-
-## Deploy with Helm
-
-### Standalone Mode
-
-Suitable for development and small-scale deployments:
+The Milvus project maintains the Helm chart. The following starts a standalone
+deployment suitable for development and evaluation:
 
 ```bash
 helm repo add milvus https://zilliztech.github.io/milvus-helm/
 helm repo update
+
+helm upgrade --install milvus milvus/milvus \
+  --namespace milvus \
+  --create-namespace \
+  --set cluster.enabled=false
 ```
 
-**Without Prometheus Operator** (for testing/development):
+Wait for the workload and inspect its Service:
 
 ```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
+kubectl get pods,service -n milvus
+kubectl wait --for=condition=Ready pod \
+  -l app.kubernetes.io/instance=milvus \
+  -n milvus --timeout=10m
 ```
 
-**With Prometheus Operator** (production with monitoring):
+For production, use the topology, object storage, metadata store, persistence,
+backup, and upgrade procedure documented by your Milvus distribution. Pin a
+chart version and review its values rather than copying development defaults.
 
-```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-```
+## Configure response cache
 
-### Cluster Mode
-
-Recommended for production with high availability:
-
-```bash
-helm repo add milvus https://zilliztech.github.io/milvus-helm/
-helm repo update
-```
-
-:::note[Pulsar Version]
-Milvus 2.4+ uses Pulsar v3 by default. The values below disable the old Pulsar to avoid conflicts.
-:::
-
-**Without Prometheus Operator** (for testing):
-
-```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=true \
-  --set etcd.replicaCount=3 \
-  --set minio.mode=distributed \
-  --set pulsar.enabled=false \
-  --set pulsarv3.enabled=true \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-```
-
-**With Prometheus Operator** (production with monitoring):
-
-```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=true \
-  --set etcd.replicaCount=3 \
-  --set minio.mode=distributed \
-  --set pulsar.enabled=false \
-  --set pulsarv3.enabled=true \
-  --namespace vllm-semantic-router-system --create-namespace
-```
-
-## Deploy with Milvus Operator
-
-1. Install Milvus Operator following the [official instructions](https://github.com/zilliztech/milvus-operator)
-
-2. Apply the Custom Resource:
-
-**Standalone:**
-
-```bash
-kubectl apply -n vllm-semantic-router-system -f - <<EOF
-apiVersion: milvus.io/v1beta1
-kind: Milvus
-metadata:
-  name: milvus-standalone
-spec:
-  mode: standalone
-  components:
-    disableMetrics: false
-  dependencies:
-    storage:
-      inCluster:
-        values:
-          mode: standalone
-        deletionPolicy: Delete
-        pvcDeletion: true
-    etcd:
-      inCluster:
-        values:
-          replicaCount: 1
-  config: {}
-EOF
-```
-
-**Cluster:**
-
-```bash
-kubectl apply -n vllm-semantic-router-system -f - <<EOF
-apiVersion: milvus.io/v1beta1
-kind: Milvus
-metadata:
-  name: milvus-cluster
-spec:
-  mode: cluster
-  components:
-    disableMetrics: false
-  dependencies:
-    storage:
-      inCluster:
-        values:
-          mode: distributed
-        deletionPolicy: Retain
-        pvcDeletion: false
-    etcd:
-      inCluster:
-        values:
-          replicaCount: 3
-    pulsar:
-      inCluster:
-        values:
-          broker:
-            replicaCount: 1
-  config: {}
-EOF
-```
-
-## Configure Semantic Router
-
-### Apply Milvus Client Config
-
-```bash
-kubectl apply -n vllm-semantic-router-system -f - <<EOF
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: milvus-client-config
-data:
-  milvus.yaml: |
-    connection:
-      host: "milvus-semantic-cache.vllm-semantic-router-system.svc.cluster.local"
-      port: 19530
-      timeout: 60
-      auth:
-        enabled: false
-      tls:
-        enabled: false
-    collection:
-      name: "semantic_cache"
-      description: "Semantic cache"
-      vector_field:
-        name: "embedding"
-        dimension: 384
-        metric_type: "IP"
-      index:
-        type: "HNSW"
-        params:
-          M: 16
-          efConstruction: 64
-    search:
-      params:
-        ef: 64
-      topk: 10
-      consistency_level: "Session"
-    development:
-      auto_create_collection: true
-      verbose_errors: true
-EOF
-```
-
-### Update Router Config
-
-Ensure these settings in your canonical router configuration:
+Use the canonical `response_cache` key. `semantic_cache` is a deprecated input
+alias retained only for migration compatibility.
 
 ```yaml
 global:
   stores:
-    semantic_cache:
+    response_cache:
       enabled: true
-      backend_type: "milvus"
+      backend_type: milvus
+      similarity_threshold: 0.86
+      max_entries: 50000
+      ttl_seconds: 7200
+      embedding_model: mmbert
       milvus:
         connection:
-          host: "milvus"
+          host: milvus.milvus.svc.cluster.local
           port: 19530
+          database: default
+          timeout: 30
         collection:
-          name: "semantic_cache"
+          name: semantic_router_response_cache
+          description: Semantic Router response-cache vectors
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index:
+            type: HNSW
+            params:
+              M: 16
+              efConstruction: 200
+        search:
+          params:
+            ef: 64
+          topk: 10
+          consistency_level: Bounded
+        development:
+          drop_collection_on_startup: false
+          auto_create_collection: true
+          verbose_errors: false
 ```
 
-## Networking and Security
+Set `dimension` to the output dimension of `embedding_model`. A mismatch causes
+inserts or searches to fail.
 
-### Network Policy
-
-Restrict access to Milvus:
-
-```bash
-kubectl apply -n vllm-semantic-router-system -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-router-to-milvus
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: milvus
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: vllm-semantic-router-system
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: semantic-router
-      ports:
-        - protocol: TCP
-          port: 19530
-EOF
-```
-
-### TLS and Authentication
-
-1. Create secrets for credentials and certificates:
-
-```bash
-# Auth credentials
-kubectl create secret generic milvus-auth -n vllm-semantic-router-system \
-  --from-literal=username="YOUR_USERNAME" \
-  --from-literal=password="YOUR_PASSWORD"
-
-# TLS certificates
-kubectl create secret generic milvus-tls -n vllm-semantic-router-system \
-  --from-file=ca.crt=/path/to/ca.crt \
-  --from-file=client.crt=/path/to/client.crt \
-  --from-file=client.key=/path/to/client.key
-```
-
-2. Update Milvus client configuration:
+Enable the route plugin on decisions that may read or populate the cache:
 
 ```yaml
-connection:
-  host: "milvus-cluster.vllm-semantic-router-system.svc.cluster.local"
-  port: 19530
-  timeout: 60
-  auth:
-    enabled: true
-    username: "${MILVUS_USERNAME}"
-    password: "${MILVUS_PASSWORD}"
-  tls:
-    enabled: true
+routing:
+  decisions:
+    - name: general-chat
+      description: General requests that may use response cache.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: local/general
+      plugins:
+        - type: response_cache
+          configuration:
+            enabled: true
+            semantic:
+              similarity_threshold: 0.86
 ```
 
-:::tip
-Wire environment variables or projected Secret volumes to the router deployment and reference them in the config.
-:::
-
-## Storage
-
-Ensure a default `StorageClass` exists. Milvus Helm chart and Operator automatically create necessary PVCs for etcd and MinIO.
-
-## Monitoring
-
-:::note[Requires Prometheus Operator]
-ServiceMonitor requires [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) to be installed in your cluster. The default Helm values enable ServiceMonitor.
-:::
-
-### Install Prometheus Operator
-
-If not already installed:
+Run configuration validation before rollout:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml
-
-# Wait for CRDs to be ready
-kubectl wait --for condition=established --timeout=60s \
-  crd/servicemonitors.monitoring.coreos.com
+vllm-sr validate --config config.yaml
 ```
 
-### Deploy Milvus with Monitoring
+## Network and transport security
 
-ServiceMonitor is enabled by default. Just omit the `--set metrics.serviceMonitor.enabled=false` flag:
+The current response-cache connector opens an unauthenticated, plaintext gRPC
+connection using `connection.host` and `connection.port`. It does not apply
+Milvus username/password or TLS settings, so do not add those fields expecting
+the response-cache client to enforce them.
 
-```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-```
+Keep this connection on a private network. In Kubernetes, use NetworkPolicy to
+allow only Router workloads to reach the Milvus Service and deny unrelated
+namespaces. Do not expose the Service publicly. If your environment requires
+authenticated or end-to-end TLS database connections, use a backend whose
+current Router integration supports that requirement, or place a reviewed
+in-cluster transport proxy in front of Milvus and test the complete path before
+production rollout.
 
-### Verify ServiceMonitor
+## Verify behavior
 
-```bash
-kubectl get servicemonitor -n vllm-semantic-router-system
-```
+After deployment:
 
-### Disable Monitoring (Optional)
+1. confirm the Router becomes ready and logs a successful Milvus connection;
+2. send a request through a decision with the `response_cache` plugin;
+3. repeat an equivalent request and inspect cache metrics or routing metadata;
+4. confirm that the expected collection exists and its vector dimension is
+   correct; and
+5. exercise the same path from every Router replica.
 
-For testing environments without Prometheus, add `--set metrics.serviceMonitor.enabled=false`:
+Do not use a fixed latency expectation as a health check. Lookup time depends on
+network distance, index size, index parameters, consistency level, storage, and
+hardware. Measure it with your dataset and deployment.
 
-```bash
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-```
+## Migrate from another cache
 
-## Migration from Memory Cache
+Response-cache entries are derived data, so the safest migration is usually to
+start a new empty Milvus collection and allow it to warm:
 
-### Pre-migration Checklist
+1. deploy and secure Milvus;
+2. add the Milvus config without removing the old deployment's rollback path;
+3. validate and roll out to a small traffic slice;
+4. monitor connection errors, cache hit rate, memory, and request latency;
+5. expand the rollout; and
+6. retire the previous cache after its rollback window expires.
 
-- Milvus deployed and healthy: `kubectl get pods -l app.kubernetes.io/name=milvus`
-- Network connectivity verified between router and Milvus
-- Sufficient storage provisioned for expected cache size
+If the collection contains durable memory or uploaded documents rather than
+reconstructible cache entries, follow a data migration and backup procedure
+specific to that feature. Do not treat those collections as disposable.
 
-### Staged Rollout
+## Backup and retention
 
-```bash
-# Step 1: Deploy Milvus (using Helm for simplicity)
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
+Define retention from the data being stored, not from Milvus alone. Response
+cache may contain request-derived embeddings, metadata, or responses. Limit
+access, set TTLs, and document deletion behavior.
 
-# Step 2: Wait for ready
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=milvus \
-  -n vllm-semantic-router-system --timeout=300s
-
-# Step 3: Update router config (set backend_type: "milvus")
-kubectl edit configmap semantic-router-config -n vllm-semantic-router-system
-
-# Step 4: Restart router
-kubectl rollout restart deployment/semantic-router -n vllm-semantic-router-system
-```
-
-### Validation
-
-```bash
-# Check logs for Milvus connection
-kubectl logs -l app=semantic-router -n vllm-semantic-router-system | grep -i milvus
-
-# Test cache functionality
-curl -X POST http://<router-endpoint>/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "test", "messages": [{"role": "user", "content": "Hello"}]}'
-
-# Repeat request to verify cache hit
-curl -X POST http://<router-endpoint>/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model": "test", "messages": [{"role": "user", "content": "Hello"}]}'
-```
-
-### Monitor Metrics
-
-- Cache hit ratio should stabilize after warm-up
-- Latency: Milvus adds ~1-5ms per lookup vs memory cache
-- Error rate should remain at baseline
-
-### Rollback
-
-```bash
-# Revert to memory backend
-kubectl patch configmap semantic-router-config -n vllm-semantic-router-system \
-  --type merge -p '{"data":{"config.yaml":"semantic_cache:\n  backend_type: \"memory\""}}'
-
-# Restart router
-kubectl rollout restart deployment/semantic-router -n vllm-semantic-router-system
-
-# Verify
-kubectl logs -l app=semantic-router -n vllm-semantic-router-system | grep -i "cache"
-```
-
-:::note
-Data in Milvus is preserved and can be reused when switching back.
-:::
-
-## Backup and Recovery
-
-### Backup Strategies
-
-**1. Milvus Native Backup (Recommended)**
-
-Use [milvus-backup](https://github.com/zilliztech/milvus-backup):
-
-```bash
-# Install
-wget https://github.com/zilliztech/milvus-backup/releases/latest/download/milvus-backup_Linux_x86_64.tar.gz
-tar -xzf milvus-backup_Linux_x86_64.tar.gz
-
-# Create backup
-./milvus-backup create -n semantic_cache_backup \
-  --milvus.address milvus-cluster.vllm-semantic-router-system.svc.cluster.local:19530
-
-# List / Restore
-./milvus-backup list
-./milvus-backup restore -n semantic_cache_backup
-```
-
-**2. Storage-Level Backup**
-
-Use volume snapshots (requires CSI snapshot controller):
-
-```yaml
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: milvus-data-snapshot
-  namespace: vllm-semantic-router-system
-spec:
-  volumeSnapshotClassName: csi-snapclass
-  source:
-    persistentVolumeClaimName: milvus-data
-```
-
-**3. MinIO/S3 Backup (Cluster Mode)**
-
-Configure bucket versioning and replication:
-
-```bash
-mc version enable myminio/milvus-bucket
-mc replicate add myminio/milvus-bucket --remote-bucket milvus-bucket-dr \
-  --arn "arn:minio:replication::..."
-```
-
-### Recovery Procedures
-
-**From milvus-backup:**
-
-```bash
-# Stop router
-kubectl scale deployment/semantic-router -n vllm-semantic-router-system --replicas=0
-
-# Restore
-./milvus-backup restore -n semantic_cache_backup --restore_index
-
-# Restart router
-kubectl scale deployment/semantic-router -n vllm-semantic-router-system --replicas=3
-```
-
-**From VolumeSnapshot:**
-
-```bash
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: milvus-data-restored
-  namespace: vllm-semantic-router-system
-spec:
-  dataSource:
-    name: milvus-data-snapshot
-    kind: VolumeSnapshot
-    apiGroup: snapshot.storage.k8s.io
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
-EOF
-```
-
-### Backup Schedule Recommendation
-
-| Environment | Frequency | Retention | Method |
-|-------------|-----------|-----------|--------|
-| Development | Weekly | 2 backups | milvus-backup |
-| Staging | Daily | 7 backups | milvus-backup + snapshots |
-| Production | Every 6 hours | 14 backups | milvus-backup + S3 replication |
+Use the Milvus project's supported backup tooling for durable collections and
+test restoration into an isolated environment. Record the Milvus version,
+collection schema, embedding model, and dimension with the backup.
 
 ## Troubleshooting
 
-### Both Pulsar and Pulsar v3 Running
+### `milvus configuration is required`
 
-**Symptom**: Both `pulsar` and `pulsarv3` pods are running in cluster mode
+`backend_type: milvus` requires the nested
+`global.stores.response_cache.milvus` block. Check indentation and validate the
+complete config.
 
-```bash
-kubectl get pods -n vllm-semantic-router-system | grep pulsar
-# Shows both milvus-semantic-cache-pulsar-* and milvus-semantic-cache-pulsarv3-* pods
-```
+### Collection does not exist
 
-**Cause**: Both old Pulsar and Pulsar v3 are enabled in Helm values
+For development, set `development.auto_create_collection: true`. In a
+controlled production environment, pre-create the collection and leave
+automatic creation disabled. Ensure the schema and vector dimension match the
+Router config.
 
-**Solution**: Use only Pulsar v3 (recommended for Milvus 2.4+)
+### Connection timeout
 
-```bash
-# Uninstall existing release
-helm uninstall milvus-semantic-cache -n vllm-semantic-router-system
-
-# Reinstall with correct configuration
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=true \
-  --set etcd.replicaCount=3 \
-  --set minio.mode=distributed \
-  --set pulsar.enabled=false \
-  --set pulsarv3.enabled=true \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-```
-
-### ServiceMonitor CRD Not Found
-
-**Symptom**: Helm installation fails with error:
-
-```
-Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest: 
-resource mapping not found for name: "milvus-semantic-cache-milvus-standalone" namespace: "vllm-semantic-router-system" 
-from "": no matches for kind "ServiceMonitor" in version "monitoring.coreos.com/v1"
-ensure CRDs are installed first
-```
-
-**Solution**: Disable ServiceMonitor or install Prometheus Operator
+Check the Service and endpoints, DNS from the Router namespace, NetworkPolicy,
+and the configured database:
 
 ```bash
-# Option 1: Disable ServiceMonitor (recommended for testing)
-helm install milvus-semantic-cache milvus/milvus \
-  --set cluster.enabled=false \
-  --set etcd.replicaCount=1 \
-  --set minio.mode=standalone \
-  --set pulsar.enabled=false \
-  --set metrics.serviceMonitor.enabled=false \
-  --namespace vllm-semantic-router-system --create-namespace
-
-# Option 2: Install Prometheus Operator first
-kubectl apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/main/bundle.yaml
+kubectl get service,endpoints -n milvus
+kubectl get networkpolicy -A
 ```
 
-### Connection Issues
+### Search quality is poor
 
-**Symptom**: `failed to connect to Milvus: context deadline exceeded`
-
-```bash
-# Verify Milvus is running
-kubectl get pods -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system
-
-# Check service endpoint
-kubectl get svc -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system
-
-# Test connectivity from router pod
-kubectl exec -it deploy/semantic-router -n vllm-semantic-router-system -- \
-  nc -zv milvus-cluster.vllm-semantic-router-system.svc.cluster.local 19530
-
-# Check NetworkPolicy
-kubectl get networkpolicy -n vllm-semantic-router-system
-
-# Verify DNS
-kubectl exec -it deploy/semantic-router -n vllm-semantic-router-system -- \
-  nslookup milvus-cluster.vllm-semantic-router-system.svc.cluster.local
-```
-
-### Authentication Failures
-
-**Symptom**: `authentication failed` or `access denied`
-
-```bash
-# Verify credentials
-kubectl get secret milvus-auth -n vllm-semantic-router-system -o jsonpath='{.data.username}' | base64 -d
-
-# Check auth in Milvus logs
-kubectl logs -l app.kubernetes.io/component=proxy -n vllm-semantic-router-system | grep -i auth
-
-# Verify router config
-kubectl get configmap milvus-client-config -n vllm-semantic-router-system -o yaml
-```
-
-### Performance Issues
-
-**Symptom**: High latency or timeouts
-
-```bash
-# Check resource usage
-kubectl top pods -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system
-
-# Review metrics
-kubectl port-forward svc/milvus-cluster 9091:9091 -n vllm-semantic-router-system
-# Visit http://localhost:9091/metrics
-```
-
-Check collection stats via pymilvus:
-
-```python
-from pymilvus import connections, Collection
-connections.connect(host="localhost", port="19530")
-col = Collection("semantic_cache")
-print(col.num_entities)
-print(col.index())
-```
-
-### Collection Issues
-
-**Symptom**: `collection not found` or schema mismatch
-
-```bash
-# List collections
-kubectl exec -it deploy/milvus-cluster-proxy -n vllm-semantic-router-system -- \
-  curl -s localhost:9091/api/v1/collections
-
-# Check auto_create setting
-kubectl get configmap milvus-client-config -n vllm-semantic-router-system -o yaml | grep auto_create
-```
-
-Manual collection creation:
-
-```python
-from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType
-
-connections.connect(host="localhost", port="19530")
-fields = [
-    FieldSchema(name="id", dtype=DataType.VARCHAR, is_primary=True, max_length=64),
-    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=384),
-    FieldSchema(name="response", dtype=DataType.VARCHAR, max_length=65535),
-]
-schema = CollectionSchema(fields, description="Semantic cache")
-collection = Collection("semantic_cache", schema)
-collection.create_index("embedding", {
-    "index_type": "HNSW",
-    "metric_type": "IP",
-    "params": {"M": 16, "efConstruction": 64}
-})
-```
-
-### Storage Issues
-
-**Symptom**: PVC pending or storage full
-
-```bash
-# Check PVC status
-kubectl get pvc -n vllm-semantic-router-system
-
-# Check StorageClass
-kubectl get sc
-
-# Check available storage
-kubectl exec -it deploy/milvus-cluster-datanode -n vllm-semantic-router-system -- df -h
-
-# Expand PVC
-kubectl patch pvc milvus-data -n vllm-semantic-router-system \
-  -p '{"spec":{"resources":{"requests":{"storage":"50Gi"}}}}'
-```
-
-### Pod Crash / OOM
-
-**Symptom**: CrashLoopBackOff or OOMKilled
-
-```bash
-# Check events
-kubectl describe pod -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system
-
-# Check previous logs
-kubectl logs -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system --previous
-
-# Increase memory
-kubectl patch deployment milvus-cluster-proxy -n vllm-semantic-router-system \
-  --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value":"4Gi"}]'
-```
-
-### Diagnostic Commands
-
-```bash
-# Overall health
-kubectl get all -l app.kubernetes.io/name=milvus -n vllm-semantic-router-system
-
-# Component logs
-kubectl logs -l app.kubernetes.io/component=proxy -n vllm-semantic-router-system --tail=100
-kubectl logs -l app.kubernetes.io/component=datanode -n vllm-semantic-router-system --tail=100
-kubectl logs -l app.kubernetes.io/component=querynode -n vllm-semantic-router-system --tail=100
-
-# etcd health (cluster mode)
-kubectl exec -it milvus-cluster-etcd-0 -n vllm-semantic-router-system -- etcdctl endpoint health
-
-# MinIO health (cluster mode)
-kubectl exec -it milvus-cluster-minio-0 -n vllm-semantic-router-system -- mc admin info local
-```
-
-## Next Steps
-
-- [Configuration Guide](./configuration) - Semantic cache configuration options
-- [Global Observability](../tutorials/global/api-and-observability) - Monitoring and metrics
+Verify that training and inference use the same embedding model and dimension.
+Then tune the response-cache similarity threshold and Milvus search/index
+parameters against representative traffic. Do not copy thresholds from another
+embedding model without evaluation.
 
 ## References
 
-- [Configure Milvus with Helm](https://milvus.io/docs/configure-helm.md)
-- [Milvus Operator](https://github.com/zilliztech/milvus-operator)
-- [Milvus Monitoring](https://milvus.io/docs/monitor.md)
+- [Milvus documentation](https://milvus.io/docs)
+- [Response Cache plugin](../tutorials/plugin/response-cache)
+- [Data and Storage](storage-overview)

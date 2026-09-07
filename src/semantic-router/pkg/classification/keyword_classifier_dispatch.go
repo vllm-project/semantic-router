@@ -13,6 +13,16 @@ type ruleMatch struct {
 	totalKeywords int
 }
 
+// KeywordRuleMatch describes one matching keyword rule. MatchAll returns these
+// in configuration order so callers can compose rule signals without changing
+// the legacy first-match classification APIs.
+type KeywordRuleMatch struct {
+	RuleName      string
+	Keywords      []string
+	MatchCount    int
+	TotalKeywords int
+}
+
 // classifyState holds per-call lazy caches so the BM25 / N-gram classifiers
 // are invoked at most once per ClassifyWithKeywordsAndCount call, regardless
 // of how many BM25 / N-gram rule refs appear in ruleOrder.
@@ -54,6 +64,74 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 		}
 	}
 	return "", nil, 0, 0, nil
+}
+
+// MatchAll evaluates every keyword rule and returns all matches in declaration
+// order. Decision evaluation must use this method because a request can satisfy
+// multiple named signals that participate in AND, OR, and NOT expressions.
+func (c *KeywordClassifier) MatchAll(text string) ([]KeywordRuleMatch, error) {
+	if c == nil {
+		return nil, nil
+	}
+
+	regexIdx := 0
+	var bm25Matches, ngramMatches map[string]nlp_binding.MatchResult
+	matches := make([]KeywordRuleMatch, 0)
+	for _, ref := range c.ruleOrder {
+		var match ruleMatch
+		var err error
+		switch ref.method {
+		case "regex":
+			match, err = c.classifyRegexRule(text, &regexIdx)
+		case "bm25":
+			if bm25Matches == nil {
+				bm25Matches = indexNativeMatches(c.bm25Classifier.ClassifyAll(text))
+			}
+			match = nativeRuleMatch(ref.name, bm25Matches)
+		case "ngram":
+			if ngramMatches == nil {
+				ngramMatches = indexNativeMatches(c.ngramClassifier.ClassifyAll(text))
+			}
+			match = nativeRuleMatch(ref.name, ngramMatches)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !match.matched {
+			continue
+		}
+
+		logRuleMatch(ref.method, match.ruleName, match.keywords, match.matchCount, match.totalKeywords)
+		matches = append(matches, KeywordRuleMatch{
+			RuleName:      match.ruleName,
+			Keywords:      match.keywords,
+			MatchCount:    match.matchCount,
+			TotalKeywords: match.totalKeywords,
+		})
+	}
+	return matches, nil
+}
+
+func indexNativeMatches(matches []nlp_binding.MatchResult) map[string]nlp_binding.MatchResult {
+	indexed := make(map[string]nlp_binding.MatchResult, len(matches))
+	for _, match := range matches {
+		indexed[match.RuleName] = match
+	}
+	return indexed
+}
+
+func nativeRuleMatch(ruleName string, matches map[string]nlp_binding.MatchResult) ruleMatch {
+	result, ok := matches[ruleName]
+	if !ok || !result.Matched {
+		return ruleMatch{}
+	}
+	return ruleMatch{
+		matched:       true,
+		ruleName:      result.RuleName,
+		keywords:      result.MatchedKeywords,
+		matchCount:    result.MatchCount,
+		totalKeywords: result.TotalKeywords,
+	}
 }
 
 func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, state *classifyState) (ruleMatch, error) {

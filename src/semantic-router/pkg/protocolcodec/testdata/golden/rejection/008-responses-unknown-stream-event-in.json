@@ -1,0 +1,8 @@
+{
+  "operation": "stream",
+  "public_model": "public-model",
+  "provider_model": "source-model",
+  "chunks": [
+    "event: response.future\ndata: {\"type\":\"response.future\",\"sequence_number\":0}\n\n"
+  ]
+}

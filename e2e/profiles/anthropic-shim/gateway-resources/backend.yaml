@@ -1,12 +1,12 @@
 # Anthropic-Shim Backend Resources
 #
 # Deploys the Qwen-flavoured anthropic-shim backend (llama.cpp + Python shim)
-# and exposes it to Envoy AI Gateway so the router can forward Anthropic-
-# protocol requests to it.
+# and exposes it to Envoy so the router can forward Anthropic-protocol
+# requests to it.
 #
 # The backend runs in the anthropic-backend-system namespace (created by
 # deploy/kubernetes/anthropic-backend/base/namespace.yaml). The shim Service
-# exposes port 9080; port 8080 (llama-server) is cluster-internal only.
+# exposes port 8080; port 8081 (llama-server) is pod-internal only.
 
 # ── Namespace ────────────────────────────────────────────────────────────────
 apiVersion: v1
@@ -107,12 +107,19 @@ spec:
             - "--host"
             - "0.0.0.0"
             - "--port"
-            - "8080"
+            - "8081"
             - "-c"
             - "4096"
+            # Keep llama.cpp from sizing its thread pools from the Kind host.
+            # Large CI and development hosts can expose hundreds of CPUs to the
+            # container while this fixture is intentionally CPU constrained.
+            - "--threads"
+            - "4"
+            - "--threads-batch"
+            - "4"
           ports:
             - name: llama
-              containerPort: 8080
+              containerPort: 8081
               protocol: TCP
           volumeMounts:
             - name: models-volume
@@ -158,20 +165,22 @@ spec:
 
         - name: anthropic-shim
           image: ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - name: shim
-              containerPort: 9080
+              containerPort: 8080
               protocol: TCP
           env:
             - name: ANTHROPIC_SHIM_UPSTREAM_URL
-              value: "http://127.0.0.1:8080"
+              value: "http://127.0.0.1:8081"
             - name: ANTHROPIC_SHIM_HOST
               value: "0.0.0.0"
             - name: ANTHROPIC_SHIM_PORT
-              value: "9080"
+              value: "8080"
             - name: ANTHROPIC_SHIM_SESSION_HEADER
               value: "x-vsr-test-session-id"
+            - name: ANTHROPIC_SHIM_OPENAI_UPSTREAM
+              value: "true"
           livenessProbe:
             httpGet:
               path: /healthz
@@ -226,26 +235,11 @@ spec:
     app.kubernetes.io/name: anthropic-backend
   ports:
     - name: http
-      port: 9080
+      port: 8080
       targetPort: shim
       protocol: TCP
 ---
-# ── Envoy AI Gateway Backend + AIServiceBackend ───────────────────────────────
-# The router uses the Anthropic schema so the AI Gateway knows to translate
-# outbound requests to Anthropic Messages shape before forwarding.
-apiVersion: aigateway.envoyproxy.io/v1alpha1
-kind: AIServiceBackend
-metadata:
-  name: anthropic-backend-qwen
-  namespace: default
-spec:
-  schema:
-    name: Anthropic
-  backendRef:
-    name: anthropic-backend-qwen
-    kind: Backend
-    group: gateway.envoyproxy.io
----
+# ── Gateway API backend ───────────────────────────────────────────────────────
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: Backend
 metadata:
@@ -255,4 +249,4 @@ spec:
   endpoints:
     - fqdn:
         hostname: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local
-        port: 9080
+        port: 8080

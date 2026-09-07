@@ -3,26 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: general-expert
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -76,7 +65,7 @@ config:
             lora_name: humanities-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -147,7 +136,7 @@ config:
             lora_name: science-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.8
@@ -266,7 +255,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -290,13 +279,13 @@ config:
             lora_name: general-expert
             use_reasoning: false
         plugins:
-          - type: semantic-cache
+          - type: response_cache
             configuration:
               enabled: true
               similarity_threshold: 0.75
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent
@@ -412,7 +401,7 @@ config:
             service_version: v0.1.0
             deployment_environment: development
     stores:
-      semantic_cache:
+      response_cache:
         enabled: true
         backend_type: memory
         similarity_threshold: 0.8

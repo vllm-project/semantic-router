@@ -1,7 +1,10 @@
 package routerreplay
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -686,4 +689,29 @@ func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	if rec.PromptTruncated {
 		t.Error("expected PromptTruncated=false")
 	}
+}
+
+func TestRecorderPolicyConcurrentAccess(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(1000, 0))
+	var waitGroup sync.WaitGroup
+	for worker := range 8 {
+		waitGroup.Add(1)
+		go func(worker int) {
+			defer waitGroup.Done()
+			for iteration := range 100 {
+				recorder.SetCapturePolicy(true, true, 128+iteration)
+				recorder.SetMaxToolTraceBytes(iteration)
+				recorder.SetMaxToolTraceSteps(iteration)
+				id := fmt.Sprintf("%d-%d", worker, iteration)
+				_, _ = recorder.AddRecord(RoutingRecord{
+					ID:           id,
+					RequestBody:  strings.Repeat("q", 256),
+					ResponseBody: strings.Repeat("a", 256),
+				})
+				_ = recorder.AttachRequest(id, []byte("request"))
+				_ = recorder.AttachResponse(id, []byte("response"))
+			}
+		}(worker)
+	}
+	waitGroup.Wait()
 }

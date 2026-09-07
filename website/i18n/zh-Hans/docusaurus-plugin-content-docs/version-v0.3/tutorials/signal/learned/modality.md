@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`modality` 检测请求应停留在文本生成、切换到图像生成，或两者兼顾。映射到 `config/signal/modality/`，在 `routing.signals.modality` 中声明。
+`modality` 检测请求应停留在文本生成、切换到图像生成，或两者兼顾。映射到 `config/fragments/signal/modality/`，在 `routing.signals.modality` 中声明。
 
 该族现归入「学习型」，因为典型部署依赖路由器自带的 `modality_detector` 模块分类输出模式，即使路由结果仍像简单请求形态决策。
 
@@ -37,7 +37,7 @@ translation:
 
 ## 配置
 
-源片段族：`config/signal/modality/`
+源片段族：`config/fragments/signal/modality/`
 
 ```yaml
 routing:

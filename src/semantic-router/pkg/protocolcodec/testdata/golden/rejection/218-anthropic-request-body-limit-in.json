@@ -1,0 +1,16 @@
+{
+  "operation": "request",
+  "limits": {
+    "body_bytes": 16
+  },
+  "body": {
+    "model": "client-model",
+    "max_tokens": 16,
+    "messages": [
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ]
+  }
+}

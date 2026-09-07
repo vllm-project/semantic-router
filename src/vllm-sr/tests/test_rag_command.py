@@ -108,17 +108,17 @@ def test_rag_list_help_describes_subcommand():
     assert "list" in result.output
 
 
-def test_rag_list_prints_vector_stores(caplog, monkeypatch: pytest.MonkeyPatch):
+def test_rag_list_prints_vector_stores(monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
     monkeypatch.setattr(
         rag_command.requests, "get", lambda *a, **k: _fake_response(200, _TWO_STORES)
     )
 
-    with caplog.at_level("INFO"):
-        result = runner.invoke(main, ["rag", "list"])
+    result = runner.invoke(main, ["rag", "list"])
 
     assert result.exit_code == 0
-    combined = "\n".join(record.message for record in caplog.records)
+    combined = result.stdout
+    assert result.stderr == ""
 
     assert "Vector stores (2)" in combined
     assert "docs-prod" in combined
@@ -129,7 +129,7 @@ def test_rag_list_prints_vector_stores(caplog, monkeypatch: pytest.MonkeyPatch):
     assert "1 failed" in combined
 
 
-def test_rag_list_reports_no_vector_stores(caplog, monkeypatch: pytest.MonkeyPatch):
+def test_rag_list_reports_no_vector_stores(monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
     monkeypatch.setattr(
         rag_command.requests,
@@ -137,13 +137,13 @@ def test_rag_list_reports_no_vector_stores(caplog, monkeypatch: pytest.MonkeyPat
         lambda *a, **k: _fake_response(200, {"object": "list", "data": []}),
     )
 
-    with caplog.at_level("INFO"):
-        result = runner.invoke(main, ["rag", "list"])
+    result = runner.invoke(main, ["rag", "list"])
 
     assert result.exit_code == 0
-    combined = "\n".join(record.message for record in caplog.records)
+    combined = result.stdout
+    assert result.stderr == ""
     assert "Vector stores (0)" in combined
-    assert "(none created)" in combined
+    assert "No vector stores have been created" in combined
 
 
 def test_rag_list_reports_feature_disabled(caplog, monkeypatch: pytest.MonkeyPatch):
@@ -176,3 +176,27 @@ def test_rag_list_reports_unreachable_router(caplog, monkeypatch: pytest.MonkeyP
     assert result.exit_code == 1
     combined = "\n".join(record.message for record in caplog.records)
     assert "Router is not running" in combined
+
+
+def test_rag_list_redacts_endpoint_credentials(monkeypatch: pytest.MonkeyPatch):
+    requested_urls = []
+
+    def _empty_response(url, **_kwargs):
+        requested_urls.append(url)
+        return _fake_response(200, {"object": "list", "data": []})
+
+    monkeypatch.setattr(rag_command.requests, "get", _empty_response)
+    result = CliRunner().invoke(
+        main,
+        [
+            "rag",
+            "list",
+            "--endpoint",
+            "http://user:RAGSECRET@router.test",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert requested_urls == ["http://user:RAGSECRET@router.test/v1/vector_stores"]
+    assert "RAGSECRET" not in result.stdout
+    assert "***@router.test" in result.stdout

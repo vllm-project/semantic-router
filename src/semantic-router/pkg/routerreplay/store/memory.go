@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 )
 
 const (
@@ -49,6 +50,9 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 			return "", fmt.Errorf("failed to generate ID: %w", err)
 		}
 		record.ID = id
+	}
+	if record.LifecycleState == "" {
+		record.LifecycleState = LifecycleInProgress
 	}
 
 	// Evict oldest if at capacity
@@ -108,6 +112,31 @@ func (m *MemoryStore) UpdateStatus(ctx context.Context, id string, status int, f
 	rec.FromCache = rec.FromCache || fromCache
 	rec.Streaming = rec.Streaming || streaming
 
+	return nil
+}
+
+func (m *MemoryStore) UpdateLifecycle(
+	ctx context.Context,
+	id string,
+	state string,
+	endedAt time.Time,
+	durationMS int64,
+	reason string,
+) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+	if rec.LifecycleState != "" && rec.LifecycleState != LifecycleInProgress {
+		return nil
+	}
+	rec.LifecycleState = state
+	rec.EndedAt = cloneTimePtr(&endedAt)
+	rec.DurationMS = durationMS
+	rec.TerminalReason = reason
 	return nil
 }
 

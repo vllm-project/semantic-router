@@ -189,6 +189,58 @@ func (c *Compiler) compileStructureSignal(s *SignalDecl) {
 	c.config.StructureRules = append(c.config.StructureRules, rule)
 }
 
+func (c *Compiler) compileMetadataSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode metadata signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.MetadataRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode metadata signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.MetadataRules = append(c.config.MetadataRules, rule)
+}
+
+func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode input_modality signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.InputModalityRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode input_modality signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateInputModalityRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
+}
+
+func (c *Compiler) compileClassifierSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode classifier signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.ClassifierSignalRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode classifier signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.ClassifierRules = append(c.config.ClassifierRules, rule)
+}
+
 func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	rule := config.ComplexityRule{Name: s.Name}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
@@ -200,7 +252,11 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	if obj, ok := s.Fields["composer"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
 			rc := compileComposerObj(ov)
-			rule.Composer = &rc
+			if err := config.NormalizeRuleOperator(&rc); err != nil {
+				c.addError(s.Pos, "complexity signal %q: %v", s.Name, err)
+			} else {
+				rule.Composer = &rc
+			}
 		}
 	}
 	if obj, ok := s.Fields["hard"]; ok {
@@ -245,6 +301,9 @@ func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
 	}
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
+	}
+	if v, ok := getStringField(s.Fields, "direction"); ok {
+		rule.Direction = v
 	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v

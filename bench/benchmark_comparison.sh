@@ -15,19 +15,20 @@ DATASET=${1:-"arc"}
 SAMPLES_PER_CATEGORY=${2:-5}
 CONCURRENT_REQUESTS=${3:-2}
 
-# Semantic router configuration
-ROUTER_ENDPOINT="http://127.0.0.1:8801/v1"
-ROUTER_API_KEY="1234"
-ROUTER_MODEL="auto"
+# Semantic Router configuration. Environment variables set by the packaged
+# CLI, or by the caller, take precedence over these local defaults.
+ROUTER_ENDPOINT=${ROUTER_ENDPOINT:-"http://127.0.0.1:8899/v1"}
+ROUTER_API_KEY=${ROUTER_API_KEY:-"1234"}
+ROUTER_MODEL=${ROUTER_MODEL:-"auto"}
 
 # Direct vLLM configuration
-VLLM_ENDPOINT="http://127.0.0.1:8000/v1"
-VLLM_API_KEY="1234"
-VLLM_MODEL="openai/gpt-oss-20b"
+VLLM_ENDPOINT=${VLLM_ENDPOINT:-"http://127.0.0.1:8000/v1"}
+VLLM_API_KEY=${VLLM_API_KEY:-"1234"}
+VLLM_MODEL=${VLLM_MODEL:-"openai/gpt-oss-20b"}
 
 # Evaluation parameters
-TEMPERATURE=0.0
-OUTPUT_DIR="results/comparison_$(date +%Y%m%d_%H%M%S)"
+TEMPERATURE=${TEMPERATURE:-0.0}
+OUTPUT_DIR=${OUTPUT_DIR:-"results/comparison_$(date +%Y%m%d_%H%M%S)"}
 
 echo "🎯 MULTI-DATASET REASONING BENCHMARK"
 echo "====================================="
@@ -48,6 +49,28 @@ fi
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
+RUN_STARTED_AT=$(date +%s)
+
+find_result_dir() {
+    local expected_model=$1
+    python3 - "$OUTPUT_DIR" "$expected_model" "$RUN_STARTED_AT" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+candidates = []
+for summary in sorted(Path(sys.argv[1]).glob("*/summary.json")):
+    try:
+        payload = json.loads(summary.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        continue
+    if payload.get("model") == sys.argv[2] and summary.stat().st_mtime >= float(sys.argv[3]):
+        candidates.append(summary)
+
+if candidates:
+    print(max(candidates, key=lambda path: path.stat().st_mtime_ns).parent)
+PY
+}
 
 echo "🔄 PHASE 1: ROUTER EVALUATION (via Envoy)"
 echo "------------------------------------------"
@@ -92,8 +115,8 @@ echo "🎨 PHASE 3: GENERATING COMPARISON PLOTS"
 echo "----------------------------------------"
 
 # Generate plots comparing router vs vLLM
-ROUTER_RESULT=$(find "$OUTPUT_DIR" -name "*router*auto*" -type d | head -1)
-VLLM_RESULT=$(find "$OUTPUT_DIR" -name "*vllm*gpt-oss*" -type d | head -1)
+ROUTER_RESULT=$(find_result_dir "router::$ROUTER_MODEL")
+VLLM_RESULT=$(find_result_dir "vllm::$VLLM_MODEL")
 
 if [ -n "$ROUTER_RESULT" ] && [ -f "$ROUTER_RESULT/summary.json" ] && [ -n "$VLLM_RESULT" ] && [ -f "$VLLM_RESULT/summary.json" ]; then
     echo "Creating comparison plots (router plotted first for visibility)..."
@@ -130,8 +153,7 @@ echo ""
 echo "📈 QUICK SUMMARY:"
 echo "-----------------"
 
-# Find and display router results
-ROUTER_RESULT=$(find "$OUTPUT_DIR" -name "*router*auto*" -type d | head -1)
+# Display router results
 if [ -n "$ROUTER_RESULT" ] && [ -f "$ROUTER_RESULT/summary.json" ]; then
     echo "🔀 Router (via Envoy):"
     python3 -c "
@@ -148,8 +170,7 @@ except Exception as e:
 "
 fi
 
-# Find and display vLLM results
-VLLM_RESULT=$(find "$OUTPUT_DIR" -name "*vllm*gpt-oss*" -type d | head -1)
+# Display direct vLLM results
 if [ -n "$VLLM_RESULT" ] && [ -f "$VLLM_RESULT/summary.json" ]; then
     echo "🎯 Direct vLLM:"
     python3 -c "

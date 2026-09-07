@@ -4,7 +4,7 @@
 
 `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers.
 
-It aligns to `config/plugin/header-mutation/tenant-routing.yaml`.
+It aligns to `config/fragments/plugin/header-mutation/tenant-routing.yaml`.
 
 ## Key Advantages
 

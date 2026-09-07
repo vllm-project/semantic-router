@@ -34,33 +34,44 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 	for _, recipe := range canonical.Recipes {
 		decisions := copyDecisions(recipe.Routing.Decisions)
 		ensureModelRefDefaults(decisions)
+		strategy := recipe.Routing.Strategy
+		if strategy == "" {
+			strategy = cfg.Strategy
+		}
 		recipes = append(recipes, RoutingRecipe{
-			Name:        recipe.Name,
+			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
-			Signals:     normalizeSignals(recipe.Routing.Signals, decisions),
-			Projections: normalizeProjections(recipe.Routing.Projections),
-			Decisions:   decisions,
+			Profile: RoutingProfile{
+				Signals:     normalizeSignals(recipe.Routing.Signals, decisions),
+				Projections: normalizeProjections(recipe.Routing.Projections),
+				Decisions:   decisions,
+				Strategy:    strategy,
+			},
 		})
 	}
 
 	if explicitDefault := findRecipe(recipes, DefaultRecipeName); explicitDefault != nil {
 		// Recipes-only layout: bridge the explicit default recipe into the
-		// flat routing fields so existing read sites keep working.
-		cfg.Signals = explicitDefault.Signals
-		cfg.Projections = explicitDefault.Projections
-		cfg.Decisions = explicitDefault.Decisions
+		// flat routing fields so existing single-profile read sites keep working.
+		cfg.Signals = explicitDefault.Profile.Signals
+		cfg.Projections = explicitDefault.Profile.Projections
+		cfg.Decisions = explicitDefault.Profile.Decisions
+		cfg.Strategy = explicitDefault.Profile.Strategy
 	} else {
 		// The top-level routing profile is the default recipe.
 		recipes = append([]RoutingRecipe{{
-			Name:        DefaultRecipeName,
-			Signals:     cfg.Signals,
-			Projections: cfg.Projections,
-			Decisions:   cfg.Decisions,
+			Name: DefaultRecipeName,
+			Profile: RoutingProfile{
+				Signals:     cfg.Signals,
+				Projections: cfg.Projections,
+				Decisions:   cfg.Decisions,
+				Strategy:    cfg.Strategy,
+			},
 		}}, recipes...)
 	}
 	cfg.Recipes = recipes
 
-	entrypoints, err := normalizeCanonicalEntrypoints(canonical.Entrypoints, recipes)
+	entrypoints, err := normalizeCanonicalEntrypoints(cfg, canonical, recipes)
 	if err != nil {
 		return err
 	}
@@ -70,21 +81,31 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 
 func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 	modelCards := canonicalRoutingModels(canonical.Routing)
-	modelsByName := make(map[string]RoutingModel, len(modelCards))
+	cardsByName := make(map[string]RoutingModel, len(modelCards))
 	for _, model := range modelCards {
-		modelsByName[model.Name] = model
+		cardsByName[model.Name] = model
+	}
+	aliases := make(map[string]CanonicalProviderModel, len(canonical.Providers.Models))
+	for _, model := range canonical.Providers.Models {
+		aliases[model.Name] = model
 	}
 
-	seen := make(map[string]bool, len(canonical.Recipes))
+	seen := make(map[RecipeName]struct{}, len(canonical.Recipes))
 	for _, recipe := range canonical.Recipes {
-		name := strings.TrimSpace(recipe.Name)
+		name := RecipeName(strings.TrimSpace(recipe.Name))
 		if name == "" {
 			return fmt.Errorf("recipes[].name cannot be empty")
 		}
-		if seen[name] {
+		if string(name) != recipe.Name {
+			return fmt.Errorf(
+				"recipes[%s].name must not contain surrounding whitespace",
+				name,
+			)
+		}
+		if _, exists := seen[name]; exists {
 			return fmt.Errorf("recipes[%s]: duplicate recipe name", name)
 		}
-		seen[name] = true
+		seen[name] = struct{}{}
 
 		if name == DefaultRecipeName && canonicalRoutingHasProfile(canonical.Routing) {
 			return fmt.Errorf("recipes[%s]: conflicts with the top-level routing profile; keep the default profile in `routing` or move it entirely into recipes", name)
@@ -92,22 +113,23 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if len(recipe.Routing.ModelCards) > 0 {
 			return fmt.Errorf("recipes[%s].routing.modelCards: the model catalog is shared; define modelCards under top-level routing", name)
 		}
-		if err := validateCanonicalDecisions(recipe.Routing.Decisions, modelsByName, modelCards); err != nil {
+		if err := validateCanonicalDecisions(recipe.Routing.Decisions, aliases, cardsByName); err != nil {
 			return fmt.Errorf("recipes[%s]: %w", name, err)
 		}
 	}
 	return nil
 }
 
-func normalizeCanonicalEntrypoints(entrypoints []CanonicalEntrypoint, recipes []RoutingRecipe) ([]EntrypointMapping, error) {
+func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig, recipes []RoutingRecipe) ([]EntrypointMapping, error) {
+	entrypoints := canonical.Entrypoints
 	if len(entrypoints) == 0 {
 		return nil, nil
 	}
 
 	result := make([]EntrypointMapping, 0, len(entrypoints))
-	claimed := make(map[string]bool)
+	claimed := make(map[string]struct{})
 	for index, entrypoint := range entrypoints {
-		recipeName := strings.TrimSpace(entrypoint.Recipe)
+		recipeName := RecipeName(strings.TrimSpace(entrypoint.Recipe))
 		if recipeName == "" {
 			return nil, fmt.Errorf("entrypoints[%d].recipe cannot be empty", index)
 		}
@@ -120,10 +142,13 @@ func normalizeCanonicalEntrypoints(entrypoints []CanonicalEntrypoint, recipes []
 			return nil, fmt.Errorf("entrypoints[%d].model_names cannot be empty", index)
 		}
 		for _, name := range names {
-			if claimed[name] {
+			if _, exists := claimed[name]; exists {
 				return nil, fmt.Errorf("entrypoints[%d]: model name %q is already mapped by another entrypoint", index, name)
 			}
-			claimed[name] = true
+			claimed[name] = struct{}{}
+			if meaning := entrypointNameConflict(cfg, canonical, name); meaning != "" {
+				return nil, fmt.Errorf("entrypoints[%d]: model name %q is already %s; entrypoint names must be new virtual names", index, name, meaning)
+			}
 		}
 
 		result = append(result, EntrypointMapping{
@@ -132,6 +157,55 @@ func normalizeCanonicalEntrypoints(entrypoints []CanonicalEntrypoint, recipes []
 		})
 	}
 	return result, nil
+}
+
+// entrypointNameConflict reports what an entrypoint virtual name already means
+// to the router, if anything. Entrypoint names must be new: reusing an existing
+// routable name would silently hijack it, because requestModelActsAsAuto stops
+// treating the name as an explicitly specified model.
+func entrypointNameConflict(cfg *RouterConfig, canonical *CanonicalConfig, name string) string {
+	if conflict := configuredEntrypointNameConflict(canonical, name); conflict != "" {
+		return conflict
+	}
+	return algorithmEntrypointNameConflict(cfg, name)
+}
+
+func configuredEntrypointNameConflict(canonical *CanonicalConfig, name string) string {
+	cards := canonicalRoutingModels(canonical.Routing)
+	for _, model := range canonical.Providers.Models {
+		if model.Name == name {
+			return "a configured model"
+		}
+		cardID := model.Catalog
+		if cardID == "" {
+			cardID = model.Name
+		}
+		for _, card := range cards {
+			if card.Name == cardID && routingModelHasLoRA(card, name) {
+				return "a configured LoRA adapter"
+			}
+		}
+	}
+	for _, card := range cards {
+		if routingModelHasLoRA(card, name) {
+			return "a configured LoRA adapter"
+		}
+	}
+	return ""
+}
+
+func algorithmEntrypointNameConflict(cfg *RouterConfig, name string) string {
+	switch {
+	case cfg.IsAutoModelName(name):
+		return "an auto-model alias"
+	case cfg.IsReMoMModelName(name):
+		return "the ReMoM algorithm slug"
+	case cfg.IsFusionModelName(name):
+		return "the Fusion algorithm slug"
+	case cfg.IsFlowModelName(name):
+		return "the Flow algorithm slug"
+	}
+	return ""
 }
 
 // canonicalRecipesFromRouterConfig exports the normalized named recipes. The
@@ -147,12 +221,13 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			continue
 		}
 		recipes = append(recipes, CanonicalRecipe{
-			Name:        recipe.Name,
+			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				Signals:     canonicalSignalsFromSignals(recipe.Signals),
-				Projections: canonicalProjectionsFromProjections(recipe.Projections),
-				Decisions:   copyDecisions(recipe.Decisions),
+				Signals:     canonicalSignalsFromSignals(recipe.Profile.Signals),
+				Projections: canonicalProjectionsFromProjections(recipe.Profile.Projections),
+				Decisions:   copyDecisions(recipe.Profile.Decisions),
+				Strategy:    recipe.Profile.Strategy,
 			},
 		})
 	}
@@ -171,13 +246,13 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 	for _, entrypoint := range cfg.Entrypoints {
 		entrypoints = append(entrypoints, CanonicalEntrypoint{
 			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     entrypoint.Recipe,
+			Recipe:     string(entrypoint.Recipe),
 		})
 	}
 	return entrypoints
 }
 
-func findRecipe(recipes []RoutingRecipe, name string) *RoutingRecipe {
+func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 	for i := range recipes {
 		if recipes[i].Name == name {
 			return &recipes[i]
@@ -190,6 +265,9 @@ func findRecipe(recipes []RoutingRecipe, name string) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
+	if routing.Strategy != "" {
+		return true
+	}
 	if len(routing.Decisions) > 0 {
 		return true
 	}

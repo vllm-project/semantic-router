@@ -1,0 +1,201 @@
+{
+  "cases": [
+    {
+      "name": "temperature_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0
+        }
+      }
+    },
+    {
+      "name": "temperature_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 2
+        }
+      }
+    },
+    {
+      "name": "top_p_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0
+        }
+      }
+    },
+    {
+      "name": "top_p_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 1
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frequency_penalty": -2,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "frequency_penalty_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frequency_penalty": 2,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "presence_penalty_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "presence_penalty": -2
+        }
+      }
+    },
+    {
+      "name": "presence_penalty_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "presence_penalty": 2
+        }
+      }
+    },
+    {
+      "name": "candidate_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "n": 1
+        }
+      }
+    },
+    {
+      "name": "candidate_policy_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "n": 32
+        }
+      }
+    },
+    {
+      "name": "zero_max_completion_tokens",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 0,
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
+      "name": "four_stop_sequences",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "stop": [
+            "one",
+            "two",
+            "three",
+            "four"
+          ]
+        }
+      }
+    }
+  ]
+}

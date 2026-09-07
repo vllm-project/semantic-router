@@ -1,0 +1,108 @@
+{
+  "frames": [
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "role": "assistant"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "first"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {
+              "content": "second"
+            },
+            "finish_reason": null,
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": {
+        "choices": [
+          {
+            "delta": {},
+            "finish_reason": "stop",
+            "index": 0
+          }
+        ],
+        "id": "response_multi_content_1",
+        "model": "public-model",
+        "object": "chat.completion.chunk"
+      }
+    },
+    {
+      "event": "",
+      "data": "[DONE]"
+    }
+  ]
+}

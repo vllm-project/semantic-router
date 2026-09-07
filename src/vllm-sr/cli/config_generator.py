@@ -1,48 +1,17 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
-import ipaddress
 import os
 from pathlib import Path
-from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader
 
-from cli.consts import DEFAULT_LISTENER_PORT, EXTERNAL_API_MODEL_FORMATS
+from cli.catalog_provider_projection import project_provider_models_for_envoy
+from cli.consts import DEFAULT_LISTENER_PORT
+from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
 from cli.models import UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
-
-
-def _uses_shared_anthropic_cluster(model) -> bool:
-    """Use api.anthropic.com only when no custom upstream host is configured."""
-    if not model.backend_refs:
-        return True
-    for backend in model.backend_refs:
-        upstream = (backend.endpoint or backend.base_url or "").lower()
-        if not upstream:
-            continue
-        if "api.anthropic.com" in upstream:
-            continue
-        return False
-    return True
-
-
-def _is_ip_address(host: str) -> bool:
-    """
-    Check if a host string is an IP address (IPv4 or IPv6).
-
-    Args:
-        host: Host string to check
-
-    Returns:
-        bool: True if host is an IP address, False if it's a domain name
-    """
-    try:
-        ipaddress.ip_address(host)
-        return True
-    except ValueError:
-        return False
 
 
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
@@ -58,6 +27,8 @@ def generate_envoy_config_from_user_config(
     output_file: str,
     template_file: str | None = None,
     template_root: str | None = None,
+    *,
+    log_summary: bool = True,
 ) -> Path:
     """
     Generate Envoy configuration from user config.
@@ -67,6 +38,8 @@ def generate_envoy_config_from_user_config(
         output_file: Output file path for Envoy config
         template_file: Path to Envoy template (optional)
         template_root: Template root directory (optional)
+        log_summary: Emit the human-readable generation summary. Machine-readable
+            callers disable this so their output streams remain valid documents.
 
     Returns:
         Path: Path to generated Envoy config
@@ -80,7 +53,8 @@ def generate_envoy_config_from_user_config(
         default_template_root = cli_dir / "templates"
         template_root = os.getenv("TEMPLATE_ROOT", str(default_template_root))
 
-    log.info("Generating Envoy config...")
+    if log_summary:
+        log.info("Generating Envoy config...")
 
     # Extract all listeners
     listeners = []
@@ -116,94 +90,11 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
-    anthropic_models = []  # Anthropic models use a shared cluster
-
-    for model in user_config.providers.models:
-        # Handle external API models (e.g., Anthropic) - they use shared clusters
-        if model.api_format and model.api_format in EXTERNAL_API_MODEL_FORMATS:
-            if model.api_format == "anthropic" and _uses_shared_anthropic_cluster(
-                model
-            ):
-                anthropic_models.append({"name": model.name})
-                log.info(
-                    f"  Anthropic model: {model.name} (will use shared anthropic_api_cluster)"
-                )
-                continue
-            if model.api_format == "anthropic":
-                log.info(f"  Anthropic model: {model.name} (dedicated cluster)")
-
-        endpoints = []
-        has_https = False
-        uses_dns = False
-
-        backend_refs = model.backend_refs
-        for index, backend in enumerate(backend_refs):
-            # Parse endpoint: can be "host", "host:port", or "host/path" or "host:port/path"
-            endpoint_str = backend.endpoint or backend.base_url or ""
-            if not endpoint_str:
-                continue
-            path = ""
-
-            if "://" in endpoint_str:
-                parsed = urlparse(endpoint_str)
-                host = parsed.hostname or parsed.netloc
-                path = parsed.path.rstrip("/")
-                protocol = parsed.scheme or backend.protocol
-                port = parsed.port or (443 if protocol == "https" else 80)
-            else:
-                protocol = backend.protocol
-
-                # Extract path if present (e.g., "host/path" or "host:port/path")
-                if "/" in endpoint_str:
-                    # Split by first "/" to separate host[:port] from path
-                    parts = endpoint_str.split("/", 1)
-                    endpoint_str = parts[0]  # host or host:port
-                    path = "/" + parts[1]  # /path
-
-                # Parse host and port
-                if ":" in endpoint_str:
-                    host, port = endpoint_str.split(":", 1)
-                    port = int(port)
-                else:
-                    host = endpoint_str
-                    # Default port based on protocol
-                    port = 443 if protocol == "https" else 80
-
-            # Check if this is HTTPS (for transport_socket)
-            is_https = protocol == "https"
-            if is_https:
-                has_https = True
-
-            # Check if host is a domain name (for cluster type)
-            # Simple heuristic: if it contains letters or dots in non-IP pattern, it's a domain
-            is_domain = not _is_ip_address(host)
-            if is_domain:
-                uses_dns = True
-
-            extra_headers = dict(backend.extra_headers or {})
-            api_key = backend.resolve_api_key()
-            if api_key and backend.auth_header:
-                auth_prefix = (backend.auth_prefix or "").strip()
-                extra_headers[str(backend.auth_header)] = (
-                    f"{auth_prefix} {api_key}".strip() if auth_prefix else str(api_key)
-                )
-
-            endpoints.append(
-                {
-                    "name": backend.name or f"backend-{index + 1}",
-                    "address": host,
-                    "port": int(port),
-                    "host_authority": (
-                        f"{host}:{port}" if int(port) not in (80, 443) else host
-                    ),
-                    "path": path,
-                    "weight": backend.weight,
-                    "protocol": protocol,
-                    "is_https": is_https,
-                    "is_domain": is_domain,
-                    "extra_headers": extra_headers,
-                }
-            )
+    for model in project_provider_models_for_envoy(user_config):
+        backend_group = project_envoy_backend_group(model)
+        endpoints = list(backend_group.endpoints)
+        has_https = backend_group.has_https
+        uses_dns = backend_group.uses_dns
 
         # Sanitize model name for cluster name (replace / with _)
         if not endpoints:
@@ -213,16 +104,24 @@ def generate_envoy_config_from_user_config(
 
         # Determine cluster type based on whether endpoints use domain names
         # Domain names → LOGICAL_DNS, IP addresses → STATIC
-        cluster_type = "LOGICAL_DNS" if uses_dns else "STATIC"
+        cluster_type = (
+            "STRICT_DNS"
+            if uses_dns and len(endpoints) > 1
+            else "LOGICAL_DNS" if uses_dns else "STATIC"
+        )
 
         # Determine path prefix - use the first endpoint's path if all endpoints have the same path
         path_prefix = ""
         route_request_headers = []
         if endpoints:
             first_path = endpoints[0].get("path", "")
-            if first_path and all(ep.get("path", "") == first_path for ep in endpoints):
+            if first_path:
                 path_prefix = first_path
             route_request_headers = _route_request_headers(endpoints[0])
+
+        auto_host_rewrite = (
+            len({endpoint["host_authority"] for endpoint in endpoints}) > 1
+        )
 
         models.append(
             {
@@ -233,13 +132,19 @@ def generate_envoy_config_from_user_config(
                 "has_https": has_https,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
+                "auto_host_rewrite": auto_host_rewrite,
+                "reliability": (
+                    model.reliability.model_dump()
+                    if model.reliability is not None
+                    else {}
+                ),
             }
         )
 
     extproc_host = os.getenv("ENVOY_EXTPROC_ADDRESS", "127.0.0.1")
     router_api_host = os.getenv("ENVOY_ROUTER_API_ADDRESS", "127.0.0.1")
-    extproc_host_is_domain = not _is_ip_address(extproc_host)
-    router_api_host_is_domain = not _is_ip_address(router_api_host)
+    extproc_host_is_domain = not is_ip_address(extproc_host)
+    router_api_host_is_domain = not is_ip_address(router_api_host)
 
     # Prepare template data
     template_data = {
@@ -255,25 +160,23 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
-        "anthropic_models": anthropic_models,  # Anthropic models for shared cluster
         "use_original_dst": False,  # Use static clusters for now
     }
 
-    log.info("  Listeners:")
-    for listener in listeners:
-        log.info(f"    - {listener['name']}: {listener['address']}:{listener['port']}")
-    log.info(f"  Found {len(models)} vLLM model(s):")
-    for model in models:
-        log.info(f"    - {model['name']} (cluster: {model['cluster_name']})")
-        for ep in model["endpoints"]:
+    if log_summary:
+        log.info("  Listeners:")
+        for listener in listeners:
             log.info(
-                f"        - {ep['name']}: {ep['address']}:{ep['port']} (weight: {ep['weight']})"
+                f"    - {listener['name']}: {listener['address']}:{listener['port']}"
             )
-    if anthropic_models:
-        log.info(f"  Found {len(anthropic_models)} Anthropic model(s):")
-        for model in anthropic_models:
-            log.info(f"    - {model['name']} (cluster: anthropic_api_cluster)")
-
+        log.info(f"  Found {len(models)} vLLM model(s):")
+        for model in models:
+            log.info(f"    - {model['name']} (cluster: {model['cluster_name']})")
+            for ep in model["endpoints"]:
+                log.info(
+                    f"        - {ep['name']}: {ep['address']}:{ep['port']} "
+                    f"(weight: {ep['weight']})"
+                )
     # Check if template exists
     template_path = Path(template_root) / template_file
     if not template_path.exists():
@@ -299,7 +202,8 @@ def generate_envoy_config_from_user_config(
     try:
         with open(output_path, "w") as f:
             f.write(rendered)
-        log.info(f"Generated Envoy config: {output_path}")
+        if log_summary:
+            log.info(f"Generated Envoy config: {output_path}")
     except Exception as e:
         log.error(f"Failed to write Envoy config: {e}")
         raise

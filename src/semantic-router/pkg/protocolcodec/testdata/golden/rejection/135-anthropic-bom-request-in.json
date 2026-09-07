@@ -1,0 +1,4 @@
+{
+  "operation": "request",
+  "body_json": "\ufeff{\"model\":\"client-model\",\"max_tokens\":32,\"messages\":[{\"role\":\"user\",\"content\":\"hello\"}]}"
+}

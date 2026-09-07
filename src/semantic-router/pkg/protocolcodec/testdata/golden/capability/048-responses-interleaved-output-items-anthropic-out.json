@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "error": {
+    "category": "unsupported_feature",
+    "code": "anthropic_content_interleaving"
+  }
+}

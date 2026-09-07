@@ -8,7 +8,8 @@ spec:
   defaultModel: "deepseek-v3"
   models:
     - name: "deepseek-v3"
-      reasoningFamily: "deepseek"
+      reasoning:
+        family: "deepseek"
       pricing:
         inputTokenPrice: 0.00000027
         outputTokenPrice: 0.0000011

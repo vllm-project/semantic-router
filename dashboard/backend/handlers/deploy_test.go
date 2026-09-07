@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,7 +275,7 @@ func TestCanonicalizeYAMLForDiff_EquivalentMapOrder(t *testing.T) {
 	yamlA := []byte(`version: v0.3
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
 routing:
   modelCards:
     - name: test-model
@@ -300,7 +301,7 @@ routing:
     - name: test-model
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
 version: v0.3
 `)
 
@@ -609,8 +610,8 @@ func TestDeployHandler_DeepMergePreservesExistingFields(t *testing.T) {
 		t.Error("providers.models[].backend_refs should be preserved after deploy")
 	}
 
-	if !contains(configStr, "default_model: test-model") {
-		t.Error("providers.defaults.default_model should be preserved after deploy")
+	if !contains(configStr, "model: test-model") {
+		t.Error("providers.defaults.model should be preserved after deploy")
 	}
 	if !contains(configStr, "routing:") || !contains(configStr, "keywords:") {
 		t.Error("routing signals from deploy should be present")
@@ -628,17 +629,15 @@ listeners:
     port: 9901
 providers:
   defaults:
-    default_model: imported-model
-    reasoning_families:
-      qwen3:
-        type: reasoning_effort
-        parameter: reasoning_effort
+    model: imported-model
   models:
     - name: imported-model
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: imported-model
       backend_refs:
         - name: imported-endpoint
+          provider: vllm
           endpoint: 192.168.1.10:9000
           protocol: http
 routing:
@@ -699,8 +698,8 @@ global:
 
 	data, _ := os.ReadFile(configPath)
 	configStr := string(data)
-	if !contains(configStr, "default_model: imported-model") {
-		t.Fatalf("expected imported base providers.defaults.default_model to be preserved:\n%s", configStr)
+	if !contains(configStr, "model: imported-model") {
+		t.Fatalf("expected imported base providers.defaults.model to be preserved:\n%s", configStr)
 	}
 	if !contains(configStr, "endpoint: 192.168.1.10:9000") {
 		t.Fatalf("expected imported backend_refs to be preserved:\n%s", configStr)
@@ -708,7 +707,7 @@ global:
 	if !contains(configStr, "name: deployed-route") || !contains(configStr, "name: deployed") {
 		t.Fatalf("expected deployed routing fragment to be merged onto imported base:\n%s", configStr)
 	}
-	if contains(configStr, "default_model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
+	if contains(configStr, "model: test-model") || contains(configStr, "endpoint: 127.0.0.1:8000") {
 		t.Fatalf("expected current on-disk config to be replaced as merge base when imported base is provided:\n%s", configStr)
 	}
 }
@@ -720,12 +719,13 @@ func TestDeployPreviewHandler_UsesImportedCanonicalBaseConfig(t *testing.T) {
 	importedBase := `version: v0.3
 providers:
   defaults:
-    default_model: imported-model
+    model: imported-model
   models:
     - name: imported-model
       provider_model_id: imported-model
       backend_refs:
         - name: imported-endpoint
+          provider: vllm
           endpoint: 10.0.0.1:9000
           protocol: http
 routing:
@@ -772,10 +772,10 @@ routing:
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode preview response: %v", err)
 	}
-	if !contains(resp.Current, "default_model: test-model") {
+	if !contains(resp.Current, "model: test-model") {
 		t.Fatalf("expected current preview to show on-disk config, got:\n%s", resp.Current)
 	}
-	if !contains(resp.Preview, "default_model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
+	if !contains(resp.Preview, "model: imported-model") || !contains(resp.Preview, "endpoint: 10.0.0.1:9000") {
 		t.Fatalf("expected preview to use imported base config, got:\n%s", resp.Preview)
 	}
 	if !contains(resp.Preview, "name: previewed") {
@@ -784,13 +784,13 @@ routing:
 }
 
 func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
-	// deploy/amd/README.md documents the AMD reference profile as deploy/recipes/balance.yaml
-	// (there is no separate deploy/amd/config.yaml in-tree).
+	// website/docs/installation/amd-rocm.md documents the AMD reference profile as config/recipes/balance/config.yaml
+	// Platform documentation does not own a second copy of the config.
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
 	}
-	assetPath := filepath.Join(repoRoot, "deploy", "recipes", "balance.yaml")
+	assetPath := filepath.Join(repoRoot, "config", "recipes", "balance", "config.yaml")
 	originalYAML, err := os.ReadFile(assetPath)
 	if err != nil {
 		t.Fatalf("failed to read AMD reference recipe config: %v", err)
@@ -841,6 +841,144 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 
 	if got, want := canonicalizeYAMLForDiff(mergedCanonical), canonicalizeYAMLForDiff(originalCanonical); got != want {
 		t.Fatalf("import/decompile/compile/merge should preserve balance recipe config\nwant:\n%s\n\ngot:\n%s", want, got)
+	}
+}
+
+func TestMergeDeployPayloadReplaceOwnsCompleteDSLSurface(t *testing.T) {
+	baseYAML := `version: v0.3
+listeners:
+  - name: main
+    address: 0.0.0.0
+    port: 8080
+routing:
+  signals:
+    keywords:
+      - name: stale
+        operator: OR
+        keywords: [stale]
+entrypoints:
+  - model_names: [vllm-sr/stale]
+    recipe: stale
+recipes:
+  - name: stale
+    routing:
+      decisions: []
+global:
+  router:
+    clear_route_cache: true
+`
+	fragmentYAML := `routing:
+  strategy: confidence
+  projections:
+    partitions:
+      - name: difficulty
+        members: [easy, hard]
+        default: easy
+  decisions: []
+entrypoints:
+  - model_names: [vllm-sr/accuracy]
+    recipe: accuracy
+recipes:
+  - name: accuracy
+    routing:
+      strategy: priority
+      decisions: []
+`
+
+	merged, err := mergeDeployPayload([]byte(baseYAML), DeployRequest{
+		YAML: fragmentYAML,
+		Mode: DeployModeReplace,
+	})
+	if err != nil {
+		t.Fatalf("mergeDeployPayload error: %v", err)
+	}
+
+	text := string(merged)
+	for _, want := range []string{"clear_route_cache: true", "vllm-sr/accuracy", "name: difficulty"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("replace result missing %q:\n%s", want, text)
+		}
+	}
+	for _, stale := range []string{"vllm-sr/stale", "name: stale"} {
+		if strings.Contains(text, stale) {
+			t.Fatalf("replace result retained stale DSL state %q:\n%s", stale, text)
+		}
+	}
+}
+
+func TestMergeDeployPayloadReplaceClearsOmittedScopes(t *testing.T) {
+	baseYAML := `routing: {}
+entrypoints:
+  - model_names: [vllm-sr/old]
+    recipe: old
+recipes:
+  - name: old
+    routing: {}
+`
+
+	merged, err := mergeDeployPayload([]byte(baseYAML), DeployRequest{
+		YAML: "routing: {}\n",
+		Mode: DeployModeReplace,
+	})
+	if err != nil {
+		t.Fatalf("mergeDeployPayload error: %v", err)
+	}
+	rootDoc, err := parseYAMLDocument(merged)
+	if err != nil {
+		t.Fatalf("parse merged YAML: %v", err)
+	}
+	root, err := documentMappingNode(rootDoc)
+	if err != nil {
+		t.Fatalf("read merged root: %v", err)
+	}
+	if mappingValueNode(root, "entrypoints") != nil || mappingValueNode(root, "recipes") != nil {
+		t.Fatalf("replace should clear omitted scoped sections:\n%s", merged)
+	}
+}
+
+func TestMergeDeployPayloadRejectsUnknownMode(t *testing.T) {
+	_, err := mergeDeployPayload(
+		[]byte("routing: {}\n"),
+		DeployRequest{YAML: "routing: {}\n", Mode: DeployMode("append")},
+	)
+	if err == nil || !strings.Contains(err.Error(), "unsupported deploy mode") {
+		t.Fatalf("expected unsupported mode error, got %v", err)
+	}
+}
+
+func TestDeployPreviewHandler_AllowsPartialFragmentWithoutRouting(t *testing.T) {
+	configPath := createValidTestConfig(t, t.TempDir())
+	body, err := json.Marshal(DeployRequest{YAML: "default_model: \"MoM\"\n"})
+	if err != nil {
+		t.Fatalf("marshal preview request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/router/config/deploy/preview", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeployPreviewHandler(configPath)(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a partial fragment without routing, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var response DeployPreviewResponse
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if !strings.Contains(response.Preview, "routing:") {
+		t.Fatalf("preview lost existing routing:\n%s", response.Preview)
+	}
+}
+
+func TestMergeDeployPayloadReplaceRejectsFragmentWithoutRouting(t *testing.T) {
+	_, err := mergeDeployPayload(
+		[]byte("routing: {}\n"),
+		DeployRequest{YAML: "default_model: \"MoM\"\n", Mode: DeployModeReplace},
+	)
+	if err == nil || !strings.Contains(err.Error(), "compiled routing fragment must contain routing") {
+		t.Fatalf("expected missing-routing error, got %v", err)
 	}
 }
 
@@ -989,11 +1127,12 @@ listeners:
     port: 8801
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - name: endpoint1
+          provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
 routing:

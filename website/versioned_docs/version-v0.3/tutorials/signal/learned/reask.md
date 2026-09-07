@@ -2,7 +2,7 @@
 
 ## Overview
 
-`reask` detects when the current user turn semantically repeats the most recent user turns in the same conversation. It maps to `config/signal/reask/` and is declared under `routing.signals.reasks`.
+`reask` detects when the current user turn semantically repeats the most recent user turns in the same conversation. It maps to `config/fragments/signal/reask/` and is declared under `routing.signals.reasks`.
 
 This family is learned: it uses the router's shared semantic embedding path to compare the current user turn against prior user turns.
 
@@ -30,7 +30,7 @@ Use `reask` when:
 
 ## Configuration
 
-Source fragment family: `config/signal/reask/`
+Source fragment family: `config/fragments/signal/reask/`
 
 ```yaml
 routing:

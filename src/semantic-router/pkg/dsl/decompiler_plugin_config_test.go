@@ -55,6 +55,48 @@ routing:
 	assertRouterReplayPluginRoundTrip(t, compiled.Decisions[0])
 }
 
+func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
+	headerPayload := config.MustStructuredPayload(
+		config.HeaderMutationPluginConfig{
+			Add:    []config.HeaderPair{{Name: "x-policy", Value: "strict"}},
+			Delete: []string{"x-remove"},
+		},
+	)
+	responsePayload := config.MustStructuredPayload(
+		config.ResponseJailbreakPluginConfig{
+			Enabled:   true,
+			Threshold: 0.7,
+			Action:    "block",
+		},
+	)
+	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
+		Decisions: []config.Decision{{
+			Name:      "plugins",
+			ModelRefs: []config.ModelRef{{Model: "model-a"}},
+			Plugins: []config.DecisionPlugin{
+				{Type: config.DecisionPluginHeaderMutation, Configuration: headerPayload},
+				{Type: config.DecisionPluginResponseJailbreak, Configuration: responsePayload},
+			},
+		}},
+	}}
+
+	source := mustDecompileRoutingPluginConfigTest(t, cfg)
+	compiled := mustCompileRoutingPluginConfigTest(t, source)
+	decision := compiled.Decisions[0]
+	header := decision.GetHeaderMutationConfig()
+	if header == nil || len(header.Add) != 1 ||
+		header.Add[0].Name != "x-policy" ||
+		len(header.Delete) != 1 {
+		t.Fatalf("header mutation round trip = %#v", header)
+	}
+	response := decision.GetResponseJailbreakConfig()
+	if response == nil || !response.Enabled ||
+		response.Threshold != 0.7 ||
+		response.Action != "block" {
+		t.Fatalf("response jailbreak round trip = %#v", response)
+	}
+}
+
 func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
 version: v0.3
@@ -186,6 +228,56 @@ func assertRouterReplayPluginRoundTrip(t *testing.T, decision config.Decision) {
 	}
 }
 
+func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "compress",
+				ModelRefs: []config.ModelRef{{Model: "model"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginContextCompression,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+						"mode":    "auto",
+						"targets": map[string]interface{}{
+							"tool_outputs": map[string]interface{}{
+								"mode":          "extractive",
+								"min_tokens":    2000,
+								"target_tokens": 1000,
+							},
+							"rag": map[string]interface{}{"mode": "preserve"},
+						},
+						"request_controls": map[string]interface{}{
+							"enabled": true,
+							"allowed": []string{"bypass", "target"},
+						},
+					}),
+				}},
+			}},
+		},
+	}
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		"PLUGIN context_compression",
+		"tool_outputs:",
+		"request_controls:",
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	plugin := findDecisionPluginForTest(
+		t,
+		compiled.Decisions[0],
+		config.DecisionPluginContextCompression,
+	)
+	var pluginConfig config.ContextCompressionPluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("context_compression decode error: %v", err)
+	}
+	if pluginConfig.Targets == nil ||
+		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 {
+		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
+	}
+}
+
 func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 
@@ -211,6 +303,38 @@ func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfi
 		t.Fatalf("tools.semantic_selection = %#v", cfg.SemanticSelection)
 	}
 	assertToolsPluginStrategy(t, cfg)
+}
+
+func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
+	cfg := mustParseRoutingPluginConfigTest(t, `
+version: v0.3
+routing:
+  modelCards:
+    - name: "local-guard"
+  decisions:
+    - name: privacy_route
+      priority: 100
+      modelRefs:
+        - model: local-guard
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: none
+            strip_tool_history: true
+`)
+
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		`PLUGIN tools`,
+		`mode: "none"`,
+		`strip_tool_history: true`,
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	toolsCfg := compiled.Decisions[0].GetToolsConfig()
+	if toolsCfg == nil || !toolsCfg.StripToolHistory {
+		t.Fatal("tools.strip_tool_history was not preserved")
+	}
 }
 
 func findDecisionPluginForTest(t *testing.T, decision config.Decision, pluginType string) config.DecisionPlugin {

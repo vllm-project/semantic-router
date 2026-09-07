@@ -26,7 +26,7 @@ var _ = Describe("emitToolObservability", func() {
 
 		headerMap := make(map[string]string)
 		for _, opt := range common.HeaderMutation.SetHeaders {
-			headerMap[opt.Header.Key] = opt.Header.Value
+			headerMap[opt.Header.Key] = string(opt.Header.RawValue)
 		}
 
 		Expect(headerMap[headers.VSRToolsStrategy]).To(Equal("default"))

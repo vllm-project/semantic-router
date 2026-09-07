@@ -6,7 +6,7 @@ const readSource = (name: string) => readFileSync(new URL(name, import.meta.url)
 describe('configuration delete confirmation contracts', () => {
   it.each([
     ['./ConfigPageDecisionsSection.tsx', 'decisionDeletePending', 'decisionDeleteError'],
-    ['./ConfigPageModelsSection.tsx', 'reasoningFamilyDeletePending', 'reasoningFamilyDeleteError'],
+    ['./ConfigPageMoMRoutingPanel.tsx', 'entrypointPendingDelete', 'deleteError'],
     ['./ConfigPageProjectionsSection.tsx', 'projectionDeletePending', 'projectionDeleteError'],
   ])('uses the shared confirmation flow in %s', (path, pendingState, errorState) => {
     const source = readSource(path)
@@ -15,6 +15,15 @@ describe('configuration delete confirmation contracts', () => {
     expect(source).toContain('<ConfirmDialog')
     expect(source).toContain(pendingState)
     expect(source).toContain(errorState)
+    expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
+  })
+
+  it('uses the dedicated bulk-safe model delete dialog', () => {
+    const source = readSource('./ConfigPageModelsSection.tsx')
+
+    expect(source).toContain("import ModelDeleteDialog from './ModelDeleteDialog'")
+    expect(source).toContain('<ModelDeleteDialog')
+    expect(source).toContain('modelsPendingDelete')
     expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
   })
 

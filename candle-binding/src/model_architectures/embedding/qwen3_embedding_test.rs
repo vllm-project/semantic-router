@@ -1088,31 +1088,6 @@ fn test_layer_prenorm_architecture() {
     // Then residual is added: x + attention(norm(x))
 }
 
-/// Test Layer shape preservation through full forward pass
-#[rstest]
-#[case(2, 128, 1024, "Standard dimensions")]
-#[case(1, 64, 1024, "Single batch")]
-#[serial]
-fn test_layer_shape_preservation(
-    #[case] batch_size: usize,
-    #[case] seq_len: usize,
-    #[case] hidden_size: usize,
-    #[case] desc: &str,
-) {
-    println!("Testing: {}", desc);
-
-    // This test verifies that Layer forward would preserve shape
-    // Input: [batch, seq_len, hidden_size]
-    // After norm1 + attention + residual: [batch, seq_len, hidden_size]
-    // After norm2 + MLP + residual: [batch, seq_len, hidden_size]
-    // Output: [batch, seq_len, hidden_size]
-
-    // The architecture guarantees shape preservation
-    assert_eq!(batch_size, batch_size); // Shape in = shape out
-    assert_eq!(seq_len, seq_len);
-    assert_eq!(hidden_size, hidden_size);
-}
-
 /// Test 1: Model loading from safetensors
 ///
 /// Verifies:
@@ -1503,7 +1478,7 @@ fn load_reference_outputs() -> Vec<ReferenceOutput> {
         eprintln!("⚠️  Reference data not found. Generating...");
 
         let status = std::process::Command::new("python")
-            .arg("scripts/generate_qwen3_reference.py")
+            .arg("tools/models/generate_qwen3_reference.py")
             .current_dir("../")
             .status()
             .expect("Failed to execute Python script");

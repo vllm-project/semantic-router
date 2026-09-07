@@ -51,7 +51,7 @@ valkey-status: ## Show status of Valkey container
 clean-valkey: stop-valkey ## Clean up Valkey data
 	@$(LOG_TARGET)
 	@echo "Cleaning up Valkey data..."
-	@sudo rm -rf /tmp/valkey-data || rm -rf /tmp/valkey-data
+	@rm -rf /tmp/valkey-data 2>/dev/null || sudo -n rm -rf /tmp/valkey-data
 	@echo "Valkey data directory cleaned"
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,7 @@ run-valkey-cache-example: start-valkey rust ## Run the Valkey cache example
 		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
-		go run ../../deploy/addons/valkey/valkey-cache.go
+		go run ../../tools/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete! Check Valkey using:"
 	@echo "  • docker exec -it valkey-semantic-cache valkey-cli"
@@ -186,7 +186,7 @@ run-valkey-cache-example-no-container: rust ## Run the Valkey cache example usin
 		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
 		export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 		export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
-		go run ../../deploy/addons/valkey/valkey-cache.go
+		go run ../../tools/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete!"
 
@@ -196,7 +196,7 @@ run-valkey-vectorstore-example: start-valkey rust ## Run the Valkey vector store
 	@echo "Running Valkey vector store example..."
 	@cd src/semantic-router && \
 		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
-		go run ../../deploy/addons/valkey/valkey-vectorstore.go
+		go run ../../tools/valkey/valkey-vectorstore.go
 	@echo ""
 	@echo "Example complete! Inspect Valkey using:"
 	@echo "  • make valkey-cli"
@@ -208,7 +208,7 @@ run-valkey-vectorstore-example-no-container: rust ## Run the Valkey vector store
 	@echo "Running Valkey vector store example (using existing server)..."
 	@cd src/semantic-router && \
 		export LD_LIBRARY_PATH=${PWD}/../../candle-binding/target/release:${PWD}/../../nlp-binding/target/release && \
-		go run ../../deploy/addons/valkey/valkey-vectorstore.go
+		go run ../../tools/valkey/valkey-vectorstore.go
 
 # ---------------------------------------------------------------------------
 # Deprecated / Compatibility Aliases
@@ -297,8 +297,12 @@ benchmark-valkey: rust start-valkey ## Run Valkey cache performance benchmark
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
 		cd src/semantic-router/pkg/cache && \
+		out=../../../../benchmark_results/valkey/results.txt && \
 		CGO_ENABLED=1 go test -v -timeout 30m \
-		-run='^$' -bench=BenchmarkValkeyCache \
-		-benchtime=100x -benchmem . | tee ../../../../benchmark_results/valkey/results.txt
+		-run='^$$' -bench=BenchmarkValkeyCache \
+		-benchtime=100x -benchmem . > "$$out" 2>&1; status=$$?; \
+		cat "$$out"; \
+		[ $$status -eq 0 ] || exit $$status; \
+		grep -q 'ns/op' "$$out" || { echo "ERROR: -bench=BenchmarkValkeyCache matched no benchmark (silent-pass guard tripped)"; exit 1; }
 	@echo ""
 	@echo "Benchmark complete! Results in: benchmark_results/valkey/results.txt"

@@ -15,6 +15,64 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
+func TestScrubSecretsInErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "yaml api_key",
+			in:   `failed to parse: api_key: "plain-secret-value" near line 12`,
+			want: `failed to parse: api_key: [REDACTED] near line 12`,
+		},
+		{
+			name: "json password",
+			in:   `invalid config: {"password":"db-pass-canary"}`,
+			want: `invalid config: {"password":[REDACTED]}`,
+		},
+		{
+			name: "keeps api_key_env",
+			in:   `missing env for api_key_env: OPENAI_API_KEY`,
+			want: `missing env for api_key_env: OPENAI_API_KEY`,
+		},
+		{
+			name: "unquoted password",
+			in:   `Backup config is invalid: password: s3cretValue`,
+			want: `Backup config is invalid: password: [REDACTED]`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := scrubSecretsInErrorMessage(tc.in)
+			if got != tc.want {
+				t.Fatalf("scrubSecretsInErrorMessage() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWriteErrorResponseScrubsSecrets(t *testing.T) {
+	server := &ClassificationAPIServer{}
+	rr := httptest.NewRecorder()
+	server.writeErrorResponse(
+		rr,
+		http.StatusBadRequest,
+		"PARSE_ERROR",
+		`Failed to parse config: api_key: "redact-me-canary-value-0001"`,
+	)
+	body := rr.Body.String()
+	if strings.Contains(body, "redact-me-canary-value-0001") {
+		t.Fatalf("error response leaked canary: %s", body)
+	}
+	if !strings.Contains(body, redactedConfigValue) {
+		t.Fatalf("expected redacted placeholder in error body, got %s", body)
+	}
+}
+
 func TestRedactSensitiveConfigValue(t *testing.T) {
 	t.Parallel()
 

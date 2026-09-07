@@ -4,7 +4,7 @@
 
 `elo` is a feedback-driven selection algorithm that ranks candidate models using an Elo-style rating system based on pairwise comparisons.
 
-It aligns to `config/algorithm/selection/elo.yaml`.
+It aligns to `config/fragments/algorithm/selection/elo.yaml`.
 
 **Paper**: [RouteLLM: Simple and Effective LLM Routing](https://arxiv.org/abs/2406.18665) — uses the **Bradley-Terry model** for pairwise preference learning.
 

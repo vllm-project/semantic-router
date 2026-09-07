@@ -82,9 +82,13 @@ test-semantic-router: build-router
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
 		cd src/semantic-router && \
+		TEST_PACKAGES="$$(go list ./...)" && \
+		if [ "$${SKIP_MODEL_DEPENDENT_TESTS:-false}" = "true" ]; then \
+			TEST_PACKAGES="$$(printf '%s\n' "$$TEST_PACKAGES" | awk '!/\/pkg\/(memory|tools)$$/')"; \
+		fi && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
-		go test -v $$(go list ./...)
+		go test -v $$TEST_PACKAGES
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
@@ -201,6 +205,15 @@ bench-router-learning:
 	@python3 bench/agentic_routing_experiment.py \
 		--learning-architecture --profile $(PROFILE) \
 		--output-dir .agent-harness/router-learning-eval
+
+# Exercise production protection with maintained single-request/session fixtures.
+bench-agent-routing-protection: rust-ci ## Gate production protection and write a deterministic session report
+	@mkdir -p .agent-harness/agent-routing-protection
+	@cd src/semantic-router && \
+		CGO_ENABLED=1 \
+		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release:$(CURDIR)/ml-binding/target/release:$(CURDIR)/nlp-binding/target/release" \
+		ROUTER_PROTECTION_REPORT="$(CURDIR)/.agent-harness/agent-routing-protection/report.json" \
+		go test ./pkg/extproc -run '^TestRouterLearningSession' -count=1 -v
 
 # Run hallucination detection benchmark
 # Requires: router running with hallucination config, vLLM endpoint, envoy proxy
@@ -421,20 +434,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./scripts/test-image-gen.sh
-
-# Run image generation integration tests (Go)
-test-image-gen-integration: ## Run Go integration tests for image generation
-test-image-gen-integration:
-	@echo "Running image generation integration tests..."
-	@cd src/semantic-router && go test -tags=integration -v ./pkg/imagegen/integration_test.go -timeout 300s
-
-# Run router with image generation config
-run-router-image-gen: ## Run router with image generation config
-run-router-image-gen: build-router
-	@echo "Running router with image generation config..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
-		./bin/router -config=e2e/config/config.image-gen.yaml
+	@./tools/smoke/test-image-gen.sh
 
 # ============== Modality Routing Tests ==============
 

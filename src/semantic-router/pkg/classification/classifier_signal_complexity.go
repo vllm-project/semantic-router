@@ -7,7 +7,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
@@ -29,8 +28,8 @@ func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.M
 	mu.Lock()
 	for _, result := range classifyResults {
 		matchName := fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty)
-		metrics.RecordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeComplexity, matchName)
+		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
+		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
 		results.SignalConfidences["complexity:"+matchName] = result.Confidence
 		results.SignalValues["complexity:"+result.RuleName+":text_hard_score"] = result.TextHardScore
