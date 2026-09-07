@@ -80,7 +80,7 @@ func TestRoutingSamplingReplayParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	var request samplingParityRequest
-	if err := json.Unmarshal(data, &request); err != nil {
+	if err = json.Unmarshal(data, &request); err != nil {
 		t.Fatal(err)
 	}
 	results := make([]samplingParityResult, 0, len(request.Cases))
