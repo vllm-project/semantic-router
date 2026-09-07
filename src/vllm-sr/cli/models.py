@@ -1469,17 +1469,7 @@ class OutputContractNormalizeSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    field_order: Optional[List[str]] = None
     defaults: Optional[Dict[str, str]] = None
-
-
-class OutputContractViolationPolicy(BaseModel):
-    """Repair and fallback policy when output contract enforcement fails."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    repair: Optional[StrictBool] = None
-    fallback: Optional[str] = None
 
 
 class OutputContractPostprocess(BaseModel):
@@ -1502,7 +1492,6 @@ class OutputContractSpec(BaseModel):
     render: Optional[OutputContractRenderSpec] = None
     extract: Optional[OutputContractExtractSpec] = None
     normalize: Optional[OutputContractNormalizeSpec] = None
-    on_violation: Optional[OutputContractViolationPolicy] = None
     postprocess: Optional[List[OutputContractPostprocess]] = None
 
 

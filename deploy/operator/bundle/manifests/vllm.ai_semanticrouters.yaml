@@ -1789,44 +1789,6 @@ spec:
                                     type: string
                                 type: object
                             type: object
-                          data_management:
-                            description: DataManagement settings for TTL and compaction
-                            properties:
-                              compaction:
-                                description: Compaction settings
-                                properties:
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether auto-compaction
-                                      is active
-                                    type: boolean
-                                  interval:
-                                    default: 86400
-                                    description: Interval in seconds between compaction
-                                      runs
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              ttl:
-                                description: TTL settings for automatic expiration
-                                properties:
-                                  cleanup_interval:
-                                    default: 3600
-                                    description: CleanupInterval in seconds between
-                                      cleanup runs
-                                    minimum: 0
-                                    type: integer
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether TTL is active
-                                    type: boolean
-                                  timestamp_field:
-                                    default: created_at
-                                    description: TimestampField is the field used
-                                      for TTL calculation
-                                    type: string
-                                type: object
-                            type: object
                           development:
                             description: Development settings for Milvus cache
                             properties:
@@ -1840,48 +1802,6 @@ spec:
                                 description: DropCollectionOnStartup clears the collection
                                   when router starts (for testing)
                                 type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
-                                type: boolean
-                            type: object
-                          performance:
-                            description: Performance tuning for Milvus
-                            properties:
-                              batch:
-                                description: Batch settings for operations
-                                properties:
-                                  insert_batch_size:
-                                    default: 100
-                                    description: InsertBatchSize for bulk inserts
-                                    minimum: 1
-                                    type: integer
-                                  timeout:
-                                    default: 60
-                                    description: Timeout for batch operations in seconds
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              connection_pool:
-                                description: ConnectionPool settings
-                                properties:
-                                  acquire_timeout:
-                                    default: 30
-                                    description: AcquireTimeout in seconds
-                                    minimum: 0
-                                    type: integer
-                                  max_connections:
-                                    default: 10
-                                    description: MaxConnections in the pool
-                                    minimum: 1
-                                    type: integer
-                                  max_idle_connections:
-                                    default: 5
-                                    description: MaxIdleConnections to keep
-                                    minimum: 0
-                                    type: integer
-                                type: object
                             type: object
                           search:
                             description: Search settings for Milvus queries
@@ -2038,11 +1958,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2223,11 +2138,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2538,44 +2448,6 @@ spec:
                                     type: string
                                 type: object
                             type: object
-                          data_management:
-                            description: DataManagement settings for TTL and compaction
-                            properties:
-                              compaction:
-                                description: Compaction settings
-                                properties:
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether auto-compaction
-                                      is active
-                                    type: boolean
-                                  interval:
-                                    default: 86400
-                                    description: Interval in seconds between compaction
-                                      runs
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              ttl:
-                                description: TTL settings for automatic expiration
-                                properties:
-                                  cleanup_interval:
-                                    default: 3600
-                                    description: CleanupInterval in seconds between
-                                      cleanup runs
-                                    minimum: 0
-                                    type: integer
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether TTL is active
-                                    type: boolean
-                                  timestamp_field:
-                                    default: created_at
-                                    description: TimestampField is the field used
-                                      for TTL calculation
-                                    type: string
-                                type: object
-                            type: object
                           development:
                             description: Development settings for Milvus cache
                             properties:
@@ -2589,48 +2461,6 @@ spec:
                                 description: DropCollectionOnStartup clears the collection
                                   when router starts (for testing)
                                 type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
-                                type: boolean
-                            type: object
-                          performance:
-                            description: Performance tuning for Milvus
-                            properties:
-                              batch:
-                                description: Batch settings for operations
-                                properties:
-                                  insert_batch_size:
-                                    default: 100
-                                    description: InsertBatchSize for bulk inserts
-                                    minimum: 1
-                                    type: integer
-                                  timeout:
-                                    default: 60
-                                    description: Timeout for batch operations in seconds
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              connection_pool:
-                                description: ConnectionPool settings
-                                properties:
-                                  acquire_timeout:
-                                    default: 30
-                                    description: AcquireTimeout in seconds
-                                    minimum: 0
-                                    type: integer
-                                  max_connections:
-                                    default: 10
-                                    description: MaxConnections in the pool
-                                    minimum: 1
-                                    type: integer
-                                  max_idle_connections:
-                                    default: 5
-                                    description: MaxIdleConnections to keep
-                                    minimum: 0
-                                    type: integer
-                                type: object
                             type: object
                           search:
                             description: Search settings for Milvus queries
@@ -2787,11 +2617,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2972,11 +2797,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
