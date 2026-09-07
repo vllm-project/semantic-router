@@ -108,7 +108,10 @@ func TestMemoryRuntimeStartupDimensionPolicy(t *testing.T) {
 				require.NotNil(t, components.memoryStore)
 				require.NotNil(t, components.memoryExtractor)
 				require.NoError(t, components.resources.close())
-				require.True(t, milvusClient.closed)
+				require.True(t, rolledBack)
+				// MilvusStore.Close leaves a potentially shared client to its owner.
+				require.False(t, milvusClient.closed)
+				require.NoError(t, milvusClient.Close())
 			} else {
 				require.Nil(t, components.memoryStore)
 				require.Nil(t, components.memoryExtractor)
