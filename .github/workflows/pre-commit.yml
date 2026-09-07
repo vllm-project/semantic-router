@@ -75,6 +75,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
       - name: Cache Node dependencies
         if: inputs.website
         uses: actions/cache@v4
@@ -86,14 +91,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-docs-ci-
 
-      - name: Run docs CI gate
+      - name: Run changed-file checks
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+            export BASE_REF="origin/${{ github.base_ref }}"
           else
-            export AGENT_BASE_REF="HEAD^"
+            export BASE_REF="HEAD^"
           fi
-          make agent-docs-ci-gate
+          make check
 
       - name: Build website
         if: inputs.website
@@ -189,20 +194,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
-      # agent-ci-lint runs the selected domains' fast tests, which for dashboard
-      # changes includes make dashboard-check. Some dashboard backend tests shell
-      # out to the vllm-sr CLI, so its Python dependencies must be importable.
+      # Domain checks may invoke dashboard tests that shell out to the CLI.
       - name: Install vllm-sr CLI
         run: pip install -e src/vllm-sr
 
-      - name: Run agent CI lint on changed files
+      - name: Run changed-file checks
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+            export BASE_REF="origin/${{ github.base_ref }}"
           else
-            export AGENT_BASE_REF="HEAD^"
+            export BASE_REF="HEAD^"
           fi
-          make agent-ci-lint
+          make check
 
       - name: Show pre-commit results
         if: failure()
@@ -221,11 +224,8 @@ jobs:
           echo "=== Full git diff ==="
           git diff || true
           echo ""
-          echo "To reproduce the full PR pre-commit baseline locally:"
-          echo "  make agent-pr-gate"
+          echo "To reproduce the full PR baseline locally:"
+          echo "  make ci-full"
           echo ""
-          echo "To run the local branch prelint bundle manually:"
-          echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
-          echo ""
-          echo "To run the changed-file pre-commit workflow locally:"
-          echo "  make precommit-local"
+          echo "To run changed-file checks locally:"
+          echo "  make check BASE_REF=origin/${{ github.base_ref }}"

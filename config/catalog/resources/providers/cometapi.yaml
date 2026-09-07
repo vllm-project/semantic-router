@@ -1,0 +1,22 @@
+id: cometapi
+display_name: CometAPI
+description: Unified hosted access to model APIs.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.cometapi.com/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:cometapi
+  monogram: C
+  monochrome: false
+conformance:
+  status: unverified

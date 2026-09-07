@@ -1,0 +1,34 @@
+id: baidu-ai-studio
+display_name: Baidu AI Studio
+description: ERNIE models through Baidu AI Studio's OpenAI-compatible LLM API.
+category: model_api
+support_tier: compatible
+default_base_url: https://aistudio.baidu.com/llm/lmapi/v3
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+path_overrides:
+  openai/chat-completions@1#create: /chat/completions
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:baidu
+  monogram: E
+  monochrome: false
+conformance:
+  status: unverified
+models:
+- catalog: baidu/ernie-5.1
+  relationship: first_party
+  id: ernie-5.1
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-06
+    source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf

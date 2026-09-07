@@ -4,16 +4,18 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: llama3-8b
+      model: llama3-8b
     models:
       - name: llama3-8b
         backend_refs:
           - name: llama3-8b-service
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: phi4-mini
         backend_refs:
           - name: phi4-mini-service
+            provider: vllm
             endpoint: phi4-mini.default.svc.cluster.local:8000
             weight: 1
   routing:

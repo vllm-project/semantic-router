@@ -186,7 +186,6 @@ type topologyBackendFingerprint struct {
 	BaseURLDigest    string   `json:"base_url_digest,omitempty"`
 	Protocol         string   `json:"protocol,omitempty"`
 	Weight           int      `json:"weight,omitempty"`
-	Type             string   `json:"type,omitempty"`
 	Provider         string   `json:"provider,omitempty"`
 	APIVersion       string   `json:"api_version,omitempty"`
 	ChatPath         string   `json:"chat_path,omitempty"`
@@ -229,7 +228,7 @@ func backendTopologyDigestForModels(
 			model.Backends = append(model.Backends, topologyBackendFingerprint{
 				Name: strings.TrimSpace(backend.Name), EndpointDigest: optionalValueDigest(backend.Endpoint),
 				BaseURLDigest: optionalValueDigest(backend.BaseURL), Protocol: strings.TrimSpace(backend.Protocol),
-				Weight: backend.Weight, Type: strings.TrimSpace(backend.Type), Provider: strings.TrimSpace(backend.Provider),
+				Weight: backend.Weight, Provider: strings.TrimSpace(backend.Provider),
 				APIVersion: strings.TrimSpace(backend.APIVersion), ChatPath: strings.TrimSpace(backend.ChatPath),
 				ExtraHeaderNames: headers,
 			})

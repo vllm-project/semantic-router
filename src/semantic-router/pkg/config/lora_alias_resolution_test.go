@@ -8,16 +8,14 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: general-expert
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: general-expert
   models:
     - name: base-model
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
           api_key: alias-secret
 routing:
   modelCards:
@@ -84,11 +82,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: general-expert
+    model: general-expert
   models:
     - name: base-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: base-model
