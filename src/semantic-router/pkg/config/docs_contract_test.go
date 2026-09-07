@@ -38,7 +38,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`config/fragments/plugin/`",
 			"`tutorials/global/`",
 			"`go test ./pkg/config/...`",
-			"`make agent-lint`",
+			"`make check`",
 		},
 	},
 	{
@@ -92,7 +92,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`global.router.config_source`",
 			"vllm-sr init",
 			"exhaustive canonical reference config",
-			"`make agent-lint`",
+			"`make check`",
 		},
 	},
 	{

@@ -82,9 +82,11 @@ func TestRoutingRecipeInputIDsUseBoundedTypedRuntimeKeys(t *testing.T) {
 	}{
 		{id: "domain:reasoning", valid: true},
 		{id: "classifier:risk:RISKY", valid: true},
+		{id: "complexity:needs_reasoning:hard", valid: true},
 		{id: "kb_metric:docs:best_score", valid: true},
 		{id: "projection:quality", projection: true, valid: true},
 		{id: "case-id", valid: false},
+		{id: "metadata:source:trusted", valid: false},
 		{id: "unknown:signal", valid: false},
 		{id: "DOMAIN:reasoning", valid: false},
 		{id: "domain:bad/value", valid: false},

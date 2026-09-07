@@ -7,7 +7,7 @@ on:
   pull_request_review:
     types: [submitted, dismissed]
   issues:
-    types: [opened, reopened, edited, labeled, unlabeled, assigned, unassigned, milestoned, demilestoned]
+    types: [opened, reopened, closed, edited, labeled, unlabeled, assigned, unassigned, milestoned, demilestoned]
   issue_comment:
     types: [created, edited]
 

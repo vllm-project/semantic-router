@@ -2,7 +2,7 @@ import type { EvaluationView } from '../../pages/evaluationRoute'
 import type { EvaluationRun } from '../../types/evaluationPlane'
 import { formatDateTime } from '../../utils/dateTime'
 import styles from './EvaluationOverview.module.css'
-import type { EvaluationOverviewModel } from './evaluationOverview'
+import type { EvaluationOverviewModel } from './evaluationOverviewModel'
 import { EvaluationActionButton } from './EvaluationPrimitives'
 import planeStyles from './EvaluationPlane.module.css'
 
