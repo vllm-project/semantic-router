@@ -314,12 +314,6 @@ func (r *OpenAIRouter) buildElasticsearchRequest(ctx *RequestContext, ragConfig 
 
 // buildCustomRequest builds a custom request using template
 func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config.RAGPluginConfig, template string) ([]byte, error) {
-	if template == "" {
-		return nil, fmt.Errorf("request template is required for custom format")
-	}
-
-	// Simple template substitution (can be enhanced with proper template engine)
-	query := ctx.UserContent
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -329,26 +323,19 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 		threshold = float64(*ragConfig.SimilarityThreshold)
 	}
 
-	// Replace template variables with basic validation
-	// Note: This is a simple substitution. For production use, consider using
-	// a proper template engine (e.g., text/template) with escaping.
-	// Basic validation: check if user content contains template markers (could indicate injection attempt)
-	if strings.Contains(query, "{{") || strings.Contains(query, "}}") || strings.Contains(query, "${") {
-		logging.Warnf("User content contains template markers, potential injection attempt")
-		// Escape the markers to prevent injection
-		query = strings.ReplaceAll(query, "{{", "\\{\\{")
-		query = strings.ReplaceAll(query, "}}", "\\}\\}")
-		query = strings.ReplaceAll(query, "${", "\\${")
+	// Use the same parser/renderer that validated this template at config load
+	// time. The previous implementation string-replaced user content directly
+	// into the template text, so a query containing a quote or backslash could
+	// terminate a JSON string early and reshape the request -- load-time
+	// validation could not prevent that, because it validated a different
+	// operation than the one the runtime performed. Render substitutes into the
+	// decoded document and marshals, so user content is escaped structurally
+	// and cannot alter the request's shape (review on #2507).
+	compiled, err := config.ParseExternalAPICustomRequestTemplate(template)
+	if err != nil {
+		return nil, err
 	}
-
-	replaced := strings.ReplaceAll(template, "{{.Query}}", query)
-	replaced = strings.ReplaceAll(replaced, "{{.TopK}}", fmt.Sprintf("%d", topK))
-	replaced = strings.ReplaceAll(replaced, "{{.Threshold}}", fmt.Sprintf("%.3f", threshold))
-	replaced = strings.ReplaceAll(replaced, "${user_content}", query)
-	replaced = strings.ReplaceAll(replaced, "${top_k}", fmt.Sprintf("%d", topK))
-	replaced = strings.ReplaceAll(replaced, "${threshold}", fmt.Sprintf("%.3f", threshold))
-
-	return []byte(replaced), nil
+	return compiled.Render(ctx.UserContent, topK, threshold)
 }
 
 // extractContextFromResponse extracts context from API response based on format

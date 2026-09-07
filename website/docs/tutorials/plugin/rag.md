@@ -43,9 +43,9 @@ For `external_api`, `max_response_bytes` caps each response body; omitted or
 For OpenAI `direct_search`, `max_response_bytes` applies the same 4 MiB default
 to each vector-store search response.
 
-The examples below show the two direct-store options. For the
-other backends, start from the field names above and validate the complete
-config before deployment.
+The examples below show the two direct-store options and the external HTTP
+API. For the other backends, start from the field names above and validate the
+complete config before deployment.
 
 Add the plugin under `routing.decisions[].plugins`:
 
@@ -85,9 +85,30 @@ plugins:
         content_field: content
 ```
 
+**External API backend:**
+
+```yaml
+plugins:
+  - type: rag
+    configuration:
+      enabled: true
+      backend: external_api
+      top_k: 5
+      similarity_threshold: 0.78
+      injection_mode: tool_role
+      on_failure: warn
+      backend_config:
+        endpoint: https://search.example.com/query
+        request_format: custom
+        request_template: '{"query":"${user_content}","top_k":${top_k},"threshold":${threshold}}'
+        timeout_seconds: 15
+        max_response_body_bytes: 16777216
+```
+
 Retrieved documents become provider-bound context. Apply collection-level
 access control and avoid mixing tenants in one unrestricted search scope.
 Similarity thresholds are embedding-model specific. See complete examples:
-[`milvus.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/milvus.yaml)
+[`milvus.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/milvus.yaml),
+[`qdrant.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/qdrant.yaml),
 and
-[`qdrant.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/qdrant.yaml).
+[`external-api.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/external-api.yaml).

@@ -86,9 +86,12 @@ func registerRAGValidationSpecs() {
 	It("rejects invalid similarity thresholds", func() {
 		threshold := float32(1.1)
 		cfg := &RAGPluginConfig{
-			Enabled:             true,
-			Backend:             "hybrid",
-			BackendConfig:       MustStructuredPayload(&HybridRAGConfig{Primary: "milvus"}),
+			Enabled: true,
+			Backend: "hybrid",
+			BackendConfig: MustStructuredPayload(&HybridRAGConfig{
+				Primary:       "milvus",
+				PrimaryConfig: MustStructuredPayload(&MilvusRAGConfig{Collection: "docs"}),
+			}),
 			SimilarityThreshold: &threshold,
 		}
 
@@ -99,9 +102,12 @@ func registerRAGValidationSpecs() {
 
 	It("rejects invalid injection modes", func() {
 		cfg := &RAGPluginConfig{
-			Enabled:       true,
-			Backend:       "hybrid",
-			BackendConfig: MustStructuredPayload(&HybridRAGConfig{Primary: "milvus"}),
+			Enabled: true,
+			Backend: "hybrid",
+			BackendConfig: MustStructuredPayload(&HybridRAGConfig{
+				Primary:       "milvus",
+				PrimaryConfig: MustStructuredPayload(&MilvusRAGConfig{Collection: "docs"}),
+			}),
 			InjectionMode: "header",
 		}
 
@@ -152,3 +158,6 @@ func registerRAGAccessorSpecs() {
 		Expect(filter).To(HaveKeyWithValue("field", "topic"))
 	})
 }
+
+// TestHybridExternalAPIRAGResponseLimitValidation removed: response-body limits
+// are validated by main's MaxResponseBytes path, not by this PR.
