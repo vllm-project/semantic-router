@@ -1,0 +1,26 @@
+[
+  {
+    "question_id": "h1",
+    "category": "math",
+    "avg_logprob": -2.4,
+    "correct": true
+  },
+  {
+    "question_id": "h2",
+    "category": "math",
+    "avg_logprob": -2.1,
+    "correct": true
+  },
+  {
+    "question_id": "h3",
+    "category": "math",
+    "avg_logprob": -0.6,
+    "correct": true
+  },
+  {
+    "question_id": "h4",
+    "category": "math",
+    "avg_logprob": -0.3,
+    "correct": true
+  }
+]
