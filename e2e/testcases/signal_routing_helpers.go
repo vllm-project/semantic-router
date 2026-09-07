@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // SignalRoutingCase is a single request/expectation pair for a signal that is

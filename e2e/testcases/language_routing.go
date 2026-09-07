@@ -3,8 +3,9 @@ package testcases
 import (
 	"context"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // targetLanguageDecision is the decision configured to route on the
