@@ -241,6 +241,7 @@ export interface JailbreakSignal {
   threshold: number
   method?: string // "classifier" (default) or "contrastive"
   include_history?: boolean
+  direction?: 'request' | 'response' // "request" (default) scores the prompt, "response" the model's output
   jailbreak_patterns?: string[] // Known jailbreak prompts (contrastive KB)
   benign_patterns?: string[] // Known benign prompts (contrastive KB)
   description?: string

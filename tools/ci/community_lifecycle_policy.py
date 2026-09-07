@@ -50,6 +50,17 @@ PR_STATE_LABELS = (
 )
 PR_CLOSE_CANDIDATE = "pr/close-candidate"
 
+# Delivery-pipeline labels; stale once the issue closes, like pr/* on a PR.
+ISSUE_DELIVERY_STATE_LABELS = frozenset(
+    {
+        NEEDS_ACCEPTANCE,
+        READY_FOR_DEV,
+        IN_PROGRESS,
+        HELP_WANTED,
+        GOOD_FIRST_ISSUE,
+    }
+)
+
 PRIORITY_LABELS = ("priority/P0", "priority/P1", "priority/P2")
 PROTECTED_ISSUE_LABELS = {
     ACCEPTED,
@@ -332,6 +343,13 @@ def plan_issue(
     kind_plan = plan_issue_kind(issue)
     plan.add_labels.update(kind_plan.add_labels)
     plan.remove_labels.update(kind_plan.remove_labels)
+
+    if issue.get("state") == "closed":
+        # Drop stale delivery-state labels; owner/priority/record labels stay.
+        plan.remove_labels.update(labels.intersection(ISSUE_DELIVERY_STATE_LABELS))
+        plan.add_labels.difference_update(plan.remove_labels)
+        return plan
+
     assignees = {
         assignee.get("login", "")
         for assignee in issue.get("assignees", [])

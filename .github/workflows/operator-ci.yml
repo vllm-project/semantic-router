@@ -654,8 +654,7 @@ jobs:
                     topk: 1
                   development:
                     drop_index_on_startup: false
-                    auto_create_index: true
-                    verbose_errors: true'
+                    auto_create_index: true'
               ;;
             milvus)
               CACHE_CONFIG='
@@ -696,26 +695,9 @@ jobs:
                       ef: 64
                     topk: 10
                     consistency_level: Session
-                  performance:
-                    connection_pool:
-                      max_connections: 10
-                      max_idle_connections: 5
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 100
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 3600
-                    compaction:
-                      enabled: false
-                      interval: 86400
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: true'
+                    auto_create_collection: true'
               ;;
             qdrant)
               CACHE_CONFIG='
@@ -779,26 +761,9 @@ jobs:
                       ef: 128
                     topk: 20
                     consistency_level: Eventually
-                  performance:
-                    connection_pool:
-                      max_connections: 20
-                      max_idle_connections: 10
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 200
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 1800
-                    compaction:
-                      enabled: true
-                      interval: 43200
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: false'
+                    auto_create_collection: true'
               ;;
             mmbert)
               CACHE_CONFIG='

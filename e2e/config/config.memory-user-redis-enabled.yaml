@@ -66,7 +66,6 @@ global:
       embedding_model: bert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.60
-      extraction_batch_size: 1
       redis_cache:
         enabled: true
         address: semantic-router-redis:6379
