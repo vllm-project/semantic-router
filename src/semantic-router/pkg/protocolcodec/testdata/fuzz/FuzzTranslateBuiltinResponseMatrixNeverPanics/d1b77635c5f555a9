@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"id\":   \"00\", \"model\": \"0\", \"content\": [{\"type\": \"thinking\"}]}")

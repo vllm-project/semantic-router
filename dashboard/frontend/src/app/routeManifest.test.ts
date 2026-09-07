@@ -22,6 +22,10 @@ describe('dashboard route manifest', () => {
     })
   })
 
+  it('registers Model Hub as an authenticated shell page', () => {
+    expect(shellRouteDefinitions).toContainEqual({ path: '/models', page: 'models' })
+  })
+
   it('keeps legacy redirects pointed at canonical dashboard routes', () => {
     expect(redirectRouteDefinitions).toContainEqual({
       path: '/knowledge-bases',
@@ -30,18 +34,6 @@ describe('dashboard route manifest', () => {
     expect(redirectRouteDefinitions).toContainEqual({
       path: '/taxonomy',
       to: '/knowledge-bases/bases',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/openclaw',
-      to: '/clawos',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/response-cache',
-      to: '/plugins/response-cache',
-    })
-    expect(redirectRouteDefinitions).toContainEqual({
-      path: '/context-compression',
-      to: '/plugins/context-compression',
     })
   })
 

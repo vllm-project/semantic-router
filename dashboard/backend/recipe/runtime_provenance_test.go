@@ -14,11 +14,7 @@ import (
 
 func TestValidationProvenanceVerifiesStableActiveRouterHashes(t *testing.T) {
 	directory := writeManagedRecipe(t)
-	config, err := os.ReadFile(filepath.Join(directory, "config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	routerHash := strings.TrimPrefix(digestBytes(config), "sha256:")
+	routerHash := strings.Repeat("a", 64)
 	server, hashCalls := stableCountingProvenanceRouter(t, routerHash)
 
 	service := NewService(Options{
@@ -35,8 +31,7 @@ func TestValidationProvenanceVerifiesStableActiveRouterHashes(t *testing.T) {
 		t.Fatalf("provenance = %#v", result.Provenance)
 	}
 	if result.Provenance.PackageHash != result.RecipeDigest ||
-		result.Provenance.PackageConfigHash != digestBytes(config) ||
-		result.Provenance.Before.SourceConfigHash != digestBytes(config) ||
+		result.Provenance.Before.SourceConfigHash != "sha256:"+routerHash ||
 		result.Provenance.Before != result.Provenance.After {
 		t.Fatalf("provenance hashes = %#v", result.Provenance)
 	}
@@ -103,41 +98,22 @@ func TestValidationUsesManagedBearerCredentialForEvalAndProvenance(t *testing.T)
 	}
 }
 
-func TestValidationProvenanceSupportsBoundPlatformRuntimeOverrides(t *testing.T) {
+func TestValidationProvenanceKeepsSourceAndGeneratedRuntimeIdentityDistinct(t *testing.T) {
 	directory := writeManagedRecipe(t)
-	config, err := os.ReadFile(filepath.Join(directory, "config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	runtime := append(append([]byte(nil), config...), []byte("\n# platform realization\n")...)
-	runtimePath := filepath.Join(t.TempDir(), "runtime-config.demo.yaml")
-	if writeErr := os.WriteFile(runtimePath, runtime, 0o600); writeErr != nil {
-		t.Fatal(writeErr)
-	}
-	provenancePath := strings.TrimSuffix(runtimePath, filepath.Ext(runtimePath)) + ".provenance.json"
-	if writeErr := os.WriteFile(
-		provenancePath,
-		[]byte(runtimeProvenanceJSON(digestBytes(config), digestBytes(runtime))),
-		0o600,
-	); writeErr != nil {
-		t.Fatal(writeErr)
-	}
-	sourceHash := strings.TrimPrefix(digestBytes(config), "sha256:")
-	runtimeHash := strings.TrimPrefix(digestBytes(runtime), "sha256:")
+	sourceHash := strings.Repeat("a", 64)
+	runtimeHash := strings.Repeat("b", 64)
 	server := stableProvenanceRouter(t, sourceHash, runtimeHash, "active", runtimeHash)
 
 	service := NewService(Options{
-		Directory:         directory,
-		RuntimeConfigPath: runtimePath,
-		RouterAPIURL:      server.URL,
-		HTTPClient:        server.Client(),
+		Directory:    directory,
+		RouterAPIURL: server.URL,
+		HTTPClient:   server.Client(),
 	})
 	result, err := service.Validate(context.Background(), "lane-a", "variant-a")
 	if err != nil || !result.Passed || result.Provenance.Status != ProvenanceVerified {
 		t.Fatalf("Validate() = %#v, %v", result, err)
 	}
-	if result.Provenance.PackageConfigHash != result.Provenance.Before.SourceConfigHash ||
-		result.Provenance.Before.SourceConfigHash == result.Provenance.Before.GeneratedRuntimeHash {
+	if result.Provenance.Before.SourceConfigHash == result.Provenance.Before.GeneratedRuntimeHash {
 		t.Fatalf("source/runtime distinction = %#v", result.Provenance)
 	}
 }

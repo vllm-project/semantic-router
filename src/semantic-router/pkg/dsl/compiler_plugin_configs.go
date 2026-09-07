@@ -62,9 +62,6 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields), true
 	},
-	"image_gen": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileImageGenPluginConfig(fields), true
-	},
 	"fast_response": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileFastResponsePluginConfig(fields), true
 	},
@@ -219,17 +216,6 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getIntField(fields, "max_tool_trace_steps"); ok {
 		cfg.MaxToolTraceSteps = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileImageGenPluginConfig(fields map[string]Value) config.ImageGenPluginConfig {
-	cfg := config.ImageGenPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getStringField(fields, "backend"); ok {
-		cfg.Backend = v
 	}
 	return cfg
 }

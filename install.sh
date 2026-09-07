@@ -126,7 +126,7 @@ describe_package_selection() {
 
   case "$REQUESTED_CHANNEL" in
     dev)
-      printf 'vllm-sr (--pre; prereleases allowed)\n'
+      printf 'vllm-sr==<latest published .dev version>\n'
       ;;
     stable)
       printf 'vllm-sr (latest stable release)\n'
@@ -204,8 +204,8 @@ Options:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
   --channel stable|dev     Package channel to install when --pip-spec is not
-                           set. The dev channel allows prereleases, but pip may
-                           still choose a newer stable version. Default: dev
+                           set. The dev channel resolves and pins the newest
+                           published .dev package. Default: dev
   --pip-spec SPEC          Explicit Python package spec to install. Overrides
                            --channel when set
   --python PATH            Explicit Python interpreter to use
@@ -498,6 +498,11 @@ detect_existing_runtime() {
     return
   fi
 
+  if podman_ready; then
+    printf 'podman\n'
+    return
+  fi
+
   return 1
 }
 
@@ -626,7 +631,26 @@ EOF
   chmod +x "$launcher_path"
 }
 
+resolve_latest_dev_version() {
+  local versions_line dev_version
+  versions_line="$(
+    "$INSTALL_ROOT/venv/bin/python" -m pip index versions \
+      --disable-pip-version-check --pre vllm-sr 2>/dev/null \
+      | sed -n 's/^Available versions: //p' \
+      | head -n 1
+  )"
+  dev_version="$(
+    printf '%s\n' "$versions_line" \
+      | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+      | awk '/^[0-9]+([.][0-9]+)*[.]dev[0-9]+$/ { print; exit }'
+  )"
+  [ -n "$dev_version" ] || return 1
+  printf '%s\n' "$dev_version"
+}
+
 install_requested_package() {
+  local dev_version
   if [ -n "$PIP_SPEC" ]; then
     run_quiet_step \
       "Installing vLLM Semantic Router from $PIP_SPEC" \
@@ -636,9 +660,11 @@ install_requested_package() {
 
   case "$REQUESTED_CHANNEL" in
     dev)
+      dev_version="$(resolve_latest_dev_version)" || die \
+        "No published vllm-sr development package was found. Use --channel stable or --pip-spec."
       run_quiet_step \
-        "Installing vLLM Semantic Router with prereleases allowed" \
-        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr
+        "Installing vLLM Semantic Router development package $dev_version" \
+        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "vllm-sr==$dev_version"
       ;;
     stable)
       run_quiet_step \
@@ -687,6 +713,10 @@ install_cli() {
 
 docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
+}
+
+podman_ready() {
+  has_cmd podman && podman info >/dev/null 2>&1
 }
 
 choose_runtime_preference() {
@@ -745,7 +775,11 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
+  local runtime="${1:-${SELECTED_RUNTIME:-}}"
   rm -f "$INSTALL_ROOT/runtime.env"
+  if [ -n "$runtime" ]; then
+    printf 'CONTAINER_RUNTIME=%s\n' "$runtime" > "$INSTALL_ROOT/runtime.env"
+  fi
 }
 
 ensure_runtime() {
@@ -760,6 +794,13 @@ ensure_runtime() {
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
+    return
+  fi
+
+  if [ "$REQUESTED_RUNTIME" = "auto" ] && podman_ready; then
+    SELECTED_RUNTIME="podman"
+    write_runtime_env "podman"
+    done_step "Using existing Podman runtime"
     return
   fi
 

@@ -95,7 +95,7 @@ func newModelVerificationHandler(configPath string, options modelVerificationOpt
 		}
 		model = request.Model
 		identity := modelVerificationUserIdentity(r)
-		allowed, retryAfter := rateLimiter.Allow(identity)
+		allowed, retryAfter := rateLimiter.Allow(identity + "\x00" + request.Model)
 		if !allowed {
 			status = http.StatusTooManyRequests
 			errorCode = "rate_limited"

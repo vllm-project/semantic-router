@@ -26,6 +26,7 @@ func TestRecipeActivatorCommitsRawAndRealizedDigests(t *testing.T) {
 		Store:      store,
 		ConfigPath: configPath,
 		ConfigDir:  filepath.Dir(configPath),
+		Topology:   testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
 			return append(append([]byte(nil), raw...), []byte("\n# realized\n")...), nil
 		},
@@ -66,6 +67,7 @@ func TestRecipeActivatorFailureRollsBackConfigRuntimeAndJournal(t *testing.T) {
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(_ context.Context, _ string) error {
@@ -98,6 +100,7 @@ func TestRecipeActivatorRepairsPointerRuntimeDrift(t *testing.T) {
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(context.Context, string) error { return nil },
@@ -130,6 +133,7 @@ func TestRecipeActivatorIdempotentActivationDoesNotReapplyRuntime(t *testing.T) 
 		Store:      store,
 		ConfigPath: configPath,
 		ConfigDir:  filepath.Dir(configPath),
+		Topology:   testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
 			realizeCalls.Add(1)
 			return raw, nil
@@ -162,6 +166,7 @@ func TestRecipeActivatorIdempotentPointerWithStaleRouterReappliesRuntime(t *test
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime: func(path, _ string) (string, error) {
 			applyCalls.Add(1)
@@ -217,6 +222,7 @@ func TestRecipeActivatorRequiresConfirmedPlanForListenerAndStorageRecreation(t *
 				Store:      store,
 				ConfigPath: configPath,
 				ConfigDir:  filepath.Dir(configPath),
+				Topology:   testTopologyForHotSwitch(),
 				RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
 					return test.realize(raw), nil
 				},
@@ -262,6 +268,7 @@ func assertManagementAuthRejectedBeforeJournal(t *testing.T, bearerSide string) 
 		Store:      store,
 		ConfigPath: configPath,
 		ConfigDir:  filepath.Dir(configPath),
+		Topology:   testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) {
 			if bearerSide == "target" {
 				return withManagementBearer(raw), nil
@@ -305,6 +312,7 @@ func TestRecipeActivatorEnvoyReadinessFailureRollsBack(t *testing.T) {
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(context.Context, string) error { return nil },
@@ -338,6 +346,7 @@ func TestRecipeActivatorTargetTimeoutLeavesIndependentRollbackBudget(t *testing.
 		ConfigPath:     configPath,
 		ConfigDir:      filepath.Dir(configPath),
 		AttemptTimeout: 500 * time.Millisecond,
+		Topology:       testTopologyForHotSwitch(),
 		RealizeConfig:  func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:   func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(ctx context.Context, _ string) error {
@@ -381,6 +390,7 @@ func TestRecipeActivatorFailureRollbackDetachesFromCanceledParent(t *testing.T) 
 		ConfigPath:     configPath,
 		ConfigDir:      filepath.Dir(configPath),
 		AttemptTimeout: attemptTimeout,
+		Topology:       testTopologyForHotSwitch(),
 		ApplyRuntime:   func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(ctx context.Context, _ string) error {
 			assertLiveBoundedRollbackContext(t, ctx, attemptTimeout)
@@ -419,6 +429,7 @@ func TestRecipeActivatorRecoveryRollbackDetachesFromExpiredParent(t *testing.T) 
 		ConfigPath:     configPath,
 		ConfigDir:      filepath.Dir(configPath),
 		AttemptTimeout: attemptTimeout,
+		Topology:       testTopologyForHotSwitch(),
 		ApplyRuntime:   func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(ctx context.Context, _ string) error {
 			assertLiveBoundedRollbackContext(t, ctx, attemptTimeout)
@@ -462,6 +473,7 @@ func TestRecipeActivatorDeactivateRestoresOriginalSourceAcrossPackageSwitches(t 
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(context.Context, string) error { return nil },
@@ -529,6 +541,7 @@ func TestRecipeActivatorRecoversInconsistentJournalThenRepairs(t *testing.T) {
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime: func(path, _ string) (string, error) {
 			applyCalls.Add(1)
@@ -573,6 +586,7 @@ func TestHotSwitchCommittingRecoveryDoesNotRequireTopologyJournal(t *testing.T) 
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		VerifyRuntime: func(context.Context, string) error { return nil },
 		VerifyEnvoy:   func(context.Context) error { return nil },
 	})
@@ -590,6 +604,7 @@ func TestRecipeActivatorRollbackFailureLeavesInconsistentJournal(t *testing.T) {
 		Store:         store,
 		ConfigPath:    configPath,
 		ConfigDir:     filepath.Dir(configPath),
+		Topology:      testTopologyForHotSwitch(),
 		RealizeConfig: func(raw []byte, _ string) ([]byte, error) { return raw, nil },
 		ApplyRuntime:  func(path, _ string) (string, error) { return path, nil },
 		VerifyRuntime: func(context.Context, string) error { return errors.New("router remains pending") },
@@ -697,6 +712,15 @@ func importedActivationFixture(t *testing.T, recipeName string) (*recipe.Store, 
 
 func activationRequest(summary recipe.PackageSummary) recipe.ActivateRequest {
 	return recipe.ActivateRequest{RecipeDigest: summary.RecipeDigest, AcknowledgeWarnings: true}
+}
+
+func testTopologyForHotSwitch() *fakeRuntimeTopology {
+	return &fakeRuntimeTopology{inventory: runtimeTopologyInventory{
+		ContainerRunning: map[string]bool{
+			managedContainerNameForService("router"): true,
+			managedContainerNameForService("envoy"):  true,
+		},
+	}}
 }
 
 func withManagementBearer(config []byte) []byte {

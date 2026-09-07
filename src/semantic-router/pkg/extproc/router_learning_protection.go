@@ -135,7 +135,6 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return decision
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
-	r.addCurrentLearningCandidate(learningCtx, input.ctx)
 	if rescue, ok := r.protectionRescueDecision(input, learningCtx, preflight, proposal); ok {
 		return rescue
 	}
@@ -331,18 +330,6 @@ func protectionMode(ctx *RequestContext) string {
 	return config.DecisionAdaptationModeApply
 }
 
-func (r *OpenAIRouter) addCurrentLearningCandidate(learningCtx *selection.SelectionContext, ctx *RequestContext) {
-	current := currentLearningModel(learningCtx)
-	if current == "" || selectionContextContainsModel(learningCtx, current) || !r.configuredBackendModel(current) {
-		return
-	}
-	learningCtx.CandidateModels = append(learningCtx.CandidateModels, config.ModelRef{Model: current})
-	learningCtx.CacheAffinityCtx = r.buildCacheAffinityContext(ctx, learningCtx.CandidateModels)
-	if learningCtx.AgenticSession != nil {
-		learningCtx.AgenticSession.ModelContextWindows = r.modelContextWindows(learningCtx.CandidateModels)
-	}
-}
-
 func (r *OpenAIRouter) selectProtectionResult(
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
@@ -423,7 +410,6 @@ func (r *OpenAIRouter) protectionSelectionContext(
 
 func protectionSelectionConfig(cfg config.RouterLearningProtectionConfig) *selection.SessionAwareConfig {
 	result := selection.DefaultSessionAwareConfig()
-	result.DecisionDriftReset = false
 	tuning := cfg.Tuning
 	if tuning.IdleTimeoutSeconds != nil {
 		result.IdleTimeoutSeconds = *tuning.IdleTimeoutSeconds

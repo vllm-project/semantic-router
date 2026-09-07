@@ -15,10 +15,9 @@ from cli.model_catalog import (
     ModelCatalogError,
     available_catalog_versions,
     find_catalog_model,
-    fork_catalog_models,
     load_model_catalog,
-    materialize_catalog_models,
 )
+from cli.model_catalog_export import packaged_model_catalog_document
 
 DEFAULT_MODEL = "vllm-sr/mom-v1-blend"
 LITE_MODEL = "vllm-sr/mom-v1-lite"
@@ -30,6 +29,11 @@ CATALOG_MODELS = {
     "vllm-sr/mom-v1-ultra",
     "vllm-sr/mom-v1-vault",
 }
+CATALOG_PROTOCOLS = (
+    "openai/chat-completions@1",
+    "openai/responses@1",
+    "anthropic/messages@1",
+)
 
 
 def _system_prompts(value: Any) -> list[str]:
@@ -51,6 +55,24 @@ def _target_at(document: dict[str, Any], path: tuple[str | int, ...]) -> Any:
     for part in path:
         target = target[part]
     return target
+
+
+def _first_virtual_model(document: dict[str, Any]) -> dict[str, Any]:
+    return next(model for model in document["models"] if model["kind"] == "virtual")
+
+
+def _catalog_target_at(document: dict[str, Any], path: tuple[str | int, ...]) -> Any:
+    """Resolve legacy model index zero as the first CLI virtual model.
+
+    The shared snapshot intentionally orders physical cards independently from
+    virtual recipe bundles. Mutation tests must select by kind rather than
+    depending on either projection's ordering.
+    """
+
+    if len(path) >= 2 and path[0:2] == ("models", 0):
+        virtual_index = document["models"].index(_first_virtual_model(document))
+        path = ("models", virtual_index, *path[2:])
+    return _target_at(document, path)
 
 
 def _stage_catalog_asset(
@@ -133,39 +155,61 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert catalog.default_model == DEFAULT_MODEL
     assert catalog.enabled_models == (DEFAULT_MODEL,)
     assert {model.id for model in catalog.models} == CATALOG_MODELS
+    assert all(model.protocols == CATALOG_PROTOCOLS for model in catalog.models)
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
 
 
-def test_packaged_mom_prompts_use_model_ids_and_community_attribution() -> None:
+def test_catalog_virtual_projection_is_independent_of_model_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def mutate(document: dict[str, Any]) -> None:
+        document["models"].reverse()
+
+    _load_mutated_catalog(tmp_path, monkeypatch, mutate)
+
+
+def test_packaged_catalog_export_is_complete_and_config_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config.yaml").write_text("not: [valid", encoding="utf-8")
+
+    document = packaged_model_catalog_document()
+
+    assert document["catalogs"] == [
+        {
+            "catalog_version": "latest",
+            "channel": "latest",
+            "default_model": DEFAULT_MODEL,
+            "enabled_models": [DEFAULT_MODEL],
+            "default_intelligence_index": "vllm-sr/intelligence@1.0.0",
+        }
+    ]
+    assert {model["kind"] for model in document["models"]} == {
+        "physical",
+        "virtual",
+    }
+    virtual_models = [
+        model for model in document["models"] if model["kind"] == "virtual"
+    ]
+    assert {model["id"] for model in virtual_models} == CATALOG_MODELS
+    assert all(
+        model["verification"]["status"] == "reproduced" for model in virtual_models
+    )
+
+
+def test_packaged_mom_recipes_do_not_inject_system_prompts() -> None:
     packaged_root = model_catalog.resources.files("cli.model_assets")
     document = yaml.safe_load(
         packaged_root.joinpath("latest", "mom-v1", "config.yaml").read_text(
             encoding="utf-8"
         )
     )
-    expected_identities = {
-        "balance": "mom-v1-blend",
-        "cost": "mom-v1-lite",
-        "speed": "mom-v1-flash",
-        "accuracy": "mom-v1-ultra",
-        "vault": "mom-v1-vault",
-    }
-    seen: set[str] = set()
-
     for recipe in document["recipes"]:
-        recipe_name = recipe["name"]
-        if recipe_name not in expected_identities:
-            continue
-        prompts = _system_prompts(recipe)
-        identity = expected_identities[recipe_name]
-        prefix = f"You are {identity}, built by vLLM-SR Community."
-        assert prompts, f"{recipe_name} has no system prompts"
-        assert all(prompt.startswith(prefix) for prompt in prompts)
-        assert all("built by AMD" not in prompt for prompt in prompts)
-        seen.add(recipe_name)
-
-    assert seen == set(expected_identities)
+        assert (
+            _system_prompts(recipe) == []
+        ), f"{recipe['name']} must not change the model's system prompt"
 
 
 @pytest.mark.parametrize(
@@ -255,66 +299,6 @@ def test_packaged_catalog_roles_cover_each_recipe_provider_reference() -> None:
         assert {model.id for model in catalog.models} == CATALOG_MODELS
 
 
-def test_fork_without_selection_materializes_catalog_defaults(tmp_path: Path) -> None:
-    destination = tmp_path / "default.yaml"
-
-    result = fork_catalog_models((), destination)
-    document = yaml.safe_load(destination.read_text(encoding="utf-8"))
-
-    assert result == {
-        "path": str(destination.resolve()),
-        "catalog_version": "latest",
-        "enabled": [DEFAULT_MODEL],
-        "default": DEFAULT_MODEL,
-        "verification": "verified",
-    }
-    assert document["entrypoints"] == [
-        {"model_names": [DEFAULT_MODEL], "recipe": "balance"}
-    ]
-    assert [recipe["name"] for recipe in document["recipes"]] == ["balance"]
-    # A virtual entrypoint is never a provider fallback model.
-    assert document["providers"]["defaults"]["default_model"] == "local/qwen3.5-9b"
-
-
-def test_fork_materializes_multiple_models_and_explicit_default(tmp_path: Path) -> None:
-    destination = tmp_path / "multi.yaml"
-
-    result = fork_catalog_models(
-        (LITE_MODEL, FLASH_MODEL),
-        destination,
-        default_model=FLASH_MODEL,
-    )
-    document = yaml.safe_load(destination.read_text(encoding="utf-8"))
-
-    # The default is persisted without adding non-runtime metadata: it is the
-    # first selected entrypoint, and the rest retain request order.
-    assert result["enabled"] == [FLASH_MODEL, LITE_MODEL]
-    assert result["default"] == FLASH_MODEL
-    assert result["verification"] == "verified"
-    assert document["entrypoints"] == [
-        {"model_names": [FLASH_MODEL], "recipe": "speed"},
-        {"model_names": [LITE_MODEL], "recipe": "cost"},
-    ]
-    assert [recipe["name"] for recipe in document["recipes"]] == ["speed", "cost"]
-    assert (
-        materialize_catalog_models(
-            (LITE_MODEL, FLASH_MODEL),
-            default_model=FLASH_MODEL,
-        ).document
-        == document
-    )
-
-
-def test_fork_refuses_to_overwrite_existing_config(tmp_path: Path) -> None:
-    destination = tmp_path / "existing.yaml"
-    destination.write_text("sentinel\n", encoding="utf-8")
-
-    with pytest.raises(ModelCatalogError, match="refusing to overwrite"):
-        fork_catalog_models((DEFAULT_MODEL,), destination)
-
-    assert destination.read_text(encoding="utf-8") == "sentinel\n"
-
-
 def test_missing_catalog_version_fails_closed() -> None:
     with pytest.raises(ModelCatalogError, match="is not installed"):
         load_model_catalog("v9.9")
@@ -339,7 +323,7 @@ def test_catalog_rejects_unknown_fields_at_every_manifest_layer(
     path: tuple[str | int, ...],
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        _target_at(document, path)["unexpected_contract"] = True
+        _catalog_target_at(document, path)["unexpected_contract"] = True
 
     with pytest.raises(ModelCatalogError, match="unknown fields: unexpected_contract"):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
@@ -349,7 +333,7 @@ def test_catalog_rejects_unknown_fields_in_model_compatibility_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0]["compatibility"] = {
+        _first_virtual_model(document)["compatibility"] = {
             "cli": {"min": "0.3.0", "unsupported_bound": "0.4.0"}
         }
 
@@ -362,7 +346,7 @@ def test_catalog_rejects_secret_like_manifest_keys(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0][field] = "must-not-enter-a-package"
+        _first_virtual_model(document)[field] = "must-not-enter-a-package"
 
     with pytest.raises(ModelCatalogError, match=rf"secret-like field: .*\.{field}"):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
@@ -382,7 +366,7 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
     literal: str,
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0]["description"] = literal
+        _first_virtual_model(document)["description"] = literal
 
     with pytest.raises(
         ModelCatalogError, match=r"credential-like literal at .*\.description"
@@ -404,7 +388,7 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
         (("models", 0, "kind"), "concrete", "unsupported value"),
         (("models", 0, "family"), "MoM", "lowercase slug"),
         (("models", 0, "policy_version"), "1", "semantic version"),
-        (("models", 0, "protocols"), ["openai"], "unsupported values"),
+        (("protocols", 0, "id"), "openai", "unsupported values"),
         (
             ("models", 0, "roles", 0, "minimum_candidates"),
             99,
@@ -420,34 +404,11 @@ def test_catalog_rejects_invalid_identity_version_enum_and_cardinality(
     message: str,
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        parent = _target_at(document, path[:-1])
+        parent = _catalog_target_at(document, path[:-1])
         parent[path[-1]] = value
 
     with pytest.raises(ModelCatalogError, match=message):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
-
-
-def test_catalog_rejects_role_pool_missing_nested_algorithm_model(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def mutate_asset(bundle: str, document: dict[str, Any]) -> None:
-        if bundle != "mom-v1":
-            return
-        accuracy = next(
-            recipe for recipe in document["recipes"] if recipe["name"] == "accuracy"
-        )
-        fusion = next(
-            decision
-            for decision in accuracy["routing"]["decisions"]
-            if decision["name"] == "accuracy_expert_fusion"
-        )
-        fusion["algorithm"]["fusion"]["model"] = "local/qwen3.5-9b"
-
-    with pytest.raises(
-        ModelCatalogError,
-        match=rf"{LITE_MODEL.removesuffix('-lite')}-ultra.*local/qwen3\.5-9b",
-    ):
-        _load_mutated_catalog(tmp_path, monkeypatch, lambda _: None, mutate_asset)
 
 
 def test_catalog_allows_additional_recommended_candidates(

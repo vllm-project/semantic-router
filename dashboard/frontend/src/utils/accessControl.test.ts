@@ -7,7 +7,6 @@ import {
   canDeployConfig,
   canManageMCP,
   canManageOpenClaw,
-  canManageSecurity,
   canManageUsers,
   canRunEvaluation,
   canViewUsers,
@@ -59,9 +58,6 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/logs')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/logs')).toBe(false)
     expect(canAccessDashboardPath({ role: 'write' }, '/logs')).toBe(true)
-    expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/plugins/response-cache')).toBe(
-      true,
-    )
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/status')).toBe(false)
     expect(canAccessDashboardPath({ permissions: ['replay.read'] }, '/insights/record-1')).toBe(
       true,
@@ -69,6 +65,8 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ permissions: ['evaluation.read'] }, '/evaluation')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['mcp.read'] }, '/config/mcp')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/models')).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/models')).toBe(false)
     expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
   })
@@ -83,8 +81,6 @@ describe('config write access', () => {
     expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
     expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
-    expect(canManageSecurity({ role: 'write' })).toBe(false)
-    expect(canManageSecurity({ role: 'admin' })).toBe(true)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {

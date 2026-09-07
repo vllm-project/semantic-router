@@ -456,10 +456,13 @@ def _start_storage(service: str) -> None:
             f"unexpected managed {service} container appeared during activation"
         )
     layout = resolve_runtime_stack()
+    # Managed storage joins the data network here for the same reason `serve`
+    # puts it there: activation must not hand a Recipe's stores a route back to
+    # the application network the workloads sit on.
     if service == "redis":
         credentials = _storage_credentials(layout)
         result = container_start_redis(
-            layout.network_name,
+            layout.data_network_name,
             layout,
             reuse_existing=False,
             redis_conf_file=credentials.redis_conf_file,
@@ -468,7 +471,7 @@ def _start_storage(service: str) -> None:
     elif service == "postgres":
         credentials = _storage_credentials(layout)
         result = container_start_postgres(
-            layout.network_name,
+            layout.data_network_name,
             layout,
             reuse_existing=False,
             postgres_password_file=credentials.postgres_password_file,
@@ -476,7 +479,7 @@ def _start_storage(service: str) -> None:
         )
     elif service == "milvus":
         result = container_start_milvus(
-            layout.network_name,
+            layout.data_network_name,
             layout,
             state_root_dir="/app",
             host_hidden_state_dir=_host_hidden_state_dir(),

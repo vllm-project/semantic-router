@@ -19,19 +19,38 @@ OPENCLAW_INSTALL_DOC_PATH = (
 )
 
 
-def test_install_script_only_mentions_docker_runtime() -> None:
+def test_install_script_runtime_contract_supports_podman_fallback() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    assert "podman" not in content.lower()
+    # User-facing --runtime choices are unchanged: Podman is an internal
+    # fallback during auto detection, not a first-class option.
     assert "--runtime auto|docker|skip" in content
+
+    # Auto detection must prefer Docker but fall back to Podman when Docker
+    # is not reachable. The fallback has to be gated on --runtime auto so
+    # explicit --runtime docker/skip paths are unaffected.
+    assert "podman_ready" in content
+    assert 'REQUESTED_RUNTIME" = "auto" ] && podman_ready' in content
+
+    # Linux auto still resolves to Docker first.
     assert "Linux auto -> docker" in content
 
 
-def test_installation_doc_only_mentions_docker_runtime() -> None:
+def test_install_script_persists_selected_runtime() -> None:
+    content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # The selected runtime is written to runtime.env so later CLI sessions
+    # reuse it instead of re-probing the host.
+    assert "runtime.env" in content
+    assert "CONTAINER_RUNTIME=" in content
+
+
+def test_installation_doc_documents_runtime_options() -> None:
     content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
 
-    assert "Podman" not in content
     assert "Docker" in content
+    # Podman is now documented as a fallback when Docker is absent.
+    assert "Podman" in content
 
 
 def test_install_script_defaults_to_dev_channel() -> None:
@@ -39,20 +58,19 @@ def test_install_script_defaults_to_dev_channel() -> None:
 
     assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"' in content
     assert "--channel stable|dev" in content
-    assert (
-        '"$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr'
-        in content
-    )
+    assert "resolve_latest_dev_version" in content
+    assert '"vllm-sr==$dev_version"' in content
+    assert "resolves and pins the newest" in content
 
 
-def test_installation_doc_recommends_stable_and_explains_prerelease_resolution() -> (
-    None
-):
+def test_installation_doc_recommends_development_package() -> None:
     content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
 
-    assert "bash -s -- --channel stable" in content
-    assert "pip install vllm-sr" in content
-    assert "does not guarantee that pip will prefer one" in content
+    assert "bash -s -- --channel dev" in content
+    assert (
+        'python -m pip install --upgrade "vllm-sr==${VLLM_SR_DEV_VERSION}"' in content
+    )
+    assert "newest published `.dev` package" in content
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:

@@ -7,7 +7,7 @@ from cli.consts import IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
     container_logs,
     container_logs_output,
-    container_network_disconnect,
+    container_network_disconnect_if_attached,
     container_remove_container,
     container_remove_network,
     container_start_vllm_sr,
@@ -16,7 +16,7 @@ from cli.container_cli import (
     container_stop_container,
     load_openclaw_registry,
 )
-from cli.container_images import get_fleet_sim_container_image, get_runtime_images
+from cli.container_images import get_runtime_images
 from cli.logo import print_vllm_logo
 from cli.recipe_activation_recovery import (
     active_recipe_package_for_stack,
@@ -28,13 +28,13 @@ from cli.runtime_config_lock import RuntimeConfigLock
 from cli.runtime_lifecycle import (
     connect_runtime_container,
     ensure_clean_runtime_container,
+    ensure_data_network,
     ensure_shared_network,
     log_runtime_summary,
     log_startup_banner,
     maybe_finish_setup_mode,
     recover_openclaw_containers,
     resolve_openclaw_data_dir,
-    start_fleet_sim_sidecar,
     start_observability_stack,
 )
 from cli.runtime_lifecycle import (
@@ -81,19 +81,20 @@ def _prepare_runtime_network(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image,
     pull_policy,
     dashboard_disabled,
 ):
     shared_network_name = stack_layout.network_name
     state_root_dir = resolve_state_root_dir(source_config_file, env_vars)
     ensure_shared_network(shared_network_name)
+    # The data network has to exist before any storage container is created on
+    # it, which is the very next step in the serve sequence.
+    ensure_data_network(stack_layout.data_network_name)
     ensure_runtime_images_for_pull_policy(
         image,
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         pull_policy,
         env_vars,
         dashboard_disabled=dashboard_disabled,
@@ -106,7 +107,6 @@ def ensure_runtime_images_for_pull_policy(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image=None,
     pull_policy=None,
     env_vars=None,
     dashboard_disabled=False,
@@ -123,20 +123,6 @@ def ensure_runtime_images_for_pull_policy(
         platform=env_vars.get("VLLM_SR_PLATFORM"),
         include_dashboard=not dashboard_disabled,
     )
-    if _fleet_sim_required(env_vars):
-        get_fleet_sim_container_image(image=sim_image, pull_policy=pull_policy)
-
-
-def _fleet_sim_required(env_vars):
-    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
-        "TARGET_FLEET_SIM_URL"
-    )
-    if external_url:
-        return False
-    raw_enabled = env_vars.get(
-        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
-    )
-    return str(raw_enabled).lower() != "false"
 
 
 def start_vllm_sr(
@@ -146,7 +132,6 @@ def start_vllm_sr(
     router_image=None,
     envoy_image=None,
     dashboard_image=None,
-    sim_image=None,
     topology=None,
     pull_policy=None,
     enable_observability=True,
@@ -178,7 +163,6 @@ def start_vllm_sr(
             router_image=router_image,
             envoy_image=envoy_image,
             dashboard_image=dashboard_image,
-            sim_image=sim_image,
             pull_policy=pull_policy,
             enable_observability=enable_observability,
         )
@@ -220,7 +204,6 @@ def _start_vllm_sr_locked(
     router_image,
     envoy_image,
     dashboard_image,
-    sim_image,
     pull_policy,
     enable_observability,
 ):
@@ -249,19 +232,16 @@ def _start_vllm_sr_locked(
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         pull_policy,
         dashboard_disabled,
     )
 
-    started_backends, runtime_network_name, fleet_sim_enabled = _start_support_services(
+    started_backends, runtime_network_name = _start_support_services(
         user_config,
         shared_network_name,
         state_root_dir,
         env_vars,
         stack_layout,
-        sim_image,
-        pull_policy,
         enable_observability,
     )
 
@@ -301,7 +281,6 @@ def _start_vllm_sr_locked(
         stack_layout,
         dashboard_disabled,
         enable_observability,
-        fleet_sim_enabled,
         started_backends=started_backends,
     )
 
@@ -312,12 +291,10 @@ def _start_support_services(
     state_root_dir,
     env_vars,
     stack_layout,
-    sim_image,
-    pull_policy,
     enable_observability,
 ):
     started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
+        user_config, stack_layout, state_root_dir=state_root_dir
     )
     env_vars[MANAGED_STORAGE_BACKENDS_ENV] = ",".join(sorted(started_backends))
     observability_network_name = start_observability_stack(
@@ -328,16 +305,7 @@ def _start_support_services(
         stack_layout,
     )
     runtime_network_name = observability_network_name or shared_network_name
-    fleet_sim_enabled = start_fleet_sim_sidecar(
-        state_root_dir,
-        env_vars,
-        stack_layout,
-        sim_image=sim_image,
-        pull_policy=pull_policy,
-    )
-    if fleet_sim_enabled:
-        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
-    return started_backends, runtime_network_name, fleet_sim_enabled
+    return started_backends, runtime_network_name
 
 
 def _start_runtime_containers(
@@ -385,8 +353,9 @@ def stop_vllm_sr():
 
     openclaw_data_dir = resolve_openclaw_data_dir(os.getcwd())
     network_name = stack_layout.network_name
+    stack_network_names = (network_name, stack_layout.data_network_name)
     failures = _disconnect_openclaw_registry_containers(
-        network_name,
+        stack_network_names,
         load_openclaw_registry(openclaw_data_dir),
     )
     for container_name in _runtime_container_names(stack_layout):
@@ -397,13 +366,6 @@ def stop_vllm_sr():
             stopped_message=f"{container_name} stopped",
         ):
             failures.append(container_name)
-    if not _stop_managed_container(
-        stack_layout.fleet_sim_container_name,
-        container_statuses[stack_layout.fleet_sim_container_name],
-        stop_message=f"Stopping {stack_layout.fleet_sim_container_name}...",
-        stopped_message=f"{stack_layout.fleet_sim_container_name} stopped",
-    ):
-        failures.append(stack_layout.fleet_sim_container_name)
     for container_name in _observability_container_names(stack_layout):
         if not _stop_managed_container(
             container_name,
@@ -425,11 +387,12 @@ def stop_vllm_sr():
             stop_message=f"Stopping {container_name}...",
             stopped_message=f"{container_name} stopped",
             preserve_unadopted_data=container_name in credentialed_storage,
-            network_name=network_name,
+            network_names=stack_network_names,
         ):
             failures.append(container_name)
-    if not _remove_runtime_network(network_name):
-        failures.append(network_name)
+    for stack_network_name in stack_network_names:
+        if not _remove_runtime_network(stack_network_name):
+            failures.append(stack_network_name)
     if failures:
         raise RuntimeError("Failed to stop managed containers: " + ", ".join(failures))
     if containers_absent:
@@ -441,7 +404,6 @@ def stop_vllm_sr():
 def _managed_container_statuses(stack_layout: RuntimeStackLayout) -> dict[str, str]:
     container_names = [
         *_runtime_container_names(stack_layout),
-        stack_layout.fleet_sim_container_name,
         *_observability_container_names(stack_layout),
         *_storage_container_names(stack_layout),
     ]
@@ -471,19 +433,30 @@ def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:
 
 
 def _disconnect_openclaw_registry_containers(
-    network_name: str, openclaw_entries: list[dict[str, str]]
+    network_names: tuple[str, ...], openclaw_entries: list[dict[str, str]]
 ) -> list[str]:
     failures = []
     for entry in openclaw_entries:
         name = entry.get("name") or entry.get("containerName")
         if not name:
             continue
-        if not _disconnect_openclaw_container(network_name, name):
+        if not _disconnect_openclaw_container(network_names, name):
             failures.append(name)
     return failures
 
 
-def _disconnect_openclaw_container(network_name: str, container_name: str) -> bool:
+def _disconnect_openclaw_container(
+    network_names: tuple[str, ...], container_name: str
+) -> bool:
+    """Detach one OpenClaw workload from every network this stack owns.
+
+    A workload normally joins the application network only, but the network is
+    chosen by ``OPENCLAW_DEFAULT_NETWORK_MODE``, which the caller's environment
+    can set to anything -- including this stack's data network. Detaching from
+    both keeps `stop` able to remove both instead of failing on whichever one
+    still has a user.
+    """
+
     status = container_status(container_name)
     if status == "not found":
         return True
@@ -491,17 +464,18 @@ def _disconnect_openclaw_container(network_name: str, container_name: str) -> bo
         log.info(f"Stopping OpenClaw container: {container_name}")
         if not container_stop_container(container_name):
             return False
-    log.info(f"Disconnecting {container_name} from {network_name}")
-    return_code, _stdout, stderr = container_network_disconnect(
-        network_name, container_name
-    )
-    if return_code == 0:
-        return True
-    log.error(
-        f"Failed to disconnect {container_name} from {network_name}: "
-        f"{stderr.strip() or f'exit code {return_code}'}"
-    )
-    return False
+    for network_name in network_names:
+        log.info(f"Disconnecting {container_name} from {network_name}")
+        return_code, _stdout, stderr = container_network_disconnect_if_attached(
+            network_name, container_name
+        )
+        if return_code != 0:
+            log.error(
+                f"Failed to disconnect {container_name} from {network_name}: "
+                f"{stderr.strip() or f'exit code {return_code}'}"
+            )
+            return False
+    return True
 
 
 def _stop_managed_container(
@@ -511,7 +485,7 @@ def _stop_managed_container(
     stop_message: str | None = None,
     stopped_message: str | None = None,
     preserve_unadopted_data: bool = False,
-    network_name: str | None = None,
+    network_names: tuple[str, ...] = (),
 ) -> bool:
     if container_status == "not found":
         return True
@@ -527,13 +501,13 @@ def _stop_managed_container(
             "The next `vllm-sr serve` adopts the volume and takes the "
             "container over."
         )
-        # A kept container stays attached to the stack network, which Podman
+        # A kept container stays attached to a stack network, which Podman
         # counts as a user of that network and refuses to remove. Detaching it
         # costs nothing -- the next `serve` recreates it on the new network
         # anyway -- and follows what the OpenClaw teardown already does for the
         # containers it likewise stops without removing.
-        if network_name:
-            detach_preserved_storage_container(network_name, container_name)
+        if network_names:
+            detach_preserved_storage_container(network_names, container_name)
         return True
     if not container_remove_container(container_name):
         return False
@@ -573,11 +547,7 @@ def show_logs(service: str, follow: bool = False):
     """Show logs from a runtime service."""
     _validate_runtime_service(service)
     stack_layout = resolve_runtime_stack()
-    container_name = (
-        stack_layout.fleet_sim_container_name
-        if service == "simulator"
-        else runtime_service_container_name(service, stack_layout)
-    )
+    container_name = runtime_service_container_name(service, stack_layout)
     _ensure_runtime_container_available(container_name)
 
     if follow:
@@ -601,18 +571,9 @@ def show_logs(service: str, follow: bool = False):
 def show_status(service: str = "all"):
     """Show runtime service status."""
     stack_layout = resolve_runtime_stack()
-    status, sim_status = _resolve_runtime_status_snapshot(stack_layout)
+    status = _resolve_runtime_status_snapshot(stack_layout)
     if status == "not found":
         heading("Runtime status")
-        if sim_status == "running":
-            fields(
-                (
-                    ("Router stack", "Not running"),
-                    ("Simulator", f"Running ({stack_layout.fleet_sim_url})"),
-                )
-            )
-            echo("Stop with: vllm-sr stop")
-            return
         fields((("State", "Not running"),))
         echo("Start with: vllm-sr serve")
         return
@@ -634,35 +595,32 @@ def show_status(service: str = "all"):
         report_service_status(requested_service, stack_layout)
 
     echo()
-    echo("Detailed logs: vllm-sr logs <envoy|router|dashboard|simulator>")
+    echo("Detailed logs: vllm-sr logs <envoy|router|dashboard>")
 
 
 def _resolve_runtime_status_snapshot(
     stack_layout: RuntimeStackLayout,
-) -> tuple[str, str]:
+) -> str:
     try:
-        return (
-            _runtime_stack_status(stack_layout),
-            container_status(stack_layout.fleet_sim_container_name),
-        )
+        return _runtime_stack_status(stack_layout)
     except SystemExit:
         warning(
             "Docker daemon is not reachable, so local container status cannot be inspected"
         )
-        return "not found", "not found"
+        return "not found"
 
 
 def _validate_runtime_service(service: str) -> None:
-    if service == "simulator" or service in RUNTIME_LOG_SERVICES:
+    if service in RUNTIME_LOG_SERVICES:
         return
     log.error(f"Invalid service: {service}")
-    log.error("Must be 'envoy', 'router', 'dashboard', or 'simulator'")
+    log.error("Must be 'envoy', 'router', or 'dashboard'")
     raise SystemExit(1)
 
 
 def _requested_services(service: str) -> list[str]:
     if service == "all":
-        return ["router", "envoy", "dashboard", "simulator"]
+        return ["router", "envoy", "dashboard"]
     _validate_runtime_service(service)
     return [service]
 

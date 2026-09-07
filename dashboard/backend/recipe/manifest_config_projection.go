@@ -105,9 +105,9 @@ func projectAutoModels(router configRouterDocument) ([]string, error) {
 
 	configured := strings.TrimSpace(router.AutoModelName)
 	if configured == "" {
-		configured = "MoM"
+		return nil, nil
 	}
-	return stableUnique([]string{"vllm-sr/auto", "auto", configured}), nil
+	return []string{configured}, nil
 }
 
 func (projection configProjection) requestModelFor(expectedRecipe string) (string, error) {

@@ -1,62 +1,38 @@
 package router
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
-func TestRegisterFleetSimRoutesReturnsBadGatewayWhenDisabled(t *testing.T) {
+type routerProxyCredentialProvider struct {
+	token string
+}
+
+func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerFleetSimRoutes(mux, &config.Config{})
+	registerProxyRoutes(mux, &config.Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
+	_, pattern := mux.Handler(req)
+	if pattern != "/api/" {
+		t.Fatalf("matched route = %q, want generic API fallback %q", pattern, "/api/")
+	}
+
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, req)
-
 	if recorder.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadGateway)
 	}
-}
-
-func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
-	t.Parallel()
-
-	var proxiedPath string
-	var forwardedPrefix string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proxiedPath = r.URL.Path
-		forwardedPrefix = r.Header.Get("X-Forwarded-Prefix")
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"ok":true}`)
-	}))
-	defer server.Close()
-
-	mux := http.NewServeMux()
-	registerFleetSimRoutes(mux, &config.Config{FleetSimURL: server.URL})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
-	recorder := httptest.NewRecorder()
-	mux.ServeHTTP(recorder, req)
-
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	if !strings.Contains(recorder.Body.String(), "No API handler configured for this path") {
+		t.Fatalf("response body = %q, want generic API fallback", recorder.Body.String())
 	}
-	if proxiedPath != "/api/workloads" {
-		t.Fatalf("proxied path = %q, want %q", proxiedPath, "/api/workloads")
-	}
-	if forwardedPrefix != "/api/fleet-sim" {
-		t.Fatalf("forwarded prefix = %q, want %q", forwardedPrefix, "/api/fleet-sim")
-	}
-}
-
-type routerProxyCredentialProvider struct {
-	token string
 }
 
 func (provider routerProxyCredentialProvider) ManagementCredential() (string, error) {
@@ -183,5 +159,67 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		if got := routerManagementProxyRouteAllowed(test.method, test.path); got != test.want {
 			t.Fatalf("routerManagementProxyRouteAllowed(%q, %q) = %v, want %v", test.method, test.path, got, test.want)
 		}
+	}
+}
+
+func TestRedactCredentialParams(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			name: "authToken is redacted and other params survive",
+			raw:  "http://localhost:8711/embedded/grafana/x?orgId=1&authToken=secret",
+			want: "http://localhost:8711/embedded/grafana/x?authToken=%5BREDACTED%5D&orgId=1",
+		},
+		{
+			name: "token is redacted",
+			raw:  "http://localhost:8711/x?token=secret",
+			want: "http://localhost:8711/x?token=%5BREDACTED%5D",
+		},
+		{
+			name: "access_token is redacted",
+			raw:  "http://localhost:8711/x?access_token=secret",
+			want: "http://localhost:8711/x?access_token=%5BREDACTED%5D",
+		},
+		{
+			name: "repeated authToken collapses to one redaction",
+			raw:  "http://localhost:8711/x?authToken=a&authToken=b",
+			want: "http://localhost:8711/x?authToken=%5BREDACTED%5D",
+		},
+		{
+			name: "fragment is preserved",
+			raw:  "http://localhost:8711/x?authToken=secret#gatewayUrl=http://localhost:8080",
+			want: "http://localhost:8711/x?authToken=%5BREDACTED%5D#gatewayUrl=http://localhost:8080",
+		},
+		{
+			name: "no credential is returned byte for byte",
+			raw:  "http://localhost:8711/embedded/grafana/x?orgId=1&b=2",
+			want: "http://localhost:8711/embedded/grafana/x?orgId=1&b=2",
+		},
+		{name: "empty", raw: "", want: ""},
+		{name: "unparsable", raw: "::::", want: "[unparsable]"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := redactCredentialParams(tc.raw); got != tc.want {
+				t.Fatalf("redactCredentialParams(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRedactCredentialParamsRemovesTheTokenFromTheLoggedReferer(t *testing.T) {
+	t.Parallel()
+
+	fakeJWT := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.signature"
+	logged := redactCredentialParams("http://localhost:8711/embedded/grafana/goto/x?orgId=1&authToken=" + fakeJWT)
+	if strings.Contains(logged, fakeJWT) {
+		t.Fatalf("the token survived redaction: %q", logged)
 	}
 }

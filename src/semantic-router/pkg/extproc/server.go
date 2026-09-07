@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
@@ -497,4 +498,5 @@ func publishRouterState(
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
+	selection.SetGlobalRegistry(router.ModelSelector)
 }

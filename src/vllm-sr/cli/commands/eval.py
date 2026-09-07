@@ -16,6 +16,7 @@ import click
 import requests
 
 from cli.commands.common import exit_with_logged_error
+from cli.commands.eval_pipeline import EVALUATION_COMMANDS
 from cli.commands.eval_rendering import render_eval_summary
 from cli.commands.recipe_learning import recipe_learning
 from cli.consts import DEFAULT_API_PORT
@@ -64,8 +65,7 @@ def _normalize_endpoint(endpoint: str) -> str:
         return _default_endpoint()
 
     # If user passes a base URL (e.g. http://localhost:8080), append path.
-    if endpoint.endswith("/"):
-        endpoint = endpoint[:-1]
+    endpoint = endpoint.removesuffix("/")
 
     if endpoint.endswith("/api/v1/eval"):
         return endpoint
@@ -88,7 +88,7 @@ def _parse_messages_json(messages_json: str) -> list[dict[str, Any]]:
 
     for idx, item in enumerate(value):
         if not isinstance(item, dict):
-            raise ValueError(
+            raise TypeError(
                 f"--messages[{idx}] must be an object, got {type(item).__name__}"
             )
 
@@ -398,3 +398,5 @@ def eval(
 
 
 eval.add_command(recipe_learning)
+for evaluation_command in EVALUATION_COMMANDS:
+    eval.add_command(evaluation_command)

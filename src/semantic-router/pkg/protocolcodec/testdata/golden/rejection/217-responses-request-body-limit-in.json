@@ -1,0 +1,10 @@
+{
+  "operation": "request",
+  "limits": {
+    "body_bytes": 16
+  },
+  "body": {
+    "model": "client-model",
+    "input": "hello"
+  }
+}

@@ -21,6 +21,7 @@ func newOpenClawHandler(cfg *config.Config, wf *workflowstore.Store) *handlers.O
 
 	openClawHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode, wf)
 	openClawHandler.SetRouterConfigPath(cfg.AbsConfigPath)
+	openClawHandler.SetAllowedOrigins(cfg.AllowedOrigins)
 	return openClawHandler
 }
 
@@ -99,12 +100,12 @@ func registerOpenClawProxyRoute(mux *http.ServeMux, openClawHandler *handlers.Op
 			handler, _ = proxyCache.LoadOrStore(cacheKey, h)
 		}
 
-		roomID := strings.TrimSpace(r.Header.Get("X-ClawOS-Room-Id"))
+		roomID := strings.TrimSpace(r.Header.Get("X-OpenClaw-Room-Id"))
 		if roomID == "" {
 			roomID = strings.TrimSpace(r.URL.Query().Get("roomId"))
 		}
 		if roomID != "" {
-			r.Header.Set("X-ClawOS-Room-Id", roomID)
+			r.Header.Set("X-OpenClaw-Room-Id", roomID)
 		}
 
 		handler.(http.Handler).ServeHTTP(w, r)

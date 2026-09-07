@@ -39,7 +39,37 @@ global:
       enabled: true
       backend_type: memory
       similarity_threshold: 0.8
+      polarity_guard:
+        mode: lexical          # lexical | nli | lexical+nli
+        nli:
+          contradiction_threshold: 0.5
 ```
+
+#### Negation guard
+
+Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
+mode"*: opposite-meaning queries often score above `similarity_threshold`
+while genuine paraphrases score below it, so raising the threshold does not
+fix the false hit. `polarity_guard` verifies the winning candidate before the
+in-memory backend serves it:
+
+- `lexical` (default): the model-free tier that catches negation cues and
+  known antonym swaps. It is always on and needs no model.
+- `nli` / `lexical+nli`: additionally runs the router's NLI model once per
+  lookup on the single best candidate and rejects the hit when the
+  contradiction probability exceeds `nli.contradiction_threshold`. The tier
+  reuses the hallucination explainer
+  (`global.model_catalog.modules.hallucination_mitigation.explainer`, by default
+  `tasksource/ModernBERT-base-nli`); the native binding holds one NLI model, so
+  the guard cannot bind a different one. Config loading fails when an NLI mode
+  is selected without that model. Expect roughly 70 ms per verified hit on CPU;
+  a cache hit still saves a full generation. If the model errors at lookup
+  time the guard fails open: the hit is served and a
+  `cache_polarity_nli_skipped` warning is logged.
+
+Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
+misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
+and hybrid cache backends do not run the guard.
 
 ### Memory
 
@@ -98,6 +128,10 @@ For full deployment instructions, see:
 - [Valkey Agentic Memory](../../installation/valkey-memory) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - [Qdrant](../../installation/qdrant) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `config/runtime/memory/` for backend-specific configuration references
+
+When an external model with `model_role: memory_rewrite` is configured, its
+`max_response_bytes` limits each query-rewrite response. An omitted or
+non-positive value uses the 1 MiB default.
 
 ### Vector Store
 

@@ -7,14 +7,10 @@ the complete interactive CLI dependency graph into lightweight router images.
 from importlib import import_module
 from typing import Any
 
-__all__ = [
-    "config_command",
-    "model_list_command",
-]
+__all__ = ["config_command"]
 
 _LAZY_EXPORTS = {
     "config_command": (".config", "config_command"),
-    "model_list_command": (".model", "model_list_command"),
 }
 
 

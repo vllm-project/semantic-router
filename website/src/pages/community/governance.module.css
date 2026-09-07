@@ -28,7 +28,7 @@
   color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.67rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.15em;
 }
@@ -41,8 +41,8 @@
 .sectionHeader h2 {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
-  font-weight: 500;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
   line-height: 1;
   letter-spacing: -0.025em;
 }
@@ -156,7 +156,7 @@
 
 .roleTable th {
   color: var(--site-text);
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .roleTable thead th {
@@ -227,7 +227,7 @@
   border-bottom: 1px solid var(--site-border);
   color: var(--site-text);
   font-size: 0.68rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }

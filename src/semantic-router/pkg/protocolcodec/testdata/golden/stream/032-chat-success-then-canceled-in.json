@@ -1,0 +1,8 @@
+{
+  "public_model": "public-model",
+  "provider_model": "provider-model",
+  "finalize_reason": "canceled",
+  "chunks": [
+    "data: {\"id\":\"response_cancel\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"provisional\"},\"finish_reason\":\"stop\"}]}\n\ndata: {\"id\":\"response_cancel\",\"object\":\"chat.completion.chunk\",\"created\":100,\"model\":\"provider-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3}}\n\ndata: [DONE]\n\n"
+  ]
+}

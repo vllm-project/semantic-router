@@ -455,11 +455,8 @@ func (c *QdrantCache) LookupSimilarWithThreshold(ctx context.Context, model, que
 	logging.Debugf("QdrantCache: CACHE HIT similarity=%.4f threshold=%.4f response_size=%d",
 		best.Score, threshold, len(responseBody))
 	metrics.RecordCacheOperation("qdrant", "find_similar", "hit", time.Since(start).Seconds())
-	return LookupResult{
-		ResponseBody: []byte(responseBody),
-		Found:        true,
-		Similarity:   best.Score,
-	}, nil
+	storedAt, expTime := parseQdrantPayloadTiming(best.Payload)
+	return lookupResultFromTimestamps([]byte(responseBody), best.Score, storedAt, expTime), nil
 }
 
 func (c *QdrantCache) GetStats() CacheStats {

@@ -81,6 +81,9 @@
 }
 
 .portfolioActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 36px;
   padding: 0 13px;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -90,6 +93,11 @@
   cursor: pointer;
   font-size: 0.73rem;
   font-weight: 700;
+}
+
+.portfolioActions button svg {
+  width: 14px;
+  height: 14px;
 }
 
 .portfolioList {
@@ -119,6 +127,11 @@
   padding-left: 56px;
 }
 
+.entrypointPortfolioItemMain {
+  grid-template-columns: minmax(260px, 1.4fr) minmax(200px, 0.8fr) auto;
+  padding-left: 22px;
+}
+
 .portfolioItemMain:hover {
   background: rgba(255, 255, 255, 0.018);
 }
@@ -134,6 +147,16 @@
   color: var(--graphite-text-muted, #9da7b3);
   cursor: pointer;
   font-size: 0.9rem;
+}
+
+.disclosureButton svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 160ms ease;
+}
+
+.disclosureButton[aria-expanded='true'] svg {
+  transform: rotate(90deg);
 }
 
 .disclosureButton:hover,
@@ -187,6 +210,9 @@
 }
 
 .rowActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 8px;
   border: 0;
   border-radius: 6px;
@@ -194,6 +220,11 @@
   color: var(--graphite-text-muted, #9da7b3);
   cursor: pointer;
   font-size: 0.68rem;
+}
+
+.rowActions svg {
+  width: 13px;
+  height: 13px;
 }
 
 .rowActions button:hover {
@@ -363,172 +394,11 @@
   font-size: 0.63rem;
 }
 
-.catalogDisclosure {
-  display: grid;
-  gap: 12px;
-  padding: 16px 18px 18px;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--brand-amd, #e31b23) 7%, transparent),
-      transparent 34%
-    ),
-    #101012;
-  color: var(--graphite-text-muted, #9da7b3);
-  font-size: 0.72rem;
-}
-
-.catalogDisclosure > p {
-  max-width: 860px;
-  margin: 0;
-  color: var(--graphite-text-muted, #9da7b3);
-  line-height: 1.5;
-}
-
-.catalogDisclosure > button {
-  width: max-content;
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--graphite-text, #f0f3f6);
-  cursor: pointer;
-  font-size: 0.68rem;
-}
-
-.catalogDisclosureHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.catalogDisclosureHeader > div:first-child {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.catalogDisclosureHeader strong {
-  color: var(--graphite-text, #f0f3f6);
-  font-size: 0.92rem;
-}
-
-.catalogDisclosureHeader code {
-  color: #c8ccd2;
-  font-size: 0.66rem;
-}
-
-.catalogBadges,
-.catalogTraits,
-.catalogPool {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.catalogBadges > span,
-.catalogTraits > span,
-.customBadge {
-  display: inline-flex;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #c8ccd2;
-  font-size: 0.62rem;
-  font-weight: 700;
-}
-
-.catalogBadges .verifiedBadge {
-  background: rgba(75, 214, 139, 0.11);
-  color: #8ce9b7;
-}
-
-.catalogBadges .warningBadge,
-.customBadge {
-  background: rgba(251, 191, 36, 0.1);
-  color: #f7cc63;
-}
-
-.catalogFacts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-  margin: 0;
-}
-
-.catalogFacts > div {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-  padding: 9px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.catalogFacts dt {
-  color: var(--graphite-text-muted, #9da7b3);
-  font-size: 0.6rem;
-}
-
-.catalogFacts dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: #c8ccd2;
-  font-size: 0.67rem;
-}
-
-.catalogRoleGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
-}
-
-.catalogRoleGrid > section {
-  display: grid;
-  gap: 7px;
-  padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: #18181b;
-}
-
-.catalogRoleGrid > section > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.catalogRoleGrid strong {
-  color: var(--graphite-text, #f0f3f6);
-  font-size: 0.71rem;
-}
-
-.catalogRoleGrid span,
-.catalogRoleGrid p {
-  margin: 0;
-  color: var(--graphite-text-muted, #9da7b3);
-  font-size: 0.61rem;
-}
-
-.catalogPool code {
-  padding: 3px 5px;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #c8ccd2;
-  font-size: 0.6rem;
-}
-
 @media (max-width: 760px) {
-  .staticPortfolioItemMain {
+  .staticPortfolioItemMain,
+  .entrypointPortfolioItemMain {
     grid-template-columns: 1fr;
     padding-left: 14px;
-  }
-
-  .catalogDisclosureHeader,
-  .catalogRoleGrid > section > div:first-child {
-    flex-direction: column;
   }
 }
 

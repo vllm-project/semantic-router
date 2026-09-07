@@ -9,7 +9,7 @@ from collections.abc import Callable
 from cli.container_runtime import get_container_runtime
 from cli.container_services import (
     container_mount_destinations,
-    container_network_disconnect,
+    container_network_disconnect_if_attached,
     container_start_milvus,
     container_start_postgres,
     container_start_redis,
@@ -66,7 +66,6 @@ def detect_required_backends(
 
 def start_storage_backends(
     required_backends: set[str],
-    network_name: str,
     stack_layout: RuntimeStackLayout,
     *,
     state_root_dir: str,
@@ -80,6 +79,11 @@ def start_storage_backends(
     re-keyed, and only then is the state written. That order is the contract --
     see :func:`cli.storage_secrets.ensure_storage_secrets`.
 
+    The network is not a parameter. Every backend here goes on the stack's data
+    network, including the ones a takeover rebuilds, and a caller that could
+    name a different one could put a store back on the application network by
+    passing the value it already had in hand.
+
     Returns the set of backends that were actually started.
     """
     if not required_backends:
@@ -92,14 +96,14 @@ def start_storage_backends(
 
     if required_backends & CREDENTIALED_BACKENDS:
         _provision_credentialed_backends(
-            required_backends, network_name, stack_layout, state_root_dir, started
+            required_backends, stack_layout, state_root_dir, started
         )
 
     if "milvus" in required_backends:
         _start_backend(
             "Milvus",
             lambda: container_start_milvus(
-                network_name,
+                stack_layout.data_network_name,
                 stack_layout,
                 state_root_dir=state_root_dir,
             ),
@@ -111,7 +115,6 @@ def start_storage_backends(
 
 def provision_storage_backends(
     config: dict,
-    network_name: str,
     stack_layout: RuntimeStackLayout,
     *,
     state_root_dir: str,
@@ -124,7 +127,6 @@ def provision_storage_backends(
     required = detect_required_backends(config, stack_layout)
     return start_storage_backends(
         required,
-        network_name,
         stack_layout,
         state_root_dir=state_root_dir,
     )
@@ -132,7 +134,6 @@ def provision_storage_backends(
 
 def _provision_credentialed_backends(
     required_backends: set[str],
-    network_name: str,
     stack_layout: RuntimeStackLayout,
     state_root_dir: str,
     started: set[str],
@@ -164,7 +165,6 @@ def _provision_credentialed_backends(
         _start_credentialed_backends(
             targets,
             required_backends,
-            network_name,
             stack_layout,
             state_root_dir,
             generated,
@@ -183,7 +183,6 @@ def _provision_credentialed_backends(
     _start_credentialed_backends(
         required_backends & CREDENTIALED_BACKENDS,
         required_backends,
-        network_name,
         stack_layout,
         state_root_dir,
         secrets,
@@ -206,7 +205,6 @@ def _existing_managed_storage(stack_layout: RuntimeStackLayout) -> set[str]:
 def _start_credentialed_backends(
     targets: set[str],
     required_backends: set[str],
-    network_name: str,
     stack_layout: RuntimeStackLayout,
     state_root_dir: str,
     secrets: StorageSecrets,
@@ -233,7 +231,7 @@ def _start_credentialed_backends(
         _start_backend(
             "Redis",
             lambda: container_start_redis(
-                network_name,
+                stack_layout.data_network_name,
                 stack_layout,
                 recreate=credentials_are_new,
                 redis_conf_file=conf_file,
@@ -251,7 +249,7 @@ def _start_credentialed_backends(
         _start_backend(
             "Postgres",
             lambda: container_start_postgres(
-                network_name,
+                stack_layout.data_network_name,
                 stack_layout,
                 recreate=credentials_are_new,
                 postgres_password_file=password_file,
@@ -406,17 +404,32 @@ def _start_backend(name: str, starter: Callable[[], tuple[int, str, str]]) -> No
     log.info(f"{name} started successfully")
 
 
-def detach_preserved_storage_container(network_name: str, container_name: str) -> None:
-    """Best-effort detach so the stack network can still be removed."""
+def detach_preserved_storage_container(
+    network_names: tuple[str, ...], container_name: str
+) -> None:
+    """Best-effort detach so every stack network can still be removed.
 
-    return_code, _stdout, stderr = container_network_disconnect(
-        network_name, container_name
-    )
-    if return_code != 0:
-        log.warning(
-            f"Could not disconnect the preserved {container_name} from "
-            f"{network_name}: {stderr.strip() or f'exit code {return_code}'}"
+    Both of the stack's networks are named because a preserved container can be
+    on either one. It is preserved exactly when it carries no credential mount,
+    which means it predates this CLI and therefore sits on the application
+    network; a container this CLI provisioned sits on the data network and is
+    removed rather than kept. Detaching from both keeps `stop` able to remove
+    both networks under Podman without inspecting which history applies.
+    """
+
+    if isinstance(network_names, str):
+        # A string is iterable, so this would otherwise disconnect the
+        # container from one network per character and report success.
+        raise TypeError("network_names must be a sequence of network names")
+    for network_name in network_names:
+        return_code, _stdout, stderr = container_network_disconnect_if_attached(
+            network_name, container_name
         )
+        if return_code != 0:
+            log.warning(
+                f"Could not disconnect the preserved {container_name} from "
+                f"{network_name}: {stderr.strip() or f'exit code {return_code}'}"
+            )
 
 
 def storage_data_volume_is_recorded(container_name: str) -> bool:

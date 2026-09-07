@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
@@ -185,6 +186,60 @@ func requestFactDecision(
 			Type: signalType,
 			Name: signalName,
 		},
+	}
+}
+
+func TestClassifyIntentForEvalReturnsDiagnosticsWhenFailRequest(t *testing.T) {
+	threshold := 0.5
+	cfg := &config.RouterConfig{
+		ExternalModels: []config.ExternalModelConfig{{
+			Name:           "risk-judge",
+			ModelRole:      config.ModelRoleClassification,
+			ModelName:      "risk-judge",
+			TimeoutSeconds: 1,
+			ModelEndpoint: config.ClassifierVLLMEndpoint{
+				Address:  "127.0.0.1",
+				Port:     1,
+				Protocol: "http",
+			},
+		}},
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				ClassifierRules: []config.ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         "llm",
+					Model:        "risk-judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}},
+			},
+			Decisions: []config.Decision{{
+				Name: "guarded",
+				Rules: config.RuleNode{
+					Type:      config.SignalTypeClassifier,
+					Name:      "risk",
+					Label:     "RISKY",
+					Predicate: &config.NumericPredicate{GTE: &threshold},
+					OnUnknown: config.RuleOnUnknownFailRequest,
+				},
+			}},
+		},
+	}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	require.NoError(t, err)
+	service := NewClassificationService(classifier, cfg)
+
+	for name, trace := range map[string]bool{"without trace": false, "with trace": true} {
+		t.Run(name, func(t *testing.T) {
+			response, evalErr := service.ClassifyIntentForEval(IntentRequest{
+				Text:    "hello",
+				Options: &IntentOptions{Trace: trace},
+			})
+			require.ErrorIs(t, evalErr, decision.ErrDecisionUnresolved)
+			require.NotNil(t, response)
+			require.NotEmpty(t, response.DecisionError)
+			require.Equal(t, trace, len(response.EvalTrace) > 0)
+		})
 	}
 }
 

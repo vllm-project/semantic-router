@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -11,6 +12,36 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
+
+// The Referer of a request made from a page whose URL carried ?authToken= holds a live
+// session token, so logging it verbatim put a working credential in stdout. See #2465.
+func redactCredentialParams(raw string) string {
+	if raw == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		// Say so rather than risk logging a credential.
+		return "[unparsable]"
+	}
+
+	query := parsed.Query()
+	changed := false
+	for _, name := range []string{"authToken", "token", "access_token"} {
+		if query.Has(name) {
+			query.Set(name, "[REDACTED]")
+			changed = true
+		}
+	}
+	if !changed {
+		// Byte for byte: this log line is how proxy routing gets debugged.
+		return raw
+	}
+
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
 
 type dashboardProxySet struct {
 	envoy         *httputil.ReverseProxy
@@ -30,7 +61,6 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvi
 	registerRouterAPIProxy(mux, cfg, proxies.envoy, provider)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
-	registerFleetSimRoutes(mux, cfg)
 
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
@@ -314,7 +344,8 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 			return
 		}
 
-		log.Printf("API request: %s %s (from: %s)", r.Method, r.URL.Path, r.Header.Get("Referer"))
+		log.Printf("API request: %s %s (from: %s)",
+			r.Method, r.URL.Path, redactCredentialParams(r.Header.Get("Referer")))
 
 		if proxies.jaegerAPI != nil && isJaegerAPIPath(r.URL.Path) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
@@ -373,39 +404,4 @@ func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
 		prometheusProxy.ServeHTTP(w, r)
 	})
 	log.Printf("Prometheus proxy configured: %s", cfg.PrometheusURL)
-}
-
-func registerFleetSimRoutes(mux *http.ServeMux, cfg *config.Config) {
-	if cfg.FleetSimURL == "" {
-		mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
-			if middleware.HandleCORSPreflight(w, r) {
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			http.Error(
-				w,
-				`{"error":"Service not available","message":"Fleet simulator is not configured"}`,
-				http.StatusBadGateway,
-			)
-		})
-		log.Printf("Info: Fleet simulator URL not configured (optional)")
-		return
-	}
-
-	fleetSimProxy, err := proxy.NewReverseProxy(cfg.FleetSimURL, "/api/fleet-sim", false)
-	if err != nil {
-		log.Fatalf("fleet simulator proxy error: %v", err)
-	}
-	originalDirector := fleetSimProxy.Director
-	fleetSimProxy.Director = func(r *http.Request) {
-		originalDirector(r)
-		r.Header.Set("X-Forwarded-Prefix", "/api/fleet-sim")
-	}
-	mux.HandleFunc("/api/fleet-sim/", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		fleetSimProxy.ServeHTTP(w, r)
-	})
-	log.Printf("Fleet simulator proxy configured: %s → /api/fleet-sim/*", cfg.FleetSimURL)
 }

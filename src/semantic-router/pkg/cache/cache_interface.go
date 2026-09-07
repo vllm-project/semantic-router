@@ -29,6 +29,29 @@ type LookupResult struct {
 	ResponseBody []byte
 	Found        bool
 	Similarity   float32
+	StoredAt     time.Time
+	ExpiresAt    time.Time
+	Age          time.Duration
+	AgeKnown     bool
+}
+
+// lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.
+func lookupResultFromTimestamps(responseBody []byte, similarity float32, storedAt, expiresAt time.Time) LookupResult {
+	var age time.Duration
+	var ageKnown bool
+	if !storedAt.IsZero() {
+		age = time.Since(storedAt)
+		ageKnown = true
+	}
+	return LookupResult{
+		ResponseBody: responseBody,
+		Found:        true,
+		Similarity:   similarity,
+		StoredAt:     storedAt,
+		ExpiresAt:    expiresAt,
+		Age:          age,
+		AgeKnown:     ageKnown,
+	}
 }
 
 // ExactCacheBackend is an optional exact-response fast path implemented by
@@ -218,4 +241,7 @@ type CacheConfig struct {
 	// EmbeddingModel specifies which embedding model to use
 	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+
+	// PolarityGuard configures the optional NLI polarity tier of the in-memory backend (#2751)
+	PolarityGuard PolarityGuardOptions `yaml:"polarity_guard,omitempty"`
 }

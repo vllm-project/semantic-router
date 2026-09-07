@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/router"
@@ -53,21 +59,50 @@ func main() {
 	if cfg.EnvoyURL != "" {
 		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	}
-	if cfg.FleetSimURL != "" {
-		log.Printf("Fleet Sim: %s → /api/fleet-sim/*", cfg.FleetSimURL)
-	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 	if cfg.ReadonlyMode {
 		log.Printf("Read-only mode: ENABLED (config editing disabled)")
 	}
 
-	// Start server
-	serveErr := http.ListenAndServe(addr, srv.Handler)
-	if closeErr := srv.Close(); closeErr != nil {
-		log.Printf("Warning: dashboard store shutdown: %v", closeErr)
+	server := &http.Server{Addr: addr, Handler: srv.Handler, ReadHeaderTimeout: 15 * time.Second}
+	shutdownContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	shutdown := func(ctx context.Context) error {
+		if err := server.Shutdown(ctx); err != nil {
+			return errors.Join(err, server.Close())
+		}
+		return nil
 	}
-	if serveErr != nil {
-		log.Fatalf("server error: %v", serveErr)
+	lifecycleErr := runServerLifecycle(shutdownContext, server.ListenAndServe, shutdown, srv.Close, 15*time.Second)
+	stop()
+	if lifecycleErr != nil {
+		log.Fatalf("server error: %v", lifecycleErr)
+	}
+}
+
+func runServerLifecycle(
+	ctx context.Context,
+	serve func() error,
+	shutdown func(context.Context) error,
+	closeResources func() error,
+	timeout time.Duration,
+) error {
+	serveErrors := make(chan error, 1)
+	go func() { serveErrors <- serve() }()
+	select {
+	case serveErr := <-serveErrors:
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(serveErr, closeResources())
+	case <-ctx.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), timeout)
+		shutdownErr := shutdown(shutdownContext)
+		cancel()
+		serveErr := <-serveErrors
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		return errors.Join(shutdownErr, serveErr, closeResources())
 	}
 }

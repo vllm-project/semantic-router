@@ -108,6 +108,11 @@ SIGNAL structure fenced_instruction_blob {
   feature: { source: { pattern: "(?i)(<system>|<assistant>|begin system prompt|```system|###\\s*system)", type: "regex" }, type: "exists" }
 }
 
+SIGNAL conversation privacy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 SIGNAL complexity frontier_reasoning {
   threshold: 0.12
   description: "General reasoning boundary between local handling and frontier-cloud escalation."
@@ -196,8 +201,13 @@ MODEL cloud/frontier-reasoning {
   description: "High-cost cloud frontier lane reserved for non-sensitive deep reasoning and synthesis."
   capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context"]
   tags: ["deployment:cloud", "policy:non_sensitive_only", "tier:frontier", "cost:high"]
-  quality_score: 0.92
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.92 } }]
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL local/private-qwen {
@@ -205,7 +215,7 @@ MODEL local/private-qwen {
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
   capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs"]
   tags: ["deployment:self_hosted", "policy:local_first", "policy:privacy_first", "cost:free"]
-  quality_score: 0.74
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.74 } }]
   modality: "text"
 }
 
@@ -237,11 +247,29 @@ ROUTE local_security_containment (description = "Keep suspicious or jailbreak-li
   }
 }
 
+ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+  PRIORITY 275
+  TIER 2
+  WHEN conversation("privacy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+  PLUGIN tools {
+    enabled: true
+    mode: "filtered"
+    allow_tools: ["local_search", "local_read"]
+  }
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 50000
+    max_body_bytes: 2048
+  }
+}
+
 ROUTE local_privacy_policy (description = "Route PII, private code, and internal documents to the local model with local-only tool access.") {
   PRIORITY 250
   TIER 2
   WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active")) AND NOT projection("policy_security_local_only")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "filtered"
@@ -274,7 +302,7 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
   PRIORITY 100
   TIER 4
   WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "passthrough"

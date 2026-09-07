@@ -168,6 +168,7 @@ func cloneProbeDetail(source ProbeDetail) ProbeDetail {
 	cloned.ProbeSummary = cloneProbeSummary(source.ProbeSummary)
 	cloned.Messages = cloneObjects(source.Messages)
 	cloned.Tools = cloneObjects(source.Tools)
+	cloned.ToolChoice = cloneJSONValue(source.ToolChoice)
 	if source.Padding != nil {
 		padding := *source.Padding
 		cloned.Padding = &padding

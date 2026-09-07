@@ -4,13 +4,13 @@
 
 ##@ Linter
 
-# codespell is installed into .venv-agent by tools/make/agent.mk (agent-venv-install).
-AGENT_VENV ?= $(CURDIR)/.venv-agent
+# codespell is installed into .venv-agent by tools/make/agent.mk.
+AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
 
-markdown-lint: ## Lint all markdown files in the project
+markdown-lint: harness-markdown-bootstrap ## Lint all markdown files in the project
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
@@ -21,9 +21,9 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore models \
 		--ignore vsr
 
-markdown-lint-fix: ## Auto-fix markdown lint issues
+markdown-lint-fix: harness-markdown-bootstrap ## Auto-fix markdown lint issues
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
@@ -63,4 +63,4 @@ shellcheck: ## Lint all shell scripts in the project
 		exit 1; \
 	fi
 	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
-	@shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.augment/*" -not -path "./.venv/*" -not -path "*/.venv/*" -not -path "./.venv-*/*" -not -path "*/.venv-*/*" -not -path "./.venv-agent/*" -not -path "./.venv-codex/*" -not -path "./.codex-agent-venv/*")
+	@shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.augment/*" -not -path "./.agent-harness/*" -not -path "./.codex/*" -not -path "./.venv/*" -not -path "*/.venv/*" -not -path "./.venv-*/*" -not -path "*/.venv-*/*" -not -path "./.venv-agent/*" -not -path "./.venv-codex/*" -not -path "./.codex-agent-venv/*")

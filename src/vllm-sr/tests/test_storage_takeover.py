@@ -69,7 +69,7 @@ def test_takeover_commits_credential_state_only_after_the_containers_accept_it(
     assert not state_path.exists()
 
     started = start_storage_backends(
-        {"redis", "postgres"}, "test-network", layout, state_root_dir=str(tmp_path)
+        {"redis", "postgres"}, layout, state_root_dir=str(tmp_path)
     )
 
     assert started == {"redis", "postgres"}
@@ -101,7 +101,7 @@ def test_takeover_announces_that_the_shared_credential_is_revoked_without_printi
 
     with caplog.at_level("INFO"):
         start_storage_backends(
-            {"redis", "postgres"}, "test-network", layout, state_root_dir=str(tmp_path)
+            {"redis", "postgres"}, layout, state_root_dir=str(tmp_path)
         )
 
     assert "treated as compromised" in caplog.text
@@ -117,15 +117,11 @@ def test_a_restart_reuses_the_recorded_credentials_and_does_not_re_key(
 
     events = []
     layout, state_path = _takeover_environment(monkeypatch, tmp_path, events)
-    start_storage_backends(
-        {"redis", "postgres"}, "test-network", layout, state_root_dir=str(tmp_path)
-    )
+    start_storage_backends({"redis", "postgres"}, layout, state_root_dir=str(tmp_path))
     committed = state_path.read_bytes()
     events.clear()
 
-    start_storage_backends(
-        {"redis", "postgres"}, "test-network", layout, state_root_dir=str(tmp_path)
-    )
+    start_storage_backends({"redis", "postgres"}, layout, state_root_dir=str(tmp_path))
 
     steps = [step for step, _detail in events]
     assert steps == ["start-redis", "start-postgres"]
@@ -147,7 +143,7 @@ def test_a_failed_re_key_leaves_no_credential_state_behind(monkeypatch, tmp_path
 
     with _pytest.raises(SystemExit):
         start_storage_backends(
-            {"redis", "postgres"}, "test-network", layout, state_root_dir=str(tmp_path)
+            {"redis", "postgres"}, layout, state_root_dir=str(tmp_path)
         )
 
     assert not state_path.exists()
@@ -164,9 +160,7 @@ def test_a_fresh_stack_names_its_own_volumes_and_says_so(monkeypatch, tmp_path, 
     monkeypatch.setattr(storage_backends, "container_status", lambda _name: "not found")
 
     with caplog.at_level("INFO"):
-        start_storage_backends(
-            {"redis"}, "test-network", layout, state_root_dir=str(tmp_path)
-        )
+        start_storage_backends({"redis"}, layout, state_root_dir=str(tmp_path))
 
     assert "empty data volumes" in caplog.text
     assert "orphaned volumes" in caplog.text
@@ -182,9 +176,7 @@ def test_takeover_re_keys_a_container_the_config_no_longer_requires(
 
     # Only Redis is required, but a Postgres container from an older stack is
     # still here and its volume is about to be recorded in the state file.
-    started = start_storage_backends(
-        {"redis"}, "test-network", layout, state_root_dir=str(tmp_path)
-    )
+    started = start_storage_backends({"redis"}, layout, state_root_dir=str(tmp_path))
 
     assert started == {"redis"}
     steps = [step for step, _detail in events]
@@ -206,13 +198,9 @@ def test_a_restart_leaves_a_container_the_config_no_longer_requires_alone(
 
     events = []
     layout, _state_path = _takeover_environment(monkeypatch, tmp_path, events)
-    start_storage_backends(
-        {"redis"}, "test-network", layout, state_root_dir=str(tmp_path)
-    )
+    start_storage_backends({"redis"}, layout, state_root_dir=str(tmp_path))
     events.clear()
 
-    start_storage_backends(
-        {"redis"}, "test-network", layout, state_root_dir=str(tmp_path)
-    )
+    start_storage_backends({"redis"}, layout, state_root_dir=str(tmp_path))
 
     assert [step for step, _detail in events] == ["start-redis"]

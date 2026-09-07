@@ -12,7 +12,7 @@
 
 .section h2 {
   margin: 0;
-  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  font-size: var(--text-2xl);
   line-height: 1;
 }
 
@@ -98,7 +98,7 @@
   width: 2rem;
   height: 2rem;
   border: 1px solid var(--site-border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-text);
   font-size: 0.78rem;
 }
@@ -131,7 +131,7 @@
 .controlButton {
   width: 0.7rem;
   height: 0.7rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.22);
 }
 
@@ -170,7 +170,7 @@
   min-height: 2.35rem;
   padding: 0.5rem 0.85rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-text);
   font-size: 0.74rem;
   text-transform: uppercase;
@@ -185,7 +185,7 @@
 .stepsList code,
 .card code {
   padding: 0.12rem 0.32rem;
-  border-radius: 0.35rem;
+  border-radius: var(--radius-md);
   background: var(--site-badge-bg);
   overflow-wrap: anywhere;
   word-break: break-word;

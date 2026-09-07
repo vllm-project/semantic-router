@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DashboardManagerLayout from '../components/DashboardManagerLayout'
+import ProductLoadingState from '../components/ProductLoadingState'
+import ProductIcon from '../components/ProductIcon'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import {
   describeLogsAvailability,
@@ -42,7 +44,6 @@ const LogsPage: React.FC = () => {
   const [lines, setLines] = useState(100)
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState<LogLevel>('all')
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const requestControllerRef = useRef<AbortController | null>(null)
 
@@ -64,7 +65,6 @@ const LogsPage: React.FC = () => {
       setSupported(data.supported)
       setError(data.error || null)
       setMessage(data.message || null)
-      setLastUpdated(new Date())
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -122,141 +122,94 @@ const LogsPage: React.FC = () => {
   return (
     <div className={styles.container}>
       <DashboardManagerLayout
-        eyebrow="Operate"
+        eyebrow="System"
         title="System Logs"
-        description="View recent, centrally redacted output retained by the bounded local runtime spool."
+        description="Search live output across the router, gateway, and dashboard."
         meta={[
-          { label: 'Active stream', value: activeComponentLabel },
+          { label: 'Stream', value: activeComponentLabel },
           { label: 'Deployment', value: formatDeploymentType(deploymentType) },
-          { label: 'Log access', value: describeLogsAvailability(supported) },
-          { label: 'Entries loaded', value: logs.length },
-        ]}
-        panelEyebrow="Diagnostics"
-        panelTitle="Runtime event stream"
-        panelDescription="Select a service, filter by severity or text, and keep the viewport stable while new events arrive."
-        pills={[
-          { label: autoRefresh ? 'Auto-refresh on' : 'Manual refresh', active: autoRefresh },
-          { label: `${filteredLogs.length} visible` },
-          {
-            label: lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for logs',
-          },
+          { label: 'Access', value: describeLogsAvailability(supported) },
+          { label: 'Entries', value: logs.length },
         ]}
       >
-        <div className={styles.summaryGrid}>
-          <article className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>Deployment</span>
-            <strong className={styles.summaryValue}>{formatDeploymentType(deploymentType)}</strong>
-            <span className={styles.summaryHint}>
-              {supported === false
-                ? 'This deployment has no mounted bounded log spool.'
-                : 'Read from fixed, read-only service files with response redaction.'}
-            </span>
-          </article>
-          <article className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>Selected source</span>
-            <strong className={styles.summaryValue}>{activeComponentLabel}</strong>
-            <span className={styles.summaryHint}>
-              Switch sources without changing the log viewport width.
-            </span>
-          </article>
-          <article className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>Entries loaded</span>
-            <strong className={styles.summaryValue}>{logs.length}</strong>
-            <span className={styles.summaryHint}>
-              Showing the latest {lines} lines per request.
-            </span>
-          </article>
-        </div>
-
-        <section className={styles.controlPanel}>
-          <div className={styles.controlPanelHeader}>
-            <div>
-              <h2 className={styles.panelTitle}>Stream controls</h2>
-              <p className={styles.panelSubtitle}>
-                Tune source selection, tail length, and live refresh behavior.
-              </p>
-            </div>
+        <section className={styles.streamToolbar} aria-label="Log filters">
+          <div className={styles.serviceSelector}>
+            {COMPONENT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                className={`${styles.serviceButton} ${selectedComponent === option.value ? styles.active : ''}`}
+                onClick={() => setSelectedComponent(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
 
-          <div className={styles.controls}>
-            <div className={styles.serviceSelector}>
-              {COMPONENT_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={`${styles.serviceButton} ${selectedComponent === option.value ? styles.active : ''}`}
-                  onClick={() => setSelectedComponent(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+          <div className={styles.controlsRight}>
+            <label className={styles.filterField}>
+              <span className={styles.srOnly}>Search logs</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search logs"
+              />
+            </label>
 
-            <div className={styles.controlsRight}>
-              <label className={styles.filterField}>
-                <span>Search logs</span>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Message or service"
-                />
+            <label className={styles.filterField}>
+              <span className={styles.srOnly}>Level</span>
+              <select value={level} onChange={(event) => setLevel(event.target.value as LogLevel)}>
+                <option value="all">All levels</option>
+                <option value="error">Error</option>
+                <option value="warn">Warning</option>
+                <option value="info">Info</option>
+                <option value="debug">Debug</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <div className={styles.linesSelector}>
+              <label htmlFor="logs-lines" className={styles.srOnly}>
+                Lines
               </label>
-
-              <label className={styles.filterField}>
-                <span>Level</span>
-                <select
-                  value={level}
-                  onChange={(event) => setLevel(event.target.value as LogLevel)}
-                >
-                  <option value="all">All levels</option>
-                  <option value="error">Error</option>
-                  <option value="warn">Warning</option>
-                  <option value="info">Info</option>
-                  <option value="debug">Debug</option>
-                  <option value="other">Other</option>
-                </select>
-              </label>
-
-              <div className={styles.linesSelector}>
-                <label htmlFor="logs-lines">Lines</label>
-                <select
-                  id="logs-lines"
-                  value={lines}
-                  onChange={(e) => setLines(Number(e.target.value))}
-                  className={styles.linesSelect}
-                >
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                  <option value={200}>200</option>
-                  <option value={500}>500</option>
-                </select>
-              </div>
-
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                />
-                <span>Auto-refresh</span>
-              </label>
-
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={autoScroll}
-                  onChange={(e) => setAutoScroll(e.target.checked)}
-                />
-                <span>Auto-scroll</span>
-              </label>
-
-              <button
-                onClick={() => void logsRequest.run({ allowHidden: true })}
-                className={styles.refreshButton}
+              <select
+                id="logs-lines"
+                value={lines}
+                onChange={(e) => setLines(Number(e.target.value))}
+                className={styles.linesSelect}
               >
-                Refresh
-              </button>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
+              </select>
             </div>
+
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+              />
+              <span>Auto-refresh</span>
+            </label>
+
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+              />
+              <span>Auto-scroll</span>
+            </label>
+
+            <button
+              onClick={() => void logsRequest.run({ allowHidden: true })}
+              className={styles.refreshButton}
+            >
+              <ProductIcon name="refresh" width={15} height={15} />
+              Refresh
+            </button>
           </div>
         </section>
 
@@ -289,10 +242,7 @@ const LogsPage: React.FC = () => {
 
           <div ref={logsContainerRef} className={styles.logsContainer}>
             {loading && logs.length === 0 ? (
-              <div className={styles.loadingLogs}>
-                <div className={styles.spinner}></div>
-                <span>Fetching logs...</span>
-              </div>
+              <ProductLoadingState label="Loading logs" compact />
             ) : supported === false ? (
               <div className={styles.noLogs}>
                 <p className={styles.noLogsTitle}>Runtime logs unavailable</p>

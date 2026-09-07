@@ -33,7 +33,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v03ToNow',
       label: translate({
         id: 'community.contributors.range.v03ToNow.label',
-        message: 'v0.3 -> Now',
+        message: 'v0.3 → Now',
       }),
       caption: translate({
         id: 'community.contributors.range.v03ToNow.caption',
@@ -44,7 +44,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v02ToV03',
       label: translate({
         id: 'community.contributors.range.v02ToV03.label',
-        message: 'v0.2 -> v0.3',
+        message: 'v0.2 → v0.3',
       }),
       caption: translate({
         id: 'community.contributors.range.v02ToV03.caption',
@@ -55,7 +55,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v01ToV02',
       label: translate({
         id: 'community.contributors.range.v01ToV02.label',
-        message: 'v0.1 -> v0.2',
+        message: 'v0.1 → v0.2',
       }),
       caption: translate({
         id: 'community.contributors.range.v01ToV02.caption',
@@ -66,7 +66,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v0ToV01',
       label: translate({
         id: 'community.contributors.range.v0ToV01.label',
-        message: 'v0 -> v0.1',
+        message: 'v0 → v0.1',
       }),
       caption: translate({
         id: 'community.contributors.range.v0ToV01.caption',
@@ -199,7 +199,7 @@ const ContributorsPage: React.FC = () => {
               </p>
               <p className={styles.methodNote}>
                 <Translate id="community.contributors.method">
-                  Contributors include people with non-merge commits or eligible reviews. First-time commit authors have no earlier commit in repository history. Review credits use the review submission date and count at most once per contributor for each pull request that is ultimately merged.
+                  Contributors include qualifying commit authors and reviewers. “New” means a first repository commit; reviews count once per contributor per merged pull request.
                 </Translate>
               </p>
             </div>

@@ -14,7 +14,6 @@ var decisionPluginPayloadFactories = map[string]func() interface{}{
 	DecisionPluginRouterReplay:       func() interface{} { return &RouterReplayPluginConfig{} },
 	DecisionPluginMemory:             func() interface{} { return &MemoryPluginConfig{} },
 	DecisionPluginRAG:                func() interface{} { return &RAGPluginConfig{} },
-	DecisionPluginImageGen:           func() interface{} { return &ImageGenPluginConfig{} },
 	DecisionPluginFastResponse:       func() interface{} { return &FastResponsePluginConfig{} },
 	DecisionPluginRequestParams:      func() interface{} { return &RequestParamsPluginConfig{} },
 	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
@@ -27,6 +26,18 @@ func validateDecisionPluginPayload(
 	index int,
 	plugin DecisionPlugin,
 ) error {
+	// image_gen was removed when #3076 unified inference protocol translation:
+	// the router no longer executes image-generation backends. Route image
+	// generation through a vllm-omni modality route speaking the Responses-API
+	// hosted image_generation tool instead. See issue #3129.
+	if plugin.Type == "image_gen" {
+		return fmt.Errorf(
+			"decision %q plugins[%d]: plugin %q is unsupported: the image_gen route plugin was removed; use the Responses-API hosted image_generation tool with a vllm-omni modality route",
+			decisionName,
+			index,
+			plugin.Type,
+		)
+	}
 	if !IsSupportedDecisionPluginType(plugin.Type) {
 		return fmt.Errorf(
 			"decision %q plugins[%d]: unsupported plugin type %q",

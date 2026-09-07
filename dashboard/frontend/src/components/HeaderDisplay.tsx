@@ -1,4 +1,5 @@
 import styles from './HeaderDisplay.module.css'
+import ProductIcon from './ProductIcon'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
@@ -140,6 +141,10 @@ const HEADER_INFO: Record<
     label: 'Event Signal',
     type: 'info',
   },
+  'x-vsr-matched-input-modality': {
+    label: 'Input Modality Signal',
+    type: 'info',
+  },
   'x-vsr-matched-projections': {
     label: 'Projection',
     type: 'info',
@@ -162,7 +167,7 @@ const HEADER_INFO: Record<
     type: 'info',
   },
   'x-vsr-looper-latency-ms': {
-    label: 'Looper Latency (ms)',
+    label: 'Looper latency',
     type: 'info',
   },
   'x-vsr-looper-prompt-tokens': {
@@ -175,6 +180,18 @@ const HEADER_INFO: Record<
   },
   'x-vsr-looper-total-tokens': {
     label: 'Looper Total Tokens',
+    type: 'info',
+  },
+  'x-vsr-latency-ms': {
+    label: 'Latency',
+    type: 'info',
+  },
+  'x-vsr-ttft-ms': {
+    label: 'TTFT',
+    type: 'info',
+  },
+  'x-vsr-tpot-ms': {
+    label: 'TPOT',
     type: 'info',
   },
   // Retention directive headers (issue #2009)
@@ -249,24 +266,77 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     return null
   }
 
+  const primaryKeys = [
+    'x-vsr-selected-decision',
+    'x-vsr-selected-algorithm',
+    'x-vsr-looper-algorithm',
+    'x-vsr-selected-model',
+    'x-vsr-looper-model',
+  ]
+  const performanceKeys = [
+    'x-vsr-latency-ms',
+    'x-vsr-ttft-ms',
+    'x-vsr-tpot-ms',
+    'x-vsr-looper-latency-ms',
+  ]
+  const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
+  const performanceHeaders = displayHeaders.filter(([key]) => performanceKeys.includes(key))
+  const detailHeaders = displayHeaders.filter(
+    ([key]) => !primaryKeys.includes(key) && !performanceKeys.includes(key),
+  )
+
+  const renderHeader = ([key, value]: [string, string]) => {
+    const info = HEADER_INFO[key]
+    const displayValue = summarizeHeaderValue(key, value)
+    const unit = key.endsWith('-ms') ? ' ms' : ''
+    return (
+      <div
+        key={key}
+        className={`${styles.header} ${styles[info.type]}`}
+        title={`${info.label}: ${displayValue}${unit}`}
+      >
+        <span className={styles.label}>{info.label}</span>
+        <span className={styles.value}>
+          {displayValue}
+          {unit}
+        </span>
+      </div>
+    )
+  }
+
+  const renderPerformance = ([key, value]: [string, string]) => {
+    const info = HEADER_INFO[key]
+    const displayValue = summarizeHeaderValue(key, value)
+    return (
+      <div
+        key={key}
+        className={styles.performanceMetric}
+        title={`${info.label}: ${displayValue} ms`}
+      >
+        <span>{info.label}</span>
+        <strong>{displayValue}</strong>
+        <small>ms</small>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.headers}>
-        {displayHeaders.map(([key, value]) => {
-          const info = HEADER_INFO[key]
-          const displayValue = summarizeHeaderValue(key, value)
-          return (
-            <div
-              key={key}
-              className={`${styles.header} ${styles[info.type]}`}
-              title={`${info.label}: ${displayValue}`}
-            >
-              <span className={styles.label}>{info.label}</span>
-              <span className={styles.value}>{displayValue}</span>
-            </div>
-          )
-        })}
+        {primaryHeaders.map(renderHeader)}
+        {performanceHeaders.length > 0 ? (
+          <div className={styles.performance}>{performanceHeaders.map(renderPerformance)}</div>
+        ) : null}
       </div>
+      {detailHeaders.length > 0 ? (
+        <details className={styles.details}>
+          <summary className={styles.detailsToggle} aria-label="Show response details">
+            <span>Response details</span>
+            <ProductIcon name="chevron-down" width={13} height={13} />
+          </summary>
+          <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
+        </details>
+      ) : null}
     </div>
   )
 }

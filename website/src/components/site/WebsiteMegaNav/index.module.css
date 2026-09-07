@@ -1,36 +1,45 @@
+/* Primary navigation. Resolves through --site-* tokens instead of hard-coded dark-chrome literals. */
 .root {
   display: flex;
   align-items: center;
   height: 100%;
-  gap: 0.15rem;
+  gap: 2px;
+  margin-left: var(--space-2);
 }
 
 .link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 2.3rem;
-  padding: 0.58rem 0.78rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.7rem;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: #d4d4d8;
-  font-size: 0.73rem;
-  font-weight: 550;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
   line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
   transition:
-    background 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
 }
 
 .link:hover,
-.link:focus-visible,
-.linkActive {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  box-shadow: inset 0 -2px var(--site-accent);
+.link:focus-visible {
+  background: var(--site-menu-hover);
+  color: var(--site-text-strong);
+  text-decoration: none;
+}
+
+.linkActive,
+.linkActive:hover {
+  background: var(--site-accent-soft);
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -39,7 +48,20 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 1339px) {
+/* The landing page keeps dark chrome in both color modes. */
+:global(.site-root--home) .link {
+  color: #a1a1aa;
+}
+
+:global(.site-root--home) .link:hover,
+:global(.site-root--home) .link:focus-visible,
+:global(.site-root--home) .linkActive {
+  background: rgba(48, 162, 255, 0.12);
+  color: #fafafa;
+}
+
+/* Collapses at 996px to match Docusaurus breakpoint and shell.css. */
+@media (max-width: 996px) {
   .root {
     display: none;
   }

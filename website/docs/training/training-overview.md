@@ -1,138 +1,122 @@
 ---
-title: Training Router Models
-sidebar_label: Training Overview
+title: Train and Evaluate Router Models
+sidebar_label: Overview
 ---
 
-# Training Router Models
+# Train and evaluate router models
 
-Semantic Router uses small, task-specific models to understand a request before
-it chooses a generative model. These router-owned models are different from the
-LLMs in the provider pool: they classify, embed, score, or verify a request;
-they do not produce the final answer.
+Semantic Router uses small, task-specific models before it sends a request to
+an LLM. These models create routing signals: they embed a request, rank a
+candidate, classify an intent or risk, or predict which provider model should
+answer. They do not generate the final response.
 
-This page helps you choose the right training workflow and explains what a
-reproducible result should contain. Each workflow has its own README beside the
-training code for exact commands and input formats.
+Use this section in three steps:
 
-## Choose a workflow
+1. Choose the routing decision you need.
+2. Learn the architecture and training objective for that model family.
+3. Train, evaluate, and export an artifact with the same input and output
+   contract that the router will use.
 
-| Goal | Training area | Typical output |
-|------|---------------|----------------|
-| Classify domain, intent, feedback, modality, PII, or jailbreak risk | [`model_classifier`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier) | A classifier or LoRA adapter used by a signal |
-| Adapt embeddings for cache or retrieval | [`model_embeddings`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_embeddings) | An embedding model and evaluation report |
-| Learn which provider model should answer a request | [`model_selection`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection) | KNN, KMeans, SVM, MLP, or reinforcement-learning selector artifacts |
-| Compare provider models or produce routing scores | [`model_eval`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_eval) | Per-model and per-category evaluation data |
-| Explore research ideas that are not part of the supported runtime contract | [`model_experiment`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_experiment) | Experimental code and local artifacts |
+## Choose the model by routing decision
 
-If your goal is to route among several generative models, start with
-[ML-Based Model Selection](./ml-model-selection). If you need to measure the
-models in an existing pool, start with
-[Model Performance Evaluation](./model-performance-eval).
+| You need to | Start with | Output |
+| --- | --- | --- |
+| Compare queries and documents efficiently | [mmBERT-32K embedder](./mmbert-32k-models#embedding-model-bi-encoder) | One normalized vector per input |
+| Re-score a short list with higher accuracy | [mmBERT-32K reranker](./mmbert-32k-models#reranking-model-cross-encoder) | A relevance score for each query-document pair |
+| Place text, images, and audio in one vector space | [Multimodal embeddings](./multimodal-embeddings) | A normalized cross-modal vector |
+| Detect intent, jailbreaks, feedback, modality, fact-check needs, or PII | [Classifier models](./classifier-models) | A class, probability distribution, or token labels |
+| Apply hierarchical prompt-safety policy | [Safety classifiers](./mmbert-safety-classifier) | `safe`/`unsafe`, followed by a hazard class |
+| Learn which provider model should answer | [ML-based model selection](./ml-model-selection) | A provider-model choice |
+| Compare models already in a provider pool | [Model performance evaluation](./model-performance-eval) | Per-model and per-category scores |
 
-## The training lifecycle
+The [model catalog](./model-catalog) lists every artifact in the current MoM
+multilingual embedding and classifier collections and maps release variants to
+their training workflow.
 
-### 1. Define the routing decision
+## Understand the three common architectures
 
-Write down what the model must distinguish and how its output changes routing.
-For example, a domain classifier may choose a decision, while a PII signal may
-trigger a policy rule. A label is useful only when it maps to an observable
-router behavior.
+Most router models in this section use one of these patterns:
 
-Decide before training:
+| Pattern | How it processes input | Best fit |
+| --- | --- | --- |
+| Bi-encoder | Encodes each input independently, then compares vectors | Large-scale retrieval and semantic cache lookup |
+| Cross-encoder | Encodes a pair jointly and predicts one score | Accurate reranking of a small candidate set |
+| Encoder plus task head | Encodes one request, then predicts sequence or token labels | Online routing and policy signals |
 
-- the label or score contract
-- the languages and request types in scope
-- acceptable false-positive and false-negative costs
-- the latency and memory budget for online inference
-- what happens when the model is unavailable or uncertain
+Multimodal models extend the bi-encoder pattern with separate text, image, and
+audio towers whose outputs are projected into a shared space. The catalog and
+family pages explain the exact towers, dimensions, labels, and objectives.
 
-### 2. Build and document the dataset
+## Adapter versus merged model
 
-Keep training, validation, and test splits separate. Record the dataset source,
-license, revision, preprocessing steps, label definitions, and any synthetic
-data generation. Deduplicate before splitting so near-identical examples do not
-leak into evaluation.
+Several classifier entries have both `-lora` and `-merged` artifacts. They are
+two release shapes of the same logical model:
 
-Security and privacy datasets need additional care. Remove credentials and
-personal data that are not required for the task, restrict access to sensitive
-examples, and document whether generated samples resemble production traffic.
+- A **LoRA adapter** stores the trained low-rank update and classification
+  head. It is small, but inference also needs the compatible base model.
+- A **merged model** folds the adapter into the base weights. It is larger and
+  can be loaded as a standalone classifier by supported runtimes.
 
-### 3. Train from a pinned environment
+Choose the shape your inference backend supports. Do not compare the two names
+as if they represented independently trained architectures.
 
-Use the requirements and commands in the selected workflow directory. Record
-the source commit, dependency versions, base model revision, random seed,
-hyperparameters, and hardware class. Store large checkpoints and datasets in an
-artifact registry rather than committing them to the repository.
+## Follow the training lifecycle
 
-LoRA is available for several classifier workflows when full fine-tuning is not
-necessary. It trains a small adapter over a frozen base model, which can reduce
-the amount of compute and storage required. Whether LoRA is the right choice
-still depends on measured quality and the runtime's supported model format.
+### 1. Define the routing contract
 
-### 4. Evaluate the behavior that matters
+Specify the labels or score, how that output changes routing, supported
+languages and request lengths, latency budget, and fallback behavior. A label
+is useful only when it maps to an observable router decision or policy.
 
-Do not promote a model from training loss alone. Evaluate it on a held-out test
-set and report the metrics that match the routing consequence:
+### 2. Prepare versioned data
 
-| Task | Useful measurements |
-|------|---------------------|
-| Single-label classification | Per-class precision, recall, F1, confusion matrix |
-| Multi-label or token classification | Per-label and entity-level precision, recall, F1 |
-| Safety or privacy detection | False-negative and false-positive rates at the chosen threshold |
-| Embedding retrieval | Recall@k, ranking quality, domain slices, latency |
-| Model selection | End-to-end answer quality, selected-model distribution, cost, latency, regret against an oracle |
+Keep training, validation, and test splits separate. Record dataset revisions,
+licenses, preprocessing, label definitions, and synthetic-data rules.
+Deduplicate before splitting so near-identical examples do not leak into
+evaluation.
 
-Slice results by language, domain, request length, and other conditions that are
-important to your deployment. Measure online inference latency on the hardware
-you intend to use.
+### 3. Start with a smoke run
+
+Use the checked configuration or the script's `--help` output as the source of
+truth. Resolve paths explicitly, run a small sample, and inspect label counts,
+loss, and validation output before allocating a full training run.
+
+### 4. Evaluate routing behavior
+
+Match metrics to the decision:
+
+| Task | Minimum useful evaluation |
+| --- | --- |
+| Sequence classification | Per-class precision, recall, F1, and confusion matrix |
+| PII token classification | Entity-level precision, recall, and F1 |
+| Safety detection | False-negative and false-positive rates plus per-hazard F1 |
+| Embedding retrieval | Recall@k, ranking quality, language/domain slices, and latency |
+| Model selection | End-to-end answer quality, cost, latency, and regret against an oracle |
+
+Always retain a held-out test set. Slice results by language, domain, input
+length, and the failure modes that matter to your deployment.
 
 ### 5. Export and integrate
 
-The exported artifact must match a runtime-supported format and the dimensions,
-labels, and preprocessing used during training. Configure the corresponding
-signal or selector with the artifact path, then validate the full router config
-before deployment.
+Export the tokenizer, model or adapter, label mapping, and any architecture
+metadata required by the runtime. Then validate the complete router
+configuration:
 
 ```bash
 vllm-sr validate --config config.yaml
 ```
 
-Run representative requests through the complete data path. This catches
-integration errors that an offline notebook cannot see, such as label-order
-mismatches, missing files, unsupported native backends, or a different embedding
-model at inference time.
+Finally, send representative requests through the full router path. This
+catches mismatched label order, preprocessing, dimensions, or artifact shape
+that an offline trainer cannot detect.
 
-## Reproducible evaluation records
+## Recommended reading path
 
-Long-lived documentation should explain how to reproduce a result, not paste a
-single terminal session. Publish measured results as a versioned report or
-artifact that includes:
+If you are new to these models, read the pages in this order:
 
-- repository commit and model/dataset revisions
-- evaluation command and configuration
-- hardware and software environment
-- sample counts and exclusions
-- raw metrics plus aggregation method
-- known limitations and failed slices
-
-Without that context, accuracy, latency, cost, and training-time numbers are not
-portable across models or machines and should be treated only as local
-observations.
-
-## Operational guidance
-
-- Train with data representative of the traffic the router will actually see.
-- Keep an explicit fallback when a learned model is unavailable or uncertain.
-- Re-evaluate after changing the base model, labels, embedding model, provider
-  pool, prompt format, or preprocessing.
-- Monitor routing distribution and downstream quality after rollout; offline
-  accuracy does not guarantee production behavior.
-- Roll out new router models gradually and keep the previous artifact available
-  for rollback.
-
-## Next steps
-
-- [ML-Based Model Selection](./ml-model-selection)
-- [Model Performance Evaluation](./model-performance-eval)
-- [Signals](/docs/tutorials/signal/overview)
-- [Routing Pipeline](/docs/overview/signal-driven-decisions)
+1. [Current model catalog](./model-catalog)
+2. [mmBERT-32K foundation, embedder, and reranker](./mmbert-32k-models)
+3. [Small and large multimodal embeddings](./multimodal-embeddings)
+4. [mmBERT-32K classifier models](./classifier-models)
+5. [Two-level safety classifiers](./mmbert-safety-classifier)
+6. [Model performance evaluation](./model-performance-eval)

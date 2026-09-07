@@ -22,14 +22,18 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `routing_policy`
 
-- Router-side policy after signal extraction, covering matched-decision logic plus downstream candidate-model selection.
-- Typical paths: `src/semantic-router/pkg/decision/**`, `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/selection/**`, `req_filter_looper*.go`
+- Router-side policy after signal extraction, covering matched-decision logic,
+  candidate-model selection, and multi-model execution.
+- Typical paths: `src/semantic-router/pkg/decision/**`,
+  `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/looper/**`,
+  `src/semantic-router/pkg/projectiontrace/**`
 - Task rules: `router-core`
 
 ## `algorithm_selection`
 
 - Per-decision candidate-model selection after a decision matches.
-- Typical paths: `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/selection/**`, `req_filter_looper*.go`
+- Typical paths: `src/semantic-router/pkg/modelselection/**`,
+  `src/semantic-router/pkg/selection/**`, `src/semantic-router/pkg/looper/**`
 - Task rules: `router-core`
 
 ## `plugin_runtime`
@@ -40,8 +44,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `router_service_platform`
 
-- Router-side service, API, storage, authz, memory, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
-- Typical paths: `src/semantic-router/pkg/apiserver/**`, `authz/**`, `memory/**`, `responseapi/**`, `responsestore/**`, `openai/**`, `anthropic/**`, `routerreplay/**`
+- Router-side service, API, storage, authz, context, telemetry, provider, and
+  runtime support modules outside the config, decision, selection, and extproc
+  plugin chains.
+- Typical paths: `src/semantic-router/pkg/apiserver/**`, `authz/**`,
+  `contextcompression/**`, `memory/**`, `modelruntime/**`, `routerruntime/**`,
+  `sessiontelemetry/**`, `responseapi/**`, `publicmodels/**`
 - Task rules: `router-core`
 
 ## `native_binding`
@@ -53,7 +61,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `response_headers`
 
 - `x-vsr-*` header constants, router emission, dashboard reveal/display allowlists, and user-visible header contracts.
-- Typical paths: `src/semantic-router/pkg/headers/**`, `processor_res_header.go`, `HeaderDisplay.tsx`, `HeaderReveal.tsx`
+- Typical paths: `src/semantic-router/pkg/headers/**`, `processor_res_header.go`, `HeaderDisplay.tsx`, `ChatComponent*.tsx`
 - Task rules: `router-core`, `dashboard`
 
 ## `python_cli_schema`
@@ -95,7 +103,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `playground_reveal`
 
 - Playground chat rendering, reveal overlays, and user-visible route metadata presentation.
-- Typical paths: `PlaygroundPage.tsx`, `ChatComponent*.tsx`, `HeaderDisplay.tsx`, `HeaderReveal.tsx`
+- Typical paths: `PlaygroundPage.tsx`, `ChatComponent*.tsx`, `HeaderDisplay.tsx`, `ThinkingAnimation.tsx`
 - Task rules: `dashboard`
 
 ## `dsl_crd`
@@ -140,56 +148,29 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `website/**`, `config/**`
 - Task rules: `repo-docs`, `training-stack`
 
-## `harness_docs`
+## Development harness
 
-- Shared agent entry, indexed harness docs, local `AGENTS.md` supplements, skill prose, execution plans, glossary, and debt tracking for the harness itself.
-- Typical paths: `AGENTS.md`, `tools/agent/docs/**`, `tools/agent/skills/**`, indexed local `AGENTS.md` files under hotspot directories
-- Task rules: `agent_text`, `repo-docs`
+- Ownership, minimum checks, CI jobs, images, and E2E profiles have one mapping:
+  `tools/agent/domains.yaml`.
+- Harness code and workflow contracts live in `tools/agent/scripts/**`,
+  `tools/ci/**`, `tools/make/agent.mk`, `.pre-commit-config.yaml`, and
+  `.github/workflows/**`.
+- Contributor prose lives in `AGENTS.md`, `CONTRIBUTING.md`, this directory,
+  and the nearest local `AGENTS.md`. It does not duplicate executable routing.
 
-## `harness_exec`
+## Local runtime and E2E
 
-- Executable harness manifests, scripts, Make entrypoints, and validation logic that implement the shared contract.
-- Typical paths: `tools/agent/*.yaml`, `tools/agent/scripts/**`,
-  `tools/ci/**`, `tools/make/agent.mk`, `.github/workflows/**`,
-  `.mergify.yml`
-- Task rules: `agent_exec`
+- The CLI's local-image flow is the only local runtime path:
+  `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never` with the
+  selected platform.
+- E2E profiles live under `e2e/profiles/**` and are run explicitly with
+  `make verify PROFILE=<profile>` or selected by the coarse CI registry.
+- CI classification lives in `.github/workflows/ci-changes.yml` and
+  `tools/ci/classify_pr_changes.py`; `.github/workflows/pr.yml` aggregates its
+  selected jobs into the single `PR Gate` check.
 
-## `contributor_interface`
+## Maintainer operations
 
-- Contributor-facing wrappers around the harness such as README, contributing guidance, PR or issue intake templates, and maintainer label taxonomy.
-- Typical paths: `README.md`, `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, `.prowlabels.yaml`
-- Task rules: `repo-docs`, `agent_text`
-
-## `maintainer_ops`
-
-- Maintainer-only release, milestone, issue, PR, stale-work, and daily board workflows.
-- Typical paths: `tools/agent/docs/maintainer-ops.md`, `tools/agent/maintainer-policy.yaml`, `tools/agent/scripts/maintainer_board.py`, `.prowlabels.yaml`
-- Task rules: `agent_text`, `agent_exec`, `repo-docs`
-
-## `local_smoke`
-
-- Canonical local image build, serve, dashboard/router smoke validation, and environment-specific smoke configs.
-- Typical paths: `tools/make/agent.mk`, `tools/make/docker.mk`, `src/vllm-sr/cli/**`, `e2e/config/config.agent-smoke.*.yaml`
-- Task rules: `vllm-sr-cli`
-
-## `local_e2e`
-
-- Affected local E2E profile selection and local profile execution.
-- Typical paths: `tools/agent/e2e-profile-map.yaml`, `e2e/profiles/**`, `e2e/config/**`, `deploy/kubernetes/**`
-- Task rules: `e2e-framework`
-
-## `cli_install`
-
-- Session-isolated CLI install wrapper and coding-agent skill for quick, disposable vllm-sr installs.
-- Typical paths: `install.sh`, `tools/agent/scripts/cc-install.sh`
-- Task rules: `vllm-sr-cli`
-
-## `ci_e2e`
-
-- Shared PR change classification, domain reusable workflows, stable merge-gate
-  compatibility, and affected profile-matrix execution.
-- Typical paths: `.github/workflows/pr.yml`,
-  `.github/workflows/ci-changes.yml`, domain workflows under
-  `.github/workflows/`, `tools/ci/validate_workflows.py`,
-  `tools/agent/skill-registry.yaml`
-- Task rules: `agent_exec`, `e2e-framework`
+- Release, issue, PR, stale-work, and board policy lives in
+  `maintainer-ops.md`, `tools/agent/maintainer-policy.yaml`, and the maintainer
+  scripts. Generated state stays under `.agent-harness/maintainer/`.

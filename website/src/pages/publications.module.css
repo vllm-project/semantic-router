@@ -8,7 +8,7 @@
   gap: 0.4rem;
   padding: 0.35rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--site-surface);
 }
 
@@ -16,7 +16,7 @@
   min-height: 2.35rem;
   padding: 0.5rem 0.9rem;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--site-muted-bright);
   font-size: 0.74rem;
@@ -29,11 +29,19 @@
     border-color 180ms ease;
 }
 
-.filterButton:hover,
-.filterButton.active {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+/* Selected is the filled blue; hovering an unselected filter only tints, so
+ * the two states stay distinguishable while the pointer is over the row. */
+.filterButton:hover {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
+}
+
+.filterButton.active,
+.filterButton.active:hover {
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
 }
 
 .groups {
@@ -51,7 +59,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.7rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.14em;
 }
@@ -84,17 +92,22 @@
   border: 1px solid var(--site-border-strong);
   color: var(--site-muted-bright);
   font-size: 0.6rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.rowTypePaper {
+/* Doubled class on purpose. `.rowType` sets the `border` shorthand, which
+ * resets border-color, and these modifiers score the same (0,1,0) — so in a
+ * production build, where the minifier merges and reorders rules across files,
+ * the shorthand can land after the modifier and repaint the badge grey.
+ * (0,2,0) wins regardless of where the bundler puts each rule. */
+.rowType.rowTypePaper {
   border-color: var(--site-accent);
   color: var(--site-accent-strong);
 }
 
-.rowTypeTalk {
+.rowType.rowTypeTalk {
   border-color: #a1a1aa;
   color: #71717a;
 }
@@ -109,7 +122,7 @@
   margin: 0;
   color: var(--site-text);
   font-size: 0.94rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.35;
 }
 
@@ -137,7 +150,7 @@
   min-height: 1.9rem;
   padding: 0.35rem 0.7rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   color: var(--site-text);
   font-size: 0.68rem;
   text-transform: uppercase;
@@ -145,9 +158,9 @@
 }
 
 .rowLink:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 
@@ -159,7 +172,7 @@
 @media (max-width: 700px) {
   .filterButtons {
     display: grid;
-    border-radius: 1.1rem;
+    border-radius: var(--radius-lg);
   }
 
   .row {

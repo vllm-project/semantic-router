@@ -239,7 +239,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 	modelSelectionCfg := buildModelSelectionConfig(&cfg)
 	registry := selection.NewFactory(modelSelectionCfg).
 		WithModelConfig(cfg.BackendModels.ModelConfig).
-		WithEmbeddingFunc(func(text string) ([]float32, error) {
+		WithEmbeddingFunc(func(text string, _ selection.EmbeddingConfig) ([]float32, error) {
 			lower := strings.ToLower(text)
 			switch {
 			case strings.Contains(lower, "coding"):
@@ -249,7 +249,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 			default:
 				return []float32{0.5, 0.5}, nil
 			}
-		}).
+		}, selection.EmbeddingConfig{}).
 		CreateAll()
 
 	router := &OpenAIRouter{
@@ -294,14 +294,12 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 	}
 	cfg := config.DefaultGlobalConfig()
 	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
-		"premium": {
-			QualityScore: 0.9,
-			Pricing:      config.ModelPricing{PromptPer1M: 10},
-		},
-		"economy": {
-			QualityScore: 0.1,
-			Pricing:      config.ModelPricing{PromptPer1M: 1},
-		},
+		"premium": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 10},
+		}, 0.9),
+		"economy": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 1},
+		}, 0.1),
 	}
 	cfg.Decisions = []config.Decision{
 		{Name: "quality", Algorithm: qualityPolicy},

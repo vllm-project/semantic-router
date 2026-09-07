@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
+import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
@@ -243,12 +244,7 @@ export default function InsightsPage() {
   )
 
   if (loading && !hasReplayData && records.length === 0) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.spinner} />
-        <p>Loading insight records...</p>
-      </div>
-    )
+    return <ProductLoadingState label="Loading insights" />
   }
 
   return (
@@ -256,15 +252,6 @@ export default function InsightsPage() {
       eyebrow="Insights"
       title="Insights"
       description="See what the router picked, what signals fired, and how much it saved."
-      configArea="Analysis"
-      scope="Filtered replay intelligence"
-      panelTitle="Semantic Router Insights"
-      panelDescription="Decisions, model picks, token usage, and savings in one view."
-      pills={[
-        { label: 'Cost Savings', active: true },
-        { label: 'Selections' },
-        { label: 'Signals' },
-      ]}
     >
       {error ? (
         <div className={styles.error}>

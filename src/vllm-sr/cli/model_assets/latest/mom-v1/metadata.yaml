@@ -1,17 +1,18 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: mom-v1
 name: vLLM-SR MoM V1
-version: 1.0.0
+version: 1.6.0
 description: >-
-  A five-entrypoint reference recipe that composes seven specialized local
-  models across balanced, cost, speed, accuracy, and privacy routing profiles.
+  Five reusable, model-free routing profiles for balanced, cost, speed,
+  accuracy, privacy, and image-understanding workloads.
 authors:
   - name: vLLM Semantic Router Maintainers
 license: Apache-2.0
 tags:
-  - local-models
+  - model-free
   - mixture-of-models
-  - multi-entrypoint
+  - multimodal
+  - entrypoint-assignments
   - semantic-routing
 links:
   source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1

@@ -50,6 +50,7 @@ The backend-specific fields are:
 | `api_key` | Authenticates the OpenAI request; source it from a secret. |
 | `base_url` | Overrides the API origin when required. |
 | `max_num_results` | Limits returned search results. |
+| `max_response_bytes` | Caps each direct-search response; `0` uses 4 MiB. |
 | `file_ids` and `filter` | Narrow the search when supported by the workflow. |
 | `workflow_mode` | Chooses direct search or tool mutation. |
 | `timeout_seconds` | Bounds the remote request. |

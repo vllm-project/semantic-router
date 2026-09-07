@@ -1,116 +1,92 @@
 ---
 title: Models, Entrypoints, and Serving
-description: Discover virtual models, expose stable entrypoints, connect inference backends, and operate Semantic Router from the CLI.
+description: Connect inference backends, compose a Mixture-of-Model, and expose stable OpenAI-compatible model names.
 ---
 
 # Models, Entrypoints, and Serving
 
 ## Overview
 
-Semantic Router gives applications stable model names while operators retain
-control over the models and routing policy behind them. This guide covers the
-complete CLI path from discovering a built-in virtual model to serving requests.
-
-## Understand the four objects
-
-| Object | What it represents |
-| --- | --- |
-| Provider model | A logical model connected to one or more physical inference endpoints. |
-| Virtual model | A public model ID such as `vllm-sr/mom-v1-flash` that promises a routing objective. |
-| Entrypoint | The mapping from one or more public model names to a recipe. |
-| Recipe | The isolated signals, decisions, algorithms, plugins, and runtime state for that objective. |
-
-```text
-client model -> entrypoint -> recipe -> selected provider model -> inference endpoint
-```
-
-The virtual model name is the client contract. It does not identify a model
-checkpoint, and it never reaches the selected provider backend.
+Semantic Router gives applications stable model names while operators can
+change the physical models and routing policy behind them. The Dashboard is the
+fastest path to a working topology; YAML remains available for reviewed,
+version-controlled deployments.
 
 ## What Problem Does It Solve?
 
-Without an entrypoint, clients must know which physical model to call and carry
-deployment-specific model names in application code. A stable virtual model
-lets operators change backend pools, routing logic, or rollout strategy without
-changing the client contract.
+Applications should call a durable model name without coupling themselves to a
+provider, endpoint, or checkpoint. Entrypoints keep that public contract stable
+while Recipes and connected Models can evolve independently.
+
+The topology has four user-facing objects:
+
+| Object | What it represents |
+| --- | --- |
+| Model | One logical model connected to one or more inference endpoints. |
+| Recipe | Reusable signals, projections, decisions, algorithms, and plugins. |
+| Mixture-of-Model | A Recipe whose decisions have been assigned connected Models. |
+| Entrypoint | One or more public model names that resolve to that Mixture-of-Model. |
+
+```text
+client model -> entrypoint -> recipe decision -> selected model -> inference endpoint
+```
+
+The public model name is the client contract. It does not identify a checkpoint
+and is never forwarded as the selected backend model ID.
 
 ## When to Use
 
-Use this workflow when you want to serve a built-in routing objective, publish
-several objectives from one Router, or fork a maintained model into a
-user-owned configuration. Use a direct provider endpoint when one physical
-model is the intentional and durable client contract.
+Use this workflow whenever one public model should route across several
+connected Models, or when the routing policy must change without updating every
+client. A direct Model remains the simpler choice for single-backend testing.
 
-## Start with a built-in virtual model
+## Build a model path
 
-### 1. Discover the catalog
+### 1. Connect Models
 
-The installed CLI contains a versioned catalog of maintained virtual models:
-
-```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
-```
-
-`model show` reports the entrypoint, intended use, required backend roles,
-recommended candidates, compatibility, and verified asset digest. Recommended
-models are starting points, not mandatory vendor IDs.
-
-### 2. Serve one or more entrypoints
-
-Pass catalog model IDs as positional arguments to the local Docker target:
+Start the stack and open the Dashboard:
 
 ```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-
-vllm-sr serve \
-  vllm-sr/mom-v1-lite \
-  vllm-sr/mom-v1-flash \
-  vllm-sr/mom-v1-ultra \
-  vllm-sr/mom-v1-vault
+vllm-sr serve
+vllm-sr dashboard
 ```
 
-This starts Router, Envoy, Dashboard, and supporting services. Each request
-should name the entrypoint it needs; serving several entrypoints does not turn
-their command-line order into a routing fallback chain.
+Open **Build → Models**, choose a provider, and enter the endpoint credentials.
+For compatible providers the Dashboard discovers available model IDs, so you
+can import several in one step. Use **Advanced settings** only when you need to
+override metadata, pricing, or connection behavior. Verify each connection
+before assigning it to a Recipe.
 
-Bare `vllm-sr serve` is intentionally different: it uses `config.yaml` or opens
-the Dashboard-first setup flow. It does not silently enable the catalog default.
+### 2. Choose a Recipe
 
-### 3. Connect physical inference backends
+Open **Build → Mixture-of-Models → Recipes**. A Recipe describes the routing
+logic without embedding provider URLs or credentials. Review its decisions and
+probes, or create a custom Recipe from the Signals, Projections, and Decisions
+you already maintain.
 
-Catalog models are routing products, not checkpoint installers. `serve` does
-not download or start the physical vLLM, Ollama, or hosted API models referenced
-by a recipe.
+### 3. Publish a Mixture-of-Model
 
-Choose either workflow:
+In **Models**, create a Mixture-of-Model, choose the Recipe, and assign eligible
+connected Models to each decision. A decision can use one Model or an ordered
+set when the algorithm supports multiple candidates. Add concise public aliases
+and publish only after the topology and probes are complete.
 
-- In the Dashboard, open **Built-in Models**, review the Model Card, bind each
-  required role under **Models & Routing**, and use **Verify** to send a real
-  generation request to every backend.
-- Fork the built-in model, edit `providers.models[].backend_refs[]`, validate the
-  resulting YAML, and serve that user-owned configuration.
+### 4. Test in Playground
 
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-vllm-sr model validate mom-v1.yaml
-vllm-sr serve --config mom-v1.yaml
-```
+Select the new public model in **Playground** and send a representative request.
+The response metadata shows the decision, algorithm, selected Model, latency,
+TTFT, and TPOT without interrupting the conversation. Use **Insights** for a
+deeper routing trace and cost comparison.
 
-An untouched deterministic fork retains verified catalog provenance. Changing
-the provider pool or routing policy makes it a custom, unverified configuration.
-Validation checks structure and references; it does not certify backend quality
-or availability.
+### 5. Call the OpenAI-compatible API
 
-### 4. Discover and call entrypoints
-
-List the model names exposed by the running Router:
+List the public model names exposed by the running stack:
 
 ```bash
 curl -sS http://localhost:8899/v1/models
 ```
 
-Then use a virtual model through the standard OpenAI-compatible `model` field:
+Then use an entrypoint through the standard `model` field:
 
 ```bash
 curl http://localhost:8899/v1/chat/completions \
@@ -123,11 +99,17 @@ curl http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-The Router resolves the entrypoint, evaluates only its recipe, selects an
-eligible provider model, and rewrites the backend request to that model's
-provider-facing ID.
+The Router resolves the entrypoint, evaluates only its Recipe, selects an
+eligible Model, and rewrites the upstream request to the provider-facing model
+ID.
 
-### 5. Operate the stack
+## Configuration
+
+The Dashboard writes the same model, Recipe, and Entrypoint contract that the
+Router reads from YAML. Use the Dashboard for interactive authoring and checked
+in YAML for reviewed deployments; avoid splitting ownership between them.
+
+## Operate the stack
 
 ```bash
 vllm-sr status
@@ -137,113 +119,28 @@ vllm-sr dashboard
 vllm-sr stop
 ```
 
-Use `status` before assuming ports or workspace paths. If the Router is ready
-but generation fails, verify the selected backend's network address, model ID,
-credentials, and `/v1/models` response.
-
-## `vllm-sr model` command reference
-
-### List models
+`vllm-sr serve --config my-models.yaml` remains the explicit path for a
+reviewed user-owned configuration. Kubernetes deployments use the same config
+through Helm or the Operator:
 
 ```bash
-vllm-sr model list
-vllm-sr model list --output json
-vllm-sr model list --all-versions
-vllm-sr model list --catalog-version latest
-vllm-sr model list --all
-vllm-sr model list --config my-config.yaml
+vllm-sr serve --target k8s --config my-models.yaml --namespace semantic-router
 ```
 
-- The default view shows compatible models from the installed `latest` catalog.
-- `--all-versions` includes every immutable release snapshot installed with the
-  CLI.
-- `--all` includes incompatible entries and their compatibility reason.
-- `--config` inspects provider and virtual models in one explicit configuration
-  instead of reading the installed catalog.
+Keep provider credentials in environment bindings or Kubernetes Secrets, not
+in Recipe assets, ConfigMaps, shell history, or committed Helm values.
 
-### Inspect one built-in model
+## Move a custom Recipe
 
-```bash
-vllm-sr model show vllm-sr/mom-v1-blend
-vllm-sr model show --output json vllm-sr/mom-v1-blend
-```
-
-Read the Model Card and backend-role requirements before deploying a model.
-
-### Fork one or more models
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-
-vllm-sr model fork vllm-sr/mom-v1-lite mom-v1.yaml \
-  --enable vllm-sr/mom-v1-flash \
-  --default vllm-sr/mom-v1-flash
-```
-
-Compatible assets merge fail-closed: conflicting shared settings, providers,
-entrypoints, or recipes produce an error instead of an implicit override.
-
-### Validate a fork or user-owned config
-
-```bash
-vllm-sr model validate mom-v1.yaml
-```
-
-This runs canonical configuration validation and reports whether the document
-still matches a verified catalog projection.
-
-## Configuration
-
-A custom entrypoint maps public aliases to a named recipe:
-
-```yaml
-entrypoints:
-  - model_names:
-      - company/assistant-fast
-      - company/assistant-interactive
-    recipe: fast
-
-recipes:
-  - name: fast
-    description: Prefer the lowest-latency eligible backend.
-    routing:
-      strategy: priority
-      decisions: []
-```
-
-Both names select the same isolated policy. Use a concrete provider model name
-only when the caller deliberately needs to bypass signals, decisions,
-algorithms, and recipe-local plugins.
-
-See [Virtual Models](entrypoints-and-recipes) for request resolution
-and [Recipes](recipes) for policy isolation and lifecycle behavior.
-
-## Docker and Kubernetes
-
-Positional catalog models currently target local Docker serving. For
-Kubernetes, fork the selected model into a user-owned config and deploy that
-config through Helm or the Operator:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-vllm-sr serve --target k8s --config mom-v1.yaml --namespace semantic-router
-```
-
-Kubernetes credentials and sensitive environment values belong in Secrets,
-not in catalog assets, ConfigMaps, shell history, or Helm values committed to
-source control.
-
-## Package and move a custom recipe
-
-Package a reviewed custom recipe directory for transport:
+Package a reviewed Recipe directory for transport:
 
 ```bash
 vllm-sr recipe pack path/to/custom-recipe
 ```
 
-The archive does not become a built-in model and does not install provider
-models or runtime dependencies. On the target host, authorize each required
-environment variable by name:
+The archive contains routing policy, not physical model credentials or runtime
+dependencies. On the target host, authorize every required environment variable
+by name and serve the complete configuration:
 
 ```bash
 export PROVIDER_API_KEY=...
@@ -259,12 +156,8 @@ vllm-sr config migrate --config old-config.yaml
 
 ## Next
 
-- [Virtual Models](entrypoints-and-recipes) for routing semantics.
-- [Entrypoints](entrypoints) for naming, discovery, and validation rules.
-- [Recipes](recipes) for isolation, lifecycle APIs, and limitations.
-- [Mixture of Models](../../overview/mom-model-family) for the serving-system
-  architecture behind MoM V1.
-- [Configuration Workflows](../../installation/configuration-workflows) for
-  ownership across YAML, Dashboard, Helm, the Operator, and DSL.
-- [Container Connectivity](../../troubleshooting/container-connectivity) when
-  Router or backend networking fails.
+- [Virtual Models](entrypoints-and-recipes) for request resolution and isolation.
+- [Entrypoints](entrypoints) for naming and validation rules.
+- [Recipes](recipes) for lifecycle behavior and limitations.
+- [Mixture of Models](../../overview/mom-model-family) for the MoM architecture.
+- [Configuration Workflows](../../installation/configuration-workflows) for YAML, Dashboard, Helm, Operator, and DSL ownership.

@@ -9,9 +9,15 @@ import (
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
+
+// defaultEmbeddingMemoSize bounds the embedding memo. Each entry costs roughly
+// embedding_dim * 4 bytes (e.g. ~1KB at 256 dims), so 512 entries is well under
+// a few MB even for 1024-dim models.
+const defaultEmbeddingMemoSize = 512
 
 // InMemoryCache provides a high-performance semantic cache using BERT embeddings in memory
 type InMemoryCache struct {
@@ -37,18 +43,24 @@ type InMemoryCache struct {
 
 	hnswIndex        *HNSWIndex
 	useHNSW          bool
-	hnswNeedsRebuild bool   // true while the HNSW graph is stale relative to entries
-	hnswEfSearch     int    // Search-time ef parameter
-	embeddingModel   string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	hnswNeedsRebuild bool                 // true while the HNSW graph is stale relative to entries
+	hnswEfSearch     int                  // Search-time ef parameter
+	embeddingModel   string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	polarityGuard    PolarityGuardOptions // optional NLI polarity tier (#2751)
 
 	// embMemo deduplicates query-embedding inference: a cache-miss request
 	// otherwise embeds the same query twice (lookup + pending write), so the
 	// memo turns the second compute into a memory hit.
-	embMemo *embeddingMemo
+	//
+	// An embedding is a deterministic pure function of (query text, configured
+	// model), so memoizing it is always correct: the worst case under a race is
+	// a redundant recompute, never a wrong vector.
+	embMemo *embedding.Memo
 
 	// Background cleanup
 	cleanupTicker *time.Ticker
 	stopCleanup   chan struct{}
+	cleanupDone   chan struct{}
 	closeOnce     sync.Once
 }
 
@@ -59,11 +71,12 @@ type InMemoryCacheOptions struct {
 	TTLSeconds          int
 	Enabled             bool
 	EvictionPolicy      EvictionPolicyType
-	UseHNSW             bool   // Enable HNSW index for faster search
-	HNSWM               int    // Number of bi-directional links (default: 16)
-	HNSWEfConstruction  int    // Size of dynamic candidate list during construction (default: 200)
-	HNSWEfSearch        int    // Size of dynamic candidate list during search (default: 50)
-	EmbeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	UseHNSW             bool                 // Enable HNSW index for faster search
+	HNSWM               int                  // Number of bi-directional links (default: 16)
+	HNSWEfConstruction  int                  // Size of dynamic candidate list during construction (default: 200)
+	HNSWEfSearch        int                  // Size of dynamic candidate list during search (default: 50)
+	EmbeddingModel      string               // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	PolarityGuard       PolarityGuardOptions // Optional NLI polarity tier (#2751)
 }
 
 func attachInMemoryEvictionPolicy(cache *InMemoryCache, policy EvictionPolicyType) {
@@ -114,6 +127,7 @@ func startInMemoryTTLCleanup(cache *InMemoryCache, options InMemoryCacheOptions)
 		return
 	}
 	cache.stopCleanup = make(chan struct{})
+	cache.cleanupDone = make(chan struct{})
 	cleanupInterval := time.Duration(options.TTLSeconds/2) * time.Second
 	if cleanupInterval < 10*time.Second {
 		cleanupInterval = 10 * time.Second // Minimum 10 seconds
@@ -144,6 +158,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"eviction_policy":      options.EvictionPolicy,
 		"use_hnsw":             options.UseHNSW,
 		"embedding_model":      embeddingModel,
+		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	cache := &InMemoryCache{
@@ -159,7 +174,8 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		useHNSW:             options.UseHNSW,
 		hnswEfSearch:        efSearch,
 		embeddingModel:      embeddingModel,
-		embMemo:             newEmbeddingMemo(defaultEmbeddingMemoSize),
+		polarityGuard:       options.PolarityGuard,
+		embMemo:             embedding.NewMemo(defaultEmbeddingMemoSize),
 	}
 
 	logging.ComponentEvent("cache", "inmemory_cache_initialized", map[string]interface{}{
@@ -171,6 +187,7 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		"use_hnsw":             options.UseHNSW,
 		"hnsw_ef_search":       efSearch,
 		"embedding_model":      embeddingModel,
+		"polarity_guard_nli":   options.PolarityGuard.UseNLI,
 	})
 
 	attachInMemoryEvictionPolicy(cache, options.EvictionPolicy)
@@ -200,7 +217,9 @@ func (c *InMemoryCache) generateEmbedding(ctx context.Context, text string) ([]f
 		return nil, err
 	}
 	if c.embMemo != nil {
-		return c.embMemo.getOrCompute(text, c.computeEmbedding)
+		return c.embMemo.GetOrCompute(text, func() ([]float32, error) {
+			return c.computeEmbedding(text)
+		})
 	}
 	return c.computeEmbedding(text)
 }

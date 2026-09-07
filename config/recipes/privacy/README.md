@@ -15,6 +15,7 @@ that a backend, network, or storage system is private.
 | --- | --- | --- |
 | Local | `local/private-qwen` | Default, sensitive-data, and attack-containment traffic. |
 | Frontier | `cloud/frontier-reasoning` | Explicitly non-sensitive, high-effort reasoning. |
+| Visual | `local/omni` | Local image understanding with restricted tool access. |
 
 Clients use `vllm-sr/auto`. Replace both aliases with backends that match the
 deployment's data-handling policy.
@@ -25,6 +26,7 @@ Use this recipe for:
 
 - prompts containing personal, confidential, or proprietary information;
 - deployments with a local-only handling requirement;
+- private image-bearing requests that require local visual understanding;
 - suspicious prompts that should not receive tools or leave the local boundary;
 - mixed workloads where a frontier model is allowed only for non-sensitive
   reasoning; and
@@ -38,6 +40,7 @@ backend ownership, logging, retention, and access controls remain necessary.
 | Request pattern | Route | Behavior |
 | --- | --- | --- |
 | Jailbreak or attack signal | `local_security_containment` | Keep the request local with containment policy. |
+| Image content without an attack signal | `omni` | Use the local visual-language model with filtered tools. |
 | PII, private-context, or local-only signal | `local_privacy_policy` | Keep the request local with privacy-oriented reasoning. |
 | Clearly non-sensitive deep reasoning | `cloud_frontier_reasoning` | Use the configured frontier backend. |
 | Everything else | `local_standard` | Use the local model. |
@@ -48,7 +51,7 @@ signals.
 
 ## Requirements
 
-- A local OpenAI-compatible backend controlled by the operator.
+- Local OpenAI-compatible text and visual-language backends controlled by the operator.
 - A frontier backend only if policy permits it.
 - Jailbreak, PII, privacy-KB, embedding, context, structure, and complexity
   signals configured in [`config.yaml`](config.yaml).
@@ -71,9 +74,12 @@ replay store as to the original traffic.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/privacy/config.yaml
-vllm-sr serve --config config/recipes/privacy/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect Models that match the required data boundaries,
+choose **Privacy-First Routing** in **Recipes**, assign every decision, and
+publish the resulting Mixture-of-Model Entrypoint.
 
 ## Evaluation
 

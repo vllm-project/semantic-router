@@ -33,21 +33,44 @@
   --site-hover-border-strong: rgba(48, 162, 255, 0.52);
   --site-hover-glow: 0 0 0 1px rgba(48, 162, 255, 0.2), 0 14px 32px rgba(48, 162, 255, 0.14);
   --site-hover-inset: inset 0 0 0 1px rgba(48, 162, 255, 0.18);
+  /* Hover ladder. One hue — brand blue — at three weights, chosen by the role
+   * of the thing being hovered, never by which component happens to own it:
+   *   chrome  navbar, sidebar, dropdown and table rows. Lightest, so it reads
+   *           as a pointer cue and never competes with the active row.
+   *   row     list rows inside content (--site-hover-row-bg, above).
+   *   surface cards, chips, pills, secondary buttons
+   *           (--site-hover-surface-bg + --site-hover-border, above).
+   * Solid fills are the separate --site-cta-* tier below. */
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.08);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.05);
+  /* A step deeper than --site-accent-strong (#0876c9), which only reached
+   * 4.1:1 against its own hover tint — under AA for the small caps these
+   * labels use. This clears 5.1:1 on every light-mode hover surface. */
+  --site-hover-text: #0a63a8;
+  /* Primary CTA. The one filled control on the site: solid brand blue, matching
+   * the hero's "Try the Playground". Light mode drops to the deep blue so white
+   * label text clears 4.5:1; dark mode keeps the bright blue with dark ink. */
+  --site-cta-bg: #0876c9;
+  --site-cta-bg-hover: #0a6ab3;
+  --site-cta-text: #ffffff;
+  --site-cta-border: #0876c9;
+  --site-cta-border-hover: #0a6ab3;
+  --site-cta-shadow: 0 12px 28px rgba(8, 118, 201, 0.24);
   --site-gradient-text: linear-gradient(135deg, #75c5ff 0%, #30a2ff 62%, #0876c9 100%);
-  --site-accent-indigo: #818cf8;
-  --site-accent-violet: #a78bfa;
   --site-glow-blue-soft: rgba(48, 162, 255, 0.14);
-  --site-glow-violet-soft: rgba(124, 58, 237, 0.16);
-  --site-bg: #ffffff;
-  --site-bg-alt: #f7f9fc;
-  --site-surface: #ffffff;
+  /* Neutral ladder: bg-alt < surface-alt < bg < surface < raised. */
+  --site-bg: #f6f8fb;
+  --site-bg-alt: #eef2f7;
+  --site-surface: #fdfdfe;
   --site-surface-alt: #f3f6fa;
-  --site-surface-raised: #fbfcfe;
+  --site-surface-raised: #ffffff;
   --site-surface-soft: rgba(15, 23, 42, 0.035);
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  --site-muted: #677487;
+  /* Split secondary text (--site-muted) from control at rest (--site-interactive-rest). */
+  --site-muted: #556070;
+  --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
   --site-border: rgba(15, 23, 42, 0.1);
   --site-border-strong: rgba(15, 23, 42, 0.16);
@@ -57,14 +80,15 @@
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  --site-code-bg: #f6f2ea;
+  /* White code bg; border defines surface. */
+  --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
   --site-mermaid-bg: rgba(255, 255, 255, 0.72);
   --site-body-wash: radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
     linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(251, 252, 254, 0.96);
-  --site-menu-hover: rgba(17, 17, 17, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(17, 17, 17, 0.04);
   --site-table-stripe-bg: rgba(17, 17, 17, 0.02);
   --site-admonition-bg: rgba(17, 17, 17, 0.025);
@@ -77,12 +101,49 @@
   --tech-text-primary: var(--site-text-strong);
   --tech-text-secondary: var(--site-muted-bright);
   --tech-primary-blue: var(--site-accent-strong);
-  --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
-  --site-grid-max: 1400px;
-  --site-content-max: 1200px;
-  --site-doc-max: 840px;
+  /* Page geometry. 1536 = rail 288 + rail-gap 110 + measure 736 +
+   * column-gap 130 + toc 272, so the docs row fills the frame exactly. */
+  --page-max: 1536px;
+  --gutter: clamp(1rem, 5vw, 4.5rem);
+  --measure: 72ch;
+  /* Rail width: 18rem (20rem too wide for label list). */
+  --rail: 18rem;
+  --toc: 17rem;
+  /* Rail to content, shared so every page starts its text on the same x.
+   * Caps at 1680px, where the frame stops growing. */
+  --rail-gap: clamp(var(--space-6), calc(13.45vw - 115.9px), 6.875rem);
+
+  /* Legacy aliases repointed to shared geometry. --site-content-max removed. */
+  --site-grid-max: var(--page-max);
+  --site-doc-max: var(--measure);
   --site-header-height: 4.9rem;
+
+  /* Type scale: eight steps. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.125rem;
+  --text-4xl: clamp(2.5rem, 5vw, 3.5rem);
+
+  /* Shape: four steps. */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  /* Space: 4px ramp. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
 
   --ifm-color-primary: #111111;
   --ifm-color-primary-dark: #0b0b0b;
@@ -93,13 +154,14 @@
   --ifm-color-primary-lightest: #4a4a4a;
   --ifm-background-color: var(--site-bg);
   --ifm-background-surface-color: var(--site-surface);
-  --ifm-navbar-background-color: rgba(5, 5, 5, 0.97);
-  --ifm-navbar-link-color: #d4d4d8;
-  --ifm-navbar-link-hover-color: #ffffff;
-  --ifm-footer-background-color: #050505;
-  --ifm-footer-color: #a1a1aa;
-  --ifm-footer-link-color: #f4f4f5;
-  --ifm-footer-title-color: #a1a1aa;
+  /* Chrome follows color mode; shell.css re-darkens on homepage. */
+  --ifm-navbar-background-color: var(--site-surface-glass);
+  --ifm-navbar-link-color: var(--site-interactive-rest);
+  --ifm-navbar-link-hover-color: var(--site-text-strong);
+  --ifm-footer-background-color: var(--site-bg-alt);
+  --ifm-footer-color: var(--site-muted-bright);
+  --ifm-footer-link-color: var(--site-muted-bright);
+  --ifm-footer-title-color: var(--site-muted);
   --ifm-color-content: var(--site-text);
   --ifm-color-content-secondary: var(--site-muted-bright);
   --ifm-font-color-base: var(--site-text);
@@ -119,9 +181,10 @@
   --ifm-toc-border-color: var(--site-border);
   --ifm-code-font-size: 0.95rem;
   --ifm-code-background: var(--site-code-bg);
-  --ifm-font-family-base: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --ifm-font-family-monospace: 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
-  --ifm-heading-font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* Inter + JetBrains Mono from docusaurus.config.ts headTags. */
+  --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
   --ifm-global-shadow-lw: none;
   --ifm-global-shadow-md: none;
   --ifm-global-shadow-tl: none;
@@ -139,16 +202,17 @@
 
 html[data-theme='light'],
 [data-theme='light'] {
-  --site-bg: #ffffff;
-  --site-bg-alt: #f7f9fc;
-  --site-surface: #ffffff;
+  --site-bg: #f6f8fb;
+  --site-bg-alt: #eef2f7;
+  --site-surface: #fdfdfe;
   --site-surface-alt: #f3f6fa;
-  --site-surface-raised: #fbfcfe;
+  --site-surface-raised: #ffffff;
   --site-surface-soft: rgba(15, 23, 42, 0.035);
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  --site-muted: #677487;
+  --site-muted: #556070;
+  --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
   --site-border: rgba(15, 23, 42, 0.1);
   --site-border-strong: rgba(15, 23, 42, 0.16);
@@ -158,14 +222,14 @@ html[data-theme='light'],
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  --site-code-bg: #f6f2ea;
+  --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
   --site-mermaid-bg: rgba(255, 255, 255, 0.72);
   --site-body-wash: radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
     linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(251, 252, 254, 0.96);
-  --site-menu-hover: rgba(17, 17, 17, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(17, 17, 17, 0.04);
   --site-table-stripe-bg: rgba(17, 17, 17, 0.02);
   --site-admonition-bg: rgba(17, 17, 17, 0.025);
@@ -200,7 +264,7 @@ html[data-theme='light'],
 
 html[data-theme='dark'],
 [data-theme='dark'] {
-  /* Zinc-neutral dark palette (industry standard: Vercel / shadcn / Tailwind zinc). */
+  /* Zinc-neutral dark palette (Vercel/shadcn/Tailwind standard). */
   --site-bg: #09090b;
   --site-bg-alt: #0c0c0e;
   --site-surface: #18181b;
@@ -211,6 +275,7 @@ html[data-theme='dark'],
   --site-text: #fafafa;
   --site-text-strong: #ffffff;
   --site-muted: #a1a1aa;
+  --site-interactive-rest: #b4b4bd;
   --site-muted-bright: #d4d4d8;
   --site-border: rgba(255, 255, 255, 0.1);
   --site-border-strong: rgba(255, 255, 255, 0.16);
@@ -224,6 +289,15 @@ html[data-theme='dark'],
   --site-hover-surface-bg: linear-gradient(135deg, rgba(48, 162, 255, 0.14), rgba(8, 118, 201, 0.05));
   --site-hover-surface-bg-soft: linear-gradient(180deg, rgba(48, 162, 255, 0.12), rgba(48, 162, 255, 0.03));
   --site-hover-glow: 0 0 0 1px rgba(48, 162, 255, 0.26), 0 16px 36px rgba(48, 162, 255, 0.14);
+  --site-hover-chrome-bg: rgba(48, 162, 255, 0.1);
+  --site-hover-subtle-bg: rgba(48, 162, 255, 0.06);
+  --site-hover-text: #75c5ff;
+  --site-cta-bg: #30a2ff;
+  --site-cta-bg-hover: #75c5ff;
+  --site-cta-text: #04121f;
+  --site-cta-border: #30a2ff;
+  --site-cta-border-hover: #75c5ff;
+  --site-cta-shadow: 0 14px 32px rgba(48, 162, 255, 0.24);
   --site-code-bg: #111113;
   --site-sidebar-bg: rgba(24, 24, 27, 0.94);
   --site-toc-bg: rgba(24, 24, 27, 0.96);
@@ -231,7 +305,7 @@ html[data-theme='dark'],
   --site-body-wash: radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 32%),
     linear-gradient(180deg, #09090b 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   --site-dropdown-bg: rgba(24, 24, 27, 0.97);
-  --site-menu-hover: rgba(255, 255, 255, 0.06);
+  --site-menu-hover: var(--site-hover-chrome-bg);
   --site-table-header-bg: rgba(255, 255, 255, 0.045);
   --site-table-stripe-bg: rgba(255, 255, 255, 0.025);
   --site-admonition-bg: rgba(255, 255, 255, 0.035);

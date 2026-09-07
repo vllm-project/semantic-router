@@ -8,6 +8,9 @@ recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
 recursive-include cli/model_assets *.yaml *.md *.dsl
+include cli/evaluation/golden/metric_analysis_catalog.v1.json
+include cli/evaluation/golden/research_benchmark_inventory.v1.json
+recursive-include cli/evaluation/resources *.json
 
 # Include requirements
 include requirements.txt

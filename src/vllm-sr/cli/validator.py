@@ -1,7 +1,6 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
-from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -17,7 +16,6 @@ from cli.models import (
     RouterReplayPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
-    ImageGenPluginConfig,
 )
 from cli.terminal import echo, error as terminal_error
 from pydantic import ValidationError as PydanticValidationError
@@ -41,6 +39,7 @@ from cli.validator_workflows import (
     validate_workflow_final_model,
 )
 from cli.validator_signal_references import validate_signal_references
+from cli.validator_models import validate_model_references
 
 log = get_logger(__name__)
 
@@ -71,11 +70,6 @@ ALGORITHM_CONFIG_BLOCKS = (
     "multi_factor",
     "prompt",
 )
-
-
-def _iter_profile_decisions(config: UserConfig):
-    for _, routing in iter_routing_profiles(config):
-        yield from routing.decisions
 
 
 VALID_ALGORITHM_TYPES = {
@@ -257,103 +251,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def validate_model_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all model references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    provider_model_names = {model.name for model in config.providers.models}
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    routing_model_names = set(routing_cards.keys())
-
-    for model in config.providers.models:
-        if model.name not in routing_model_names:
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' is missing from routing.modelCards",
-                    field=f"providers.models.{model.name}",
-                )
-            )
-
-    for model in config.providers.models:
-        if (
-            model.reasoning_family
-            and model.reasoning_family not in config.providers.reasoning_families
-        ):
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
-                    field=f"providers.models.{model.name}.reasoning_family",
-                )
-            )
-
-    # Check decision model references
-    for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in provider_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.model not in routing_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.lora_name:
-                declared_loras = {
-                    adapter.name
-                    for adapter in (routing_cards[model_ref.model].loras or [])
-                    if adapter.name
-                }
-                if not declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
-                            "but routing.modelCards declares no loras for that model",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-                elif model_ref.lora_name not in declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-
-    # Check default model
-    if config.providers.default_model not in provider_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.defaults.default_model",
-            )
-        )
-    elif config.providers.default_model not in routing_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
-                field="providers.defaults.default_model",
-            )
-        )
-
-    return errors
-
-
 def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
     messages: List[str] = []
     for error in exc.errors():
@@ -417,7 +314,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
-        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
         PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
@@ -497,6 +393,112 @@ def _maybe_hybrid_weight_error(
     return None
 
 
+def _decision_candidate_names(decision) -> set[str]:
+    return {
+        (model_ref.lora_name or model_ref.model).strip()
+        for model_ref in decision.modelRefs
+        if (model_ref.lora_name or model_ref.model).strip()
+    }
+
+
+def _algorithm_quorum_errors(
+    decision, algo, field_prefix: str = "decisions"
+) -> List[ValidationError]:
+    errors: List[ValidationError] = []
+    candidates = _decision_candidate_names(decision)
+
+    fusion_cfg = getattr(algo, "fusion", None)
+    if algo.type == "fusion" and fusion_cfg is not None:
+        minimum = fusion_cfg.min_successful_responses
+        if fusion_cfg.analysis_models:
+            panel = {
+                name.strip() for name in fusion_cfg.analysis_models if name.strip()
+            }
+        else:
+            panel = candidates
+        if minimum and panel and minimum > len(panel):
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' fusion min_successful_responses={minimum} "
+                    f"exceeds panel size {len(panel)}",
+                    field=f"{field_prefix}.{decision.name}.algorithm.fusion.min_successful_responses",
+                )
+            )
+
+    workflows_cfg = getattr(algo, "workflows", None)
+    if algo.type != "workflows" or workflows_cfg is None:
+        return errors
+    minimum = workflows_cfg.min_successful_responses
+    if not minimum:
+        return errors
+    max_parallel = workflows_cfg.max_parallel or 2
+    if minimum > max_parallel:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                f"exceeds max_parallel={max_parallel}",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.min_successful_responses",
+            )
+        )
+    mode = workflows_cfg.mode or "static"
+    if mode == "dynamic" and candidates and minimum > len(candidates):
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                f"exceeds worker pool size {len(candidates)}",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.min_successful_responses",
+            )
+        )
+    if mode == "static":
+        for role_index, role in enumerate(workflows_cfg.roles or []):
+            models = {name.strip() for name in role.models if name.strip()}
+            if minimum > len(models):
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' workflows min_successful_responses={minimum} "
+                        f"exceeds role '{role.name}' model count {len(models)}",
+                        field=(
+                            f"{field_prefix}.{decision.name}.algorithm.workflows."
+                            f"roles.{role_index}.models"
+                        ),
+                    )
+                )
+    return errors
+
+
+def _workflow_configuration_errors(
+    decision, algo, field_prefix: str = "decisions"
+) -> List[ValidationError]:
+    workflows_cfg = getattr(algo, "workflows", None)
+    if algo.type != "workflows" or workflows_cfg is None:
+        return []
+
+    errors: List[ValidationError] = []
+    mode = workflows_cfg.mode or "static"
+    planner = workflows_cfg.planner
+    planner_model = getattr(planner, "model", None) if planner is not None else None
+    if mode == "dynamic" and not planner_model:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
+            )
+        )
+    if mode == "dynamic" and workflows_cfg.roles:
+        errors.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
+                field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
+            )
+        )
+    errors.extend(validate_workflow_final_model(decision, workflows_cfg, field_prefix))
+    if mode == "static":
+        errors.extend(
+            validate_static_workflow_roles(decision, workflows_cfg, field_prefix)
+        )
+    return errors
+
+
 def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
     """
     Validate algorithm configurations in decisions.
@@ -533,6 +535,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             continue
 
         errors.extend(_router_dc_missing_description_errors(decision, algo, config))
+        errors.extend(_algorithm_quorum_errors(decision, algo, field_prefix))
+        errors.extend(_workflow_configuration_errors(decision, algo, field_prefix))
 
         hybrid_err = _maybe_hybrid_weight_error(
             decision.name,
@@ -542,43 +546,6 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         )
         if hybrid_err is not None:
             errors.append(hybrid_err)
-
-        workflows_cfg = getattr(algo, "workflows", None)
-        if algo_type == "workflows" and workflows_cfg is not None:
-            mode = workflows_cfg.mode or "static"
-            planner = workflows_cfg.planner
-            planner_model = (
-                getattr(planner, "model", None) if planner is not None else None
-            )
-            if mode == "dynamic" and not planner_model:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-                    )
-                )
-            if mode == "dynamic" and workflows_cfg.roles:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
-                    )
-                )
-            errors.extend(
-                validate_workflow_final_model(
-                    decision,
-                    workflows_cfg,
-                    field_prefix,
-                )
-            )
-            if mode == "static":
-                errors.extend(
-                    validate_static_workflow_roles(
-                        decision,
-                        workflows_cfg,
-                        field_prefix,
-                    )
-                )
 
         remom_cfg = getattr(algo, "remom", None)
         if (

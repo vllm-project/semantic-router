@@ -12,6 +12,7 @@ license: Apache-2.0
 tags:
   - accuracy
   - orchestration
+  - multimodal
   - verification
 links:
   source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/accuracy

@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import Link from '@docusaurus/Link'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import useGlobalData from '@docusaurus/useGlobalData'
 import {
   HtmlClassNameProvider,
   PageMetadata,
@@ -9,14 +8,11 @@ import {
 } from '@docusaurus/theme-common'
 import SearchMetadata from '@theme/SearchMetadata'
 import BlogLayout from '@theme/BlogLayout'
+import PageHeader from '@site/src/components/site/PageHeader'
 import BlogListPaginator from '@theme/BlogListPaginator'
 import BlogListPageStructuredData from '@theme/BlogListPage/StructuredData'
 import type { Props } from '@theme/BlogListPage'
-import {
-  BLOG_SEARCH_INDEX_PLUGIN_NAME,
-  type BlogSearchIndex,
-  type BlogSearchIndexEntry,
-} from '../../plugins/blogSearchIndex'
+import type { BlogSearchIndexEntry } from '../../plugins/blogSearchIndex'
 
 interface BlogCardProps {
   featured?: boolean
@@ -46,11 +42,7 @@ function readingTimeLabel(readingTime: number | undefined): string | null {
   return `${Math.ceil(readingTime)} min read`
 }
 
-/**
- * Normalizes a post from `props.items` into the same plain shape the search index
- * uses, so cards render identically whether they came from the current page or from
- * the site-wide index.
- */
+/** Normalizes a post into the card shape shared by featured and grid cards. */
 function toEntry(item: Props['items'][number]): BlogSearchIndexEntry {
   const { frontMatter, metadata } = item.content
 
@@ -63,26 +55,6 @@ function toEntry(item: Props['items'][number]): BlogSearchIndexEntry {
     readingTime: metadata.readingTime,
     tags: metadata.tags.map(tag => tag.label),
   }
-}
-
-/**
- * Reads the site-wide post index published by the `blog-search-index` plugin.
- *
- * Returns `null` when the index is unavailable so callers can fall back to the posts
- * Docusaurus passed in props. Global data is read defensively rather than through
- * `usePluginData` because a missing entry must degrade, never throw.
- */
-function useBlogSearchIndex(): BlogSearchIndexEntry[] | null {
-  const globalData = useGlobalData()
-
-  return useMemo(() => {
-    const pluginData = globalData?.[BLOG_SEARCH_INDEX_PLUGIN_NAME]?.default as
-      | BlogSearchIndex
-      | undefined
-    const posts = pluginData?.posts
-
-    return Array.isArray(posts) && posts.length > 0 ? posts : null
-  }, [globalData])
 }
 
 function BlogPostImage({
@@ -119,8 +91,9 @@ function BlogPostImage({
 }
 
 function BlogCard({ featured = false, entry }: BlogCardProps): React.ReactNode {
-  const { date, description, image, permalink, readingTime, title } = entry
+  const { date, description, image, permalink, readingTime, tags, title } = entry
   const readTime = readingTimeLabel(readingTime)
+  const chip = featured ? 'Featured' : tags[0]
 
   return (
     <article
@@ -138,7 +111,7 @@ function BlogCard({ featured = false, entry }: BlogCardProps): React.ReactNode {
         <BlogPostImage alt="" image={image} />
       </Link>
       <div className="site-blog-card__body">
-        {featured && <span className="site-blog-card__eyebrow">Featured</span>}
+        {chip && <span className="site-blog-card__eyebrow">{chip}</span>}
         <h2 className="site-blog-card__title">
           <Link to={permalink}>{title}</Link>
         </h2>
@@ -176,32 +149,8 @@ function BlogListPageMetadata({ metadata }: Props): React.ReactNode {
 
 export default function BlogListPage(props: Props): React.ReactNode {
   const { items, metadata } = props
-  const [query, setQuery] = useState('')
-  const normalizedQuery = query.trim().toLowerCase()
-  const isSearching = normalizedQuery.length > 0
-  const searchIndex = useBlogSearchIndex()
 
-  // Posts for the page Docusaurus rendered. Used verbatim when not searching, and as
-  // the fallback corpus if the site-wide index is ever unavailable.
   const pageEntries = useMemo(() => items.map(toEntry), [items])
-
-  const searchableEntries = searchIndex ?? pageEntries
-
-  const filteredEntries = useMemo(() => {
-    if (!isSearching) {
-      return pageEntries
-    }
-
-    return searchableEntries.filter((entry) => {
-      const haystack = [
-        entry.title,
-        entry.description,
-        entry.tags.join(' '),
-      ].join(' ').toLowerCase()
-
-      return haystack.includes(normalizedQuery)
-    })
-  }, [isSearching, normalizedQuery, pageEntries, searchableEntries])
 
   const tagSummaries = useMemo(() => {
     const counts = new Map<string, TagSummary>()
@@ -222,7 +171,7 @@ export default function BlogListPage(props: Props): React.ReactNode {
       .slice(0, 8)
   }, [items])
 
-  const [featuredEntry, ...remainingEntries] = filteredEntries
+  const [featuredEntry, ...remainingEntries] = pageEntries
 
   return (
     <HtmlClassNameProvider
@@ -232,49 +181,15 @@ export default function BlogListPage(props: Props): React.ReactNode {
       <BlogListPageStructuredData {...props} />
       <BlogLayout>
         <div className="site-blog-index">
-          <header className="site-blog-index__header">
-            <h1>Blog</h1>
-            <label className="site-blog-search">
-              <span aria-hidden="true" className="site-blog-search__icon">⌕</span>
-              <input
-                aria-label="Search blog posts"
-                onChange={event => setQuery(event.target.value)}
-                placeholder="Search blog posts..."
-                type="search"
-                value={query}
-              />
-            </label>
-            <p>
-              Deep dives into model routing, inference engineering, performance
-              breakthroughs, and the latest from the vLLM Semantic Router
-              community.
-            </p>
-          </header>
+          <div className="site-blog-index__header">
+            <PageHeader
+              description="Deep dives into model routing, inference engineering, performance breakthroughs, and the latest from the vLLM Semantic Router community."
+              eyebrow="Blog"
+              title="Engineering notes"
+            />
+          </div>
 
           <div className="site-blog-index__columns">
-            <section aria-live="polite" className="site-blog-index__feed">
-              {featuredEntry
-                ? (
-                    <>
-                      <BlogCard featured entry={featuredEntry} />
-                      {remainingEntries.length > 0 && (
-                        <div className="site-blog-card-grid">
-                          {remainingEntries.map(entry => (
-                            <BlogCard entry={entry} key={entry.permalink} />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )
-                : (
-                    <div className="site-blog-empty">
-                      <h2>No posts found</h2>
-                      <p>Try a different title, topic, or tag.</p>
-                    </div>
-                  )}
-              {!isSearching && <BlogListPaginator metadata={metadata} />}
-            </section>
-
             <aside className="site-blog-index__rail">
               <section>
                 <h2>Recent</h2>
@@ -311,6 +226,29 @@ export default function BlogListPage(props: Props): React.ReactNode {
                 </section>
               )}
             </aside>
+
+            <section aria-live="polite" className="site-blog-index__feed">
+              {featuredEntry
+                ? (
+                    <>
+                      <BlogCard featured entry={featuredEntry} />
+                      {remainingEntries.length > 0 && (
+                        <div className="site-blog-card-grid">
+                          {remainingEntries.map(entry => (
+                            <BlogCard entry={entry} key={entry.permalink} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                : (
+                    <div className="site-blog-empty">
+                      <h2>No posts found</h2>
+                      <p>Check back soon for new engineering notes.</p>
+                    </div>
+                  )}
+              <BlogListPaginator metadata={metadata} />
+            </section>
           </div>
         </div>
       </BlogLayout>

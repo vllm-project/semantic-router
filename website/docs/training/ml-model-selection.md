@@ -150,6 +150,7 @@ global:
     model_selection:
       ml:
         models_path: /models/selection
+        model_type: qwen3
         embedding_dim: 1024
         knn:
           k: 5
@@ -172,9 +173,13 @@ routing:
         - model: hosted-model
 ```
 
-The configured `embedding_dim` and online embedding model must match the
-training artifacts. Model names in `modelRefs` must match the names recorded in
-the benchmark data and the configured provider aliases.
+The configured `model_type` and `embedding_dim` select the embedding feature
+space used by the ML selectors and must match the training artifacts. Other
+selection algorithms and embedding consumers continue to use the default
+semantic embedding configuration. If `model_type` is omitted, ML selectors also
+use that default for backward compatibility. Model names in `modelRefs` must
+match the names recorded in the benchmark data and the configured provider
+aliases.
 
 ```bash
 vllm-sr validate --config config.yaml
@@ -216,7 +221,8 @@ selectors do not compensate for unrepresentative benchmark data.
 
 ## References
 
-- [Training Router Models](./training-overview)
+- [Model training overview](./training-overview)
+- [Current model catalog](./model-catalog)
 - [Model Performance Evaluation](./model-performance-eval)
 - [Training source and complete CLI options](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection/ml_model_selection)
 - [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540)

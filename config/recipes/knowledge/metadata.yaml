@@ -13,6 +13,7 @@ tags:
   - accuracy
   - cost
   - knowledge
+  - multimodal
   - mmlu
 links:
   source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/knowledge

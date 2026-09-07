@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"runtime/debug"
 
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -222,6 +224,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
@@ -236,9 +239,14 @@ func (r *OpenAIRouter) processRequestBody(
 ) error {
 	response, err := r.handleRequestBodyDispatch(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestBody failed: %v", err)
-		return err
+		var ok bool
+		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
+			logging.Errorf("handleRequestBody failed: %v", err)
+			return err
+		}
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.
@@ -250,6 +258,25 @@ func (r *OpenAIRouter) processRequestBody(
 		return err
 	}
 	return nil
+}
+
+// processBodyRoutingError converts a *llmprotocol.ProtocolError raised during
+// routing or dispatch into an immediate client-facing response. Capability
+// mismatches (a request requiring capabilities the chosen backend wire cannot
+// express, e.g. image output on chat completions) are client errors, not
+// server failures; every other error keeps the caller's generic path.
+func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
+	if err == nil {
+		return nil, false
+	}
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) {
+		return nil, false
+	}
+	if ctx != nil {
+		ctx.ImmediateProtocolError = protocolError
+	}
+	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(

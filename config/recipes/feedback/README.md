@@ -16,6 +16,7 @@ Clients use the `vllm-sr/auto` entrypoint.
 | Local | `qwen/qwen3.5-rocm` | Default answers and clarification. |
 | Specialist | `google/gemini-3.1-pro` | First recovery for general or coding failures. |
 | Premium | `openai/gpt5.4` | Persistent failures and verification-heavy recovery. |
+| Visual | `local/omni` | Image-bearing questions and follow-ups. |
 
 The aliases can be rebound to other models with similar cost and capability
 roles.
@@ -28,6 +29,7 @@ Use this recipe for multi-turn assistants where users may:
 - repeat or rephrase an unanswered question;
 - report that generated code still fails;
 - request a correction backed by verification; or
+- ask a question about an attached image; or
 - ask for clarification without requiring a more expensive model.
 
 It is not useful for stateless clients that do not send conversation history,
@@ -37,6 +39,7 @@ because repeated-question and prior-answer signals need earlier turns.
 
 | Conversation evidence | Behavior |
 | --- | --- |
+| Image content | Use the dedicated visual-language model. |
 | Clarification request | Stay on the local model and ask a focused follow-up. |
 | First general correction or re-ask | Move to the specialist recovery lane. |
 | First coding failure | Use the specialist with reasoning enabled. |
@@ -49,7 +52,7 @@ verification evidence take priority over the ordinary fallback.
 
 ## Requirements
 
-- Reachable OpenAI-compatible endpoints for the three configured aliases.
+- Reachable OpenAI-compatible endpoints for the four configured aliases.
 - Conversation history in the request for re-ask and persistence detection.
 - Feedback, fact-check, domain, context, and keyword signals configured in
   [`config.yaml`](config.yaml).
@@ -69,9 +72,12 @@ and history retention before using the recipe with sensitive conversations.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/feedback/config.yaml
-vllm-sr serve --config config/recipes/feedback/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Feedback Routing** in
+**Recipes**, assign each recovery lane, and publish the resulting
+Mixture-of-Model Entrypoint.
 
 ## Evaluation
 

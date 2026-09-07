@@ -16,7 +16,6 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"router_replay":       emitRouterReplayPluginConfig,
 	"memory":              emitMemoryPluginConfig,
 	"hallucination":       emitHallucinationPluginConfig,
-	"image_gen":           emitImageGenPluginConfig,
 	"fast_response":       emitFastResponsePluginConfig,
 	"request_params":      emitRequestParamsPluginConfig,
 	"tool_selection":      emitToolSelectionPluginConfig,
@@ -138,19 +137,6 @@ func emitHallucinationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	}
 	if cfg.IncludeHallucinationDetails {
 		fmt.Fprintf(sb, "    include_hallucination_details: true\n")
-	}
-}
-
-func emitImageGenPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
-	cfg, ok := decodePluginConfig[config.ImageGenPluginConfig](p)
-	if !ok {
-		return
-	}
-	if cfg.Enabled {
-		fmt.Fprintf(sb, "    enabled: true\n")
-	}
-	if cfg.Backend != "" {
-		fmt.Fprintf(sb, "    backend: %q\n", cfg.Backend)
 	}
 }
 

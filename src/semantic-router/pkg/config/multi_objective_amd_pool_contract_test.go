@@ -7,9 +7,10 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 )
 
-func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
+func TestMultiObjectiveRecipePreservesAMDModelPool(t *testing.T) {
 	const asset = "config/recipes/multi-objective/config.yaml"
 	expectedEndpoints := map[string][]string{
+		"local/omni":                       {"vllm-omni:8000"},
 		"local/qwen3.5-122b-frontier":      {"vllm:8000"},
 		"local/qwen3.5-9b-economy":         {"vllm-qwen35-economy:8000"},
 		"local/qwen3.5-9b-economy-replica": {"vllm-qwen35-economy-replica:8000"},
@@ -55,8 +56,8 @@ func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 
 	slices.Sort(physicalEndpoints)
 	physicalEndpoints = slices.Compact(physicalEndpoints)
-	if len(physicalEndpoints) != 7 {
-		t.Fatalf("expected seven serving endpoints across GPUs 0-6, got %v", physicalEndpoints)
+	if len(physicalEndpoints) != 8 {
+		t.Fatalf("expected eight serving endpoints, got %v", physicalEndpoints)
 	}
 	if got := recipe.Global.Integrations.Looper.Endpoint; got != "http://vllm-sr-envoy-container:8899/v1/chat/completions" {
 		t.Fatalf("Looper endpoint must re-enter Envoy for cross-backend orchestration, got %q", got)

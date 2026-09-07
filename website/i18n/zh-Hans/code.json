@@ -322,7 +322,6 @@
     "message": "标签",
     "description": "The title of the tag list page"
   },
-
   "homepage.hero.intelligentRouting": {
     "message": "智能路由"
   },
@@ -426,7 +425,7 @@
     "message": "架构"
   },
   "homepage.capabilities.heading": {
-    "message": "统一异构推理。"
+    "message": "统一异构推理"
   },
   "homepage.capabilities.description": {
     "message": "在四个维度上统一碎片化的模型生态。"
@@ -479,9 +478,6 @@
   "homepage.capabilities.preference.value": {
     "message": "将偏好表达为路由策略。"
   },
-  "homepage.capabilities.docsCta": {
-    "message": "了解工作原理"
-  },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
   },
@@ -522,7 +518,7 @@
     "message": "信号智能"
   },
   "homepage.aiTech.title": {
-    "message": "生成之前，先理解。"
+    "message": "生成之前，先理解"
   },
   "homepage.aiTech.description": {
     "message": "专用编码器在选择生成模型之前，先提取意图、上下文、安全与模态信号。"
@@ -590,26 +586,11 @@
   "homepage.install.label": {
     "message": "快速上手"
   },
-  "homepage.install.meta": {
-    "message": "只保留一条官方支持的本地启动路径：复制安装命令，执行后即可进入控制台。"
-  },
   "homepage.install.title.human": {
-    "message": "一条命令，本地跑起来。"
-  },
-  "homepage.install.description.human": {
-    "message": "首跑路径收敛为一个安装脚本，负责在 macOS 和 Linux 上配置 CLI 与本地服务流程。"
-  },
-  "homepage.install.frameLabel.human": {
-    "message": "一键安装"
-  },
-  "homepage.install.footer.human": {
-    "message": "默认安装到 ~/.local/share/vllm-sr，写入 ~/.local/bin/vllm-sr；Windows 仍按文档中的手动 pip 方式安装。"
+    "message": "一条命令，本地跑起来"
   },
   "homepage.install.primaryCta": {
     "message": "查看完整安装指南"
-  },
-  "homepage.install.copy.idle": {
-    "message": "复制命令"
   },
   "homepage.install.copy.copied": {
     "message": "已复制"
@@ -621,7 +602,7 @@
     "message": "研究"
   },
   "homepage.researchCarousel.title": {
-    "message": "这些论文，构成了路由器的底层思路。"
+    "message": "这些论文，构成了路由器的底层思路"
   },
   "homepage.researchCarousel.subtitle": {
     "message": "从安全、多模态到编排与系统设计，这些研究线索持续塑造 vLLM Semantic Router 的演进方向。"
@@ -642,7 +623,7 @@
     "message": "文档"
   },
   "homepage.band.docs.title": {
-    "message": "架构、配置与运行方式，都写清楚了。"
+    "message": "架构、配置与运行方式，都写清楚了"
   },
   "homepage.band.docs.text": {
     "message": "从安装、配置到训练和运维，整套路径都收进一张连贯的文档图谱里。"
@@ -654,7 +635,7 @@
     "message": "社区"
   },
   "homepage.band.community.title": {
-    "message": "研究者和构建者，在同一条反馈回路里。"
+    "message": "研究者和构建者，在同一条反馈回路里"
   },
   "homepage.band.community.text": {
     "message": "论文、工作组和贡献者围绕同一套系统公开协作、持续迭代。"
@@ -666,7 +647,7 @@
     "message": "路由蓝图"
   },
   "homepage.paperFigures.title": {
-    "message": "从信号到模型路径。"
+    "message": "从信号到模型路径"
   },
   "homepage.paperFigures.description": {
     "message": "探索架构如何提取信号、组合决策并执行选定的模型路径。"
@@ -1343,10 +1324,13 @@
     "message": "贡献流程"
   },
   "contributing.process.step1.title": {
-    "message": "创建 Issue"
+    "message": "认领已接受的工作"
   },
   "contributing.process.step1.desc": {
-    "message": "首先与社区讨论你的想法或错误报告。"
+    "message": "新报告会从 needs-acceptance 进入 accepted，再进入 ready-for-dev；请在实施前发表评论认领 ready-for-dev 工作。"
+  },
+  "contributing.process.step1.docs": {
+    "message": "社区文档"
   },
   "contributing.process.step2.title": {
     "message": "Fork & 分支"
@@ -1445,10 +1429,10 @@
     "message": "从上面的本地运行方法可以看出，过程非常麻烦和复杂。因此，我们提供了基于 Docker 或 Podman 的运行方法。无需安装各种依赖软件；你只需要一个容器运行时。"
   },
   "contributing.docker.tips.1": {
-    "message": "虽然 Docker 可以帮助避免在本地安装过多的检测工具，但这并不意味着它会在提交过程中自动执行。因此，提交时，你可以使用"
+    "message": "Docker 不会自动运行检查。请使用以下命令签署提交"
   },
   "contributing.docker.tips.2": {
-    "message": "来跳过检测。"
+    "message": "并让 pre-commit 钩子正常运行。"
   },
   "contributing.docker.step1.title": {
     "message": "确保 Docker/Podman 已安装"
@@ -1515,9 +1499,6 @@
   },
   "team.track.academic.description": {
     "message": "围绕项目开展前沿学术研究，并与工程团队紧密协作，推动研究成果转化为项目能力。"
-  },
-  "homepage.community.team.subtitle": {
-    "message": "维护者与活跃提交者共同推进研究、基础设施与模型系统建设。"
   },
   "team.committers.title": {
     "message": "提交者"
@@ -1606,20 +1587,20 @@
   "team.members.YankaiChen.expertise.mining": {
     "message": "知识挖掘"
   },
-  "team.members.FuyuanLyu.role": {
-    "message": "PhD Candidate @ McGill University / Mila"
+  "team.members.HaolunWu.role": {
+    "message": "加拿大总督学术金奖 · McGill / Mila 博士 · Stanford 访问学者"
   },
-  "team.members.FuyuanLyu.bio": {
-    "message": "研究方向包括数据中心 AI、自动特征选择，以及面向深度学习和基础模型的自动标注。"
+  "team.members.HaolunWu.bio": {
+    "message": "研究方向覆盖可信 AI 和从反馈中学习，拥有 McGill、Mila 与 Stanford 的学术经历。"
   },
-  "team.members.FuyuanLyu.expertise.data": {
-    "message": "数据中心 AI"
+  "team.members.HaolunWu.expertise.feedback": {
+    "message": "从反馈中学习"
   },
-  "team.members.FuyuanLyu.expertise.features": {
-    "message": "自动特征选择"
+  "team.members.HaolunWu.expertise.trustworthy": {
+    "message": "可信 AI"
   },
-  "team.members.FuyuanLyu.expertise.labeling": {
-    "message": "自动标注"
+  "team.members.HaolunWu.expertise.alignment": {
+    "message": "AI 对齐"
   },
   "team.members.SteveLiu.role": {
     "message": "@MBZUAI / McGill / Mila"
@@ -1652,7 +1633,7 @@
     "message": "@AMD"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "LLM routing builder at vLLM。"
+    "message": "Building the Mixture-of-Models for the next era of computing."
   },
   "team.members.XunzhuoLiu.expertise.routing": {
     "message": "LLM 路由"
@@ -1700,10 +1681,10 @@
     "message": "Red Hat Data and AI SDE，GSoC 2025 参与者，AsyncAPI Steering Committee member。"
   },
   "team.members.siloteemu.role": {
-    "message": "开源贡献者"
+    "message": "SMTS，Silo AI"
   },
   "team.members.siloteemu.bio": {
-    "message": "GitHub 开源贡献者。"
+    "message": "vLLM Semantic Router 开源贡献者。"
   },
   "team.members.topNewContributor.role": {
     "message": "Release Window Committer"
@@ -2473,7 +2454,6 @@
   "homepage.meta.socialTitle": {
     "message": "构建你的 Mixture-of-Models | vLLM Semantic Router"
   },
-
   "homepage.whereItLives.title": {
     "message": "它的位置"
   },
@@ -2511,7 +2491,7 @@
     "message": "贡献者"
   },
   "teamCarousel.title": {
-    "message": "在开放协作中构建。"
+    "message": "在开放协作中构建"
   },
   "teamCarousel.subtitle": {
     "message": "来自研究、基础设施与模型系统的维护者，共同塑造这个项目。"
@@ -2529,7 +2509,7 @@
     "message": "生态"
   },
   "acknowledgements.title": {
-    "message": "由开源共同构建。"
+    "message": "由开源共同构建"
   },
   "acknowledgements.subtitle": {
     "message": "支撑 vLLM Semantic Router 的开源库与平台。"
@@ -2544,7 +2524,7 @@
     "message": "行业声音"
   },
   "homepage.testimonials.title": {
-    "message": "这场转变已经开始。"
+    "message": "这场转变已经开始"
   },
   "homepage.testimonials.source": {
     "message": "来源"
@@ -2553,7 +2533,7 @@
     "message": "开始构建"
   },
   "homepage.finalCta.title": {
-    "message": "组合你的 Mixture-of-Models。"
+    "message": "组合你的 Mixture-of-Models"
   },
   "homepage.finalCta.description": {
     "message": "用信号、偏好与策略塑造模型路径。"
@@ -2616,7 +2596,7 @@
     "message": "更新于"
   },
   "community.contributors.method": {
-    "message": "贡献者包括产生非合并提交或有效审阅的人。首次提交作者在更早的仓库历史中没有提交记录。审阅贡献按审阅提交日期归类；对每个最终合并的拉取请求，每位贡献者最多计一次。"
+    "message": "贡献者包括符合条件的提交作者和审阅者。“新贡献者”指首次向仓库提交；每个已合并 PR 对每位审阅者最多计一次。"
   },
   "community.contributors.sort.label": {
     "message": "排序"
@@ -2691,25 +2671,25 @@
     "message": "合计"
   },
   "community.contributors.range.v03ToNow.label": {
-    "message": "v0.3 -> 当前"
+    "message": "v0.3 → 当前"
   },
   "community.contributors.range.v03ToNow.caption": {
     "message": "自 v0.3 起"
   },
   "community.contributors.range.v02ToV03.label": {
-    "message": "v0.2 -> v0.3"
+    "message": "v0.2 → v0.3"
   },
   "community.contributors.range.v02ToV03.caption": {
     "message": "两个版本之间"
   },
   "community.contributors.range.v01ToV02.label": {
-    "message": "v0.1 -> v0.2"
+    "message": "v0.1 → v0.2"
   },
   "community.contributors.range.v01ToV02.caption": {
     "message": "两个版本之间"
   },
   "community.contributors.range.v0ToV01.label": {
-    "message": "v0 -> v0.1"
+    "message": "v0 → v0.1"
   },
   "community.contributors.range.v0ToV01.caption": {
     "message": "项目起步阶段"

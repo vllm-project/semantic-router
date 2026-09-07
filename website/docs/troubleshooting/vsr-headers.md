@@ -108,6 +108,7 @@ Matched signal headers contain comma-separated rule names. They require
 | `x-vsr-matched-kb` | `kb` |
 | `x-vsr-matched-conversation` | `conversation` |
 | `x-vsr-matched-event` | `event` |
+| `x-vsr-matched-input-modality` | `input_modality` |
 
 ## Projection headers
 

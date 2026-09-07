@@ -38,17 +38,19 @@ type RouterConfigHashes struct {
 	ActivationStatus     string `json:"activation_status,omitempty"`
 }
 
-// ValidationProvenance binds a probe result to its immutable five-file package
-// and records Router identity on both sides of the Eval call. Before and After
-// are retained even when verification fails so a caller can distinguish a
-// missing contract from a mid-validation activation.
+// ValidationProvenance identifies the immutable five-file package used to
+// materialize a probe and records Router identity on both sides of the Eval
+// call. Package identity and Router runtime identity are deliberately separate:
+// the active runtime also contains provider connections, Entrypoints, and model
+// assignments that do not belong in a reusable, model-free Recipe package.
+// Before and After are retained even when verification fails so a caller can
+// distinguish a missing contract from a mid-validation activation.
 type ValidationProvenance struct {
-	Status            ProvenanceVerificationStatus `json:"status"`
-	Reason            string                       `json:"reason,omitempty"`
-	PackageHash       string                       `json:"package_hash"`
-	PackageConfigHash string                       `json:"package_config_hash"`
-	Before            RouterConfigHashes           `json:"before"`
-	After             RouterConfigHashes           `json:"after"`
+	Status      ProvenanceVerificationStatus `json:"status"`
+	Reason      string                       `json:"reason,omitempty"`
+	PackageHash string                       `json:"package_hash"`
+	Before      RouterConfigHashes           `json:"before"`
+	After       RouterConfigHashes           `json:"after"`
 }
 
 // ConfigHashObserver is implemented by Router clients that support the
@@ -136,22 +138,18 @@ func noRedirectHTTPClient(configured *http.Client) *http.Client {
 }
 
 type validationProvenanceSession struct {
-	result      ValidationProvenance
-	observer    ConfigHashObserver
-	localBefore string
-	localErr    error
-	beforeErr   error
+	result    ValidationProvenance
+	observer  ConfigHashObserver
+	beforeErr error
 }
 
 func (s *Service) beginValidationProvenance(ctx context.Context, snapshot *snapshot) validationProvenanceSession {
 	session := validationProvenanceSession{
 		result: ValidationProvenance{
-			Status:            ProvenanceUnverified,
-			PackageHash:       snapshot.recipeDigest,
-			PackageConfigHash: digestBytes(snapshot.files["config"]),
+			Status:      ProvenanceUnverified,
+			PackageHash: snapshot.recipeDigest,
 		},
 	}
-	session.localBefore, session.localErr = s.boundRuntimeConfigDigest(snapshot.files["config"])
 	observer, supported := s.evaluator.(ConfigHashObserver)
 	if !supported {
 		return session
@@ -163,18 +161,14 @@ func (s *Service) beginValidationProvenance(ctx context.Context, snapshot *snaps
 
 func (s *Service) finishValidationProvenance(
 	ctx context.Context,
-	snapshot *snapshot,
 	session validationProvenanceSession,
 ) ValidationProvenance {
 	var afterErr error
 	if session.observer != nil {
 		session.result.After, afterErr = observeConfigHashBounded(ctx, session.observer)
 	}
-	localAfter, localAfterErr := s.boundRuntimeConfigDigest(snapshot.files["config"])
 	reason := provenanceVerificationReason(
 		session,
-		localAfter,
-		localAfterErr,
 		afterErr,
 	)
 	if reason == "" {
@@ -199,8 +193,6 @@ func observeConfigHashBounded(ctx context.Context, observer ConfigHashObserver) 
 
 func provenanceVerificationReason(
 	session validationProvenanceSession,
-	localAfter string,
-	localAfterErr error,
 	afterErr error,
 ) string {
 	checks := []struct {
@@ -210,13 +202,8 @@ func provenanceVerificationReason(
 		{session.observer == nil, "config_hash_unsupported"},
 		{session.beforeErr != nil, "before_observation_unavailable"},
 		{afterErr != nil, "after_observation_unavailable"},
-		{session.localErr != nil, "package_runtime_binding_unavailable_before_validation"},
-		{localAfterErr != nil, "package_runtime_binding_unavailable_after_validation"},
-		{session.localBefore != localAfter, "dashboard_runtime_config_changed_during_validation"},
 		{session.result.Before != session.result.After, "router_config_changed_during_validation"},
 		{incompleteConfigHashes(session.result.Before), "router_config_hashes_incomplete"},
-		{session.result.Before.SourceConfigHash != session.result.PackageConfigHash, "router_source_hash_does_not_match_package_config"},
-		{session.result.Before.GeneratedRuntimeHash != session.localBefore, "router_runtime_hash_does_not_match_dashboard_runtime"},
 		{!strings.EqualFold(session.result.Before.ActivationStatus, "active"), "router_runtime_not_active"},
 		{session.result.Before.GeneratedRuntimeHash != session.result.Before.ActiveRuntimeHash, "router_runtime_hash_does_not_match_active_hash"},
 	}

@@ -11,18 +11,7 @@ import (
 )
 
 func TestDashboardE2EStagesWritableRuntimeConfig(t *testing.T) {
-	raw, err := os.ReadFile("dashboard-deployment.yaml")
-	if err != nil {
-		t.Fatalf("read dashboard deployment: %v", err)
-	}
-	jsonDocument, err := utilyaml.ToJSON(raw)
-	if err != nil {
-		t.Fatalf("convert dashboard deployment to JSON: %v", err)
-	}
-	var deployment appsv1.Deployment
-	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
-		t.Fatalf("decode dashboard deployment: %v", err)
-	}
+	deployment := loadDashboardDeployment(t)
 
 	initContainer := requireContainer(t, deployment.Spec.Template.Spec.InitContainers, "stage-dashboard-runtime-config")
 	requireVolumeMount(t, initContainer.VolumeMounts, "router-config-seed", true)
@@ -40,6 +29,38 @@ func TestDashboardE2EStagesWritableRuntimeConfig(t *testing.T) {
 		}
 	}
 	t.Fatal("router-config-runtime must be an emptyDir")
+}
+
+func TestDashboardE2EPersistsPrivateEvaluationStore(t *testing.T) {
+	deployment := loadDashboardDeployment(t)
+	dashboard := requireContainer(t, deployment.Spec.Template.Spec.Containers, "dashboard")
+	requireVolumeMount(t, dashboard.VolumeMounts, "dashboard-data", false)
+	if value := envValue(dashboard.Env, "EVALUATION_DATA_DIR"); value != "/tmp/vllm-sr-dashboard/evaluation" {
+		t.Fatalf("EVALUATION_DATA_DIR = %q, want a private directory on dashboard-data", value)
+	}
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.Name == "dashboard-data" && volume.PersistentVolumeClaim != nil {
+			return
+		}
+	}
+	t.Fatal("dashboard-data must be a persistent volume claim")
+}
+
+func loadDashboardDeployment(t *testing.T) appsv1.Deployment {
+	t.Helper()
+	raw, err := os.ReadFile("dashboard-deployment.yaml")
+	if err != nil {
+		t.Fatalf("read dashboard deployment: %v", err)
+	}
+	jsonDocument, err := utilyaml.ToJSON(raw)
+	if err != nil {
+		t.Fatalf("convert dashboard deployment to JSON: %v", err)
+	}
+	var deployment appsv1.Deployment
+	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
+		t.Fatalf("decode dashboard deployment: %v", err)
+	}
+	return deployment
 }
 
 func requireContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {

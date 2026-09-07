@@ -2,16 +2,10 @@ import { expect, test } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
-test('runs a real provider-model query and renders pending, verified, and retry states', async ({
+test('lets an operator run a real provider-model query and renders pending, verified, and retry states', async ({
   page,
 }) => {
-  await mockAuthenticatedAppShell(page, {
-    settings: {
-      readonlyMode: true,
-      serverReadonly: true,
-      runtimeConfigWritable: false,
-    },
-  })
+  await mockAuthenticatedAppShell(page)
   await page.route('**/api/router/config/all', async (route) => {
     await route.fulfill({
       status: 200,
@@ -95,27 +89,25 @@ test('runs a real provider-model query and renders pending, verified, and retry 
 
   await page.goto('/config/models')
   const verifyButton = page.getByRole('button', {
-    name: 'Verify logical-model with a real inference query',
+    name: 'Check logical-model with a real inference query',
   })
   await expect(verifyButton).toBeEnabled()
   await verifyButton.click()
   await firstVerificationRequest
-  await expect(page.getByText('Sending test query')).toBeVisible()
-  await expect(page.getByRole('button', { name: /Verifying… logical-model/ })).toBeDisabled()
+  await expect(page.getByText('Checking', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Checking… logical-model/ })).toBeDisabled()
 
   releaseFirstVerification()
-  await expect(page.getByText('Live verified')).toBeVisible()
-  await expect(page.getByText('OK from provider')).toBeVisible()
-  await expect(page.getByText(/openai · 18 ms/)).toBeVisible()
+  await expect(page.getByText('Live', { exact: true })).toBeVisible()
   expect(requestBodies).toEqual([{ model: 'logical-model' }])
 
   await page
-    .getByRole('button', { name: 'Verify again logical-model with a real inference query' })
+    .getByRole('button', { name: 'Check again logical-model with a real inference query' })
     .click()
-  await expect(page.getByText('Verification failed')).toBeVisible()
+  await expect(page.getByText('Unavailable', { exact: true })).toBeVisible()
   await expect(page.getByText('Provider inference returned HTTP 503.')).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Retry logical-model with a real inference query' }),
+    page.getByRole('button', { name: 'Check again logical-model with a real inference query' }),
   ).toBeEnabled()
   expect(requestBodies).toEqual([{ model: 'logical-model' }, { model: 'logical-model' }])
 })

@@ -117,25 +117,16 @@ backends must already be running and available under the configured aliases.
 Tool execution remains the client's responsibility, and “local” privacy still
 depends on the deployment's network, backends, logs, caches, and stores.
 
-Inspect the installed Model Card and requirements:
+Open **Models** in the Dashboard to connect and verify physical inference
+endpoints. Then choose a maintained **Recipe**, assign one or more connected
+models to each decision, and publish a **Mixture-of-Model** entrypoint. The
+Dashboard keeps backend credentials out of the Recipe while showing the
+resulting topology before it goes live.
+
+Start or resume the stack with one command:
 
 ```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
-```
-
-Serve one objective, or expose several over the same pool:
-
-```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
-```
-
-To change the pool or policy, fork the asset into a user-owned configuration:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-vllm-sr model validate mom-v1.yaml
+vllm-sr serve
 ```
 
 Read the full

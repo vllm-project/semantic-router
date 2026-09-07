@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedSession } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedSession } from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const setupState = {
@@ -12,25 +12,14 @@ const setupState = {
   canActivate: true,
 }
 
-const serverReadonlySettings = {
+const serverReadonlySettings = dashboardSettingsResponse({
   readonlyMode: true,
   serverReadonly: true,
   runtimeConfigWritable: false,
   recipeStoreWritable: false,
-  setupMode: false,
-  platform: '',
-  envoyUrl: '',
-}
+})
 
-const writableSettings = {
-  readonlyMode: false,
-  serverReadonly: false,
-  runtimeConfigWritable: true,
-  recipeStoreWritable: true,
-  setupMode: false,
-  platform: '',
-  envoyUrl: '',
-}
+const writableSettings = dashboardSettingsResponse()
 
 const openClawTeam = {
   id: 'team-alpha',
@@ -460,7 +449,7 @@ test.describe('Readonly OpenClaw', () => {
   }) => {
     await mockReadonlyOpenClaw(page)
 
-    await page.goto('/clawos')
+    await page.goto('/openclaw')
 
     await page.getByRole('tab', { name: /Claw Team/ }).click()
     await expect(page.getByRole('button', { name: 'New Team' })).toHaveCount(0)
@@ -471,9 +460,9 @@ test.describe('Readonly OpenClaw', () => {
     await expect(page.getByRole('button', { name: 'New Worker' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Status' }).first()).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Runtime' }).first()).toBeEnabled()
 
-    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
+    await page.getByRole('tab', { name: /Runtime/ }).click()
     await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0)

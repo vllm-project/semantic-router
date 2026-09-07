@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ChangeEvent,
@@ -79,6 +80,7 @@ export default function ChatComponentInputBar({
   showClawRoom,
 }: ChatComponentInputBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const canSend = Boolean(inputValue.trim()) || attachments.length > 0
   const [isComposing, setIsComposing] = useState(false)
   const {
@@ -93,6 +95,26 @@ export default function ChatComponentInputBar({
       stopListening()
     }
   }, [isListening, stopListening, voiceInputDisabled])
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    textarea.style.height = 'auto'
+    const maxHeight = 220
+    const nextHeight = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = `${Math.max(nextHeight, 36)}px`
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+  }, [inputValue])
+
+  const setTextareaRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      textareaRef.current = node
+      if (typeof inputRef === 'function') inputRef(node)
+      else if (inputRef) (inputRef as { current: HTMLTextAreaElement | null }).current = node
+    },
+    [inputRef],
+  )
 
   const handleChangeInput = useCallback(
     (value: string) => {
@@ -189,7 +211,7 @@ export default function ChatComponentInputBar({
           </div>
         ) : null}
         <textarea
-          ref={inputRef}
+          ref={setTextareaRef}
           value={inputValue}
           onChange={(event) => handleChangeInput(event.target.value)}
           onCompositionStart={() => setIsComposing(true)}

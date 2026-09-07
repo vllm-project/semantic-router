@@ -1,15 +1,25 @@
 import pytest
-from cli.algorithms import AlgorithmConfig, ReMoMAlgorithmConfig
+from cli.algorithms import (
+    AlgorithmConfig,
+    FusionAlgorithmConfig,
+    ReMoMAlgorithmConfig,
+    WorkflowPlannerConfig,
+    WorkflowsAlgorithmConfig,
+)
 from cli.models import (
     Condition,
     DecisionAdaptationsConfig,
     Domain,
     Entrypoint,
     KeywordSignal,
+    LoRAAdapter,
+    ModelEvaluation,
     ProjectionMapping,
     ProjectionMappingOutput,
     ProjectionScore,
     ProjectionScoreInput,
+    Reasoning,
+    RoutingModel,
     UserConfig,
 )
 from cli.validator import validate_user_config
@@ -21,11 +31,13 @@ def recipe_config(*, recipe_model: str = "model-a", recipe_name: str = "private"
         {
             "version": "v0.3",
             "providers": {
-                "defaults": {"default_model": "model-a"},
+                "defaults": {"model": "model-a"},
                 "models": [
                     {
                         "name": "model-a",
-                        "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
                     }
                 ],
             },
@@ -69,6 +81,235 @@ def test_recipe_model_references_are_validated():
     errors = validate_user_config(recipe_config(recipe_model="missing-model"))
 
     assert any("unknown model 'missing-model'" in error.message for error in errors)
+
+
+def test_catalog_model_cannot_override_reasoning_binding():
+    config = recipe_config()
+    config.providers.models[0].catalog = "vllm-sr/mom-v1-lite"
+    config.providers.models[0].reasoning = Reasoning(family="qwen3")
+
+    errors = validate_user_config(config)
+
+    assert any(
+        error.field == "providers.models.model-a.reasoning"
+        and "inherits reasoning" in error.message
+        for error in errors
+    )
+
+
+def test_inline_reasoning_allows_an_implicit_mode_contract():
+    reasoning = Reasoning(
+        type="chat_template_kwargs",
+        parameter="enable_thinking",
+    )
+
+    assert reasoning.modes == []
+    assert reasoning.default_mode is None
+
+
+def test_inline_reasoning_keeps_disable_sentinel_separate_from_effort_levels():
+    reasoning = Reasoning(
+        type="reasoning_effort",
+        parameter="reasoning_effort",
+        levels=["low", "high"],
+        default="high",
+        disabled="none",
+        modes=["enabled", "disabled"],
+        default_mode="enabled",
+    )
+
+    assert reasoning.disabled == "none"
+    assert reasoning.levels == ["low", "high"]
+
+
+def test_inline_effort_flags_ignore_a_disabled_sentinel_level():
+    reasoning = Reasoning(
+        type="reasoning_effort",
+        parameter="reasoning_effort",
+        activation_parameter="enable_thinking",
+        effort_flags={"low": "low_effort", "medium": "medium_effort"},
+        levels=["none", "low", "medium", "high"],
+        default="high",
+        disabled="none",
+        modes=["enabled", "disabled"],
+        default_mode="enabled",
+    )
+
+    assert reasoning.effort_flags == {
+        "low": "low_effort",
+        "medium": "medium_effort",
+    }
+
+
+def test_declared_lora_alias_can_have_metadata_only_model_card():
+    config = recipe_config()
+    config.routing.model_cards[0].loras = [LoRAAdapter(name="general-expert")]
+    config.routing.model_cards.append(RoutingModel(name="general-expert"))
+
+    errors = validate_user_config(config)
+
+    assert not any(
+        error.field == "routing.modelCards.general-expert.name" for error in errors
+    )
+
+
+def test_routing_only_model_card_can_supply_default_model():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {"defaults": {"model": "private-model"}},
+            "routing": {
+                "modelCards": [
+                    {
+                        "name": "private-model",
+                        "description": "Metadata-only routing model",
+                    }
+                ]
+            },
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
+
+
+def test_routing_only_decision_refs_remain_external_gateway_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {},
+            "routing": {
+                "modelCards": [{"name": "private-model"}],
+                "decisions": [
+                    {
+                        "name": "external-route",
+                        "priority": 100,
+                        "modelRefs": [{"model": "private-model"}],
+                    }
+                ],
+            },
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
+
+
+def test_blank_routing_model_card_identity_is_rejected():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {},
+            "routing": {"modelCards": [{"name": " "}]},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "routing.modelCards[0].name"
+        and error.message == "Model card name cannot be empty"
+        for error in errors
+    )
+
+
+def test_routing_only_exception_does_not_allow_unbound_card_with_provider_models():
+    config = recipe_config()
+    config.routing.model_cards.append(RoutingModel(name="unbound-metadata"))
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "routing.modelCards.unbound-metadata.name" for error in errors
+    )
+
+
+def test_empty_provider_model_requires_backend_or_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {"models": [{"name": "bare"}]},
+            "routing": {},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "providers.models.bare"
+        and "must define backend_refs or model metadata" in error.message
+        for error in errors
+    )
+
+
+def test_empty_pricing_block_does_not_count_as_provider_model_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {"models": [{"name": "bare", "pricing": {}}]},
+            "routing": {},
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == "providers.models.bare"
+        and "must define backend_refs or model metadata" in error.message
+        for error in errors
+    )
+
+
+def test_explicit_zero_pricing_counts_as_provider_model_metadata():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "listeners": [],
+            "providers": {
+                "models": [
+                    {
+                        "name": "free-model",
+                        "pricing": {
+                            "prompt_per_1m": 0,
+                            "completion_per_1m": 0,
+                        },
+                    }
+                ]
+            },
+            "routing": {},
+        }
+    )
+
+    assert validate_user_config(config, log_summary=False) == []
+
+
+def test_operator_evaluation_requires_versioned_identity_and_finite_metrics():
+    with pytest.raises(PydanticValidationError, match="string_pattern_mismatch"):
+        ModelEvaluation(benchmark="support", metrics={"score": 0.8})
+    with pytest.raises(PydanticValidationError, match="named finite numbers"):
+        ModelEvaluation(
+            benchmark="acme/support@1",
+            metrics={"score": float("nan")},
+        )
+
+
+def test_operator_evaluation_preserves_profile_and_reasoning_effort():
+    evaluation = ModelEvaluation(
+        benchmark="acme/support@1.0.0",
+        benchmark_profile="published-standard",
+        reasoning_effort="high",
+        metrics={"score": 0.82},
+    )
+
+    assert evaluation.benchmark_profile == "published-standard"
+    assert evaluation.reasoning_effort == "high"
+
+
+def test_omitted_provider_defaults_do_not_invent_reasoning_effort():
+    config = UserConfig.model_validate({"version": "v0.3"})
+
+    assert config.providers.defaults.reasoning_effort is None
+    assert config.providers.defaults.model_dump(exclude_none=True) == {}
 
 
 def test_recipe_decision_tier_survives_schema_parse():
@@ -139,6 +380,35 @@ def test_recipe_remom_synthesis_model_must_be_in_model_refs():
     errors = validate_user_config(config)
 
     assert any("synthesis_model 'missing-model'" in error.message for error in errors)
+
+
+def test_recipe_fusion_rejects_quorum_above_panel_size():
+    config = recipe_config()
+    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+        type="fusion",
+        fusion=FusionAlgorithmConfig(min_successful_responses=2),
+    )
+
+    errors = validate_user_config(config)
+
+    assert any("exceeds panel size 1" in error.message for error in errors)
+
+
+def test_recipe_workflow_rejects_quorum_above_parallelism():
+    config = recipe_config()
+    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+        type="workflows",
+        workflows=WorkflowsAlgorithmConfig(
+            mode="dynamic",
+            planner=WorkflowPlannerConfig(model="model-a"),
+            max_parallel=1,
+            min_successful_responses=2,
+        ),
+    )
+
+    errors = validate_user_config(config)
+
+    assert any("exceeds max_parallel=1" in error.message for error in errors)
 
 
 def test_entrypoint_identifiers_are_trimmed_and_deduplicated():

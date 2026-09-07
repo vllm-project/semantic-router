@@ -116,15 +116,21 @@ func TestReloadWarmupFailurePreservesPublishedSessionStore(t *testing.T) {
 		sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	})
 
-	oldRouter := &OpenAIRouter{
-		Config:                  &config.RouterConfig{},
-		routerSessionStateStore: activeStoreSlot,
-	}
+	activeResources := newResourceScope()
+	registerRouterSessionStore(activeResources, activeStoreSlot)
+	oldRouter := (&routerComponents{
+		cfg:                &config.RouterConfig{},
+		resources:          activeResources,
+		routerSessionStore: activeStoreSlot,
+	}).buildRouter()
 	candidateCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	candidateRouter := &OpenAIRouter{
-		Config:                  candidateCfg,
-		routerSessionStateStore: candidateStoreSlot,
-	}
+	candidateResources := newResourceScope()
+	registerRouterSessionStore(candidateResources, candidateStoreSlot)
+	candidateRouter := (&routerComponents{
+		cfg:                candidateCfg,
+		resources:          candidateResources,
+		routerSessionStore: candidateStoreSlot,
+	}).buildRouter()
 	server := &Server{
 		service: NewRouterService(oldRouter),
 	}

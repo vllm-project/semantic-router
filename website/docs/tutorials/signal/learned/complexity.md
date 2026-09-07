@@ -31,7 +31,7 @@ routing:
   signals:
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
           candidates:
@@ -44,6 +44,27 @@ routing:
             - quick summary
             - simple rewrite
 ```
+
+`threshold` is a margin, not a similarity cutoff. The router scores the request
+against the `hard` and the `easy` candidate banks, then compares the two:
+
+```text
+signal = hard_bank_score - easy_bank_score
+
+signal >  threshold  -> hard
+signal < -threshold  -> easy
+otherwise            -> medium
+```
+
+Because the two banks can assign similar baseline scores, subtracting their
+scores may produce a margin much smaller than either individual score. In one
+calibration run using the candidate banks above, the largest observed absolute
+margin across eight prompts was `0.197`; none reached the `hard` or `easy` band
+with a threshold of `0.75`.
+
+Treat `0.10` as a starting point rather than a universal default. Measure the
+margin on representative traffic and tune the threshold for the configured
+candidate banks and embedding model.
 
 A rule emits a suffixed name. Decisions must reference
 `<rule>:easy`, `<rule>:medium`, or `<rule>:hard`:

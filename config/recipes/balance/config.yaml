@@ -28,15 +28,20 @@ global:
           stability_weight: 1.0
 providers:
   defaults:
-    default_model: qwen/qwen3.5-rocm
-    default_reasoning_effort: low
-    reasoning_families:
-      qwen3:
-        parameter: enable_thinking
-        type: chat_template_kwargs
+    model: qwen/qwen3.5-rocm
+    reasoning_effort: low
   models:
     - backend_refs:
+        - endpoint: vllm-omni:8000
+          name: local-omni
+          protocol: http
+          provider: vllm
+          weight: 1
+      name: local/omni
+      provider_model_id: local/omni
+    - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -57,9 +62,11 @@ providers:
         health_check_path: /health
         health_check_interval: 10s
         health_check_timeout: 2s
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -82,6 +89,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -104,6 +112,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -126,6 +135,7 @@ providers:
         health_check_timeout: 2s
     - backend_refs:
         - endpoint: vllm:8000
+          provider: vllm
           name: vllm_primary
           protocol: http
           weight: 1
@@ -148,6 +158,19 @@ providers:
         health_check_timeout: 2s
 routing:
   decisions:
+    - algorithm:
+        type: static
+      description: Understand image-bearing requests with the dedicated visual-language model.
+      modelRefs:
+        - model: local/omni
+      name: omni
+      priority: 300
+      rules:
+        conditions:
+          - name: balance_has_images
+            type: conversation
+        operator: AND
+      tier: 1
     - description: Premium-only route for high-value legal and compliance analysis.
       modelRefs:
         - model: anthropic/claude-opus-4.6
@@ -187,7 +210,7 @@ routing:
                 type: complexity
             operator: OR
         operator: AND
-      tier: 1
+      tier: 2
     - description: Narrow premium reasoning lane for formal math proofs and derivations.
       modelRefs:
         - model: openai/gpt5.4
@@ -239,7 +262,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 2
+      tier: 3
     - description: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -347,7 +370,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 3
+      tier: 4
     - description: High-structure execution plans, systems design, and specialist STEM synthesis.
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -433,7 +456,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 4
+      tier: 5
     - description: Explicit correction requests on evidence-sensitive follow-ups.
       modelRefs:
         - model: google/gemini-2.5-flash-lite
@@ -468,11 +491,11 @@ routing:
                 type: keyword
             operator: NOT
         operator: AND
-      tier: 5
+      tier: 6
     - description: Low-medium cost coding, debugging, refactoring, and technical Q&A.
       modelRefs:
         - model: qwen/qwen3.5-rocm
-          reasoning_effort: medium
+          reasoning_mode: enabled
           use_reasoning: true
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -527,7 +550,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 6
+      tier: 7
     - description: Conservative route for evidence-sensitive health and medical guidance.
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -583,7 +606,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 7
+      tier: 8
     - description: Evidence-sensitive business, economics, history, and psychology explanation.
       modelRefs:
         - model: google/gemini-2.5-flash-lite
@@ -652,7 +675,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 8
+      tier: 9
     - description: Cheap clarification lane for explicit restatements and single-turn re-asks.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -690,11 +713,11 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 9
+      tier: 10
     - description: Low-cost business, history, and psychology explanation when verification pressure is absent.
       modelRefs:
         - model: qwen/qwen3.5-rocm
-          reasoning_effort: medium
+          reasoning_mode: enabled
           use_reasoning: true
         - model: google/gemini-2.5-flash-lite
           use_reasoning: false
@@ -775,7 +798,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 10
+      tier: 11
     - description: Low-cost creative writing, copywriting, and interpersonal drafting.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -833,7 +856,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 11
+      tier: 12
     - description: Short English or Chinese factual questions, including explicit verification asks, that should stay on the cheap lane.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -949,7 +972,7 @@ routing:
                 operator: AND
             operator: OR
         operator: AND
-      tier: 12
+      tier: 13
     - description: Lowest-cost fallback for everyday traffic and non-specialized requests.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -1043,7 +1066,7 @@ routing:
                 operator: NOT
             operator: AND
         operator: OR
-      tier: 13
+      tier: 14
     - description: Absolute final fallback that guarantees a routing decision when no earlier balance lane matches.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -1062,8 +1085,17 @@ routing:
       priority: 10
       rules:
         operator: AND
-      tier: 14
+      tier: 15
   modelCards:
+    - capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+        - omni
+        - text
+        - vision
+      modality: omni
+      name: local/omni
     - capabilities:
         - legal_analysis
         - policy_review
@@ -1072,7 +1104,10 @@ routing:
       description: PREMIUM tier alias reserved for legal and high-risk analysis.
       modality: text
       name: anthropic/claude-opus-4.6
-      quality_score: 0.94
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       tags:
         - tier:premium
         - cost:highest
@@ -1085,7 +1120,10 @@ routing:
       description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
       modality: text
       name: google/gemini-2.5-flash-lite
-      quality_score: 0.68
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.68
       tags:
         - tier:medium
         - cost:low
@@ -1099,7 +1137,10 @@ routing:
       description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
       modality: text
       name: google/gemini-3.1-pro
-      quality_score: 0.82
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.82
       tags:
         - tier:complex
         - cost:upper_mid
@@ -1112,7 +1153,10 @@ routing:
       description: REASONING tier alias for narrow formal math proofs and derivations.
       modality: text
       name: openai/gpt5.4
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
       tags:
         - tier:reasoning
         - cost:high
@@ -1127,7 +1171,10 @@ routing:
       description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
       modality: text
       name: qwen/qwen3.5-rocm
-      quality_score: 0.58
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.58
       tags:
         - tier:simple
         - cost:free
@@ -1536,6 +1583,13 @@ routing:
         method: weighted_sum
         name: urgency_pressure
   signals:
+    conversation:
+      - description: Request contains at least one image content part.
+        feature:
+          source:
+            type: image_content
+          type: exists
+        name: balance_has_images
     complexity:
       - description: General difficulty boundary for simple answers versus synthesis-heavy reasoning.
         easy:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"net"
 	"reflect"
 	"testing"
 
@@ -79,6 +80,63 @@ func TestResolveRuntimeManagementOptionsRejectsRouterServicePortConflict(t *test
 	}, cfg); err == nil {
 		t.Fatal("management port conflict must fail before startup")
 	}
+}
+
+func TestStartProfilingServerKeepsExplicitPortZeroEphemeral(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Observability.Profiling = config.ProfilingConfig{Enabled: true, Port: 0, Bind: "127.0.0.1"}
+
+	// Reserving the default profiling port means a 0 -> 6060 rewrite would be
+	// rejected as a service conflict instead of taking an ephemeral port.
+	hooks := startProfilingForTest(t, cfg, runtimeOptions{port: config.DefaultProfilingPort})
+	if len(hooks) != 1 {
+		t.Fatalf("profiling shutdown hooks = %d, want 1", len(hooks))
+	}
+}
+
+func TestStartProfilingServerReusesMetricsPortWhenMetricsDisabled(t *testing.T) {
+	metricsPort := freePort(t)
+	cfg := &config.RouterConfig{}
+	metricsDisabled := false
+	cfg.Observability.Metrics.Enabled = &metricsDisabled
+	cfg.Observability.Profiling = config.ProfilingConfig{Enabled: true, Port: metricsPort, Bind: "127.0.0.1"}
+
+	hooks := startProfilingForTest(t, cfg, runtimeOptions{port: 50051, metricsPort: metricsPort})
+	if len(hooks) != 1 {
+		t.Fatalf("profiling shutdown hooks = %d, want 1 when the metrics server is disabled", len(hooks))
+	}
+}
+
+func TestStartProfilingServerRejectsLiveMetricsPort(t *testing.T) {
+	metricsPort := freePort(t)
+	cfg := &config.RouterConfig{}
+	cfg.Observability.Profiling = config.ProfilingConfig{Enabled: true, Port: metricsPort, Bind: "127.0.0.1"}
+
+	hooks := startProfilingForTest(t, cfg, runtimeOptions{port: 50051, metricsPort: metricsPort})
+	if len(hooks) != 0 {
+		t.Fatalf("profiling shutdown hooks = %d, want 0 when the port collides with the metrics server", len(hooks))
+	}
+}
+
+func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeOptions) []func() {
+	t.Helper()
+	hooks := make([]func(), 0)
+	t.Cleanup(func() { runShutdownHooks(&hooks) })
+	startProfilingServerIfEnabled(cfg, opts, &hooks)
+	return hooks
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to reserve a free port: %v", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := listener.Close(); err != nil {
+		t.Fatalf("failed to release the reserved port: %v", err)
+	}
+	return port
 }
 
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {

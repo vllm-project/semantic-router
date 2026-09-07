@@ -14,6 +14,7 @@ import {
   validateRecipeProbe,
 } from '../utils/recipeApi'
 import { RecipeProbeDetailPanel, RecipeProbeValidation } from './ConfigPageMoMProbeResults'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './ConfigPageMoMProbesPanel.module.css'
 import {
   mapRecipeProbeFacetOptions,
@@ -316,11 +317,7 @@ export default function ConfigPageMoMProbesPanel({
         </div>
       ) : null}
 
-      {!error && loading && !result ? (
-        <div className={styles.asyncState} role="status">
-          Loading probes…
-        </div>
-      ) : null}
+      {!error && loading && !result ? <ProductLoadingState label="Loading probes" compact /> : null}
 
       {!error && result ? (
         <>
@@ -438,9 +435,7 @@ export default function ConfigPageMoMProbesPanel({
                   {validationResult ? <RecipeProbeValidation result={validationResult} /> : null}
                   {isSelected ? (
                     detailLoading ? (
-                      <div className={styles.detailState} role="status">
-                        Loading probe detail…
-                      </div>
+                      <ProductLoadingState label="Loading probe" compact />
                     ) : detailError ? (
                       <div className={styles.detailState} role="alert">
                         {detailError}

@@ -54,24 +54,12 @@ Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
 boundary and allow only that component to supply identity headers.
 
-## Configure authorization and rate limits
-
-The Dashboard **Security Policy** page maps users or groups to Router roles and
-model access, and can define per-subject request and token limits. Saving a
-valid policy updates the canonical Router configuration and applies it to the
-active stack.
-
-Use preview before saving when a policy changes several mappings. Keep the
-management surface authenticated and grant write permissions only to operators
-who are allowed to change live routing policy.
-
 Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
 | `feedback.submit` | Submit routing feedback. | admin, write |
 | `replay.read` | List replay records. | admin, write, read |
-| `security.manage` | Change security policy. | admin |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 
 The Router management API distinguishes replay metadata from replay detail.
@@ -103,6 +91,51 @@ referenced.
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Isolate Evaluation broker credentials
+
+Production Evaluation uses a server-owned HTTP broker. The sandboxed Python
+worker receives neither origins nor credential values in its environment and
+can request only the operation, frozen case identity, bounded timeout, and
+validated payload allowed by the run manifest. The Go broker selects the exact
+Router, Envoy, or evidence-ledger origin and attaches its bearer token.
+
+Use a dedicated Router Evaluation token:
+
+```yaml
+global:
+  services:
+    management_api:
+      auth:
+        mode: bearer
+        tokens:
+          - env: ROUTER_EVAL_TOKEN
+            role: evaluation
+        roles:
+          evaluation:
+            - classify.invoke
+```
+
+Then reference its name, never its value:
+
+```bash
+export ROUTER_EVAL_TOKEN="<secret-manager value>"
+export EVALUATION_ROUTER_API_KEY_ENV=ROUTER_EVAL_TOKEN
+```
+
+The Evaluation token must differ from
+`VLLM_SR_DASHBOARD_RECIPE_TOKEN`, which is the Dashboard control-plane
+identity. Envoy, fault-recovery, hard-policy, and production-experiment
+ledgers must each use another environment reference. Reusing a reference or a
+ledger origin is rejected. `vllm-sr serve` renders referenced secret names as
+inheriting `-e NAME` container arguments, so values stay out of process
+arguments, generated manifests, API responses, reports, and logs. A configured
+reference with no non-empty host value fails startup; an authenticated Router
+with no dedicated Evaluation reference keeps routing Evaluation unavailable
+instead of falling back to the broader Dashboard credential.
+
+See [Evaluation Plane](../benchmarking/evaluation-plane#configure-production-evidence-services)
+for the complete endpoint and timeout surface.
 
 ## Secure the local stack's storage credentials
 
@@ -136,6 +169,39 @@ that can reach the container runtime directly: the Postgres image trusts local
 socket connections, so anyone able to `docker exec` bypasses the password. Keep
 [container-runtime access](#limit-container-runtime-access) restricted
 accordingly.
+
+### Network layering
+
+The local stack runs on two bridge networks.
+
+| Container | `vllm-sr-network` | `vllm-sr-data-network` |
+| --- | --- | --- |
+| Redis, Postgres, Milvus | no | yes |
+| Router | yes | yes |
+| Envoy, Dashboard | yes | no |
+| Jaeger, Prometheus, Grafana | yes | no |
+| OpenClaw workloads | yes | no |
+
+Router is the only container on both. Requests reach it over the application
+network; it reaches the stores over the data network. A named stack prefixes
+both names, so two stacks share neither. Milvus joins the data network even
+though it has no credentials of its own yet.
+
+This closes east-west reachability. A container on the application network --
+a sidecar or an image chosen for an OpenClaw workload -- cannot
+open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
+storage ports remain published on `127.0.0.1` only, which closes the same
+exposure from the host side.
+
+It does not constrain a caller that can reach the container runtime. Such a
+caller can attach a container to any network, so the split is a boundary for
+workloads, not for the runtime socket.
+
+A stack created before the split has its stores on the application network. The
+next `vllm-sr serve` attaches each running store to the data network and
+detaches it from the application network. If that detach fails, `serve` stops
+rather than continuing: a stack that reports the isolation without having it is
+worse than one that refuses to start.
 
 ### Rotate
 

@@ -86,6 +86,14 @@ hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
 
+The in-memory backend can verify a semantic hit against opposite-meaning
+queries before serving it (`global.stores.response_cache.polarity_guard`; see
+[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With the
+optional NLI tier enabled, a rejected candidate is logged as
+`cache_negation_reject` with `tier: nli`, is reported as a miss, and its
+similarity still appears on `x-vsr-cache-similarity` so near-threshold
+rejections stay diagnosable.
+
 Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
 thresholds must be calibrated for the configured embedding model, and routes

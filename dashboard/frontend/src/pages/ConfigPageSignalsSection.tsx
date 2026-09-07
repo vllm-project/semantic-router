@@ -14,7 +14,6 @@ import type {
   JailbreakSignal,
   MetadataSignal,
   SignalType,
-  ClassifierSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
 import { hasFlatSignals } from '../types/config'
@@ -23,16 +22,21 @@ import { cloneConfigData } from './configPageCanonicalization'
 import { buildSignalFormFields } from './configPageSignalFormFields'
 import {
   SignalConditionsEditor,
+  SignalConversationFeatureEditor,
   SignalStringListEditor,
   SignalStructureFeatureEditor,
   SignalStructurePredicateEditor,
   SignalSubjectsEditor,
 } from './configPageSignalStructuredEditors'
 import {
+  DEFAULT_CONVERSATION_FEATURE,
   DEFAULT_STRUCTURE_FEATURE,
   DEFAULT_STRUCTURE_PREDICATE,
+  buildClassifierSignal,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
+  normalizeConversationFeature,
+  normalizeConversationPredicate,
   normalizeStringList,
   normalizeStructureFeature,
   normalizeStructurePredicate,
@@ -52,6 +56,126 @@ interface ConfigPageSignalsSectionProps {
   openViewModal: OpenViewModal
   listInputToArray: (input: string) => string[]
   removeSignalByName: (cfg: ConfigData, type: SignalType, targetName: string) => void
+}
+
+function jailbreakDetailFields(
+  rawData: UnifiedSignal['rawData'],
+): Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> {
+  const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
+    { label: 'Method', value: rawData.method || 'classifier', fullWidth: true },
+    {
+      label: 'Threshold',
+      value: rawData.threshold?.toString() || 'N/A',
+      fullWidth: true,
+    },
+    {
+      label: 'Direction',
+      value: rawData.direction || 'request',
+      fullWidth: true,
+    },
+    {
+      label: 'Include History',
+      value: rawData.include_history ? 'Yes' : 'No',
+      fullWidth: true,
+    },
+  ]
+  if (rawData.method === 'contrastive') {
+    fields.push(
+      {
+        label: 'Jailbreak Patterns',
+        value: (
+          <SignalStringListEditor
+            value={rawData.jailbreak_patterns}
+            onChange={() => undefined}
+            addLabel=""
+            emptyLabel="No jailbreak patterns."
+            itemLabel="Jailbreak pattern"
+            readOnly
+          />
+        ),
+        fullWidth: true,
+      },
+      {
+        label: 'Benign Patterns',
+        value: (
+          <SignalStringListEditor
+            value={rawData.benign_patterns}
+            onChange={() => undefined}
+            addLabel=""
+            emptyLabel="No benign patterns."
+            itemLabel="Benign pattern"
+            readOnly
+          />
+        ),
+        fullWidth: true,
+      },
+    )
+  }
+  fields.push({
+    label: 'Description',
+    value: rawData.description || 'N/A',
+    fullWidth: true,
+  })
+  return fields
+}
+
+type JailbreakFormState = Pick<
+  AddSignalFormState,
+  | 'jailbreak_threshold'
+  | 'jailbreak_method'
+  | 'jailbreak_direction'
+  | 'include_history'
+  | 'jailbreak_patterns'
+  | 'benign_patterns'
+>
+
+function jailbreakFormDefaults(): JailbreakFormState {
+  return {
+    jailbreak_threshold: 0.65,
+    jailbreak_method: 'classifier',
+    jailbreak_direction: 'request',
+    include_history: false,
+    jailbreak_patterns: [],
+    benign_patterns: [],
+  }
+}
+
+function jailbreakFormStateFrom(rawData: UnifiedSignal['rawData']): JailbreakFormState {
+  return {
+    jailbreak_threshold: rawData.threshold ?? 0.65,
+    jailbreak_method: rawData.method || 'classifier',
+    jailbreak_direction: rawData.direction || 'request',
+    include_history: !!rawData.include_history,
+    jailbreak_patterns: [...(rawData.jailbreak_patterns || [])],
+    benign_patterns: [...(rawData.benign_patterns || [])],
+  }
+}
+
+function buildJailbreakEntry(name: string, formData: AddSignalFormState): JailbreakSignal {
+  const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
+  if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
+    throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
+  }
+  const method = formData.jailbreak_method || 'classifier'
+  const jailbreakEntry: JailbreakSignal = {
+    name,
+    threshold: jailbreak_threshold,
+    include_history: formData.include_history || false,
+    description: formData.description || undefined,
+  }
+  if (method !== 'classifier') {
+    jailbreakEntry.method = method
+  }
+  if (formData.jailbreak_direction === 'response') {
+    jailbreakEntry.direction = 'response'
+  }
+  if (method === 'contrastive') {
+    const jailbreakPatterns = normalizeStringList(formData.jailbreak_patterns, 'Jailbreak patterns')
+    const benignPatterns = normalizeStringList(formData.benign_patterns, 'Benign patterns')
+    if (jailbreakPatterns.length > 0) jailbreakEntry.jailbreak_patterns = jailbreakPatterns
+    if (benignPatterns.length > 0) jailbreakEntry.benign_patterns = benignPatterns
+  }
+  return jailbreakEntry
 }
 
 export default function ConfigPageSignalsSection({
@@ -199,7 +323,9 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: ctx.name,
       type: 'Context',
-      summary: `${ctx.min_tokens} to ${ctx.max_tokens} tokens`,
+      summary: ctx.max_tokens
+        ? `${ctx.min_tokens ?? '0'} to ${ctx.max_tokens} tokens`
+        : `${ctx.min_tokens ?? '0'} tokens and above`,
       rawData: ctx,
     })
   })
@@ -210,6 +336,17 @@ export default function ConfigPageSignalsSection({
       type: 'Structure',
       summary: `${structure.feature?.type || 'unknown'} from ${structure.feature?.source?.type || 'unknown'}`,
       rawData: structure,
+    })
+  })
+
+  effectiveSignals?.conversation?.forEach((conversation) => {
+    const source = conversation.feature?.source
+    const role = source?.role ? `(${source.role})` : ''
+    allSignals.push({
+      name: conversation.name,
+      type: 'Conversation',
+      summary: `${conversation.feature?.type || 'unknown'} of ${source?.type || 'unknown'}${role}`,
+      rawData: conversation,
     })
   })
 
@@ -248,7 +385,7 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: jb.name,
       type: 'Jailbreak',
-      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.direction === 'response' ? ', scores the response' : ''}${jb.include_history ? ', includes history' : ''}`,
       rawData: jb,
     })
   })
@@ -310,7 +447,11 @@ export default function ConfigPageSignalsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
+      render: (row) => (
+        <span style={{ fontWeight: 600 }}>
+          {formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}
+        </span>
+      ),
     },
     {
       key: 'type',
@@ -511,8 +652,12 @@ export default function ConfigPageSignalsSection({
       sections.push({
         title: 'Context Signal',
         fields: [
-          { label: 'Min Tokens', value: signal.rawData.min_tokens || 'N/A', fullWidth: true },
-          { label: 'Max Tokens', value: signal.rawData.max_tokens || 'N/A', fullWidth: true },
+          { label: 'Min Tokens', value: signal.rawData.min_tokens || '0', fullWidth: true },
+          {
+            label: 'Max Tokens',
+            value: signal.rawData.max_tokens || 'No upper bound',
+            fullWidth: true,
+          },
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ],
       })
@@ -526,6 +671,39 @@ export default function ConfigPageSignalsSection({
             label: 'Feature',
             value: (
               <SignalStructureFeatureEditor
+                value={signal.rawData.feature}
+                onChange={() => undefined}
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
+          {
+            label: 'Predicate',
+            value: signal.rawData.predicate ? (
+              <SignalStructurePredicateEditor
+                value={signal.rawData.predicate}
+                onChange={() => undefined}
+                readOnly
+              />
+            ) : (
+              'None'
+            ),
+            fullWidth: true,
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ],
+      })
+    } else if (signal.type === 'Conversation') {
+      sections.push({
+        title: 'Conversation Signal',
+        fields: [
+          { label: 'Feature Type', value: signal.rawData.feature?.type || 'N/A' },
+          { label: 'Source Type', value: signal.rawData.feature?.source?.type || 'N/A' },
+          {
+            label: 'Feature',
+            value: (
+              <SignalConversationFeatureEditor
                 value={signal.rawData.feature}
                 onChange={() => undefined}
                 readOnly
@@ -640,57 +818,7 @@ export default function ConfigPageSignalsSection({
         ],
       })
     } else if (signal.type === 'Jailbreak') {
-      const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
-        { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
-        {
-          label: 'Threshold',
-          value: signal.rawData.threshold?.toString() || 'N/A',
-          fullWidth: true,
-        },
-        {
-          label: 'Include History',
-          value: signal.rawData.include_history ? 'Yes' : 'No',
-          fullWidth: true,
-        },
-      ]
-      if (signal.rawData.method === 'contrastive') {
-        fields.push(
-          {
-            label: 'Jailbreak Patterns',
-            value: (
-              <SignalStringListEditor
-                value={signal.rawData.jailbreak_patterns}
-                onChange={() => undefined}
-                addLabel=""
-                emptyLabel="No jailbreak patterns."
-                itemLabel="Jailbreak pattern"
-                readOnly
-              />
-            ),
-            fullWidth: true,
-          },
-          {
-            label: 'Benign Patterns',
-            value: (
-              <SignalStringListEditor
-                value={signal.rawData.benign_patterns}
-                onChange={() => undefined}
-                addLabel=""
-                emptyLabel="No benign patterns."
-                itemLabel="Benign pattern"
-                readOnly
-              />
-            ),
-            fullWidth: true,
-          },
-        )
-      }
-      fields.push({
-        label: 'Description',
-        value: signal.rawData.description || 'N/A',
-        fullWidth: true,
-      })
-      sections.push({ title: 'Jailbreak Signal', fields })
+      sections.push({ title: 'Jailbreak Signal', fields: jailbreakDetailFields(signal.rawData) })
     } else if (signal.type === 'PII') {
       sections.push({
         title: 'PII Signal',
@@ -790,6 +918,8 @@ export default function ConfigPageSignalsSection({
       max_tokens: '8K',
       structure_feature: structuredClone(DEFAULT_STRUCTURE_FEATURE),
       structure_predicate: { ...DEFAULT_STRUCTURE_PREDICATE },
+      conversation_feature: structuredClone(DEFAULT_CONVERSATION_FEATURE),
+      conversation_predicate: {},
       complexity_threshold: 0.1,
       role: '',
       subjects: [],
@@ -797,11 +927,7 @@ export default function ConfigPageSignalsSection({
       easy_candidates: [],
       composer_operator: 'AND',
       composer_conditions: [],
-      jailbreak_threshold: 0.65,
-      jailbreak_method: 'classifier',
-      include_history: false,
-      jailbreak_patterns: [],
-      benign_patterns: [],
+      ...jailbreakFormDefaults(),
       pii_threshold: 0.5,
       pii_types_allowed: [],
       pii_include_history: false,
@@ -839,13 +965,21 @@ export default function ConfigPageSignalsSection({
             preference_threshold: signal.rawData.threshold,
             lookback_turns: signal.rawData.lookback_turns,
             min_tokens: signal.rawData.min_tokens || '0',
-            max_tokens: signal.rawData.max_tokens || '8K',
+            max_tokens: signal.rawData.max_tokens || '',
             structure_feature:
               signal.type === 'Structure' ? signal.rawData.feature : defaultForm.structure_feature,
             structure_predicate:
               signal.type === 'Structure'
                 ? signal.rawData.predicate
                 : defaultForm.structure_predicate,
+            conversation_feature:
+              signal.type === 'Conversation'
+                ? signal.rawData.feature
+                : defaultForm.conversation_feature,
+            conversation_predicate:
+              signal.type === 'Conversation'
+                ? signal.rawData.predicate
+                : defaultForm.conversation_predicate,
             complexity_threshold: signal.rawData.threshold ?? 0.1,
             role: signal.type === 'Authz' ? signal.rawData.role || '' : '',
             subjects: signal.type === 'Authz' ? [...(signal.rawData.subjects || [])] : [],
@@ -853,11 +987,7 @@ export default function ConfigPageSignalsSection({
             easy_candidates: [...(signal.rawData.easy?.candidates || [])],
             composer_operator: signal.rawData.composer?.operator || 'AND',
             composer_conditions: [...(signal.rawData.composer?.conditions || [])],
-            jailbreak_threshold: signal.rawData.threshold ?? 0.65,
-            jailbreak_method: signal.rawData.method || 'classifier',
-            include_history: !!signal.rawData.include_history,
-            jailbreak_patterns: [...(signal.rawData.jailbreak_patterns || [])],
-            benign_patterns: [...(signal.rawData.benign_patterns || [])],
+            ...jailbreakFormStateFrom(signal.rawData),
             pii_threshold: signal.rawData.threshold ?? 0.5,
             pii_types_allowed: [...(signal.rawData.pii_types_allowed || [])],
             pii_include_history: !!signal.rawData.include_history,
@@ -1044,16 +1174,14 @@ export default function ConfigPageSignalsSection({
         }
         case 'Context': {
           const min_tokens = (formData.min_tokens || '0').trim()
-          const max_tokens = (formData.max_tokens || '8K').trim()
-          if (!min_tokens || !max_tokens) {
-            throw new Error('Both min_tokens and max_tokens are required.')
-          }
+          // An empty max_tokens is an open-ended band with no upper limit.
+          const max_tokens = (formData.max_tokens || '').trim()
           newConfig.signals.context = [
             ...(newConfig.signals.context || []),
             {
               name,
               min_tokens,
-              max_tokens,
+              max_tokens: max_tokens || undefined,
               description: formData.description || undefined,
             },
           ]
@@ -1065,6 +1193,21 @@ export default function ConfigPageSignalsSection({
 
           newConfig.signals.structure = [
             ...(newConfig.signals.structure || []),
+            {
+              name,
+              description: formData.description || undefined,
+              feature,
+              ...(predicate ? { predicate } : {}),
+            },
+          ]
+          break
+        }
+        case 'Conversation': {
+          const feature = normalizeConversationFeature(formData.conversation_feature)
+          const predicate = normalizeConversationPredicate(feature, formData.conversation_predicate)
+
+          newConfig.signals.conversation = [
+            ...(newConfig.signals.conversation || []),
             {
               name,
               description: formData.description || undefined,
@@ -1132,30 +1275,10 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Jailbreak': {
-          const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
-          if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
-            throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
-          }
-          const method = formData.jailbreak_method || 'classifier'
-          const jailbreakEntry: JailbreakSignal = {
-            name,
-            threshold: jailbreak_threshold,
-            include_history: formData.include_history || false,
-            description: formData.description || undefined,
-          }
-          if (method !== 'classifier') {
-            jailbreakEntry.method = method
-          }
-          if (method === 'contrastive') {
-            const jailbreakPatterns = normalizeStringList(
-              formData.jailbreak_patterns,
-              'Jailbreak patterns',
-            )
-            const benignPatterns = normalizeStringList(formData.benign_patterns, 'Benign patterns')
-            if (jailbreakPatterns.length > 0) jailbreakEntry.jailbreak_patterns = jailbreakPatterns
-            if (benignPatterns.length > 0) jailbreakEntry.benign_patterns = benignPatterns
-          }
-          newConfig.signals.jailbreak = [...(newConfig.signals.jailbreak || []), jailbreakEntry]
+          newConfig.signals.jailbreak = [
+            ...(newConfig.signals.jailbreak || []),
+            buildJailbreakEntry(name, formData),
+          ]
           break
         }
         case 'PII': {
@@ -1231,28 +1354,7 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Classifier': {
-          const classifierType = formData.classifier_type || 'local'
-          const labels = normalizeStringList(formData.classifier_labels, 'Classifier labels')
-          if (labels.length === 0) throw new Error('Classifier labels are required.')
-          const classifier: ClassifierSignal = {
-            name,
-            description: formData.description || undefined,
-            type: classifierType,
-            labels,
-          }
-          if (classifierType === 'local') {
-            if (labels.length !== 2) {
-              throw new Error('Local classifiers require exactly two labels.')
-            }
-            classifier.model_path = (formData.classifier_model_path || '').trim()
-            if (!classifier.model_path) throw new Error('Local model path is required.')
-            classifier.use_cpu = !!formData.classifier_use_cpu
-          } else {
-            classifier.model = (formData.classifier_model || '').trim()
-            classifier.instructions = (formData.classifier_instructions || '').trim()
-            if (!classifier.model) throw new Error('External classifier model is required.')
-            if (!classifier.instructions) throw new Error('Classifier instructions are required.')
-          }
+          const classifier = buildClassifierSignal(formData, name, formData.description)
           newConfig.signals.classifiers = [...(newConfig.signals.classifiers || []), classifier]
           break
         }
@@ -1333,7 +1435,6 @@ export default function ConfigPageSignalsSection({
     <ConfigPageManagerLayout
       title="Signals"
       description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         {actionError ? (

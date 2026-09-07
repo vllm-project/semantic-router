@@ -17,18 +17,24 @@ global:
 
 providers:
   defaults:
-    default_model: local/private-qwen
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    model: local/private-qwen
+    reasoning_effort: medium
   # Example pricing intentionally exaggerates the local-vs-cloud spread so
   # Insights makes privacy-preserving savings obvious. These are not vendor
   # billing quotes.
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          provider: vllm
+          weight: 1
     - name: local/private-qwen
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen/qwen3.5-rocm
       api_format: openai
       pricing:
@@ -39,7 +45,7 @@ providers:
         - name: local-vllm
           endpoint: vllm:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: cloud/frontier-reasoning
       provider_model_id: anthropic/claude-opus-4.6
@@ -50,12 +56,16 @@ providers:
         completion_per_1m: 7.20
       backend_refs:
         - name: vllm_primary
+          provider: vllm
           endpoint: vllm:8000
           protocol: http
           weight: 1
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: local/private-qwen
       context_window_size: 131072
       description: Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic.
@@ -65,7 +75,10 @@ routing:
         - security_containment
         - code
         - internal_docs
-      quality_score: 0.74
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.74
       modality: text
       tags:
         - deployment:self_hosted
@@ -80,7 +93,10 @@ routing:
         - deep_synthesis
         - architecture_review
         - long_context
-      quality_score: 0.92
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.92
       modality: text
       tags:
         - deployment:cloud
@@ -89,6 +105,13 @@ routing:
         - cost:high
 
   signals:
+    conversation:
+      - name: privacy_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     keywords:
       - name: local_only_markers
         operator: OR
@@ -617,6 +640,31 @@ routing:
             max_records: 50000
             max_body_bytes: 2048
 
+    - name: omni
+      description: Understand private image-bearing requests on the local visual-language model.
+      priority: 275
+      tier: 2
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: privacy_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+      plugins:
+        - type: tools
+          configuration:
+            enabled: true
+            mode: filtered
+            allow_tools: [local_search, local_read]
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 50000
+            max_body_bytes: 2048
+
     - name: local_privacy_policy
       description: Route PII, private code, and internal documents to the local model with local-only tool access.
       priority: 250
@@ -637,7 +685,7 @@ routing:
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:
@@ -698,7 +746,7 @@ routing:
       modelRefs:
         - model: local/private-qwen
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
       plugins:
         - type: tools
           configuration:

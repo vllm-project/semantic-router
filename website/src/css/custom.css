@@ -2,6 +2,7 @@
 @import './typography.css';
 @import './section-surfaces.css';
 @import './base.css';
+@import './components.css';
 @import './shell.css';
 @import './docs.css';
 @import './docs-intro.css';

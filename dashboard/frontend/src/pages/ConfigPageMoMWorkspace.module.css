@@ -9,6 +9,10 @@
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 38px;
   padding: 0 16px;
   border: 0;
@@ -19,6 +23,16 @@
   font-size: 0.78rem;
   font-weight: 680;
   white-space: nowrap;
+}
+
+.tab svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0.78;
+}
+
+.activeTab svg {
+  opacity: 1;
 }
 
 .tab:hover {

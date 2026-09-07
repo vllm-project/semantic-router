@@ -36,11 +36,11 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         core,
         "provision_storage_backends",
-        lambda config, network_name, stack_layout, **_kwargs: (
+        lambda config, stack_layout, **_kwargs: (
             provisioned.update(
                 {
                     "config": config,
-                    "network_name": network_name,
+                    "network_name": stack_layout.data_network_name,
                     "stack_layout": stack_layout,
                 }
             )
@@ -56,9 +56,6 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
         runtime_lifecycle,
         "container_create_network",
         record("container_create_network"),
-    )
-    monkeypatch.setattr(
-        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", False)
     )
     monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")

@@ -9,7 +9,8 @@
   <a href="https://app.vllm-sr.ai/playground">Playground</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
-  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a>
+  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a> |
+  <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
 
 </div>
@@ -36,18 +37,19 @@ Use it to improve quality, cost, latency, privacy, and safety without hard-codin
 ### Install
 
 ```bash
-curl -fsSL https://vllm-sr.ai/install.sh | bash
+curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
 ```
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-<details>
-<summary>Online playground credentials</summary>
+### Online playground
+
+Try the online playground at <https://app.vllm-sr.ai/playground>.
+
+Credentials:
 
 - Username: `love@vllm-sr.ai`
-- Password: `vllm-sr`
-
-</details>
+- Password: `vllm-sr-read`
 
 ## Latest News
 
@@ -78,7 +80,8 @@ More announcements are available on the **[Blog](https://vllm-sr.ai/blog/)** and
 
 ## Community
 
-For questions, feedback, or to contribute, please join the `#semantic-router` channel in vLLM Slack.
+For questions, feedback, or to contribute, please join the [`#semantic-router`](https://vllm-dev.slack.com/archives/C09CTGF8KCN) channel in vLLM Slack.
+Track contributors, workgroups, and weekly activity at [community.vllm-sr.ai](https://community.vllm-sr.ai).
 
 ### Community Meetings
 

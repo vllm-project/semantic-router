@@ -55,7 +55,7 @@ make build-e2e
 ./bin/e2e -help
 ```
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml)
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
 records CI ownership, selection mode, and path triggers. Profile code remains
 the source of truth for deployment behavior and its exact test list.
 
@@ -115,13 +115,16 @@ until the selected cases are known to be isolated.
 ### Supported Profiles
 
 - **envoy-ai-gateway**: baseline routing, safety, cache, and decision contracts.
-- **dashboard**: dashboard API, validation, and security-policy contracts.
+- **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
+- **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
+- **category-remote-backend**: shared remote category `http_classify` backend.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
+- **looper**: deterministic Looper algorithm contracts.
 - **istio**: sidecar, mTLS, and tracing behavior.
 - **agentgateway**: agentgateway routing and ExtProc policy enforcement.
 - **production-stack**: HA, load balancing, failover, and load checks.
@@ -129,8 +132,9 @@ until the selected cases are known to be isolated.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
-- **anthropic-shim**: manual Anthropic-shape translation diagnostics.
-- **response-api**: manual memory-backed Responses API coverage.
+- **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
+- **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
+- **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary and restart-recovery coverage.
@@ -139,20 +143,31 @@ until the selected cases are known to be isolated.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
+- **response-jailbreak**: response-direction jailbreak signal and response_jailbreak plugin coverage for LLM output carrying jailbreak content past the classifier's sequence window, and the streamed-response pass-through contract.
 
 ### Coverage Ownership Matrix
 
 | Selection | Meaning | Source of truth |
 | --- | --- | --- |
-| Default local | Runs when no profile is specified | `default_local_profiles` in the profile map |
-| Full CI | Runs in the complete E2E matrix | `full_ci_profiles` in the profile map |
-| Affected | Selected when owned paths change | `profile_rules` in the profile map |
-| Manual only | Requires explicit selection and profile prerequisites | `manual_profile_rules` in the profile map |
+| Default local | Runs when no profile is specified | `default_local: true` in the domain registry |
+| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the domain registry |
+| Affected | Selected only by declared contract paths | `selection: pr` and `paths` in the domain registry |
+| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the domain registry |
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml) owns
-the exact selection mode, path triggers, and coverage role for every entry.
+[`tools/agent/domains.yaml`](../tools/agent/domains.yaml)
+owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
+
+The `response-api` and `anthropic-shim` affected-change profiles jointly own the
+three native protocol backends used by the pairwise codec matrix. Their default
+contracts exercise Chat Completions, Responses, and Messages clients against each
+backend in buffered and streaming modes: 3 client protocols x 3 backend protocols
+x 2 response modes, for 18 required end-to-end cells. Each cell validates the
+client-native response envelope or SSE sequence, the terminal event, translated
+backend output, and the absence of leaked backend wire shapes. The same profiles
+also cover tool-call lifecycles, structured JSON Schema output, provider transport
+errors, incomplete streams, and midstream failures.
 
 ## Add or change a profile
 
@@ -161,7 +176,7 @@ profile passed in another environment.
    access.
 3. Register it in `e2e/profiles/all/imports.go`.
 4. Add its ownership and selection mode to
-   `tools/agent/e2e-profile-map.yaml`.
+   `tools/agent/domains.yaml`.
 5. Reuse test cases where the contract is shared; add a new test only for a new
    externally visible behavior.
 6. Add deterministic assertions. A request that merely returned any response
@@ -174,12 +189,11 @@ For test-case boundaries, read [`testcases/AGENTS.md`](testcases/AGENTS.md).
 ```bash
 make build-e2e
 (cd e2e && go test ./...)
-make agent-report ENV=cpu CHANGED_FILES='e2e/...'
+make impact ENV=cpu CHANGED_FILES='e2e/...'
 ```
 
-Then run the smallest affected profile. Use
-`make agent-e2e-affected CHANGED_FILES='...'` when the repository harness can
-resolve the profile set from changed paths.
+Then run the relevant profile explicitly with
+`make verify PROFILE=<profile>`.
 
 ## Diagnose a failed run
 

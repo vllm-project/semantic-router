@@ -202,6 +202,11 @@ SIGNAL structure constraint_dense {
   predicate: { gt: 0.08 }
 }
 
+SIGNAL conversation agent_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 SIGNAL conversation multi_turn_user {
   feature: { source: { role: "user", type: "message" }, type: "count" }
   predicate: { gte: 2 }
@@ -312,7 +317,7 @@ MODEL anthropic/claude-opus-4.6 {
   description: "Simulated high-care domain lane for non-private legal, compliance, and health analysis."
   capabilities: ["chat", "legal_analysis", "health_guidance", "high_stakes"]
   tags: ["deployment:vllm_alias", "tier:premium", "domain:high_care"]
-  quality_score: 0.96
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.96 } }]
   modality: "text"
 }
 
@@ -321,7 +326,7 @@ MODEL google/gemini-2.5-flash-lite {
   description: "Simulated low-cost domain lane for medium difficulty explanations, follow-ups, and lightweight coding."
   capabilities: ["chat", "low_cost", "explanation", "coding"]
   tags: ["deployment:vllm_alias", "tier:medium"]
-  quality_score: 0.84
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.84 } }]
   modality: "text"
 }
 
@@ -330,8 +335,13 @@ MODEL google/gemini-3.1-pro {
   description: "Simulated complex-domain lane for architecture, STEM, research synthesis, and difficult coding."
   capabilities: ["chat", "reasoning", "architecture", "research", "code"]
   tags: ["deployment:vllm_alias", "tier:complex", "domain:technical"]
-  quality_score: 0.9
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.9 } }]
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL openai/gpt5.4 {
@@ -339,7 +349,7 @@ MODEL openai/gpt5.4 {
   description: "Simulated frontier reasoning lane for hard non-private planning and long-horizon agent sessions."
   capabilities: ["chat", "frontier_reasoning", "planning", "synthesis"]
   tags: ["deployment:vllm_alias", "tier:frontier"]
-  quality_score: 0.95
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.95 } }]
   modality: "text"
 }
 
@@ -348,7 +358,7 @@ MODEL qwen/qwen3.6-rocm {
   description: "Local AMD vLLM alias backed by Qwen3.6 for privacy-sensitive work, safety containment, simple traffic, and low-cost fallbacks."
   capabilities: ["chat", "privacy_locality", "private_code", "simple_qa", "tool_use"]
   tags: ["deployment:self_hosted", "tier:simple", "policy:privacy_first"]
-  quality_score: 0.78
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.78 } }]
   modality: "text"
 }
 
@@ -367,6 +377,22 @@ ROUTE local_security_containment (description = "Keep prompt-injection or jailbr
   TIER 1
   WHEN projection("policy_security_local_only")
   MODEL "qwen/qwen3.6-rocm" (reasoning = false)
+  PLUGIN router_replay {
+    enabled: true
+    max_records: 10000
+    capture_request_body: true
+    capture_response_body: true
+    max_body_bytes: 2048
+    max_tool_trace_steps: 100
+  }
+}
+
+ROUTE omni (description = "Understand image-bearing requests locally without bypassing security containment.") {
+  PRIORITY 330
+  TIER 1
+  WHEN conversation("agent_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
   PLUGIN router_replay {
     enabled: true
     max_records: 10000

@@ -18,6 +18,7 @@ use that data when enabled, but learning is not required to run the recipe.
 | Fast specialist work | `google/gemini-2.5-flash-lite` |
 | Complex code and research | `google/gemini-3.1-pro`, `openai/gpt5.4` |
 | Legal and health | `anthropic/claude-opus-4.6` |
+| Visual understanding | `local/omni` |
 
 Clients use `vllm-sr/auto`. The names above are logical provider aliases and
 can be rebound to compatible backends.
@@ -27,6 +28,7 @@ can be rebound to compatible backends.
 Use this recipe for:
 
 - coding assistants and tool-using agents;
+- multimodal assistants that accept image content;
 - technical research and STEM questions;
 - business, legal, or health specialist routing;
 - private-context requests that must remain on a local lane; and
@@ -41,6 +43,7 @@ managing application state.
 | Request pattern | Behavior |
 | --- | --- |
 | Jailbreak or private-context signal | Stay on the local model and bypass learning adaptation. |
+| Image content without a containment signal | Use the local visual-language model. |
 | Simple math or general request | Use the local fast path. |
 | Coding, research, business, legal, or health request | Use the corresponding specialist lane. |
 | Complex request without a specialist domain | Escalate to a frontier lane. |
@@ -51,7 +54,7 @@ not accidentally match several peer lanes.
 
 ## Requirements
 
-- Reachable OpenAI-compatible endpoints for the five configured aliases.
+- Reachable OpenAI-compatible endpoints for the six configured aliases.
 - Embedding, category, PII, and complexity classifiers.
 - A Postgres replay store when replay collection is enabled.
 - `POSTGRES_PASSWORD` supplied from the environment rather than committed to
@@ -77,11 +80,13 @@ capture when prompts and responses must not be stored.
 ## Quick start
 
 ```bash
-export POSTGRES_PASSWORD="$(openssl rand -base64 24)"  # your own value
-vllm-sr validate --config config/recipes/agent/config.yaml
-vllm-sr serve --config config/recipes/agent/config.yaml \
-  --recipe-env POSTGRES_PASSWORD
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Agent Routing** in
+**Recipes**, assign each capability lane, and publish the resulting
+Mixture-of-Model Entrypoint. Configure replay retention and credentials through
+the managed control-plane resources rather than the launch command.
 
 ## Evaluation
 

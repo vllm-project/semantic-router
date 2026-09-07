@@ -1,10 +1,10 @@
 package extproc
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -56,62 +56,35 @@ func (r *OpenAIRouter) checkRequestHasTools(ctx *RequestContext) {
 		return
 	}
 
-	if len(ctx.OriginalRequestBody) == 0 {
+	if ctx.SemanticRequest == nil {
 		return
 	}
-
-	// Parse request to check for tools
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.OriginalRequestBody, &requestMap); err != nil {
-		logging.Debugf("Failed to parse request for tool check: %v", err)
-		return
+	if len(ctx.SemanticRequest.Tools) > 0 {
+		ctx.HasToolsForFactCheck = true
+		logging.Debugf("Request has %d tool definitions", len(ctx.SemanticRequest.Tools))
 	}
-
-	// Check for tool definitions
-	if tools, ok := requestMap["tools"]; ok {
-		if toolsArray, isArray := tools.([]interface{}); isArray && len(toolsArray) > 0 {
-			ctx.HasToolsForFactCheck = true
-			logging.Debugf("Request has %d tool definitions", len(toolsArray))
-		}
-	}
-
-	// Check for tool results in messages (from previous tool calls)
-	if messages, ok := requestMap["messages"]; ok {
-		if messagesArray, isArray := messages.([]interface{}); isArray {
-			toolResults := extractToolResultsFromMessages(messagesArray)
-			if len(toolResults) > 0 {
-				ctx.HasToolsForFactCheck = true
-				ctx.ToolResultsContext = strings.Join(toolResults, "\n\n")
-				logging.Infof("Extracted %d tool results for hallucination context (%d chars)",
-					len(toolResults), len(ctx.ToolResultsContext))
-			}
-		}
+	toolResults := extractSemanticToolResults(ctx.SemanticRequest.Messages)
+	if len(toolResults) > 0 {
+		ctx.HasToolsForFactCheck = true
+		ctx.ToolResultsContext = strings.Join(toolResults, "\n\n")
+		logging.Infof("Extracted %d tool results for hallucination context (%d chars)",
+			len(toolResults), len(ctx.ToolResultsContext))
 	}
 }
 
-// extractToolResultsFromMessages extracts content from tool role messages
-func extractToolResultsFromMessages(messages []interface{}) []string {
-	var toolResults []string
-
-	for _, msg := range messages {
-		msgMap, ok := msg.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Check for tool role messages
-		role, ok := msgMap["role"].(string)
-		if !ok || role != "tool" {
-			continue
-		}
-
-		// Extract content from tool message
-		if content, ok := msgMap["content"].(string); ok && content != "" {
-			toolResults = append(toolResults, content)
+func extractSemanticToolResults(messages []llmprotocol.Message) []string {
+	var results []string
+	for _, message := range messages {
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				continue
+			}
+			if text := semanticText(content.ToolResult.Content); text != "" {
+				results = append(results, text)
+			}
 		}
 	}
-
-	return toolResults
+	return results
 }
 
 // shouldPerformHallucinationDetection determines if hallucination detection should run

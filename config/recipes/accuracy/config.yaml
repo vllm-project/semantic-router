@@ -27,17 +27,23 @@ global:
 
 providers:
   defaults:
-    default_model: qwen-coordinator
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
+    model: qwen-coordinator
+    reasoning_effort: medium
   models:
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: local-omni
+          endpoint: vllm-omni:8000
+          protocol: http
+          provider: vllm
+          weight: 1
     - name: qwen-coordinator
       provider_model_id: qwen-coordinator
       api_format: openai
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       pricing:
         currency: USD
         prompt_per_1m: 0
@@ -47,7 +53,7 @@ providers:
         - name: local-qwen
           endpoint: qwen-coordinator:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
     - name: opus48-worker
       provider_model_id: anthropic/claude-opus-4.8
@@ -100,36 +106,58 @@ providers:
 
 routing:
   modelCards:
+    - name: local/omni
+      capabilities: [chat, image_understanding, multimodal, omni, text, vision]
+      modality: omni
     - name: qwen-coordinator
       context_window_size: 32768
       description: Local planner and synthesis model for Router Flow dynamic plans.
       capabilities: [chat, planning, synthesis, code]
-      quality_score: 0.88
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.88
       modality: text
       tags: [deployment:self_hosted, role:planner]
     - name: opus48-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon agentic work.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.95
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.95
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gemini31-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and coding.
       capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.93
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.93
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: gpt55-worker
       context_window_size: 1048576
-      description: OpenRouter worker for frontier synthesis.
-      capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.94
+      description: OpenRouter worker for long-context planning and frontier synthesis.
+      capabilities: [chat, code, reasoning, long-context, planning, synthesis]
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.94
       modality: text
-      tags: [deployment:openrouter, role:worker]
+      tags: [deployment:openrouter, role:worker, role:planner]
 
   signals:
+    conversation:
+      - name: accuracy_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     keywords:
       - name: accuracy_workflow_request
         operator: OR
@@ -173,6 +201,19 @@ routing:
         description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
 
   decisions:
+    - name: omni
+      description: Understand image-bearing requests with the dedicated visual-language model.
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: conversation
+            name: accuracy_has_images
+      modelRefs:
+        - model: local/omni
+      algorithm:
+        type: static
+
     - name: accuracy_workflow
       description: Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.
       priority: 100
@@ -197,7 +238,7 @@ routing:
           mode: dynamic
           template: micro_agent
           planner:
-            model: qwen-coordinator
+            model: gpt55-worker
             max_completion_tokens: 2048
           max_steps: 4
           max_parallel: 3

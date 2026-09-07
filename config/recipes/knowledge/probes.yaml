@@ -6,6 +6,13 @@ description: >
 routing_assets:
   yaml: config/recipes/knowledge/config.yaml
   dsl: config/recipes/knowledge/recipe.dsl
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
 router_eval_endpoint: /api/v1/eval
 evaluation:
   request_timeout_seconds: 300
@@ -18,10 +25,27 @@ coverage:
   min_projection_assertion_percent: 50.0
   min_algorithm_assertion_percent: 100.0
   min_plugin_assertion_percent: 100.0
-  required_request_shapes: [text]
+  required_request_shapes: [text, messages]
   min_tag_counts: {}
   min_tag_pass_rate: {}
 decisions:
+  - id: omni
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_knowledge
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Identify the key visual fact in the attached image.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [knowledge_has_images]
+        tags: [language:en, multimodal, image, shape:messages]
+
   - id: escalate_72b
     expected_decision: escalate_72b
     expected_algorithm: static

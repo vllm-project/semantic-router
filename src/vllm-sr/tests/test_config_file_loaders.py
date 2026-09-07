@@ -31,11 +31,13 @@ def write_minimal_config(path: Path) -> None:
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
                 "providers": {
-                    "defaults": {"default_model": "demo-model"},
+                    "defaults": {"model": "demo-model"},
                     "models": [
                         {
                             "name": "demo-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                            "backend_refs": [
+                                {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                            ],
                         }
                     ],
                 },
@@ -171,6 +173,27 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     assert pricing.model_dump()["cache_write_per_1m"] == 2.5
 
 
+@pytest.mark.parametrize(
+    "pricing, expected",
+    [
+        ({"currency": "usd"}, "currency"),
+        ({"prompt_per_1m": -0.01}, "prompt_per_1m"),
+        ({"completion_per_1m": float("inf")}, "completion_per_1m"),
+    ],
+)
+def test_parse_user_config_rejects_invalid_provider_pricing(
+    tmp_path: Path, pricing: dict[str, object], expected: str
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["pricing"] = pricing
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match=expected):
+        parse_user_config(str(config_path))
+
+
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
     config = EmbeddingModelsConfig(
         embedding_config={
@@ -184,6 +207,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
             "api_key_env": "EMBEDDING_API_KEY",
             "timeout_seconds": 5,
             "max_retries": 2,
+            "max_response_bytes": 16777216,
             "dimensions": 1024,
         },
     )
@@ -193,6 +217,7 @@ def test_embedding_models_config_accepts_remote_endpoint() -> None:
     assert dumped["embedding_config"]["model_type"] == "remote"
     assert dumped["endpoint"]["base_url"] == "http://embedding-service:8000/v1"
     assert dumped["endpoint"]["api_key_env"] == "EMBEDDING_API_KEY"
+    assert dumped["endpoint"]["max_response_bytes"] == 16777216
 
 
 def test_parse_user_config_accepts_decision_learning_controls(
@@ -588,7 +613,7 @@ def test_load_config_file_returns_mapping(tmp_path: Path) -> None:
     loaded = load_config_file(str(config_path))
 
     assert loaded["version"] == "v0.3"
-    assert loaded["providers"]["defaults"]["default_model"] == "demo-model"
+    assert loaded["providers"]["defaults"]["model"] == "demo-model"
 
 
 def test_find_config_file_returns_explicit_file_path(tmp_path: Path) -> None:

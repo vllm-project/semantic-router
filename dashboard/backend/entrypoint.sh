@@ -12,6 +12,9 @@ SERVER_READONLY=${DASHBOARD_READONLY:-false}
 RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
 RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
+EVALUATION_DATA_DIR=${EVALUATION_DATA_DIR:-/app/data/evaluation}
+EVALUATION_ENABLED=${EVALUATION_ENABLED:-true}
+export EVALUATION_DATA_DIR EVALUATION_ENABLED
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
@@ -107,7 +110,14 @@ fi
 if [ -d /app/data ]; then
     DATA_GID=65532
     add_nonroot_group_gid "$DATA_GID"
-    python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID"
+    python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID" \
+        --exclude-path "$EVALUATION_DATA_DIR"
+fi
+if ! python3 "$PERMISSION_HELPER" prepare-private-tree \
+    "$EVALUATION_DATA_DIR" 65532 65532; then
+    EVALUATION_ENABLED=false
+    export EVALUATION_ENABLED
+    echo "Warning: Evaluation Plane is disabled because its private data store could not be prepared safely" >&2
 fi
 
 # The dashboard is deliberately nonroot, but managed Recipe topology and

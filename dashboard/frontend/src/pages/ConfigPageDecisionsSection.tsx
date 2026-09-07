@@ -14,20 +14,30 @@ import type {
   ConfigDecisionConditionType,
   DecisionConfig,
   DecisionFormState,
-  DecisionPluginConfiguration,
   NormalizedModel,
 } from './configPageSupport'
 import {
   cloneDecisionConditions,
   conditionHasNestedRules,
   decisionRulesForSave,
+  getReasoningFamiliesMap,
   mergeDecisionForSave,
 } from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
+import ConfigPageDecisionModelRefsEditor from './ConfigPageDecisionModelRefsEditor'
+import {
+  decisionConditionsForSave,
+  decisionModelRefsForSave,
+  decisionPluginsForSave,
+} from './configPageDecisionFormSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
 import { decisionColumns } from './configPageDecisionTable'
+import {
+  reasoningFamilyForModel,
+  reasoningFamilyIsAlwaysOn,
+} from './configPageReasoningControlSupport'
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
@@ -59,14 +69,9 @@ export default function ConfigPageDecisionsSection({
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
-  const {
-    applyScopedConfig,
-    routingScopes,
-    scopedConfig,
-    selectedScope,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
+    useRoutingScopeManager(config)
+  const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -85,6 +90,7 @@ export default function ConfigPageDecisionsSection({
   ) => {
     const badges = [
       ref.use_reasoning ? 'Reasoning enabled' : 'Standard inference',
+      ref.reasoning_mode ? `Mode: ${ref.reasoning_mode}` : null,
       ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
       ref.lora_name ? `LoRA: ${ref.lora_name}` : null,
       typeof ref.weight === 'number' ? `Weight: ${ref.weight}` : null,
@@ -138,6 +144,7 @@ export default function ConfigPageDecisionsSection({
         title: 'Rules',
         fields: [
           { label: 'Operator', value: decision.rules?.operator || 'N/A' },
+          { label: 'On unknown', value: decision.rules?.on_unknown || 'Legacy default' },
           {
             label: 'Conditions',
             value: decision.rules?.conditions?.length ? (
@@ -244,6 +251,7 @@ export default function ConfigPageDecisionsSection({
       'authz',
       'jailbreak',
       'pii',
+      'conversation',
       'projection',
     ] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
@@ -286,6 +294,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'conversation':
+          return config?.signals?.conversation?.map((c) => c.name) || []
         case 'projection':
           return projectionOutputs
         default:
@@ -298,12 +308,14 @@ export default function ConfigPageDecisionsSection({
       description: '',
       priority: 1,
       operator: 'AND',
+      on_unknown: '',
       conditions: [{ type: 'keyword', name: '' }],
       modelRefs: [
         {
           model: '',
           use_reasoning: false,
           reasoning_description: '',
+          reasoning_mode: '',
           reasoning_effort: '',
           lora_name: '',
         },
@@ -318,11 +330,20 @@ export default function ConfigPageDecisionsSection({
             description: decision.description || '',
             priority: decision.priority ?? 1,
             operator: decision.rules?.operator || 'AND',
+            on_unknown: decision.rules?.on_unknown || '',
             conditions: cloneDecisionConditions(decision.rules?.conditions),
             modelRefs: (decision.modelRefs || []).map((ref) => ({
               model: ref.model,
-              use_reasoning: !!ref.use_reasoning,
+              use_reasoning:
+                !!ref.use_reasoning ||
+                reasoningFamilyIsAlwaysOn(
+                  reasoningFamilyForModel(
+                    models.find((model) => model.name === ref.model),
+                    reasoningFamilies,
+                  ),
+                ),
               reasoning_description: ref.reasoning_description || '',
+              reasoning_mode: ref.reasoning_mode || '',
               reasoning_effort: ref.reasoning_effort || '',
               lora_name: ref.lora_name || '',
               weight: typeof ref.weight === 'number' ? ref.weight : undefined,
@@ -338,7 +359,7 @@ export default function ConfigPageDecisionsSection({
       value: DecisionFormState['conditions'],
       onChange: (value: DecisionFormState['conditions']) => void,
     ) => {
-      const rows = (Array.isArray(value) ? value : []).length
+      const rows: DecisionFormState['conditions'] = (Array.isArray(value) ? value : []).length
         ? value
         : [{ type: 'keyword', name: '' }]
       if (rows.some(conditionHasNestedRules)) {
@@ -424,173 +445,6 @@ export default function ConfigPageDecisionsSection({
       )
     }
 
-    const renderModelRefsEditor = (
-      value: DecisionFormState['modelRefs'],
-      onChange: (value: DecisionFormState['modelRefs']) => void,
-    ) => {
-      const modelOptions = models.map((model) => model.name)
-      const rows = (Array.isArray(value) ? value : []).length
-        ? value
-        : [
-            {
-              model: '',
-              use_reasoning: false,
-              reasoning_description: '',
-              reasoning_effort: '',
-              lora_name: '',
-            },
-          ]
-
-      const updateItem = (
-        index: number,
-        key:
-          | 'model'
-          | 'use_reasoning'
-          | 'reasoning_description'
-          | 'reasoning_effort'
-          | 'lora_name'
-          | 'weight',
-        val: string | boolean | number | undefined,
-      ) => {
-        const next = rows.map((item, idx) => (idx === index ? { ...item, [key]: val } : item))
-        onChange(next)
-      }
-
-      const removeItem = (index: number) => {
-        const next = rows.filter((_, idx) => idx !== index)
-        onChange(
-          next.length
-            ? next
-            : [
-                {
-                  model: '',
-                  use_reasoning: false,
-                  reasoning_description: '',
-                  reasoning_effort: '',
-                  lora_name: '',
-                },
-              ],
-        )
-      }
-
-      const addItem = () =>
-        onChange([
-          ...rows,
-          {
-            model: '',
-            use_reasoning: false,
-            reasoning_description: '',
-            reasoning_effort: '',
-            lora_name: '',
-          },
-        ])
-
-      return (
-        <div className={decisionStyles.editorList}>
-          {rows.map((ref, idx) => (
-            <div key={idx} className={decisionStyles.editorCard}>
-              <div className={decisionStyles.editorGridTwo}>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Model</span>
-                  <select
-                    value={ref?.model || ''}
-                    onChange={(e) => updateItem(idx, 'model', e.target.value)}
-                    className={decisionStyles.editorSelect}
-                  >
-                    <option value="">Select model</option>
-                    {ref?.model && !modelOptions.includes(ref.model) ? (
-                      <option value={ref.model}>{ref.model}</option>
-                    ) : null}
-                    {modelOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Reasoning effort</span>
-                  <select
-                    value={ref?.reasoning_effort || ''}
-                    onChange={(e) => updateItem(idx, 'reasoning_effort', e.target.value)}
-                    className={decisionStyles.editorSelect}
-                  >
-                    <option value="">Default effort</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={decisionStyles.editorMetaRow}>
-                <label className={decisionStyles.editorCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={!!ref?.use_reasoning}
-                    onChange={(e) => updateItem(idx, 'use_reasoning', e.target.checked)}
-                  />
-                  Use reasoning
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
-                  className={decisionStyles.editorButtonDanger}
-                >
-                  Remove model reference
-                </button>
-              </div>
-
-              <div className={decisionStyles.editorGridTwo}>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>LoRA adapter</span>
-                  <input
-                    type="text"
-                    value={ref?.lora_name || ''}
-                    onChange={(e) => updateItem(idx, 'lora_name', e.target.value)}
-                    placeholder="Optional adapter name"
-                    className={decisionStyles.editorInput}
-                  />
-                </label>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Weight</span>
-                  <input
-                    type="number"
-                    value={typeof ref?.weight === 'number' ? ref.weight : ''}
-                    onChange={(e) =>
-                      updateItem(
-                        idx,
-                        'weight',
-                        e.target.value === '' ? undefined : Number(e.target.value),
-                      )
-                    }
-                    placeholder="Optional weight"
-                    step="0.1"
-                    min="0"
-                    className={decisionStyles.editorInput}
-                  />
-                </label>
-              </div>
-
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Reasoning description</span>
-                <input
-                  type="text"
-                  value={ref?.reasoning_description || ''}
-                  onChange={(e) => updateItem(idx, 'reasoning_description', e.target.value)}
-                  placeholder="Optional operator note or reasoning hint"
-                  className={decisionStyles.editorInput}
-                />
-              </label>
-            </div>
-          ))}
-          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
-            Add Model Reference
-          </button>
-        </div>
-      )
-    }
-
     const fields: FieldConfig<DecisionFormState>[] = [
       {
         name: 'name',
@@ -622,6 +476,14 @@ export default function ConfigPageDecisionsSection({
         required: true,
       },
       {
+        name: 'on_unknown',
+        label: 'On Unknown',
+        type: 'select',
+        options: ['', 'no_match', 'match', 'fail_request'],
+        description:
+          'When a signal evaluator fails: no_match skips this decision, match selects it, fail_request rejects the request with 503. Empty keeps condition on_error.',
+      },
+      {
         name: 'conditions',
         label: 'Conditions',
         type: 'custom',
@@ -637,11 +499,14 @@ export default function ConfigPageDecisionsSection({
         label: 'Model References',
         type: 'custom',
         description: 'Set target models and whether to enable reasoning.',
-        customRender: (value, onChange) =>
-          renderModelRefsEditor(
-            Array.isArray(value) ? (value as DecisionFormState['modelRefs']) : [],
-            (nextValue) => onChange(nextValue),
-          ),
+        customRender: (value, onChange) => (
+          <ConfigPageDecisionModelRefsEditor
+            value={Array.isArray(value) ? (value as DecisionFormState['modelRefs']) : []}
+            onChange={(nextValue) => onChange(nextValue)}
+            models={models}
+            reasoningFamilies={reasoningFamilies}
+          />
+        ),
       },
       {
         name: 'plugins',
@@ -673,82 +538,9 @@ export default function ConfigPageDecisionsSection({
 
       const priority = Number.isFinite(formData.priority) ? formData.priority : 0
 
-      const normalizedConditions = (formData.conditions || []).filter(
-        (c) => (c?.type || '').trim() || (c?.name || '').trim(),
-      )
-      const conditions = normalizedConditions.map((condition, idx) => {
-        const type = (condition?.type || '').trim()
-        const conditionName = (condition?.name || '').trim()
-        if (!type || !conditionName) {
-          throw new Error(`Condition #${idx + 1} needs both type and name.`)
-        }
-        return {
-          type,
-          name: conditionName,
-          ...(condition.label ? { label: condition.label } : {}),
-          ...(condition.predicate ? { predicate: condition.predicate } : {}),
-          ...(condition.on_error ? { on_error: condition.on_error } : {}),
-        }
-      })
-
-      const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
-      const modelRefs = normalizedModelRefs.map((modelRefValue, idx) => {
-        const model = (modelRefValue?.model || '').trim()
-        if (!model) {
-          throw new Error(`Model reference #${idx + 1} is missing a model name.`)
-        }
-        const modelRef: DecisionConfig['modelRefs'][number] = {
-          model,
-          use_reasoning: !!modelRefValue?.use_reasoning,
-        }
-        const reasoningDescription = (modelRefValue?.reasoning_description || '').trim()
-        if (reasoningDescription) {
-          modelRef.reasoning_description = reasoningDescription
-        }
-        const reasoningEffort = (modelRefValue?.reasoning_effort || '').trim()
-        if (reasoningEffort) {
-          modelRef.reasoning_effort = reasoningEffort
-        }
-        const loraName = (modelRefValue?.lora_name || '').trim()
-        if (loraName) {
-          modelRef.lora_name = loraName
-        }
-        if (typeof modelRefValue?.weight === 'number' && Number.isFinite(modelRefValue.weight)) {
-          modelRef.weight = modelRefValue.weight
-        }
-        return modelRef
-      })
-
-      const normalizedPlugins = (formData.plugins || []).filter((p) => {
-        const hasType = (p?.type || '').trim()
-        const hasConfigString =
-          typeof p?.configuration === 'string' && (p.configuration as string).trim()
-        const hasConfigObject = p?.configuration && typeof p.configuration === 'object'
-        return hasType || hasConfigString || hasConfigObject
-      })
-
-      const plugins = normalizedPlugins.map((pluginValue, idx) => {
-        const type = (pluginValue?.type || '').trim()
-        if (!type) {
-          throw new Error(`Plugin #${idx + 1} must include a type.`)
-        }
-
-        let configuration: DecisionPluginConfiguration = {}
-        if (typeof pluginValue?.configuration === 'string') {
-          const trimmed = pluginValue.configuration.trim()
-          if (trimmed) {
-            try {
-              configuration = JSON.parse(trimmed)
-            } catch {
-              throw new Error(`Plugin #${idx + 1} configuration must be valid JSON.`)
-            }
-          }
-        } else if (pluginValue?.configuration && typeof pluginValue.configuration === 'object') {
-          configuration = pluginValue.configuration as DecisionPluginConfiguration
-        }
-
-        return { type, configuration }
-      })
+      const conditions = decisionConditionsForSave(formData.conditions)
+      const modelRefs = decisionModelRefsForSave(formData.modelRefs)
+      const plugins = decisionPluginsForSave(formData.plugins)
 
       const newDecision = mergeDecisionForSave(mode === 'edit' ? decision : undefined, {
         name,
@@ -757,6 +549,7 @@ export default function ConfigPageDecisionsSection({
         rules: decisionRulesForSave(decision?.rules, {
           operator: formData.operator,
           conditions,
+          ...(formData.on_unknown ? { on_unknown: formData.on_unknown } : {}),
         }),
         modelRefs,
         plugins,
@@ -822,7 +615,6 @@ export default function ConfigPageDecisionsSection({
     <ConfigPageManagerLayout
       title="Decisions"
       description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>

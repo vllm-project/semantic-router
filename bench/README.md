@@ -16,6 +16,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does the router improve reasoning-task selection over a direct backend? | `vllm-semantic-router-bench` |
 | Does a model benefit from its reasoning mode, and what does that cost? | `reasoning-mode-eval` |
 | Does session routing preserve continuity and tool-loop invariants? | `agentic_routing_experiment.py` and `agentic_routing_live_benchmark.py` |
+| Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
 | Do Router Flow arms improve answer quality? | [`router_flow/`](router_flow/README.md) |
@@ -93,17 +94,11 @@ A known-family patch uses the current v0.3 provider and Model Card fields:
 ```yaml
 providers:
   defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
+    reasoning_effort: medium
   models:
     - name: qwen3-14b
-      reasoning_family: qwen3
-routing:
-  modelCards:
-    - name: qwen3-14b
+      reasoning:
+        family: qwen3
 ```
 
 Reasoning is enabled per decision reference, after the evaluated model has been
@@ -170,7 +165,7 @@ The related tools are intentionally separate:
 | --- | --- |
 | `agent_task_live_benchmark.py` | Score maintained smoke or long-horizon tasks and their tool transitions |
 | `cache_token_probe.py` | Repeat a session prefix and classify cached-token reporting as missing, zero, or positive |
-| `openai_fault_proxy.py` | Inject controlled upstream failures for recovery tests |
+| `openai_fault_proxy.py` | Inject controlled upstream failures, plus optional fixed and jittered response latency, for recovery tests |
 | `session_routing_branch_image_probe.py` | Record diagnostics from a reviewed branch image |
 | `session_routing_branch_image_benchmark.py` | Assemble the diagnostic, live, failure, task, and cache summaries |
 | `session_routing_ga_report.py` | Apply release thresholds to the assembled machine-readable evidence |

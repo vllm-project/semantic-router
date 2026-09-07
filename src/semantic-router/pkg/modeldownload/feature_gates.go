@@ -68,7 +68,8 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return cfg.NeedsLocalHallucinationNLIForAPI() ||
-				cfg.NeedsLocalHallucinationNLIForRouting()
+				cfg.NeedsLocalHallucinationNLIForRouting() ||
+				cfg.NeedsLocalNLIForSemanticCache()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.HallucinationMitigation.NLIModel.ModelID}

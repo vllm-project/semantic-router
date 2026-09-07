@@ -8,6 +8,13 @@ description: >
 routing_assets:
   yaml: config/recipes/multi-objective/config.yaml
   dsl: config/recipes/multi-objective/recipe.dsl
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
 router_eval_endpoint: /api/v1/eval
 evaluation:
   request_timeout_seconds: 300
@@ -36,6 +43,102 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
+  - id: balanced_omni
+    model: vllm-sr/mom-v1-blend
+    expected_recipe: balanced
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Describe the attached image in one sentence.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [unified_balance_has_images]
+        tags: [recipe:balanced, language:en, multimodal, image, shape:messages]
+
+  - id: speed_omni
+    model: vllm-sr/mom-v1-flash
+    expected_recipe: speed-first
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Quickly summarize the attached image.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [unified_speed_has_images]
+        tags: [recipe:speed-first, language:en, multimodal, image, shape:messages]
+
+  - id: cost_omni
+    model: vllm-sr/mom-v1-lite
+    expected_recipe: cost-first
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: State the main visible fact in the attached image.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [unified_cost_has_images]
+        tags: [recipe:cost-first, language:en, multimodal, image, shape:messages]
+
+  - id: accuracy_omni
+    model: vllm-sr/mom-v1-ultra
+    expected_recipe: accuracy-first
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Carefully explain what the attached image shows.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [unified_frontier_has_images]
+        tags: [recipe:accuracy-first, language:en, multimodal, image, shape:messages]
+
+  - id: privacy_omni
+    model: vllm-sr/mom-v1-vault
+    expected_recipe: privacy-first
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    expected_plugins: [tools]
+    variants:
+      - id: private_image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Summarize the attached private image locally.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [unified_privacy_has_images]
+        tags: [recipe:privacy-first, language:en, privacy, multimodal, image, shape:messages]
+
   - id: balanced_standard
     model: vllm-sr/mom-v1-blend
     expected_recipe: balanced
@@ -168,7 +271,6 @@ decisions:
     expected_recipe: balanced
     expected_decision: unified_balance_recovery
     expected_algorithm: multi_factor
-    expected_plugins: [system_prompt]
     variants:
       - id: explicit_correction
         query: That's wrong. Please correct the answer and try again.

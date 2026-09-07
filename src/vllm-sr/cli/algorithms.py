@@ -11,9 +11,8 @@ class ModelRef(BaseModel):
     model: str
     use_reasoning: bool | None = False
     reasoning_description: str | None = None
-    reasoning_effort: str | None = (
-        None  # Model-specific reasoning effort level (low, medium, high)
-    )
+    reasoning_mode: Literal["enabled", "disabled", "adaptive"] | None = None
+    reasoning_effort: str | None = None  # Model-specific reasoning effort level.
     lora_name: str | None = None  # LoRA adapter name (if using LoRA)
     weight: float | None = None
 
@@ -48,6 +47,8 @@ class ConfidenceAlgorithmConfig(BaseModel):
 
     # Behavior on model call failure: "skip" or "fail"
     on_error: str | None = "skip"
+
+    max_response_bytes: int | None = Field(default=None, ge=0)
 
 
 class RatingsAlgorithmConfig(BaseModel):
@@ -421,6 +422,10 @@ class AlgorithmConfig(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid")
+
+    # Minimum distinct decision candidates required once a model-free Recipe
+    # is materialized by an Entrypoint.
+    minimum_candidates: int | None = Field(default=None, ge=1)
 
     # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
     # "workflows") or

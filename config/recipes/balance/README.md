@@ -20,9 +20,10 @@ operators calibrate against their own models and traffic.
 | Deep reasoning and formal math | `openai/gpt5.4` |
 | Premium legal analysis | `anthropic/claude-opus-4.6` |
 | Secondary high-care health reviewer | `anthropic/claude-opus-4.6` |
+| Visual understanding | `local/omni` |
 
-These are routing aliases, not required vendor choices. The checked-in backend
-bindings are development placeholders and should be replaced before use.
+These are routing aliases, not required vendor choices. Connect the Models you
+operate, then review each decision assignment before publishing the Entrypoint.
 
 ## Intended use
 
@@ -32,6 +33,7 @@ Use this recipe for mixed assistant traffic where:
 - complex reasoning and specialist domains justify stronger models;
 - corrections and repeated questions should trigger a recovery path;
 - evidence-sensitive requests need additional verification; and
+- image-bearing requests need an explicit visual-capability lane; and
 - one request-facing model name is preferred over several client-side tiers.
 
 Choose a more specialized recipe when privacy, minimum latency, or minimum cost
@@ -41,6 +43,7 @@ must dominate every decision.
 
 | Request pattern | Typical behavior |
 | --- | --- |
+| Image content | Use the dedicated visual-language model. |
 | Legal, health, formal proof, or deep reasoning | Prefer premium or high-reasoning candidates. |
 | Complex specialist or coding work | Use a capable specialist, with a stronger fallback where configured. |
 | Explicit correction, repeated dissatisfaction, or verification request | Move to a recovery or reviewed-answer lane. |
@@ -73,9 +76,13 @@ replay or body capture when the deployment must not retain request content.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/balance/config.yaml
-vllm-sr serve --config config/recipes/balance/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Balanced Routing** in
+**Recipes**, assign a Model to each decision, and publish the resulting
+Mixture-of-Model Entrypoint. The checked-in YAML and probes remain the
+maintainer-facing source and conformance fixtures for this built-in Recipe.
 
 ## Evaluation
 

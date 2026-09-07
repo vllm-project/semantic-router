@@ -97,24 +97,28 @@ func (k *KindCluster) Create(ctx context.Context) error {
 }
 
 func (k *KindCluster) runCreateClusterCommand(ctx context.Context, configFile string) error {
-	var cmd *exec.Cmd
-	if k.GPUEnabled {
-		k.log("Creating cluster with GPU support and /mnt mount for storage...")
-		cmd = exec.CommandContext(ctx, "kind", "create", "cluster",
-			"--name", k.Name,
-			"--config", configFile,
-			"--wait", "5m")
-	} else {
-		k.log("Using Kind config with /mnt mount for storage")
-		cmd = exec.CommandContext(ctx, "kind", "create", "cluster",
-			"--name", k.Name,
-			"--config", configFile)
-	}
+	args := k.createClusterArgs(configFile)
+	cmd := exec.CommandContext(ctx, "kind", args...)
 	if k.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
 	return cmd.Run()
+}
+
+func (k *KindCluster) createClusterArgs(configFile string) []string {
+	args := []string{"create", "cluster", "--name", k.Name}
+	if nodeImage := strings.TrimSpace(os.Getenv("KIND_NODE_IMAGE")); nodeImage != "" {
+		args = append(args, "--image", nodeImage)
+	}
+	args = append(args, "--config", configFile)
+	if k.GPUEnabled {
+		k.log("Creating cluster with GPU support and /mnt mount for storage...")
+		args = append(args, "--wait", "5m")
+	} else {
+		k.log("Using Kind config with /mnt mount for storage")
+	}
+	return args
 }
 
 func (k *KindCluster) configureStorageProvisioner(ctx context.Context) error {

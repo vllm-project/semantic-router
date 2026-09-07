@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import webbrowser
-from contextlib import nullcontext
 from pathlib import Path
 
 import click
@@ -21,13 +20,6 @@ from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
 )
 from cli.commands.runtime_help import SERVE_HELP
-from cli.commands.runtime_management_credentials import (
-    catalog_management_credential_environment,
-)
-from cli.commands.runtime_model_source import (
-    ServeModelSource,
-    resolve_serve_model_request,
-)
 from cli.commands.runtime_serve_config import _prepare_effective_serve_config
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
@@ -49,7 +41,6 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
-from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import fields, heading, success
 from cli.utils import get_logger
 
@@ -72,7 +63,7 @@ RUNTIME_HELP = (
 
 
 def _build_backend(target: str | None, **k8s_kwargs):
-    """Instantiate the right DeploymentBackend for *target*."""
+    """Instantiate the deployment backend for *target*."""
     resolved = resolve_target(target)
     if resolved == "k8s":
         from cli.k8s_backend import K8sBackend  # noqa: PLC0415
@@ -86,55 +77,26 @@ def _build_backend(target: str | None, **k8s_kwargs):
 
 def _resolve_serve_config(
     config: str,
-    model_source: ServeModelSource | None,
     resolved_target: str,
-    image: str | None,
-    router_image: str | None,
-    platform: str | None,
 ) -> tuple[Path, bool]:
-    """Resolve a user-owned/bootstrap source or one immutable catalog source."""
+    """Resolve one user-owned config or bootstrap the local Dashboard workspace."""
 
-    if model_source is None:
-        if resolved_target != "docker":
-            config_path = Path(config).expanduser()
-            if not config_path.is_file():
-                raise ValueError(
-                    "Kubernetes deployment requires an existing complete --config; "
-                    "empty-directory Dashboard setup is supported only by local Docker"
-                )
-            if is_setup_mode_config(config_path):
-                raise ValueError(
-                    "Kubernetes deployment does not support Dashboard setup-mode "
-                    "configs; complete the config locally or provide a canonical config"
-                )
-            return config_path, False
-        bootstrap = ensure_bootstrap_workspace(Path(config))
-        log_bootstrap_result(config, bootstrap)
-        return bootstrap.config_path, bootstrap.setup_mode
-    platform_hint = (platform or os.getenv("VLLM_SR_PLATFORM", "")).strip().lower()
-    platform_image_override = (
-        os.getenv("VLLM_SR_IMAGE_AMD", "").strip()
-        if platform_hint == PLATFORM_AMD
-        else (
-            os.getenv("VLLM_SR_IMAGE_NVIDIA", "").strip()
-            if platform_hint == PLATFORM_NVIDIA
-            else ""
-        )
-    )
-    if any(
-        (
-            image,
-            router_image,
-            os.getenv("VLLM_SR_IMAGE", "").strip(),
-            os.getenv("VLLM_SR_ROUTER_IMAGE", "").strip(),
-            platform_image_override,
-        )
-    ):
-        log.warning(
-            "Catalog compatibility is verified against the co-versioned Router; "
-            "the custom Router image is an operator-managed compatibility override."
-        )
-    return model_source.config_path, False
+    if resolved_target != "docker":
+        config_path = Path(config).expanduser()
+        if not config_path.is_file():
+            raise ValueError(
+                "Kubernetes deployment requires an existing complete --config; "
+                "empty-directory Dashboard setup is supported only by local Docker"
+            )
+        if is_setup_mode_config(config_path):
+            raise ValueError(
+                "Kubernetes deployment does not support Dashboard setup-mode "
+                "configs; complete the config locally or provide a canonical config"
+            )
+        return config_path, False
+    bootstrap = ensure_bootstrap_workspace(Path(config))
+    log_bootstrap_result(config, bootstrap)
+    return bootstrap.config_path, bootstrap.setup_mode
 
 
 def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
@@ -164,7 +126,6 @@ def _deploy_serve_backend(
     effective_config_document: dict[str, object] | None,
     runtime_lock,
     env_vars: dict[str, str],
-    model_source: ServeModelSource | None,
     namespace: str | None,
     context: str | None,
     profile: str | None,
@@ -173,48 +134,35 @@ def _deploy_serve_backend(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     minimal: bool,
     readonly: bool,
 ) -> None:
-    """Deploy one prepared runtime while catalog credentials are in scope."""
+    """Deploy one prepared runtime."""
 
-    credential_scope = (
-        catalog_management_credential_environment(
-            config_path,
-            state_root=model_source.state_root,
-            stack_name=resolve_runtime_stack().stack_name,
-        )
-        if model_source is not None
-        else nullcontext({})
+    backend = _build_backend(
+        resolved_target,
+        namespace=namespace,
+        context=context,
+        profile=profile,
+        chart_dir=chart_dir,
     )
-    with credential_scope as credential_env:
-        env_vars.update(credential_env)
-        backend = _build_backend(
-            resolved_target,
-            namespace=namespace,
-            context=context,
-            profile=profile,
-            chart_dir=chart_dir,
-        )
-        backend.deploy(
-            config_file=str(effective_config_path.absolute()),
-            source_config_file=str(config_path.absolute()),
-            runtime_config_file=str(effective_config_path.absolute()),
-            runtime_config_lock=runtime_lock,
-            config_document=effective_config_document,
-            env_vars=env_vars,
-            image=image,
-            router_image=router_image,
-            envoy_image=envoy_image,
-            dashboard_image=dashboard_image,
-            sim_image=sim_image,
-            pull_policy=image_pull_policy,
-            enable_observability=not minimal,
-            minimal=minimal,
-            readonly=readonly,
-        )
+    backend.deploy(
+        config_file=str(effective_config_path.absolute()),
+        source_config_file=str(config_path.absolute()),
+        runtime_config_file=str(effective_config_path.absolute()),
+        runtime_config_lock=runtime_lock,
+        config_document=effective_config_document,
+        env_vars=env_vars,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        pull_policy=image_pull_policy,
+        enable_observability=not minimal,
+        minimal=minimal,
+        readonly=readonly,
+    )
 
 
 def _execute_serve(
@@ -223,7 +171,6 @@ def _execute_serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -237,15 +184,12 @@ def _execute_serve(
     chart_dir: str | None,
     runtime: str | None,
     recipe_env_names: tuple[str, ...] = (),
-    model_source: ServeModelSource | None = None,
 ) -> None:
     """Bootstrap workspace, resolve config, and delegate to the deployment backend."""
     resolved_target = resolve_target(target)
     _validate_target_platform(resolved_target, platform)
     apply_container_runtime_override(runtime)
-    config_path, source_setup_mode = _resolve_serve_config(
-        config, model_source, resolved_target, image, router_image, platform
-    )
+    config_path, source_setup_mode = _resolve_serve_config(config, resolved_target)
     log.info(f"Using config file: {config_path}")
 
     env_vars: dict[str, str] = {}
@@ -256,7 +200,6 @@ def _execute_serve(
         effective_config_path, setup_mode, runtime_lock, effective_config_document = (
             _prepare_effective_serve_config(
                 config_path,
-                model_source=model_source,
                 resolved_target=resolved_target,
                 algorithm=algorithm,
                 source_setup_mode=source_setup_mode,
@@ -280,8 +223,6 @@ def _execute_serve(
                 config_path,
                 effective_config_path,
             )
-        if model_source is not None:
-            env_vars["VLLM_SR_STATE_ROOT_DIR"] = str(model_source.state_root)
         _deploy_serve_backend(
             resolved_target=resolved_target,
             config_path=config_path,
@@ -289,7 +230,6 @@ def _execute_serve(
             effective_config_document=effective_config_document,
             runtime_lock=runtime_lock,
             env_vars=env_vars,
-            model_source=model_source,
             namespace=namespace,
             context=context,
             profile=profile,
@@ -298,7 +238,6 @@ def _execute_serve(
             router_image=router_image,
             envoy_image=envoy_image,
             dashboard_image=dashboard_image,
-            sim_image=sim_image,
             image_pull_policy=image_pull_policy,
             minimal=minimal,
             readonly=readonly,
@@ -309,19 +248,11 @@ def _execute_serve(
 
 
 @click.command(help=SERVE_HELP)
-@click.argument("model_ids", nargs=-1, metavar="[MODEL]...")
 @click.option(
     "--config",
-    default=None,
-    help=(
-        "Path to a user-owned config. Mutually exclusive with MODEL; defaults to "
-        "config.yaml when MODEL is omitted."
-    ),
-)
-@click.option(
-    "--catalog-version",
-    default=None,
-    help="Installed catalog version used to resolve MODEL operands (default: latest).",
+    default="config.yaml",
+    show_default=True,
+    help="Path to the Router configuration.",
 )
 @click.option(
     "--image",
@@ -342,11 +273,6 @@ def _execute_serve(
     "--dashboard-image",
     default=None,
     help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
-)
-@click.option(
-    "--sim-image",
-    default=None,
-    help="Docker image for the simulator sidecar (Docker target only; defaults to VLLM_SR_SIM_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -400,9 +326,7 @@ def _execute_serve(
     default=None,
     help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
     "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
-    "This option applies to config mode; catalog MODEL operands retain their "
-    "verified recipe algorithms. Cross-request learning uses "
-    "global.router.learning.adaptation/protection.",
+    "Cross-request learning uses global.router.learning.adaptation/protection.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -437,14 +361,11 @@ def _execute_serve(
 )
 @exit_with_logged_error(log, interrupt_message="\nInterrupted by user")
 def serve(
-    model_ids: tuple[str, ...],
-    config: str | None,
-    catalog_version: str | None,
+    config: str,
     image: str | None,
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
-    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -459,20 +380,12 @@ def serve(
     runtime: str | None,
     recipe_env_names: tuple[str, ...],
 ) -> None:
-    config_path, model_source = resolve_serve_model_request(
-        model_ids,
-        config=config,
-        catalog_version=catalog_version,
-        algorithm=algorithm,
-        target=target,
-    )
     _execute_serve(
-        config_path,
+        config,
         image,
         router_image,
         envoy_image,
         dashboard_image,
-        sim_image,
         image_pull_policy,
         readonly,
         minimal,
@@ -486,14 +399,13 @@ def serve(
         chart_dir,
         runtime,
         recipe_env_names,
-        model_source,
     )
 
 
 @click.command()
 @click.argument(
     "service",
-    type=click.Choice(["envoy", "router", "dashboard", "simulator", "all"]),
+    type=click.Choice(["envoy", "router", "dashboard", "all"]),
     default="all",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
@@ -525,7 +437,6 @@ def status(
         vllm-sr status all          # Show all services
         vllm-sr status router       # Show router status
         vllm-sr status dashboard    # Show dashboard status
-        vllm-sr status simulator    # Show simulator status
         vllm-sr status --target k8s # Show Kubernetes status
     """
     apply_container_runtime_override(runtime)
@@ -534,9 +445,7 @@ def status(
 
 
 @click.command()
-@click.argument(
-    "service", type=click.Choice(["envoy", "router", "dashboard", "simulator"])
-)
+@click.argument("service", type=click.Choice(["envoy", "router", "dashboard"]))
 @click.option("--follow", "-f", is_flag=True, help="Follow log output")
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -567,7 +476,6 @@ def logs(
         vllm-sr logs envoy
         vllm-sr logs router
         vllm-sr logs dashboard
-        vllm-sr logs simulator
         vllm-sr logs envoy --follow
         vllm-sr logs router -f
         vllm-sr logs router --target k8s        # Kubernetes logs

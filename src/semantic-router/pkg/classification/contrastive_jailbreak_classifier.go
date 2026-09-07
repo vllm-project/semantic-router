@@ -3,7 +3,9 @@ package classification
 import (
 	"context"
 	"fmt"
+	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +39,7 @@ type ContrastiveJailbreakClassifier struct {
 	// Pre-computed embeddings for the two knowledge bases
 	jailbreakEmbeddings map[string][]float32 // pattern text → embedding
 	benignEmbeddings    map[string][]float32 // pattern text → embedding
+	exactJailbreaks     map[string]struct{}  // normalized explicit positive patterns
 
 	modelType string
 	provider  embedding.Provider
@@ -53,6 +56,19 @@ type contrastiveJailbreakEmbeddingResult struct {
 	isJailbreak bool
 	err         error
 }
+
+type contrastiveJailbreakMessageTask struct {
+	index int
+	text  string
+}
+
+type contrastiveJailbreakMessageResult struct {
+	index     int
+	embedding []float32
+	err       error
+}
+
+const maxContrastiveJailbreakWorkers = 8
 
 // NewContrastiveJailbreakClassifier creates and initialises a classifier for a
 // single contrastive JailbreakRule. KB embeddings are computed eagerly using a
@@ -71,8 +87,14 @@ func NewContrastiveJailbreakClassifierWithProvider(rule config.JailbreakRule, de
 		rule:                rule,
 		jailbreakEmbeddings: make(map[string][]float32),
 		benignEmbeddings:    make(map[string][]float32),
+		exactJailbreaks:     make(map[string]struct{}, len(rule.JailbreakPatterns)),
 		modelType:           modelType,
 		provider:            provider,
+	}
+	for _, pattern := range rule.JailbreakPatterns {
+		if normalized := normalizeContrastivePattern(pattern); normalized != "" {
+			c.exactJailbreaks[normalized] = struct{}{}
+		}
 	}
 
 	if err := c.preloadKBEmbeddings(); err != nil {
@@ -92,24 +114,33 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		TotalMessages: len(messages),
 	}
 
+	// Search every bounded chunk before starting embedding inference. Explicit
+	// patterns are deterministic policy and can terminate the scan immediately,
+	// which also keeps long-context containment probes inexpensive.
 	for i, msg := range messages {
-		if msg == "" {
-			continue
+		if c.matchesExplicitJailbreak(msg) {
+			result.MaxScore = 1
+			result.WorstMessage = msg
+			result.WorstMsgIndex = i
+			result.JailbreakSim = 1
+			result.BenignSim = 0
+			result.ProcessingTime = time.Since(start)
+			return result
 		}
-		msgEmb, err := c.embedText(msg)
-		if err != nil {
-			// Counted, not just logged: a message that was never scored is
-			// unverified content, which prompt_guard's on_error policy has to
-			// be able to act on.
-			result.FailedMessages++
-			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", i, err)
+	}
+
+	embeddings, failed := c.embedMessages(messages)
+	result.FailedMessages = failed
+	for i, msg := range messages {
+		msgEmb := embeddings[i]
+		if msg == "" || msgEmb == nil {
 			continue
 		}
 
 		// max similarity to jailbreak KB
 		maxJailSim := float32(-1)
 		for _, emb := range c.jailbreakEmbeddings {
-			if sim := cosineSimilarity(msgEmb, emb); sim > maxJailSim {
+			if sim := contrastiveCosineSimilarity(msgEmb, emb); sim > maxJailSim {
 				maxJailSim = sim
 			}
 		}
@@ -117,7 +148,7 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		// max similarity to benign KB
 		maxBenignSim := float32(-1)
 		for _, emb := range c.benignEmbeddings {
-			if sim := cosineSimilarity(msgEmb, emb); sim > maxBenignSim {
+			if sim := contrastiveCosineSimilarity(msgEmb, emb); sim > maxBenignSim {
 				maxBenignSim = sim
 			}
 		}
@@ -134,6 +165,94 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 
 	result.ProcessingTime = time.Since(start)
 	return result
+}
+
+func (c *ContrastiveJailbreakClassifier) embedMessages(messages []string) ([][]float32, int) {
+	embeddings := make([][]float32, len(messages))
+	taskCount := 0
+	for _, message := range messages {
+		if message != "" {
+			taskCount++
+		}
+	}
+	if taskCount == 0 {
+		return embeddings, 0
+	}
+
+	tasks := make(chan contrastiveJailbreakMessageTask, taskCount)
+	results := make(chan contrastiveJailbreakMessageResult, taskCount)
+	for index, message := range messages {
+		if message != "" {
+			tasks <- contrastiveJailbreakMessageTask{index: index, text: message}
+		}
+	}
+	close(tasks)
+
+	var workers sync.WaitGroup
+	for range boundedContrastiveJailbreakWorkers(taskCount) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for task := range tasks {
+				embedding, err := c.embedText(task.text)
+				results <- contrastiveJailbreakMessageResult{index: task.index, embedding: embedding, err: err}
+			}
+		}()
+	}
+	go func() {
+		workers.Wait()
+		close(results)
+	}()
+
+	failed := 0
+	for embedded := range results {
+		if embedded.err != nil {
+			failed++
+			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", embedded.index, embedded.err)
+			continue
+		}
+		embeddings[embedded.index] = embedded.embedding
+	}
+	return embeddings, failed
+}
+
+func normalizeContrastivePattern(text string) string {
+	return strings.ToLower(strings.Join(strings.Fields(text), " "))
+}
+
+func (c *ContrastiveJailbreakClassifier) matchesExplicitJailbreak(text string) bool {
+	normalized := normalizeContrastivePattern(text)
+	for pattern := range c.exactJailbreaks {
+		if strings.Contains(normalized, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// contrastiveCosineSimilarity normalizes both vectors at the comparison seam.
+// Embedding providers are encouraged to return normalized vectors, but remote
+// and native providers do not share that as a contract. A raw dot product lets
+// vector magnitude dominate the jailbreak-versus-benign margin and can make an
+// exact positive example score below an unrelated high-norm benign example.
+func contrastiveCosineSimilarity(a, b []float32) float32 {
+	length := min(len(a), len(b))
+	if length == 0 {
+		return 0
+	}
+
+	var dotProduct, normA, normB float64
+	for index := 0; index < length; index++ {
+		left := float64(a[index])
+		right := float64(b[index])
+		dotProduct += left * right
+		normA += left * left
+		normB += right * right
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return float32(dotProduct / math.Sqrt(normA*normB))
 }
 
 func (c *ContrastiveJailbreakClassifier) embedText(text string) ([]float32, error) {
@@ -185,6 +304,9 @@ func (c *ContrastiveJailbreakClassifier) contrastiveJailbreakEmbeddingTasks() []
 
 func boundedContrastiveJailbreakWorkers(taskCount int) int {
 	numWorkers := runtime.NumCPU() * 2
+	if numWorkers > maxContrastiveJailbreakWorkers {
+		numWorkers = maxContrastiveJailbreakWorkers
+	}
 	if numWorkers > taskCount {
 		return taskCount
 	}

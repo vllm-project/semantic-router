@@ -223,6 +223,9 @@ func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	if jb.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
 	}
+	if jb.Direction != "" {
+		fields["direction"] = StringValue{V: jb.Direction}
+	}
 	if jb.Description != "" {
 		fields["description"] = StringValue{V: jb.Description}
 	}
@@ -337,8 +340,16 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
 		Description: dec.Description,
+		OnUnknown:   string(dec.Rules.OnUnknown),
 		Priority:    dec.Priority,
 		Tier:        dec.Tier,
+	}
+
+	if dec.Action != nil {
+		route.Action = &ActionDecl{
+			Type:        dec.Action.Type,
+			Destination: dec.Action.Destination,
+		}
 	}
 
 	// WHEN
@@ -349,6 +360,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		ref := &ModelRef{
 			Model:     mr.Model,
 			Reasoning: mr.UseReasoning,
+			Mode:      mr.ReasoningMode,
 			Effort:    mr.ReasoningEffort,
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
@@ -409,10 +421,24 @@ func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
 		Model:     model.Model,
 		Reasoning: model.UseReasoning,
+		Mode:      model.ReasoningMode,
 		Effort:    model.ReasoningEffort,
 		LoRA:      model.LoRAName,
 		Weight:    model.Weight,
 	}
+}
+
+// normalizedRuleOperator trims and upper-cases a rule-tree operator for
+// comparison. A rule tree loaded through the standard config path has
+// already been normalized (see config.NormalizeRuleOperator), but the
+// decompiler also runs directly against configs assembled without going
+// through that path (e.g. a Kubernetes CR merged for preview), so decompiling
+// must not assume the operator is already canonical: an unnormalized value
+// like "or" must still be recognized as OR rather than falling through to a
+// nil expression (dropping the WHEN clause and matching every request) or an
+// invalid lowercase keyword in decompiled DSL text.
+func normalizedRuleOperator(operator string) string {
+	return strings.ToUpper(strings.TrimSpace(operator))
 }
 
 func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
@@ -422,7 +448,7 @@ func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
 	if node.Type != "" {
 		return decompileSignalRefNode(node)
 	}
-	switch node.Operator {
+	switch normalizedRuleOperator(node.Operator) {
 	case "AND":
 		exprs := flattenRuleNodeToExprs(node, "AND")
 		if len(exprs) == 0 {
@@ -472,7 +498,7 @@ func decompileSignalRefNode(
 }
 
 func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr {
-	if node.Operator == op {
+	if normalizedRuleOperator(node.Operator) == op {
 		var exprs []BoolExpr
 		for i := range node.Conditions {
 			exprs = append(exprs, flattenRuleNodeToExprs(&node.Conditions[i], op)...)
@@ -493,6 +519,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", mr.ReasoningEffort))
+	}
+	if mr.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", mr.ReasoningMode))
 	}
 	if mr.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", mr.LoRAName))

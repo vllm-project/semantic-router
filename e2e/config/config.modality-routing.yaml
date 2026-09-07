@@ -1,16 +1,18 @@
 version: v0.3
 providers:
   defaults:
-    default_model: "Qwen/Qwen2.5-14B-Instruct"
+    model: "Qwen/Qwen2.5-14B-Instruct"
   models:
     - name: "Qwen/Qwen2.5-14B-Instruct"
       backend_refs:
         - name: vllm-ar
+          provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
     - name: "Qwen/Qwen-Image"
       backend_refs:
         - name: vllm-omni
+          provider: vllm
           endpoint: 127.0.0.1:8001
           weight: 1
 routing:
@@ -44,19 +46,6 @@ routing:
       modelRefs:
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_and_image
       description: Route hybrid text+image requests to both models in parallel.
       priority: 190
@@ -70,19 +59,6 @@ routing:
           use_reasoning: false
         - model: "Qwen/Qwen-Image"
           use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
     - name: text_generation
       description: Default text routing for AR requests.
       priority: 1

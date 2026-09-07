@@ -51,6 +51,7 @@ describe('decision editor preservation', () => {
   it('preserves recursive rule trees during form edits', () => {
     const existing: DecisionConfig['rules'] = {
       operator: 'AND',
+      on_unknown: 'fail_request',
       conditions: [
         { type: 'keyword', name: 'complex' },
         {
@@ -71,10 +72,13 @@ describe('decision editor preservation', () => {
 
     const result = decisionRulesForSave(existing, {
       operator: 'AND',
+      on_unknown: 'match',
       conditions: [{ type: 'keyword', name: 'flattened' }],
     })
 
-    expect(result).toEqual(existing)
+    expect(result.operator).toBe(existing.operator)
+    expect(result.conditions).toEqual(existing.conditions)
+    expect(result.on_unknown).toBe('match')
     expect(result).not.toBe(existing)
   })
 })

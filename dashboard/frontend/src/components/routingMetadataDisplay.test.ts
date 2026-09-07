@@ -51,7 +51,7 @@ describe('formatRoutingMetadataValue', () => {
       (match) => match[1],
     )
 
-    expect(decisions).toHaveLength(16)
+    expect(decisions).toHaveLength(21)
     expect(signals.length).toBeGreaterThan(40)
     expect(projections).toHaveLength(14)
 

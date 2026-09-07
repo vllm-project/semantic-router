@@ -258,6 +258,11 @@ const (
 	// Example: "critical_payment_event,payment_failed"
 	VSRMatchedEvent = "x-vsr-matched-event"
 
+	// VSRMatchedInputModality contains comma-separated list of matched
+	// structural input-modality signal names.
+	// Example: "image_input,audio_input"
+	VSRMatchedInputModality = "x-vsr-matched-input-modality"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projections"

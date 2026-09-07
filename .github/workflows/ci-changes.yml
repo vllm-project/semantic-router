@@ -3,18 +3,12 @@ name: CI Change Classification
 on:
   workflow_call:
     outputs:
-      core:
-        value: ${{ jobs.classify.outputs.core }}
       core_test:
         value: ${{ jobs.classify.outputs.core_test }}
       dashboard:
         value: ${{ jobs.classify.outputs.dashboard }}
       website:
         value: ${{ jobs.classify.outputs.website }}
-      docs:
-        value: ${{ jobs.classify.outputs.docs }}
-      docs_paper:
-        value: ${{ jobs.classify.outputs.docs_paper }}
       paper:
         value: ${{ jobs.classify.outputs.paper }}
       helm:
@@ -29,18 +23,12 @@ on:
         value: ${{ jobs.classify.outputs.cli }}
       memory:
         value: ${{ jobs.classify.outputs.memory }}
-      ci:
-        value: ${{ jobs.classify.outputs.ci }}
-      docker:
-        value: ${{ jobs.classify.outputs.docker }}
       images:
         value: ${{ jobs.classify.outputs.images }}
       pr_images:
         value: ${{ jobs.classify.outputs.pr_images }}
       publish_images:
         value: ${{ jobs.classify.outputs.publish_images }}
-      make:
-        value: ${{ jobs.classify.outputs.make }}
       operator:
         value: ${{ jobs.classify.outputs.operator }}
       openvino:
@@ -51,56 +39,12 @@ on:
         value: ${{ jobs.classify.outputs.router_learning }}
       recipe_conformance:
         value: ${{ jobs.classify.outputs.recipe_conformance }}
-      agent_text:
-        value: ${{ jobs.classify.outputs.agent_text }}
-      agent_exec:
-        value: ${{ jobs.classify.outputs.agent_exec }}
       docs_only:
         value: ${{ jobs.classify.outputs.docs_only }}
       security:
         value: ${{ jobs.classify.outputs.security }}
       full:
         value: ${{ jobs.classify.outputs.full }}
-      e2e_istio:
-        value: ${{ jobs.classify.outputs.e2e_istio }}
-      e2e_agentgateway:
-        value: ${{ jobs.classify.outputs.e2e_agentgateway }}
-      e2e_envoy_ai_gateway:
-        value: ${{ jobs.classify.outputs.e2e_envoy_ai_gateway }}
-      e2e_aibrix:
-        value: ${{ jobs.classify.outputs.e2e_aibrix }}
-      e2e_dashboard:
-        value: ${{ jobs.classify.outputs.e2e_dashboard }}
-      e2e_dynamic_config:
-        value: ${{ jobs.classify.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing:
-        value: ${{ jobs.classify.outputs.e2e_multimodal_routing }}
-      e2e_remote_embedding:
-        value: ${{ jobs.classify.outputs.e2e_remote_embedding }}
-      e2e_llm_d:
-        value: ${{ jobs.classify.outputs.e2e_llm_d }}
-      e2e_routing_strategies:
-        value: ${{ jobs.classify.outputs.e2e_routing_strategies }}
-      e2e_production_stack:
-        value: ${{ jobs.classify.outputs.e2e_production_stack }}
-      e2e_response_api:
-        value: ${{ jobs.classify.outputs.e2e_response_api }}
-      e2e_response_api_redis:
-        value: ${{ jobs.classify.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster:
-        value: ${{ jobs.classify.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection:
-        value: ${{ jobs.classify.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint:
-        value: ${{ jobs.classify.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac:
-        value: ${{ jobs.classify.outputs.e2e_authz_rbac }}
-      e2e_streaming:
-        value: ${{ jobs.classify.outputs.e2e_streaming }}
-      e2e_anthropic_shim:
-        value: ${{ jobs.classify.outputs.e2e_anthropic_shim }}
-      e2e_common:
-        value: ${{ jobs.classify.outputs.e2e_common }}
 
 permissions:
   contents: read
@@ -110,62 +54,34 @@ jobs:
     name: Classify changed files
     runs-on: ubuntu-latest
     outputs:
-      core: ${{ steps.matrix.outputs.core }}
-      core_test: ${{ steps.matrix.outputs.core_test }}
-      dashboard: ${{ steps.matrix.outputs.dashboard }}
-      website: ${{ steps.matrix.outputs.website }}
-      docs: ${{ steps.matrix.outputs.docs }}
-      docs_paper: ${{ steps.matrix.outputs.docs_paper }}
-      paper: ${{ steps.matrix.outputs.paper }}
-      helm: ${{ steps.matrix.outputs.helm }}
-      e2e: ${{ steps.matrix.outputs.e2e }}
-      e2e_profiles: ${{ steps.matrix.outputs.e2e_profiles }}
-      full_e2e_profiles: ${{ steps.matrix.outputs.full_e2e_profiles }}
-      cli: ${{ steps.matrix.outputs.cli }}
-      memory: ${{ steps.matrix.outputs.memory }}
-      ci: ${{ steps.matrix.outputs.ci }}
-      docker: ${{ steps.matrix.outputs.docker }}
-      images: ${{ steps.matrix.outputs.images }}
-      pr_images: ${{ steps.matrix.outputs.pr_images }}
-      publish_images: ${{ steps.matrix.outputs.publish_images }}
-      make: ${{ steps.matrix.outputs.make }}
-      operator: ${{ steps.matrix.outputs.operator }}
-      openvino: ${{ steps.matrix.outputs.openvino }}
-      performance: ${{ steps.matrix.outputs.performance }}
-      router_learning: ${{ steps.matrix.outputs.router_learning }}
-      recipe_conformance: ${{ steps.matrix.outputs.recipe_conformance }}
-      agent_text: ${{ steps.matrix.outputs.agent_text }}
-      agent_exec: ${{ steps.matrix.outputs.agent_exec }}
-      docs_only: ${{ steps.matrix.outputs.docs_only }}
-      security: ${{ steps.matrix.outputs.security }}
-      full: ${{ steps.matrix.outputs.full }}
-      e2e_istio: ${{ steps.matrix.outputs.e2e_istio }}
-      e2e_agentgateway: ${{ steps.matrix.outputs.e2e_agentgateway }}
-      e2e_envoy_ai_gateway: ${{ steps.matrix.outputs.e2e_envoy_ai_gateway }}
-      e2e_aibrix: ${{ steps.matrix.outputs.e2e_aibrix }}
-      e2e_dashboard: ${{ steps.matrix.outputs.e2e_dashboard }}
-      e2e_dynamic_config: ${{ steps.matrix.outputs.e2e_dynamic_config }}
-      e2e_multimodal_routing: ${{ steps.matrix.outputs.e2e_multimodal_routing }}
-      e2e_remote_embedding: ${{ steps.matrix.outputs.e2e_remote_embedding }}
-      e2e_llm_d: ${{ steps.matrix.outputs.e2e_llm_d }}
-      e2e_routing_strategies: ${{ steps.matrix.outputs.e2e_routing_strategies }}
-      e2e_production_stack: ${{ steps.matrix.outputs.e2e_production_stack }}
-      e2e_response_api: ${{ steps.matrix.outputs.e2e_response_api }}
-      e2e_response_api_redis: ${{ steps.matrix.outputs.e2e_response_api_redis }}
-      e2e_response_api_redis_cluster: ${{ steps.matrix.outputs.e2e_response_api_redis_cluster }}
-      e2e_ml_model_selection: ${{ steps.matrix.outputs.e2e_ml_model_selection }}
-      e2e_multi_endpoint: ${{ steps.matrix.outputs.e2e_multi_endpoint }}
-      e2e_authz_rbac: ${{ steps.matrix.outputs.e2e_authz_rbac }}
-      e2e_streaming: ${{ steps.matrix.outputs.e2e_streaming }}
-      e2e_anthropic_shim: ${{ steps.matrix.outputs.e2e_anthropic_shim }}
-      e2e_common: ${{ steps.matrix.outputs.e2e_common }}
+      core_test: ${{ steps.classify.outputs.core_test }}
+      dashboard: ${{ steps.classify.outputs.dashboard }}
+      website: ${{ steps.classify.outputs.website }}
+      paper: ${{ steps.classify.outputs.paper }}
+      helm: ${{ steps.classify.outputs.helm }}
+      e2e: ${{ steps.classify.outputs.e2e }}
+      e2e_profiles: ${{ steps.classify.outputs.e2e_profiles }}
+      full_e2e_profiles: ${{ steps.classify.outputs.full_e2e_profiles }}
+      cli: ${{ steps.classify.outputs.cli }}
+      memory: ${{ steps.classify.outputs.memory }}
+      images: ${{ steps.classify.outputs.images }}
+      pr_images: ${{ steps.classify.outputs.pr_images }}
+      publish_images: ${{ steps.classify.outputs.publish_images }}
+      operator: ${{ steps.classify.outputs.operator }}
+      openvino: ${{ steps.classify.outputs.openvino }}
+      performance: ${{ steps.classify.outputs.performance }}
+      router_learning: ${{ steps.classify.outputs.router_learning }}
+      recipe_conformance: ${{ steps.classify.outputs.recipe_conformance }}
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      security: ${{ steps.classify.outputs.security }}
+      full: ${{ steps.classify.outputs.full }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - id: matrix
-        name: Build domain, image, and E2E matrices
+      - id: classify
+        name: Classify domains and explicit escalations
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci/full') }}

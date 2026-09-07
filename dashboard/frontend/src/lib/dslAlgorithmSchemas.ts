@@ -40,7 +40,22 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   prompt: 'Use a concrete helper model to select one declared candidate',
 }
 
+const COMMON_ALGORITHM_FIELDS: FieldSchema[] = [
+  {
+    key: 'minimum_candidates',
+    label: 'Minimum Candidates',
+    type: 'number',
+    min: 1,
+    placeholder: '1',
+    description: 'Minimum distinct decision candidates required after model assignment',
+  },
+]
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
+  return [...COMMON_ALGORITHM_FIELDS, ...getAlgorithmSpecificFieldSchema(algoType)]
+}
+
+function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
   switch (algoType) {
     case 'confidence':
       return [
@@ -85,6 +100,12 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'Verifier Timeout',
           type: 'number',
           placeholder: '60',
+        },
+        {
+          key: 'max_response_bytes',
+          label: 'Max Response Bytes',
+          type: 'number',
+          placeholder: '33554432',
         },
       ]
     case 'ratings':

@@ -3509,7 +3509,7 @@
           }
         },
         "requestBody": {
-          "description": "Multipart upload with a file field and optional purpose field. Limit: 52428800 bytes.",
+          "description": "Multipart upload with a file field and optional purpose field. Documents (.txt, .md, .json, .csv, .html) by default; images (.png, .jpg, .jpeg, .gif, .webp) with purpose=vision. Limit: 52428800 bytes.",
           "required": true,
           "content": {
             "multipart/form-data": {

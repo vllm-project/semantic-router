@@ -61,8 +61,9 @@ Detects the language of the query.
   Fields: description (string)
 
 ### context
-Matches based on conversation context length.
-  Fields: min_tokens (string), max_tokens (string), description (string)
+Matches based on conversation context length (inclusive token band).
+  Fields: min_tokens (string, defaults to 0), max_tokens (string, optional; omit for no upper bound), description (string)
+  min_tokens == max_tokens matches exactly that token count.
 
 ### modality
 Detects input modality (text, image, audio, etc.).
@@ -116,7 +117,7 @@ Inside a ROUTE block:
 
 ### Plugin Types (inline)
   system_prompt, semantic_cache, hallucination, memory, rag, tools,
-  image_gen, fast_response, request_params, router_replay, header_mutation
+  fast_response, request_params, router_replay, header_mutation
 
 ## Boolean Expressions (WHEN clauses)
 

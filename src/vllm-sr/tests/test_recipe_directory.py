@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -28,7 +29,7 @@ def _capture_run_commands(monkeypatch):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )
@@ -258,7 +259,10 @@ listeners: []
 providers:
   models:
     - name: custom
-      api_key_env: CUSTOM_PROVIDER_API_KEY
+      backend_refs:
+        - provider: vllm
+          endpoint: localhost:8000
+          api_key_env: CUSTOM_PROVIDER_API_KEY
 """,
         encoding="utf-8",
     )

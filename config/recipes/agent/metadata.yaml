@@ -11,6 +11,7 @@ authors:
 license: Apache-2.0
 tags:
   - agents
+  - multimodal
   - privacy
   - router-learning
   - security

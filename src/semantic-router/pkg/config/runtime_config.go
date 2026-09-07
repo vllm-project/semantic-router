@@ -6,7 +6,6 @@ type LooperConfig struct {
 	GRPCMaxMsgSizeMB   int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
 	MaxResponseBytesMB int                 `yaml:"max_response_bytes_mb,omitempty"`
 	TimeoutSeconds     int                 `yaml:"timeout_seconds,omitempty"`
-	RetryCount         int                 `yaml:"retry_count,omitempty"`
 	Headers            map[string]string   `yaml:"headers,omitempty"`
 	ReMoM              ReMoMRuntimeConfig  `yaml:"remom,omitempty"`
 	Fusion             FusionRuntimeConfig `yaml:"fusion,omitempty"`
@@ -222,6 +221,9 @@ type ResponseCacheStoreConfig struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	// PolarityGuard configures the negation/antonym guard; nil means the
+	// lexical default with the NLI tier off.
+	PolarityGuard *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
 }
 
 // SemanticCache is retained for source compatibility.
@@ -248,7 +250,6 @@ type MemoryConfig struct {
 	Qdrant                     *MemoryQdrantConfig        `yaml:"qdrant,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
-	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
 	DefaultRetrievalLimit      int                        `yaml:"default_retrieval_limit,omitempty"`
 	DefaultSimilarityThreshold float32                    `yaml:"default_similarity_threshold,omitempty"`
 	HybridSearch               bool                       `yaml:"hybrid_search,omitempty"`

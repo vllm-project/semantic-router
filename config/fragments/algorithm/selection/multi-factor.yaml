@@ -1,5 +1,6 @@
 algorithm:
   type: multi_factor
+  minimum_candidates: 2
   multi_factor:
     weights:
       quality: 0.4

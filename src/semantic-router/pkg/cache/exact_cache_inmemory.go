@@ -9,6 +9,7 @@ import (
 
 type exactMemoryEntry struct {
 	responseBody []byte
+	storedAt     time.Time
 	expiresAt    time.Time
 }
 
@@ -33,11 +34,7 @@ func (c *InMemoryCache) FindExact(ctx context.Context, partition string, fingerp
 		c.mu.Unlock()
 		return LookupResult{}, nil
 	}
-	return LookupResult{
-		ResponseBody: append([]byte(nil), entry.responseBody...),
-		Found:        true,
-		Similarity:   1,
-	}, nil
+	return lookupResultFromTimestamps(append([]byte(nil), entry.responseBody...), 1, entry.storedAt, entry.expiresAt), nil
 }
 
 // AddExact stores a complete exact response under the normalized request hash.
@@ -56,7 +53,10 @@ func (c *InMemoryCache) AddExact(
 		return err
 	}
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
-	entry := exactMemoryEntry{responseBody: append([]byte(nil), responseBody...)}
+	entry := exactMemoryEntry{
+		responseBody: append([]byte(nil), responseBody...),
+		storedAt:     time.Now(),
+	}
 	if effectiveTTL > 0 {
 		entry.expiresAt = time.Now().Add(time.Duration(effectiveTTL) * time.Second)
 	}
