@@ -70,6 +70,12 @@ func (v *AutoMixVerifier) Verify(ctx context.Context, req *VerifierRequest) (*Ve
 		if err != nil {
 			return nil, &VerifierError{Code: classifyVerifierOutputError(err), Err: err}
 		}
+		if !validVerifierConfidence(resp.Confidence) {
+			return nil, &VerifierError{
+				Code: VerifierFailureMalformed,
+				Err:  fmt.Errorf("automix confidence %.3g out of [0,1]", resp.Confidence),
+			}
+		}
 		scores = append(scores, CandidateScore{CandidateID: c.ID, Confidence: resp.Confidence})
 		if resp.Confidence > best {
 			best, bestIdx = resp.Confidence, i

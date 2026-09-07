@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -179,6 +180,9 @@ const (
 	VerifierFailureMalformed VerifierFailureCode = "malformed_output"
 	// VerifierFailureNoCandidate means no policy-valid candidate was supplied.
 	VerifierFailureNoCandidate VerifierFailureCode = "no_candidate"
+	// VerifierFailureCanceled means the verification was canceled by the
+	// caller; distinct from timeout so on_error policy need never guess.
+	VerifierFailureCanceled VerifierFailureCode = "canceled"
 )
 
 // VerifierError is the typed verifier failure. Callers switch on Code for
@@ -204,14 +208,29 @@ func NewVerifierError(code VerifierFailureCode, err error) *VerifierError {
 }
 
 // classifyVerifierHTTPError maps a client-side HTTP error to a typed failure
-// code. Adapters that build on net/http reuse this so timeout-vs-unavailable
-// semantics stay uniform.
+// code. Adapters that build on net/http reuse this so cancellation-vs-timeout
+// vs-unavailable semantics stay uniform: caller cancellation is its own
+// deterministic outcome (issue #2857), deadline expiry is a timeout, and
+// everything else is unavailable.
 func classifyVerifierHTTPError(err error) VerifierFailureCode {
+	if errors.Is(err, context.Canceled) {
+		return VerifierFailureCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return VerifierFailureTimeout
+	}
 	var nerr interface{ Timeout() bool }
 	if errors.As(err, &nerr) && nerr.Timeout() {
 		return VerifierFailureTimeout
 	}
 	return VerifierFailureUnavailable
+}
+
+// validVerifierConfidence reports whether c is a usable bounded score in
+// [0,1]. The contract caps confidence so no adapter can approve on an
+// out-of-domain or non-finite value from the verifier server.
+func validVerifierConfidence(c float64) bool {
+	return !math.IsNaN(c) && !math.IsInf(c, 0) && c >= 0 && c <= 1
 }
 
 // waitForLatency measures caller-side latency into the result when the

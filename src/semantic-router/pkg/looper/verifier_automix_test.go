@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -199,5 +200,38 @@ func TestAutoMixVerifierNoCandidateIsTyped(t *testing.T) {
 	}
 	if verr.Code != VerifierFailureNoCandidate {
 		t.Fatalf("failure code = %q, want no_candidate", verr.Code)
+	}
+}
+
+func TestAutoMixVerifierRejectsOutOfDomainConfidence(t *testing.T) {
+	for _, c := range []float64{2.0, -0.1, math.NaN(), math.Inf(1)} {
+		srv, _ := serveAutoMixVerifier(t, automixVerifierBody(200, c))
+		v := NewAutoMixVerifier(srv.URL, 5, 0, 0.7)
+		_, err := v.Verify(context.Background(), &VerifierRequest{
+			Task:       "q",
+			Candidates: []VerifierCandidate{{ID: "c1", Content: "a"}},
+		})
+		srv.Close()
+		var verr *VerifierError
+		if !errors.As(err, &verr) || verr.Code != VerifierFailureMalformed {
+			t.Fatalf("confidence=%v: err = %v, want malformed_output", c, err)
+		}
+	}
+}
+
+func TestAutoMixVerifierCanceledIsTyped(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	v := NewAutoMixVerifier("http://127.0.0.1:1", 1, 0, 0.7)
+	_, err := v.Verify(ctx, &VerifierRequest{
+		Task:       "q",
+		Candidates: []VerifierCandidate{{ID: "c1", Content: "a"}},
+	})
+	var verr *VerifierError
+	if !errors.As(err, &verr) {
+		t.Fatalf("expected *VerifierError, got %T", err)
+	}
+	if verr.Code != VerifierFailureCanceled {
+		t.Fatalf("failure code = %q, want canceled", verr.Code)
 	}
 }

@@ -19,6 +19,8 @@ package looper
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -126,3 +128,45 @@ func TestValidVerifierDisposition(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyVerifierHTTPErrorIsDeterministic(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want VerifierFailureCode
+	}{
+		{"canceled", context.Canceled, VerifierFailureCanceled},
+		{"wrapped-canceled", fmt.Errorf("transport: %w", context.Canceled), VerifierFailureCanceled},
+		{"deadline", context.DeadlineExceeded, VerifierFailureTimeout},
+		{"timeout-iface", netTimeoutErr{}, VerifierFailureTimeout},
+		{"unavailable", errors.New("connection refused"), VerifierFailureUnavailable},
+	} {
+		if got := classifyVerifierHTTPError(tc.err); got != tc.want {
+			t.Fatalf("classify(%q) = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestValidVerifierConfidenceRejectsOutOfDomain(t *testing.T) {
+	for c, want := range map[float64]bool{
+		0:            true,
+		0.5:          true,
+		1:            true,
+		-0.1:         false,
+		2.0:          false,
+		math.NaN():   false,
+		math.Inf(1):  false,
+		math.Inf(-1): false,
+	} {
+		if got := validVerifierConfidence(c); got != want {
+			t.Fatalf("validVerifierConfidence(%v) = %v, want %v", c, got, want)
+		}
+	}
+}
+
+// netTimeoutErr implements the net.Error timeout interface used by HTTP
+// clients to signal deadline expiry.
+type netTimeoutErr struct{ error }
+
+func (netTimeoutErr) Timeout() bool   { return true }
+func (netTimeoutErr) Temporary() bool { return false }
