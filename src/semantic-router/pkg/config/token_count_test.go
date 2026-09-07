@@ -6,73 +6,167 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v2"
 )
 
-// tokenCountCase is one entry of testdata/token_count_cases.json, the parsing
-// contract shared with the CLI test suite (src/vllm-sr/tests). Exactly one of
-// Value or Error is set.
-type tokenCountCase struct {
-	Input string `json:"input"`
+// tokenCountExpectation is what a fixture entry expects from
+// TokenCount.Value: exactly one of Value or Error is set.
+type tokenCountExpectation struct {
 	Value *int64 `json:"value"`
 	Error string `json:"error"`
 	Note  string `json:"note"`
 }
 
-func loadTokenCountCases(t *testing.T) []tokenCountCase {
+// tokenCountCase is one entry of the fixture's cases: a string handed to
+// TokenCount directly.
+type tokenCountCase struct {
+	Input string `json:"input"`
+	tokenCountExpectation
+}
+
+// yamlTokenCountCase is one entry of the fixture's yaml_cases: the scalar as
+// spelled in a config file, and the text TokenCount receives once the
+// Router loader has decoded the file untyped and re-marshalled it.
+type yamlTokenCountCase struct {
+	Scalar string `json:"scalar"`
+	Text   string `json:"text"`
+	tokenCountExpectation
+}
+
+// tokenCountFixture is testdata/token_count_cases.json, the parsing contract
+// shared with the CLI test suite (src/vllm-sr/tests).
+type tokenCountFixture struct {
+	Cases     []tokenCountCase     `json:"cases"`
+	YAMLCases []yamlTokenCountCase `json:"yaml_cases"`
+}
+
+func loadTokenCountFixture(t *testing.T) tokenCountFixture {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("testdata", "token_count_cases.json"))
 	if err != nil {
 		t.Fatalf("read token count cases: %v", err)
 	}
-	var fixture struct {
-		Cases []tokenCountCase `json:"cases"`
-	}
+	var fixture tokenCountFixture
 	if err := json.Unmarshal(raw, &fixture); err != nil {
 		t.Fatalf("decode token count cases: %v", err)
 	}
-	if len(fixture.Cases) == 0 {
-		t.Fatal("token count fixture has no cases")
+	if len(fixture.Cases) == 0 || len(fixture.YAMLCases) == 0 {
+		t.Fatal("token count fixture must have cases and yaml_cases")
 	}
-	return fixture.Cases
+	return fixture
+}
+
+// contextBandYAML renders the document both test suites load for a
+// yaml_cases entry: one context rule whose min_tokens is spelled as scalar.
+func contextBandYAML(scalar string) string {
+	return "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: " + scalar + "\n        max_tokens: 100M\n"
+}
+
+// decodeTokenCountLikeRouter runs the loader's decode, marshal, decode steps
+// (parseYAMLBytesWithOptions) on doc and returns the min_tokens text the
+// typed config receives.
+func decodeTokenCountLikeRouter(t *testing.T, doc string) TokenCount {
+	t.Helper()
+	raw, err := parseRawConfigMap([]byte(doc))
+	if err != nil {
+		t.Fatalf("decode untyped: %v", err)
+	}
+	remarshalled, err := yaml.Marshal(raw)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	var fragment routingFragmentDocument
+	if err := yaml.Unmarshal(remarshalled, &fragment); err != nil {
+		t.Fatalf("decode typed: %v", err)
+	}
+	if len(fragment.Routing.Signals.Context) != 1 {
+		t.Fatalf("decoded %d context rules, want 1", len(fragment.Routing.Signals.Context))
+	}
+	return fragment.Routing.Signals.Context[0].MinTokens
 }
 
 // TestTokenCountValueMatchesSharedContract pins TokenCount.Value to the
 // fixture the CLI's parse_token_count is also tested against, so the two
 // parsers cannot drift apart silently.
 func TestTokenCountValueMatchesSharedContract(t *testing.T) {
-	for _, tc := range loadTokenCountCases(t) {
+	for _, tc := range loadTokenCountFixture(t).Cases {
 		t.Run(tc.Input, func(t *testing.T) {
-			assertTokenCountCase(t, tc)
+			got, err := TokenCount(tc.Input).Value()
+			assertTokenCountResult(t, "Value("+tc.Input+")", tc.tokenCountExpectation, got, err)
 		})
 	}
 }
 
-// assertTokenCountCase checks one fixture entry: an error case must fail with
-// the fixture's error prefix, a value case must parse to the fixture's value.
-func assertTokenCountCase(t *testing.T, tc tokenCountCase) {
-	t.Helper()
-	if (tc.Value == nil) == (tc.Error == "") {
-		t.Fatalf("case %q must set exactly one of value or error", tc.Input)
-	}
-	got, err := TokenCount(tc.Input).Value()
-	if tc.Error != "" {
-		assertTokenCountError(t, tc, got, err)
-		return
-	}
-	if err != nil {
-		t.Fatalf("Value(%q) returned error %v, want %d", tc.Input, err, *tc.Value)
-	}
-	if int64(got) != *tc.Value {
-		t.Fatalf("Value(%q) = %d, want %d", tc.Input, got, *tc.Value)
+// TestTokenCountYAMLScalarsMatchSharedContract loads each yaml_cases scalar
+// the way the Router loads a config file. yaml.v2 types a plain scalar and
+// re-emits it before TokenCount sees it, so the fixture's text is what the
+// CLI's YAML boundary must reproduce, and ParseYAMLBytes must reach the
+// fixture's outcome.
+func TestTokenCountYAMLScalarsMatchSharedContract(t *testing.T) {
+	for _, tc := range loadTokenCountFixture(t).YAMLCases {
+		t.Run(tc.Scalar, func(t *testing.T) {
+			doc := contextBandYAML(tc.Scalar)
+			text := decodeTokenCountLikeRouter(t, doc)
+			if string(text) != tc.Text {
+				t.Fatalf("min_tokens: %s decoded as %q, want %q", tc.Scalar, string(text), tc.Text)
+			}
+			got, err := text.Value()
+			assertTokenCountResult(t, "min_tokens: "+tc.Scalar, tc.tokenCountExpectation, got, err)
+			assertParsedTokenCount(t, doc, tc)
+		})
 	}
 }
 
-func assertTokenCountError(t *testing.T, tc tokenCountCase, got int, err error) {
+// assertParsedTokenCount checks the end-to-end outcome of ParseYAMLBytes for
+// one yaml_cases entry: the parsed band's lower bound, or a load error that
+// names min_tokens and the fixture's error.
+func assertParsedTokenCount(t *testing.T, doc string, tc yamlTokenCountCase) {
+	t.Helper()
+	cfg, err := ParseYAMLBytes([]byte(doc))
+	if tc.Error != "" {
+		if err == nil || !strings.Contains(err.Error(), "min_tokens: "+tc.Error) {
+			t.Fatalf("ParseYAMLBytes(min_tokens: %s) error = %v, want one containing %q", tc.Scalar, err, "min_tokens: "+tc.Error)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(min_tokens: %s): %v", tc.Scalar, err)
+	}
+	bounds, err := cfg.ContextRules[0].Bounds()
+	if err != nil {
+		t.Fatalf("Bounds(min_tokens: %s): %v", tc.Scalar, err)
+	}
+	if int64(bounds.Min) != *tc.Value {
+		t.Fatalf("ParseYAMLBytes(min_tokens: %s) min = %d, want %d", tc.Scalar, bounds.Min, *tc.Value)
+	}
+}
+
+// assertTokenCountResult checks one fixture expectation: an error case must
+// fail with the fixture's error prefix, a value case must parse to its value.
+func assertTokenCountResult(t *testing.T, label string, want tokenCountExpectation, got int, err error) {
+	t.Helper()
+	if (want.Value == nil) == (want.Error == "") {
+		t.Fatalf("%s: fixture must set exactly one of value or error", label)
+	}
+	if want.Error != "" {
+		assertTokenCountError(t, label, want.Error, got, err)
+		return
+	}
+	if err != nil {
+		t.Fatalf("%s returned error %v, want %d", label, err, *want.Value)
+	}
+	if int64(got) != *want.Value {
+		t.Fatalf("%s = %d, want %d", label, got, *want.Value)
+	}
+}
+
+func assertTokenCountError(t *testing.T, label, wantPrefix string, got int, err error) {
 	t.Helper()
 	if err == nil {
-		t.Fatalf("Value(%q) = %d, want error %q", tc.Input, got, tc.Error)
+		t.Fatalf("%s = %d, want error %q", label, got, wantPrefix)
 	}
-	if !strings.HasPrefix(err.Error(), tc.Error+":") {
-		t.Fatalf("Value(%q) error = %q, want prefix %q", tc.Input, err.Error(), tc.Error)
+	if !strings.HasPrefix(err.Error(), wantPrefix+":") {
+		t.Fatalf("%s error = %q, want prefix %q", label, err.Error(), wantPrefix)
 	}
 }

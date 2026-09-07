@@ -42,11 +42,12 @@ ROUTER_MAX_TOKEN_COUNT = float(2**63 - 1)
 
 
 def normalize_token_count(value: object, field: str) -> str | None:
-    """Return the string form of a YAML token count, or None when omitted.
+    """Return the string form of a token count, or None when omitted.
 
-    YAML authors write ``min_tokens: 8001`` and ``max_tokens: 64K``
-    interchangeably, so plain integers and floats are accepted alongside
-    strings. Booleans and containers are rejected.
+    Values read from a config file arrive as the text the Router's YAML
+    decoder hands TokenCount (see cli.config_yaml). Plain integers and floats
+    are accepted for callers that build the model in Python. Booleans and
+    containers are rejected.
     """
     if value is None:
         return None

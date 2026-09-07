@@ -66,6 +66,12 @@ Each rule is an inclusive token band: it matches when
 
 Values accept `K` and `M` suffixes (`1.5K`, `0.5M`).
 
+An unquoted limit is typed by the Router's YAML decoder before it is parsed,
+following YAML 1.1 rules: `0123` is octal 83, `0x10` is 16, `1_000` is 1000,
+and `1:30` is not a number. Quote a value to keep it literal, so `'0123'` is
+123. The `vllm-sr` CLI applies the same typing, so its validation matches what
+the Router loads from the forwarded file.
+
 ```yaml
 routing:
   signals:

@@ -11,6 +11,7 @@ from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
     iter_routing_profiles,
 )
+from cli.config_yaml import safe_load_router_config
 from cli.models import RouterLearningConfig, UserConfig
 from cli.utils import get_logger
 
@@ -456,10 +457,11 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     if not config_file.exists():
         raise ConfigParseError(f"Configuration file not found: {config_path}")
 
-    # Load YAML
+    # Load YAML. Context band token counts keep their source spelling so the
+    # checks below see the text the Router parses from the forwarded file.
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = safe_load_router_config(f)
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
@@ -523,7 +525,7 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
 
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = safe_load_router_config(f)
         return data or {}
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
