@@ -4,6 +4,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKER_MK_PATH = REPO_ROOT / "tools" / "make" / "docker.mk"
 AGENT_MK_PATH = REPO_ROOT / "tools" / "make" / "agent.mk"
 ENVIRONMENTS_DOC_PATH = REPO_ROOT / "tools" / "agent" / "docs" / "environments.md"
+MEMORY_INTEGRATION_PATH = REPO_ROOT / "e2e" / "testing" / "run_memory_integration.sh"
+MILVUS_MK_PATH = REPO_ROOT / "tools" / "make" / "milvus.mk"
 
 
 def test_split_topology_defaults_to_rebuilding_router_image() -> None:
@@ -43,6 +45,60 @@ def test_memory_integration_uses_installed_agent_venv_cli() -> None:
     assert "vllm-sr-install-cli" in target
     assert 'PATH="$(AGENT_VENV)/bin:$$PATH" \\' in target
     assert "run_memory_integration.sh" in target
+
+
+def test_memory_integration_propagates_one_stack_run_and_port_identity() -> None:
+    make_content = DOCKER_MK_PATH.read_text(encoding="utf-8")
+    target = make_content.split("memory-test-integration:", 1)[1]
+
+    assert 'VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-}"' in target
+    assert 'VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-}"' in target
+    assert 'VLLM_SR_RUN_ID="$${VLLM_SR_RUN_ID:-}"' in target
+
+    script = MEMORY_INTEGRATION_PATH.read_text(encoding="utf-8")
+    assert 'VLLM_SR_STACK_NAME="${VLLM_SR_STACK_NAME:-vllm-sr-memory-$$}"' in script
+    assert 'VLLM_SR_RUN_ID="${VLLM_SR_RUN_ID:-memory-$$}"' in script
+    assert 'STACK_SUFFIX="${VLLM_SR_STACK_NAME}-memory"' in script
+    assert "19530 + VLLM_SR_PORT_OFFSET" in script
+    assert "9091 + VLLM_SR_PORT_OFFSET" in script
+
+
+def test_memory_cleanup_attests_fixture_ownership_before_deletion() -> None:
+    script = MEMORY_INTEGRATION_PATH.read_text(encoding="utf-8")
+    cleanup = script.split("cleanup() {", 1)[1].split("trap cleanup", 1)[0]
+
+    assert 'container_owned_by_run "${LLM_KATAN_CONTAINER_NAME}"' in cleanup
+    assert 'network_owned_by_run "${VLLM_SR_NETWORK}"' in cleanup
+    assert 'if [[ -n "${VLLM_SR_PID}" ]]' in cleanup
+    assert 'MILVUS_STACK_NAME="${VLLM_SR_STACK_NAME}"' in cleanup
+    assert 'MILVUS_RUN_ID="${VLLM_SR_RUN_ID}"' in cleanup
+    assert "stop llm-katan" not in cleanup
+    assert "rm llm-katan" not in cleanup
+    assert "milvus-semantic-cache" not in cleanup
+
+    milvus_make = MILVUS_MK_PATH.read_text(encoding="utf-8")
+    stop_target = milvus_make.split("stop-milvus:", 1)[1].split("restart-milvus:", 1)[0]
+    assert "com.vllm.semantic-router.managed" in stop_target
+    assert "com.vllm.semantic-router.stack" in stop_target
+    assert "com.vllm.semantic-router.run" in stop_target
+
+
+def test_milvus_data_path_is_safe_when_workspace_contains_spaces() -> None:
+    content = MILVUS_MK_PATH.read_text(encoding="utf-8")
+
+    assert 'mkdir -p "$(MILVUS_DATA_DIR)"' in content
+    assert '-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z"' in content
+    assert 'rm -rf "$(MILVUS_DATA_DIR)"' in content
+
+
+def test_memory_harness_keeps_loopback_binding_out_of_legacy_milvus_defaults() -> None:
+    milvus_make = MILVUS_MK_PATH.read_text(encoding="utf-8")
+    script = MEMORY_INTEGRATION_PATH.read_text(encoding="utf-8")
+
+    assert "MILVUS_BIND_HOST ?=" in milvus_make
+    assert "MILVUS_PUBLISH_HOST = $(if $(MILVUS_BIND_HOST)," in milvus_make
+    assert "-p 127.0.0.1:$(MILVUS_PORT):19530" not in milvus_make
+    assert 'MILVUS_BIND_HOST="127.0.0.1"' in script
 
 
 def test_cli_integration_uses_an_isolated_runtime_stack() -> None:

@@ -28,6 +28,21 @@ the shared-environment symlink without overwriting local files.
   and `make agent-serve-local ENV=cpu AGENT_STACK_NAME=lane-b AGENT_PORT_OFFSET=200`
 - Use the same `AGENT_STACK_NAME` and `AGENT_PORT_OFFSET` values with `make agent-smoke-local` and `make agent-stop-local`
 
+### Shared-host memory integration
+
+Use a distinct integration stack, port offset, and run ID for each concurrent
+host invocation:
+
+```bash
+VLLM_SR_STACK_NAME=memory-a VLLM_SR_PORT_OFFSET=2400 VLLM_SR_RUN_ID=memory-a-001 make memory-test-integration
+```
+
+The harness derives its network, Milvus, llm-katan, and temporary data names
+from that identity. Teardown removes auxiliary containers and networks only
+when their stack and run labels match. This first slice does not change the
+general CLI integration or local-agent lifecycle; those remain follow-up work
+under issue #2487.
+
 ## `amd-local`
 
 - Build with `make vllm-sr-dev VLLM_SR_PLATFORM=amd`

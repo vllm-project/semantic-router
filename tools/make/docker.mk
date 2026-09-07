@@ -520,5 +520,8 @@ memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-bui
 	VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) \
 	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
 	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
+	VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-}" \
+	VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-}" \
+	VLLM_SR_RUN_ID="$${VLLM_SR_RUN_ID:-}" \
 	PATH="$(AGENT_VENV)/bin:$$PATH" \
 	bash e2e/testing/run_memory_integration.sh

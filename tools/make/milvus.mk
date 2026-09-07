@@ -4,33 +4,44 @@
 
 ##@ Milvus
 
+MILVUS_CONTAINER_NAME ?= milvus-semantic-cache
+MILVUS_BIND_HOST ?=
+MILVUS_PORT ?= 19530
+MILVUS_HEALTH_PORT ?= 9091
+MILVUS_DATA_DIR ?= /tmp/milvus-data
+MILVUS_STACK_NAME ?=
+MILVUS_RUN_ID ?=
+MILVUS_LABEL_ARGS = $(if $(MILVUS_STACK_NAME),--label com.vllm.semantic-router.managed=true --label com.vllm.semantic-router.stack=$(MILVUS_STACK_NAME) $(if $(MILVUS_RUN_ID),--label com.vllm.semantic-router.run=$(MILVUS_RUN_ID),),)
+MILVUS_PUBLISH_HOST = $(if $(MILVUS_BIND_HOST),$(MILVUS_BIND_HOST):,)
+
 # Milvus container management
 start-milvus: ## Start Milvus container for testing
 	@$(LOG_TARGET)
-	@mkdir -p /tmp/milvus-data
+	@mkdir -p "$(MILVUS_DATA_DIR)"
 	@$(CONTAINER_RUNTIME) run -d \
-		--name milvus-semantic-cache \
+		--name $(MILVUS_CONTAINER_NAME) \
+		$(MILVUS_LABEL_ARGS) \
 		--security-opt seccomp:unconfined \
 		-e ETCD_USE_EMBED=true \
 		-e ETCD_DATA_DIR=/var/lib/milvus/etcd \
 		-e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
 		-e COMMON_STORAGETYPE=local \
 		-e CLUSTER_ENABLED=false \
-		-p 19530:19530 \
-		-p 9091:9091 \
-		-v /tmp/milvus-data:/var/lib/milvus:z \
+		-p $(MILVUS_PUBLISH_HOST)$(MILVUS_PORT):19530 \
+		-p $(MILVUS_PUBLISH_HOST)$(MILVUS_HEALTH_PORT):9091 \
+		-v "$(MILVUS_DATA_DIR):/var/lib/milvus:z" \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
 	@echo "Waiting for Milvus to be ready (up to 120s)..."
 	@elapsed=0; \
 	while [ $$elapsed -lt 120 ]; do \
-		if curl -sf http://localhost:9091/healthz >/dev/null 2>&1; then \
+		if curl -sf http://localhost:$(MILVUS_HEALTH_PORT)/healthz >/dev/null 2>&1; then \
 			echo "Milvus healthy after $${elapsed}s"; \
 			break; \
 		fi; \
-		if ! $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format '{{.Names}}' | grep -q milvus-semantic-cache; then \
+		if ! $(CONTAINER_RUNTIME) ps --filter "name=$(MILVUS_CONTAINER_NAME)" --format '{{.Names}}' | grep -q '^$(MILVUS_CONTAINER_NAME)$$'; then \
 			echo "ERROR: Milvus container exited unexpectedly"; \
-			$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -20 || true; \
+			$(CONTAINER_RUNTIME) logs $(MILVUS_CONTAINER_NAME) 2>&1 | tail -20 || true; \
 			exit 1; \
 		fi; \
 		sleep 5; \
@@ -39,25 +50,34 @@ start-milvus: ## Start Milvus container for testing
 	done; \
 	if [ $$elapsed -ge 120 ]; then \
 		echo "ERROR: Milvus did not become healthy within 120s"; \
-		$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -30 || true; \
+		$(CONTAINER_RUNTIME) logs $(MILVUS_CONTAINER_NAME) 2>&1 | tail -30 || true; \
 		exit 1; \
 	fi
-	@echo "Milvus available at localhost:19530"
+	@echo "Milvus available at localhost:$(MILVUS_PORT)"
 
 stop-milvus: ## Stop and remove Milvus container
 	@$(LOG_TARGET)
-	@$(CONTAINER_RUNTIME) stop milvus-semantic-cache || true
-	@$(CONTAINER_RUNTIME) rm milvus-semantic-cache || true
-	@rm -rf /tmp/milvus-data 2>/dev/null || sudo -n rm -rf /tmp/milvus-data || true
+	@if $(CONTAINER_RUNTIME) inspect $(MILVUS_CONTAINER_NAME) >/dev/null 2>&1; then \
+		if [ -n "$(MILVUS_STACK_NAME)" ]; then \
+			LABELS="$$($(CONTAINER_RUNTIME) inspect --format '{{json .Config.Labels}}' $(MILVUS_CONTAINER_NAME) 2>/dev/null || true)"; \
+			if ! echo "$$LABELS" | grep -Fq '"com.vllm.semantic-router.managed":"true"' || ! echo "$$LABELS" | grep -Fq '"com.vllm.semantic-router.stack":"$(MILVUS_STACK_NAME)"' || { [ -n "$(MILVUS_RUN_ID)" ] && ! echo "$$LABELS" | grep -Fq '"com.vllm.semantic-router.run":"$(MILVUS_RUN_ID)"'; }; then \
+				echo "Refusing to remove $(MILVUS_CONTAINER_NAME): ownership labels do not match" >&2; \
+				exit 1; \
+			fi; \
+		fi; \
+		$(CONTAINER_RUNTIME) stop $(MILVUS_CONTAINER_NAME) || true; \
+		$(CONTAINER_RUNTIME) rm $(MILVUS_CONTAINER_NAME) || true; \
+	fi
+	@rm -rf "$(MILVUS_DATA_DIR)" 2>/dev/null || sudo -n rm -rf "$(MILVUS_DATA_DIR)" || true
 	@echo "Milvus container stopped and removed"
 
 restart-milvus: stop-milvus start-milvus ## Restart Milvus container
 
 milvus-status: ## Show status of Milvus container
 	@$(LOG_TARGET)
-	@if $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q milvus-semantic-cache; then \
+	@if $(CONTAINER_RUNTIME) ps --filter "name=$(MILVUS_CONTAINER_NAME)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q $(MILVUS_CONTAINER_NAME); then \
 		echo "Milvus container is running:"; \
-		$(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
+		$(CONTAINER_RUNTIME) ps --filter "name=$(MILVUS_CONTAINER_NAME)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"; \
 	else \
 		echo "Milvus container is not running"; \
 		echo "Run 'make start-milvus' to start it"; \
