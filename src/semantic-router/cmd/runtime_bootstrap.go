@@ -493,29 +493,11 @@ func registerVectorStoreShutdownHook(
 }
 
 func warmupRouterRuntime(ctx context.Context, server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) error {
-	router := server.GetRouter()
-	if router == nil {
-		return nil
-	}
-	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
-		{
-			Name:       "tools_database",
-			Ready:      embeddingState.ToolsReady,
-			SkipReason: "embedding_runtime_not_ready_for_tools",
-			Load:       router.LoadToolsDatabase,
-		},
-		{
-			Name:       "knowledge_bases",
-			Ready:      embeddingState.AnyReady,
-			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-			Load:       router.PreloadKnowledgeBases,
-		},
-	}, modelruntime.WarmupRouterOptions{
+	return server.WarmupRouter(ctx, embeddingState, modelruntime.WarmupRouterOptions{
 		Component:      "router",
 		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
 	})
-	return err
 }
 
 func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) (*apiserver.Server, error) {

@@ -113,6 +113,40 @@ func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
 }
 
+// WarmupRouter loads generation-owned runtime data before serving requests.
+func (s *Server) WarmupRouter(
+	ctx context.Context,
+	state modelruntime.EmbeddingRuntimeState,
+	options modelruntime.WarmupRouterOptions,
+) error {
+	if s == nil || s.service == nil {
+		return nil
+	}
+	generation := s.service.current.Load()
+	if generation == nil || generation.router == nil {
+		return nil
+	}
+	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
+		{
+			Name:       "tools_database",
+			Ready:      state.ToolsReady,
+			SkipReason: "embedding_runtime_not_ready_for_tools",
+			Load: func() error {
+				return generation.withLease(generation.router.LoadToolsDatabase)
+			},
+		},
+		{
+			Name:       "knowledge_bases",
+			Ready:      state.AnyReady,
+			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
+			Load: func() error {
+				return generation.withLease(generation.router.PreloadKnowledgeBases)
+			},
+		},
+	}, options)
+	return err
+}
+
 // Start serves requests until Stop is called or the gRPC server fails.
 func (s *Server) Start() error {
 	return s.StartContext(context.Background())
@@ -360,6 +394,15 @@ func (g *routerGeneration) acquire() (func(), bool) {
 	return func() {
 		once.Do(g.refs.Done)
 	}, true
+}
+
+func (g *routerGeneration) withLease(work func() error) error {
+	release, acquired := g.acquire()
+	if !acquired {
+		return errors.New("router generation is shutting down")
+	}
+	defer release()
+	return work()
 }
 
 func (g *routerGeneration) retire() {
