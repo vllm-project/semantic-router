@@ -75,7 +75,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "mixed-model"
+    model: "mixed-model"
   models:
     - name: "mixed-model"
       backend_refs:
