@@ -402,7 +402,12 @@ func validRoutingRecipeInputID(value string, projection bool) bool {
 	if !routerconfig.IsSupportedSignalType(signalType) {
 		return false
 	}
-	return len(parts) == 2 || signalType == routerconfig.SignalTypeClassifier
+	return len(parts) == 2 || routingRecipeSignalSupportsLabel(signalType)
+}
+
+func routingRecipeSignalSupportsLabel(signalType string) bool {
+	return signalType == routerconfig.SignalTypeClassifier ||
+		signalType == routerconfig.SignalTypeComplexity
 }
 
 func validRoutingRecipeDigest(value string) bool {

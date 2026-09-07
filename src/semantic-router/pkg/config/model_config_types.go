@@ -280,11 +280,10 @@ type ToolsConfig struct {
 }
 
 type HallucinationMitigationConfig struct {
-	Enabled                 bool                     `yaml:"enabled"`
-	FactCheckModel          FactCheckModelConfig     `yaml:"fact_check_model"`
-	HallucinationModel      HallucinationModelConfig `yaml:"hallucination_model"`
-	NLIModel                NLIModelConfig           `yaml:"nli_model"`
-	OnHallucinationDetected string                   `yaml:"on_hallucination_detected,omitempty"`
+	Enabled            bool                     `yaml:"enabled"`
+	FactCheckModel     FactCheckModelConfig     `yaml:"fact_check_model"`
+	HallucinationModel HallucinationModelConfig `yaml:"hallucination_model"`
+	NLIModel           NLIModelConfig           `yaml:"nli_model"`
 }
 
 type FactCheckModelConfig struct {

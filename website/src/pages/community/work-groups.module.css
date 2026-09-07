@@ -68,11 +68,11 @@
 }
 
 .sectionHeading p {
-  max-width: 42rem;
   margin: 0.55rem 0 0;
   color: var(--site-muted-bright);
   font-size: 0.86rem;
   line-height: 1.6;
+  text-wrap: balance;
 }
 
 .groupList {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.evidence import ExecutionRecord
 from cli.evaluation.method_evidence import RobustnessMethodEvidence
 from cli.evaluation.normalized_suite_inputs import (
@@ -21,7 +22,6 @@ from cli.evaluation.normalized_suite_record_helpers import (
     unavailable_record,
 )
 from cli.evaluation.suite_contract import NormalizedDecision, NormalizedOutcome
-from cli.evaluation.suite_store_error import SuiteStoreError
 
 _MIN_MODEL_POOL_ARMS = 2
 

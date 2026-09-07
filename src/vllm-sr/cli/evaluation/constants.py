@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 SCHEMA_VERSION = "evaluation.v1"
-ENGINE_VERSION = "1"
 
 TRACK_IDS = (
     "routing",

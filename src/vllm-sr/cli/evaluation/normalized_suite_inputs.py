@@ -15,6 +15,7 @@ from cli.evaluation.contracts import (
     GradingCaseSet,
     VisibleCaseSet,
 )
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.execution_contract import (
     EvaluationInputs,
     NormalizedIdentity,
@@ -34,7 +35,6 @@ from cli.evaluation.suite_contract import (
     NormalizedTrajectoryStep,
 )
 from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.target_contracts import (
     BindingSnapshot,
     EvaluationTargetArm,

@@ -11,6 +11,9 @@ if str(CLI_ROOT) not in sys.path:
 
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
+from cli.validator import validate_user_config  # noqa: E402
+
+REPO_ROOT = CLI_ROOT.parents[1]
 
 
 def _render_envoy_config(
@@ -33,6 +36,19 @@ def _cluster_by_name(rendered_config, cluster_name):
         if cluster["name"] == cluster_name:
             return cluster
     raise AssertionError(f"cluster {cluster_name!r} not found")
+
+
+def test_helm_backend_target_fixture_is_valid_canonical_config(tmp_path):
+    fixture = yaml.safe_load(
+        (REPO_ROOT / "deploy/helm/testdata/backend-target-values.yaml").read_text()
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(yaml.safe_dump(fixture["configOverride"]))
+
+    config = parse_user_config(str(config_path))
+
+    errors = validate_user_config(config, log_summary=False)
+    assert [str(error) for error in errors] == []
 
 
 def test_generate_envoy_config_uses_logical_dns_for_split_extproc_host(
@@ -113,12 +129,8 @@ def _default_route(rendered_config):
     raise AssertionError("default route not found")
 
 
-def test_backend_ref_ip_port_path_produces_correct_envoy_cluster_and_route(
-    tmp_path, monkeypatch
-):
-    """Backend ref http://10.0.0.1:8000/v1 should split into address=10.0.0.1,
-    port=8000, host_authority=10.0.0.1:8000, path_prefix=/v1, and the route
-    should match only a complete /v1 path segment."""
+def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
+    """Weighted refs should retain endpoint weights and one shared route path."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -136,7 +148,10 @@ providers:
       backend_refs:
         - name: "primary"
           endpoint: "http://10.0.0.1:8000/v1"
-          weight: 100
+          weight: 75
+        - name: "secondary"
+          endpoint: "http://10.0.0.2:8001/v1"
+          weight: 25
 routing:
   modelCards:
     - name: "test-model"
@@ -159,9 +174,18 @@ routing:
     cluster = _cluster_by_name(rendered, "test_model_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
-    ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
-    assert ep["address"]["socket_address"]["address"] == "10.0.0.1"
-    assert ep["address"]["socket_address"]["port_value"] == 8000
+    lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
+    assert [endpoint["load_balancing_weight"] for endpoint in lb_endpoints] == [
+        75,
+        25,
+    ]
+    addresses = [
+        endpoint["endpoint"]["address"]["socket_address"] for endpoint in lb_endpoints
+    ]
+    assert addresses == [
+        {"address": "10.0.0.1", "port_value": 8000},
+        {"address": "10.0.0.2", "port_value": 8001},
+    ]
 
     # --- route assertions ---
     route = _model_route(rendered, "test-model")

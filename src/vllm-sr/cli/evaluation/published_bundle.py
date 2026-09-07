@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.bundle import (
     artifact_media_type,
     checksum_bytes,
@@ -29,6 +28,7 @@ from cli.evaluation.contracts import (
     RunManifest,
     VisibleCaseSet,
 )
+from cli.evaluation.errors import StoreError
 from cli.evaluation.evidence import ExecutionRecord, ReplayFixture, RoutingDiagnostic
 from cli.evaluation.execution_contract import (
     NormalizedSuiteIdentities,

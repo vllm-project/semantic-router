@@ -813,6 +813,7 @@ fn generate_multimodal_text_embedding(
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = token_ids.len();
+    check_position_limit(seq_len, model.config().text_max_position_embeddings)?;
 
     let device = model.device();
     let input_ids = Tensor::from_vec(token_ids, (1, seq_len), device)
@@ -2282,6 +2283,21 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 }
 
+/// Reject a tokenized sequence longer than the text encoder's position-embedding
+/// limit.
+///
+/// The encoder holds a fixed number of position embeddings, so a longer sequence
+/// fails inside the position lookup with an index error that names neither the
+/// limit nor the input length. This names both and discards nothing.
+pub(crate) fn check_position_limit(seq_len: usize, max_position: usize) -> Result<(), String> {
+    if seq_len > max_position {
+        return Err(format!(
+            "text tokenizes to {seq_len} tokens, over the text encoder's {max_position}-position limit"
+        ));
+    }
+    Ok(())
+}
+
 /// Encode text using the multi-modal embedding model
 ///
 /// # Parameters
@@ -2350,6 +2366,13 @@ pub extern "C" fn multimodal_encode_text(
     let ids: Vec<u32> = encoding.get_ids().to_vec();
     let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = ids.len();
+    if let Err(e) = check_position_limit(seq_len, model.config().text_max_position_embeddings) {
+        eprintln!("Error: {}", e);
+        unsafe {
+            (*result) = MultiModalEmbeddingResult::default();
+        }
+        return -1;
+    }
 
     let device = model.device();
     let input_ids = match candle_core::Tensor::from_vec(ids, (1, seq_len), device) {

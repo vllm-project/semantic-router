@@ -50,6 +50,7 @@ const SIGNAL_TYPES = new Set([
   'structure',
   'user_feedback',
 ])
+const LABELED_SIGNAL_TYPES = new Set(['classifier', 'complexity'])
 
 function rotateRight(value: number, distance: number): number {
   return (value >>> distance) | (value << (32 - distance))
@@ -147,7 +148,7 @@ function validInputID(value: unknown, projection: boolean): value is string {
   if (projection) return parts[0] === 'projection' && parts.length === 2
   if (parts[0] === 'projection') return false
   if (parts[0] === 'kb_metric') return parts.length === 3
-  return SIGNAL_TYPES.has(parts[0]) && (parts.length === 2 || parts[0] === 'classifier')
+  return SIGNAL_TYPES.has(parts[0]) && (parts.length === 2 || LABELED_SIGNAL_TYPES.has(parts[0]))
 }
 
 function isInputSpec(value: unknown): value is EvaluationRoutingRecipeInputSpec {

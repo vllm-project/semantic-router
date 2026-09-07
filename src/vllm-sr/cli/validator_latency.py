@@ -16,34 +16,6 @@ def _all_decisions(config: UserConfig):
             yield field_prefix, decision
 
 
-def _iter_condition_nodes(conditions):
-    if not conditions:
-        return
-    for condition in conditions:
-        yield condition
-        if getattr(condition, "conditions", None):
-            yield from _iter_condition_nodes(condition.conditions)
-
-
-def validate_latency_compatibility(
-    config: UserConfig,
-) -> list[ValidationError]:
-    errors: list[ValidationError] = []
-    for field_prefix, decision in _all_decisions(config):
-        has_legacy_conditions = any(
-            (condition.type or "").strip().lower() == "latency"
-            for condition in _iter_condition_nodes(decision.rules.conditions)
-        )
-        if has_legacy_conditions:
-            errors.append(
-                ValidationError(
-                    "legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove conditions.type=latency",
-                    field=f"{field_prefix}.{decision.name}.rules.conditions",
-                )
-            )
-    return errors
-
-
 def validate_latency_aware_algorithm_config(
     config: UserConfig,
 ) -> list[ValidationError]:

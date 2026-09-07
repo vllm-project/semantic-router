@@ -59,11 +59,11 @@ func TestResearchBenchmarkInventoryIsExactlyTheAuditedThirteen(t *testing.T) {
 			t.Fatalf("unexpected research benchmark %q", benchmark.AdapterID)
 		}
 		delete(want, benchmark.AdapterID)
-		plugin, found := InstalledMethodPlugin(benchmark.AdapterID)
-		if !found || plugin.Status != benchmark.Status || plugin.NativeParity != benchmark.NativeParity ||
-			plugin.EvidenceCeiling != benchmark.EvidenceCeiling || plugin.Status == "native-qualified" ||
-			plugin.NativeParity == "native" || plugin.EvidenceCeiling != "E0" {
-			t.Fatalf("benchmark %q readiness drifted: benchmark=%+v plugin=%+v", benchmark.AdapterID, benchmark, plugin)
+		method := researchBenchmarkMethod(benchmark)
+		if method.Status != benchmark.Status || method.NativeParity != benchmark.NativeParity ||
+			method.EvidenceCeiling != benchmark.EvidenceCeiling || method.Status == "native-qualified" ||
+			method.NativeParity == "native" || method.EvidenceCeiling != "E0" {
+			t.Fatalf("benchmark %q readiness drifted: benchmark=%+v method=%+v", benchmark.AdapterID, benchmark, method)
 		}
 	}
 	if len(want) != 0 {
@@ -89,11 +89,11 @@ func TestResearchBenchmarkAnalysisPlansAreDescriptorDriven(t *testing.T) {
 	if !found {
 		t.Fatal("r2-router benchmark is unavailable")
 	}
-	plugin := researchBenchmarkMethodPlugin(r2)
-	if plugin.AnalysisPlan.ID != r2.AnalysisPlanID ||
-		plugin.AnalysisPlan.AnalysisUnit != r2.AnalysisUnit ||
-		plugin.AnalysisPlan.CurveDomain != r2.CurveDomain ||
-		plugin.AnalysisPlan.CurveDomain != "shared_budget" {
-		t.Fatalf("r2-router analysis plan drifted from its descriptor: benchmark=%+v plugin=%+v", r2, plugin)
+	method := researchBenchmarkMethod(r2)
+	if method.AnalysisPlan.ID != r2.AnalysisPlanID ||
+		method.AnalysisPlan.AnalysisUnit != r2.AnalysisUnit ||
+		method.AnalysisPlan.CurveDomain != r2.CurveDomain ||
+		method.AnalysisPlan.CurveDomain != "shared_budget" {
+		t.Fatalf("r2-router analysis plan drifted from its descriptor: benchmark=%+v method=%+v", r2, method)
 	}
 }

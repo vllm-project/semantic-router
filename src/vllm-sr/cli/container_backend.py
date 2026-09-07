@@ -15,7 +15,7 @@ log = get_logger(__name__)
 
 
 class ContainerBackend:
-    """DeploymentBackend implementation for local Docker workflows."""
+    """Local Docker deployment backend."""
 
     def deploy(
         self,

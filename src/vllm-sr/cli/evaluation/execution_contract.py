@@ -18,7 +18,10 @@ from cli.evaluation.contracts import (
     VisibleCaseSet,
 )
 from cli.evaluation.evidence import ExecutionRecord, ReplayFixture
-from cli.evaluation.suite_contract import SUITE_CONTRACT_VERSION
+from cli.evaluation.suite_contract import (
+    SUITE_CONTRACT_VERSION,
+    BenchmarkSuiteManifest,
+)
 from cli.evaluation.target_contracts import (
     BindingSnapshot,
     EvaluationTargetArm,
@@ -32,6 +35,32 @@ MOM_REPLAY_EXECUTOR_ID = "mom-cohort-replay.v1"
 LIVE_RUNTIME_EXECUTOR_ID = "live-runtime.v1"
 NORMALIZED_REPLAY_EXECUTOR_ID = "normalized-suite-replay.v1"
 NORMALIZED_LIVE_EXECUTOR_ID = "normalized-suite-live.v1"
+
+
+@dataclass(frozen=True)
+class ExecutionPlan:
+    """Immutable suite and executor resolution consumed by every executor."""
+
+    suites: tuple[BenchmarkSuiteManifest, ...]
+    suite_revisions: Mapping[str, str]
+    suite_executors: Mapping[str, str]
+    allowed_tracks: frozenset[str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "suite_revisions", MappingProxyType(dict(self.suite_revisions))
+        )
+        object.__setattr__(
+            self, "suite_executors", MappingProxyType(dict(self.suite_executors))
+        )
+        if set(self.suite_revisions) != set(self.suite_executors):
+            raise ValueError("execution plan suite identities must have equal key sets")
+        if len(set(self.suite_executors.values())) != 1:
+            raise ValueError("one evaluation run cannot mix executor implementations")
+
+    @property
+    def executor_id(self) -> str:
+        return next(iter(self.suite_executors.values()))
 
 
 class NormalizedIdentity(StrictModel):

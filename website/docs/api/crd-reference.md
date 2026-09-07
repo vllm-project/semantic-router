@@ -211,6 +211,7 @@ _Appears in:_
 | `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
 | `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingModelsConfig
@@ -416,19 +417,6 @@ _Appears in:_
 | `password` _string_ | Password for Milvus authentication (plaintext - consider using PasswordSecretRef instead) |  | Optional: \{\} <br /> |
 | `password_secret_ref` _[SecretKeySelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#secretkeyselector-v1-core)_ | PasswordSecretRef references a Secret containing the Milvus password<br />Preferred over plaintext Password field for security |  | Optional: \{\} <br /> |
 
-#### MilvusCacheBatch
-
-MilvusCacheBatch defines batch operation settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `insert_batch_size` _integer_ | InsertBatchSize for bulk inserts | 100 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `timeout` _integer_ | Timeout for batch operations in seconds | 60 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheCollection
 
 MilvusCacheCollection defines Milvus collection configuration.
@@ -457,19 +445,6 @@ _Appears in:_
 | `type` _string_ | Type of index algorithm | HNSW | Enum: [HNSW IVF_FLAT IVF_SQ8 IVF_PQ] <br />Optional: \{\} <br /> |
 | `params` _[MilvusCacheIndexParams](#milvuscacheindexparams)_ | Params for the index |  | Optional: \{\} <br /> |
 
-#### MilvusCacheCompaction
-
-MilvusCacheCompaction defines compaction settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether auto-compaction is active | false | Optional: \{\} <br /> |
-| `interval` _integer_ | Interval in seconds between compaction runs | 86400 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheConfig
 
 MilvusCacheConfig defines Milvus cache backend configuration.
@@ -484,8 +459,6 @@ _Appears in:_
 | `connection` _[MilvusCacheConnection](#milvuscacheconnection)_ | Connection settings for Milvus server |  | Optional: \{\} <br /> |
 | `collection` _[MilvusCacheCollection](#milvuscachecollection)_ | Collection settings for Milvus |  | Optional: \{\} <br /> |
 | `search` _[MilvusCacheSearch](#milvuscachesearch)_ | Search settings for Milvus queries |  | Optional: \{\} <br /> |
-| `performance` _[MilvusCachePerformance](#milvuscacheperformance)_ | Performance tuning for Milvus |  | Optional: \{\} <br /> |
-| `data_management` _[MilvusCacheDataManagement](#milvuscachedatamanagement)_ | DataManagement settings for TTL and compaction |  | Optional: \{\} <br /> |
 | `development` _[MilvusCacheDevelopment](#milvuscachedevelopment)_ | Development settings for Milvus cache |  | Optional: \{\} <br /> |
 
 #### MilvusCacheConnection
@@ -505,33 +478,6 @@ _Appears in:_
 | `auth` _[MilvusCacheAuth](#milvuscacheauth)_ | Auth configuration for Milvus authentication |  | Optional: \{\} <br /> |
 | `tls` _[MilvusCacheTLS](#milvuscachetls)_ | TLS configuration for secure Milvus connections |  | Optional: \{\} <br /> |
 
-#### MilvusCacheConnectionPool
-
-MilvusCacheConnectionPool defines connection pool settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `max_connections` _integer_ | MaxConnections in the pool | 10 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `max_idle_connections` _integer_ | MaxIdleConnections to keep | 5 | Minimum: 0 <br />Optional: \{\} <br /> |
-| `acquire_timeout` _integer_ | AcquireTimeout in seconds | 30 | Minimum: 0 <br />Optional: \{\} <br /> |
-
-#### MilvusCacheDataManagement
-
-MilvusCacheDataManagement defines data lifecycle settings.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `ttl` _[MilvusCacheTTL](#milvuscachettl)_ | TTL settings for automatic expiration |  | Optional: \{\} <br /> |
-| `compaction` _[MilvusCacheCompaction](#milvuscachecompaction)_ | Compaction settings |  | Optional: \{\} <br /> |
-
 #### MilvusCacheDevelopment
 
 MilvusCacheDevelopment defines development-mode settings.
@@ -544,7 +490,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_collection_on_startup` _boolean_ | DropCollectionOnStartup clears the collection when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_collection` _boolean_ | AutoCreateCollection automatically creates the collection if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### MilvusCacheIndexParams
 
@@ -558,19 +503,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `M` _integer_ | M is the number of bi-directional links for HNSW | 16 | Minimum: 2 <br />Optional: \{\} <br /> |
 | `efConstruction` _integer_ | EfConstruction for HNSW index building | 64 | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### MilvusCachePerformance
-
-MilvusCachePerformance defines performance tuning.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `connection_pool` _[MilvusCacheConnectionPool](#milvuscacheconnectionpool)_ | ConnectionPool settings |  | Optional: \{\} <br /> |
-| `batch` _[MilvusCacheBatch](#milvuscachebatch)_ | Batch settings for operations |  | Optional: \{\} <br /> |
 
 #### MilvusCacheSearch
 
@@ -612,20 +544,6 @@ _Appears in:_
 | `cert_file` _string_ | CertFile is the path to client certificate file |  | Optional: \{\} <br /> |
 | `key_file` _string_ | KeyFile is the path to client key file |  | Optional: \{\} <br /> |
 | `ca_file` _string_ | CAFile is the path to CA certificate file |  | Optional: \{\} <br /> |
-
-#### MilvusCacheTTL
-
-MilvusCacheTTL defines time-to-live settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether TTL is active | false | Optional: \{\} <br /> |
-| `timestamp_field` _string_ | TimestampField is the field used for TTL calculation | created_at | Optional: \{\} <br /> |
-| `cleanup_interval` _integer_ | CleanupInterval in seconds between cleanup runs | 3600 | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### MilvusCacheVectorField
 
@@ -854,7 +772,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### RedisCacheIndex
 
@@ -1333,7 +1250,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### ValkeyCacheIndex
 

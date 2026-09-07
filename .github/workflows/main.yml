@@ -19,6 +19,13 @@ jobs:
       docs_only: ${{ needs.changes.outputs.docs_only == 'true' }}
       website: ${{ needs.changes.outputs.website == 'true' }}
 
+  security:
+    needs: changes
+    uses: ./.github/workflows/security-scan.yml
+    permissions:
+      contents: read
+      security-events: write
+
   core:
     needs: changes
     if: needs.changes.outputs.core_test == 'true'
@@ -67,6 +74,7 @@ jobs:
     needs:
       - changes
       - quality
+      - security
       - core
       - dashboard
       - operator

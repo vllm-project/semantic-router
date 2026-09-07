@@ -11,15 +11,21 @@ from cli.evaluation.benchmark_normalization import (
     NormalizationError,
     verify_registered_normalization,
 )
+from cli.evaluation.benchmark_pack import (
+    build_pack_install_request,
+    load_benchmark_pack,
+)
 from cli.evaluation.benchmark_registry import (
     BenchmarkAdapterDescriptor,
     get_benchmark_adapter,
 )
 from cli.evaluation.benchmark_sources import (
     SourceVerificationError,
+    require_verified_benchmark_pack_source,
     require_verified_benchmark_source,
 )
 from cli.evaluation.canonical import digest_value
+from cli.evaluation.errors import SuiteStoreError
 from cli.evaluation.execution_contract import NORMALIZED_REPLAY_EXECUTOR_ID
 from cli.evaluation.suite_contract import (
     BenchmarkSourceReceipt,
@@ -37,7 +43,6 @@ from cli.evaluation.suite_qualification import (
     UnqualifiedBenchmarkEvidence,
 )
 from cli.evaluation.suite_store_cas import SuiteCAS
-from cli.evaluation.suite_store_error import SuiteStoreError
 from cli.evaluation.suite_store_index import SuiteManifestIndex, suite_identity
 from cli.evaluation.suite_store_records import SuiteRecordReader
 
@@ -56,11 +61,25 @@ class SuiteInstaller:
         self._records = records
 
     @staticmethod
+    def _validated_request(
+        request: BenchmarkSuiteInstallRequest,
+    ) -> BenchmarkSuiteInstallRequest:
+        # model_copy(update=...) skips Pydantic validation. Re-parse at this
+        # trust boundary so preconstructed objects cannot bypass the contract.
+        try:
+            return BenchmarkSuiteInstallRequest.model_validate(
+                request.model_dump(mode="json")
+            )
+        except (AttributeError, ValidationError) as exc:
+            raise SuiteStoreError("invalid suite install request") from exc
+
+    @staticmethod
     def _validate_source_receipt(
         descriptor: BenchmarkAdapterDescriptor, receipt: BenchmarkSourceReceipt
     ) -> None:
         source_exact = (
-            receipt.adapter_id == descriptor.id
+            receipt.source_kind == "registered_adapter"
+            and receipt.adapter_id == descriptor.id
             and receipt.verified
             and receipt.source_clean
             and receipt.expected_source_revision == descriptor.source_revision
@@ -164,15 +183,7 @@ class SuiteInstaller:
     ) -> BenchmarkSuiteManifest:
         if self._cas.read_only:
             raise SuiteStoreError("read-only suite store cannot install suites")
-
-        # model_copy(update=...) skips Pydantic validation. Re-parse at this
-        # trust boundary so preconstructed objects cannot bypass the contract.
-        try:
-            request = BenchmarkSuiteInstallRequest.model_validate(
-                request.model_dump(mode="json")
-            )
-        except (AttributeError, ValidationError) as exc:
-            raise SuiteStoreError("invalid suite install request") from exc
+        request = self._validated_request(request)
         descriptor = get_benchmark_adapter(request.adapter_id)
         try:
             source_receipt = require_verified_benchmark_source(descriptor, source_root)
@@ -194,6 +205,52 @@ class SuiteInstaller:
             raise SuiteStoreError(
                 "user-provided import cannot claim parser verification through an export root"
             )
+        return self._install_request(request, bundle_root)
+
+    def install_pack(
+        self,
+        pack_root: str | Path,
+    ) -> BenchmarkSuiteManifest:
+        """Install a declarative, data-only benchmark pack from an exact commit."""
+
+        if self._cas.read_only:
+            raise SuiteStoreError("read-only suite store cannot install suites")
+        pack = load_benchmark_pack(pack_root)
+        try:
+            receipt = require_verified_benchmark_pack_source(
+                pack.benchmark_id,
+                pack_root,
+            )
+        except SourceVerificationError as exc:
+            raise SuiteStoreError(str(exc)) from exc
+        request, bundle_root = build_pack_install_request(pack, pack_root, receipt)
+        request = self._validated_request(request)
+        artifacts = stage_suite_artifacts(
+            self._cas,
+            self._records,
+            request,
+            bundle_root,
+        )
+        try:
+            final_pack = load_benchmark_pack(pack_root)
+            final_receipt = require_verified_benchmark_pack_source(
+                pack.benchmark_id,
+                pack_root,
+            )
+        except SourceVerificationError as exc:
+            raise SuiteStoreError(str(exc)) from exc
+        if final_pack != pack or final_receipt != receipt:
+            raise SuiteStoreError("benchmark pack changed during installation")
+        return self._publish_manifest(request, artifacts)
+
+    def _install_request(
+        self,
+        request: BenchmarkSuiteInstallRequest,
+        bundle_root: str | Path,
+    ) -> BenchmarkSuiteManifest:
+        if self._cas.read_only:
+            raise SuiteStoreError("read-only suite store cannot install suites")
+        request = self._validated_request(request)
         artifact_set = stage_suite_artifacts(
             self._cas,
             self._records,

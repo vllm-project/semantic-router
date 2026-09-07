@@ -15,6 +15,7 @@ This plan owns every open entry indexed by
 - classification subsystem boundaries;
 - native binding structure and complexity exceptions;
 - Router Flow state-store validation;
+- backend-target producer and consumer parity;
 - reviewed content moderation;
 - ONNX binding runtime coverage.
 
@@ -42,6 +43,8 @@ Release planning and daily GitHub queue state are out of scope.
   guidance.
 - [ ] `ADC-06` Replace hidden moderation behavior with reviewed policy and code.
 - [ ] `ADC-07` Add mandatory CPU-compatible ONNX binding coverage.
+- [ ] `ADC-08` Converge backend-target validation and preservation across
+  canonical configuration producers and consumers.
 
 ## Next Action
 

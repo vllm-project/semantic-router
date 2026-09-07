@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from cli.evaluation.artifact_store_error import StoreError
 from cli.evaluation.builtin_executors import DEFAULT_EXECUTOR_REGISTRY
 from cli.evaluation.canonical import (
     digest_value,
@@ -19,6 +18,7 @@ from cli.evaluation.catalog import get_catalog
 from cli.evaluation.constants import SCHEMA_VERSION
 from cli.evaluation.contract_primitives import ArtifactRef
 from cli.evaluation.contracts import RunManifest, WorkloadSnapshot
+from cli.evaluation.errors import StoreError
 from cli.evaluation.execution_plan import SuiteRegistry, resolve_execution_plan
 from cli.evaluation.executor_contracts import BUILTIN_EXECUTOR_CONTRACTS
 from cli.evaluation.manifest_identity import seal_manifest_fields

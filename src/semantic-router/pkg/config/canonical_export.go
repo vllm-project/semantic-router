@@ -235,8 +235,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 			},
 			Complexity: cfg.ComplexityModel.WithDefaults(),
 			HallucinationMitigation: CanonicalHallucinationModule{
-				Enabled:                 cfg.HallucinationMitigation.Enabled,
-				OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
+				Enabled: cfg.HallucinationMitigation.Enabled,
 				FactCheck: CanonicalFactCheckModule{
 					FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
 					ModelRef:             "fact_check_classifier",

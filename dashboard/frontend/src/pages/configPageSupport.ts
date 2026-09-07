@@ -367,7 +367,6 @@ export interface MemoryConfig {
   embedding_model?: string
   default_retrieval_limit?: number
   default_similarity_threshold?: number
-  extraction_batch_size?: number
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
@@ -470,7 +469,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      model_metrics?: boolean
       queue_depth_estimation?: boolean
       max_models?: number
     }
@@ -592,7 +590,6 @@ export interface ModalityDetectionConfig {
 
 export interface ModalityDetectorConfig {
   enabled?: boolean
-  prompt_prefixes?: string[]
   method?: string
   classifier?: ModalityClassifierConfig
   keywords?: string[]
@@ -703,7 +700,6 @@ export interface CanonicalClassifierConfig {
 
 export interface CanonicalHallucinationModuleConfig {
   enabled?: boolean
-  on_hallucination_detected?: string
   fact_check?: FactCheckModelModuleConfig
   detector?: HallucinationDetectorModuleConfig
   explainer?: NLIExplainerModuleConfig
@@ -1208,6 +1204,7 @@ export interface JailbreakSignal {
   threshold?: number
   method?: string
   include_history?: boolean
+  direction?: 'request' | 'response'
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
   description?: string
@@ -1369,6 +1366,7 @@ export interface AddSignalFormState {
   composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
+  jailbreak_direction?: string
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]

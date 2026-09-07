@@ -62,6 +62,14 @@ for name in definitely-outdated definitely-current verify-false verify-true; do
         "$source_commit" "$name" "$outdated_value" "$name" \
         > "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/cases/$name.md"
 done
+cat > website/i18n/translation-coverage-baseline.txt <<'EOF'
+# Current documentation locale overrides.
+# Regenerate with: make docs-update-translation-baseline
+zh-Hans	cases/definitely-current.md
+zh-Hans	cases/definitely-outdated.md
+zh-Hans	cases/verify-false.md
+zh-Hans	cases/verify-true.md
+EOF
 git add website/i18n
 commit_at "2026-01-02T00:00:00Z" "add Chinese fixtures"
 
@@ -103,6 +111,22 @@ assert_contains "$audit_output" "cases/verify-true.md"
 assert_contains "$audit_output" "cases/definitely-current.md"
 assert_contains "$audit_output" "English fallback:"
 assert_contains "$audit_output" "1 English fallback"
+assert_contains "$audit_output" "cases: 1"
+
+coverage_only_output="$(website/scripts/check-translation-sync.sh --coverage-only 2>&1)" \
+    || fail "coverage-only audit should ignore source drift and metadata work"
+assert_contains "$coverage_only_output" "0 coverage regressions"
+
+deleted_translation="website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/cases/definitely-current.md"
+rm "$deleted_translation"
+set +e
+coverage_output="$(website/scripts/check-translation-sync.sh --coverage-only 2>&1)"
+coverage_status=$?
+set -e
+[[ $coverage_status -eq 1 ]] || fail "audit should fail when a baseline translation is deleted"
+assert_contains "$coverage_output" "Coverage regressions (baseline override deleted):"
+assert_contains "$coverage_output" "cases/definitely-current.md"
+git checkout -- "$deleted_translation"
 
 set +e
 fix_output="$(website/scripts/check-translation-sync.sh --locale zh-Hans --fix-status 2>&1)"
@@ -149,5 +173,23 @@ set -e
 
 [[ $fallback_status -eq 0 ]] || fail "English fallback without stale overrides should pass"
 assert_contains "$fallback_output" "5 English fallback"
+
+printf 'zh-Hans\tcases/retired.md\n' >> website/i18n/translation-coverage-baseline.txt
+set +e
+stale_baseline_output="$(website/scripts/check-translation-sync.sh --coverage-only 2>&1)"
+stale_baseline_status=$?
+set -e
+[[ $stale_baseline_status -eq 1 ]] || fail "audit should fail when the baseline names a retired source"
+assert_contains "$stale_baseline_output" "Stale baseline entries (English source retired or moved):"
+assert_contains "$stale_baseline_output" "cases/retired.md"
+
+website/scripts/check-translation-sync.sh --update-baseline >/dev/null
+if grep -q 'cases/retired.md' website/i18n/translation-coverage-baseline.txt; then
+    fail "baseline refresh retained a retired path"
+fi
+for name in definitely-current definitely-outdated verify-false verify-true; do
+    grep -q $'^zh-Hans\tcases/'"$name"'.md$' website/i18n/translation-coverage-baseline.txt \
+        || fail "baseline refresh omitted cases/$name.md"
+done
 
 echo "Translation sync behavior test passed."

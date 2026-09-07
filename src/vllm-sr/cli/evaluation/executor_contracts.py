@@ -190,7 +190,7 @@ def builtin_executor_contracts() -> tuple[ExecutorContract, ...]:
             track_ids=("routing", "model_pool", "joint", "multimodal", "capacity"),
             normalized_suite=True,
             case_budget_per_suite=True,
-            evidence_level_ceiling="E4",
+            evidence_level_ceiling="E5",
             evidence_qualifications=NORMALIZED_LIVE_EVIDENCE_QUALIFICATIONS,
         ),
     )
