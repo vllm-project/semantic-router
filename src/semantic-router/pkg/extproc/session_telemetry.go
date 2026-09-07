@@ -45,6 +45,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		return
 	}
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
+	recordSessionTurnOutcome(ctx, usage)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 
 	domain := consts.UnknownLabel

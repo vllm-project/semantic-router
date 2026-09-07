@@ -1754,6 +1754,18 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+          # Gate session model switches on recent-outcome evidence. Disabled by
+          # default; thresholds stay placeholders until they are calibrated.
+          progress_gate:
+            enabled: false
+            mode: observe
+            window_size: 8
+            window_ttl_seconds: 900
+            min_window_outcomes: 3
+            min_consecutive_regressions: 2
+            min_consecutive_recoveries: 2
+            cooldown_seconds: 120
+            max_switches_per_window: 2
       state_store:
         backend: redis
         ttl_seconds: 86400

@@ -86,6 +86,7 @@ func (rt *routerLearningRuntime) updateOwnedModelOutcome(
 	}
 	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
 	rt.recordModelExperience(decisionName, decisionTier, model, verdict, outcome.Score)
+	recordIngestedTurnOutcome(record, model, verdict, outcome.Score)
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}
 }
 
