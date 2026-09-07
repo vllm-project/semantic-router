@@ -108,28 +108,9 @@ spec:
           topk: 20
           consistency_level: Eventually  # Faster for hybrid usage
 
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 30
-          batch:
-            insert_batch_size: 200
-            timeout: 60
-
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 1800
-          compaction:
-            enabled: true
-            interval: 43200  # Twice daily
-
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: false
 
     # Disable features that require additional models for this example
     # Enable these features in production with proper model configuration
