@@ -83,6 +83,10 @@ current-policy baseline and collection settings so reviewers can distinguish a
 candidate proposal from an approved production change. A candidate is never
 auto-promoted; a held-out result with no benefit remains a review finding.
 
+Threshold candidates are selected from the policy regions between adjacent
+observed confidence scores. The sweep does not use a fixed epsilon, so close
+scores remain distinguishable and narrow operating points cannot be skipped.
+
 Run it without a live router:
 
 ```bash

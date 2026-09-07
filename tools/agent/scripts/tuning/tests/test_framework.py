@@ -665,6 +665,33 @@ class TestOfflineAnalyzer:
         assert result["best_accuracy"] >= 2
         assert result["strategy"] in ("ESCALATE", "SELECTIVE", "AVOID")
 
+    def test_find_optimal_threshold_separates_close_scores(self):
+        from tuning.analyzer import OfflineAnalyzer
+
+        items = [
+            self.Q("uplift", 0.5000, False, True, "uplift"),
+            self.Q("regression", 0.5005, True, False, "regression"),
+        ]
+        analyzer = OfflineAnalyzer(severity_fn=lambda q: 1)
+
+        result = analyzer.find_optimal_threshold(
+            items=items,
+            confidence_fn=lambda q: q.confidence,
+            quadrant_fn=lambda q: q.quadrant,
+            correct_small_fn=lambda q: q.correct_small,
+            correct_large_fn=lambda q: q.correct_large,
+            id_fn=lambda q: q.qid,
+        )
+
+        separating = next(
+            candidate
+            for candidate in result["candidates"]
+            if 0.5000 < candidate["threshold"] < 0.5005
+        )
+        assert separating["uplifts"] == 1
+        assert separating["regressions"] == 0
+        assert result["best_accuracy"] == 2
+
     def test_compute_threshold_fix_regression(self):
         from tuning.analyzer import OfflineAnalyzer
 
