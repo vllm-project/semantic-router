@@ -3,16 +3,16 @@ package cache
 import (
 	"context"
 	"time"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
-const bertEmbeddingWindow = 512
-
 type LegacyBackendAdapter struct {
-	backend         CacheBackend
-	capabilities    BackendCapabilities
-	embeddingWindow int
+	backend        CacheBackend
+	capabilities   BackendCapabilities
+	embeddingModel string
 }
 
 func NewLegacyBackendAdapter(
@@ -28,14 +28,16 @@ func NewLegacyBackendAdapter(
 }
 
 func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAdapter {
-	if normalizeEmbeddingModel(model) == defaultEmbeddingModel {
-		a.embeddingWindow = bertEmbeddingWindow
-	}
+	a.embeddingModel = normalizeEmbeddingModel(model)
 	return a
 }
 
 func (a *LegacyBackendAdapter) exceedsEmbeddingWindow(query string) bool {
-	return a.embeddingWindow > 0 && queryTokensExceed(query, a.embeddingWindow)
+	if a.embeddingModel == "" {
+		return false
+	}
+	exceeds, err := candle_binding.EmbeddingTextExceedsWindow(query, a.embeddingModel)
+	return err == nil && exceeds
 }
 
 func (a *LegacyBackendAdapter) LookupExact(

@@ -246,6 +246,7 @@ extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
 
@@ -653,6 +654,24 @@ func TokenizeText(text string, maxLength int) (TokenizeResult, error) {
 // TokenizeTextDefault tokenizes text with default max length (512)
 func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeText(text, 512)
+}
+
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
+	}
 }
 
 // GetEmbedding gets the embedding vector for a text

@@ -739,3 +739,70 @@ pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
         }
     }
 }
+
+fn tokens_exceed_window(
+    tokenizer: &tokenizers::Tokenizer,
+    text: &str,
+    window: usize,
+) -> Result<bool, String> {
+    use tokenizers::{TruncationDirection, TruncationParams, TruncationStrategy};
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: window + 1,
+            strategy: TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: TruncationDirection::Right,
+        }))
+        .map_err(|e| e.to_string())?;
+    let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+    Ok(encoding.get_ids().len() > window)
+}
+
+/// Report whether `text` tokenizes past the context window of the loaded
+/// embedding model named by `model_type`. Every model type other than
+/// `multimodal` embeds through mmBERT, matching `get_embedding_with_model_type`.
+///
+/// # Returns
+/// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
+/// loaded or the input is invalid
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn embedding_text_exceeds_window(
+    text: *const c_char,
+    model_type: *const c_char,
+) -> i32 {
+    if text.is_null() || model_type.is_null() {
+        return -1;
+    }
+    let (text, model_type) = unsafe {
+        match (
+            CStr::from_ptr(text).to_str(),
+            CStr::from_ptr(model_type).to_str(),
+        ) {
+            (Ok(t), Ok(m)) => (t, m),
+            _ => return -1,
+        }
+    };
+    let exceeds = if model_type == "multimodal" {
+        let Some(model) = crate::ffi::multimodal::GLOBAL_MULTIMODAL.get() else {
+            return -1;
+        };
+        tokens_exceed_window(model.tokenizer(), text, model.config().max_seq_len)
+    } else {
+        let Some(model_lock) = GLOBAL_MMBERT_MODEL.get() else {
+            return -1;
+        };
+        let model = model_lock.lock();
+        tokens_exceed_window(
+            model.tokenizer(),
+            text,
+            model.config().max_position_embeddings,
+        )
+    };
+    match exceeds {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
+}
