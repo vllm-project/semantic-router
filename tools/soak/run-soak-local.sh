@@ -220,7 +220,7 @@ wait_for_url router-pprof "http://127.0.0.1:${SOAK_PPROF_PORT}/debug/pprof/" 30
 
 if [[ "${SOAK_ENVOY_CONFIG}" == "${SOAK_ENVOY_DEFAULT_CONFIG}" ]]; then
   derived="${SOAK_LOG_DIR}/envoy.soak.yaml"
-  log "deriving ${derived} from ${SOAK_ENVOY_CONFIG} (drop ext_authz, bind loopback)"
+  log "deriving ${derived} from ${SOAK_ENVOY_CONFIG} (bind loopback)"
   "${SOAK_VENV_DIR}/bin/python" - "${SOAK_ENVOY_CONFIG}" "${derived}" <<'PY'
 import sys
 
@@ -230,26 +230,10 @@ src, dst = sys.argv[1], sys.argv[2]
 with open(src) as handle:
     doc = yaml.safe_load(handle)
 
-removed = 0
 for listener in doc["static_resources"]["listeners"]:
     sock = listener.get("address", {}).get("socket_address")
     if sock and sock.get("address") not in (None, "127.0.0.1", "::1"):
         sock["address"] = "127.0.0.1"
-    for chain in listener.get("filter_chains", []):
-        for network_filter in chain.get("filters", []):
-            typed = network_filter.get("typed_config", {})
-            http_filters = typed.get("http_filters")
-            if not http_filters:
-                continue
-            kept = [
-                f for f in http_filters
-                if f.get("name") != "envoy.filters.http.ext_authz"
-            ]
-            removed += len(http_filters) - len(kept)
-            typed["http_filters"] = kept
-
-if removed == 0:
-    sys.exit(f"expected an ext_authz http filter in {src}; nothing was removed")
 
 with open(dst, "w") as handle:
     yaml.safe_dump(doc, handle, sort_keys=False)

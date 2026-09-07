@@ -14,7 +14,8 @@ spec:
   vllmEndpoints:
     - name: qwen-model
       model: qwen3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: service
         service:
