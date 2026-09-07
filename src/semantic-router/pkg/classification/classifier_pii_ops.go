@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -282,8 +283,9 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) map[string]bool {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) (map[string]bool, bool) {
 	entityTypes := make(map[string]bool)
+	failed := false
 	for _, content := range ruleContents {
 		cachedResults, ok := piiCache[content]
 		if !ok {
@@ -291,8 +293,15 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 		}
 		for _, cached := range cachedResults {
 			if cached.err != nil {
-				logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
-				continue
+				failed = true
+				if !errors.Is(cached.err, ErrTokenSpansTruncated) {
+					logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
+					continue
+				}
+				// A declared truncation still carries valid spans for the part
+				// the provider saw; they count, and the rule is marked as not
+				// fully evaluated so on_error decides what the unseen part means.
+				logging.Warnf("[Signal Computation] PII rule %q: provider truncated its input, spans are partial", ruleName)
 			}
 			for _, entity := range cached.result.Entities {
 				if entity.Confidence >= threshold {
@@ -301,7 +310,7 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 			}
 		}
 	}
-	return entityTypes
+	return entityTypes, failed
 }
 
 // findDeniedEntities returns entity types not covered by the allow-list.

@@ -26,9 +26,9 @@ func newPIIHTTPBackend(external *config.ExternalModelConfig, mapping *PIIMapping
 }
 
 // ClassifyTokens returns the remote spans as a TokenClassificationResult. A
-// partial response (ErrTokenSpansTruncated) is surfaced as an error so the
-// existing PII callers fail closed rather than treating half a scan as clean;
-// the on_error policy from #2922's scope can relax this once it exists.
+// partial response (ErrTokenSpansTruncated) keeps its spans and surfaces the
+// error: signal evaluation counts the spans it did get and lets
+// classifier.pii.on_error decide whether the unseen remainder blocks.
 func (p *piiHTTPBackend) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
 	entities, err := p.backend.ClassifyTokens(text)
 	if err != nil {

@@ -52,6 +52,12 @@ type PIIModel struct {
 	// Backend attaches a named remote token classifier speaking token_spans.v1.
 	// Its absence preserves local PII inference exactly as before.
 	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
+
+	// ClassifierOnErrorConfig contributes OnError (allow|block). With block, a
+	// PII rule whose content could not be fully classified (backend error, or a
+	// provider that declared truncated_at) matches as classification_error
+	// instead of reading as clean.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
