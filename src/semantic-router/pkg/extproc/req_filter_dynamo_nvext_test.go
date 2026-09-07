@@ -95,6 +95,38 @@ func TestValidateDynamoBackendPoolDoesNotAffectOrdinaryRequests(t *testing.T) {
 	}
 }
 
+func TestDynamoBackendBoundaryPrecedesCacheHit(t *testing.T) {
+	cache := &mockStreamingCache{
+		exactHit: true,
+		exactResponse: []byte(
+			`{"id":"cached","object":"chat.completion","created":1,"model":"model-a","choices":[{"index":0,"message":{"role":"assistant","content":"cached"},"finish_reason":"stop"}]}`,
+		),
+	}
+	router := dynamoBoundaryTestRouter("vllm")
+	router.Cache = cache
+	router.Config.SemanticCache.Enabled = true
+	ctx := &RequestContext{Headers: map[string]string{}}
+	body := []byte(
+		`{"model":"model-a","messages":[{"role":"user","content":"same request"}],"nvext":{"cache_salt":"client-a"}}`,
+	)
+
+	response, err := router.handleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
+		RequestBody: &ext_proc.HttpBody{Body: body},
+	}, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestBody() error = %v", err)
+	}
+	if response.GetImmediateResponse().GetStatus().GetCode() != 400 {
+		t.Fatalf("response = %+v, want Dynamo backend boundary rejection", response)
+	}
+	if cache.exactFindCalled || cache.findSimilarCalled {
+		t.Fatal("Dynamo request reached response-cache lookup before backend validation")
+	}
+	if ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "unsupported_dynamo_nvext_backend" {
+		t.Fatalf("protocol error = %+v, want unsupported_dynamo_nvext_backend", ctx.ImmediateProtocolError)
+	}
+}
+
 func TestValidateDynamoBackendPoolIncludesHeaderOnlyExtensions(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{headers.DynamoDPRank: "1"}}
 	for _, test := range []struct {

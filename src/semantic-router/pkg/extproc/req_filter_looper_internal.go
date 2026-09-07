@@ -101,13 +101,6 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if err := validateDynamoBackendPool(r.Config, modelName, ctx, ctx.ProtocolEnvelope); err != nil {
-		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
-			copy := *protocolError
-			ctx.ImmediateProtocolError = &copy
-		}
-		return r.createErrorResponse(400, err.Error()), nil
-	}
 	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
 	if err != nil {
 		return nil, err
@@ -145,6 +138,13 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	ctx.SemanticRequest.Generation++
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
+	if err := validateDynamoBackendPool(r.Config, modelName, ctx, ctx.ProtocolEnvelope); err != nil {
+		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		return r.createErrorResponse(400, err.Error()), nil
+	}
 	return r.buildLooperBackendDispatchResponse(modelName, ctx)
 }
 
@@ -169,6 +169,18 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
 
+	if err := validateDynamoBackendPool(
+		r.Config,
+		modelName,
+		ctx,
+		ctx.ProtocolEnvelope,
+	); err != nil {
+		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+			copy := *protocolError
+			ctx.ImmediateProtocolError = &copy
+		}
+		return r.createErrorResponse(400, err.Error()), nil
+	}
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
