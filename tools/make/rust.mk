@@ -107,7 +107,7 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
 CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
 
-ck-rewrite-deps: agent-venv-install ## Install the CK graph rewriter test dependencies into the agent venv
+ck-rewrite-deps: harness-venv-install ## Install the CK graph rewriter test dependencies into the harness venv
 	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
 
 ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
