@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -82,7 +83,6 @@ func testModelNotReady503(
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
-
 	session, err := fixtures.OpenRouterAPISession(ctx, client, opts)
 	if err != nil {
 		return err

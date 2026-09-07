@@ -2,12 +2,10 @@ package nomodel
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -64,8 +62,4 @@ func (p *Profile) GetTestCases() []string {
 // GetServiceConfig returns the service configuration.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return p.stack.ServiceConfig()
-}
-
-func init() {
-	_ = fmt.Sprintf("no-model profile registered")
 }
