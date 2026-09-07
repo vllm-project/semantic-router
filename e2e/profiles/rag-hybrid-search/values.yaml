@@ -3,16 +3,14 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
-      reasoning_families:
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
+      model: general-expert
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
