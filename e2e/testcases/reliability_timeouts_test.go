@@ -2,52 +2,48 @@ package testcases
 
 import (
 	"errors"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestEvaluateTimeoutBound(t *testing.T) {
+func TestEvaluateTimeoutBounds(t *testing.T) {
 	t.Parallel()
 
-	// Normal case: completed well within timeout + slack
-	if err := evaluateTimeoutBound("test fast", 300*time.Millisecond, 500*time.Millisecond, 1*time.Second); err != nil {
-		t.Fatalf("expected nil for within bound, got %v", err)
+	minBound := 1 * time.Second
+	maxBound := 3 * time.Second
+
+	// Case 1: comfortably within bounds
+	if err := evaluateTimeoutBounds("test within", 2*time.Second, minBound, maxBound); err != nil {
+		t.Fatalf("expected nil for within bounds, got %v", err)
 	}
 
-	// Boundary case: completed exactly at timeout + slack
-	if err := evaluateTimeoutBound("test boundary", 1*time.Second, 500*time.Millisecond, 500*time.Millisecond); err != nil {
-		t.Fatalf("expected nil for exact boundary, got %v", err)
+	// Case 2: exactly at lower bound
+	if err := evaluateTimeoutBounds("test min boundary", 1*time.Second, minBound, maxBound); err != nil {
+		t.Fatalf("expected nil for lower boundary, got %v", err)
 	}
 
-	// Exceeded case: completed past timeout + slack
-	if err := evaluateTimeoutBound("test exceeded", 2*time.Second, 500*time.Millisecond, 500*time.Millisecond); err == nil {
-		t.Fatalf("expected error for exceeded bound, got nil")
-	}
-}
-
-func TestIsAllowedProbeStatusCode(t *testing.T) {
-	t.Parallel()
-
-	allowed := []int{http.StatusOK, http.StatusRequestTimeout, http.StatusGatewayTimeout}
-	for _, code := range allowed {
-		if !isAllowedProbeStatusCode(code) {
-			t.Errorf("expected status %d to be allowed", code)
-		}
+	// Case 3: exactly at upper bound
+	if err := evaluateTimeoutBounds("test max boundary", 3*time.Second, minBound, maxBound); err != nil {
+		t.Fatalf("expected nil for upper boundary, got %v", err)
 	}
 
-	rejected := []int{
-		http.StatusBadRequest,
-		http.StatusNotFound,
-		http.StatusInternalServerError,
-		http.StatusBadGateway,
-		http.StatusServiceUnavailable,
+	// Case 4: below lower bound
+	errBelow := evaluateTimeoutBounds("test below", 500*time.Millisecond, minBound, maxBound)
+	if errBelow == nil {
+		t.Fatalf("expected error for below lower bound, got nil")
 	}
-	for _, code := range rejected {
-		if isAllowedProbeStatusCode(code) {
-			t.Errorf("expected status %d to be rejected", code)
-		}
+	if !strings.Contains(errBelow.Error(), "below minimum bound") {
+		t.Errorf("expected error message to contain 'below minimum bound', got: %v", errBelow)
+	}
+
+	// Case 5: exceeding upper bound
+	errAbove := evaluateTimeoutBounds("test above", 4*time.Second, minBound, maxBound)
+	if errAbove == nil {
+		t.Fatalf("expected error for exceeding upper bound, got nil")
+	}
+	if !strings.Contains(errAbove.Error(), "exceeded maximum bound") {
+		t.Errorf("expected error message to contain 'exceeded maximum bound', got: %v", errAbove)
 	}
 }
 
@@ -93,6 +89,7 @@ func TestIsTimeoutOrConnectionError(t *testing.T) {
 	// Case 2: Matched network/timeout error patterns
 	matchErrors := []error{
 		errors.New("context deadline exceeded"),
+		errors.New("dial tcp 198.51.100.1:81: i/o timeout"),
 		errors.New("dial tcp 127.0.0.1:19999: connect: connection refused"),
 		errors.New("read tcp 127.0.0.1:8000: connection reset by peer"),
 		errors.New("unexpected EOF"),
@@ -108,5 +105,53 @@ func TestIsTimeoutOrConnectionError(t *testing.T) {
 	unrelatedErr := errors.New("invalid JSON syntax at position 42")
 	if isTimeoutOrConnectionError(unrelatedErr) {
 		t.Errorf("expected unrelated error %q to return false", unrelatedErr)
+	}
+}
+
+func TestConfiguredTimeoutBoundsConstants(t *testing.T) {
+	t.Parallel()
+
+	// Fast deadline: 2s configured timeout, triggered around 2s. Lower bound < 2s, upper bound > 2s.
+	if expectedFastDeadlineMinBound >= expectedFastDeadline {
+		t.Errorf("expectedFastDeadlineMinBound (%v) should be < expectedFastDeadline (%v)",
+			expectedFastDeadlineMinBound, expectedFastDeadline)
+	}
+	if expectedFastDeadlineMaxBound <= expectedFastDeadline {
+		t.Errorf("expectedFastDeadlineMaxBound (%v) should be > expectedFastDeadline (%v)",
+			expectedFastDeadlineMaxBound, expectedFastDeadline)
+	}
+
+	// Slow deadline: 4s probe delay within 15s deadline. Lower bound < 4s, upper bound > 4s, upper bound < 15s.
+	if expectedSlowDeadlineMinBound >= expectedSlowProbeDelay {
+		t.Errorf("expectedSlowDeadlineMinBound (%v) should be < expectedSlowProbeDelay (%v)",
+			expectedSlowDeadlineMinBound, expectedSlowProbeDelay)
+	}
+	if expectedSlowDeadlineMaxBound <= expectedSlowProbeDelay {
+		t.Errorf("expectedSlowDeadlineMaxBound (%v) should be > expectedSlowProbeDelay (%v)",
+			expectedSlowDeadlineMaxBound, expectedSlowProbeDelay)
+	}
+	if expectedSlowDeadlineMaxBound >= expectedSlowDeadline {
+		t.Errorf("expectedSlowDeadlineMaxBound (%v) should be < expectedSlowDeadline (%v)",
+			expectedSlowDeadlineMaxBound, expectedSlowDeadline)
+	}
+
+	// Stream idle timeout: 2s configured timeout. Lower bound < 2s, upper bound > 2s.
+	if expectedStreamIdleMinBound >= expectedStreamIdleTimeout {
+		t.Errorf("expectedStreamIdleMinBound (%v) should be < expectedStreamIdleTimeout (%v)",
+			expectedStreamIdleMinBound, expectedStreamIdleTimeout)
+	}
+	if expectedStreamIdleMaxBound <= expectedStreamIdleTimeout {
+		t.Errorf("expectedStreamIdleMaxBound (%v) should be > expectedStreamIdleTimeout (%v)",
+			expectedStreamIdleMaxBound, expectedStreamIdleTimeout)
+	}
+
+	// Connect timeout: 1s configured timeout. Lower bound < 1s, upper bound > 1s.
+	if expectedConnectMinBound >= expectedConnectTimeout {
+		t.Errorf("expectedConnectMinBound (%v) should be < expectedConnectTimeout (%v)",
+			expectedConnectMinBound, expectedConnectTimeout)
+	}
+	if expectedConnectMaxBound <= expectedConnectTimeout {
+		t.Errorf("expectedConnectMaxBound (%v) should be > expectedConnectTimeout (%v)",
+			expectedConnectMaxBound, expectedConnectTimeout)
 	}
 }

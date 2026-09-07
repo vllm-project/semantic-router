@@ -1,5 +1,7 @@
+import asyncio
 import json
 import math
+import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -169,6 +171,7 @@ def generate_chat_stream(
     usage: dict,
     created_ts: int,
     complete: bool = True,
+    stall_seconds: float = 0.0,
 ):
     chunk_size = 24
     response_id = response["id"]
@@ -180,6 +183,11 @@ def generate_chat_stream(
             {"content": content[i : i + chunk_size]},
             None,
         )
+        if stall_seconds > 0:
+            # Frame stall: hold stream open without sending further chunks,
+            # allowing downstream stream_idle_timeout to trigger if stall exceeds timeout.
+            time.sleep(stall_seconds)
+            stall_seconds = 0.0
         if not complete:
             return
     yield build_chat_stream_chunk(req, response_id, created_ts, {}, "stop", usage)
@@ -355,7 +363,10 @@ def responses_in_progress_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate_responses_stream(
-    response: dict[str, Any], item_id: str, complete: bool = True
+    response: dict[str, Any],
+    item_id: str,
+    complete: bool = True,
+    stall_seconds: float = 0.0,
 ) -> Iterator[str]:
     output = response["output_text"]
     item = response["output"][0]
@@ -409,6 +420,9 @@ def generate_responses_stream(
         ("response.completed", {"response": response}),
     ]
     for sequence, (event, payload) in enumerate(events):
+        if stall_seconds > 0 and event == "response.output_text.done":
+            time.sleep(stall_seconds)
+            stall_seconds = 0.0
         if not complete and event == "response.output_text.done":
             return
         yield responses_sse(event, {"sequence_number": sequence, **payload})
@@ -499,6 +513,46 @@ def chat_contains(req: ChatRequest, marker: str) -> bool:
         isinstance(message.content, str) and marker in message.content
         for message in req.messages
     )
+
+
+def extract_mock_header_delay(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_header_delay_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
+def response_extract_mock_header_delay(body: dict[str, Any]) -> float:
+    for item in response_input_messages(body):
+        for text in response_texts(item):
+            m = re.search(r"__mock_header_delay_(\d+(?:\.\d+)?)s?__", text)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
+def extract_mock_frame_stall(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+            if "__mock_frame_stall__" in message.content:
+                return 15.0
+    return 0.0
+
+
+def response_extract_mock_frame_stall(body: dict[str, Any]) -> float:
+    for item in response_input_messages(body):
+        for text in response_texts(item):
+            m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", text)
+            if m:
+                return float(m.group(1))
+            if "__mock_frame_stall__" in text:
+                return 15.0
+    return 0.0
 
 
 def chat_has_tool_result(req: ChatRequest) -> bool:
@@ -672,6 +726,9 @@ async def chat_completions(request: Request):
         return invalid_request_response(detail["msg"], field)
 
     created_ts = int(time.time())
+    delay = extract_mock_header_delay(req)
+    if delay > 0:
+        await asyncio.sleep(delay)
     control_response = mock_chat_control_response(req, created_ts)
     if control_response is not None:
         return control_response
@@ -692,6 +749,7 @@ async def chat_completions(request: Request):
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
+    stall_sec = extract_mock_frame_stall(req)
     return StreamingResponse(
         generate_chat_stream(
             req,
@@ -700,6 +758,7 @@ async def chat_completions(request: Request):
             usage,
             created_ts,
             complete=not chat_contains(req, "__mock_incomplete_stream__"),
+            stall_seconds=stall_sec,
         ),
         media_type="text/event-stream",
         headers={
@@ -775,6 +834,9 @@ async def responses(request: Request):
             )
         return build_responses_tool_response(body)
     response, item_id = build_responses_response(body)
+    delay = response_extract_mock_header_delay(body)
+    if delay > 0:
+        await asyncio.sleep(delay)
     if not body.get("stream"):
         return response
     if response_input_contains(body, "__mock_midstream_error__"):
@@ -783,11 +845,13 @@ async def responses(request: Request):
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
+    resp_stall_sec = response_extract_mock_frame_stall(body)
     return StreamingResponse(
         generate_responses_stream(
             response,
             item_id,
             complete=not response_input_contains(body, "__mock_incomplete_stream__"),
+            stall_seconds=resp_stall_sec,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},

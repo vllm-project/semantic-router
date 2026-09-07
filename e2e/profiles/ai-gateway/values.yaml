@@ -62,7 +62,7 @@ config:
           connect_timeout: 1s
         backend_refs:
           - name: timeout-unreachable-backend
-            endpoint: 127.0.0.1:19999
+            endpoint: 198.51.100.1:81
             weight: 1
   routing:
     projections:

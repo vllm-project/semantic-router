@@ -16,6 +16,3 @@ spec:
               value: timeout-unreachable-backend
       backendRefs:
         - name: timeout-unreachable-backend
-      timeouts:
-        request: 2s
-        backendRequest: 2s

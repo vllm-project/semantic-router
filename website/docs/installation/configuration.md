@@ -300,12 +300,12 @@ for the physical backends assigned to a logical model.
 
 - `request_timeout`: Total deadline bound for an entire request attempt, translated to
   the Envoy route `timeout`. Unsets or overrides inheritance from `listener.timeout`
-  (default `1200s`). Can be explicitly disabled with `"0s"` to allow unbounded execution
+  (default `300s`). Can be explicitly disabled with `"0s"` to allow unbounded execution
   (e.g. for long-running reasoning models or high-token generations), which is valid
   only when a positive `stream_idle_timeout` is configured.
 - `stream_idle_timeout`: Idle duration allowed between consecutive streaming chunks,
   translated to the Envoy route `idleTimeout`. Unsets or overrides inheritance from
-  `listener.timeout` (default `1200s`). Guards against stalled upstreams during
+  `listener.timeout` (default `300s`). Guards against stalled upstreams during
   token generation.
 - `connect_timeout`: Network connection establishment timeout for the backend cluster,
   translated to the Envoy cluster `connect_timeout`. Must be strictly positive
@@ -316,7 +316,7 @@ for the physical backends assigned to a logical model.
 
 To preserve backwards compatibility with existing deployments and ensure robust multi-model routing, the reliability block adheres to the following contracts:
 
-- **Baseline inheritance**: When `request_timeout` or `stream_idle_timeout` is omitted, the model route inherits the global `listener.timeout` (default `1200s`). When `connect_timeout` is omitted, the cluster defaults to `10s`. Existing configurations without a reliability block continue to operate without changes.
+- **Baseline inheritance**: When `request_timeout` or `stream_idle_timeout` is omitted, the model route inherits the global `listener.timeout` (default `300s`). When `connect_timeout` is omitted, the cluster defaults to `10s`. Existing configurations without a reliability block continue to operate without changes.
 - **Unbounded reasoning guard**: Setting `request_timeout: "0s"` disables the total request deadline for extended reasoning models. To prevent stalled connection leaks, this setting is valid only when a positive `stream_idle_timeout` is configured.
 
 ### Load balancing and retries

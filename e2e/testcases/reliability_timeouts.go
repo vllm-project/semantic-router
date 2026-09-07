@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -47,14 +49,22 @@ const (
 	timeoutProbeUnreachableModel = "timeout-probe-unreachable"
 
 	// Expected timeouts configured in e2e/profiles/ai-gateway/values.yaml
-	expectedFastDeadline       = 2 * time.Second
-	expectedFastDeadlineSlack  = 500 * time.Millisecond
-	expectedSlowDeadline       = 15 * time.Second
-	expectedSlowDeadlineSlack  = 1 * time.Second
+	expectedFastDeadline         = 2 * time.Second
+	expectedFastDeadlineMinBound = 1800 * time.Millisecond
+	expectedFastDeadlineMaxBound = 3500 * time.Millisecond
+
+	expectedSlowDeadline         = 15 * time.Second
+	expectedSlowProbeDelay       = 4 * time.Second
+	expectedSlowDeadlineMinBound = 3800 * time.Millisecond
+	expectedSlowDeadlineMaxBound = 6000 * time.Millisecond
+
 	expectedStreamIdleTimeout  = 2 * time.Second
-	expectedStreamIdleMaxSlack = 6 * time.Second
-	expectedConnectTimeout     = 1 * time.Second
-	expectedConnectSlack       = 4 * time.Second
+	expectedStreamIdleMinBound = 1800 * time.Millisecond
+	expectedStreamIdleMaxBound = 4500 * time.Millisecond
+
+	expectedConnectTimeout  = 1 * time.Second
+	expectedConnectMinBound = 900 * time.Millisecond
+	expectedConnectMaxBound = 3000 * time.Millisecond
 )
 
 func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -73,33 +83,31 @@ func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, 
 	if err := testReliabilityShortConnectFailures(ctx, client, opts); err != nil {
 		failures = append(failures, fmt.Errorf("short-connect-failures: %w", err))
 	}
+	if err := verifyTimeoutMetrics(ctx, client, opts); err != nil {
+		failures = append(failures, fmt.Errorf("timeout-metrics: %w", err))
+	}
 
 	return errors.Join(failures...)
 }
 
-func probeModelDeadline(ctx context.Context, localPort, model, prompt string, timeout time.Duration) (time.Duration, error) {
+func probeModelDeadline(ctx context.Context, localPort, model, prompt string, timeout time.Duration) (time.Duration, int, error) {
 	start := time.Now()
 	resp, err := sendLocalChatCompletion(ctx, localPort, model, prompt, timeout)
 	elapsed := time.Since(start)
 
 	if err != nil && !isTimeoutOrConnectionError(err) {
-		return elapsed, fmt.Errorf("unexpected error on %s: %w", model, err)
+		return elapsed, 0, fmt.Errorf("unexpected error on %s: %w", model, err)
 	}
-	if resp != nil && !isAllowedProbeStatusCode(resp.StatusCode) {
-		return elapsed, fmt.Errorf("expected 200, 408, or 504 for %s, got status %d", model, resp.StatusCode)
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
 	}
-	return elapsed, nil
-}
-
-func isAllowedProbeStatusCode(statusCode int) bool {
-	return statusCode == http.StatusOK ||
-		statusCode == http.StatusGatewayTimeout ||
-		statusCode == http.StatusRequestTimeout
+	return elapsed, statusCode, nil
 }
 
 func testReliabilityDistinctDeadlines(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing distinct deadlines per model")
+		fmt.Println("[Test] Testing distinct deadlines per model with controllable header delay")
 	}
 
 	localPort, stop, err := setupServiceConnection(ctx, client, opts)
@@ -108,39 +116,55 @@ func testReliabilityDistinctDeadlines(ctx context.Context, client *kubernetes.Cl
 	}
 	defer stop()
 
-	fastElapsed, err := probeModelDeadline(ctx, localPort, timeoutProbeFastModel, "hello fast deadline probe", 15*time.Second)
+	// Fast model has request_timeout: 2s. Sending a 4s header delay forces Envoy's
+	// per-model deadline to trigger, returning HTTP 504 Gateway Timeout in ~2s.
+	fastPrompt := "__mock_header_delay_4s__ hello fast deadline probe"
+	fastElapsed, fastStatus, err := probeModelDeadline(ctx, localPort, timeoutProbeFastModel, fastPrompt, 15*time.Second)
 	if err != nil {
+		return fmt.Errorf("fast model probe failed: %w", err)
+	}
+	if fastStatus != http.StatusGatewayTimeout {
+		return fmt.Errorf("expected status %d (Gateway Timeout) for fast model exceeding deadline, got %d",
+			http.StatusGatewayTimeout, fastStatus)
+	}
+	if err := evaluateTimeoutBounds("fast model deadline", fastElapsed, expectedFastDeadlineMinBound, expectedFastDeadlineMaxBound); err != nil {
 		return err
 	}
 
-	slowElapsed, err := probeModelDeadline(ctx, localPort, timeoutProbeSlowModel, "hello slow deadline probe", 20*time.Second)
-	if err != nil {
-		return err
+	// Slow model has request_timeout: 15s. Sending a 4s header delay forces the request
+	// to take 4s, which exceeds the fast model's 2s deadline but completes well within
+	// the slow model's 15s deadline, returning HTTP 200 OK after ~4s.
+	slowPrompt := "__mock_header_delay_4s__ hello slow deadline probe"
+	slowElapsed, slowStatus, slowErr := probeModelDeadline(ctx, localPort, timeoutProbeSlowModel, slowPrompt, 20*time.Second)
+	if slowErr != nil {
+		return fmt.Errorf("slow model probe failed: %w", slowErr)
 	}
-
-	if err := evaluateTimeoutBound("fast model deadline", fastElapsed, expectedFastDeadline, expectedFastDeadlineSlack); err != nil {
-		return err
+	if slowStatus != http.StatusOK {
+		return fmt.Errorf("expected status %d (OK) for slow model within deadline, got %d",
+			http.StatusOK, slowStatus)
 	}
-	if err := evaluateTimeoutBound("slow model deadline", slowElapsed, expectedSlowDeadline, expectedSlowDeadlineSlack); err != nil {
+	if err := evaluateTimeoutBounds("slow model deadline", slowElapsed, expectedSlowDeadlineMinBound, expectedSlowDeadlineMaxBound); err != nil {
 		return err
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"distinct_deadlines_verified": true,
+			"fast_model_status":           fastStatus,
 			"fast_model_elapsed_ms":       fastElapsed.Milliseconds(),
+			"slow_model_status":           slowStatus,
 			"slow_model_elapsed_ms":       slowElapsed.Milliseconds(),
 		})
 	}
 	return nil
 }
 
-func sendStalledStreamRequest(ctx context.Context, localPort, model string) (*http.Response, time.Time, error) {
+func sendStalledStreamRequest(ctx context.Context, localPort, model, prompt string) (*http.Response, time.Time, error) {
 	reqBody := map[string]interface{}{
 		"model":  model,
 		"stream": true,
 		"messages": []map[string]string{
-			{"role": "user", "content": "__mock_incomplete_stream__"},
+			{"role": "user", "content": prompt},
 		},
 	}
 	jsonBytes, err := json.Marshal(reqBody)
@@ -177,7 +201,7 @@ func scanStreamForCompletion(body io.Reader) (int, bool) {
 
 func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing stalled stream idle timeout")
+		fmt.Println("[Test] Testing stalled stream idle timeout with mid-stream frame stall")
 	}
 
 	localPort, stop, err := setupServiceConnection(ctx, client, opts)
@@ -186,14 +210,15 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stop()
 
-	resp, start, err := sendStalledStreamRequest(ctx, localPort, timeoutProbeFastModel)
+	stalledPrompt := "__mock_frame_stall_15s__ hello stalled stream probe"
+	resp, start, err := sendStalledStreamRequest(ctx, localPort, timeoutProbeFastModel, stalledPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to initiate stalled stream request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected status 200 for stalled stream probe, got %d", resp.StatusCode)
+		return fmt.Errorf("expected initial status 200 for stalled stream probe, got %d", resp.StatusCode)
 	}
 
 	chunksReceived, streamHasDone := scanStreamForCompletion(resp.Body)
@@ -202,7 +227,10 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 	if streamHasDone {
 		return fmt.Errorf("stalled stream path unexpectedly emitted [DONE]")
 	}
-	if err := evaluateTimeoutBound("stalled stream idle timeout", elapsed, expectedStreamIdleTimeout, expectedStreamIdleMaxSlack); err != nil {
+	if chunksReceived < 1 {
+		return fmt.Errorf("stalled stream expected at least 1 initial chunk before frame stall, got %d", chunksReceived)
+	}
+	if err := evaluateTimeoutBounds("stalled stream idle timeout", elapsed, expectedStreamIdleMinBound, expectedStreamIdleMaxBound); err != nil {
 		return err
 	}
 
@@ -212,6 +240,7 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 			"chunks_received":          chunksReceived,
 			"elapsed_ms":               elapsed.Milliseconds(),
 			"prematurely_terminated":   !streamHasDone,
+			"typed_reset_outcome":      "stream_idle_timeout",
 		})
 	}
 	return nil
@@ -228,12 +257,12 @@ func testReliabilityShortConnectFailures(ctx context.Context, client *kubernetes
 	}
 	defer stop()
 
-	// Send request through Envoy for unreachable model cluster with short connect_timeout (1s)
+	// Send request through Envoy for unreachable model cluster with short connect_timeout (1s).
 	start := time.Now()
 	resp, err := sendLocalChatCompletion(ctx, localPort, timeoutProbeUnreachableModel, "connect failure probe", 10*time.Second)
 	elapsed := time.Since(start)
 
-	// An upstream connect failure through Envoy must return an HTTP failure (503/504) or transport error
+	// An upstream connect failure through Envoy must return an HTTP failure or transport error
 	if resp != nil && resp.StatusCode == http.StatusOK {
 		return fmt.Errorf("expected connect failure through Envoy cluster, but got 200 OK")
 	}
@@ -242,25 +271,70 @@ func testReliabilityShortConnectFailures(ctx context.Context, client *kubernetes
 		return fmt.Errorf("unexpected error on connect failure probe: %w", err)
 	}
 
+	// Verify exact status: Envoy returns 503 Service Unavailable on cluster connect timeout (UF)
+	if resp != nil && resp.StatusCode != http.StatusServiceUnavailable {
+		return fmt.Errorf("expected status %d (Service Unavailable) on connect timeout, got %d",
+			http.StatusServiceUnavailable, resp.StatusCode)
+	}
+
 	// Verify the failure occurred within bounded duration reflecting the short connect timeout
-	if err := evaluateTimeoutBound("connect timeout", elapsed, expectedConnectTimeout, expectedConnectSlack); err != nil {
+	if err := evaluateTimeoutBounds("connect timeout", elapsed, expectedConnectMinBound, expectedConnectMaxBound); err != nil {
 		return err
 	}
 
 	if opts.SetDetails != nil {
+		statusCode := 0
+		if resp != nil {
+			statusCode = resp.StatusCode
+		}
 		opts.SetDetails(map[string]interface{}{
 			"short_connect_verified": true,
 			"elapsed_ms":             elapsed.Milliseconds(),
+			"status_code":            statusCode,
+			"typed_connect_outcome":  "connect_timeout",
 		})
 	}
 	return nil
 }
 
-// evaluateTimeoutBound verifies that an operation completed within the expected timeout plus allowable slack.
-func evaluateTimeoutBound(name string, elapsed, expectedTimeout, allowableSlack time.Duration) error {
-	maxAllowed := expectedTimeout + allowableSlack
-	if elapsed > maxAllowed {
-		return fmt.Errorf("%s took %v, exceeded max allowed %v (expected ~%v)", name, elapsed, maxAllowed, expectedTimeout)
+// evaluateTimeoutBounds verifies that elapsed time is within [minBound, maxBound].
+func evaluateTimeoutBounds(name string, elapsed, minBound, maxBound time.Duration) error {
+	if elapsed < minBound {
+		return fmt.Errorf("%s took %v, below minimum bound %v", name, elapsed, minBound)
+	}
+	if elapsed > maxBound {
+		return fmt.Errorf("%s took %v, exceeded maximum bound %v", name, elapsed, maxBound)
+	}
+	return nil
+}
+
+// verifyTimeoutMetrics verifies that the router's Prometheus /metrics endpoint records
+// timeout errors in llm_request_errors_total.
+func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if client == nil || opts.RestConfig == nil {
+		return nil
+	}
+	metricsSession, err := fixtures.OpenSemanticRouterMetricsSession(ctx, client, opts)
+	if err != nil {
+		if opts.Verbose {
+			fmt.Printf("[Test] Note: metrics session not accessible: %v\n", err)
+		}
+		return nil
+	}
+	defer metricsSession.Close()
+
+	metricsHTTP := metricsSession.HTTPClient(10 * time.Second)
+	metricsResp, err := fixtures.DoGETRequest(ctx, metricsHTTP, metricsSession.URL("/metrics"))
+	if err != nil {
+		return fmt.Errorf("fetch /metrics: %w", err)
+	}
+	if metricsResp.StatusCode != http.StatusOK {
+		return fmt.Errorf("/metrics: expected 200, got %d", metricsResp.StatusCode)
+	}
+
+	body := string(metricsResp.Body)
+	if !strings.Contains(body, "llm_request_errors_total") || !strings.Contains(body, `reason="timeout"`) {
+		return fmt.Errorf("metrics body missing llm_request_errors_total with reason=\"timeout\": %s", body)
 	}
 	return nil
 }

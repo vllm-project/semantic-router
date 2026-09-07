@@ -93,5 +93,6 @@ metadata:
 spec:
   endpoints:
     - fqdn:
-        hostname: 127.0.0.1
-        port: 19999
+        hostname: 198.51.100.1
+        port: 81
+
