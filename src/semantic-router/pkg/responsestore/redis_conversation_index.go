@@ -34,8 +34,131 @@ const (
 	conversationIndexProofPopulated conversationIndexProof = "v1:populated"
 )
 
+// conversationIndexAddScript adds members to KEYS[1] and, in the same atomic
+// step, makes sure the key's expiry covers at least ARGV[1] milliseconds.
+// ARGV[1] <= 0 means "this index must never expire"; ARGV[2..] are score,
+// member pairs, and may be empty to ask only about the lifetime.
+//
+// The expiry is only ever raised, never lowered. A conversation index must
+// outlive every live payload it names, or a read finds no index and — once the
+// store is finalized (ConversationIndexCompletionKeySuffix) — reports the
+// conversation empty while its payloads are still sitting there, permanently
+// and silently. Different writers know different lower bounds for how long
+// that is: an ordinary write knows only the store TTL it just wrote its own
+// payload with, while a backfill has seen a legacy payload's real remaining
+// lifetime, which can be weeks longer. Whichever writer happens to run last
+// must not be the one that decides.
+//
+// Reading PTTL *before* the ZADD is what makes that decision possible at all.
+// Afterwards, a key with no expiry is ambiguous: it may be an index this
+// script deliberately persisted to cover a payload that never expires, or one
+// the ZADD just created, which Redis leaves without a TTL. Beforehand, the two
+// are distinct — -1 is the former and must be left alone, -2 is the latter and
+// takes the requested lifetime. That ambiguity is also why EXPIRE's GT flag
+// cannot express this (it reads a missing TTL as infinite), quite apart from
+// making Redis 7.0 a hard runtime requirement.
+//
+// Single-key: KEYS[1] only, so it stays legal in Redis Cluster. Callers keep
+// members within redisBackfillBatchSize, so the unpack below stays far inside
+// Lua's argument limit.
+var conversationIndexAddScript = redis.NewScript(`
+local existing = redis.call("PTTL", KEYS[1])
+if #ARGV > 1 then
+	redis.call("ZADD", KEYS[1], unpack(ARGV, 2))
+end
+if redis.call("EXISTS", KEYS[1]) == 0 then
+	return 0
+end
+local want = tonumber(ARGV[1])
+if want <= 0 then
+	if existing >= 0 then
+		redis.call("PERSIST", KEYS[1])
+	end
+	return 1
+end
+if existing == -1 or (existing >= 0 and existing >= want) then
+	return 1
+end
+redis.call("PEXPIRE", KEYS[1], want)
+return 1
+`)
+
+// conversationIndexAddArgs builds conversationIndexAddScript's ARGV: the
+// requested lifetime, then each member's score and value.
+func conversationIndexAddArgs(lifetimeMillis int64, members []redis.Z) []interface{} {
+	args := make([]interface{}, 0, 1+2*len(members))
+	args = append(args, lifetimeMillis)
+	for _, member := range members {
+		args = append(args, member.Score, member.Member)
+	}
+	return args
+}
+
+// addConversationIndexMembers runs conversationIndexAddScript as a standalone
+// command. EVALSHA with go-redis's NOSCRIPT fallback, which is only available
+// outside a pipeline.
+func (s *RedisStore) addConversationIndexMembers(ctx context.Context, indexKey string, lifetimeMillis int64, members []redis.Z) error {
+	return conversationIndexAddScript.Run(ctx, s.client, []string{indexKey}, conversationIndexAddArgs(lifetimeMillis, members)...).Err()
+}
+
+// queueConversationIndexMembers queues the same script onto an existing
+// pipeline, for a caller writing to several conversations at once.
+//
+// EVAL rather than EVALSHA: inside a pipeline go-redis cannot run Script.Run's
+// NOSCRIPT-to-EVAL fallback, because a queued command's error is not readable
+// until Exec, so a NOSCRIPT against a Redis that has never seen this script
+// would fail the whole batch. Redis caches by SHA on EVAL too, so the only
+// cost is shipping the script body once per conversation in the batch.
+func queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, indexKey string, lifetimeMillis int64, members []redis.Z) {
+	conversationIndexAddScript.Eval(ctx, pipe, []string{indexKey}, conversationIndexAddArgs(lifetimeMillis, members)...)
+}
+
+// longerIndexLifetime folds one member payload's remaining lifetime into the
+// lifetime its conversation index is being asked to cover, keeping whichever
+// is longer.
+//
+// Both arguments use this package's index-lifetime convention: a non-positive
+// value means "never expires", and therefore dominates any finite one. A
+// payload Redis reported as already gone (unknownPayloadTTL) is not a
+// lifetime at all and must be filtered out by the caller rather than passed
+// in — it would otherwise read as "unbounded".
+func longerIndexLifetime(want, candidate int64) int64 {
+	if want <= 0 || candidate <= 0 {
+		return 0
+	}
+	if candidate > want {
+		return candidate
+	}
+	return want
+}
+
+// scannedResponse is one strictly decoded payload together with the remaining
+// lifetime Redis reported for it in the same round trip.
+//
+// The lifetime travels with the payload because only the scan that read it
+// knows how long it actually has left: a payload written before the store's
+// TTL was shortened, or by an older deployment, routinely outlives s.ttl by
+// weeks, and the index built from it must outlive it in turn. ttlMillis
+// follows Redis's PTTL convention — -1 never expires, unknownPayloadTTL means
+// there was nothing left to measure.
+type scannedResponse struct {
+	response  *responseapi.StoredResponse
+	ttlMillis int64
+}
+
+// indexLifetime is how long this response's index membership must remain
+// readable, in milliseconds, under the convention longerIndexLifetime uses.
+// A payload with no measurable lifetime contributes nothing, so it reports
+// the store's own TTL instead of pretending the index may expire immediately.
+func (r scannedResponse) indexLifetime(storeTTLMillis int64) int64 {
+	if r.ttlMillis == unknownPayloadTTL {
+		return storeTTLMillis
+	}
+	return longerIndexLifetime(storeTTLMillis, r.ttlMillis)
+}
+
 // indexResponse adds a response to its conversation index, scored by
-// created_at, and refreshes the index's own TTL.
+// created_at, and makes the index outlive the payload it just named.
 //
 // Deliberately touches no migrated proof at all — neither setting one nor
 // extending one. Setting: this call proves nothing about whether a
@@ -56,20 +179,22 @@ const (
 // the caller — not this helper — must decide what an index failure means:
 // StoreResponse rolls the payload back, UpdateResponse restores the previous
 // payload, DeleteResponse and lazy backfill may choose to log and continue.
-func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt int64) error {
+//
+// memberLifetimeMillis is how long the payload being indexed has left, which
+// only the caller knows: a fresh write just stored it with the store TTL, a
+// rollback is restoring a snapshot with whatever was left of the original,
+// and a repair is re-indexing a payload written at some earlier time. The
+// index is extended to cover it and never shortened — see
+// extendConversationIndexLifetimeScript for why that matters.
+func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt, memberLifetimeMillis int64) error {
 	if conversationID == "" || responseID == "" {
 		return nil
 	}
 	indexKey := s.conversationIndexKey(conversationID)
+	lifetime := longerIndexLifetime(s.ttlMillis(), memberLifetimeMillis)
+	members := []redis.Z{{Score: float64(createdAt), Member: responseID}}
 
-	pipe := s.client.Pipeline()
-	pipe.ZAdd(ctx, indexKey, redis.Z{Score: float64(createdAt), Member: responseID})
-	if s.ttl > 0 {
-		// Outlive the newest member. Guarded: EXPIRE with 0 deletes the key.
-		pipe.Expire(ctx, indexKey, s.ttl)
-	}
-
-	if _, err := pipe.Exec(ctx); err != nil {
+	if err := s.addConversationIndexMembers(ctx, indexKey, lifetime, members); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
 	}
 
@@ -200,20 +325,20 @@ func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversation
 // whereas a callback-local batch flushed immediately, plus only an
 // atomic.Int64 running total, has no shared mutable state to race on.
 //
-// Idempotent and additive: every ZADD (including one re-adding a member an
-// ordinary write already indexed, harmlessly, with the same score) only
-// ever adds, so a concurrently indexed write racing this scan is never
+// Idempotent and additive: every index write (including one re-adding a
+// member an ordinary write already indexed, harmlessly, with the same score)
+// only ever adds, so a concurrently indexed write racing this scan is never
 // undone by it, no matter which finishes first, and concurrent per-master
-// ZADDs from different callback invocations are independent, idempotent
+// writes from different callback invocations are independent, idempotent
 // operations that need no coordination between themselves.
 //
-// The typed proof is set only after the scan and every ZADD succeed —
+// The typed proof is set only after the scan and every index write succeed —
 // on any error, this returns without marking migrated, matching blueprint
 // §5 Phase 3's "no proof on partial success"; the next call is a safe,
 // fully idempotent retry.
 func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (int64, error) {
 	var total atomic.Int64
-	err := s.scanResponsePayloads(ctx, func(batch []*responseapi.StoredResponse) error {
+	err := s.scanResponsePayloads(ctx, func(batch []scannedResponse) error {
 		return s.indexBackfillMatches(ctx, conversationID, batch, &total)
 	})
 	if err != nil {
@@ -237,29 +362,43 @@ func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversa
 // invokes this concurrently across masters, since each invocation gets its
 // own slice, and total is the only state shared between them — updated
 // exclusively through atomic.Int64.
-func (s *RedisStore) indexBackfillMatches(ctx context.Context, conversationID string, batch []*responseapi.StoredResponse, total *atomic.Int64) error {
+//
+// Each chunk carries the longest lifetime among its own members, and nothing
+// accumulates a maximum across chunks: because the index's expiry is only
+// ever extended, applying each chunk's own bound converges on the longest
+// across all of them, in any order and from any number of concurrent
+// callback invocations. That is what keeps this free of shared mutable state
+// beyond total.
+func (s *RedisStore) indexBackfillMatches(ctx context.Context, conversationID string, batch []scannedResponse, total *atomic.Int64) error {
+	storeTTL := s.ttlMillis()
 	members := make([]redis.Z, 0, min(len(batch), redisBackfillBatchSize))
-	for _, response := range batch {
-		if response.ConversationID != conversationID {
+	lifetime := storeTTL
+	flush := func() error {
+		if err := s.indexBackfillBatch(ctx, conversationID, members, lifetime); err != nil {
+			return err
+		}
+		total.Add(int64(len(members)))
+		members = members[:0]
+		lifetime = storeTTL
+		return nil
+	}
+
+	for _, scanned := range batch {
+		if scanned.response.ConversationID != conversationID {
 			continue
 		}
-		members = append(members, redis.Z{Score: float64(response.CreatedAt), Member: response.ID})
+		members = append(members, redis.Z{Score: float64(scanned.response.CreatedAt), Member: scanned.response.ID})
+		lifetime = longerIndexLifetime(lifetime, scanned.indexLifetime(storeTTL))
 		if len(members) >= redisBackfillBatchSize {
-			if err := s.indexBackfillBatch(ctx, conversationID, members); err != nil {
+			if err := flush(); err != nil {
 				return err
 			}
-			total.Add(int64(len(members)))
-			members = members[:0]
 		}
 	}
 	if len(members) == 0 {
 		return nil
 	}
-	if err := s.indexBackfillBatch(ctx, conversationID, members); err != nil {
-		return err
-	}
-	total.Add(int64(len(members)))
-	return nil
+	return flush()
 }
 
 // finishEmptyBackfill marks conversationID migrated with the empty proof
@@ -272,36 +411,37 @@ func (s *RedisStore) finishEmptyBackfill(ctx context.Context, conversationID str
 	}
 }
 
-// finishPopulatedBackfill refreshes the backfilled index's TTL once — after
-// every batch across every master has already succeeded, not per batch,
-// which would be redundant work for no additional safety — and marks
-// conversationID migrated with the populated proof. Both steps are
-// best-effort; see markConversationMigrated.
+// finishPopulatedBackfill makes sure the backfilled index covers at least the
+// store's own TTL — once, after every batch across every master has already
+// succeeded — and marks conversationID migrated with the populated proof. The
+// floor is all this adds: each batch has already extended the index to cover
+// its own longest-lived member, and this can only ever raise that, never
+// bring it back down to s.ttl. Both steps are best-effort; see
+// markConversationMigrated.
 func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID string) {
-	if s.ttl > 0 {
-		if err := s.client.Expire(ctx, s.conversationIndexKey(conversationID), s.ttl).Err(); err != nil {
-			logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
-				conversationID, err)
-		}
+	if err := s.addConversationIndexMembers(ctx, s.conversationIndexKey(conversationID), s.ttlMillis(), nil); err != nil {
+		logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
+			conversationID, err)
 	}
 	if err := s.markConversationMigrated(ctx, conversationID, conversationIndexProofPopulated); err != nil {
 		logging.Debugf("RedisStore: failed to mark conversation %s migrated (populated): %v", conversationID, err)
 	}
 }
 
-// indexBackfillBatch ZADDs one bounded batch (at most redisBackfillBatchSize
+// indexBackfillBatch adds one bounded batch (at most redisBackfillBatchSize
 // members, enforced by lazyBackfillConversationIndex's caller-side
-// allocation) into a conversation's index. A thin wrapper — its only job is
-// giving this one Redis call its own name and error context, since
+// allocation) to a conversation's index, covering lifetimeMillis. A thin
+// wrapper — its only job is giving this one Redis call its own name and error
+// context, since
 // lazyBackfillConversationIndex now calls it once per flushed batch per
 // callback invocation, potentially from several concurrent goroutines (one
 // per Cluster master) at once; each call is independent and idempotent, so
 // no coordination between concurrent callers is needed.
-func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID string, members []redis.Z) error {
+func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID string, members []redis.Z, lifetimeMillis int64) error {
 	if len(members) == 0 {
 		return nil
 	}
-	if err := s.client.ZAdd(ctx, s.conversationIndexKey(conversationID), members...).Err(); err != nil {
+	if err := s.addConversationIndexMembers(ctx, s.conversationIndexKey(conversationID), lifetimeMillis, members); err != nil {
 		return fmt.Errorf("failed to backfill conversation index: %w", err)
 	}
 	return nil
@@ -363,8 +503,8 @@ func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationI
 // (sweepAndIndexAllConversations) — this is the O(N) operation the index
 // exists to avoid on the hot read path. See scanResponseKeys for the
 // Cluster-aware key walking.
-func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []*responseapi.StoredResponse) error) error {
-	return s.scanResponseKeys(ctx, func(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error) {
+func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []scannedResponse) error) error {
+	return s.scanResponseKeys(ctx, func(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error) {
 		return s.getResponsesPipelined(ctx, client, keys)
 	}, visit)
 }
@@ -380,8 +520,8 @@ func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch 
 // Standalone mode scans the one client directly.
 func (s *RedisStore) scanResponseKeys(
 	ctx context.Context,
-	fetch func(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error),
-	visit func(batch []*responseapi.StoredResponse) error,
+	fetch func(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error),
+	visit func(batch []scannedResponse) error,
 ) error {
 	s.scanInvocations.Add(1)
 
@@ -400,8 +540,8 @@ func scanResponseNode(
 	ctx context.Context,
 	client redis.UniversalClient,
 	pattern string,
-	fetch func(context.Context, redis.UniversalClient, []string) ([]*responseapi.StoredResponse, error),
-	visit func([]*responseapi.StoredResponse) error,
+	fetch func(context.Context, redis.UniversalClient, []string) ([]scannedResponse, error),
+	visit func([]scannedResponse) error,
 ) error {
 	keys := make([]string, 0, redisBackfillBatchSize)
 	flush := func() error {
@@ -431,26 +571,30 @@ func scanResponseNode(
 	return flush()
 }
 
-// getResponsesPipelined decodes the shared raw pipelined GET results used by
-// both lazy backfill and finalization. A key that expired between SCAN and
-// GET is a benign TTL race and is skipped; every other read, decode, or
-// key-identity failure aborts the whole scan rather than being logged and
-// skipped, so neither a per-conversation proof nor the global completion
-// record is ever published from an observation known to be incomplete.
-func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) ([]*responseapi.StoredResponse, error) {
+// getResponsesPipelined decodes the shared raw pipelined results used by both
+// lazy backfill and finalization. A key that expired between SCAN and GET is a
+// benign TTL race and is skipped; every other read, decode, or key-identity
+// failure aborts the whole scan rather than being logged and skipped, so
+// neither a per-conversation proof nor the global completion record is ever
+// published from an observation known to be incomplete.
+//
+// Each payload's remaining lifetime is read in the same pipeline, because the
+// index these scans build has to outlive the payloads they found — and a
+// legacy payload's real lifetime is knowable here and nowhere later.
+func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
 
-	results := fetchResponsePayloadsPipelined(ctx, client, keys)
-	responses := make([]*responseapi.StoredResponse, 0, len(keys))
+	results := fetchResponsePayloadsAndTTLsPipelined(ctx, client, keys)
+	responses := make([]scannedResponse, 0, len(keys))
 	for i, result := range results {
 		response, err := s.decodeScannedResponse(keys[i], result)
 		if err != nil {
 			return nil, err
 		}
 		if response != nil {
-			responses = append(responses, response)
+			responses = append(responses, scannedResponse{response: response, ttlMillis: result.ttlMillis})
 		}
 	}
 

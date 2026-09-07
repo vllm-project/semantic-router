@@ -12,16 +12,46 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// responsePayloadResult is one independent GET outcome. The helper below
-// pipelines single-key GET commands, allowing go-redis to route each command
-// to its owning Cluster node without issuing a cross-slot MGET.
+// responsePayloadResult is one independent GET outcome, optionally with the
+// key's remaining lifetime read in the same round trip. The helpers below
+// pipeline single-key commands, allowing go-redis to route each one to its
+// owning Cluster node without issuing a cross-slot MGET.
+//
+// ttlMillis follows Redis's PTTL convention (-1 never expires, -2 no such
+// key) and is only meaningful when the result came from
+// fetchResponsePayloadsAndTTLsPipelined; the GET-only helper leaves it at
+// unknownPayloadTTL.
 type responsePayloadResult struct {
-	key string
-	raw []byte
-	err error
+	key       string
+	raw       []byte
+	ttlMillis int64
+	err       error
 }
 
+// unknownPayloadTTL is responsePayloadResult.ttlMillis when no PTTL was
+// asked for, or when Redis answered that the key is already gone. Both are
+// "this payload contributes nothing to how long its conversation index must
+// live", and Redis's own -2 is the natural spelling of that.
+const unknownPayloadTTL int64 = -2
+
+// fetchResponsePayloadsPipelined reads each key's payload. Used by the read
+// and cascade paths, which act on the payload alone and have no reason to
+// pay for a second command per key.
 func fetchResponsePayloadsPipelined(ctx context.Context, client redis.UniversalClient, keys []string) []responsePayloadResult {
+	return fetchResponsePayloads(ctx, client, keys, false)
+}
+
+// fetchResponsePayloadsAndTTLsPipelined additionally reads how long each
+// payload has left, in the same pipeline. Used by the scan paths (lazy
+// backfill and the finalization sweep), which must make a conversation's
+// index outlive payloads they did not write and whose real lifetimes can be
+// far longer than the store's currently configured TTL — see
+// extendConversationIndexLifetimeScript.
+func fetchResponsePayloadsAndTTLsPipelined(ctx context.Context, client redis.UniversalClient, keys []string) []responsePayloadResult {
+	return fetchResponsePayloads(ctx, client, keys, true)
+}
+
+func fetchResponsePayloads(ctx context.Context, client redis.UniversalClient, keys []string, withTTL bool) []responsePayloadResult {
 	results := make([]responsePayloadResult, len(keys))
 	if len(keys) == 0 {
 		return results
@@ -29,16 +59,82 @@ func fetchResponsePayloadsPipelined(ctx context.Context, client redis.UniversalC
 
 	pipe := client.Pipeline()
 	cmds := make([]*redis.StringCmd, len(keys))
+	var ttlCmds []*redis.DurationCmd
+	if withTTL {
+		ttlCmds = make([]*redis.DurationCmd, len(keys))
+	}
 	for i, key := range keys {
 		results[i].key = key
+		results[i].ttlMillis = unknownPayloadTTL
 		cmds[i] = pipe.Get(ctx, key)
+		if withTTL {
+			ttlCmds[i] = pipe.PTTL(ctx, key)
+		}
 	}
 	_, _ = pipe.Exec(ctx)
 
 	for i, cmd := range cmds {
 		results[i].raw, results[i].err = cmd.Bytes()
+		if withTTL {
+			results[i].ttlMillis = decodePayloadTTL(ttlCmds[i])
+		}
 	}
 	return results
+}
+
+// decodePayloadTTL turns go-redis's PTTL reply into raw milliseconds. go-redis
+// reports the two sentinels as negative durations, which Duration.Milliseconds
+// would otherwise round to 0 — indistinguishable from "expires right now" —
+// so they are mapped back explicitly. A failed PTTL is treated as unknown
+// rather than fatal: it only costs a shorter index lifetime, and the payload
+// read itself is what the scan is really after.
+func decodePayloadTTL(cmd *redis.DurationCmd) int64 {
+	ttl, err := cmd.Result()
+	if err != nil {
+		return unknownPayloadTTL
+	}
+	switch {
+	case ttl == -1:
+		return -1
+	case ttl < 0:
+		return unknownPayloadTTL
+	default:
+		return ttl.Milliseconds()
+	}
+}
+
+// getResponseWithLifetime reads a response and how long its payload has left,
+// in one pipeline of single-key commands.
+//
+// Used by the two paths that index a payload they did not just write — a
+// duplicate-ID repair and an explicit AddResponseToConversation. Both would
+// otherwise have to assume the payload has the store's current TTL, which is
+// exactly the assumption that lets a conversation index retire ahead of a
+// longer-lived payload it names. Neither is a hot path, so the extra command
+// costs nothing that matters.
+func (s *RedisStore) getResponseWithLifetime(ctx context.Context, responseID string) (*responseapi.StoredResponse, int64, error) {
+	if !s.enabled {
+		return nil, 0, ErrStoreDisabled
+	}
+	if responseID == "" {
+		return nil, 0, ErrInvalidInput
+	}
+
+	key := s.buildKey(ResponseKeyPrefix + responseID)
+	result := fetchResponsePayloadsAndTTLsPipelined(ctx, s.client, []string{key})[0]
+	if result.err != nil {
+		if errors.Is(result.err, redis.Nil) {
+			return nil, 0, ErrNotFound
+		}
+		return nil, 0, fmt.Errorf("failed to get response from Redis: %w", result.err)
+	}
+
+	var response responseapi.StoredResponse
+	if err := json.Unmarshal(result.raw, &response); err != nil {
+		return nil, 0, fmt.Errorf("failed to deserialize response: %w", err)
+	}
+
+	return &response, result.ttlMillis, nil
 }
 
 // storedConversationID reports a response's current conversation so update and
