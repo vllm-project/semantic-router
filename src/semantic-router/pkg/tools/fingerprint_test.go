@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -262,5 +263,89 @@ func TestCanonicalizeJSON_EmptyInput(t *testing.T) {
 func TestCanonicalizeJSON_InvalidInput(t *testing.T) {
 	if _, err := canonicalizeJSON(json.RawMessage(`{not valid json`)); err == nil {
 		t.Fatal("expected an error for invalid JSON")
+	}
+}
+
+// schemaWithMaximum builds a minimal tool schema whose only variable is a
+// numeric bound, so a fingerprint difference can only come from that number.
+func schemaWithMaximum(literal string) json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","maximum":` + literal + `}}}`)
+}
+
+func TestCanonicalizeJSON_PreservesLargeIntegers(t *testing.T) {
+	// Decoding into a plain interface{} routes numbers through float64,
+	// whose 53-bit mantissa rounds these literals; each must survive the
+	// canonical round trip byte-exact instead.
+	for _, literal := range []string{
+		"9007199254740993",     // 2^53 + 1, the first integer float64 cannot hold
+		"18446744073709551615", // max uint64
+		"18446744073709551616", // max uint64 + 1, float64-identical to the line above
+		"-9007199254740993",
+		"1.0000000000000000001",
+	} {
+		raw := json.RawMessage(`{"n":` + literal + `}`)
+		got, err := canonicalizeJSON(raw)
+		if err != nil {
+			t.Fatalf("canonicalizeJSON(%s): %v", raw, err)
+		}
+		if want := `{"n":` + literal + `}`; string(got) != want {
+			t.Errorf("number literal not preserved: got %s, want %s", got, want)
+		}
+	}
+}
+
+func TestCanonicalizeJSON_RejectsTrailingData(t *testing.T) {
+	// json.Unmarshal rejects trailing bytes on its own; a json.Decoder stops
+	// at the first value, so canonicalizeJSON has to re-assert the check --
+	// otherwise a schema plus trailing bytes would canonicalize to the
+	// schema alone and collide with it.
+	for _, raw := range []string{
+		`{"type":"object"} {"type":"array"}`,
+		`{"type":"object"}trailing`,
+		`{"type":"object"}[]`,
+	} {
+		if _, err := canonicalizeJSON(json.RawMessage(raw)); !errors.Is(err, errTrailingJSON) {
+			t.Errorf("canonicalizeJSON(%s) = %v, want errTrailingJSON", raw, err)
+		}
+	}
+}
+
+func TestToolDefinitionFingerprint_SensitiveToLargeIntegerSchemaChange(t *testing.T) {
+	// Both bounds are valid, distinct JSON Schema integers that differ by
+	// one past float64 precision. Collapsing them would let sticky state
+	// survive a real tool-schema change.
+	a := sampleTool("search")
+	a.InputSchema = schemaWithMaximum("9007199254740992") // 2^53
+	b := sampleTool("search")
+	b.InputSchema = schemaWithMaximum("9007199254740993") // 2^53 + 1
+	if ToolDefinitionFingerprint(a) == ToolDefinitionFingerprint(b) {
+		t.Fatal("schema integers beyond float64 precision must fingerprint distinctly")
+	}
+}
+
+func TestToolDefinitionFingerprint_SensitiveToUint64RangeSchemaChange(t *testing.T) {
+	// These two literals round to the same float64 (18446744073709552000),
+	// so a float64-based canonicalization produces identical bytes for
+	// schemas pinning different account-scale identifiers.
+	a := sampleTool("search")
+	a.InputSchema = json.RawMessage(`{"type":"object","properties":{"account_id":{"const":18446744073709551615}}}`)
+	b := sampleTool("search")
+	b.InputSchema = json.RawMessage(`{"type":"object","properties":{"account_id":{"const":18446744073709551616}}}`)
+	if ToolDefinitionFingerprint(a) == ToolDefinitionFingerprint(b) {
+		t.Fatal("schema constants that share a float64 representation must still fingerprint distinctly")
+	}
+}
+
+func TestToolCatalogFingerprint_SensitiveToLargeIntegerSchemaChange(t *testing.T) {
+	// The catalog fingerprint is the signal sticky state is invalidated on,
+	// so the precision guarantee has to hold at that level too.
+	a := sampleTool("search")
+	a.InputSchema = schemaWithMaximum("9007199254740992")
+	b := sampleTool("search")
+	b.InputSchema = schemaWithMaximum("9007199254740993")
+	forward := []llmprotocol.Tool{sampleTool("lookup"), a}
+	changed := []llmprotocol.Tool{sampleTool("lookup"), b}
+	if ToolCatalogFingerprint(forward) == ToolCatalogFingerprint(changed) {
+		t.Fatal("a large-integer schema change must invalidate the catalog fingerprint")
 	}
 }
