@@ -112,24 +112,24 @@ func (b *scanLeaseBackoff) wait(ctx context.Context) error {
 // scan lease, then runs fn with a context that is cancelled the moment the
 // lease is confirmed lost — a background goroutine renews the lease every
 // conversationIndexScanRenewInterval and cancels fn's context the instant a
-// renewal fails or reports the lease no longer belongs to this call. The
-// lease is always released on the way out, and a lease lost *while fn was
-// still running* is reported as an error even if fn itself returned nil (a
-// scan that lost its lease partway through must not be trusted, whatever it
-// managed to do before losing it — see lazyBackfillConversationIndex and
-// FinalizeConversationIndex, both of which rely on this to avoid
-// publishing a proof/completion built from a scan that was not exclusive
-// for its whole duration).
+// renewal proves the lease no longer belongs to this call. The lease is
+// always released on the way out, and a lost lease is reported as an error
+// even if fn itself returned nil (a scan that lost its lease must not be
+// trusted, whatever it managed to do before losing it — see
+// lazyBackfillConversationIndex and FinalizeConversationIndex, both of which
+// rely on this to avoid publishing a proof/completion built from a scan that
+// was not exclusive for its whole duration).
 //
-// "While fn was still running" is the exact boundary, and it is deliberate.
-// Once fn returns, this call cancels the lease context as its own normal
-// shutdown; the renewal round-trip that cancellation aborts — and any
-// renewal verdict that merely lands after that point — is discarded rather
-// than reported as a loss. fn publishes its proof/completion as its last act
-// under a lease the renewer was still confirming, that marker is
-// irreversible, and a renewal result arriving afterwards cannot be told
-// apart from the expected shutdown; treating it as a loss would fail a scan
-// that in fact finalized. See scanLeaseRenewer.
+// What counts as "lost" is decided by whether Redis answered the renewal, not
+// by when the answer arrived. An answer of "this key no longer holds your
+// token" proves exclusivity was already broken when the renewal was sent, and
+// is reported however late it lands — including after fn has published its
+// completion marker, since no shutdown ordering can make a broken lease
+// whole again. A renewal that was merely *aborted* — this call cancels the
+// lease context as its own normal shutdown once fn returns — proves nothing
+// about who holds the lease, and is discarded rather than mistaken for a
+// loss; treating it as one would fail a scan that in fact finalized. See
+// scanLeaseRenewalVerdict and scanLeaseRenewer.
 //
 // Shared by ensureConversationIndex's per-conversation lazy backfill
 // (Phase 3) and FinalizeConversationIndex's whole-keyspace sweep (Phase 6)
@@ -215,9 +215,10 @@ func (s *RedisStore) runWithConversationIndexScanLeaseEvery(
 
 	fnErr := fn(leaseCtx)
 
-	// Stopping settles the lease's verdict before it is read, rather than
-	// letting a renewal that was still in flight when fn returned race the
-	// outcome of work that has already published its completion marker.
+	// Stopping settles the lease's verdict before it is read: it waits out
+	// any renewal still in flight when fn returned, so an answer proving the
+	// lease was already gone is counted, and the shutdown's own aborted
+	// round-trip is not mistaken for one.
 	lost := renewer.stop()
 
 	if releaseErr := s.releaseConversationIndexScanLease(context.WithoutCancel(ctx), token); releaseErr != nil {
@@ -233,20 +234,61 @@ func (s *RedisStore) runWithConversationIndexScanLeaseEvery(
 	return errors.New("conversation index scan lease was lost mid-scan")
 }
 
+// scanLeaseRenewalVerdict is what one renewal round-trip actually proved.
+//
+// The distinction that matters is whether Redis answered at all, not when the
+// answer landed: an answered renewal is evidence about who holds the lease,
+// and an aborted one is evidence about nothing.
+type scanLeaseRenewalVerdict int
+
+const (
+	// scanLeaseHeld: Redis answered, and the lease key still holds this
+	// call's token.
+	scanLeaseHeld scanLeaseRenewalVerdict = iota
+	// scanLeaseReleased: Redis answered that the lease key no longer holds
+	// this call's token — the lease expired and was re-acquired, or another
+	// holder took it. Authoritative, and permanently so: it proves
+	// exclusivity was already broken when the renewal was sent.
+	scanLeaseReleased
+	// scanLeaseUnknown: the round-trip produced no answer at all — a
+	// cancelled context, a transport failure, a timeout, or a reply this
+	// code cannot parse. It says nothing about who holds the lease.
+	scanLeaseUnknown
+)
+
+// classifyScanLeaseRenewal reads one renewal's outcome.
+// renewConversationIndexScanLease already returns a non-nil error for every
+// case where Redis did not give a valid answer (including an unexpected
+// result type), so "Redis answered" is exactly err == nil.
+func classifyScanLeaseRenewal(held bool, err error) scanLeaseRenewalVerdict {
+	switch {
+	case err != nil:
+		return scanLeaseUnknown
+	case !held:
+		return scanLeaseReleased
+	default:
+		return scanLeaseHeld
+	}
+}
+
 // scanLeaseRenewer keeps one held scan lease alive in the background and
-// records whether that lease was lost while the work it guards was still
-// running.
+// records whether that lease was lost.
 //
 // Stopping it is a signal of its own, deliberately distinct from cancelling
 // the lease context. The wrapper cancels that context as part of its normal
 // shutdown once fn returns, and a renewal round-trip in flight at that moment
-// fails with the cancellation — indistinguishable, from inside the renewal
-// loop, from a lease that genuinely went away. Without a separate stop signal
-// that expected shutdown is reported as a lost lease, failing a scan whose
+// is aborted by the cancellation — which, on its own, is indistinguishable
+// from a lease that genuinely went away. Without a separate stop signal that
+// expected shutdown is reported as a lost lease, failing a scan whose
 // irreversible completion marker was already published.
+//
+// That discard is narrow on purpose, and applies only to verdicts Redis never
+// answered (scanLeaseUnknown). A scanLeaseReleased answer is recorded whether
+// or not the work has stopped: see record.
 type scanLeaseRenewer struct {
-	// mu makes stopping and recording a loss mutually exclusive, so the two
-	// can never interleave into "loss recorded after the work completed."
+	// mu makes stopping and recording a verdict mutually exclusive, so the
+	// two can never interleave into "an unanswered renewal recorded a loss
+	// after the work completed."
 	mu      sync.Mutex
 	stopped bool
 	lost    bool
@@ -275,13 +317,18 @@ func (s *RedisStore) startScanLeaseRenewer(
 	return renewer
 }
 
-// stop ends the renewal loop and reports whether the lease was lost while the
-// work was still running.
+// stop ends the renewal loop and reports whether the lease was lost.
 //
-// The ordering carries the guarantee: stopCh is closed, under mu, *before*
-// the lease context is cancelled, so a renewal aborted by that cancellation
-// can only reach markLost after stopped is already set, and is discarded.
-// Cancelling first would reintroduce exactly the race this exists to close.
+// Waiting on done is what settles the outcome: the loop closes it only after
+// any verdict it produced has already been through record, so this can never
+// read lost while a verdict is still in flight — including the authoritative
+// one an in-flight renewal is about to deliver.
+//
+// The ordering carries the other half of the guarantee: stopCh is closed,
+// under mu, *before* the lease context is cancelled, so a renewal aborted by
+// that cancellation can only reach record with stopped already set, and is
+// discarded. Cancelling first would reintroduce exactly the race this exists
+// to close.
 func (r *scanLeaseRenewer) stop() bool {
 	r.mu.Lock()
 	if !r.stopped {
@@ -298,16 +345,33 @@ func (r *scanLeaseRenewer) stop() bool {
 	return r.lost
 }
 
-// markLost records a genuine loss and cancels the work still running under
-// the lease, reporting whether it did so. It is a no-op once stop has run: a
-// renewal result that lands after the work completed cannot change the
-// outcome, because whatever that work published, it published while the loop
-// was still confirming the lease.
-func (r *scanLeaseRenewer) markLost() bool {
+// record applies one renewal verdict, cancelling the work still running under
+// the lease if this is the verdict that loses it, and reports whether it was
+// the one that did so (so the loop logs exactly once).
+//
+// scanLeaseReleased is recorded whether or not stop has already run. Redis
+// answered that this call's token is no longer in the lease key, which proves
+// exclusivity was already broken when the renewal was sent — while fn was
+// still working. Nothing that happens afterwards, this call's own shutdown
+// included, can make that untrue, so the scan's proof/completion must not be
+// trusted even though fn has already published it.
+//
+// scanLeaseUnknown is recorded only while the work is still running. Once
+// stop has run it is, by construction, the round-trip the wrapper's own
+// cancellation aborted, and an unanswered renewal is not evidence of
+// anything.
+func (r *scanLeaseRenewer) record(verdict scanLeaseRenewalVerdict) bool {
+	if verdict == scanLeaseHeld {
+		return false
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if r.stopped {
+	if verdict == scanLeaseUnknown && r.stopped {
+		return false
+	}
+	if r.lost {
 		return false
 	}
 	r.lost = true
@@ -316,16 +380,19 @@ func (r *scanLeaseRenewer) markLost() bool {
 }
 
 // renewConversationIndexScanLeaseUntilStopped renews token's lease every
-// interval until the renewer is stopped or ctx is done. If a renewal fails
-// outright or reports the lease is no longer held (expired and reacquired, or
-// renewed by another holder), it records the loss and cancels the lease
-// context, so an in-flight scan aborts promptly rather than keep working
-// under a lease it no longer holds.
+// interval until the renewer is stopped or ctx is done. A renewal Redis
+// answers with "the lease is no longer yours" (expired and reacquired, or
+// renewed by another holder) records the loss and cancels the lease context,
+// so an in-flight scan aborts promptly rather than keep working under a lease
+// it no longer holds — and is recorded even if it lands after fn returned,
+// because the loss it reports happened while fn was still running.
 //
-// A renewal that fails because the lease context itself is gone says nothing
-// about who holds the lease: it is either this call's own shutdown or the
-// caller cancelling, and in the latter case fn's own error already carries
-// the real reason. Only a renewal that Redis actually answered can prove a
+// A renewal that produced no answer is handled separately. If the lease
+// context is gone, the round-trip was aborted rather than answered: either
+// this call's own shutdown or the caller cancelling, and in the latter case
+// fn's own error already carries the real reason, so there is nothing to
+// report. Otherwise — a transport failure while the work is still running —
+// the lease cannot be confirmed, and this fails safe by treating it as a
 // loss.
 func (s *RedisStore) renewConversationIndexScanLeaseUntilStopped(
 	ctx context.Context,
@@ -347,18 +414,26 @@ func (s *RedisStore) renewConversationIndexScanLeaseUntilStopped(
 		case <-ticker.C:
 		}
 
-		ok, err := s.renewConversationIndexScanLease(ctx, token)
-		switch {
-		case ctx.Err() != nil:
+		held, err := s.renewConversationIndexScanLease(ctx, token)
+		verdict := classifyScanLeaseRenewal(held, err)
+		if verdict == scanLeaseUnknown && ctx.Err() != nil {
+			// Aborted by a cancellation rather than answered. Note the
+			// ordering: only an unanswered round-trip is dismissed this way,
+			// so an answer that arrived just before the shutdown still counts.
 			return
-		case err != nil:
-			if renewer.markLost() {
-				logging.Warnf("RedisStore: failed to renew conversation index scan lease: %v", err)
+		}
+
+		switch verdict {
+		case scanLeaseHeld:
+			continue
+		case scanLeaseReleased:
+			if renewer.record(verdict) {
+				logging.Warnf("RedisStore: conversation index scan lease was lost (expired and reacquired, or renewed by another holder)")
 			}
 			return
-		case !ok:
-			if renewer.markLost() {
-				logging.Warnf("RedisStore: conversation index scan lease was lost (expired and reacquired, or renewed by another holder)")
+		case scanLeaseUnknown:
+			if renewer.record(verdict) {
+				logging.Warnf("RedisStore: failed to renew conversation index scan lease: %v", err)
 			}
 			return
 		}
