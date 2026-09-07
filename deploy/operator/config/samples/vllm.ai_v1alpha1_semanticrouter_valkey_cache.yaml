@@ -93,7 +93,6 @@ spec:
         development:
           drop_index_on_startup: false
           auto_create_index: true
-          verbose_errors: true
 
     # Disable features that require additional models for this example
     # Enable these features in production with proper model configuration

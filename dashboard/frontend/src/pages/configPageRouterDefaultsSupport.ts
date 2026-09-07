@@ -674,12 +674,6 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           type: 'percentage',
           placeholder: '70',
         },
-        {
-          name: 'extraction_batch_size',
-          label: 'Extraction Batch Size',
-          type: 'number',
-          placeholder: '10',
-        },
         { name: 'hybrid_search', label: 'Hybrid Search', type: 'boolean' },
         { name: 'hybrid_mode', label: 'Hybrid Mode', type: 'text', placeholder: 'rerank' },
         { name: 'adaptive_threshold', label: 'Adaptive Threshold', type: 'boolean' },

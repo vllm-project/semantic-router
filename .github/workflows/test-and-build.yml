@@ -126,6 +126,20 @@ jobs:
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
 
+      # Reuse the CPU bindings above and gate protection before external services
+      # or model downloads. The report includes per-turn failures on regression.
+      - name: Gate agent routing protection benchmark
+        run: make bench-agent-routing-protection
+
+      - name: Upload agent routing protection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-routing-protection
+          path: .agent-harness/agent-routing-protection/report.json
+          include-hidden-files: true
+          if-no-files-found: warn
+
       # Regenerates the apiserver OpenAPI JSON and reference Markdown from the
       # route catalog and fails if either committed artifact differs, so API
       # docs cannot be hand-edited or left stale when a route changes.

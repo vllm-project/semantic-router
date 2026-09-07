@@ -22,15 +22,14 @@ const (
 // output_contract remains model-facing prompt text; this typed spec controls
 // runtime extraction, normalization, fallback, and post-processing.
 type OutputContractSpec struct {
-	Type        string                         `yaml:"type,omitempty" json:"type,omitempty"`
-	ChoiceSet   *OutputContractChoiceSetSpec   `yaml:"choice_set,omitempty" json:"choice_set,omitempty"`
-	JSONSchema  *OutputContractJSONSchemaSpec  `yaml:"json_schema,omitempty" json:"json_schema,omitempty"`
-	Reference   *OutputContractReferenceSpec   `yaml:"reference,omitempty" json:"reference,omitempty"`
-	Render      *OutputContractRenderSpec      `yaml:"render,omitempty" json:"render,omitempty"`
-	Extract     *OutputContractExtractSpec     `yaml:"extract,omitempty" json:"extract,omitempty"`
-	Normalize   *OutputContractNormalizeSpec   `yaml:"normalize,omitempty" json:"normalize,omitempty"`
-	OnViolation *OutputContractViolationPolicy `yaml:"on_violation,omitempty" json:"on_violation,omitempty"`
-	Postprocess []OutputContractPostprocess    `yaml:"postprocess,omitempty" json:"postprocess,omitempty"`
+	Type        string                        `yaml:"type,omitempty" json:"type,omitempty"`
+	ChoiceSet   *OutputContractChoiceSetSpec  `yaml:"choice_set,omitempty" json:"choice_set,omitempty"`
+	JSONSchema  *OutputContractJSONSchemaSpec `yaml:"json_schema,omitempty" json:"json_schema,omitempty"`
+	Reference   *OutputContractReferenceSpec  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	Render      *OutputContractRenderSpec     `yaml:"render,omitempty" json:"render,omitempty"`
+	Extract     *OutputContractExtractSpec    `yaml:"extract,omitempty" json:"extract,omitempty"`
+	Normalize   *OutputContractNormalizeSpec  `yaml:"normalize,omitempty" json:"normalize,omitempty"`
+	Postprocess []OutputContractPostprocess   `yaml:"postprocess,omitempty" json:"postprocess,omitempty"`
 }
 
 type OutputContractChoiceSetSpec struct {
@@ -57,13 +56,7 @@ type OutputContractExtractSpec struct {
 }
 
 type OutputContractNormalizeSpec struct {
-	FieldOrder []string          `yaml:"field_order,omitempty" json:"field_order,omitempty"`
-	Defaults   map[string]string `yaml:"defaults,omitempty" json:"defaults,omitempty"`
-}
-
-type OutputContractViolationPolicy struct {
-	Repair   bool   `yaml:"repair,omitempty" json:"repair,omitempty"`
-	Fallback string `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	Defaults map[string]string `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 }
 
 type OutputContractPostprocess struct {
