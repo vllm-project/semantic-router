@@ -114,6 +114,11 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	nestedVendorExtensions, err := responsesOutputVendorExtensions(wire.Output, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	vendorExtensions = append(vendorExtensions, nestedVendorExtensions...)
 	var diagnostics llmprotocol.Diagnostics
 	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
 	diagnostics = appendDiagnostics(diagnostics, responsesResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)

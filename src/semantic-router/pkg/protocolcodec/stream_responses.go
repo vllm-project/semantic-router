@@ -279,6 +279,20 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	}
 	var diagnostics llmprotocol.Diagnostics
 	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	if len(wire.Item) > 0 {
+		itemVendorExtensions, itemErr := responsesItemVendorExtensions(wire.Item, decoder.policy)
+		appendResponsesVendorExtensionDiagnostics(&diagnostics, decoder.policy, "output[]", itemVendorExtensions)
+		if itemErr != nil {
+			return nil, diagnostics, itemErr
+		}
+	}
+	if wire.Response != nil {
+		outputVendorExtensions, outputErr := responsesOutputVendorExtensions(wire.Response.Output, decoder.policy)
+		appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, outputVendorExtensions)
+		if outputErr != nil {
+			return nil, diagnostics, outputErr
+		}
+	}
 	if wire.Type == "" {
 		wire.Type = eventType
 	}

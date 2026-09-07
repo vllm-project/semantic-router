@@ -19,7 +19,10 @@ func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
 // sorted paths. It preserves the original bytes when no fields are removed.
 func stripProviderVendorExtensions(body []byte, targetType reflect.Type) ([]byte, []string) {
 	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 || trimmed[0] != '{' {
+	if len(trimmed) == 0 {
+		return body, nil
+	}
+	if trimmed[0] != '{' && trimmed[0] != '[' {
 		return body, nil
 	}
 	dropped := map[string]struct{}{}

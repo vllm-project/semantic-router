@@ -95,6 +95,10 @@ func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) err
 	return err
 }
 
+func decodeProviderValueVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]string, error) {
+	return decodeProviderJSON(body, target, policy, false)
+}
+
 func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]string, error) {
 	if err := validateProviderJSONDocument(body, policy, requireObject); err != nil {
 		return nil, err
