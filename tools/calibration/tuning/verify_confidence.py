@@ -1,182 +1,63 @@
 #!/usr/bin/env python3
-"""Offline confidence threshold verification using OfflineAnalyzer.
+"""Build a versioned offline confidence-calibration artifact.
 
-Loads MMLU-Pro 7B/72B results, computes per-category optimal thresholds
-using the severity-weighted framework, and classifies into ESCALATE/SELECTIVE/AVOID.
+The command consumes a manifest-backed set of recorded small/large-model
+results.  It never calls the router and never mutates active configuration.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
-from collections import defaultdict
-from dataclasses import dataclass
+import sys
 from pathlib import Path
 
-from tuning import OfflineAnalyzer
-from tuning.scenarios.confidence import (
-    normalize_logprob,
-    question_severity,
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
+from tuning.confidence_calibration import (  # noqa: E402
+    ConfidenceCalibrationError,
+    build_artifact,
+    write_artifact,
 )
 
 
-@dataclass
-class Question:
-    qid: str
-    category: str
-    confidence: float
-    correct_small: bool
-    correct_large: bool
-    quadrant: str
-
-
-def load_questions(data_dir: Path) -> list[Question]:
-    small = json.loads((data_dir / "small_results.json").read_text())
-    large = json.loads((data_dir / "large_results.json").read_text())
-    large_map = {r["question_id"]: r for r in large}
-
-    questions = []
-    for s in small:
-        qid = s["question_id"]
-        lg = large_map.get(qid)
-        if lg is None:
-            continue
-        conf = normalize_logprob(s["avg_logprob"])
-        c_small = s["predicted"] == s["correct_answer"]
-        c_large = lg["predicted"] == lg["correct_answer"]
-
-        if not c_small and c_large:
-            quadrant = "uplift"
-        elif c_small and not c_large:
-            quadrant = "regression"
-        elif c_small and c_large:
-            quadrant = "both_correct"
-        else:
-            quadrant = "both_wrong"
-
-        questions.append(
-            Question(
-                qid=qid,
-                category=s["category"],
-                confidence=conf,
-                correct_small=c_small,
-                correct_large=c_large,
-                quadrant=quadrant,
-            )
-        )
-    return questions
-
-
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Build a reproducible offline confidence-calibration artifact"
+    )
     parser.add_argument(
-        "--data-dir",
+        "--manifest",
         required=True,
         type=Path,
-        help="directory containing small_results.json and large_results.json",
+        help="Path to a confidence-calibration/v1 JSON manifest",
     )
     parser.add_argument(
-        "--output", required=True, type=Path, help="destination JSON report"
+        "--output",
+        type=Path,
+        default=Path("confidence_calibration_artifact.json"),
+        help="Output artifact path",
     )
     args = parser.parse_args(argv)
-    questions = load_questions(args.data_dir)
-    if not questions:
-        parser.error("input results have no matching question IDs")
-    print(
-        f"Loaded {len(questions)} questions across {len({q.category for q in questions})} categories"
-    )
 
-    small_acc = sum(1 for q in questions if q.correct_small) / len(questions)
-    large_acc = sum(1 for q in questions if q.correct_large) / len(questions)
-    print(f"7B baseline: {100*small_acc:.1f}%  |  72B baseline: {100*large_acc:.1f}%")
+    try:
+        artifact = build_artifact(args.manifest)
+        write_artifact(artifact, args.output)
+    except (ConfidenceCalibrationError, OSError, json.JSONDecodeError) as error:
+        print(f"confidence calibration failed: {error}", file=sys.stderr)
+        return 2
 
-    by_cat = defaultdict(list)
-    for q in questions:
-        by_cat[q.category].append(q)
-
-    analyzer = OfflineAnalyzer(severity_fn=question_severity)
-
-    results = {}
-    strategy_counts = defaultdict(int)
-    total_correct = 0
-    total_escalated = 0
-    total_questions = 0
-
-    print(
-        f"\n{'Category':20s} {'N':>4s} {'Strategy':>10s} {'Thr':>7s} {'Acc%':>6s} {'Esc%':>6s} {'Net':>5s}"
-    )
-    print("-" * 70)
-
-    for cat in sorted(by_cat.keys()):
-        items = by_cat[cat]
-        result = analyzer.find_optimal_threshold(
-            items=items,
-            confidence_fn=lambda q: q.confidence,
-            quadrant_fn=lambda q: q.quadrant,
-            correct_small_fn=lambda q: q.correct_small,
-            correct_large_fn=lambda q: q.correct_large,
-            id_fn=lambda q: q.qid,
-        )
-        results[cat] = result
-        strategy_counts[result["strategy"]] += 1
-        total_correct += result["best_accuracy"]
-        total_escalated += round(result["escalation_rate"] * len(items) / 100)
-        total_questions += len(items)
-
-        print(
-            f"{cat:20s} {len(items):4d} {result['strategy']:>10s} "
-            f"{result['optimal_threshold']:7.4f} "
-            f"{result['best_accuracy_pct']:5.1f}% "
-            f"{result['escalation_rate']:5.1f}% "
-            f"{result['net_uplift']:+4d}"
-        )
-
-    overall_acc = 100 * total_correct / total_questions
-    overall_esc = 100 * total_escalated / total_questions
-
-    print("-" * 70)
-    print(
-        f"{'OVERALL':20s} {total_questions:4d} {'':10s} {'':>7s} "
-        f"{overall_acc:5.1f}% {overall_esc:5.1f}%"
-    )
-    print(
-        f"\nStrategy distribution: "
-        f"ESCALATE={strategy_counts['ESCALATE']}, "
-        f"SELECTIVE={strategy_counts['SELECTIVE']}, "
-        f"AVOID={strategy_counts['AVOID']}"
-    )
-
-    output = {
-        "scenario": "confidence_threshold_tuning",
-        "method": "analytical_trace_diagnosis",
-        "pipeline": "offline_per_category_optimization",
-        "num_questions": total_questions,
-        "num_categories": len(by_cat),
-        "overall_accuracy_pct": round(overall_acc, 2),
-        "overall_escalation_pct": round(overall_esc, 2),
-        "strategy_counts": dict(strategy_counts),
-        "baselines": {
-            "always_7b": round(100 * small_acc, 2),
-            "always_72b": round(100 * large_acc, 2),
-        },
-        "per_category": {
-            cat: {
-                "n": r["n_items"],
-                "strategy": r["strategy"],
-                "threshold": r["optimal_threshold"],
-                "accuracy_pct": r["best_accuracy_pct"],
-                "escalation_pct": r["escalation_rate"],
-                "net_uplift": r["net_uplift"],
-                "baseline_pct": r["baseline_accuracy_pct"],
-            }
-            for cat, r in results.items()
-        },
-        "router_queries": 0,
-    }
-
-    out_path = args.output
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(output, indent=2) + "\n")
-    print(f"\nResults saved to {out_path}")
+    selection = artifact["selection"]
+    print(f"Artifact: {args.output}")
+    print(f"Artifact ID: {artifact['artifact_id']}")
+    print(f"Status: {artifact['status']}")
+    if "threshold" in selection:
+        print(f"Candidate threshold: {selection['threshold']:.4f}")
+    else:
+        print(f"Fallback threshold: {artifact['fallback']['effective_threshold']:.4f}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
