@@ -407,6 +407,34 @@ func TestRecentTurnOutcomesRecoversFromSharedStore(t *testing.T) {
 	}
 }
 
+// 11b. Delayed arrival regression: an older verdict arriving after a newer one
+// (the outcome-ingest writer) must land at its event-time position and still
+// expire — it can neither corrupt the timeline nor survive behind a newer
+// entry past the window TTL.
+func TestRecordTurnOutcomeDelayedArrivalStaysOrderedAndExpires(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	const sessionID = "delayed-arrival"
+
+	// The newer turn completes and is captured first.
+	RecordTurnOutcome(sessionID, outcomeAt(fixedBase, 10, 2, TurnProgress, true), fixedBase.Add(10*time.Minute))
+	// The older verdict arrives later through the ingest path, carrying its
+	// original event time.
+	RecordTurnOutcome(sessionID, outcomeAt(fixedBase, 2, 1, TurnNoProgress, true), fixedBase.Add(2*time.Minute))
+
+	// Ordered by event time despite arrival order: turn 1 before turn 2.
+	window := mustWindow(t, sessionID, fixedBase.Add(12*time.Minute))
+	if len(window) != 2 || window[0].TurnIndex != 1 || window[1].TurnIndex != 2 {
+		t.Fatalf("window not ordered by event time: %+v", window)
+	}
+
+	// At read time +18min the delayed turn 1 is 16 minutes old (expired) while
+	// turn 2 is only 8 minutes old: the delayed entry must be gone.
+	window = mustWindow(t, sessionID, fixedBase.Add(18*time.Minute))
+	if len(window) != 1 || window[0].TurnIndex != 2 {
+		t.Fatalf("expired delayed outcome survived: %+v", window)
+	}
+}
+
 // 11. Reads return clones: mutating a read must not leak into the store.
 func TestRecentTurnOutcomesReturnClones(t *testing.T) {
 	ResetRouterSessionMemoryForTesting()
