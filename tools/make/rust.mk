@@ -95,6 +95,18 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
 
+# The CK flash-attention graph rewriter is a Python script under onnx-binding;
+# its unit tests need onnx, which the agent venv does not carry by default.
+CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
+CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
+
+ck-rewrite-deps: agent-venv-install ## Install the CK graph rewriter test dependencies into the agent venv
+	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
+
+ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
+	@$(LOG_TARGET)
+	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph
+
 # Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
 # the candle-binding Go tests (including the network-dependent image-encode
 # ones), the Go router integration tests in pkg/classification, and the

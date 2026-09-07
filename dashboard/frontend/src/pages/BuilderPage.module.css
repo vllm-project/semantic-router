@@ -683,6 +683,17 @@
   user-select: none;
 }
 
+.sidebarSectionToggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .sidebarSectionHeader:hover {
   background: var(--color-bg-elevated);
 }
@@ -2344,6 +2355,10 @@
 }
 
 .validationHeader {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -2541,6 +2556,10 @@
 }
 
 .gsSectionHeader {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
