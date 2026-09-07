@@ -26,9 +26,11 @@ const FilterSelect: React.FC<FilterSelectProps> = ({ label, value, onChange, chi
       <select value={value} onChange={(event) => onChange(event.target.value)}>
         {children}
       </select>
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path d="m4 6 4 4 4-4" />
-      </svg>
+      <span className={styles.selectIndicator} aria-hidden="true">
+        <svg viewBox="0 0 16 16">
+          <path d="m5 6.5 3 3 3-3" />
+        </svg>
+      </span>
     </div>
   </label>
 )
@@ -64,8 +66,10 @@ interface HubFiltersProps {
   providers: CatalogProvider[]
   capabilities: string[]
   view: ModelHubView
+  collapsed: boolean
   update: (patch: Partial<ModelHubFilters>) => void
   setView: (view: ModelHubView) => void
+  toggleCollapsed: () => void
   reset: () => void
 }
 
@@ -228,25 +232,45 @@ export const HubFilters: React.FC<HubFiltersProps> = ({
   providers,
   capabilities,
   view,
+  collapsed,
   update,
   setView,
+  toggleCollapsed,
   reset,
 }) => {
   const activeCount = activeModelHubFilterCount(filters)
   const [filtersOpen, setFiltersOpen] = useState(false)
 
   return (
-    <aside className={styles.filterArea} aria-label="Model filters">
+    <aside
+      className={`${styles.filterArea} ${collapsed ? styles.filterAreaCollapsed : ''}`}
+      aria-label="Model filters"
+    >
       <div className={styles.filterRailTitle}>
         <strong>Filters</strong>
-        <button
-          className={styles.resetInline}
-          type="button"
-          onClick={reset}
-          disabled={activeCount === 0}
-        >
-          Reset{activeCount ? ` (${activeCount})` : ''}
-        </button>
+        <span className={styles.filterRailActions}>
+          <button
+            className={styles.resetInline}
+            type="button"
+            onClick={reset}
+            disabled={activeCount === 0}
+          >
+            Reset{activeCount ? ` (${activeCount})` : ''}
+          </button>
+          <button
+            className={styles.collapseFiltersButton}
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-controls="model-hub-filter-controls"
+            aria-label={collapsed ? 'Show model filters' : 'Hide model filters'}
+            title={collapsed ? 'Show filters' : 'Hide filters'}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d={collapsed ? 'm6 4 4 4-4 4' : 'm10 4-4 4 4 4'} />
+            </svg>
+          </button>
+        </span>
       </div>
       <HubFilterTopline query={filters.query} view={view} update={update} setView={setView} />
       <button
@@ -258,7 +282,10 @@ export const HubFilters: React.FC<HubFiltersProps> = ({
         Filters{activeCount ? ` (${activeCount})` : ''}
         <span aria-hidden="true">{filtersOpen ? '−' : '+'}</span>
       </button>
-      <div className={`${styles.filters} ${filtersOpen ? styles.filtersOpen : ''}`}>
+      <div
+        id="model-hub-filter-controls"
+        className={`${styles.filters} ${filtersOpen ? styles.filtersOpen : ''}`}
+      >
         <HubIdentityFilters
           filters={filters}
           creators={creators}

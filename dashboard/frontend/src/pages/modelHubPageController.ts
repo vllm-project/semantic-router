@@ -6,11 +6,14 @@ import {
   modelHubCapabilities,
   modelHubCreators,
   modelHubProviders,
+  modelHubPageForModel,
+  modelHubRowElementID,
   modelHubRows,
   modelHubStats,
   paginateModelHubRows,
   resolveModelHubSelection,
   type ModelHubFilters,
+  type ModelHubRow,
   type ModelHubView,
 } from './modelHubSupport'
 
@@ -102,6 +105,23 @@ function useMobileDetailDialog(
   }, [closeDetail, compact, detailCloseRef, detailLayerRef, detailOpen, detailTriggerRef])
 }
 
+function useBenchmarkModelFocus(view: ModelHubView, visibleRows: ModelHubRow[]) {
+  const [targetID, setTargetID] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (view !== 'list' || !targetID) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      const row = document.getElementById(modelHubRowElementID(targetID))
+      row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      row?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
+      setTargetID(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [targetID, view, visibleRows])
+
+  return setTargetID
+}
+
 export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   const [filters, setFilters] = useState<ModelHubFilters>(initialFilters)
   const [view, setView] = useState<ModelHubView>('list')
@@ -109,6 +129,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   const [page, setPage] = useState(1)
   const compact = useCompactModelHubLayout()
   const [pageSize, setPageSize] = useState(10)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const detailCloseRef = useRef<HTMLButtonElement>(null)
   const detailLayerRef = useRef<HTMLDivElement>(null)
@@ -126,6 +147,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     view === 'benchmarks' ? rows : pagination.items,
     selectedID,
   )
+  const focusBenchmarkModel = useBenchmarkModelFocus(view, pagination.items)
 
   useEffect(() => {
     setPage(1)
@@ -133,6 +155,10 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   }, [compact])
 
   const closeDetail = useCallback((): void => setDetailOpen(false), [])
+  const toggleFiltersCollapsed = useCallback(
+    (): void => setFiltersCollapsed((current) => !current),
+    [],
+  )
   useMobileDetailDialog(
     compact,
     detailOpen,
@@ -161,9 +187,17 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
       document.activeElement instanceof HTMLElement ? document.activeElement : null
     setDetailOpen(true)
   }
+  const openModelFromBenchmark = (id: string): void => {
+    setSelectedID(id)
+    setPage(modelHubPageForModel(rows, id, pageSize))
+    setView('list')
+    setDetailOpen(false)
+    focusBenchmarkModel(id)
+  }
 
   return {
     filters,
+    filtersCollapsed,
     view,
     setView,
     compact,
@@ -179,9 +213,11 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     selected,
     setPage,
     closeDetail,
+    toggleFiltersCollapsed,
     updateFilters,
     resetFilters,
     updatePageSize,
     selectModel,
+    openModelFromBenchmark,
   }
 }

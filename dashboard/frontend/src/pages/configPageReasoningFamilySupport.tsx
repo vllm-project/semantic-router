@@ -1,6 +1,6 @@
 import type { Column } from '../components/DataTable'
 import type { ViewSection } from '../components/ViewModal'
-import styles from './ConfigPage.module.css'
+import styles from './ConfigPageModelsSection.module.css'
 import type { ReasoningFamily } from './configPageSupport'
 
 export interface ReasoningFamilyRow {
@@ -11,12 +11,32 @@ export interface ReasoningFamilyRow {
   defaultLevel: string
 }
 
+const reasoningFamilyMonogram = (name: string): string =>
+  name
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toLocaleUpperCase())
+    .join('') || 'R'
+
 export const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
   {
     key: 'name',
     header: 'Family Name',
     sortable: true,
-    render: (row) => <span className={styles.reasoningFamilyName}>{row.name}</span>,
+    render: (row) => (
+      <span className={styles.reasoningFamilyIdentity}>
+        <span className={styles.reasoningFamilyMark} aria-hidden="true">
+          {reasoningFamilyMonogram(row.name)}
+        </span>
+        <span>
+          <strong className={styles.reasoningFamilyName}>{row.name}</strong>
+          <small>
+            {row.defaultLevel ? `Default · ${row.defaultLevel}` : 'Model-selected default'}
+          </small>
+        </span>
+      </span>
+    ),
   },
   {
     key: 'type',

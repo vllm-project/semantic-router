@@ -274,12 +274,6 @@ const config: Config = {
           position: 'left',
         },
         {
-          label: 'Models',
-          to: '/models',
-          className: 'nav-primary',
-          position: 'left',
-        },
-        {
           label: 'Blog',
           to: '/blog',
           className: 'nav-primary',
@@ -299,6 +293,10 @@ const config: Config = {
           className: 'nav-utility',
           position: 'right',
           items: [
+            {
+              label: 'Model Hub',
+              to: '/models',
+            },
             {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',

@@ -16,6 +16,60 @@
   padding: 0.85rem 0.8rem 0.55rem;
 }
 
+.filterRailActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.collapseFiltersButton {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #85858d;
+  cursor: pointer;
+}
+
+.collapseFiltersButton:hover,
+.collapseFiltersButton:focus-visible {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  outline: none;
+}
+
+.collapseFiltersButton svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.filterAreaCollapsed .filterRailTitle {
+  justify-content: center;
+  padding: 0.55rem 0;
+}
+
+.filterAreaCollapsed .filterRailTitle > strong,
+.filterAreaCollapsed .resetInline,
+.filterAreaCollapsed .filterTopline,
+.filterAreaCollapsed .mobileFilterToggle,
+.filterAreaCollapsed .filters {
+  display: none;
+}
+
+.filterAreaCollapsed .filterRailActions {
+  gap: 0;
+}
+
 .filterRailTitle strong {
   color: #e6e6e9;
   font-size: 0.75rem;
@@ -171,28 +225,47 @@
 
 .selectShell select {
   width: 100%;
-  height: 34px;
-  padding: 0 1.65rem 0 0.58rem;
+  height: 36px;
+  padding: 0 2.25rem 0 0.64rem;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 8px;
   outline: none;
   appearance: none;
-  background: #151517;
+  background: linear-gradient(180deg, #18181b, #141416);
   color: #d8d8dc;
   cursor: pointer;
   font: inherit;
   font-size: 0.75rem;
 }
 
-.selectShell svg {
+.selectShell:hover select {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: #1a1a1d;
+}
+
+.selectIndicator {
   position: absolute;
   top: 50%;
-  right: 0.5rem;
-  width: 12px;
+  right: 0.34rem;
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
   pointer-events: none;
-  fill: none;
-  stroke: #74747c;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
   transform: translateY(-50%);
+}
+
+.selectIndicator svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: #8f8f97;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
 }
 
 .selectShell option {
@@ -217,6 +290,12 @@
 
   .filterRailTitle {
     display: none;
+  }
+
+  .filterAreaCollapsed .filterRailTitle {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.45rem 0.55rem;
   }
 
   .filterTopline {

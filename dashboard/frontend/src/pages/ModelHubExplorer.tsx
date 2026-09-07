@@ -23,12 +23,7 @@ const ModelHubCatalogPanel: React.FC<{
       <ModelList rows={hub.pagination.items} selected={hub.selected} select={hub.selectModel} />
     ) : null}
     {hub.rows.length && hub.view === 'benchmarks' ? (
-      <BenchmarkExplorer
-        catalog={catalog}
-        rows={hub.rows}
-        selected={hub.selected}
-        select={hub.selectModel}
-      />
+      <BenchmarkExplorer catalog={catalog} rows={hub.rows} openModel={hub.openModelFromBenchmark} />
     ) : null}
     {hub.rows.length && hub.view !== 'benchmarks' ? (
       <HubPagination
@@ -76,21 +71,27 @@ export const ModelHubExplorer: React.FC<{
       <h2>Models</h2>
       <span>{hub.rows.length.toLocaleString()} available</span>
     </div>
-    <div className={styles.directoryLayout}>
+    <div
+      className={`${styles.directoryLayout} ${hub.filtersCollapsed ? styles.directoryLayoutCollapsed : ''}`}
+    >
       <HubFilters
         filters={hub.filters}
         creators={hub.creators}
         providers={hub.providers}
         capabilities={hub.capabilities}
         view={hub.view}
+        collapsed={hub.filtersCollapsed}
         update={hub.updateFilters}
         setView={hub.setView}
+        toggleCollapsed={hub.toggleFiltersCollapsed}
         reset={hub.resetFilters}
       />
       <div className={styles.directoryContent}>
-        <div className={styles.workspace}>
+        <div
+          className={`${styles.workspace} ${hub.view === 'benchmarks' ? styles.benchmarkWorkspace : ''}`}
+        >
           <ModelHubCatalogPanel catalog={catalog} hub={hub} />
-          <ModelHubDetailLayer catalog={catalog} hub={hub} />
+          {hub.view !== 'benchmarks' ? <ModelHubDetailLayer catalog={catalog} hub={hub} /> : null}
         </div>
       </div>
     </div>

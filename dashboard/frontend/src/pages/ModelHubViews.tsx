@@ -4,11 +4,12 @@ import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import {
   modelHubContextLabel,
   modelHubDistributionLabel as distributionLabel,
+  modelHubRowElementID,
   readableModelHubValue as readable,
   type ModelHubRow,
 } from './modelHubSupport'
 import { ModelMark } from './ModelHubComponents'
-import { ModelHubBenchmarkChart, ModelHubBenchmarkControls } from './ModelHubBenchmarkViews'
+import { ModelHubBenchmarkChart } from './ModelHubBenchmarkViews'
 import { OpenModelButton } from './ModelHubOpenModelButton'
 import { useModelHubBenchmarkController } from './modelHubBenchmarkController'
 import styles from './ModelHubViews.module.css'
@@ -68,6 +69,7 @@ export const ModelTable: React.FC<{
         {rows.map((row) => (
           <tr
             key={row.model.id}
+            id={modelHubRowElementID(row.model.id)}
             className={`${styles.tableRow} ${selected?.model.id === row.model.id ? styles.selected : ''}`}
             onClick={() => select(row.model.id)}
           >
@@ -112,7 +114,12 @@ export const ModelList: React.FC<{
 }> = ({ rows, selected, select }) => (
   <div className={styles.modelList} role="list" aria-label="Model catalog results">
     {rows.map((row) => (
-      <article className={styles.modelListItem} role="listitem" key={row.model.id}>
+      <article
+        className={styles.modelListItem}
+        role="listitem"
+        key={row.model.id}
+        id={modelHubRowElementID(row.model.id)}
+      >
         <OpenModelButton row={row} selected={selected} select={select} className={styles.modelRow}>
           <span className={styles.listIdentity}>
             <ModelMark model={row.model} />
@@ -167,39 +174,50 @@ export const ModelList: React.FC<{
 export const BenchmarkExplorer: React.FC<{
   catalog: BuiltInModelCatalog
   rows: ModelHubRow[]
-  selected: ModelHubRow | null
-  select: (id: string) => void
-}> = ({ catalog, rows, selected, select }) => {
+  openModel: (id: string) => void
+}> = ({ catalog, rows, openModel }) => {
   const controller = useModelHubBenchmarkController(catalog, rows)
 
   return (
     <section className={styles.benchmarkExplorer} aria-label="Benchmark explorer">
       <div className={styles.benchmarkHeading}>
-        <h2>{controller.benchmark?.display_name ?? 'Benchmarks'}</h2>
-        {controller.benchmark?.source ? (
-          <a href={controller.benchmark.source} target="_blank" rel="noreferrer">
-            Benchmark source ↗
-          </a>
-        ) : null}
+        <div>
+          <h2>Benchmarks</h2>
+          <span>{controller.charts.length} comparable sets</span>
+        </div>
+        <small>All published results</small>
       </div>
-      <ModelHubBenchmarkControls catalog={catalog} controller={controller} />
-      <div className={styles.chartMeta}>
-        <span>{controller.points.length} published results · all current model filters</span>
-        <span>
-          {controller.metric?.direction === 'lower_is_better'
-            ? 'Lower is better'
-            : 'Higher is better'}
-        </span>
-      </div>
-      {controller.points.length ? (
-        <ModelHubBenchmarkChart
-          rows={rows}
-          selected={selected}
-          select={select}
-          controller={controller}
-        />
+      {controller.charts.length ? (
+        <div className={styles.benchmarkStack}>
+          {controller.charts.map((chart) => (
+            <article className={styles.benchmarkPanel} key={chart.key}>
+              <header className={styles.benchmarkPanelHeading}>
+                <div>
+                  <h3>{chart.benchmark?.display_name ?? chart.selection.benchmark}</h3>
+                  <span>
+                    {readable(chart.selection.profile)} · {readable(chart.selection.metric)}
+                  </span>
+                </div>
+                {chart.benchmark?.source ? (
+                  <a href={chart.benchmark.source} target="_blank" rel="noreferrer">
+                    Source ↗
+                  </a>
+                ) : null}
+              </header>
+              <div className={styles.chartMeta}>
+                <span>{chart.points.length} results</span>
+                <span>
+                  {chart.metric?.direction === 'lower_is_better'
+                    ? 'Lower is better'
+                    : 'Higher is better'}
+                </span>
+              </div>
+              <ModelHubBenchmarkChart rows={rows} openModel={openModel} chart={chart} />
+            </article>
+          ))}
+        </div>
       ) : (
-        <EmptyResults title="No available scores" body="Change the benchmark or model filters." />
+        <EmptyResults title="No available scores" body="Change the model filters." />
       )}
     </section>
   )

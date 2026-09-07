@@ -3,6 +3,11 @@
   grid-template-columns: 13.5rem minmax(0, 1fr);
   align-items: start;
   gap: 1rem;
+  transition: grid-template-columns 160ms ease;
+}
+
+.directoryCollapsed {
+  grid-template-columns: 2.9rem minmax(0, 1fr);
 }
 
 .filterRail,
@@ -45,6 +50,49 @@
 
 .filterRail > header button:disabled {
   opacity: 0.35;
+}
+
+.filterActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.filterRail > header .collapseFilters {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--hub-border-soft);
+  border-radius: 0.48rem;
+  background: color-mix(in srgb, var(--ifm-color-emphasis-100) 65%, transparent);
+}
+
+.collapseFilters svg {
+  width: 0.8rem;
+  height: 0.8rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.filterRailCollapsed > header {
+  justify-content: center;
+  padding: 0.55rem 0;
+}
+
+.filterRailCollapsed > header > strong,
+.filterRailCollapsed > header .filterActions > button:first-child,
+.filterRailCollapsed .mobileFilterToggle,
+.filterRailCollapsed .filterStack {
+  display: none;
+}
+
+.filterRailCollapsed .filterActions {
+  gap: 0;
 }
 
 .filterStack {
@@ -398,7 +446,8 @@
 }
 
 @media (max-width: 1080px) {
-  .directory {
+  .directory,
+  .directoryCollapsed {
     grid-template-columns: 1fr;
   }
 
@@ -408,6 +457,12 @@
 
   .filterRail > header {
     display: none;
+  }
+
+  .filterRailCollapsed > header {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.45rem 0.55rem;
   }
 
   .mobileFilterToggle {
@@ -493,6 +548,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .directory,
   .modelRow > button {
     transition: none;
   }

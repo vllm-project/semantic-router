@@ -232,14 +232,33 @@ export function ModelHubDirectory({
   selectModel: (id: string) => void
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const activeFilters = modelHubActiveFilterCount(filters)
 
   return (
-    <div className={styles.directory}>
-      <aside className={styles.filterRail} aria-label="Model filters">
+    <div className={`${styles.directory} ${filtersCollapsed ? styles.directoryCollapsed : ''}`}>
+      <aside
+        className={`${styles.filterRail} ${filtersCollapsed ? styles.filterRailCollapsed : ''}`}
+        aria-label="Model filters"
+      >
         <header>
           <strong>Filters</strong>
-          <button type="button" onClick={resetFilters} disabled={!activeFilters}>Reset</button>
+          <span className={styles.filterActions}>
+            <button type="button" onClick={resetFilters} disabled={!activeFilters}>Reset</button>
+            <button
+              type="button"
+              className={styles.collapseFilters}
+              aria-expanded={!filtersCollapsed}
+              aria-controls="website-model-hub-filter-controls"
+              aria-label={filtersCollapsed ? 'Show model filters' : 'Hide model filters'}
+              title={filtersCollapsed ? 'Show filters' : 'Hide filters'}
+              onClick={() => setFiltersCollapsed(current => !current)}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d={filtersCollapsed ? 'm6 4 4 4-4 4' : 'm10 4-4 4 4 4'} />
+              </svg>
+            </button>
+          </span>
         </header>
         <button
           type="button"
@@ -251,7 +270,10 @@ export function ModelHubDirectory({
           {activeFilters ? ` (${activeFilters})` : ''}
           <span>{filtersOpen ? '−' : '+'}</span>
         </button>
-        <div className={`${styles.filterStack} ${filtersOpen ? styles.filterStackOpen : ''}`}>
+        <div
+          id="website-model-hub-filter-controls"
+          className={`${styles.filterStack} ${filtersOpen ? styles.filterStackOpen : ''}`}
+        >
           <SelectControl
             label="Distribution"
             value={filters.distribution}

@@ -6,8 +6,8 @@ import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { BenchmarkExplorer, ModelList, ModelTable } from './ModelHubViews'
 import {
   modelHubBenchmarkBarHeight,
+  modelHubBenchmarkOverviewSelections,
   modelHubBenchmarkPoints,
-  modelHubDefaultBenchmark,
   modelHubRows,
   type ModelHubFilters,
 } from './modelHubSupport'
@@ -51,20 +51,21 @@ describe('model hub views', () => {
 
   it('announces model, evaluation condition, and exact value without an overall rank', () => {
     const markup = renderToStaticMarkup(
-      <BenchmarkExplorer catalog={catalog} rows={rows} selected={rows[0]} select={select} />,
+      <BenchmarkExplorer catalog={catalog} rows={rows} openModel={select} />,
     )
 
-    expect(markup).toMatch(/aria-label="[^"]+, [^"]+, [^"]+\. Open evidence\."/)
+    expect(markup).toMatch(/aria-label="[^"]+, [^"]+, [^"]+\. Open model details\."/)
     expect(markup).not.toContain('Rank 1')
-    expect(markup).toContain('aria-label="Benchmark comparison with all filtered results"')
+    expect(markup).toMatch(/aria-label="[^"]+ comparison with all filtered results"/)
     expect(markup).not.toContain('aria-label="Model catalog pagination"')
-    const selection = modelHubDefaultBenchmark(catalog)!
-    const expected = modelHubBenchmarkPoints(
-      catalog,
-      selection,
-      new Set(rows.map((row) => row.model.id)),
+    expect(markup).not.toContain('aria-pressed')
+    expect(markup).not.toContain('<select')
+    const modelIDs = new Set(rows.map((row) => row.model.id))
+    const expected = modelHubBenchmarkOverviewSelections(catalog).reduce(
+      (total, selection) => total + modelHubBenchmarkPoints(catalog, selection, modelIDs).length,
+      0,
     )
-    expect(markup.match(/role="listitem"/g)).toHaveLength(expected.length)
+    expect(markup.match(/role="listitem"/g)).toHaveLength(expected)
   })
 
   it('labels an always-on reasoning result as evidence rather than a configurable effort', () => {
@@ -88,17 +89,12 @@ describe('model hub views', () => {
     }
     const focusedRows = modelHubRows(focusedCatalog, filters)
     const markup = renderToStaticMarkup(
-      <BenchmarkExplorer
-        catalog={focusedCatalog}
-        rows={focusedRows}
-        selected={focusedRows[0]}
-        select={select}
-      />,
+      <BenchmarkExplorer catalog={focusedCatalog} rows={focusedRows} openModel={select} />,
     )
 
     expect(markup).toContain('<small>Reasoning enabled</small>')
     expect(markup).toMatch(
-      /aria-label="Jamba Reasoning 3B, Reasoning enabled, [^"]+\. Open evidence\."/,
+      /aria-label="Jamba Reasoning 3B, Reasoning enabled, [^"]+\. Open model details\."/,
     )
     expect(markup).not.toContain('enabled effort')
   })

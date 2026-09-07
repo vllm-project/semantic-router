@@ -104,6 +104,18 @@ export const modelHubRelationshipLabel: Record<CatalogModelBinding['relationship
 
 export const readableModelHubValue = (value: string): string => value.split('_').join(' ')
 
+export const modelHubRowElementID = (modelID: string): string =>
+  `model-hub-row-${encodeURIComponent(modelID)}`
+
+export function modelHubPageForModel<T extends { model: { id: string } }>(
+  rows: T[],
+  modelID: string,
+  pageSize: number,
+): number {
+  const index = rows.findIndex((row) => row.model.id === modelID)
+  return index < 0 ? 1 : Math.floor(index / Math.max(1, Math.floor(pageSize))) + 1
+}
+
 const modelHubPublishedConditionLabels: Record<string, string> = {
   unspecified: 'Effort not reported',
   default: 'Published default',
@@ -130,9 +142,7 @@ const normalizedSearch = (value: string): string => value.trim().toLocaleLowerCa
 
 export function modelHubStats(catalog: BuiltInModelCatalog): ModelHubStats {
   const publicEvaluations = modelHubPublicEvaluations(catalog)
-  const evaluatedModels = new Set(
-    publicEvaluations.map((result) => result.model),
-  )
+  const evaluatedModels = new Set(publicEvaluations.map((result) => result.model))
   return {
     models: catalog.models.length,
     physicalModels: catalog.models.filter((model) => model.kind === 'physical').length,
@@ -193,11 +203,7 @@ export function modelHubPublicEvaluations(catalog: BuiltInModelCatalog) {
       evaluation.status === 'available' &&
       Object.keys(evaluation.metrics).some((metric) =>
         eligible.has(
-          benchmarkSelectionKey(
-            evaluation.benchmark,
-            evaluation.benchmark_profile,
-            metric,
-          ),
+          benchmarkSelectionKey(evaluation.benchmark, evaluation.benchmark_profile, metric),
         ),
       ),
   )
@@ -439,11 +445,7 @@ export function modelHubBenchmarkSelections(
   catalog.evaluations.forEach((evaluation) => {
     if (evaluation.status !== 'available') return
     Object.keys(evaluation.metrics).forEach((metric) => {
-      const key = benchmarkSelectionKey(
-        evaluation.benchmark,
-        evaluation.benchmark_profile,
-        metric,
-      )
+      const key = benchmarkSelectionKey(evaluation.benchmark, evaluation.benchmark_profile, metric)
       const models = modelsBySelection.get(key) ?? new Set<string>()
       models.add(evaluation.model)
       modelsBySelection.set(key, models)
@@ -464,13 +466,24 @@ export function modelHubBenchmarkSelections(
     )
 }
 
+/** Selects the broadest published profile/metric for each benchmark card. */
+export function modelHubBenchmarkOverviewSelections(
+  catalog: BuiltInModelCatalog,
+  minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
+): Array<ModelHubBenchmarkSelection & { modelCount: number }> {
+  const seen = new Set<string>()
+  return modelHubBenchmarkSelections(catalog, minimumModels).filter((selection) => {
+    if (seen.has(selection.benchmark)) return false
+    seen.add(selection.benchmark)
+    return true
+  })
+}
+
 export function modelHubDefaultBenchmark(
   catalog: BuiltInModelCatalog,
 ): ModelHubBenchmarkSelection | null {
   const best = modelHubBenchmarkSelections(catalog)[0]
-  return best
-    ? { benchmark: best.benchmark, profile: best.profile, metric: best.metric }
-    : null
+  return best ? { benchmark: best.benchmark, profile: best.profile, metric: best.metric } : null
 }
 
 export function modelHubBenchmarkPoints(

@@ -8,6 +8,7 @@ import {
   formatIntelligence,
   modelHubBenchmarkBarHeight,
   modelHubBenchmarkDomain,
+  modelHubBenchmarkOverviewSelections,
   modelHubBenchmarkPoints,
   modelHubBenchmarkSelections,
   modelHubChartColors,
@@ -19,6 +20,7 @@ import {
   modelHubContextLabel,
   modelHubMaxOutputLabel,
   modelHubParameterLabel,
+  modelHubPageForModel,
   modelHubPublicEvaluations,
   modelHubRows,
   modelHubStats,
@@ -291,5 +293,22 @@ describe('model hub selection and benchmark support', () => {
         ),
       ),
     ).toBe(true)
+  })
+})
+
+describe('model hub cross-view navigation', () => {
+  it('routes a benchmark bar back to the model page that owns its card', () => {
+    const rows = modelHubRows(catalog, filters())
+    const target = rows[27]
+
+    expect(modelHubPageForModel(rows, target.model.id, 10)).toBe(3)
+    expect(modelHubPageForModel(rows, 'missing/model', 10)).toBe(1)
+  })
+
+  it('chooses one broad comparison card per benchmark for the stacked explorer', () => {
+    const overview = modelHubBenchmarkOverviewSelections(catalog)
+
+    expect(new Set(overview.map((selection) => selection.benchmark))).toHaveLength(overview.length)
+    expect(overview.every((selection) => selection.modelCount >= 10)).toBe(true)
   })
 })

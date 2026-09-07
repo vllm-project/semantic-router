@@ -16,6 +16,8 @@ runtime behavior.
   request shapes.
 - Complete Dashboard and Website Model Hub regression, mobile QA, PR CI, and
   preview deployment.
+- Finish the collapsible Hub workspace, stacked benchmark exploration,
+  provider-mark fallback, and reliable cross-page navigation contracts.
 
 ## Non-Goals
 
@@ -38,11 +40,13 @@ runtime behavior.
 - [x] `TASK-02` Complete provider wire-contract and validation tests.
 - [x] `TASK-03` Run local and AMD validation, fixing failures locally.
 - [ ] `TASK-04` Rebase, push, and drive PR CI green.
-- [x] `TASK-05` Deploy and inspect Website and Dashboard previews.
+- [ ] `TASK-05` Redeploy and inspect the final Website and Dashboard previews.
+- [ ] `TASK-06` Close the Hub interaction and global-navigation regression.
 
 ## Next Action
 
-Drive the latest rebased pull-request head through every required CI check.
+Finish the Hub interaction regression, redeploy both previews, then drive the
+new pull-request head through every required CI check.
 
 ## Operating Rules
 

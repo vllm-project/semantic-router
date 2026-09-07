@@ -4,7 +4,7 @@ import type { ModelHubRow } from './modelHubSupport'
 
 export const OpenModelButton: React.FC<{
   row: ModelHubRow
-  selected: ModelHubRow | null
+  selected?: ModelHubRow | null
   select: (id: string) => void
   className: string
   ariaLabel?: string
@@ -16,7 +16,7 @@ export const OpenModelButton: React.FC<{
     className={className}
     onClick={() => select(row.model.id)}
     aria-label={ariaLabel ?? `Inspect ${row.model.display_name}`}
-    aria-pressed={selected?.model.id === row.model.id}
+    aria-pressed={selected === undefined ? undefined : selected?.model.id === row.model.id}
     style={style}
   >
     {children}

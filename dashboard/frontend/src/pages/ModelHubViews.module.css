@@ -308,7 +308,7 @@
 
 .benchmarkExplorer {
   min-height: 500px;
-  padding: 0.9rem;
+  padding: 0.82rem;
 }
 
 .benchmarkHeading {
@@ -316,79 +316,92 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  padding: 0.18rem 0.12rem 0.8rem;
 }
 
-.benchmarkHeading h2 {
+.benchmarkHeading > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.benchmarkHeading h2,
+.benchmarkPanelHeading h3 {
   margin: 0;
   color: #e7e7ea;
   font-size: 0.92rem;
   font-weight: 650;
 }
 
-.benchmarkHeading a {
-  color: #aaaab2;
+.benchmarkHeading span,
+.benchmarkHeading small {
+  color: #696971;
   font-size: 0.75rem;
+}
+
+.benchmarkStack {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.benchmarkPanel {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 10px;
+  background: #0d0d0f;
+}
+
+.benchmarkPanelHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.72rem 0.8rem 0.62rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 58%);
+}
+
+.benchmarkPanelHeading > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.16rem;
+}
+
+.benchmarkPanelHeading h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.benchmarkPanelHeading span {
+  color: #707078;
+  font-size: 0.7rem;
+  text-transform: capitalize;
+}
+
+.benchmarkPanelHeading a {
+  flex: 0 0 auto;
+  color: #8d8d95;
+  font-size: 0.7rem;
   text-decoration: none;
 }
 
-.benchmarkControls {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr;
-  gap: 1px;
-  margin-top: 0.75rem;
-  overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  background: var(--border-subtle);
-}
-
-.benchmarkControls label {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.5rem 0.6rem;
-  background: #111113;
-}
-
-.benchmarkControls label > span {
-  color: #6f6f78;
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.benchmarkControls select {
-  width: 100%;
-  height: 26px;
-  padding: 0 1.5rem 0 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: #d8d8dc;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.75rem;
-}
-
-.benchmarkControls select:focus {
-  box-shadow: inset 0 -1px #ee555c;
-}
-
-.benchmarkControls option {
-  background: #18181b;
-  color: #f4f4f5;
+.benchmarkPanelHeading a:hover {
+  color: #fff;
 }
 
 .chartMeta {
   display: flex;
   justify-content: space-between;
-  padding: 0.72rem 0.1rem 0.48rem;
-  color: #696971;
-  font-size: 0.75rem;
+  padding: 0.52rem 0.8rem 0.42rem;
+  color: #616169;
+  font-size: 0.68rem;
 }
 
 .benchmarkViewport {
   overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  border-radius: 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
   outline: none;
   background: #0d0d0f;
   scrollbar-color: #3a3a40 transparent;
@@ -400,22 +413,22 @@
 }
 
 .benchmarkChart {
-  --chart-column-width: 52px;
-  --chart-label-height: 88px;
+  --chart-column-width: 48px;
+  --chart-label-height: 84px;
   position: relative;
   display: grid;
   grid-auto-columns: var(--chart-column-width);
   grid-auto-flow: column;
   min-width: max(100%, calc(var(--column-count) * var(--chart-column-width) + 20px));
   justify-content: center;
-  height: 350px;
-  padding: 1rem 0.65rem 0.45rem;
+  height: 320px;
+  padding: 0.82rem 0.55rem 0.35rem;
   background: #0d0d0f;
 }
 
 .chartGrid {
   position: absolute;
-  inset: 1.7rem 0.65rem var(--chart-label-height);
+  inset: 1.55rem 0.55rem var(--chart-label-height);
   pointer-events: none;
   background: repeating-linear-gradient(
     to top,
@@ -613,14 +626,31 @@
     width: 100%;
   }
 
-  .benchmarkControls {
-    grid-template-columns: 1fr;
+  .benchmarkExplorer {
+    padding: 0.55rem;
+  }
+
+  .benchmarkHeading {
+    padding-inline: 0.15rem;
+  }
+
+  .benchmarkHeading small {
+    display: none;
+  }
+
+  .benchmarkStack {
+    gap: 0.65rem;
+  }
+
+  .benchmarkPanelHeading {
+    padding-inline: 0.65rem;
   }
 
   .benchmarkChart {
-    --chart-column-width: 60px;
+    --chart-column-width: 54px;
     min-width: calc(var(--column-count) * var(--chart-column-width) + 16px);
     justify-content: start;
+    height: 310px;
     padding-inline: 8px;
   }
 }

@@ -25,8 +25,10 @@ describe('model hub filters', () => {
         providers={[]}
         capabilities={[]}
         view="table"
+        collapsed={false}
         update={() => undefined}
         setView={() => undefined}
+        toggleCollapsed={() => undefined}
         reset={() => undefined}
       />,
     )
@@ -44,12 +46,35 @@ describe('model hub filters', () => {
         providers={[]}
         capabilities={[]}
         view="table"
+        collapsed={false}
         update={() => undefined}
         setView={() => undefined}
+        toggleCollapsed={() => undefined}
         reset={() => undefined}
       />,
     )
 
     expect(markup).toMatch(/<button[^>]+disabled=""[^>]*>Reset/)
+  })
+
+  it('exposes a labelled control that can collapse the filter rail', () => {
+    const markup = renderToStaticMarkup(
+      <HubFilters
+        filters={filters('released')}
+        creators={[]}
+        providers={[]}
+        capabilities={[]}
+        view="list"
+        collapsed
+        update={() => undefined}
+        setView={() => undefined}
+        toggleCollapsed={() => undefined}
+        reset={() => undefined}
+      />,
+    )
+
+    expect(markup).toContain('aria-label="Show model filters"')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain('aria-controls="model-hub-filter-controls"')
   })
 })
