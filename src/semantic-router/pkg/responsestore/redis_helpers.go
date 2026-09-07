@@ -158,6 +158,7 @@ func (s *RedisStore) storedConversationID(ctx context.Context, responseID string
 
 	return stored.ConversationID, nil
 }
+
 func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
 	var responseIDs []string
 	currentID := startID

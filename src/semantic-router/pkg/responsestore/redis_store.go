@@ -285,6 +285,7 @@ func NewRedisStore(config StoreConfig) (*RedisStore, error) {
 
 	return store, nil
 }
+
 func loadRedisStoreConfig(cfg RedisStoreConfig) (RedisStoreConfig, error) {
 	// If no external config, return inline config as-is
 	if cfg.ConfigPath == "" {
@@ -319,6 +320,7 @@ func loadRedisStoreConfig(cfg RedisStoreConfig) (RedisStoreConfig, error) {
 	// External file takes precedence
 	return fileCfg, nil
 }
+
 func validateRedisConfig(cfg RedisStoreConfig) error {
 	// Cluster mode validation
 	if cfg.ClusterMode {
@@ -356,6 +358,7 @@ func validateRedisConfig(cfg RedisStoreConfig) error {
 
 	return nil
 }
+
 func applyRedisConfigDefaults(cfg *RedisStoreConfig) {
 	if cfg.KeyPrefix == "" {
 		cfg.KeyPrefix = "sr:" // Base prefix only, types are added by constants
@@ -493,6 +496,7 @@ func (s *RedisStore) conversationIndexMigratedKey(conversationID string) string 
 func (s *RedisStore) conversationIndexScanLeaseKey() string {
 	return s.buildKey(conversationIndexScanLeaseKeySuffix)
 }
+
 func (s *RedisStore) CheckConnection(ctx context.Context) error {
 	if !s.enabled {
 		return fmt.Errorf("redis store is disabled")
@@ -506,6 +510,7 @@ func (s *RedisStore) CheckConnection(ctx context.Context) error {
 	logging.Debugf("RedisStore: connection check passed")
 	return nil
 }
+
 func (s *RedisStore) Close() error {
 	if s.client != nil {
 		logging.Infof("RedisStore: closing connection")
@@ -513,6 +518,7 @@ func (s *RedisStore) Close() error {
 	}
 	return nil
 }
+
 func (s *RedisStore) IsEnabled() bool {
 	return s.enabled
 }

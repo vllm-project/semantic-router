@@ -95,6 +95,7 @@ func (h *recreateAfterDeleteHook) DialHook(next redis.DialHook) redis.DialHook {
 func (h *recreateAfterDeleteHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
 	return next
 }
+
 func (h *recreateAfterDeleteHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		err := next(ctx, cmd)
