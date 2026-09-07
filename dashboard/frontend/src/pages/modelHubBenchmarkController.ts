@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import type {
   BuiltInModelCatalog,
@@ -28,6 +28,7 @@ export interface ModelHubBenchmarkChartData {
 }
 
 export function useModelHubBenchmarkController(catalog: BuiltInModelCatalog, rows: ModelHubRow[]) {
+  const [domain, setDomain] = useState('all')
   const modelIDs = useMemo(() => new Set(rows.map((row) => row.model.id)), [rows])
   const selections = useMemo(() => modelHubBenchmarkOverviewSelections(catalog), [catalog])
   const chartColors = useMemo(
@@ -38,7 +39,7 @@ export function useModelHubBenchmarkController(catalog: BuiltInModelCatalog, row
       ),
     [catalog.models],
   )
-  const charts = useMemo(
+  const allCharts = useMemo(
     () =>
       selections.flatMap<ModelHubBenchmarkChartData>((selection) => {
         const points = modelHubBenchmarkPoints(catalog, selection, modelIDs)
@@ -68,8 +69,31 @@ export function useModelHubBenchmarkController(catalog: BuiltInModelCatalog, row
       }),
     [catalog, chartColors, modelIDs, selections],
   )
+  const domains = useMemo(() => {
+    const counts = new Map<string, number>()
+    allCharts.forEach((chart) => {
+      const chartDomain = chart.benchmark?.domain
+      if (!chartDomain) return
+      counts.set(chartDomain, (counts.get(chartDomain) ?? 0) + 1)
+    })
+    return Array.from(counts, ([id, count]) => ({ id, count })).sort((left, right) =>
+      left.id.localeCompare(right.id),
+    )
+  }, [allCharts])
+  const activeDomain =
+    domain === 'all' || domains.some((candidate) => candidate.id === domain) ? domain : 'all'
+  const charts =
+    activeDomain === 'all'
+      ? allCharts
+      : allCharts.filter((chart) => chart.benchmark?.domain === activeDomain)
 
-  return { charts }
+  return {
+    charts,
+    chartCount: allCharts.length,
+    domains,
+    domain: activeDomain,
+    setDomain,
+  }
 }
 
 export type ModelHubBenchmarkController = ReturnType<typeof useModelHubBenchmarkController>

@@ -5,12 +5,59 @@
   background: var(--hub-surface);
 }
 
-.controls {
-  display: grid;
-  grid-template-columns: minmax(16rem, 1.45fr) repeat(2, minmax(10rem, 0.75fr));
-  gap: 0.6rem;
-  padding: 0.8rem;
+.toolbar {
+  padding: 0.78rem 0.85rem;
   border-bottom: 1px solid var(--hub-border-soft);
+  background: color-mix(in srgb, var(--hub-surface) 76%, var(--ifm-background-color));
+}
+
+.tags {
+  display: flex;
+  align-items: center;
+  gap: 0.38rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tags::-webkit-scrollbar {
+  display: none;
+}
+
+.tags button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0 0.72rem;
+  border: 1px solid var(--hub-border);
+  border-radius: 999px;
+  background: var(--ifm-background-color);
+  color: var(--hub-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-transform: capitalize;
+  transition: 140ms ease;
+  white-space: nowrap;
+}
+
+.tags button:hover {
+  border-color: var(--ifm-color-emphasis-500);
+  color: var(--ifm-font-color-base);
+}
+
+.tags button[aria-pressed='true'] {
+  border-color: var(--ifm-font-color-base);
+  background: var(--ifm-font-color-base);
+  color: var(--ifm-background-color);
+}
+
+.tags button span {
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.56;
 }
 
 .filters {
@@ -77,46 +124,79 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ifm-color-primary) 11%, transparent);
 }
 
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  padding: 0.8rem;
+}
+
+.panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--hub-border-soft);
+  border-radius: 0.72rem;
+  background: var(--ifm-background-color);
+  box-shadow: 0 8px 24px rgb(15 23 42 / 3%);
+}
+
 .chartHeader {
   display: flex;
-  min-height: 3.6rem;
-  align-items: center;
+  min-height: 5rem;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.7rem 1rem;
+  padding: 0.82rem 0.9rem 0.52rem;
 }
 
 .chartHeader > span {
-  display: flex;
-  align-items: baseline;
-  gap: 0.45rem;
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
 }
 
 .chartHeader strong {
-  font-size: 0.84rem;
+  font-size: 0.9rem;
 }
 
-.chartHeader small,
-.chartHeader > span:last-child {
+.chartHeader small {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--hub-muted);
-  font-size: 0.75rem;
-}
-
-.chartHeader b {
-  color: var(--ifm-font-color-base);
-  font-variant-numeric: tabular-nums;
+  font-size: 0.7rem;
+  line-height: 1.38;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .chartHeader a {
-  margin-left: 0.45rem;
+  flex: 0 0 auto;
+  color: var(--hub-muted);
+  font-size: 0.7rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.chartMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.48rem 0.9rem;
+  border-top: 1px solid var(--hub-border-soft);
+  color: var(--hub-muted);
+  font-size: 0.68rem;
+  text-transform: capitalize;
+}
+
+.chartMeta b {
+  color: var(--ifm-font-color-base);
+  font-variant-numeric: tabular-nums;
 }
 
 .viewport {
   overflow-x: auto;
   border-top: 1px solid var(--hub-border-soft);
-  border-bottom: 1px solid var(--hub-border-soft);
   outline: none;
   scrollbar-color: var(--ifm-color-emphasis-400) transparent;
   scrollbar-width: thin;
@@ -127,22 +207,22 @@
 }
 
 .chart {
-  --column-width: 3.35rem;
-  --label-height: 6.7rem;
+  --column-width: 2.75rem;
+  --label-height: 5.9rem;
   position: relative;
   display: grid;
   grid-auto-columns: var(--column-width);
   grid-auto-flow: column;
-  min-width: max(100%, calc(var(--bar-count) * var(--column-width) + 1.6rem));
+  min-width: max(100%, calc(var(--bar-count) * var(--column-width) + 1rem));
   justify-content: center;
-  height: 26.5rem;
-  padding: 1.25rem 0.8rem 0.55rem;
+  height: 21.5rem;
+  padding: 1rem 0.5rem 0.45rem;
   background: var(--ifm-background-color);
 }
 
 .grid {
   position: absolute;
-  inset: 2rem 0.8rem var(--label-height);
+  inset: 1.75rem 0.5rem var(--label-height);
   pointer-events: none;
   background: repeating-linear-gradient(
     to top,
@@ -206,13 +286,19 @@
 }
 
 .columnTrack i {
-  width: min(2.2rem, 72%);
+  width: min(1.75rem, 72%);
   height: var(--bar-height);
   min-height: 3px;
   border-radius: 0.35rem 0.35rem 0.1rem 0.1rem;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--bar-color) 76%, white), var(--bar-color));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bar-color) 76%, white),
+    var(--bar-color)
+  );
   box-shadow: 0 0.7rem 1.8rem var(--bar-soft);
-  transition: filter 150ms ease, transform 150ms ease;
+  transition:
+    filter 150ms ease,
+    transform 150ms ease;
 }
 
 .column:hover .columnTrack i {
@@ -247,7 +333,7 @@
 .columnIdentity b {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   line-height: 1.2;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -255,12 +341,23 @@
 
 .columnIdentity small {
   color: var(--hub-muted);
-  font-size: 0.66rem;
+  font-size: 0.62rem;
+}
+
+@media (max-width: 1080px) {
+  .gallery {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 760px) {
-  .controls {
-    grid-template-columns: 1fr;
+  .toolbar {
+    padding-inline: 0.65rem;
+  }
+
+  .tags {
+    margin-inline: -0.65rem;
+    padding-inline: 0.65rem;
   }
 
   .filters {
@@ -281,22 +378,22 @@
     flex: 1;
   }
 
-  .chartHeader {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.3rem;
+  .gallery {
+    gap: 0.65rem;
+    padding: 0.65rem;
   }
 
-  .chartHeader > span {
-    flex-wrap: wrap;
-    gap: 0.2rem 0.4rem;
+  .chartHeader {
+    min-height: 4.5rem;
+    gap: 0.55rem;
+    padding-inline: 0.72rem;
   }
 
   .chart {
-    --column-width: 3.8rem;
+    --column-width: 3.1rem;
     min-width: calc(var(--bar-count) * var(--column-width) + 1.1rem);
     justify-content: start;
-    height: 24rem;
+    height: 21rem;
     padding-inline: 0.55rem;
   }
 }

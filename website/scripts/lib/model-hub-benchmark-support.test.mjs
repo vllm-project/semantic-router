@@ -117,6 +117,16 @@ test('website public evidence omits benchmarks with fewer than ten models', () =
   assert.deepEqual(new Set(visible.map(row => row.benchmark)), new Set(['broad@1']))
 })
 
+test('website benchmark gallery selects one broad comparison per benchmark', () => {
+  const charts = support.modelHubBenchmarkCharts(catalog)
+
+  assert.ok(charts.length > 1)
+  assert.equal(new Set(charts.map(chart => chart.benchmark.id)).size, charts.length)
+  charts.forEach((chart) => {
+    assert.ok(new Set(chart.rows.map(row => row.model.id)).size >= 10)
+  })
+})
+
 test('website benchmark colors are stable and collision-free for visible models', () => {
   const modelIDs = [
     'meta/muse-glimmer-30b',
@@ -220,8 +230,10 @@ test('website benchmark renders every filtered result in one comparison surface'
     'utf8',
   )
 
-  assert.match(component, /rows\.map\(row =>/)
+  assert.match(component, /rows\.map\(\(?row\)? =>/)
   assert.match(component, /Benchmark comparison with all filtered results/)
+  assert.match(component, /Filter benchmark domains/)
+  assert.match(component, /charts\.map\(\(?chart\)? =>/)
   assert.doesNotMatch(component, /<Pagination/)
   assert.doesNotMatch(component, /pageRows/)
 })

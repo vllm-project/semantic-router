@@ -183,39 +183,60 @@ export const BenchmarkExplorer: React.FC<{
       <div className={styles.benchmarkHeading}>
         <div>
           <h2>Benchmarks</h2>
-          <span>{controller.charts.length} comparable sets</span>
+          <span>{controller.chartCount} comparable sets</span>
         </div>
         <small>All published results</small>
       </div>
-      {controller.charts.length ? (
-        <div className={styles.benchmarkStack}>
-          {controller.charts.map((chart) => (
-            <article className={styles.benchmarkPanel} key={chart.key}>
-              <header className={styles.benchmarkPanelHeading}>
-                <div>
-                  <h3>{chart.benchmark?.display_name ?? chart.selection.benchmark}</h3>
+      {controller.chartCount ? (
+        <>
+          <div className={styles.benchmarkTags} role="group" aria-label="Filter benchmark domains">
+            <button
+              type="button"
+              aria-pressed={controller.domain === 'all'}
+              onClick={() => controller.setDomain('all')}
+            >
+              All <span>{controller.chartCount}</span>
+            </button>
+            {controller.domains.map((domain) => (
+              <button
+                type="button"
+                key={domain.id}
+                aria-pressed={controller.domain === domain.id}
+                onClick={() => controller.setDomain(domain.id)}
+              >
+                {readable(domain.id)} <span>{domain.count}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.benchmarkStack}>
+            {controller.charts.map((chart) => (
+              <article className={styles.benchmarkPanel} key={chart.key}>
+                <header className={styles.benchmarkPanelHeading}>
+                  <div>
+                    <h3>{chart.benchmark?.display_name ?? chart.selection.benchmark}</h3>
+                    <span>
+                      {readable(chart.selection.profile)} · {readable(chart.selection.metric)}
+                    </span>
+                  </div>
+                  {chart.benchmark?.source ? (
+                    <a href={chart.benchmark.source} target="_blank" rel="noreferrer">
+                      Source ↗
+                    </a>
+                  ) : null}
+                </header>
+                <div className={styles.chartMeta}>
+                  <span>{chart.points.length} results</span>
                   <span>
-                    {readable(chart.selection.profile)} · {readable(chart.selection.metric)}
+                    {chart.metric?.direction === 'lower_is_better'
+                      ? 'Lower is better'
+                      : 'Higher is better'}
                   </span>
                 </div>
-                {chart.benchmark?.source ? (
-                  <a href={chart.benchmark.source} target="_blank" rel="noreferrer">
-                    Source ↗
-                  </a>
-                ) : null}
-              </header>
-              <div className={styles.chartMeta}>
-                <span>{chart.points.length} results</span>
-                <span>
-                  {chart.metric?.direction === 'lower_is_better'
-                    ? 'Lower is better'
-                    : 'Higher is better'}
-                </span>
-              </div>
-              <ModelHubBenchmarkChart rows={rows} openModel={openModel} chart={chart} />
-            </article>
-          ))}
-        </div>
+                <ModelHubBenchmarkChart rows={rows} openModel={openModel} chart={chart} />
+              </article>
+            ))}
+          </div>
+        </>
       ) : (
         <EmptyResults title="No available scores" body="Change the model filters." />
       )}

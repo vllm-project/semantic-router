@@ -58,7 +58,8 @@ describe('model hub views', () => {
     expect(markup).not.toContain('Rank 1')
     expect(markup).toMatch(/aria-label="[^"]+ comparison with all filtered results"/)
     expect(markup).not.toContain('aria-label="Model catalog pagination"')
-    expect(markup).not.toContain('aria-pressed')
+    expect(markup).toContain('aria-label="Filter benchmark domains"')
+    expect(markup).toContain('aria-pressed="true"')
     expect(markup).not.toContain('<select')
     const modelIDs = new Set(rows.map((row) => row.model.id))
     const expected = modelHubBenchmarkOverviewSelections(catalog).reduce(

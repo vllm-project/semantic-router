@@ -1,9 +1,22 @@
-import type { BenchmarkMetric } from './modelHubCatalogTypes'
+import type {
+  BenchmarkMetric,
+  BenchmarkRow,
+  CatalogBenchmark,
+  CatalogSnapshot,
+} from './modelHubCatalogTypes'
 
 export interface ModelHubBenchmarkSelection {
   benchmark: string
   profile: string
   metric: string
+}
+
+export interface ModelHubBenchmarkChart {
+  key: string
+  benchmark: CatalogBenchmark
+  metric: BenchmarkMetric
+  profile: string
+  rows: BenchmarkRow[]
 }
 
 export interface ModelHubChartColor {
@@ -22,30 +35,20 @@ interface ModelHubEvaluationSelectionSource {
 
 export const MODEL_HUB_MIN_BENCHMARK_MODELS = 10
 
-const selectionKey = (
-  benchmark: string,
-  profile: string,
-  metric: string,
-): string => `${benchmark}\u0000${profile}\u0000${metric}`
+const selectionKey = (benchmark: string, profile: string, metric: string): string =>
+  `${benchmark}\u0000${profile}\u0000${metric}`
 
 export function modelHubPublicEvaluations<T extends ModelHubEvaluationSelectionSource>(
   evaluations: T[],
   minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
 ): T[] {
-  const eligible = new Set(
-    modelHubBenchmarkSelectionCounts(evaluations, minimumModels).keys(),
-  )
+  const eligible = new Set(modelHubBenchmarkSelectionCounts(evaluations, minimumModels).keys())
   return evaluations.filter(
     evaluation =>
       evaluation.status === 'available'
       && Object.keys(evaluation.metrics ?? {}).some(metric =>
-        eligible.has(
-          selectionKey(
-            evaluation.benchmark,
-            evaluation.benchmark_profile,
-            metric,
-          ),
-        )),
+        eligible.has(selectionKey(evaluation.benchmark, evaluation.benchmark_profile, metric)),
+      ),
   )
 }
 
@@ -58,11 +61,7 @@ export function modelHubBenchmarkSelectionCounts(
     if (evaluation.status !== 'available') return
     Object.entries(evaluation.metrics ?? {}).forEach(([metric, value]) => {
       if (typeof value !== 'number') return
-      const key = selectionKey(
-        evaluation.benchmark,
-        evaluation.benchmark_profile,
-        metric,
-      )
+      const key = selectionKey(evaluation.benchmark, evaluation.benchmark_profile, metric)
       const models = modelsBySelection.get(key) ?? new Set<string>()
       models.add(evaluation.model)
       modelsBySelection.set(key, models)
@@ -80,18 +79,83 @@ export function preferredModelHubBenchmarkSelection(
   benchmarkID?: string,
   profileID?: string,
 ): ModelHubBenchmarkSelection | undefined {
-  const prefix = [benchmarkID, profileID]
-    .filter(value => value !== undefined)
-    .join('\u0000')
+  const prefix = [benchmarkID, profileID].filter(value => value !== undefined).join('\u0000')
   const scopedPrefix = prefix ? `${prefix}\u0000` : ''
   const key = Array.from(counts.entries())
     .filter(([candidate]) => candidate.startsWith(scopedPrefix))
-    .sort(
-      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
-    )[0]?.[0]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0]
   if (!key) return undefined
   const [benchmark, profile, metric] = key.split('\u0000')
   return { benchmark, profile, metric }
+}
+
+export function modelHubBenchmarkOverviewSelections(
+  evaluations: ModelHubEvaluationSelectionSource[],
+  minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
+): Array<ModelHubBenchmarkSelection & { modelCount: number }> {
+  const seen = new Set<string>()
+  return Array.from(modelHubBenchmarkSelectionCounts(evaluations, minimumModels))
+    .map(([key, modelCount]) => {
+      const [benchmark, profile, metric] = key.split('\u0000')
+      return { benchmark, profile, metric, modelCount }
+    })
+    .sort(
+      (left, right) =>
+        right.modelCount - left.modelCount
+        || `${left.benchmark}\u0000${left.profile}\u0000${left.metric}`.localeCompare(
+          `${right.benchmark}\u0000${right.profile}\u0000${right.metric}`,
+        ),
+    )
+    .filter((selection) => {
+      if (seen.has(selection.benchmark)) return false
+      seen.add(selection.benchmark)
+      return true
+    })
+}
+
+export function modelHubBenchmarkCharts(
+  catalog: CatalogSnapshot,
+  minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
+): ModelHubBenchmarkChart[] {
+  const models = new Map(catalog.models.map(model => [model.id, model]))
+  return modelHubBenchmarkOverviewSelections(
+    catalog.evaluations,
+    minimumModels,
+  ).flatMap<ModelHubBenchmarkChart>((selection) => {
+    const benchmark = catalog.benchmarks.find(item => item.id === selection.benchmark)
+    const metric = benchmark?.metrics.find(item => item.id === selection.metric)
+    if (!benchmark || !metric) return []
+    const unique = new Map<string, BenchmarkRow>()
+    catalog.evaluations.forEach((evaluation) => {
+      const model = models.get(evaluation.model)
+      const value = evaluation.metrics?.[metric.id]
+      if (
+        evaluation.status !== 'available'
+        || evaluation.benchmark !== benchmark.id
+        || evaluation.benchmark_profile !== selection.profile
+        || typeof value !== 'number'
+        || !model
+      )
+        return
+      unique.set(`${model.id}:${evaluation.reasoning_effort}`, {
+        evaluation,
+        model,
+        value,
+      })
+    })
+    const rows = Array.from(unique.values()).sort((left, right) =>
+      metric.direction === 'lower_is_better' ? left.value - right.value : right.value - left.value,
+    )
+    return [
+      {
+        key: `${selection.benchmark}/${selection.profile}/${selection.metric}`,
+        benchmark,
+        metric,
+        profile: selection.profile,
+        rows,
+      },
+    ]
+  })
 }
 
 export function availableModelHubBenchmarkProfiles(
@@ -150,11 +214,7 @@ export const modelHubChartColorDistance = (
   const leftB = left.chroma * Math.sin(radians(left.hue))
   const rightA = right.chroma * Math.cos(radians(right.hue))
   const rightB = right.chroma * Math.sin(radians(right.hue))
-  return Math.hypot(
-    left.lightness - right.lightness,
-    leftA - rightA,
-    leftB - rightB,
-  )
+  return Math.hypot(left.lightness - right.lightness, leftA - rightA, leftB - rightB)
 }
 
 const fallbackModelHubColor = (id: string): ModelHubChartColor => {
@@ -171,8 +231,8 @@ export function modelHubChartColors(
   catalogModelIDs: string[] = modelIDs,
 ): Map<string, ModelHubChartColor> {
   const requested = new Set(modelIDs)
-  const universe = Array.from(new Set([...catalogModelIDs, ...modelIDs])).sort(
-    (left, right) => left.localeCompare(right),
+  const universe = Array.from(new Set([...catalogModelIDs, ...modelIDs])).sort((left, right) =>
+    left.localeCompare(right),
   )
   const candidates = modelHubPalette()
   const assigned: ModelHubChartColor[] = []
@@ -187,9 +247,7 @@ export function modelHubChartColors(
     let bestDistance = -1
     candidates.forEach((candidate, index) => {
       const distance = assigned.length
-        ? Math.min(
-            ...assigned.map(color => modelHubChartColorDistance(candidate, color)),
-          )
+        ? Math.min(...assigned.map(color => modelHubChartColorDistance(candidate, color)))
         : Number.POSITIVE_INFINITY
       if (distance > bestDistance) {
         bestDistance = distance
