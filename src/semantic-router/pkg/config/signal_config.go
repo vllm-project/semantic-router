@@ -23,6 +23,7 @@ type Signals struct {
 	ModalityRules      []ModalityRule         `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding          `yaml:"role_bindings,omitempty"`
 	JailbreakRules     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	HallucinationRules []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PIIRules           []PIIRule              `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule         `yaml:"kb,omitempty"`
 	ConversationRules  []ConversationRule     `yaml:"conversation,omitempty"`
@@ -30,6 +31,22 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+}
+
+// HallucinationRule declares the response-stage hallucination observation:
+// the model's answer is checked against the grounding context the request
+// carried (tool results or retrieved context). It has no request direction; it
+// only exists once the model has answered, and the hallucination plugin of the
+// decision selected for the request consumes it. The detector's own threshold
+// and span filters stay on hallucination_model; a rule names the observation
+// and chooses how it is explained.
+type HallucinationRule struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+	// UseNLI asks the detector for span-level NLI explanations. It decides how
+	// the observation is produced, so it lives on the rule; the plugin's
+	// use_nli is ignored once a rule is declared.
+	UseNLI bool `yaml:"use_nli,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.
