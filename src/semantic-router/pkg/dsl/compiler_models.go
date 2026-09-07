@@ -1,6 +1,9 @@
 package dsl
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 func (c *Compiler) compileModels() {
 	if len(c.prog.Models) == 0 {
@@ -38,9 +41,6 @@ func applyRoutingModelNumericFields(
 	if v, ok := getIntField(fields, "context_window_size"); ok {
 		params.ContextWindowSize = v
 	}
-	if v, ok := getFloat64Field(fields, "quality_score"); ok {
-		params.QualityScore = v
-	}
 }
 
 func applyRoutingModelArrayFields(params *config.ModelParams, fields map[string]Value) {
@@ -53,6 +53,50 @@ func applyRoutingModelArrayFields(params *config.ModelParams, fields map[string]
 	if v, ok := getStringArrayField(fields, "tags"); ok {
 		params.Tags = v
 	}
+	if v, ok := getEvaluationsField(fields, "evaluations"); ok {
+		params.Evaluations = v
+	}
+}
+
+func getEvaluationsField(fields map[string]Value, key string) ([]modelcatalog.UserEvaluation, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return nil, false
+	}
+	array, ok := raw.(ArrayValue)
+	if !ok {
+		return nil, false
+	}
+	evaluations := make([]modelcatalog.UserEvaluation, 0, len(array.Items))
+	for _, item := range array.Items {
+		object, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		benchmark, ok := getStringField(object.Fields, "benchmark")
+		if !ok || benchmark == "" {
+			continue
+		}
+		evaluation := modelcatalog.UserEvaluation{Benchmark: benchmark}
+		if metrics, ok := object.Fields["metrics"].(ObjectValue); ok {
+			evaluation.Metrics = make(map[string]float64, len(metrics.Fields))
+			for metric, value := range metrics.Fields {
+				switch typed := value.(type) {
+				case FloatValue:
+					evaluation.Metrics[metric] = typed.V
+				case IntValue:
+					evaluation.Metrics[metric] = float64(typed.V)
+				}
+			}
+		}
+		evaluation.Source, _ = getStringField(object.Fields, "source")
+		evaluation.MeasuredAt, _ = getStringField(object.Fields, "measured_at")
+		if metadata, ok := object.Fields["metadata"].(ObjectValue); ok {
+			evaluation.Metadata = fieldsToMap(metadata.Fields)
+		}
+		evaluations = append(evaluations, evaluation)
+	}
+	return evaluations, true
 }
 
 func getLoRAAdapterField(fields map[string]Value, key string) ([]config.LoRAAdapter, bool) {

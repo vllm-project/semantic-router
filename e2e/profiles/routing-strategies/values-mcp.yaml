@@ -3,25 +3,13 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/gpt-oss-20b
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: openai/gpt-oss-20b
+      reasoning_effort: high
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: mock-vllm
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
   routing:
