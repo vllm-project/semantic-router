@@ -324,12 +324,15 @@ func (ImagesCodec) NewEncoder(_ llmprotocol.StreamContext, _ llmprotocol.Policy)
 	return imagesStreamUnsupportedEncoder{}
 }
 
-type imagesStreamUnsupportedDecoder struct{}
-type imagesStreamUnsupportedEncoder struct{}
+type (
+	imagesStreamUnsupportedDecoder struct{}
+	imagesStreamUnsupportedEncoder struct{}
+)
 
 func (imagesStreamUnsupportedDecoder) Push([]byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
+
 func (imagesStreamUnsupportedDecoder) Finalize(error) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
@@ -337,6 +340,7 @@ func (imagesStreamUnsupportedDecoder) Finalize(error) ([]llmprotocol.Event, llmp
 func (imagesStreamUnsupportedEncoder) Push(llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
+
 func (imagesStreamUnsupportedEncoder) Finalize(error) ([][]byte, llmprotocol.Diagnostics, error) {
 	return nil, nil, fmt.Errorf("images wire does not support streaming")
 }
