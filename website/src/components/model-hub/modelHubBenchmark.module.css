@@ -13,9 +13,9 @@
 
 .tags {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.38rem;
-  overflow-x: auto;
   scrollbar-width: none;
 }
 
@@ -356,6 +356,8 @@
   }
 
   .tags {
+    flex-wrap: nowrap;
+    overflow-x: auto;
     margin-inline: -0.65rem;
     padding-inline: 0.65rem;
   }

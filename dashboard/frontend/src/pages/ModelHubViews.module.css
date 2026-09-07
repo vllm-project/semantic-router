@@ -340,9 +340,9 @@
 
 .benchmarkTags {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.36rem;
-  overflow-x: auto;
   padding: 0.08rem 0.12rem 0.8rem;
   scrollbar-width: none;
 }
@@ -690,6 +690,8 @@
   }
 
   .benchmarkTags {
+    flex-wrap: nowrap;
+    overflow-x: auto;
     margin-inline: -0.55rem;
     padding-inline: 0.7rem;
   }
