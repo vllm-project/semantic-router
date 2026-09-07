@@ -26,6 +26,9 @@ func ValidateComplexityModelBackend(cfg *RouterConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("complexity model configuration is nil")
 	}
+	if err := ValidateComplexityRuleBoundaries(cfg); err != nil {
+		return err
+	}
 	backend := cfg.ComplexityModel.Backend
 	if backend == nil {
 		return nil
@@ -47,4 +50,65 @@ func ValidateComplexityModelBackend(cfg *RouterConfig) error {
 		return fmt.Errorf("complexity: %w", err)
 	}
 	return nil
+}
+
+// ValidateComplexityRuleBoundaries checks every complexity rule's declared
+// boundaries, including the rules that exist only inside a recipe, since
+// routing.signals is replaced wholesale per recipe.
+//
+// A rule may only declare the lower-is-harder pair when a score backend
+// supplies the number. The local margin is hardScore minus easyScore, so a
+// higher value is harder by construction: honouring the opposite direction
+// there would invert every verdict the rule reaches while the config still
+// looked reasonable. Locally, the inverse is expressed by swapping the
+// candidate lists.
+func ValidateComplexityRuleBoundaries(cfg *RouterConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	scored := complexityScoreBackendConfigured(cfg)
+	for _, ref := range complexityRuleRefs(cfg) {
+		bounds, err := ref.rule.EffectiveBoundaries()
+		if err != nil {
+			return fmt.Errorf("%s%w", ref.prefix(), err)
+		}
+		if !bounds.HigherIsHarder && !scored {
+			return fmt.Errorf(
+				"%scomplexity rule %q declares hard_below/easy_above, which needs a %s backend: "+
+					"the local margin is hard-minus-easy, so a higher score is harder by construction. "+
+					"To invert it locally, swap the hard and easy candidate lists",
+				ref.prefix(), ref.rule.Name, RemoteClassifierContractScore)
+		}
+	}
+	return nil
+}
+
+func complexityScoreBackendConfigured(cfg *RouterConfig) bool {
+	backend := cfg.ComplexityModel.Backend
+	return backend != nil && backend.EffectiveContract("") == RemoteClassifierContractScore
+}
+
+type complexityRuleRef struct {
+	recipe RecipeName
+	rule   ComplexityRule
+}
+
+func (r complexityRuleRef) prefix() string {
+	if r.recipe == "" {
+		return ""
+	}
+	return fmt.Sprintf("recipe %q: ", r.recipe)
+}
+
+func complexityRuleRefs(cfg *RouterConfig) []complexityRuleRef {
+	refs := make([]complexityRuleRef, 0, len(cfg.ComplexityRules))
+	for _, rule := range cfg.ComplexityRules {
+		refs = append(refs, complexityRuleRef{rule: rule})
+	}
+	for _, recipe := range cfg.Recipes {
+		for _, rule := range recipe.Profile.Signals.ComplexityRules {
+			refs = append(refs, complexityRuleRef{recipe: recipe.Name, rule: rule})
+		}
+	}
+	return refs
 }

@@ -134,3 +134,98 @@ func TestValidateComplexityModelBackend_NilBackendIsLocalPath(t *testing.T) {
 		t.Fatalf("a config with no complexity backend must remain valid: %v", err)
 	}
 }
+
+// The local margin is hardScore minus easyScore, so a higher value is harder
+// by construction. A rule that declares the opposite direction without a
+// remote score would invert every verdict it reaches, and look perfectly
+// reasonable while doing it - the user's own hard examples would score as
+// easy. The way to express the inverse locally is to swap the candidate
+// lists, so this is rejected rather than honoured.
+func TestValidateComplexityModelBackend_RejectsLowerIsHarderWithoutABackend(t *testing.T) {
+	cfg := complexityBackendConfig(nil)
+	cfg.ComplexityRules = []ComplexityRule{{
+		Name:      "needs_reasoning",
+		HardBelow: floatPtr(0.40),
+		EasyAbove: floatPtr(0.80),
+	}}
+
+	err := ValidateComplexityModelBackend(cfg)
+	if err == nil {
+		t.Fatal("expected a lower-is-harder pair on a local rule to be rejected")
+	}
+	if !strings.Contains(err.Error(), "needs_reasoning") {
+		t.Errorf("error %q should name the offending rule", err.Error())
+	}
+}
+
+// With a remote score the direction is the model's, not the margin's, so the
+// same pair is exactly what those fields exist for.
+func TestValidateComplexityModelBackend_AllowsLowerIsHarderWithAScoreBackend(t *testing.T) {
+	cfg := complexityBackendConfig(&RemoteClassifierBackend{
+		Protocol: RemoteClassifierProtocolHTTPClassify,
+		Contract: RemoteClassifierContractScore,
+		Model:    "difficulty-scorer",
+	})
+	cfg.ComplexityRules = []ComplexityRule{{
+		Name:      "needs_reasoning",
+		HardBelow: floatPtr(0.40),
+		EasyAbove: floatPtr(0.80),
+	}}
+
+	if err := ValidateComplexityModelBackend(cfg); err != nil {
+		t.Fatalf("a lower-is-harder pair is valid against a score backend: %v", err)
+	}
+}
+
+// The higher-is-harder pair reads in the direction the local margin already
+// runs, so it stays available locally as the asymmetric form of threshold.
+func TestValidateComplexityModelBackend_AllowsHigherIsHarderLocally(t *testing.T) {
+	cfg := complexityBackendConfig(nil)
+	cfg.ComplexityRules = []ComplexityRule{{
+		Name:      "needs_reasoning",
+		HardAbove: floatPtr(0.25),
+		EasyBelow: floatPtr(-0.05),
+	}}
+
+	if err := ValidateComplexityModelBackend(cfg); err != nil {
+		t.Fatalf("an asymmetric higher-is-harder pair is valid locally: %v", err)
+	}
+}
+
+// routing.signals is replaced wholesale per recipe, so a rule that only
+// exists inside a recipe must be checked too.
+func TestValidateComplexityModelBackend_ChecksRecipeRules(t *testing.T) {
+	cfg := complexityBackendConfig(nil)
+	cfg.Recipes = []RoutingRecipe{{
+		Name: "internal",
+		Profile: RoutingProfile{Signals: Signals{
+			ComplexityRules: []ComplexityRule{{
+				Name:      "recipe_only_rule",
+				HardBelow: floatPtr(0.40),
+				EasyAbove: floatPtr(0.80),
+			}},
+		}},
+	}}
+
+	err := ValidateComplexityModelBackend(cfg)
+	if err == nil {
+		t.Fatal("expected a lower-is-harder pair inside a recipe to be rejected")
+	}
+	if !strings.Contains(err.Error(), "recipe_only_rule") {
+		t.Errorf("error %q should name the offending rule", err.Error())
+	}
+}
+
+// A malformed pair is reported wherever it appears, backend or not.
+func TestValidateComplexityModelBackend_RejectsOverlappingBands(t *testing.T) {
+	cfg := complexityBackendConfig(nil)
+	cfg.ComplexityRules = []ComplexityRule{{
+		Name:      "needs_reasoning",
+		HardAbove: floatPtr(0.05),
+		EasyBelow: floatPtr(0.25),
+	}}
+
+	if err := ValidateComplexityModelBackend(cfg); err == nil {
+		t.Fatal("expected an overlapping band to be reported by the signal validator")
+	}
+}
