@@ -221,7 +221,8 @@ selectors do not compensate for unrepresentative benchmark data.
 
 ## References
 
-- [Training Router Models](./training-overview)
+- [Model training overview](./training-overview)
+- [Current model catalog](./model-catalog)
 - [Model Performance Evaluation](./model-performance-eval)
 - [Training source and complete CLI options](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_selection/ml_model_selection)
 - [FusionFactory (arXiv:2507.10540)](https://arxiv.org/abs/2507.10540)
