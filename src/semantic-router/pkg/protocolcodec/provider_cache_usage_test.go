@@ -37,6 +37,24 @@ func TestProviderPromptCacheUsagePreservesBufferedFieldPresence(t *testing.T) {
 			write:  &zero,
 		},
 		{
+			name:   "chat missing",
+			format: llmprotocol.OpenAIChatV1,
+			body:   chatCacheUsageBody(`{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}`),
+		},
+		{
+			name:   "chat partial",
+			format: llmprotocol.OpenAIChatV1,
+			body:   chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":1},"completion_tokens":2,"total_tokens":6}`),
+			read:   &one,
+		},
+		{
+			name:   "chat explicit zero",
+			format: llmprotocol.OpenAIChatV1,
+			body:   chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"completion_tokens":2,"total_tokens":6}`),
+			read:   &zero,
+			write:  &zero,
+		},
+		{
 			name:   "anthropic missing",
 			format: llmprotocol.AnthropicMessagesV1,
 			body:   anthropicCacheUsageBody(`{"input_tokens":4,"output_tokens":2}`),
@@ -94,6 +112,24 @@ func TestProviderPromptCacheUsagePreservesStreamingFieldPresence(t *testing.T) {
 			name:   "responses explicit zero",
 			format: llmprotocol.OpenAIResponsesV1,
 			stream: responsesCacheUsageStream(`{"input_tokens":4,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"output_tokens":2,"total_tokens":6}`),
+			read:   &zero,
+			write:  &zero,
+		},
+		{
+			name:   "chat missing",
+			format: llmprotocol.OpenAIChatV1,
+			stream: chatCacheUsageStream(`{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}`),
+		},
+		{
+			name:   "chat partial",
+			format: llmprotocol.OpenAIChatV1,
+			stream: chatCacheUsageStream(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":1},"completion_tokens":2,"total_tokens":6}`),
+			read:   &one,
+		},
+		{
+			name:   "chat explicit zero",
+			format: llmprotocol.OpenAIChatV1,
+			stream: chatCacheUsageStream(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"completion_tokens":2,"total_tokens":6}`),
 			read:   &zero,
 			write:  &zero,
 		},
@@ -166,6 +202,27 @@ func TestProviderPromptCacheUsagePreservesPresenceAcrossProtocolTranslation(t *t
 			wantRead:  &zero,
 			wantWrite: &zero,
 		},
+		{
+			name:   "chat to responses missing",
+			source: llmprotocol.OpenAIChatV1,
+			target: llmprotocol.OpenAIResponsesV1,
+			body:   chatCacheUsageBody(`{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}`),
+		},
+		{
+			name:     "chat to anthropic partial",
+			source:   llmprotocol.OpenAIChatV1,
+			target:   llmprotocol.AnthropicMessagesV1,
+			body:     chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":1},"completion_tokens":2,"total_tokens":6}`),
+			wantRead: &one,
+		},
+		{
+			name:      "chat to responses explicit zero",
+			source:    llmprotocol.OpenAIChatV1,
+			target:    llmprotocol.OpenAIResponsesV1,
+			body:      chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"completion_tokens":2,"total_tokens":6}`),
+			wantRead:  &zero,
+			wantWrite: &zero,
+		},
 	}
 
 	engine := NewBuiltinEngine()
@@ -202,6 +259,10 @@ func anthropicCacheUsageBody(usage string) []byte {
 	return []byte(`{"id":"msg_cache","type":"message","role":"assistant","model":"provider-model","content":[{"type":"text","text":"done"}],"stop_reason":"end_turn","stop_sequence":null,"usage":` + usage + `}`)
 }
 
+func chatCacheUsageBody(usage string) []byte {
+	return []byte(`{"id":"chat_cache","object":"chat.completion","created":1,"model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}],"usage":` + usage + `}`)
+}
+
 func responsesCacheUsageStream(usage string) []byte {
 	return []byte("event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"resp_cache\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
 		"event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":1,\"output_index\":0,\"item\":{\"type\":\"message\",\"id\":\"item_1\",\"role\":\"assistant\",\"status\":\"in_progress\",\"content\":[]}}\n\n" +
@@ -232,5 +293,14 @@ func anthropicCacheUsageStream(read, write *int64) []byte {
 			"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
 			"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"input_tokens\":4,\"output_tokens\":2" + cacheFields + "}}\n\n" +
 			"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	)
+}
+
+func chatCacheUsageStream(usage string) []byte {
+	return []byte(
+		"data: {\"id\":\"chat_cache\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"chat_cache\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: {\"id\":\"chat_cache\",\"object\":\"chat.completion.chunk\",\"model\":\"provider-model\",\"choices\":[],\"usage\":" + usage + "}\n\n" +
+			"data: [DONE]\n\n",
 	)
 }

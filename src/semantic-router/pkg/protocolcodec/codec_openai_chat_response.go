@@ -154,15 +154,17 @@ func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
 		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.PromptTokensDetails != nil {
-		cached, cacheWrite := wire.PromptTokensDetails.CachedTokens, wire.PromptTokensDetails.CacheWriteTokens
-		uncached := int64(-1)
-		if cached >= 0 && cacheWrite >= 0 && wire.PromptTokens >= cached && cacheWrite <= wire.PromptTokens-cached {
-			uncached = wire.PromptTokens - cached - cacheWrite
-		}
-		usage.InputCacheRead = authoritative(cached)
-		usage.InputCacheWrite = authoritative(cacheWrite)
-		usage.InputUncached = llmprotocol.TokenCount{
-			Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
+		usage.InputCacheRead = optionalAuthoritative(wire.PromptTokensDetails.CachedTokens)
+		usage.InputCacheWrite = optionalAuthoritative(wire.PromptTokensDetails.CacheWriteTokens)
+		if usage.InputCacheRead.Value != nil && usage.InputCacheWrite.Value != nil {
+			cached, cacheWrite := *usage.InputCacheRead.Value, *usage.InputCacheWrite.Value
+			uncached := int64(-1)
+			if cached >= 0 && cacheWrite >= 0 && wire.PromptTokens >= cached && cacheWrite <= wire.PromptTokens-cached {
+				uncached = wire.PromptTokens - cached - cacheWrite
+			}
+			usage.InputUncached = llmprotocol.TokenCount{
+				Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
+			}
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
@@ -273,7 +275,8 @@ func encodeChatUsage(usage llmprotocol.Usage, source llmprotocol.WireFormat) *ch
 	if usage.InputCacheRead.Value != nil || usage.InputCacheWrite.Value != nil ||
 		source != "" && source != llmprotocol.OpenAIChatV1 {
 		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{
-			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
+			CachedTokens:     llmprotocol.Int64(tokenValue(usage.InputCacheRead)),
+			CacheWriteTokens: llmprotocol.Int64(tokenValue(usage.InputCacheWrite)),
 		}
 	}
 	if usage.OutputReasoning.Value != nil {
