@@ -68,6 +68,8 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	// Bind response policy where the backend is selected.
+	ctx.ResponseVendor = resolveOpenAIBackendDialect(dispatch.profile).vendorExtensionProvider()
 	ctx.SemanticRequest = request
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,

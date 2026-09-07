@@ -173,7 +173,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx.ProtocolResponseStream != nil {
 		return nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return err
 	}

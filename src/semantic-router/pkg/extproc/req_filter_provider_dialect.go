@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type openAIBackendDialectKind string
@@ -14,6 +15,7 @@ const (
 	openAIBackendDialectOfficialDeepSeek    openAIBackendDialectKind = "official_deepseek"
 	openAIBackendDialectOpenRouter          openAIBackendDialectKind = "openrouter"
 	openAIBackendDialectVLLM                openAIBackendDialectKind = "vllm"
+	openAIBackendDialectAzureOpenAI         openAIBackendDialectKind = "azure_openai"
 	openAIBackendDialectGenericOpenAICompat openAIBackendDialectKind = "generic_openai_compatible"
 )
 
@@ -21,6 +23,7 @@ type openAIBackendDialect struct {
 	kind                            openAIBackendDialectKind
 	supportsTopLevelReasoningEffort bool
 	supportsTopLevelDeepSeekThink   bool
+	vendorExtensions                llmprotocol.ResponseVendor
 }
 
 // resolveOpenAIBackendDialect captures request-shaping differences between
@@ -29,6 +32,9 @@ type openAIBackendDialect struct {
 func resolveOpenAIBackendDialect(profile *config.ProviderProfile) openAIBackendDialect {
 	if profile == nil {
 		return newOpenAIBackendDialect(openAIBackendDialectVLLM)
+	}
+	if strings.EqualFold(profile.Type, "azure-openai") {
+		return newOpenAIBackendDialect(openAIBackendDialectAzureOpenAI)
 	}
 	if !strings.EqualFold(profile.Type, "openai") {
 		return newOpenAIBackendDialect(openAIBackendDialectGenericOpenAICompat)
@@ -45,9 +51,19 @@ func resolveOpenAIBackendDialect(profile *config.ProviderProfile) openAIBackendD
 		// OpenRouter exposes reasoning_effort as a top-level OpenAI-compatible
 		// request field; local vLLM-compatible endpoints do not.
 		return newOpenAIBackendDialect(openAIBackendDialectOpenRouter)
-	default:
-		return newOpenAIBackendDialect(openAIBackendDialectGenericOpenAICompat)
 	}
+
+	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
+		return newOpenAIBackendDialect(openAIBackendDialectAzureOpenAI)
+	}
+	return newOpenAIBackendDialect(openAIBackendDialectGenericOpenAICompat)
+}
+
+func isAzureOpenAIHost(host string) bool {
+	return host != "" &&
+		(strings.HasSuffix(host, ".openai.azure.com") ||
+			strings.HasSuffix(host, ".services.ai.azure.com") ||
+			strings.HasSuffix(host, ".cognitiveservices.azure.com"))
 }
 
 func newOpenAIBackendDialect(kind openAIBackendDialectKind) openAIBackendDialect {
@@ -62,8 +78,14 @@ func newOpenAIBackendDialect(kind openAIBackendDialectKind) openAIBackendDialect
 		dialect.supportsTopLevelDeepSeekThink = true
 	case openAIBackendDialectOpenRouter:
 		dialect.supportsTopLevelReasoningEffort = true
+	case openAIBackendDialectAzureOpenAI:
+		dialect.vendorExtensions = llmprotocol.ResponseVendorAzure
 	}
 	return dialect
+}
+
+func (d openAIBackendDialect) vendorExtensionProvider() llmprotocol.ResponseVendor {
+	return d.vendorExtensions
 }
 
 func (d openAIBackendDialect) usesTopLevelReasoningEffort() bool {
