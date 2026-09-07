@@ -14,30 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-type pipelineFailureHook struct {
-	name string
-	key  string
-	err  error
-	used atomic.Bool
-}
-
-func (h *pipelineFailureHook) DialHook(next redis.DialHook) redis.DialHook          { return next }
-func (h *pipelineFailureHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
-func (h *pipelineFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(ctx context.Context, cmds []redis.Cmder) error {
-		for _, cmd := range cmds {
-			args := cmd.Args()
-			if cmd.Name() == h.name && len(args) > 1 && args[1] == h.key && h.used.CompareAndSwap(false, true) {
-				for _, pipelineCmd := range cmds {
-					pipelineCmd.SetErr(h.err)
-				}
-				return h.err
-			}
-		}
-		return next(ctx, cmds)
-	}
-}
-
 // afterCommandHook runs after() once, immediately after the named command
 // has actually committed at Redis — the seam for asserting on what happens
 // in the window *between* two commands a single operation issues (e.g. a
@@ -95,17 +71,21 @@ func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID st
 
 // newConversationIndexStore scopes the store to a key prefix unique to this run,
 // so it cannot collide with the other suites sharing DB 0. Skips without Redis.
-func newConversationIndexStore(t *testing.T) *RedisStore {
-	t.Helper()
-	return newConversationIndexStoreWithTTLSeconds(t, 300)
+//
+// Takes testing.TB rather than *testing.T so benchmarks can use it too — see
+// BenchmarkListResponsesByConversation, which needs a scoped, self-cleaning
+// store just as much as any test does.
+func newConversationIndexStore(tb testing.TB) *RedisStore {
+	tb.Helper()
+	return newConversationIndexStoreWithTTLSeconds(tb, 300)
 }
 
 // newConversationIndexStoreWithTTLSeconds is newConversationIndexStore with
 // an explicit data-retention TTL, for tests asserting behavior that depends
 // on how the configured TTL compares to a fixed internal bound (e.g. the
 // empty-marker TTL cap).
-func newConversationIndexStoreWithTTLSeconds(t *testing.T, ttlSeconds int) *RedisStore {
-	t.Helper()
+func newConversationIndexStoreWithTTLSeconds(tb testing.TB, ttlSeconds int) *RedisStore {
+	tb.Helper()
 
 	cfg := StoreConfig{
 		Enabled:     true,
@@ -120,20 +100,42 @@ func newConversationIndexStoreWithTTLSeconds(t *testing.T, ttlSeconds int) *Redi
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		tb.Skipf("Redis not available: %v", err)
 	}
 
-	t.Cleanup(func() {
-		ctx := context.Background()
-		iter := store.client.Scan(ctx, 0, store.buildKey("*"), 0).Iterator()
-		for iter.Next(ctx) {
-			store.client.Del(ctx, iter.Val())
-		}
+	tb.Cleanup(func() {
+		deleteScopedKeys(store)
 		_ = store.Close()
 	})
 
 	return store
 }
+
+// deleteScopedKeys removes everything under a store's own key prefix, in
+// pipelined batches rather than one round trip per key: a benchmark seeded
+// with a hundred thousand responses would otherwise spend far longer being
+// cleaned up than measured.
+func deleteScopedKeys(store *RedisStore) {
+	ctx := context.Background()
+	pipe := store.client.Pipeline()
+	queued := 0
+
+	iter := store.client.Scan(ctx, 0, store.buildKey("*"), 0).Iterator()
+	for iter.Next(ctx) {
+		pipe.Del(ctx, iter.Val())
+		queued++
+		if queued >= redisCleanupBatchSize {
+			_, _ = pipe.Exec(ctx)
+			queued = 0
+		}
+	}
+	if queued > 0 {
+		_, _ = pipe.Exec(ctx)
+	}
+}
+
+// redisCleanupBatchSize bounds how many DELs one cleanup pipeline carries.
+const redisCleanupBatchSize = 500
 
 // directSetResponsePayload writes a response payload straight to Redis,
 // bypassing StoreResponse and its indexing entirely — the same shape as data

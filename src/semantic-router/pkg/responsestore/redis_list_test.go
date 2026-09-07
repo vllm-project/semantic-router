@@ -2,6 +2,8 @@ package responsestore
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -522,4 +524,132 @@ func TestRedisListResponsesByConversationPartiallyMigrated(t *testing.T) {
 	_, err = store.ListResponsesByConversation(ctx, "conv_1", ListOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), store.scanInvocations.Load(), "once migrated, a second read must not scan again")
+}
+
+// benchmarkSeedPipelineSize bounds how many commands one seeding pipeline
+// carries. Seeding a hundred thousand responses one round trip at a time would
+// dominate the benchmark's wall time without measuring anything.
+const benchmarkSeedPipelineSize = 1000
+
+// benchmarkSeeder writes response payloads and their index members straight to
+// Redis in pipelined batches, bypassing StoreResponse — which would cost two
+// round trips per response and measure nothing the benchmark is about.
+type benchmarkSeeder struct {
+	store  *RedisStore
+	pipe   redis.Pipeliner
+	queued int
+}
+
+func newBenchmarkSeeder(store *RedisStore) *benchmarkSeeder {
+	return &benchmarkSeeder{store: store, pipe: store.client.Pipeline()}
+}
+
+func (s *benchmarkSeeder) add(tb testing.TB, conversationID, responseID string, createdAt int64) {
+	tb.Helper()
+	ctx := context.Background()
+
+	payload, err := json.Marshal(&responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "completed", CreatedAt: createdAt,
+	})
+	require.NoError(tb, err)
+
+	s.pipe.Set(ctx, s.store.buildKey(ResponseKeyPrefix+responseID), payload, s.store.ttl)
+	s.pipe.ZAdd(ctx, s.store.conversationIndexKey(conversationID),
+		redis.Z{Score: float64(createdAt), Member: responseID})
+	s.queued += 2
+	if s.queued >= benchmarkSeedPipelineSize {
+		s.flush(tb)
+	}
+}
+
+func (s *benchmarkSeeder) flush(tb testing.TB) {
+	tb.Helper()
+	if s.queued == 0 {
+		return
+	}
+	_, err := s.pipe.Exec(context.Background())
+	require.NoError(tb, err)
+	s.queued = 0
+}
+
+// seedBenchmarkConversation writes count responses for one conversation, with
+// strictly increasing created_at so the index has a real ordering to range
+// over.
+func seedBenchmarkConversation(tb testing.TB, seeder *benchmarkSeeder, conversationID string, count int, baseTime int64) {
+	tb.Helper()
+	for i := 0; i < count; i++ {
+		seeder.add(tb, conversationID, fmt.Sprintf("%s_resp_%d", conversationID, i), baseTime+int64(i))
+	}
+}
+
+// BenchmarkListResponsesByConversation is the dataset-size-independence
+// benchmark: reading one page of a conversation must cost the same whether the
+// store holds a thousand other responses or a hundred thousand.
+//
+// That is the entire claim of the secondary index, and the only way to see it
+// is to measure the same read against two datasets two orders of magnitude
+// apart. The measured path is ZREVRANGE over one bounded rank window followed
+// by a pipeline of single-key GETs — O(log K + M) in the target conversation's
+// own size, and independent of everything else in the keyspace.
+//
+// Run it with:
+//
+//	go test -run XXX -bench BenchmarkListResponsesByConversation ./pkg/responsestore/
+//
+// and compare ns/op between the two sub-benchmarks; they should be within
+// noise of each other. Two hard guards make that comparison meaningful rather
+// than merely plausible: the scan counter must not move (a single O(N) legacy
+// scan would swamp everything else and quietly turn this into a benchmark of
+// the fallback path), and every iteration must return the full page (a short
+// read would be measuring less work, not faster work).
+func BenchmarkListResponsesByConversation(b *testing.B) {
+	const (
+		targetConversation = "conv_bench_target"
+		targetResponses    = 50
+		backgroundPerConv  = 50
+	)
+
+	for _, background := range []int{1_000, 100_000} {
+		b.Run(fmt.Sprintf("background=%d", background), func(b *testing.B) {
+			store := newConversationIndexStore(b)
+			ctx := context.Background()
+			now := time.Now().Unix()
+
+			seeder := newBenchmarkSeeder(store)
+			seedBenchmarkConversation(b, seeder, targetConversation, targetResponses, now)
+			for i := 0; i*backgroundPerConv < background; i++ {
+				seedBenchmarkConversation(b, seeder, fmt.Sprintf("conv_bench_bg_%d", i), backgroundPerConv, now)
+			}
+			seeder.flush(b)
+
+			// Mark the store finalized without running the sweep: the sweep is
+			// O(N) by construction and is not what this measures. What matters
+			// is that the read path takes its post-finalization branch, which
+			// is the steady state every read is in once an operator has run
+			// FinalizeConversationIndex.
+			require.NoError(b, store.client.Set(ctx, store.conversationIndexCompletionKey(),
+				conversationIndexCompletionValue, 0).Err())
+			store.conversationIndexFinalizedCache.Store(true)
+
+			scansBefore := store.scanInvocations.Load()
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				responses, err := store.ListResponsesByConversation(ctx, targetConversation,
+					ListOptions{Limit: targetResponses})
+				if err != nil {
+					b.Fatal(err)
+				}
+				if len(responses) != targetResponses {
+					b.Fatalf("expected %d responses, got %d", targetResponses, len(responses))
+				}
+			}
+			b.StopTimer()
+
+			if scans := store.scanInvocations.Load(); scans != scansBefore {
+				b.Fatalf("the indexed read path must never scan: %d legacy scan(s) ran during the measured loop",
+					scans-scansBefore)
+			}
+		})
+	}
 }
