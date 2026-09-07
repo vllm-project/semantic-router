@@ -14,22 +14,21 @@ None - non-release debt
 
 ## Scope
 
-Fleet-sim optimizer, CLI, API trace upload, and API regression-test files that
-still exceed the shared structure targets.
+Fleet-sim optimizer and CLI functions that still exceed the shared AST
+structure targets.
 
 ## Summary
 
-Several fleet-sim files still need structure-gate relaxation because they exceed
-the repo-wide file-size, function-size, or nesting targets. The active debt is
-to split those files until fleet-sim can use the same structure gate as the rest
-of `src/` without special treatment.
+The fleet-sim optimizer and CLI still need structure-gate relaxation because
+some functions exceed the repo-wide function-size or nesting targets. The
+active debt is to separate responsibilities until fleet-sim can use the same
+AST structure gate as the rest of `src/` without special treatment. File length
+is advisory and does not require a split by itself.
 
 ## Evidence
 
 - [src/fleet-sim/fleet_sim/optimizer/base.py](../../../../src/fleet-sim/fleet_sim/optimizer/base.py)
 - [src/fleet-sim/run_sim.py](../../../../src/fleet-sim/run_sim.py)
-- [src/fleet-sim/fleet_sim/api/routes/traces.py](../../../../src/fleet-sim/fleet_sim/api/routes/traces.py)
-- [src/fleet-sim/tests/test_api.py](../../../../src/fleet-sim/tests/test_api.py)
 - [tools/agent/structure-rules.yaml](../../../../tools/agent/structure-rules.yaml)
 - [tools/agent/scripts/structure_check.py](../../../../tools/agent/scripts/structure_check.py)
 
@@ -46,12 +45,13 @@ of `src/` without special treatment.
   into smaller modules with one main responsibility each.
 - Structure validation for fleet-sim changes fails only on new architectural
   regressions.
-- The shared structure gate no longer needs fleet-sim-specific file relaxations.
+- The shared structure gate no longer needs fleet-sim-specific function
+  relaxations.
 
 ## Exit Criteria
 
 - `make agent-lint` on fleet-sim changed files passes without fleet-sim
   structure exceptions.
-- The scoped fleet-sim files meet shared file/function/nesting thresholds.
+- The scoped fleet-sim functions meet shared function and nesting thresholds.
 - Any remaining fleet-sim-specific structure policy is documented as an active
   design choice, not a migration carve-out.

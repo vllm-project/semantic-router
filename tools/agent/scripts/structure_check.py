@@ -188,13 +188,6 @@ def load_baseline_source(path: str, base_ref: str | None) -> str | None:
     return result.stdout
 
 
-def load_baseline_line_count(path: str, base_ref: str | None) -> int | None:
-    baseline_source = load_baseline_source(path, base_ref)
-    if baseline_source is None:
-        return None
-    return baseline_source.count("\n") + 1
-
-
 def evaluate_dependency_rules(
     path: str, text: str, rules: dict, base_ref: str | None = None
 ) -> list[Finding]:
@@ -249,57 +242,18 @@ def evaluate_root_placement(path: str, rules: dict) -> list[Finding]:
     ]
 
 
-def evaluate_file_line_count(
-    path: str, line_count: int, rules: dict, base_ref: str | None
-) -> list[Finding]:
-    findings: list[Finding] = []
-    structure_exception = get_structure_exception_rule(path, rules)
-    baseline_line_count = (
-        load_baseline_line_count(path, base_ref) if structure_exception else None
-    )
+def evaluate_file_line_count(path: str, line_count: int, rules: dict) -> list[Finding]:
     warn_limit = rules["limits"]["file_lines"]["warn"]
-    error_limit = rules["limits"]["file_lines"]["error"]
-
-    if line_count > error_limit:
-        if (
-            structure_exception
-            and baseline_line_count is not None
-            and line_count <= baseline_line_count
-        ):
-            findings.append(
-                Finding(
-                    "WARN",
-                    path,
-                    f"structure exception still has {line_count} lines (limit {error_limit}) "
-                    f"but did not grow from baseline {baseline_line_count}",
-                )
-            )
-        elif relax_file_checks(structure_exception):
-            baseline_suffix = (
-                f" (baseline {baseline_line_count})"
-                if baseline_line_count is not None
-                else ""
-            )
-            findings.append(
-                Finding(
-                    "WARN",
-                    path,
-                    f"structure exception has {line_count} lines (limit {error_limit}); "
-                    f"file-level ratchet is relaxed for this file{baseline_suffix}",
-                )
-            )
-        else:
-            findings.append(
-                Finding(
-                    "ERROR", path, f"file has {line_count} lines (limit {error_limit})"
-                )
-            )
-    elif line_count > warn_limit:
-        findings.append(
-            Finding("WARN", path, f"file has {line_count} lines (warn {warn_limit})")
+    if line_count <= warn_limit:
+        return []
+    return [
+        Finding(
+            "WARN",
+            path,
+            f"file has {line_count} lines (advisory {warn_limit}); "
+            "review cohesion before splitting",
         )
-
-    return findings
+    ]
 
 
 def function_identifier(node, source_bytes: bytes) -> str:
@@ -422,12 +376,6 @@ def ratchet_or_error(
 def relax_function_checks(structure_exception: dict | None) -> bool:
     return bool(
         structure_exception and structure_exception.get("function_checks") == "relaxed"
-    )
-
-
-def relax_file_checks(structure_exception: dict | None) -> bool:
-    return bool(
-        structure_exception and structure_exception.get("file_checks") == "relaxed"
     )
 
 
@@ -558,9 +506,7 @@ def evaluate_file(
     source_bytes = absolute_path.read_bytes()
     source_text = source_bytes.decode("utf-8", errors="ignore")
     findings = evaluate_dependency_rules(path, source_text, rules, base_ref)
-    findings.extend(
-        evaluate_file_line_count(path, source_text.count("\n") + 1, rules, base_ref)
-    )
+    findings.extend(evaluate_file_line_count(path, source_text.count("\n") + 1, rules))
 
     parser_name = parser_name_for_language(language_name, rules)
     if parser_name is None:

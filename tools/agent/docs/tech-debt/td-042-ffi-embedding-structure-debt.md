@@ -19,9 +19,9 @@ Non-release debt.
 
 ## Summary
 
-The Rust embedding FFI file owns too many model families and entry points to
-meet the shared file and function-size limits. The structure gate therefore
-ignores the whole file, which also prevents it from detecting new growth.
+The Rust embedding FFI file owns too many model families and entry points. The
+structure gate therefore ignores the whole file, which prevents it from
+reporting file length or enforcing function, nesting, and dependency rules.
 
 ## Evidence
 
@@ -46,5 +46,6 @@ stable while extracting implementation details.
 ## Exit Criteria
 
 - The file is removed from `ignore_globs`.
-- Every resulting module passes the shared file, function, and nesting limits.
+- Every resulting module passes the shared function and nesting limits; file
+  length remains advisory.
 - Existing FFI tests cover the exported behavior after extraction.

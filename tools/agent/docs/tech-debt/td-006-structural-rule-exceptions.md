@@ -14,21 +14,23 @@ None - non-release debt
 
 ## Scope
 
-Repo-wide file-size, function-size, nesting, and interface-size exceptions in the
-agent structure gate.
+Repo-wide function-size, nesting, and interface-size exceptions in the agent
+structure gate.
 
 ## Summary
 
 The intended architecture is simple: most changed source files should pass the
-shared structure limits directly. The current source tree still needs explicit
-exceptions for oversized active files in router config, DSL, extproc, selection,
-cache, operator, dashboard, training, CLI, and native-binding surfaces.
+shared AST structure limits directly. File length is advisory because it cannot
+distinguish a cohesive deep module from arbitrary fragmentation. The current
+source tree still needs explicit function, nesting, or interface exceptions in
+router, operator, dashboard, training, CLI, and native-binding surfaces.
 
 The debt is not the existence of the gate. The debt is that too many maintained
-files still need `file_checks`, `function_checks`, or `interface_checks`
-relaxation in [tools/agent/structure-rules.yaml](../../../../tools/agent/structure-rules.yaml).
-Those exceptions keep validation usable, but they also show where the code still
-does not match the modularity target.
+files still need `function_checks` or `interface_checks` relaxation, or a
+baseline ratchet, in
+[tools/agent/structure-rules.yaml](../../../../tools/agent/structure-rules.yaml).
+Those exceptions keep validation usable, but they also show where executable
+control flow or interfaces still do not match the target shape.
 
 ## Evidence
 
@@ -51,15 +53,15 @@ Current exception groups include:
 
 - Structural exceptions are useful as a ratchet, but every exception widens the
   set of files where small follow-up changes can avoid the standard shape.
-- Large orchestrators make release work harder because they mix schema,
-  validation, runtime orchestration, tests, and transport logic in one place.
+- Broad orchestrators make release work harder when they mix schema,
+  validation, runtime orchestration, and transport logic in one place.
 - Maintainers need the exception list to read as a current target list, not as a
   history of past migrations.
 
 ## Desired End State
 
-- The structure gate's default limits are the common case for changed source
-  files.
+- The structure gate's default AST limits are the common case for changed
+  source files, while file length remains review evidence.
 - Remaining exceptions are rare, clearly justified, and owned by one active TD
   or release plan.
 - Router, dashboard, operator, CLI, training, and binding changes land through
@@ -69,7 +71,7 @@ Current exception groups include:
 
 - `tools/agent/structure-rules.yaml` has no broad exception groups for actively
   maintained source files.
-- Go agent lint exclusions and structure-rule exceptions agree on the same small
-  set of files, or both can be removed for a surface.
+- Go agent lint exclusions and AST structure-rule exceptions agree on the same
+  small set of files, or both can be removed for a surface.
 - New work can pass changed-file lint and structure checks without adding
   another exception for the touched area.
