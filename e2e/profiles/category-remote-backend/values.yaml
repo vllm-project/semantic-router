@@ -77,9 +77,16 @@ config:
         max_responses: 1000
 
 resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout - which is the 1h23m job, not
+  # a slow test. The router still loads the local mmbert embedding model the
+  # response cache is configured with; taking the classifier off-box does not
+  # avoid that, because the embedding models are gated separately from the
+  # classifier backend. A roomier machine survives 2Gi and fails later at the
+  # gateway instead, which is how this looked like two different bugs.
   limits:
-    memory: 2Gi
+    memory: 6Gi
     cpu: "2"
   requests:
-    memory: 512Mi
+    memory: 2Gi
     cpu: 250m
