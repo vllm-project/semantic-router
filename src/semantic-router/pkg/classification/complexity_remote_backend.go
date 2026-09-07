@@ -105,3 +105,13 @@ func (s *scoringHTTPBackend) Score(ctx context.Context, text string) (float64, e
 	}
 	return entries[0].Score, nil
 }
+
+// Close releases idle connections owned by the remote connector. A classifier
+// is rebuilt per recipe and again on every dynamic-config reload, so a backend
+// that is never closed leaks an idle HTTP transport each time.
+func (s *scoringHTTPBackend) Close() error {
+	if s == nil || s.connector == nil {
+		return nil
+	}
+	return s.connector.Close()
+}
