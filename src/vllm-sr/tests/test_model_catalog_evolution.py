@@ -18,7 +18,7 @@ def _asset_document(model_id: str, recipe: str, provider: str) -> dict:
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "global": {"router": {"strategy": "priority"}},
         "providers": {
-            "defaults": {"default_model": "local/fallback"},
+            "defaults": {"model": "local/fallback"},
             "models": [
                 {"name": "local/fallback"},
                 {"name": provider},

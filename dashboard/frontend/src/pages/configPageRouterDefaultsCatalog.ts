@@ -94,7 +94,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
-    extraction_batch_size: 10,
   } satisfies MemoryConfig,
   response_cache: {
     enabled: true,

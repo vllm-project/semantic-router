@@ -9,11 +9,12 @@ routing:
       description: default tier
 providers:
   defaults:
-    default_model: model-a
+    model: model-a
   models:
     - name: model-a
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 `
 
 func TestProfilingDefaultsWhenSectionOmitted(t *testing.T) {

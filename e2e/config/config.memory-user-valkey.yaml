@@ -12,12 +12,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
