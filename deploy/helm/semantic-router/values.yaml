@@ -267,26 +267,14 @@ config:
       timeout: "300s"
   providers:
     defaults:
-      default_model: "replace-with-your-model"
-      reasoning_families:
-        deepseek:
-          type: "chat_template_kwargs"
-          parameter: "thinking"
-        qwen3:
-          type: "chat_template_kwargs"
-          parameter: "enable_thinking"
-        gpt-oss:
-          type: "reasoning_effort"
-          parameter: "reasoning_effort"
-        gpt:
-          type: "reasoning_effort"
-          parameter: "reasoning_effort"
-      default_reasoning_effort: high
+      model: "replace-with-your-model"
+      reasoning_effort: high
     models:
       - name: "replace-with-your-model"
         provider_model_id: "replace-with-your-model"
         backend_refs:
           - name: "primary"
+            provider: vllm
             endpoint: "replace-with-your-vllm-service:8000"
             protocol: "http"
             weight: 100
