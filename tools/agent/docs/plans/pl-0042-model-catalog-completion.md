@@ -40,15 +40,14 @@ runtime behavior.
 - [x] `TASK-02` Complete provider wire-contract and validation tests.
 - [x] `TASK-03` Run local and AMD validation, fixing failures locally.
 - [ ] `TASK-04` Rebase, push, and drive PR CI green.
-- [ ] `TASK-05` Redeploy and inspect the final Website and Dashboard previews.
+- [x] `TASK-05` Redeploy and inspect the final Website and Dashboard previews.
 - [x] `TASK-06` Close the Hub interaction and global-navigation regression.
 - [x] `TASK-07` Normalize Hub benchmark display units and add the curated Core filter.
 
 ## Next Action
 
-Push the normalized benchmark contract, validate the exact commit on the AMD
-mirror, redeploy both previews, and drive the new pull-request head through
-every required CI check.
+Drive the exact pull-request head through every required CI check without
+changing the validated Website or Dashboard artifacts.
 
 ## Operating Rules
 

@@ -49,7 +49,7 @@ The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
 serving providers, three protocol definitions, 83 physical Model Cards, five
-virtual Model Cards, 166 provider-owned model mappings, 64 benchmark
+virtual Model Cards, 168 provider-owned model mappings, 64 benchmark
 definitions, and 1,360 exact evaluation records. The five default benchmark
 components produce 1,155 explicit slots over 231 model/effort rows; 124 slots
 are currently measured and every other slot stays explicitly missing. Support
@@ -60,13 +60,12 @@ All 83 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
-Across 163 selectable effort levels, 104 currently have at least five
-benchmarks, 28 are partial, and 31 are unmeasured. The audit exposes those
-three states and offers a stricter selectable-effort gate for future data work;
-the current release keeps the gaps visible instead of copying a score from
-another effort or deleting a valid runtime control. Conditions recorded for a
-model without a `reasoning_family` are evidence labels, not configurable
-Dashboard controls.
+The audit classifies every selectable effort as complete, partial, or
+unmeasured and offers a stricter selectable-effort gate for future data work.
+The generated audit report is the source of truth for the current counts; the
+catalog keeps gaps visible instead of copying a score from another effort or
+deleting a valid runtime control. Conditions recorded for a model without a
+`reasoning_family` are evidence labels, not configurable Dashboard controls.
 
 ### Implemented physical-model catalog
 
