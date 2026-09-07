@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest'
 import generatedCatalog from '../generated/modelCatalog.json'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import {
+  modelHubBenchmarkNormalizedValue,
+  modelHubBenchmarkValueLabel,
+} from './modelHubBenchmarkNormalization'
+import {
   benchmarkName,
   formatContextWindow,
   formatIntelligence,
@@ -193,6 +197,33 @@ describe('model hub presentation support', () => {
     expect(tokens.get('nvidia/nemotron-3-ultra')).not.toBe(tokens.get('stepfun/step-3.7-flash'))
     expect(tokens.get('tencent/hy3')).not.toBe(tokens.get('bytedance/seed-2.0-pro'))
     expect(tokens.get('moonshot/kimi-k2.5')).not.toBe(tokens.get('moonshot/kimi-k2.6'))
+  })
+})
+
+describe('model hub benchmark presentation contract', () => {
+  it('presents Elo as a normalized percentage without replacing the raw measurement', () => {
+    const metric = catalog.benchmarks
+      .find((benchmark) => benchmark.id === 'artificial-analysis/gdpval-aa@2.0.0')!
+      .metrics.find((candidate) => candidate.id === 'elo')!
+
+    expect(modelHubBenchmarkNormalizedValue(1769.1, metric)).toBeCloseTo(0.63455)
+    expect(modelHubBenchmarkValueLabel(1769.1, metric)).toBe('63.5%')
+    expect(metric.unit).toBe('elo')
+  })
+
+  it('defines the six core comparisons in catalog data', () => {
+    expect(
+      catalog.benchmarks
+        .filter((benchmark) => benchmark.tags?.includes('core'))
+        .map((benchmark) => benchmark.display_name),
+    ).toEqual([
+      'MMLU-Pro',
+      'GPQA Diamond',
+      "Humanity's Last Exam",
+      'SWE-bench Verified',
+      'Terminal-Bench 2.1',
+      'SciCode',
+    ])
   })
 })
 

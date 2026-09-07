@@ -8,6 +8,7 @@ import type {
   CatalogProvider,
   CatalogReasoningFamily,
 } from '../../data/modelHubCatalogTypes'
+import { modelHubBenchmarkRawValueLabel } from '../../data/modelHubBenchmarkSupport'
 import {
   modelHubEvaluationConditionLabel,
   modelHubEvaluationDateLabel,
@@ -264,10 +265,15 @@ export function ModelHubDetail({
                           <span>
                             {Object.entries(evaluation.metrics ?? {}).map(([id, value]) => {
                               const definition = benchmark?.metrics.find(item => item.id === id)
+                              const raw = definition && typeof value === 'number'
+                                ? modelHubBenchmarkRawValueLabel(value, definition)
+                                : undefined
                               return (
                                 <span key={id}>
                                   <small>{readable(id)}</small>
-                                  <b>{definition && typeof value === 'number' ? formatMetric(value, definition) : value}</b>
+                                  <b title={raw ? `Raw: ${raw}` : undefined}>
+                                    {definition && typeof value === 'number' ? formatMetric(value, definition) : value}
+                                  </b>
                                 </span>
                               )
                             })}

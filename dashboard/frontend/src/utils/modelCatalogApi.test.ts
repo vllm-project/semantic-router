@@ -199,6 +199,50 @@ describe('built-in model catalog API nested metadata', () => {
   })
 })
 
+describe('built-in model catalog API benchmark presentation metadata', () => {
+  it.each([
+    [
+      'duplicate tags',
+      (benchmarks: Array<Record<string, unknown>>) => {
+        const benchmark = benchmarks.find((candidate) => Array.isArray(candidate.tags))!
+        benchmark.tags = ['core', 'core']
+      },
+    ],
+    [
+      'empty tags',
+      (benchmarks: Array<Record<string, unknown>>) => {
+        const benchmark = benchmarks.find((candidate) => Array.isArray(candidate.tags))!
+        benchmark.tags = []
+      },
+    ],
+    [
+      'invalid metric normalization',
+      (benchmarks: Array<Record<string, unknown>>) => {
+        const benchmark = benchmarks.find((candidate) => {
+          const metrics = candidate.metrics as Array<Record<string, unknown>>
+          return metrics.some((metric) => metric.normalization !== undefined)
+        })!
+        const metrics = benchmark.metrics as Array<Record<string, unknown>>
+        const metric = metrics.find((candidate) => candidate.normalization !== undefined)!
+        metric.normalization = { type: 'linear_clamp', min: 1, max: 0 }
+      },
+    ],
+  ])('rejects %s', async (_name, mutate) => {
+    const malformed = structuredClone(validCatalog)
+    const benchmarks = malformed.benchmarks as Array<Record<string, unknown>>
+    mutate(benchmarks)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+})
+
 describe('built-in model catalog API transport failures', () => {
   it('does not echo an arbitrary backend error body', async () => {
     vi.stubGlobal(

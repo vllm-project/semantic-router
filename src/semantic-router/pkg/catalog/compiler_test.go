@@ -82,6 +82,34 @@ func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	}
 }
 
+func TestBenchmarkLookupReturnsDefensiveTagsAndNormalization(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	core, ok := registry.Benchmark("tiger-ai-lab/mmlu-pro@1.0.0")
+	if !ok || len(core.Tags) != 1 || core.Tags[0] != "core" {
+		t.Fatalf("unexpected core benchmark tags: %+v", core.Tags)
+	}
+	core.Tags[0] = "mutated"
+	reloadedCore, _ := registry.Benchmark("tiger-ai-lab/mmlu-pro@1.0.0")
+	if reloadedCore.Tags[0] != "core" {
+		t.Fatalf("registry benchmark tags were mutated: %+v", reloadedCore.Tags)
+	}
+
+	elo, ok := registry.Benchmark("artificial-analysis/gdpval-aa@2.0.0")
+	if !ok || len(elo.Metrics) == 0 || elo.Metrics[0].Normalization == nil ||
+		elo.Metrics[0].Normalization.Min == nil {
+		t.Fatalf("GDPval display normalization is missing: %+v", elo.Metrics)
+	}
+	*elo.Metrics[0].Normalization.Min = 999
+	reloadedElo, _ := registry.Benchmark("artificial-analysis/gdpval-aa@2.0.0")
+	if got := *reloadedElo.Metrics[0].Normalization.Min; got != 500 {
+		t.Fatalf("registry metric normalization was mutated: got %v", got)
+	}
+}
+
 func TestBuiltInEvaluationPreservesOpenSubjectMetadata(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {

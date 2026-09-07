@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:64648a176a64a85d7824ff37f180c5a6f1c159bdcac470ed2975fb24b33af60a"
+const builtInCatalogDigest = "sha256:1252383abd22640370153c56390b1972744171e167991a60dc9fb3f750728c33"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -39,7 +39,10 @@ const builtInCatalogJSON = `{
           "id": "rmcb-eacl-2026-valid-output-test"
         }
       ],
-      "source": "https://github.com/TIGER-AI-Lab/MMLU-Pro"
+      "source": "https://github.com/TIGER-AI-Lab/MMLU-Pro",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "published-standard",
@@ -69,7 +72,10 @@ const builtInCatalogJSON = `{
           "id": "independent-standard"
         }
       ],
-      "source": "https://arxiv.org/abs/2311.12022"
+      "source": "https://arxiv.org/abs/2311.12022",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "no-tools",
@@ -109,7 +115,10 @@ const builtInCatalogJSON = `{
           "id": "independent-standard"
         }
       ],
-      "source": "https://agi.safe.ai/"
+      "source": "https://agi.safe.ai/",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "published-agent",
@@ -139,7 +148,10 @@ const builtInCatalogJSON = `{
           "id": "published-subset"
         }
       ],
-      "source": "https://github.com/SWE-bench/SWE-bench"
+      "source": "https://github.com/SWE-bench/SWE-bench",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "published-agent",
@@ -169,7 +181,10 @@ const builtInCatalogJSON = `{
           "id": "independent-agent"
         }
       ],
-      "source": "https://github.com/harbor-framework/terminal-bench-2-1"
+      "source": "https://github.com/harbor-framework/terminal-bench-2-1",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "published-agent",
@@ -269,6 +284,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "score",
+          "normalization": {
+            "max": 100,
+            "min": 0,
+            "type": "linear_clamp"
+          },
           "range": [
             0,
             100
@@ -369,6 +389,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             -3000,
             3000
@@ -378,6 +403,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo_lower",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             -3000,
             3000
@@ -387,6 +417,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo_upper",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             -3000,
             3000
@@ -676,7 +711,10 @@ const builtInCatalogJSON = `{
           "id": "independent-test-288"
         }
       ],
-      "source": "https://github.com/scicode-bench/SciCode"
+      "source": "https://github.com/scicode-bench/SciCode",
+      "tags": [
+        "core"
+      ]
     },
     {
       "default_profile": "full-1811",
@@ -762,6 +800,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             0,
             3000
@@ -771,6 +814,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo_lower",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             0,
             3000
@@ -780,6 +828,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "elo_upper",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
           "range": [
             0,
             3000
@@ -855,6 +908,11 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "index",
+          "normalization": {
+            "max": 100,
+            "min": -100,
+            "type": "linear_clamp"
+          },
           "range": [
             -100,
             100

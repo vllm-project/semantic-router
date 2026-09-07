@@ -6,6 +6,7 @@ import type {
   CatalogIndexResult,
   CatalogProvider,
 } from '../types/modelCatalog'
+import { modelHubBenchmarkNormalizedValue } from './modelHubBenchmarkNormalization'
 
 export type ModelHubKindFilter = 'all' | 'physical' | 'virtual'
 export type ModelHubDistributionFilter = 'all' | BuiltInModelMetadata['distribution']['type']
@@ -409,7 +410,10 @@ export function modelHubBenchmarkDomain(
   values: number[],
   metric: CatalogBenchmarkMetric,
 ): [number, number] {
-  const finiteValues = values.filter(Number.isFinite)
+  const finiteValues = values
+    .filter(Number.isFinite)
+    .map((value) => modelHubBenchmarkNormalizedValue(value, metric))
+    .filter(Number.isFinite)
   if (!finiteValues.length) return metric.range
   const minimum = Math.min(...finiteValues)
   const maximum = Math.max(...finiteValues)

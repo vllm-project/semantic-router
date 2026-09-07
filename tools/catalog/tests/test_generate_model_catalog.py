@@ -96,6 +96,50 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             )
         )
 
+    def test_benchmark_display_contract_is_percentage_ready_and_core_is_curated(
+        self,
+    ) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        benchmarks = {item["id"]: item for item in resources["benchmarks"]}
+        self.assertEqual(
+            {
+                benchmark_id
+                for benchmark_id, benchmark in benchmarks.items()
+                if "core" in benchmark.get("tags", [])
+            },
+            {
+                "tiger-ai-lab/mmlu-pro@1.0.0",
+                "idavidrein/gpqa-diamond@1.0.0",
+                "cais/humanitys-last-exam@1.0.0",
+                "swe-bench/verified@1.0.0",
+                "harbor/terminal-bench@2.1.0",
+                "scicode-bench/scicode@1.0.0",
+            },
+        )
+        for benchmark in benchmarks.values():
+            for metric in benchmark["metrics"]:
+                if metric["unit"] in {"proportion", "fraction"}:
+                    continue
+                self.assertIn(
+                    "normalization",
+                    metric,
+                    f"{benchmark['id']}#{metric['id']} needs a percentage display scale",
+                )
+
+        for benchmark_id in (
+            "artificial-analysis/gdpval-aa@2.0.0",
+            "artificial-analysis/briefcase@1.0.0",
+        ):
+            elo = next(
+                metric
+                for metric in benchmarks[benchmark_id]["metrics"]
+                if metric["id"] == "elo"
+            )
+            self.assertEqual(
+                elo["normalization"],
+                {"type": "linear_clamp", "min": 500, "max": 2500},
+            )
+
     def test_physical_inventory_is_the_curated_mainstream_creator_set(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         physical_models = {

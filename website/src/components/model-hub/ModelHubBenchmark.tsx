@@ -8,6 +8,8 @@ import type {
 import { modelHubEvaluationConditionLabel } from '../../data/modelHubEvaluationLabel'
 import {
   modelHubBenchmarkBarHeight,
+  modelHubBenchmarkNormalizedValue,
+  modelHubBenchmarkRawValueLabel,
   modelHubChartColorToken,
   type ModelHubChartColor,
 } from '../../data/modelHubBenchmarkSupport'
@@ -39,7 +41,12 @@ function BenchmarkColumn({
 }) {
   const condition = modelHubEvaluationConditionLabel(row.model, row.evaluation.reasoning_effort)
   const value = formatMetric(row.value, metric)
-  const height = benchmarkColumnHeight(row.value, domain, metric.direction)
+  const rawValue = modelHubBenchmarkRawValueLabel(row.value, metric)
+  const height = benchmarkColumnHeight(
+    modelHubBenchmarkNormalizedValue(row.value, metric),
+    domain,
+    metric.direction,
+  )
   const token = modelHubChartColorToken(color)
 
   return (
@@ -56,7 +63,7 @@ function BenchmarkColumn({
         } as React.CSSProperties
       }
     >
-      <strong>{value}</strong>
+      <strong title={rawValue ? `Raw: ${rawValue}` : undefined}>{value}</strong>
       <span className={styles.columnTrack} aria-hidden="true">
         <i />
       </span>
@@ -161,9 +168,9 @@ function BenchmarkPanel({
 export function ModelHubBenchmark({
   charts,
   chartCount,
-  domains,
-  domain,
-  setDomain,
+  filters,
+  filter,
+  setFilter,
   query,
   publisher,
   publishers,
@@ -173,9 +180,9 @@ export function ModelHubBenchmark({
 }: {
   charts: BenchmarkChart[]
   chartCount: number
-  domains: Array<{ id: string, count: number }>
-  domain: string
-  setDomain: (domain: string) => void
+  filters: Array<{ id: string, label: string, count: number }>
+  filter: string
+  setFilter: (filter: string) => void
   query: string
   publisher: string
   publishers: string[]
@@ -192,20 +199,20 @@ export function ModelHubBenchmark({
   return (
     <div className={styles.shell}>
       <div className={styles.toolbar}>
-        <div className={styles.tags} role="group" aria-label="Filter benchmark domains">
-          <button type="button" aria-pressed={domain === 'all'} onClick={() => setDomain('all')}>
+        <div className={styles.tags} role="group" aria-label="Filter benchmarks">
+          <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>
             All
             {' '}
             <span>{chartCount}</span>
           </button>
-          {domains.map(item => (
+          {filters.map(item => (
             <button
               type="button"
               key={item.id}
-              aria-pressed={domain === item.id}
-              onClick={() => setDomain(item.id)}
+              aria-pressed={filter === item.id}
+              onClick={() => setFilter(item.id)}
             >
-              {readable(item.id)}
+              {readable(item.label)}
               {' '}
               <span>{item.count}</span>
             </button>

@@ -164,17 +164,36 @@ function useBenchmarkExplorer() {
       ),
     [],
   )
-  const [domain, setDomain] = useState('all')
+  const [benchmarkFilter, setBenchmarkFilter] = useState('all')
   const [query, setQuery] = useState('')
   const [publisher, setPublisher] = useState('all')
-  const domains = useMemo(() => {
-    const counts = new Map<string, number>()
+  const benchmarkFilters = useMemo(() => {
+    const tagCounts = new Map<string, number>()
+    const domainCounts = new Map<string, number>()
     allCharts.forEach((chart) => {
-      counts.set(chart.benchmark.domain, (counts.get(chart.benchmark.domain) ?? 0) + 1)
+      domainCounts.set(
+        chart.benchmark.domain,
+        (domainCounts.get(chart.benchmark.domain) ?? 0) + 1,
+      )
+      chart.benchmark.tags?.forEach((tag) => {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+      })
     })
-    return Array.from(counts, ([id, count]) => ({ id, count })).sort((left, right) =>
-      left.id.localeCompare(right.id),
-    )
+    const tags = Array.from(tagCounts, ([tag, count]) => ({
+      id: `tag:${tag}`,
+      label: tag === 'core' ? 'Core' : tag,
+      count,
+    })).sort((left, right) => {
+      if (left.id === 'tag:core') return -1
+      if (right.id === 'tag:core') return 1
+      return left.label.localeCompare(right.label)
+    })
+    const domains = Array.from(domainCounts, ([domain, count]) => ({
+      id: `domain:${domain}`,
+      label: domain,
+      count,
+    })).sort((left, right) => left.label.localeCompare(right.label))
+    return [...tags, ...domains]
   }, [allCharts])
   const publishers = useMemo(
     () =>
@@ -184,12 +203,20 @@ function useBenchmarkExplorer() {
     [allCharts],
   )
   const activePublisher = publisher === 'all' || publishers.includes(publisher) ? publisher : 'all'
-  const activeDomain
-    = domain === 'all' || domains.some(item => item.id === domain) ? domain : 'all'
+  const activeBenchmarkFilter
+    = benchmarkFilter === 'all' || benchmarkFilters.some(item => item.id === benchmarkFilter)
+      ? benchmarkFilter
+      : 'all'
   const charts = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
     return allCharts
-      .filter(chart => activeDomain === 'all' || chart.benchmark.domain === activeDomain)
+      .filter((chart) => {
+        if (activeBenchmarkFilter === 'all') return true
+        if (activeBenchmarkFilter.startsWith('tag:')) {
+          return chart.benchmark.tags?.includes(activeBenchmarkFilter.slice(4)) ?? false
+        }
+        return chart.benchmark.domain === activeBenchmarkFilter.slice(7)
+      })
       .map((chart) => {
         const rows = chart.rows.filter(
           row =>
@@ -211,14 +238,14 @@ function useBenchmarkExplorer() {
         }
       })
       .filter(chart => chart.rows.length)
-  }, [activeDomain, activePublisher, allCharts, colors, query])
+  }, [activeBenchmarkFilter, activePublisher, allCharts, colors, query])
 
   return {
     charts,
     chartCount: allCharts.length,
-    domains,
-    domain: activeDomain,
-    setDomain,
+    filters: benchmarkFilters,
+    filter: activeBenchmarkFilter,
+    setFilter: setBenchmarkFilter,
     query,
     setQuery,
     publisher: activePublisher,

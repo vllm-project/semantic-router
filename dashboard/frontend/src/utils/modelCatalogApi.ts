@@ -40,6 +40,10 @@ function isNumberRecord(value: unknown): value is Record<string, number> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'number')
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
 function isNonEmptyStringRecord(value: unknown): value is Record<string, string> {
   return (
     isRecord(value) &&
@@ -209,15 +213,12 @@ function isReasoningFamily(value: unknown): value is CatalogReasoningFamily {
       'reasoning_effort',
       'reasoning_mode',
       'top_level_reasoning_effort',
-    ].includes(
-      String(value.type),
-    ) &&
+    ].includes(String(value.type)) &&
     isNonEmptyString(value.parameter) &&
     (value.activation_parameter === undefined ||
       (isNonEmptyString(value.activation_parameter) &&
         value.activation_parameter !== value.parameter)) &&
-    (value.effort_flags === undefined ||
-      isValidReasoningEffortFlags(value)) &&
+    (value.effort_flags === undefined || isValidReasoningEffortFlags(value)) &&
     ((['reasoning_effort', 'top_level_reasoning_effort'].includes(String(value.type)) &&
       isStringArray(value.levels)) ||
       (!['reasoning_effort', 'top_level_reasoning_effort'].includes(String(value.type)) &&
@@ -292,12 +293,54 @@ function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
   )
 }
 
+function isMetricNormalization(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (value.type === 'identity' || value.type === 'one_minus') return true
+  if (value.type === 'linear_clamp') {
+    return isFiniteNumber(value.min) && isFiniteNumber(value.max) && value.min < value.max
+  }
+  if (value.type === 'piecewise_linear') {
+    if (!Array.isArray(value.points) || value.points.length < 2) return false
+    let previous = Number.NEGATIVE_INFINITY
+    return value.points.every((point) => {
+      if (
+        !isRecord(point) ||
+        !isFiniteNumber(point.input) ||
+        !isFiniteNumber(point.output) ||
+        point.output < 0 ||
+        point.output > 1 ||
+        point.input <= previous
+      ) {
+        return false
+      }
+      previous = point.input
+      return true
+    })
+  }
+  if (value.type === 'logistic') {
+    return isFiniteNumber(value.k) && value.k !== 0 && isFiniteNumber(value.x0)
+  }
+  return (
+    value.type === 'lookup' &&
+    isRecord(value.values) &&
+    Object.keys(value.values).length > 0 &&
+    Object.entries(value.values).every(
+      ([key, item]) => key.length > 0 && isFiniteNumber(item) && item >= 0 && item <= 1,
+    )
+  )
+}
+
 function isBenchmark(value: unknown): value is CatalogBenchmark {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.display_name) &&
     isNonEmptyString(value.domain) &&
+    (value.tags === undefined ||
+      (isStringArray(value.tags) &&
+        value.tags.length > 0 &&
+        new Set(value.tags).size === value.tags.length &&
+        value.tags.every((tag) => /^[a-z0-9][a-z0-9._-]*$/.test(tag)))) &&
     isNonEmptyString(value.default_profile) &&
     Array.isArray(value.profiles) &&
     value.profiles.length > 0 &&
@@ -318,7 +361,9 @@ function isBenchmark(value: unknown): value is CatalogBenchmark {
         ['higher_is_better', 'lower_is_better'].includes(String(metric.direction)) &&
         Array.isArray(metric.range) &&
         metric.range.length === 2 &&
-        metric.range.every((bound) => typeof bound === 'number'),
+        metric.range.every(isFiniteNumber) &&
+        metric.range[0] < metric.range[1] &&
+        (metric.normalization === undefined || isMetricNormalization(metric.normalization)),
     )
   )
 }

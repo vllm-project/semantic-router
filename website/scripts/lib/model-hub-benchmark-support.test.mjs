@@ -127,6 +127,32 @@ test('website benchmark gallery selects one broad comparison per benchmark', () 
   })
 })
 
+test('website benchmark display normalizes Elo while retaining its raw unit', () => {
+  const metric = catalog.benchmarks
+    .find(benchmark => benchmark.id === 'artificial-analysis/gdpval-aa@2.0.0')
+    .metrics.find(candidate => candidate.id === 'elo')
+
+  assert.ok(Math.abs(support.modelHubBenchmarkNormalizedValue(1769.1, metric) - 0.63455) < 1e-9)
+  assert.equal(support.modelHubBenchmarkRawValueLabel(1769.1, metric), '1769.10 elo')
+  assert.equal(metric.unit, 'elo')
+})
+
+test('website catalog owns the exact six core benchmark filters', () => {
+  assert.deepEqual(
+    catalog.benchmarks
+      .filter(benchmark => benchmark.tags?.includes('core'))
+      .map(benchmark => benchmark.display_name),
+    [
+      'MMLU-Pro',
+      'GPQA Diamond',
+      'Humanity\'s Last Exam',
+      'SWE-bench Verified',
+      'Terminal-Bench 2.1',
+      'SciCode',
+    ],
+  )
+})
+
 test('website benchmark colors are stable and collision-free for visible models', () => {
   const modelIDs = [
     'meta/muse-glimmer-30b',
@@ -232,7 +258,7 @@ test('website benchmark renders every filtered result in one comparison surface'
 
   assert.match(component, /rows\.map\(\(?row\)? =>/)
   assert.match(component, /Benchmark comparison with all filtered results/)
-  assert.match(component, /Filter benchmark domains/)
+  assert.match(component, /Filter benchmarks/)
   assert.match(component, /charts\.map\(\(?chart\)? =>/)
   assert.doesNotMatch(component, /<Pagination/)
   assert.doesNotMatch(component, /pageRows/)
@@ -275,7 +301,7 @@ test('website evaluation details label every metric value', () => {
   )
 
   assert.match(page, /<small>\{readable\(id\)\}<\/small>/)
-  assert.match(page, /<b>[\s\S]*?formatMetric\(value, definition\)/)
+  assert.match(page, /<b[\s\S]*?formatMetric\(value, definition\)/)
 })
 
 test('website model table uses a native keyboard target without scrolling on Space', () => {

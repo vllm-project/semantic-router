@@ -19,6 +19,7 @@ import (
 var (
 	errInvalidModelCatalogContract = errors.New("invalid model catalog contract")
 	catalogHeaderName              = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+	catalogSlug                    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 )
 
 // modelCatalogEnvelope is the complete sanitized read contract shared by the
@@ -427,7 +428,8 @@ func validateCatalogBenchmarks(
 	for _, benchmark := range values {
 		if benchmark.ID == "" || benchmark.DisplayName == "" || benchmark.Domain == "" ||
 			benchmark.DefaultProfile == "" || len(benchmark.Profiles) == 0 || len(benchmark.Metrics) == 0 ||
-			(benchmark.Source != "" && !validHTTPSURL(benchmark.Source)) {
+			(benchmark.Source != "" && !validHTTPSURL(benchmark.Source)) ||
+			!validCatalogTags(benchmark.Tags) {
 			return nil, fmt.Errorf("malformed benchmark")
 		}
 		if _, duplicate := benchmarks[benchmark.ID]; duplicate {
@@ -451,7 +453,8 @@ func validateCatalogBenchmarks(
 			key := benchmark.ID + "#" + metric.ID
 			if metric.ID == "" || metric.Unit == "" ||
 				!oneOf(metric.Direction, "higher_is_better", "lower_is_better") ||
-				!finite(metric.Range[0]) || !finite(metric.Range[1]) || metric.Range[0] >= metric.Range[1] {
+				!finite(metric.Range[0]) || !finite(metric.Range[1]) || metric.Range[0] >= metric.Range[1] ||
+				!validCatalogNormalization(metric.Normalization) {
 				return nil, fmt.Errorf("malformed benchmark metric")
 			}
 			if _, duplicate := metrics[key]; duplicate {
@@ -461,6 +464,63 @@ func validateCatalogBenchmarks(
 		}
 	}
 	return metrics, nil
+}
+
+func validCatalogTags(tags []string) bool {
+	if tags != nil && len(tags) == 0 {
+		return false
+	}
+	seen := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		if !catalogSlug.MatchString(tag) {
+			return false
+		}
+		if _, duplicate := seen[tag]; duplicate {
+			return false
+		}
+		seen[tag] = struct{}{}
+	}
+	return true
+}
+
+func validCatalogNormalization(normalization *modelcatalog.Normalization) bool {
+	if normalization == nil {
+		return true
+	}
+	switch normalization.Type {
+	case "identity", "one_minus":
+		return true
+	case "linear_clamp":
+		return normalization.Min != nil && normalization.Max != nil &&
+			finite(*normalization.Min) && finite(*normalization.Max) &&
+			*normalization.Min < *normalization.Max
+	case "piecewise_linear":
+		if len(normalization.Points) < 2 {
+			return false
+		}
+		for index, point := range normalization.Points {
+			if !finite(point.Input) || !finite(point.Output) || point.Output < 0 || point.Output > 1 ||
+				(index > 0 && point.Input <= normalization.Points[index-1].Input) {
+				return false
+			}
+		}
+		return true
+	case "logistic":
+		return normalization.K != nil && normalization.X0 != nil &&
+			finite(*normalization.K) && finite(*normalization.X0) && *normalization.K != 0
+	case "lookup":
+		if len(normalization.Values) == 0 {
+			return false
+		}
+		for key, value := range normalization.Values {
+			if strings.TrimSpace(key) == "" || !finite(value) || value < 0 || value > 1 {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 func validateCatalogEvaluations(
@@ -578,7 +638,7 @@ func validateCatalogIndices(
 		total := 0.0
 		for _, component := range index.Components {
 			if (component.Metric == "") == (component.Index == "") || component.Weight <= 0 || !finite(component.Weight) ||
-				!oneOf(component.Normalization.Type, "identity", "one_minus", "linear_clamp", "piecewise_linear", "logistic", "lookup") {
+				!validCatalogNormalization(&component.Normalization) {
 				return nil, fmt.Errorf("malformed index component")
 			}
 			if component.Metric != "" {

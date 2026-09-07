@@ -2,6 +2,10 @@ import React from 'react'
 
 import type { CatalogBenchmark, CatalogEvaluation } from '../types/modelCatalog'
 import {
+  modelHubBenchmarkRawValueLabel,
+  modelHubBenchmarkValueLabel,
+} from './modelHubBenchmarkNormalization'
+import {
   modelHubEvaluationConditionLabel,
   readableModelHubValue as readable,
   type ModelHubRow,
@@ -10,10 +14,16 @@ import styles from './ModelHubDetail.module.css'
 
 const scoreValue = (value: number, benchmark: CatalogBenchmark | undefined, metric: string) => {
   const definition = benchmark?.metrics.find((candidate) => candidate.id === metric)
-  if (definition?.unit === 'fraction' || (definition?.range[1] === 1 && value <= 1)) {
-    return `${(value * 100).toFixed(1)}%`
+  if (!definition) {
+    return {
+      label: Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2),
+      raw: undefined,
+    }
   }
-  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2)
+  return {
+    label: modelHubBenchmarkValueLabel(value, definition),
+    raw: modelHubBenchmarkRawValueLabel(value, definition),
+  }
 }
 
 export const EvaluationCard: React.FC<{
@@ -30,12 +40,15 @@ export const EvaluationCard: React.FC<{
       </small>
     </div>
     <dl>
-      {Object.entries(evaluation.metrics).map(([metric, value]) => (
-        <div key={metric}>
-          <dt>{readable(metric)}</dt>
-          <dd>{scoreValue(value, benchmark, metric)}</dd>
-        </div>
-      ))}
+      {Object.entries(evaluation.metrics).map(([metric, value]) => {
+        const score = scoreValue(value, benchmark, metric)
+        return (
+          <div key={metric}>
+            <dt>{readable(metric)}</dt>
+            <dd title={score.raw ? `Raw: ${score.raw}` : undefined}>{score.label}</dd>
+          </div>
+        )
+      })}
     </dl>
     <footer>
       <span>

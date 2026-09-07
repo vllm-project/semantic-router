@@ -1,6 +1,7 @@
 import React from 'react'
 
 import type { BenchmarkMetric, CatalogModel } from '../../data/modelHubCatalogTypes'
+import { modelHubBenchmarkNormalizedValue } from '../../data/modelHubBenchmarkSupport'
 import styles from './modelHubShared.module.css'
 
 export const readable = (value: string) => value.replace(/_/g, ' ')
@@ -48,10 +49,9 @@ export const formatDate = (value?: string) => {
 }
 
 export const formatMetric = (value: number, metric: BenchmarkMetric) => {
-  if (metric.unit === 'proportion' || metric.unit === 'fraction') {
-    return `${(value * 100).toFixed(1)}%`
+  if (metric.normalization || metric.unit === 'proportion' || metric.unit === 'fraction') {
+    return `${(modelHubBenchmarkNormalizedValue(value, metric) * 100).toFixed(1)}%`
   }
-  if (metric.unit === 'elo') return Math.round(value).toLocaleString()
   return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }
 

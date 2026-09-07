@@ -23,6 +23,36 @@
       "uniqueItems": true,
       "items": {"$ref": "#/$defs/nonEmptyString"}
     },
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["identity", "one_minus", "linear_clamp", "piecewise_linear", "logistic", "lookup"]},
+        "min": {"type": "number"},
+        "max": {"type": "number"},
+        "k": {"type": "number"},
+        "x0": {"type": "number"},
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["input", "output"],
+            "properties": {
+              "input": {"type": "number"},
+              "output": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          }
+        },
+        "values": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
     "verification": {
       "type": "object",
       "additionalProperties": false,
@@ -381,6 +411,12 @@
           "id": {"$ref": "#/$defs/versionedID"},
           "display_name": {"$ref": "#/$defs/nonEmptyString"},
           "domain": {"$ref": "#/$defs/slug"},
+          "tags": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/slug"}
+          },
           "source": {"type": "string", "format": "uri"},
           "default_profile": {"$ref": "#/$defs/slug"},
           "profiles": {
@@ -413,7 +449,8 @@
                   "prefixItems": [{"type": "number"}, {"type": "number"}],
                   "minItems": 2,
                   "maxItems": 2
-                }
+                },
+                "normalization": {"$ref": "#/$defs/normalization"}
               }
             }
           }
@@ -493,36 +530,7 @@
                 "benchmark_profile": {"$ref": "#/$defs/slug"},
                 "index": {"$ref": "#/$defs/versionedID"},
                 "weight": {"type": "number", "exclusiveMinimum": 0},
-                "normalization": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["type"],
-                  "properties": {
-                    "type": {"enum": ["identity", "one_minus", "linear_clamp", "piecewise_linear", "logistic", "lookup"]},
-                    "min": {"type": "number"},
-                    "max": {"type": "number"},
-                    "k": {"type": "number"},
-                    "x0": {"type": "number"},
-                    "points": {
-                      "type": "array",
-                      "minItems": 2,
-                      "items": {
-                        "type": "object",
-                        "additionalProperties": false,
-                        "required": ["input", "output"],
-                        "properties": {
-                          "input": {"type": "number"},
-                          "output": {"type": "number", "minimum": 0, "maximum": 1}
-                        }
-                      }
-                    },
-                    "values": {
-                      "type": "object",
-                      "minProperties": 1,
-                      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
-                    }
-                  }
-                }
+                "normalization": {"$ref": "#/$defs/normalization"}
               },
               "oneOf": [
                 {"required": ["benchmark", "metric", "benchmark_profile"]},

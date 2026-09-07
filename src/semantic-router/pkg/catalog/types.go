@@ -404,16 +404,18 @@ type BenchmarkProfile struct {
 }
 
 type BenchmarkMetric struct {
-	ID        string     `json:"id" yaml:"id"`
-	Unit      string     `json:"unit" yaml:"unit"`
-	Direction string     `json:"direction" yaml:"direction"`
-	Range     [2]float64 `json:"range" yaml:"range"`
+	ID            string         `json:"id" yaml:"id"`
+	Unit          string         `json:"unit" yaml:"unit"`
+	Direction     string         `json:"direction" yaml:"direction"`
+	Range         [2]float64     `json:"range" yaml:"range"`
+	Normalization *Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
 }
 
 type BenchmarkDefinition struct {
 	ID             string             `json:"id" yaml:"id"`
 	DisplayName    string             `json:"display_name" yaml:"display_name"`
 	Domain         string             `json:"domain" yaml:"domain"`
+	Tags           []string           `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Source         string             `json:"source,omitempty" yaml:"source,omitempty"`
 	DefaultProfile string             `json:"default_profile" yaml:"default_profile"`
 	Profiles       []BenchmarkProfile `json:"profiles" yaml:"profiles"`

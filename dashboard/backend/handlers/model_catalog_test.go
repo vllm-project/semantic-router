@@ -96,6 +96,38 @@ func TestNormalizeModelCatalogOmitsUndefinedReasoningDefault(t *testing.T) {
 	}
 }
 
+func TestNormalizeModelCatalogValidatesBenchmarkPresentationMetadata(t *testing.T) {
+	t.Parallel()
+
+	for name, payload := range map[string]string{
+		"empty tags": strings.Replace(
+			validModelCatalogPayload(""),
+			`"domain":"general",`,
+			`"domain":"general","tags":[],`,
+			1,
+		),
+		"duplicate tags": strings.Replace(
+			validModelCatalogPayload(""),
+			`"domain":"general",`,
+			`"domain":"general","tags":["core","core"],`,
+			1,
+		),
+		"invalid normalization": strings.Replace(
+			validModelCatalogPayload(""),
+			`"range":[0,1]}`,
+			`"range":[0,1],"normalization":{"type":"linear_clamp","min":1,"max":0}}`,
+			1,
+		),
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := normalizeModelCatalogDocument([]byte(payload)); err == nil {
+				t.Fatalf("malformed benchmark metadata was accepted")
+			}
+		})
+	}
+}
+
 func TestModelCatalogHandlerFailsClosedWithoutLeakingSourceErrors(t *testing.T) {
 	t.Parallel()
 

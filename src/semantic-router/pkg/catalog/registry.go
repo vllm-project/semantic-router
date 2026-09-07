@@ -127,7 +127,11 @@ func (registry *Registry) Index(id string) (IndexDefinition, bool) {
 
 func (registry *Registry) Benchmark(id string) (BenchmarkDefinition, bool) {
 	value, ok := registry.benchmarks[id]
+	value.Tags = append([]string(nil), value.Tags...)
 	value.Metrics = append([]BenchmarkMetric(nil), value.Metrics...)
+	for index := range value.Metrics {
+		value.Metrics[index].Normalization = cloneNormalizationPointer(value.Metrics[index].Normalization)
+	}
 	value.Profiles = append([]BenchmarkProfile(nil), value.Profiles...)
 	return value, ok
 }
@@ -287,10 +291,27 @@ func cloneIndex(value IndexDefinition) IndexDefinition {
 	value.Domains = cloneMap(value.Domains)
 	value.Components = append([]IndexComponent(nil), value.Components...)
 	for index := range value.Components {
-		value.Components[index].Normalization.Points = append([]NormalizationPoint(nil), value.Components[index].Normalization.Points...)
-		value.Components[index].Normalization.Values = cloneMap(value.Components[index].Normalization.Values)
+		value.Components[index].Normalization = cloneNormalization(value.Components[index].Normalization)
 	}
 	return value
+}
+
+func cloneNormalization(value Normalization) Normalization {
+	value.Min = cloneFloatPointer(value.Min)
+	value.Max = cloneFloatPointer(value.Max)
+	value.K = cloneFloatPointer(value.K)
+	value.X0 = cloneFloatPointer(value.X0)
+	value.Points = append([]NormalizationPoint(nil), value.Points...)
+	value.Values = cloneMap(value.Values)
+	return value
+}
+
+func cloneNormalizationPointer(value *Normalization) *Normalization {
+	if value == nil {
+		return nil
+	}
+	result := cloneNormalization(*value)
+	return &result
 }
 
 func cloneIndexResult(value IndexResult) IndexResult {

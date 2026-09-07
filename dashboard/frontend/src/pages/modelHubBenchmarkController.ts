@@ -27,8 +27,14 @@ export interface ModelHubBenchmarkChartData {
   span: number
 }
 
+export interface ModelHubBenchmarkFilter {
+  id: string
+  label: string
+  count: number
+}
+
 export function useModelHubBenchmarkController(catalog: BuiltInModelCatalog, rows: ModelHubRow[]) {
-  const [domain, setDomain] = useState('all')
+  const [filter, setFilter] = useState('all')
   const modelIDs = useMemo(() => new Set(rows.map((row) => row.model.id)), [rows])
   const selections = useMemo(() => modelHubBenchmarkOverviewSelections(catalog), [catalog])
   const chartColors = useMemo(
@@ -69,30 +75,49 @@ export function useModelHubBenchmarkController(catalog: BuiltInModelCatalog, row
       }),
     [catalog, chartColors, modelIDs, selections],
   )
-  const domains = useMemo(() => {
-    const counts = new Map<string, number>()
+  const filters = useMemo(() => {
+    const tagCounts = new Map<string, number>()
+    const domainCounts = new Map<string, number>()
     allCharts.forEach((chart) => {
       const chartDomain = chart.benchmark?.domain
-      if (!chartDomain) return
-      counts.set(chartDomain, (counts.get(chartDomain) ?? 0) + 1)
+      if (chartDomain) {
+        domainCounts.set(chartDomain, (domainCounts.get(chartDomain) ?? 0) + 1)
+      }
+      chart.benchmark?.tags?.forEach((tag) => {
+        tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1)
+      })
     })
-    return Array.from(counts, ([id, count]) => ({ id, count })).sort((left, right) =>
-      left.id.localeCompare(right.id),
-    )
+    const tags = Array.from(tagCounts, ([tag, count]) => ({
+      id: `tag:${tag}`,
+      label: tag === 'core' ? 'Core' : tag,
+      count,
+    })).sort((left, right) => {
+      if (left.id === 'tag:core') return -1
+      if (right.id === 'tag:core') return 1
+      return left.label.localeCompare(right.label)
+    })
+    const domains = Array.from(domainCounts, ([domain, count]) => ({
+      id: `domain:${domain}`,
+      label: domain,
+      count,
+    })).sort((left, right) => left.label.localeCompare(right.label))
+    return [...tags, ...domains]
   }, [allCharts])
-  const activeDomain =
-    domain === 'all' || domains.some((candidate) => candidate.id === domain) ? domain : 'all'
+  const activeFilter =
+    filter === 'all' || filters.some((candidate) => candidate.id === filter) ? filter : 'all'
   const charts =
-    activeDomain === 'all'
+    activeFilter === 'all'
       ? allCharts
-      : allCharts.filter((chart) => chart.benchmark?.domain === activeDomain)
+      : activeFilter.startsWith('tag:')
+        ? allCharts.filter((chart) => chart.benchmark?.tags?.includes(activeFilter.slice(4)))
+        : allCharts.filter((chart) => chart.benchmark?.domain === activeFilter.slice(7))
 
   return {
     charts,
     chartCount: allCharts.length,
-    domains,
-    domain: activeDomain,
-    setDomain,
+    filters,
+    filter: activeFilter,
+    setFilter,
   }
 }
 

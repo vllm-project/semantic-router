@@ -92,12 +92,24 @@ export interface BenchmarkMetric {
   direction: 'higher_is_better' | 'lower_is_better'
   range: [number, number]
   unit: string
+  normalization?: MetricNormalization
+}
+
+export interface MetricNormalization {
+  type: 'identity' | 'one_minus' | 'linear_clamp' | 'piecewise_linear' | 'logistic' | 'lookup'
+  min?: number
+  max?: number
+  k?: number
+  x0?: number
+  points?: Array<{ input: number, output: number }>
+  values?: Record<string, number>
 }
 
 export interface CatalogBenchmark {
   id: string
   display_name: string
   domain: string
+  tags?: string[]
   default_profile: string
   source?: string
   profiles: Array<{ id: string, display_name: string, description?: string }>

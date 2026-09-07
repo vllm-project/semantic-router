@@ -43,7 +43,8 @@ index identity; those are embedded build metadata.
 - `models/single/`: intrinsic facts for physical models, grouped by creator.
 - `models/virtual/`: recipe-backed logical model identities and role contracts.
 - `reasoning-families.yaml`: reusable request projections for reasoning knobs.
-- `benchmarks.yaml`: versioned benchmark and metric definitions.
+- `benchmarks.yaml`: versioned benchmark and metric definitions, including
+  optional semantic tags and a raw-to-percentage display normalization.
 - `evaluations/single/`: exact benchmark measurements for physical models,
   grouped by creator.
 - `evaluations/virtual/`: recipe-run measurements for virtual models.
@@ -54,6 +55,18 @@ parameter-size proxy. Two available records for the same model, effort,
 versioned benchmark profile, and metric are rejected instead of choosing a
 hidden winner; revise the evaluation identity or resolve the conflicting
 evidence explicitly.
+
+Evaluation records always preserve the benchmark's raw published measurement.
+The Hub renders every built-in benchmark on a percentage scale: proportion and
+fraction metrics map directly, while other units declare an explicit metric
+`normalization`. For example, GDPval-AA v2 and Briefcase keep their raw Elo but
+display `clamp((elo - 500) / 2000, 0, 1) * 100`. This presentation mapping is
+separate from index aggregation and never rewrites evidence.
+
+Benchmark `tags` are catalog-owned presentation facets. The curated `core` tag
+contains MMLU-Pro, GPQA Diamond, Humanity's Last Exam, SWE-bench Verified,
+Terminal-Bench 2.1, and SciCode. Hub surfaces place Core first among semantic
+filters while keeping All as the unfiltered default.
 
 Every available repository record carries a calendar anchor. Use
 `measured_at` when the evaluation run date is known; otherwise use

@@ -3,12 +3,18 @@ package catalog
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 )
+
+var benchmarkTagPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 func validateBenchmark(definition BenchmarkDefinition, path string) error {
 	if strings.TrimSpace(definition.DisplayName) == "" || strings.TrimSpace(definition.Domain) == "" {
 		return fmt.Errorf("%s.display_name and domain are required", path)
+	}
+	if err := validateBenchmarkTags(definition.Tags, path+".tags"); err != nil {
+		return err
 	}
 	if len(definition.Metrics) == 0 {
 		return fmt.Errorf("%s.metrics cannot be empty", path)
@@ -20,6 +26,23 @@ func validateBenchmark(definition BenchmarkDefinition, path string) error {
 		return err
 	}
 	return validateBenchmarkMetrics(definition.Metrics, path)
+}
+
+func validateBenchmarkTags(tags []string, path string) error {
+	if tags != nil && len(tags) == 0 {
+		return fmt.Errorf("%s cannot be empty when declared", path)
+	}
+	seen := map[string]struct{}{}
+	for index, tag := range tags {
+		if !benchmarkTagPattern.MatchString(tag) {
+			return fmt.Errorf("%s[%d] %q must be a slug", path, index, tag)
+		}
+		if _, duplicate := seen[tag]; duplicate {
+			return fmt.Errorf("%s contains duplicate %q", path, tag)
+		}
+		seen[tag] = struct{}{}
+	}
+	return nil
 }
 
 func validateBenchmarkProfiles(definition BenchmarkDefinition, path string) error {
@@ -44,8 +67,8 @@ func validateBenchmarkMetrics(metrics []BenchmarkMetric, path string) error {
 	seen := map[string]struct{}{}
 	for index, metric := range metrics {
 		metricPath := fmt.Sprintf("%s.metrics[%d]", path, index)
-		if strings.TrimSpace(metric.ID) == "" {
-			return fmt.Errorf("%s.id cannot be empty", metricPath)
+		if strings.TrimSpace(metric.ID) == "" || strings.TrimSpace(metric.Unit) == "" {
+			return fmt.Errorf("%s.id and unit are required", metricPath)
 		}
 		if _, duplicate := seen[metric.ID]; duplicate {
 			return fmt.Errorf("%s.id %q is duplicated", metricPath, metric.ID)
@@ -56,6 +79,11 @@ func validateBenchmarkMetrics(metrics []BenchmarkMetric, path string) error {
 		}
 		if !finite(metric.Range[0]) || !finite(metric.Range[1]) || metric.Range[0] >= metric.Range[1] {
 			return fmt.Errorf("%s.range is invalid", metricPath)
+		}
+		if metric.Normalization != nil {
+			if err := validateNormalization(*metric.Normalization, metricPath+".normalization"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -298,7 +326,9 @@ func validateNormalization(normalization Normalization, path string) error {
 }
 
 func validateLinearClamp(normalization Normalization, path string) error {
-	if normalization.Min == nil || normalization.Max == nil || *normalization.Min >= *normalization.Max {
+	if normalization.Min == nil || normalization.Max == nil ||
+		!finite(*normalization.Min) || !finite(*normalization.Max) ||
+		*normalization.Min >= *normalization.Max {
 		return fmt.Errorf("%s linear_clamp requires min < max", path)
 	}
 	return nil

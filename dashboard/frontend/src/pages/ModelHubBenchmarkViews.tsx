@@ -1,7 +1,11 @@
 import React from 'react'
 
-import type { CatalogBenchmark } from '../types/modelCatalog'
 import type { ModelHubBenchmarkChartData } from './modelHubBenchmarkController'
+import {
+  modelHubBenchmarkNormalizedValue,
+  modelHubBenchmarkRawValueLabel,
+  modelHubBenchmarkValueLabel,
+} from './modelHubBenchmarkNormalization'
 import { ModelMark } from './ModelHubComponents'
 import { OpenModelButton } from './ModelHubOpenModelButton'
 import {
@@ -13,14 +17,6 @@ import {
 } from './modelHubSupport'
 import styles from './ModelHubViews.module.css'
 
-const formatMetric = (value: number, benchmark: CatalogBenchmark | undefined, metric: string) => {
-  const definition = benchmark?.metrics.find((candidate) => candidate.id === metric)
-  if (definition?.unit === 'fraction' || (definition?.range[1] === 1 && value <= 1)) {
-    return `${(value * 100).toFixed(1)}%`
-  }
-  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2)
-}
-
 const BenchmarkColumn: React.FC<{
   point: ModelHubBenchmarkPoint
   row: ModelHubRow
@@ -28,13 +24,20 @@ const BenchmarkColumn: React.FC<{
   chart: ModelHubBenchmarkChartData
 }> = ({ point, row, openModel, chart }) => {
   const conditionLabel = modelHubEvaluationConditionLabel(point.model, point.reasoningEffort)
+  const metric = chart.metric
+  const chartValue = metric ? modelHubBenchmarkNormalizedValue(point.value, metric) : point.value
   const height = modelHubBenchmarkBarHeight(
-    point.value,
+    chartValue,
     chart.minimum,
     chart.minimum + chart.span,
     chart.metric?.direction ?? 'higher_is_better',
   )
-  const value = formatMetric(point.value, chart.benchmark, chart.selection.metric)
+  const value = metric
+    ? modelHubBenchmarkValueLabel(point.value, metric)
+    : Number.isInteger(point.value)
+      ? point.value.toLocaleString()
+      : point.value.toFixed(2)
+  const rawValue = metric ? modelHubBenchmarkRawValueLabel(point.value, metric) : undefined
   const color = chart.chartColors.get(point.model.id) ?? {
     lightness: 0.62,
     chroma: 0.16,
@@ -56,7 +59,9 @@ const BenchmarkColumn: React.FC<{
         } as React.CSSProperties
       }
     >
-      <strong className={styles.columnValue}>{value}</strong>
+      <strong className={styles.columnValue} title={rawValue ? `Raw: ${rawValue}` : undefined}>
+        {value}
+      </strong>
       <span className={styles.columnTrack} aria-hidden="true">
         <i />
       </span>

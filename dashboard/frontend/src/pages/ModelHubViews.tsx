@@ -189,22 +189,22 @@ export const BenchmarkExplorer: React.FC<{
       </div>
       {controller.chartCount ? (
         <>
-          <div className={styles.benchmarkTags} role="group" aria-label="Filter benchmark domains">
+          <div className={styles.benchmarkTags} role="group" aria-label="Filter benchmarks">
             <button
               type="button"
-              aria-pressed={controller.domain === 'all'}
-              onClick={() => controller.setDomain('all')}
+              aria-pressed={controller.filter === 'all'}
+              onClick={() => controller.setFilter('all')}
             >
               All <span>{controller.chartCount}</span>
             </button>
-            {controller.domains.map((domain) => (
+            {controller.filters.map((filter) => (
               <button
                 type="button"
-                key={domain.id}
-                aria-pressed={controller.domain === domain.id}
-                onClick={() => controller.setDomain(domain.id)}
+                key={filter.id}
+                aria-pressed={controller.filter === filter.id}
+                onClick={() => controller.setFilter(filter.id)}
               >
-                {readable(domain.id)} <span>{domain.count}</span>
+                {readable(filter.label)} <span>{filter.count}</span>
               </button>
             ))}
           </div>

@@ -473,11 +473,25 @@ full semantic version). Metric names must be non-empty and values finite;
 `measured_at`, when present, is an ISO calendar date. Metadata stays scalar so
 the public surface does not grow a second evidence schema.
 
-Known benchmark definitions supply ranges and direction; index definitions
-select metrics and supply normalization. Namespaced unknown benchmarks are
-retained and displayed but do not enter a repository-defined index until a
-definition is added to the repository catalog. No evaluation is required for a
-custom model.
+Known benchmark definitions supply ranges, direction, semantic tags, and an
+optional raw-to-percentage presentation normalization; index definitions
+independently select metrics and supply aggregation normalization. Namespaced
+unknown benchmarks are retained and displayed but do not enter a
+repository-defined index until a definition is added to the repository catalog.
+No evaluation is required for a custom model.
+
+The Model Hub keeps raw evaluation values as evidence and presents every
+built-in benchmark on a percentage scale. Proportion and fraction units are
+already normalized; other units must declare an auditable metric normalization.
+For the Elo-based GDPval-AA v2 and Briefcase measurements, the display mapping
+is `clamp((elo - 500) / 2000, 0, 1) * 100`. This does not alter the stored Elo
+or implicitly add it to a composite index.
+
+The benchmark gallery derives its filters from catalog-owned `tags`. `All`
+remains the default unfiltered view; `Core` is the first semantic filter and
+contains exactly MMLU-Pro, GPQA Diamond, Humanity's Last Exam, SWE-bench
+Verified, Terminal-Bench 2.1, and SciCode. Domain filters follow it, and the UI
+does not maintain a second benchmark list.
 
 An unavailable score stays unavailable. Selection algorithms omit the quality
 factor for that candidate and renormalize the remaining available factors; they

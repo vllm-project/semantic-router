@@ -45,6 +45,7 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
                 "id",
                 "display_name",
                 "domain",
+                "tags",
                 "source",
                 "default_profile",
                 "profiles",
@@ -59,6 +60,7 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
             )
         if benchmark.get("source") is not None:
             _validate_https_url(benchmark["source"], f"{path}.source")
+        _validate_benchmark_tags(benchmark.get("tags"), f"{path}.tags")
         profiles = _benchmark_profiles(benchmark, path)
         for metric_index, raw_metric in enumerate(
             _sequence(benchmark.get("metrics"), f"{path}.metrics")
@@ -66,7 +68,7 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
             metric = _mapping(raw_metric, f"{path}.metrics[{metric_index}]")
             _reject_unknown(
                 metric,
-                {"id", "unit", "direction", "range"},
+                {"id", "unit", "direction", "range", "normalization"},
                 f"{path}.metrics[{metric_index}]",
             )
             metric_id = (
@@ -83,6 +85,19 @@ def metric_catalog(benchmarks: list[dict[str, Any]]) -> dict[str, dict[str, Any]
                 "profiles": profiles,
             }
     return metrics
+
+
+def _validate_benchmark_tags(value: Any, path: str) -> None:
+    if value is None:
+        return
+    tags = _sequence(value, path)
+    if not tags:
+        raise CatalogBuildError(f"{path} cannot be empty when declared")
+    seen: set[str] = set()
+    for tag in tags:
+        if not isinstance(tag, str) or not SLUG.fullmatch(tag) or tag in seen:
+            raise CatalogBuildError(f"{path} must contain unique slug tags")
+        seen.add(tag)
 
 
 def _benchmark_profiles(benchmark: dict[str, Any], path: str) -> frozenset[str]:
@@ -108,6 +123,7 @@ def _benchmark_profiles(benchmark: dict[str, Any], path: str) -> frozenset[str]:
 
 
 def _validate_metric(metric: dict[str, Any], path: str) -> None:
+    _nonempty_string(metric.get("unit"), f"{path}.unit")
     value_range = _sequence(metric.get("range"), f"{path}.range")
     if (
         len(value_range) != PAIR_LENGTH
@@ -117,6 +133,9 @@ def _validate_metric(metric: dict[str, Any], path: str) -> None:
         raise CatalogBuildError(f"{path}.range is invalid")
     if metric.get("direction") not in {"higher_is_better", "lower_is_better"}:
         raise CatalogBuildError(f"{path}.direction is unsupported")
+    if metric.get("normalization") is not None:
+        normalization = _mapping(metric["normalization"], f"{path}.normalization")
+        _validate_normalization(normalization, f"{path}.normalization")
 
 
 def validate_indices(

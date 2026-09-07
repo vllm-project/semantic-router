@@ -7776,6 +7776,8 @@ benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
   domain: general_reasoning
+  tags:
+  - core
   source: https://github.com/TIGER-AI-Lab/MMLU-Pro
   default_profile: published-standard
   profiles:
@@ -7800,6 +7802,8 @@ benchmarks:
 - id: idavidrein/gpqa-diamond@1.0.0
   display_name: GPQA Diamond
   domain: scientific_reasoning
+  tags:
+  - core
   source: https://arxiv.org/abs/2311.12022
   default_profile: published-standard
   profiles:
@@ -7820,6 +7824,8 @@ benchmarks:
 - id: cais/humanitys-last-exam@1.0.0
   display_name: Humanity's Last Exam
   domain: frontier_reasoning
+  tags:
+  - core
   source: https://agi.safe.ai/
   default_profile: no-tools
   profiles:
@@ -7845,6 +7851,8 @@ benchmarks:
 - id: swe-bench/verified@1.0.0
   display_name: SWE-bench Verified
   domain: software_engineering
+  tags:
+  - core
   source: https://github.com/SWE-bench/SWE-bench
   default_profile: published-agent
   profiles:
@@ -7864,6 +7872,8 @@ benchmarks:
 - id: harbor/terminal-bench@2.1.0
   display_name: Terminal-Bench 2.1
   domain: agentic_systems
+  tags:
+  - core
   source: https://github.com/harbor-framework/terminal-bench-2-1
   default_profile: published-agent
   profiles:
@@ -7956,6 +7966,10 @@ benchmarks:
     range:
     - 0
     - 100
+    normalization:
+      type: linear_clamp
+      min: 0
+      max: 100
 - id: matharena/usamo@2026.0.0
   display_name: USAMO 2026
   domain: mathematical_reasoning
@@ -8024,18 +8038,30 @@ benchmarks:
     range:
     - -3000
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
   - id: elo_lower
     unit: elo
     direction: higher_is_better
     range:
     - -3000
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
   - id: elo_upper
     unit: elo
     direction: higher_is_better
     range:
     - -3000
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
 - id: berkeley-rdi/agents-last-exam@1.0.0
   display_name: Agents' Last Exam
   domain: agentic_systems
@@ -8192,6 +8218,8 @@ benchmarks:
 - id: scicode-bench/scicode@1.0.0
   display_name: SciCode
   domain: scientific_coding
+  tags:
+  - core
   source: https://github.com/scicode-bench/SciCode
   default_profile: published-standard
   profiles:
@@ -8272,18 +8300,30 @@ benchmarks:
     range:
     - 0
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
   - id: elo_lower
     unit: elo
     direction: higher_is_better
     range:
     - 0
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
   - id: elo_upper
     unit: elo
     direction: higher_is_better
     range:
     - 0
     - 3000
+    normalization:
+      type: linear_clamp
+      min: 500
+      max: 2500
 - id: tau-bench/tau3-banking@1.0.0
   display_name: τ³-Banking
   domain: agentic_systems
@@ -8332,6 +8372,10 @@ benchmarks:
     range:
     - -100
     - 100
+    normalization:
+      type: linear_clamp
+      min: -100
+      max: 100
   - id: accuracy
     unit: proportion
     direction: higher_is_better
