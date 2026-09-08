@@ -119,7 +119,7 @@ docker-test-llm-katan: docker-build-llm-katan
 			ready=1; \
 			break; \
 		fi; \
-		if ! $(CONTAINER_RUNTIME) ps --filter "name=$(LLM_KATAN_TEST_CONTAINER)" --format '{{.Names}}' | grep -q "^$(LLM_KATAN_TEST_CONTAINER)$$"; then \
+		if ! $(CONTAINER_RUNTIME) ps --filter "name=$(LLM_KATAN_TEST_CONTAINER)" --format '{{.Names}}' | grep -qxF "$(LLM_KATAN_TEST_CONTAINER)"; then \
 			echo "ERROR: llm-katan container exited unexpectedly"; \
 			$(CONTAINER_RUNTIME) logs $(LLM_KATAN_TEST_CONTAINER) 2>&1 | tail -30 || true; \
 			exit 1; \
@@ -251,10 +251,13 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
-# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
-VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
-VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
+# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once, and
+# the repository prefix derives from DOCKER_REGISTRY so the documented registry
+# override reaches the runtime images too. All platform variants must stay here;
+# a hard-coded prefix in any one of them would resurface on VLLM_SR_PLATFORM runs.
+VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
