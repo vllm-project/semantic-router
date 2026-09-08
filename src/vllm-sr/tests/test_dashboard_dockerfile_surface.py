@@ -651,6 +651,16 @@ def test_runtime_images_bind_the_generated_model_catalog() -> None:
     assert tracked_package_assets == ["src/vllm-sr/cli/model_assets/__init__.py"]
 
 
+def test_gpu_onnx_builders_validate_the_preinstalled_native_toolchain() -> None:
+    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, VLLM_SR_CUDA_DOCKERFILE):
+        content = dockerfile.read_text(encoding="utf-8")
+        onnx_builder = content.split(" AS onnx-builder", maxsplit=1)[1].split(
+            "COPY onnx-binding/Cargo.toml", maxsplit=1
+        )[0]
+        assert "pkg-config --exists openssl" in onnx_builder
+        assert "apt-get" not in onnx_builder
+
+
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
