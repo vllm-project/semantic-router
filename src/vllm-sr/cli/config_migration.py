@@ -13,12 +13,20 @@ from cli.config_contract import (
     LEGACY_ROUTING_KEYS,
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
 )
+from cli.config_migration_catalog import migrate_v03_catalog_contract
+from cli.config_migration_global import normalize_global_layout, place_global_block
 
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     """Return a canonical v0.3 config dict from legacy or mixed input data."""
 
     source = deepcopy(data or {})
+    # Historically an omitted listener list meant that the local CLI would
+    # synthesize its default listener.  An explicit empty list, in contrast,
+    # is the metadata-only/external-gateway mode and must stay transport-free.
+    router_owns_transport = not (
+        "listeners" in source and source.get("listeners") == []
+    )
     providers, routing, global_config = _prepare_blocks(source)
     routing_models, routing_models_by_name = _collect_routing_models(routing)
 
@@ -55,11 +63,11 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         canonical["global"] = global_config
     if "setup" in source:
         canonical["setup"] = deepcopy(source["setup"])
-    if "entrypoints" in source:
-        canonical["entrypoints"] = deepcopy(source["entrypoints"])
-    if "recipes" in source:
-        canonical["recipes"] = deepcopy(source["recipes"])
     _normalize_response_cache_plugins(canonical)
+    migrate_v03_catalog_contract(
+        canonical,
+        router_owns_transport=router_owns_transport,
+    )
 
     return canonical
 
@@ -113,7 +121,7 @@ def _prepare_blocks(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     providers = _as_dict(source.get("providers"))
     routing = _as_dict(source.get("routing"))
-    global_config = _normalize_global_layout(_as_dict(source.get("global")))
+    global_config = normalize_global_layout(_as_dict(source.get("global")))
     return providers, routing, global_config
 
 
@@ -208,12 +216,16 @@ def _normalize_existing_provider_model(
     provider_model = {"name": model_name}
     access = _as_dict(model.get("access"))
 
+    _set_if_missing(provider_model, "catalog", model.get("catalog"))
+    _set_if_missing(provider_model, "reasoning", model.get("reasoning"))
     _set_if_missing(
         provider_model, "provider_model_id", access.get("provider_model_id")
     )
     _set_if_missing(provider_model, "provider_model_id", model.get("provider_model_id"))
     _set_if_missing(provider_model, "pricing", access.get("pricing"))
     _set_if_missing(provider_model, "pricing", model.get("pricing"))
+    _set_if_missing(provider_model, "reliability", access.get("reliability"))
+    _set_if_missing(provider_model, "reliability", model.get("reliability"))
     _set_if_missing(provider_model, "api_format", access.get("api_format"))
     _set_if_missing(provider_model, "api_format", model.get("api_format"))
     _set_if_missing(
@@ -287,7 +299,11 @@ def _ensure_routing_model_refs(
     routing_models_by_name: dict[str, dict[str, Any]],
 ) -> None:
     defaults = _as_dict(providers.get("defaults"))
-    default_model = defaults.get("default_model") or providers.get("default_model")
+    default_model = (
+        defaults.get("model")
+        or defaults.get("default_model")
+        or providers.get("default_model")
+    )
     if isinstance(default_model, str) and default_model.strip():
         _ensure_routing_model(
             default_model.strip(), routing_models, routing_models_by_name
@@ -324,7 +340,7 @@ def _move_legacy_global_blocks(
             continue
         if value in (None, "", [], {}):
             continue
-        _place_global_block(global_config, key, value)
+        place_global_block(global_config, key, value)
 
 
 def _persist_provider_models(
@@ -537,234 +553,6 @@ def _convert_model_targets_to_provider_models(
         provider_models.append(provider_model)
 
     return provider_models
-
-
-def _normalize_global_layout(global_config: dict[str, Any]) -> dict[str, Any]:
-    if not global_config:
-        return {}
-
-    normalized = deepcopy(global_config)
-    legacy_runtime = _as_dict(normalized.pop("runtime", {}))
-    if legacy_runtime:
-        legacy_router = _as_dict(legacy_runtime.pop("router", {}))
-        for key, value in legacy_router.items():
-            _place_global_block(normalized, key, value)
-        for key, value in legacy_runtime.items():
-            _place_global_block(normalized, key, value)
-
-    legacy_models = _as_dict(normalized.pop("models", {}))
-    if legacy_models:
-        embeddings = _as_dict(legacy_models.get("embeddings"))
-        if embeddings and "semantic" in embeddings:
-            _place_global_block(normalized, "embedding_models", embeddings["semantic"])
-        if "system" in legacy_models:
-            _place_global_block(normalized, "system_models", legacy_models["system"])
-        if "external" in legacy_models:
-            _place_global_block(
-                normalized, "external_models", legacy_models["external"]
-            )
-
-    legacy_modules = _as_dict(normalized.pop("modules", {}))
-    if legacy_modules:
-        for key, value in legacy_modules.items():
-            _place_global_block(normalized, key, value)
-
-    for key, value in list(global_config.items()):
-        _place_global_block(normalized, key, value)
-    return normalized
-
-
-def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> None:
-    if key == "auto_model_names" and isinstance(value, list):
-        _ensure_dict(global_config, "router").setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if value in (None, "", [], {}):
-        return
-
-    router = _ensure_dict(global_config, "router")
-    services = _ensure_dict(global_config, "services")
-    stores = _ensure_dict(global_config, "stores")
-    integrations = _ensure_dict(global_config, "integrations")
-    model_catalog = _ensure_dict(global_config, "model_catalog")
-    embeddings = _ensure_dict(model_catalog, "embeddings")
-    modules = _ensure_dict(model_catalog, "modules")
-    classifier = _ensure_dict(modules, "classifier")
-    hallucination = _ensure_dict(modules, "hallucination_mitigation")
-
-    direct_service_keys = {
-        "response_api",
-        "router_replay",
-        "api",
-        "observability",
-        "authz",
-        "ratelimit",
-    }
-    direct_store_keys = {
-        "semantic_cache",
-        "response_cache",
-        "memory",
-        "vector_store",
-    }
-    direct_integration_keys = {
-        "tools",
-        "looper",
-    }
-
-    if key in {
-        "router",
-        "services",
-        "stores",
-        "integrations",
-        "model_catalog",
-    }:
-        return
-    if key in {
-        "strategy",
-        "auto_model_name",
-        "auto_model_names",
-        "include_config_models_in_list",
-        "clear_route_cache",
-        "model_selection",
-    }:
-        router.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "streamed_body_mode":
-        streamed_body = _ensure_dict(router, "streamed_body")
-        streamed_body.setdefault("enabled", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "max_streamed_body_bytes":
-        streamed_body = _ensure_dict(router, "streamed_body")
-        streamed_body.setdefault("max_bytes", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "streamed_body_timeout_sec":
-        streamed_body = _ensure_dict(router, "streamed_body")
-        streamed_body.setdefault("timeout_sec", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key in direct_service_keys:
-        services.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key in direct_store_keys:
-        stores.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key in direct_integration_keys:
-        integrations.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "system_models":
-        model_catalog.setdefault("system", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "external_models":
-        model_catalog.setdefault("external", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "embedding_models":
-        embeddings.setdefault("semantic", deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "bert_model":
-        semantic = _ensure_dict(embeddings, "semantic")
-        legacy_bert = deepcopy(value) if isinstance(value, dict) else {}
-        if "model_id" in legacy_bert and "bert_model_path" not in semantic:
-            semantic["bert_model_path"] = deepcopy(legacy_bert["model_id"])
-        if "use_cpu" in legacy_bert and "use_cpu" not in semantic:
-            semantic["use_cpu"] = deepcopy(legacy_bert["use_cpu"])
-        if "threshold" in legacy_bert:
-            embedding_config = _ensure_dict(semantic, "embedding_config")
-            embedding_config.setdefault(
-                "min_score_threshold", deepcopy(legacy_bert["threshold"])
-            )
-        global_config.pop(key, None)
-        return
-    if key == "prompt_compression":
-        modules.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
-        return
-    if key == "prompt_guard":
-        prompt_guard = deepcopy(value) if isinstance(value, dict) else {}
-        if "model_id" in prompt_guard and "model_ref" not in prompt_guard:
-            prompt_guard["model_ref"] = "prompt_guard"
-        modules.setdefault(key, prompt_guard)
-        global_config.pop(key, None)
-        return
-    if key == "classifier":
-        classifier_value = deepcopy(value) if isinstance(value, dict) else {}
-        if "category_model" in classifier_value:
-            domain = deepcopy(classifier_value.pop("category_model"))
-            if (
-                isinstance(domain, dict)
-                and "model_id" in domain
-                and "model_ref" not in domain
-            ):
-                domain["model_ref"] = "domain_classifier"
-            classifier.setdefault("domain", domain)
-        if "pii_model" in classifier_value:
-            pii = deepcopy(classifier_value.pop("pii_model"))
-            if isinstance(pii, dict) and "model_id" in pii and "model_ref" not in pii:
-                pii["model_ref"] = "pii_classifier"
-            classifier.setdefault("pii", pii)
-        if "mcp_category_model" in classifier_value:
-            classifier.setdefault(
-                "mcp", deepcopy(classifier_value.pop("mcp_category_model"))
-            )
-        if "preference_model" in classifier_value:
-            classifier.setdefault(
-                "preference", deepcopy(classifier_value.pop("preference_model"))
-            )
-        global_config.pop(key, None)
-        return
-    if key == "hallucination_mitigation":
-        hallucination_value = deepcopy(value) if isinstance(value, dict) else {}
-        if "fact_check_model" in hallucination_value:
-            fact_check = deepcopy(hallucination_value.pop("fact_check_model"))
-            if (
-                isinstance(fact_check, dict)
-                and "model_id" in fact_check
-                and "model_ref" not in fact_check
-            ):
-                fact_check["model_ref"] = "fact_check_classifier"
-            hallucination.setdefault("fact_check", fact_check)
-        if "hallucination_model" in hallucination_value:
-            detector = deepcopy(hallucination_value.pop("hallucination_model"))
-            if (
-                isinstance(detector, dict)
-                and "model_id" in detector
-                and "model_ref" not in detector
-            ):
-                detector["model_ref"] = "hallucination_detector"
-            hallucination.setdefault("detector", detector)
-        if "nli_model" in hallucination_value:
-            explainer = deepcopy(hallucination_value.pop("nli_model"))
-            if (
-                isinstance(explainer, dict)
-                and "model_id" in explainer
-                and "model_ref" not in explainer
-            ):
-                explainer["model_ref"] = "hallucination_explainer"
-            hallucination.setdefault("explainer", explainer)
-        if "enabled" in hallucination_value:
-            hallucination.setdefault(
-                "enabled", deepcopy(hallucination_value["enabled"])
-            )
-        global_config.pop(key, None)
-        return
-    if key == "feedback_detector":
-        feedback = deepcopy(value) if isinstance(value, dict) else {}
-        if "model_id" in feedback and "model_ref" not in feedback:
-            feedback["model_ref"] = "feedback_detector"
-        modules.setdefault(key, feedback)
-        global_config.pop(key, None)
-        return
-    if key == "modality_detector":
-        modules.setdefault(key, deepcopy(value))
-        global_config.pop(key, None)
 
 
 def _ensure_dict(target: dict[str, Any], key: str) -> dict[str, Any]:

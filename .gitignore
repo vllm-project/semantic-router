@@ -84,6 +84,8 @@ tools/bin/
 !*/trained_model/README.md
 !*/models/README.md
 models
+!config/catalog/resources/models/
+!config/catalog/resources/models/*.yaml
 # Exception for Go models package in dashboard backend
 !dashboard/backend/models/
 # Exception for the fleet-sim Python model catalog package

@@ -354,10 +354,10 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               </tr>
               <tr>
                 <td>
-                  <code>quality_score</code>
+                  <code>evaluations</code>
                 </td>
-                <td>number</td>
-                <td>Optional quality hint for selection logic</td>
+                <td>object[]</td>
+                <td>Versioned benchmark IDs with named numeric metrics</td>
               </tr>
               <tr>
                 <td>
@@ -568,12 +568,12 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
                 </tr>
                 <tr>
                   <td>
-                    <code>reasoning_family</code>
-                  </td>
-                  <td>string</td>
-                  <td>
-                    e.g. <code>qwen3</code>, <code>deepseek</code>
-                  </td>
+                  <code>reasoning</code>
+                </td>
+                <td>boolean</td>
+                <td>
+                    Enable the model's catalog-defined reasoning behavior
+                </td>
                 </tr>
               </tbody>
             </table>

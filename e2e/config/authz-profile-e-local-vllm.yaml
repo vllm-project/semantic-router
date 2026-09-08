@@ -20,4 +20,5 @@ providers:
       provider_model_id: meta-llama/Llama-3-8B
       backend_refs:
         - name: local-vllm
+          provider: vllm
           api_key: ""
