@@ -213,8 +213,8 @@ func TestWriteConfigSnapshotReplacesInodeAndNeverExposesNewBytes(t *testing.T) {
 	}
 	defer stale.Close()
 
-	if err := writeConfigSnapshot(path, []byte("api_key: new-secret\n")); err != nil {
-		t.Fatalf("writeConfigSnapshot: %v", err)
+	if writeErr := writeConfigSnapshot(path, []byte("api_key: new-secret\n")); writeErr != nil {
+		t.Fatalf("writeConfigSnapshot: %v", writeErr)
 	}
 
 	staleBytes, err := io.ReadAll(stale)
