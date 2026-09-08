@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -20,6 +21,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
+
+const metricsReadHeaderTimeout = 10 * time.Second
 
 type runtimeOptions struct {
 	configPath             string
@@ -298,7 +301,11 @@ func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) *htt
 		})
 		return nil
 	}
-	server := &http.Server{Addr: metricsAddr, Handler: metrics.NewServeMux()}
+	server := &http.Server{
+		Addr:              metricsAddr,
+		Handler:           metrics.NewServeMux(),
+		ReadHeaderTimeout: metricsReadHeaderTimeout,
+	}
 	logging.ComponentEvent("router", "metrics_server_starting", map[string]interface{}{
 		"address": metricsAddr,
 	})

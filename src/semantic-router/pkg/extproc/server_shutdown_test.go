@@ -306,8 +306,8 @@ func TestServerShutdownDrainsGenerationAfterForcedGRPCStopWithinDeadline(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
-		t.Fatal(err)
+	if sendErr := stream.SendMsg(&emptypb.Empty{}); sendErr != nil {
+		t.Fatal(sendErr)
 	}
 	select {
 	case <-rpcStarted:

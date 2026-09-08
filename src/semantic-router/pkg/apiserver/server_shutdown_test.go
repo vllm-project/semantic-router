@@ -14,11 +14,14 @@ import (
 func TestServerShutdownDrainsAcceptedRequest(t *testing.T) {
 	started := make(chan struct{})
 	release := make(chan struct{})
-	httpServer := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		close(started)
-		<-release
-		w.WriteHeader(http.StatusNoContent)
-	})}
+	httpServer := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			close(started)
+			<-release
+			w.WriteHeader(http.StatusNoContent)
+		}),
+		ReadHeaderTimeout: time.Second,
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -64,11 +67,14 @@ func TestServerShutdownDrainsAcceptedRequest(t *testing.T) {
 func TestServerShutdownForcesBoundedRequestCancellation(t *testing.T) {
 	started := make(chan struct{})
 	cancelled := make(chan struct{})
-	httpServer := &http.Server{Handler: http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
-		close(started)
-		<-request.Context().Done()
-		close(cancelled)
-	})}
+	httpServer := &http.Server{
+		Handler: http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+			close(started)
+			<-request.Context().Done()
+			close(cancelled)
+		}),
+		ReadHeaderTimeout: time.Second,
+	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

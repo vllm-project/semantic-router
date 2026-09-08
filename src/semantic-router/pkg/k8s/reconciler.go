@@ -171,9 +171,9 @@ func (r *Reconciler) Start(ctx context.Context) error {
 
 func runtimeManagerExitError(err error) error {
 	if err == nil {
-		return errors.New("Kubernetes runtime manager stopped unexpectedly")
+		return errors.New("kubernetes runtime manager stopped unexpectedly")
 	}
-	return fmt.Errorf("Kubernetes runtime manager: %w", err)
+	return fmt.Errorf("kubernetes runtime manager: %w", err)
 }
 
 // Stop stops the reconciler

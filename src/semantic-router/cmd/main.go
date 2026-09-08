@@ -79,7 +79,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		))
 	}()
 
-	if err := ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
+	if err = ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
 	if opts.downloadOnly {
