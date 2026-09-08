@@ -25056,6 +25056,516 @@
       }
     },
     {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-low-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.492122335495829
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6 Astra (low)",
+        "source_model_slug": "gpt-6-astra-low",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-low-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.880149812734082
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "source_model": "GPT-6 Astra (low)",
+        "source_model_slug": "gpt-6-astra-low",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-low-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.931313131313131
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 198,
+        "source_model": "GPT-6 Astra (low)",
+        "source_model_slug": "gpt-6-astra-low"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-low-scicode@1.0.0",
+      "metrics": {
+        "score": 0.540509259259259
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "low",
+      "status": "available",
+      "subject": {
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6 Astra (low)",
+        "source_model_slug": "gpt-6-astra-low",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.527340129749768
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6 Astra (medium)",
+        "source_model_slug": "gpt-6-astra-medium",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-medium-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.895131086142322
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "source_model": "GPT-6 Astra (medium)",
+        "source_model_slug": "gpt-6-astra-medium",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-medium-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.939393939393939
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 198,
+        "source_model": "GPT-6 Astra (medium)",
+        "source_model_slug": "gpt-6-astra-medium"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-medium-scicode@1.0.0",
+      "metrics": {
+        "score": 0.541666666666667
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "medium",
+      "status": "available",
+      "subject": {
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6 Astra (medium)",
+        "source_model_slug": "gpt-6-astra-medium",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-high-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.530583873957368
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6 Astra (high)",
+        "source_model_slug": "gpt-6-astra-high",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-high-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.898876404494382
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "source_model": "GPT-6 Astra (high)",
+        "source_model_slug": "gpt-6-astra-high",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-high-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.94949494949495
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 198,
+        "source_model": "GPT-6 Astra (high)",
+        "source_model_slug": "gpt-6-astra-high"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-high-scicode@1.0.0",
+      "metrics": {
+        "score": 0.554398148148148
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6 Astra (high)",
+        "source_model_slug": "gpt-6-astra-high",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.545875810936052
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6 Astra (xhigh)",
+        "source_model_slug": "gpt-6-astra-xhigh",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-xhigh-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.891385767790262
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "source_model": "GPT-6 Astra (xhigh)",
+        "source_model_slug": "gpt-6-astra-xhigh",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-xhigh-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.962626262626263
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 198,
+        "source_model": "GPT-6 Astra (xhigh)",
+        "source_model_slug": "gpt-6-astra-xhigh"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-xhigh-scicode@1.0.0",
+      "metrics": {
+        "score": 0.556712962962963
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6 Astra (xhigh)",
+        "source_model_slug": "gpt-6-astra-xhigh",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-max-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.546802594995366
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6 Astra (max)",
+        "source_model_slug": "gpt-6-astra",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/terminalbench-v2-1",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-max-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.883895131086142
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Terminus 2",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "source_model": "GPT-6 Astra (max)",
+        "source_model_slug": "gpt-6-astra",
+        "task_count": 89
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/gpqa-diamond",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-max-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.960606060606061
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "sample_count": 198,
+        "source_model": "GPT-6 Astra (max)",
+        "source_model_slug": "gpt-6-astra"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/evaluations/scicode",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-astra-max-scicode@1.0.0",
+      "metrics": {
+        "score": 0.564814814814815
+      },
+      "model": "openai/gpt-6-astra",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6 Astra (max)",
+        "source_model_slug": "gpt-6-astra",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
       "benchmark": "idavidrein/gpqa-diamond@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
