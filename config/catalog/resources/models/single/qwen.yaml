@@ -258,3 +258,175 @@
   - moe
   - efficient
   released_at: '2026-04-16'
+- id: qwen/qwen3.5-397b-a17b
+  display_name: Qwen3.5 397B A17B
+  description: Frontier Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 397B (17B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - frontier
+  released_at: '2026-02-16'
+- id: qwen/qwen3.5-122b-a10b
+  display_name: Qwen3.5 122B A10B
+  description: Efficient Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 122B (10B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2026-02-24'
+- id: qwen/qwen3-235b-a22b-thinking-2507
+  display_name: Qwen3 235B A22B Thinking 2507
+  description: Updated large Qwen3 thinking checkpoint for reasoning and agentic workloads.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 235B (22B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
+  released_at: '2025-07-25'
+- id: qwen/qwen3-30b-a3b-thinking-2507
+  display_name: Qwen3 30B A3B Thinking 2507
+  description: Updated compact Qwen3 thinking MoE checkpoint for efficient reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2025-07-29'

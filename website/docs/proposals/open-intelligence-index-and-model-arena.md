@@ -95,15 +95,20 @@ complete result appear in a separate coverage queue ordered by coverage. This
 queue exposes useful historical evidence without presenting unlike partial
 means as a leaderboard.
 
-At the current catalog snapshot, the Hub contains 89 Model Cards: 84 physical
-and five virtual. Fifty-four are open-weight cards from 19 creators, covering
-current and recent representative model lines. The index compiler emits 265
-model-effort rows. Eight models currently have all five components and are
-rankable; all eight are open-weight models. The other 81 cards stay visible with
-their exact gaps. These counts are generated facts, not hard-coded UI copy.
-The complete set is DeepSeek R1, DeepSeek V4 Flash, DeepSeek V4 Pro, Gemma 4
-31B IT, Kimi K2.5, NVIDIA Nemotron 3 Ultra, NVIDIA Nemotron 3.5 Lightning, and
-GPT-OSS 120B.
+At the current catalog snapshot, the Hub contains 100 Model Cards: 95 physical
+and five virtual. Sixty-five are open-weight cards from 19 creators, covering
+current and recent representative model lines. The catalog carries 1,471
+versioned evaluation records, and the index compiler emits 285 model-effort
+rows. Twenty-six unique models have all five components and are rankable; all
+26 are open-weight models. The other 74 cards stay visible with their exact
+gaps. These counts are generated facts, not hard-coded UI copy.
+
+The complete cohort spans DeepSeek R1/V3/V3.1/V4, Gemma 3/4, Llama 4,
+MiniMax M2.7, Kimi K2.5/K2.6, Mistral Small 3.2, Nemotron 3/3.5, GPT-OSS,
+Qwen3/Qwen3.5, and GLM-5.1. Expansion uses immutable benchmark-owner
+leaderboards, version-pinned official model cards, exact-checkpoint independent
+runs, and a named-harness cross-vendor technical report. Every imported value
+retains its model variant, reasoning mode, profile, source, and provenance.
 
 Routing consumes only an `available` result as its evidence-backed quality
 prior. The existing multi-factor selector keeps price, latency, availability,

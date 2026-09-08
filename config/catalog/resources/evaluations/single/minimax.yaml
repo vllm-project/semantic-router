@@ -564,3 +564,42 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-minimax-minimax-m3
     redistributable: true
+- id: nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-2.7 230B-A10B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.819
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/minimax-m2.7-scicode@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-2.7 230B-A10B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.383
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true

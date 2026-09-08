@@ -1407,3 +1407,75 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-meta-muse-spark-1-2
     redistributable: true
+- id: meta/llama-4-maverick-model-card-mmlu-pro@1.0.0
+  model: meta/llama-4-maverick-17b-128e-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Llama-4-Maverick-17B-128E-Instruct
+    source_kind: official_model_card
+    metric_variant: zero_shot_macro_average
+  metrics:
+    accuracy: 0.805
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct/blob/73d14711bcc77c16df3470856949c3764056b617/README.md
+    redistributable: true
+- id: independent/llama-4-maverick-scicode@1.0.0
+  model: meta/llama-4-maverick-17b-128e-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Llama 4 Maverick
+    source_model_slug: llama-4-maverick
+    run_kind: independent
+  metrics:
+    score: 0.31712962962963
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/llama-4-maverick
+    redistributable: true
+- id: meta/llama-4-scout-model-card-mmlu-pro@1.0.0
+  model: meta/llama-4-scout-17b-16e-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Llama-4-Scout-17B-16E-Instruct
+    source_kind: official_model_card
+    metric_variant: zero_shot_macro_average
+  metrics:
+    accuracy: 0.743
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct/blob/92f3b1597a195b523d8d9e5700e57e4fbb8f20d3/README.md
+    redistributable: true
+- id: independent/llama-4-scout-scicode@1.0.0
+  model: meta/llama-4-scout-17b-16e-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Llama 4 Scout
+    source_model_slug: llama-4-scout
+    run_kind: independent
+  metrics:
+    score: 0.212962962962963
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/llama-4-scout
+    redistributable: true

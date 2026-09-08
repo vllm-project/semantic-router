@@ -5432,3 +5432,41 @@
     verification: claimed
     source: https://openai.com/index/gpt-6-astra/
     redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-20b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-20B(high)
+    source_model_slug: gpt-oss-20b-high
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.736
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gpt-oss-20b-scicode@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.388888888888889
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gpt-oss-20b
+    redistributable: true

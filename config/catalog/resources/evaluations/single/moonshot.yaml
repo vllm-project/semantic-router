@@ -1229,3 +1229,42 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-moonshotai-kimi-k3
     redistributable: true
+- id: nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.881
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/kimi-k2.6-scicode@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.520
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true

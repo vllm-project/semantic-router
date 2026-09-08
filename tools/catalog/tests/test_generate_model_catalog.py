@@ -19,6 +19,8 @@ SPEC.loader.exec_module(catalog)
 from catalog_evaluations import evaluation_coverage  # noqa: E402
 
 DEFAULT_INDEX_COMPONENT_COUNT = 5
+DEFAULT_INDEX_ID = "vllm-sr/intelligence@1.0.0"
+MINIMUM_RANKABLE_MODEL_COUNT = 21
 OPENAI_LONG_CONTEXT_TOKENS = 1_050_000
 
 
@@ -85,9 +87,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
     def test_default_intelligence_index_is_public_and_complete_case(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         index = next(
-            item
-            for item in resources["indices"]
-            if item["id"] == "vllm-sr/intelligence@1.0.0"
+            item for item in resources["indices"] if item["id"] == DEFAULT_INDEX_ID
         )
         self.assertEqual(index["missing"], {"policy": "require_all"})
         self.assertEqual(
@@ -118,6 +118,35 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 component["normalization"] == {"type": "identity"}
                 for component in index["components"]
             )
+        )
+
+    def test_default_intelligence_index_has_a_broad_unique_model_cohort(self) -> None:
+        outputs = catalog.render_outputs()
+        snapshot = json.loads(outputs[catalog.WEBSITE_OUTPUT])
+        rankable_models = {
+            result["model"]
+            for result in snapshot["index_results"]
+            if result["index"] == DEFAULT_INDEX_ID and result["status"] == "available"
+        }
+
+        self.assertGreaterEqual(
+            len(rankable_models),
+            MINIMUM_RANKABLE_MODEL_COUNT,
+            "the core index must retain more than 20 uniquely rankable models",
+        )
+        self.assertTrue(
+            {
+                "deepseek/deepseek-v3.1-terminus",
+                "google/gemma-3-27b-it",
+                "meta/llama-4-maverick-17b-128e-instruct",
+                "minimax/minimax-m2.7",
+                "mistral/mistral-small-3.2-24b-instruct",
+                "moonshot/kimi-k2.6",
+                "nvidia/nemotron-3-nano-30b-a3b",
+                "openai/gpt-oss-20b",
+                "qwen/qwen3.5-397b-a17b",
+                "zai/glm-5.1",
+            }.issubset(rankable_models)
         )
 
     def test_benchmark_display_contract_is_percentage_ready_and_core_is_curated(

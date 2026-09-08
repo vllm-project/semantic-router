@@ -3274,6 +3274,127 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+  - catalog: deepseek/deepseek-v3
+    relationship: self_hosted
+    id: deepseek-ai/DeepSeek-V3
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/deepseek-ai/DeepSeek-V3
+  - catalog: deepseek/deepseek-v3-0324
+    relationship: self_hosted
+    id: deepseek-ai/DeepSeek-V3-0324
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/deepseek-ai/DeepSeek-V3-0324
+  - catalog: deepseek/deepseek-v3.1-terminus
+    relationship: self_hosted
+    id: deepseek-ai/DeepSeek-V3.1-Terminus
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus
+  - catalog: google/gemma-3-27b-it
+    relationship: self_hosted
+    id: google/gemma-3-27b-it
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/google/gemma-3-27b-it
+  - catalog: google/gemma-3-12b-it
+    relationship: self_hosted
+    id: google/gemma-3-12b-it
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/google/gemma-3-12b-it
+  - catalog: mistral/mistral-small-3.2-24b-instruct
+    relationship: self_hosted
+    id: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  - catalog: nvidia/nemotron-3-nano-30b-a3b
+    relationship: self_hosted
+    id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  - catalog: qwen/qwen3.5-397b-a17b
+    relationship: self_hosted
+    id: Qwen/Qwen3.5-397B-A17B
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+  - catalog: qwen/qwen3.5-122b-a10b
+    relationship: self_hosted
+    id: Qwen/Qwen3.5-122B-A10B
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+  - catalog: qwen/qwen3-235b-a22b-thinking-2507
+    relationship: self_hosted
+    id: Qwen/Qwen3-235B-A22B-Thinking-2507
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+  - catalog: qwen/qwen3-30b-a3b-thinking-2507
+    relationship: self_hosted
+    id: Qwen/Qwen3-30B-A3B-Thinking-2507
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-09'
+      source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
 - id: volcengine-ark
   display_name: Volcengine Ark
   description: ByteDance Seed and Doubao models through the Ark OpenAI-compatible API.
@@ -3564,12 +3685,25 @@ reasoning_families:
   - enabled
   - disabled
   default_mode: enabled
+- id: deepseek-v3.1
+  type: chat_template_kwargs
+  parameter: thinking
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
 - id: qwen3
   type: chat_template_kwargs
   parameter: enable_thinking
   modes:
   - enabled
   - disabled
+  default_mode: enabled
+- id: qwen3-always-on
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes:
+  - enabled
   default_mode: enabled
 - id: qwen3.8
   type: reasoning_effort
@@ -4967,6 +5101,122 @@ models:
   - moe
   - agentic
   released_at: '2025-12-01'
+- id: deepseek/deepseek-v3.1-terminus
+  display_name: DeepSeek V3.1 Terminus
+  description: Refined V3.1 checkpoint with switchable reasoning and improved agent behavior.
+  kind: physical
+  publisher: DeepSeek
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus
+    license: MIT
+  family: deepseek-v3.1
+  reasoning_family: deepseek-v3.1
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: DeepSeek
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
+  released_at: '2025-09-22'
+- id: deepseek/deepseek-v3-0324
+  display_name: DeepSeek V3 0324
+  description: Updated V3 checkpoint with stronger reasoning, coding, and tool-use quality.
+  kind: physical
+  publisher: DeepSeek
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3-0324
+    license: MIT
+  family: deepseek-v3
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: DeepSeek
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3-0324
+  tags:
+  - open_weights
+  - moe
+  - agentic
+  released_at: '2025-03-24'
+- id: deepseek/deepseek-v3
+  display_name: DeepSeek V3
+  description: First V3 open-weight mixture-of-experts checkpoint for general and coding workloads.
+  kind: physical
+  publisher: DeepSeek
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3
+    license: DeepSeek-Model-License
+  family: deepseek-v3
+  parameter_size: 671B (37B active)
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: DeepSeek
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3
+  tags:
+  - open_weights
+  - moe
+  released_at: '2024-12-26'
 - id: deepseek/deepseek-r1
   display_name: DeepSeek R1
   description: First-generation open-weight DeepSeek reasoning model derived from DeepSeek V3.
@@ -5185,6 +5435,82 @@ models:
   - open_weights
   - multimodal
   released_at: '2026-04-02'
+- id: google/gemma-3-27b-it
+  display_name: Gemma 3 27B IT
+  description: Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-27b-it
+    license: Gemma
+  family: gemma-3
+  parameter_size: 27B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/google/gemma-3-27b-it
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  released_at: '2025-03-12'
+- id: google/gemma-3-12b-it
+  display_name: Gemma 3 12B IT
+  description: Mid-size Gemma 3 instruction-tuned checkpoint for multimodal local serving.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-3-12b-it
+    license: Gemma
+  family: gemma-3
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/google/gemma-3-12b-it
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  released_at: '2025-03-12'
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.
@@ -5771,6 +6097,47 @@ models:
   - moe
   - frontier
   released_at: '2025-12-02'
+- id: mistral/mistral-small-3.2-24b-instruct
+  display_name: Mistral Small 3.2 24B Instruct
+  description: Compact multimodal Mistral instruction checkpoint for local and edge deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    license: Apache-2.0
+  family: mistral-small-3
+  parameter_size: 24B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - efficient
+  released_at: '2025-06-19'
 - id: moonshot/kimi-k3
   display_name: Kimi K3
   description: Moonshot AI native multimodal MoE model for long-context agents.
@@ -6162,6 +6529,47 @@ models:
   - moe
   - efficient
   released_at: '2026-03-19'
+- id: nvidia/nemotron-3-nano-30b-a3b
+  display_name: NVIDIA Nemotron 3 Nano 30B A3B
+  description: Compact text-only Nemotron 3 reasoning model with open evaluation recipes.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+    license: NVIDIA-Nemotron-Open-Model-License
+  family: nemotron-3
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2025-12-15'
 - id: openai/gpt-6-astra
   display_name: GPT-6 Astra
   description: OpenAI flagship model for complex reasoning, coding, computer use, research, and document creation.
@@ -6749,6 +7157,178 @@ models:
   - moe
   - efficient
   released_at: '2026-04-16'
+- id: qwen/qwen3.5-397b-a17b
+  display_name: Qwen3.5 397B A17B
+  description: Frontier Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 397B (17B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - frontier
+  released_at: '2026-02-16'
+- id: qwen/qwen3.5-122b-a10b
+  display_name: Qwen3.5 122B A10B
+  description: Efficient Qwen3.5 multimodal MoE checkpoint with switchable reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+    license: Apache-2.0
+  family: qwen3.5
+  reasoning_family: qwen3
+  parameter_size: 122B (10B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2026-02-24'
+- id: qwen/qwen3-235b-a22b-thinking-2507
+  display_name: Qwen3 235B A22B Thinking 2507
+  description: Updated large Qwen3 thinking checkpoint for reasoning and agentic workloads.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 235B (22B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - agentic
+  released_at: '2025-07-25'
+- id: qwen/qwen3-30b-a3b-thinking-2507
+  display_name: Qwen3 30B A3B Thinking 2507
+  description: Updated compact Qwen3 thinking MoE checkpoint for efficient reasoning.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+    license: Apache-2.0
+  family: qwen3
+  reasoning_family: qwen3-always-on
+  parameter_size: 30B (3B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: '2026-09-09'
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+  tags:
+  - open_weights
+  - reasoning
+  - moe
+  - efficient
+  released_at: '2025-07-29'
 - id: stepfun/step-3.7-flash
   display_name: Step 3.7 Flash
   description: Open-weight multimodal MoE model for efficient reasoning and agentic workflows.
@@ -15534,6 +16114,332 @@ evaluations:
     verification: imported
     source: https://cognition.com/data/frontiercode-leaderboard/data.json
     redistributable: true
+- id: mmlu-pro-leaderboard/deepseek-v3@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: DeepSeek-V3
+    source_kind: official_benchmark_leaderboard
+    source_model: Deepseek-V3
+    source_model_slug: deepseek-v3
+  metrics:
+    accuracy: 0.7587
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/deepseek-v3-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    accuracy: 0.556565656565657
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    accuracy: 0.029
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-scicode@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    score: 0.357638888888889
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    resolved: 0.168539325842697
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: DeepSeek-V3-0324
+    source_kind: official_benchmark_leaderboard
+    source_model: Deepseek-V3-0324
+    source_model_slug: deepseek-v3-0324
+  metrics:
+    accuracy: 0.813
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/deepseek-v3-0324-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    accuracy: 0.654545454545455
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    accuracy: 0.0474
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-scicode@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    score: 0.390046296296296
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    resolved: 0.138576779026217
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: DeepSeek-V3.1-Terminus
+    source_kind: official_model_card
+    mode: reasoning
+  metrics:
+    accuracy: 0.85
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus/blob/19510d6dc61f79dbd925bd51ee8a9081c509a4b6/README.md
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.791919191919192
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.163577386468953
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.37962962962963
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.449438202247191
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-aime-2025@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.26
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-0324-aime-2025@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.41
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3.1-terminus-aime-2025@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.896666666666667
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
 - id: independent/gemini-3-6-flash-critpt@1.0.0
   model: google/gemini-3.6-flash
   benchmark: artificial-analysis/critpt@1.0.0
@@ -17159,6 +18065,224 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-google-gemini-3-6-flash
     redistributable: true
+- id: mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: gemma-3-27b-it
+    source_kind: official_benchmark_leaderboard
+    source_model: Gemma-3-27B-it
+    source_model_slug: gemma-3-27b-it
+  metrics:
+    accuracy: 0.675
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gemma-3-27b-gpqa-diamond@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.428282828282828
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-humanitys-last-exam@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.044
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-scicode@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    score: 0.232638888888889
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-terminalbench-v2-1@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    resolved: 0.0449438202247191
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: gemma-3-12b-it
+    source_kind: official_benchmark_leaderboard
+    source_model: Gemma-3-12B-it
+    source_model_slug: gemma-3-12b-it
+  metrics:
+    accuracy: 0.606
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gemma-3-12b-gpqa-diamond@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    accuracy: 0.349494949494949
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-12b-humanitys-last-exam@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    accuracy: 0.0421
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-12b-scicode@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    score: 0.164351851851852
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-12b-terminalbench-v2-1@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    resolved: 0.0
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-27b-aime-2025@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.206666666666667
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-12b-aime-2025@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.183333333333333
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
 - id: independent/muse-spark-1-3-aa-briefcase@1.0.0
   model: meta/muse-spark-1.3
   benchmark: artificial-analysis/briefcase@1.0.0
@@ -18568,6 +19692,78 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-meta-muse-spark-1-2
     redistributable: true
+- id: meta/llama-4-maverick-model-card-mmlu-pro@1.0.0
+  model: meta/llama-4-maverick-17b-128e-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Llama-4-Maverick-17B-128E-Instruct
+    source_kind: official_model_card
+    metric_variant: zero_shot_macro_average
+  metrics:
+    accuracy: 0.805
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct/blob/73d14711bcc77c16df3470856949c3764056b617/README.md
+    redistributable: true
+- id: independent/llama-4-maverick-scicode@1.0.0
+  model: meta/llama-4-maverick-17b-128e-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Llama 4 Maverick
+    source_model_slug: llama-4-maverick
+    run_kind: independent
+  metrics:
+    score: 0.31712962962963
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/llama-4-maverick
+    redistributable: true
+- id: meta/llama-4-scout-model-card-mmlu-pro@1.0.0
+  model: meta/llama-4-scout-17b-16e-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Llama-4-Scout-17B-16E-Instruct
+    source_kind: official_model_card
+    metric_variant: zero_shot_macro_average
+  metrics:
+    accuracy: 0.743
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct/blob/92f3b1597a195b523d8d9e5700e57e4fbb8f20d3/README.md
+    redistributable: true
+- id: independent/llama-4-scout-scicode@1.0.0
+  model: meta/llama-4-scout-17b-16e-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Llama 4 Scout
+    source_model_slug: llama-4-scout
+    run_kind: independent
+  metrics:
+    score: 0.212962962962963
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/llama-4-scout
+    redistributable: true
 - id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-ai2d@1.0.0
   model: microsoft/phi-4-reasoning-vision-15b
   benchmark: ai2d/ai2d@1.0.0
@@ -19896,6 +21092,45 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-minimax-minimax-m3
     redistributable: true
+- id: nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-2.7 230B-A10B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.819
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/minimax-m2.7-scicode@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax-2.7 230B-A10B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.383
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
 - id: independent/mistral-large-3-critpt@1.0.0
   model: mistral/mistral-large-3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -20497,6 +21732,115 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-mistralai-mistral-medium-3-5
+    redistributable: true
+- id: mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Mistral-Small-3.2-24B-Instruct-2506
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6676
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506/blob/95a6d26c4bfb886c58daf9d3f7332c857cb27b43/README.md
+    redistributable: true
+- id: independent/mistral-small-3.2-gpqa-diamond@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.505050505050505
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.0430954587581094
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-scicode@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.28587962962963
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-terminal-bench-2.1@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    resolved: 0.0561797752808989
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-aime-2025@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.27
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
     redistributable: true
 - id: moonshot/kimi-k2-5-model-card-scicode@1.0.0
   model: moonshot/kimi-k2.5
@@ -21729,6 +23073,45 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-moonshotai-kimi-k3
     redistributable: true
+- id: nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.881
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/kimi-k2.6-scicode@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.52
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
 - id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
   benchmark: scicode-bench/scicode@1.0.0
@@ -22533,6 +23916,151 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
+    redistributable: true
+- id: nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.8373
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
+    redistributable: true
+- id: nvidia/nemotron-3-super-model-card-scicode@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_model_card
+    metric_variant: subtask
+  metrics:
+    score: 0.4205
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
+    redistributable: true
+- id: mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Nemotron-3-Nano-30B-A3B(BF16)
+    source_model_slug: nemotron-3-nano-30b-a3b-bf16
+    source_kind: official_benchmark_leaderboard
+  metrics:
+    accuracy: 0.783
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.756565656565657
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.113994439295644
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-scicode@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.305555555555556
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.0674157303370786
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-aime-2025@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.91
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
     redistributable: true
 - id: independent/gpt-5-4-non-reasoning-critpt@1.0.0
   model: openai/gpt-5.4
@@ -27968,6 +29496,44 @@ evaluations:
     verification: claimed
     source: https://openai.com/index/gpt-6-astra/
     redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-20b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-20B(high)
+    source_model_slug: gpt-oss-20b-high
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.736
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gpt-oss-20b-scicode@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.388888888888889
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gpt-oss-20b
+    redistributable: true
 - id: independent/qwen3-7-max-critpt@1.0.0
   model: qwen/qwen3.7-max
   benchmark: artificial-analysis/critpt@1.0.0
@@ -29909,6 +31475,444 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-qwen-qwen3-8-max
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3.5-397B-A17B
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3.5-397B-A17B
+    source_model_slug: qwen3-5-397b-a17b
+    mode: reasoning
+  metrics:
+    accuracy: 0.878
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    accuracy: 0.892929292929293
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    accuracy: 0.289620018535681
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-scicode@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    score: 0.447916666666667
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    resolved: 0.51310861423221
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3.5-122B-A10B
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3.5-122B-A10B
+    source_model_slug: qwen3-5-122b-a10b
+    mode: reasoning
+  metrics:
+    accuracy: 0.867
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.856565656565657
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.252085264133457
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-scicode@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    score: 0.396990740740741
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    resolved: 0.47565543071161
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3-235B-A22B-Thinking-2507
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3-235B-A22B-Thinking-2507
+    source_model_slug: qwen3-235b-a22b-thinking-2507
+  metrics:
+    accuracy: 0.845
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.78989898989899
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.158943466172382
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.414351851851852
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.119850187265918
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3-30B-A3B-Thinking-2507
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3-30B-A3B-Thinking-2507
+    source_model_slug: qwen3-30b-a3b-thinking-2507
+  metrics:
+    accuracy: 0.809
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.707070707070707
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.102873030583874
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.329861111111111
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.0149812734082397
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3.5-397b-a17b-lcr@1.1.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    score: 0.773333333333333
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3.5-122b-a10b-lcr@1.1.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    score: 0.763333333333333
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-aime-2025@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.91
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-aime-2025@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.563333333333333
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
     redistributable: true
 - id: independent/step-3.7-flash-high-omniscience@1.0.0
   model: stepfun/step-3.7-flash
@@ -34640,6 +36644,45 @@ evaluations:
     verification: imported
     source: https://cursor.com/cursorbench
     redistributable: true
+- id: nvidia-comparative/glm-5.1-mmlu-pro@1.0.0
+  model: zai/glm-5.1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 744B-A40B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.859
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/glm-5.1-scicode@1.0.0
+  model: zai/glm-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 744B-A40B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.477
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
 indices:
 - id: vllm-sr/intelligence@1.0.0
   display_name: vLLM-SR Open Intelligence Index
@@ -34847,6 +36890,228 @@ index_results:
     general_reasoning: 86.2
     scientific_coding: 50.3472222222222
     scientific_reasoning: 90.8080808080808
+- model: deepseek/deepseek-v3.1-terminus
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 52.69128820529932
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.85
+    normalized: 0.85
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.791919191919192
+    normalized: 0.791919191919192
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.163577386468953
+    normalized: 0.163577386468953
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.37962962962963
+    normalized: 0.37962962962963
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.449438202247191
+    normalized: 0.449438202247191
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0
+  - independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0
+  - independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
+  - independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0
+  - independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0
+  domains:
+    agentic_systems: 44.9438202247191
+    frontier_reasoning: 16.3577386468953
+    general_reasoning: 85.0
+    scientific_coding: 37.962962962963005
+    scientific_reasoning: 79.1919191919192
+- model: deepseek/deepseek-v3-0324
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 40.871370597359366
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.813
+    normalized: 0.813
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.654545454545455
+    normalized: 0.654545454545455
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-v3-0324-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.0474
+    normalized: 0.0474
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.390046296296296
+    normalized: 0.390046296296296
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/deepseek-v3-0324-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.138576779026217
+    normalized: 0.138576779026217
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/deepseek-v3-0324-gpqa-diamond@1.0.0
+  - independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
+  - independent/deepseek-v3-0324-scicode@1.0.0
+  - independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0
+  domains:
+    agentic_systems: 13.8576779026217
+    frontier_reasoning: 4.74
+    general_reasoning: 81.3
+    scientific_coding: 39.0046296296296
+    scientific_reasoning: 65.4545454545455
+- model: deepseek/deepseek-v3
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 37.40887742594487
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.7587
+    normalized: 0.7587
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/deepseek-v3@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.556565656565657
+    normalized: 0.556565656565657
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-v3-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.029
+    normalized: 0.029
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-v3-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.357638888888889
+    normalized: 0.357638888888889
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/deepseek-v3-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.168539325842697
+    normalized: 0.168539325842697
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-v3-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/deepseek-v3-gpqa-diamond@1.0.0
+  - independent/deepseek-v3-humanitys-last-exam@1.0.0
+  - independent/deepseek-v3-scicode@1.0.0
+  - independent/deepseek-v3-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/deepseek-v3@1.0.0
+  domains:
+    agentic_systems: 16.8539325842697
+    frontier_reasoning: 2.9000000000000004
+    general_reasoning: 75.87
+    scientific_coding: 35.7638888888889
+    scientific_reasoning: 55.656565656565704
 - model: deepseek/deepseek-r1
   reasoning_effort: default
   index: vllm-sr/intelligence@1.0.0
@@ -34995,6 +37260,524 @@ index_results:
     general_reasoning: 85.2
     scientific_coding: 45.4861111111111
     scientific_reasoning: 85.6565656565657
+- model: google/gemma-3-27b-it
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 28.497310747928722
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.675
+    normalized: 0.675
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.428282828282828
+    normalized: 0.428282828282828
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/gemma-3-27b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.044
+    normalized: 0.044
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/gemma-3-27b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.232638888888889
+    normalized: 0.232638888888889
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/gemma-3-27b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0449438202247191
+    normalized: 0.0449438202247191
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/gemma-3-27b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/gemma-3-27b-gpqa-diamond@1.0.0
+  - independent/gemma-3-27b-humanitys-last-exam@1.0.0
+  - independent/gemma-3-27b-scicode@1.0.0
+  - independent/gemma-3-27b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0
+  domains:
+    agentic_systems: 4.49438202247191
+    frontier_reasoning: 4.3999999999999995
+    general_reasoning: 67.5
+    scientific_coding: 23.263888888888903
+    scientific_reasoning: 42.8282828282828
+- model: google/gemma-3-12b-it
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 23.238936026936024
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.606
+    normalized: 0.606
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.349494949494949
+    normalized: 0.349494949494949
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/gemma-3-12b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.0421
+    normalized: 0.0421
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/gemma-3-12b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.164351851851852
+    normalized: 0.164351851851852
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/gemma-3-12b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0
+    normalized: 0.0
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/gemma-3-12b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/gemma-3-12b-gpqa-diamond@1.0.0
+  - independent/gemma-3-12b-humanitys-last-exam@1.0.0
+  - independent/gemma-3-12b-scicode@1.0.0
+  - independent/gemma-3-12b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0
+  domains:
+    agentic_systems: 0.0
+    frontier_reasoning: 4.21
+    general_reasoning: 60.6
+    scientific_coding: 16.4351851851852
+    scientific_reasoning: 34.949494949494905
+- model: meta/llama-4-maverick-17b-128e-instruct
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 38.412158817472225
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.805
+    normalized: 0.805
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: meta/llama-4-maverick-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.670707070707071
+    normalized: 0.670707070707071
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/llama-4-maverick-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.0491195551436515
+    normalized: 0.0491195551436515
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/llama-4-maverick-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.31712962962963
+    normalized: 0.31712962962963
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/llama-4-maverick-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0786516853932584
+    normalized: 0.0786516853932584
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/llama-4-maverick-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/llama-4-maverick-gpqa-diamond@1.0.0
+  - independent/llama-4-maverick-humanitys-last-exam@1.0.0
+  - independent/llama-4-maverick-scicode@1.0.0
+  - independent/llama-4-maverick-terminalbench-v2-1@1.0.0
+  - meta/llama-4-maverick-model-card-mmlu-pro@1.0.0
+  domains:
+    agentic_systems: 7.86516853932584
+    frontier_reasoning: 4.91195551436515
+    general_reasoning: 80.50000000000001
+    scientific_coding: 31.712962962962997
+    scientific_reasoning: 67.07070707070709
+- model: meta/llama-4-scout-17b-16e-instruct
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 32.361696667044995
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.743
+    normalized: 0.743
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: meta/llama-4-scout-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.586868686868687
+    normalized: 0.586868686868687
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/llama-4-scout-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.0378
+    normalized: 0.0378
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/llama-4-scout-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.212962962962963
+    normalized: 0.212962962962963
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/llama-4-scout-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0374531835205993
+    normalized: 0.0374531835205993
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/llama-4-scout-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/llama-4-scout-gpqa-diamond@1.0.0
+  - independent/llama-4-scout-humanitys-last-exam@1.0.0
+  - independent/llama-4-scout-scicode@1.0.0
+  - independent/llama-4-scout-terminalbench-v2-1@1.0.0
+  - meta/llama-4-scout-model-card-mmlu-pro@1.0.0
+  domains:
+    agentic_systems: 3.7453183520599302
+    frontier_reasoning: 3.7800000000000002
+    general_reasoning: 74.3
+    scientific_coding: 21.296296296296298
+    scientific_reasoning: 58.6868686868687
+- model: minimax/minimax-m2.7
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 58.523039935862464
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.819
+    normalized: 0.819
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.873737373737374
+    normalized: 0.873737373737374
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/minimax-m2-7-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.29610750695088
+    normalized: 0.29610750695088
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/minimax-m2-7-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.383
+    normalized: 0.383
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia-comparative/minimax-m2.7-scicode@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.554307116104869
+    normalized: 0.554307116104869
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/minimax-m2-7-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/minimax-m2-7-gpqa-diamond@1.0.0
+  - independent/minimax-m2-7-humanitys-last-exam@1.0.0
+  - independent/minimax-m2-7-terminalbench-v2-1@1.0.0
+  - nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0
+  - nvidia-comparative/minimax-m2.7-scicode@1.0.0
+  domains:
+    agentic_systems: 55.4307116104869
+    frontier_reasoning: 29.610750695088
+    general_reasoning: 81.89999999999999
+    scientific_coding: 38.3
+    scientific_reasoning: 87.3737373737374
+- model: mistral/mistral-small-3.2-24b-instruct
+  reasoning_effort: disabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 31.15610737438287
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.6676
+    normalized: 0.6676
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.505050505050505
+    normalized: 0.505050505050505
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/mistral-small-3.2-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.0430954587581094
+    normalized: 0.0430954587581094
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.28587962962963
+    normalized: 0.28587962962963
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/mistral-small-3.2-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0561797752808989
+    normalized: 0.0561797752808989
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/mistral-small-3.2-terminal-bench-2.1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/mistral-small-3.2-gpqa-diamond@1.0.0
+  - independent/mistral-small-3.2-humanitys-last-exam@1.0.0
+  - independent/mistral-small-3.2-scicode@1.0.0
+  - independent/mistral-small-3.2-terminal-bench-2.1@1.0.0
+  - mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0
+  domains:
+    agentic_systems: 5.617977528089891
+    frontier_reasoning: 4.30954587581094
+    general_reasoning: 66.75999999999999
+    scientific_coding: 28.587962962962997
+    scientific_reasoning: 50.5050505050505
+- model: moonshot/kimi-k2.6
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 66.92342586132489
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.881
+    normalized: 0.881
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.911111111111111
+    normalized: 0.911111111111111
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/kimi-k2-6-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.374884151992586
+    normalized: 0.374884151992586
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/kimi-k2-6-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.52
+    normalized: 0.52
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia-comparative/kimi-k2.6-scicode@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.659176029962547
+    normalized: 0.659176029962547
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/kimi-k2-6-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/kimi-k2-6-gpqa-diamond@1.0.0
+  - independent/kimi-k2-6-humanitys-last-exam@1.0.0
+  - independent/kimi-k2-6-terminalbench-v2-1@1.0.0
+  - nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0
+  - nvidia-comparative/kimi-k2.6-scicode@1.0.0
+  domains:
+    agentic_systems: 65.91760299625469
+    frontier_reasoning: 37.4884151992586
+    general_reasoning: 88.10000000000001
+    scientific_coding: 52.0
+    scientific_reasoning: 91.1111111111111
 - model: moonshot/kimi-k2.5
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
@@ -35217,6 +38000,154 @@ index_results:
     general_reasoning: 86.8
     scientific_coding: 43.5
     scientific_reasoning: 87.9
+- model: nvidia/nemotron-3-super
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 53.02334839097097
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.8373
+    normalized: 0.8373
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.8
+    normalized: 0.8
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.207599629286376
+    normalized: 0.207599629286376
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.4205
+    normalized: 0.4205
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia/nemotron-3-super-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.385767790262172
+    normalized: 0.385767790262172
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0
+  - independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
+  - independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0
+  - nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0
+  - nvidia/nemotron-3-super-model-card-scicode@1.0.0
+  domains:
+    agentic_systems: 38.5767790262172
+    frontier_reasoning: 20.7599629286376
+    general_reasoning: 83.73
+    scientific_coding: 42.050000000000004
+    scientific_reasoning: 80.00000000000001
+- model: nvidia/nemotron-3-nano-30b-a3b
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 40.53062763507872
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.783
+    normalized: 0.783
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.756565656565657
+    normalized: 0.756565656565657
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.113994439295644
+    normalized: 0.113994439295644
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.305555555555556
+    normalized: 0.305555555555556
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/nemotron-3-nano-30b-a3b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0674157303370786
+    normalized: 0.0674157303370786
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0
+  - independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
+  - independent/nemotron-3-nano-30b-a3b-scicode@1.0.0
+  - independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0
+  - mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
+  domains:
+    agentic_systems: 6.741573033707859
+    frontier_reasoning: 11.3994439295644
+    general_reasoning: 78.3
+    scientific_coding: 30.555555555555603
+    scientific_reasoning: 75.6565656565657
 - model: openai/gpt-oss-120b
   reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
@@ -35291,3 +38222,447 @@ index_results:
     general_reasoning: 80.80000000000001
     scientific_coding: 34.0277777777778
     scientific_reasoning: 78.1818181818182
+- model: openai/gpt-oss-20b
+  reasoning_effort: high
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 41.223367336452476
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.736
+    normalized: 0.736
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.687878787878788
+    normalized: 0.687878787878788
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/gpt-oss-20b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.10982391102873
+    normalized: 0.10982391102873
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/gpt-oss-20b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.388888888888889
+    normalized: 0.388888888888889
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/gpt-oss-20b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.138576779026217
+    normalized: 0.138576779026217
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/gpt-oss-20b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/gpt-oss-20b-gpqa-diamond@1.0.0
+  - independent/gpt-oss-20b-humanitys-last-exam@1.0.0
+  - independent/gpt-oss-20b-scicode@1.0.0
+  - independent/gpt-oss-20b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+  domains:
+    agentic_systems: 13.8576779026217
+    frontier_reasoning: 10.982391102873
+    general_reasoning: 73.6
+    scientific_coding: 38.8888888888889
+    scientific_reasoning: 68.7878787878788
+- model: qwen/qwen3.5-397b-a17b
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 60.431491847277016
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.878
+    normalized: 0.878
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.892929292929293
+    normalized: 0.892929292929293
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.289620018535681
+    normalized: 0.289620018535681
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.447916666666667
+    normalized: 0.447916666666667
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/qwen3-5-397b-a17b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.51310861423221
+    normalized: 0.51310861423221
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0
+  - independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
+  - independent/qwen3-5-397b-a17b-scicode@1.0.0
+  - independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0
+  domains:
+    agentic_systems: 51.310861423221
+    frontier_reasoning: 28.962001853568097
+    general_reasoning: 87.8
+    scientific_coding: 44.7916666666667
+    scientific_reasoning: 89.29292929292932
+- model: qwen/qwen3.5-122b-a10b
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 56.9659418430293
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.867
+    normalized: 0.867
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.856565656565657
+    normalized: 0.856565656565657
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.252085264133457
+    normalized: 0.252085264133457
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.396990740740741
+    normalized: 0.396990740740741
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/qwen3-5-122b-a10b-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.47565543071161
+    normalized: 0.47565543071161
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0
+  - independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
+  - independent/qwen3-5-122b-a10b-scicode@1.0.0
+  - independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0
+  domains:
+    agentic_systems: 47.565543071160995
+    frontier_reasoning: 25.2085264133457
+    general_reasoning: 86.7
+    scientific_coding: 39.6990740740741
+    scientific_reasoning: 85.6565656565657
+- model: qwen/qwen3-235b-a22b-thinking-2507
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 46.56088990378285
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.845
+    normalized: 0.845
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.78989898989899
+    normalized: 0.78989898989899
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.158943466172382
+    normalized: 0.158943466172382
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.414351851851852
+    normalized: 0.414351851851852
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.119850187265918
+    normalized: 0.119850187265918
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0
+  - independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
+  - independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0
+  - independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0
+  domains:
+    agentic_systems: 11.9850187265918
+    frontier_reasoning: 15.8943466172382
+    general_reasoning: 84.5
+    scientific_coding: 41.435185185185205
+    scientific_reasoning: 78.989898989899
+- model: qwen/qwen3-30b-a3b-thinking-2507
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 39.27572244347864
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.809
+    normalized: 0.809
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.707070707070707
+    normalized: 0.707070707070707
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.102873030583874
+    normalized: 0.102873030583874
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.329861111111111
+    normalized: 0.329861111111111
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.0149812734082397
+    normalized: 0.0149812734082397
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0
+  - independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
+  - independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0
+  - independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0
+  domains:
+    agentic_systems: 1.4981273408239701
+    frontier_reasoning: 10.2873030583874
+    general_reasoning: 80.9
+    scientific_coding: 32.98611111111109
+    scientific_reasoning: 70.7070707070707
+- model: zai/glm-5.1
+  reasoning_effort: enabled
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 62.44791446028214
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.859
+    normalized: 0.859
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia-comparative/glm-5.1-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.867676767676768
+    normalized: 0.867676767676768
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/glm-5-1-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.300741427247451
+    normalized: 0.300741427247451
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/glm-5-1-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.477
+    normalized: 0.477
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia-comparative/glm-5.1-scicode@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.617977528089888
+    normalized: 0.617977528089888
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/glm-5-1-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/glm-5-1-gpqa-diamond@1.0.0
+  - independent/glm-5-1-humanitys-last-exam@1.0.0
+  - independent/glm-5-1-terminalbench-v2-1@1.0.0
+  - nvidia-comparative/glm-5.1-mmlu-pro@1.0.0
+  - nvidia-comparative/glm-5.1-scicode@1.0.0
+  domains:
+    agentic_systems: 61.797752808988804
+    frontier_reasoning: 30.0741427247451
+    general_reasoning: 85.9
+    scientific_coding: 47.699999999999996
+    scientific_reasoning: 86.7676767676768

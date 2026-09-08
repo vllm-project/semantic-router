@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:5ed9a97d6b942e311b6e968da975ce0c0010678f893777539471b846ec3bc8f0"
+const builtInCatalogDigest = "sha256:e19aebc962427c42f93341f75abff867dd2eb5b611f2ce278a4bc550d24c55e4"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -10004,6 +10004,422 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/deepseek-v3@1.0.0",
+      "metrics": {
+        "accuracy": 0.7587
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Deepseek-V3",
+        "source_model_slug": "deepseek-v3",
+        "variant": "DeepSeek-V3"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.556565656565657
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 (Dec '24)",
+        "source_model_slug": "deepseek-v3"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.029
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 (Dec '24)",
+        "source_model_slug": "deepseek-v3"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-scicode@1.0.0",
+      "metrics": {
+        "score": 0.357638888888889
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 (Dec '24)",
+        "source_model_slug": "deepseek-v3"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.168539325842697
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 (Dec '24)",
+        "source_model_slug": "deepseek-v3"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0",
+      "metrics": {
+        "accuracy": 0.813
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Deepseek-V3-0324",
+        "source_model_slug": "deepseek-v3-0324",
+        "variant": "DeepSeek-V3-0324"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-0324",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-0324-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.654545454545455
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 0324",
+        "source_model_slug": "deepseek-v3-0324"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-0324",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-0324-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.0474
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 0324",
+        "source_model_slug": "deepseek-v3-0324"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-0324",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-0324-scicode@1.0.0",
+      "metrics": {
+        "score": 0.390046296296296
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 0324",
+        "source_model_slug": "deepseek-v3-0324"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-0324",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.138576779026217
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 0324",
+        "source_model_slug": "deepseek-v3-0324"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus/blob/19510d6dc61f79dbd925bd51ee8a9081c509a4b6/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.85
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "mode": "reasoning",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V3.1-Terminus"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.791919191919192
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
+        "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.163577386468953
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
+        "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0",
+      "metrics": {
+        "score": 0.37962962962963
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
+        "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.449438202247191
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
+        "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.26
+      },
+      "model": "deepseek/deepseek-v3",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 (Dec '24)",
+        "source_model_slug": "deepseek-v3"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-0324",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3-0324-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.41
+      },
+      "model": "deepseek/deepseek-v3-0324",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3 0324",
+        "source_model_slug": "deepseek-v3-0324"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/deepseek-v3.1-terminus-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.896666666666667
+      },
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
+        "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -12074,6 +12490,284 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0",
+      "metrics": {
+        "accuracy": 0.675
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Gemma-3-27B-it",
+        "source_model_slug": "gemma-3-27b-it",
+        "variant": "gemma-3-27b-it"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-27b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-27b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.428282828282828
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 27B Instruct",
+        "source_model_slug": "gemma-3-27b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-27b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-27b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.044
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 27B Instruct",
+        "source_model_slug": "gemma-3-27b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-27b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-27b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.232638888888889
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 27B Instruct",
+        "source_model_slug": "gemma-3-27b"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-27b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-27b-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.0449438202247191
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 27B Instruct",
+        "source_model_slug": "gemma-3-27b"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0",
+      "metrics": {
+        "accuracy": 0.606
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Gemma-3-12B-it",
+        "source_model_slug": "gemma-3-12b-it",
+        "variant": "gemma-3-12b-it"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-12b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-12b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.349494949494949
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 12B Instruct",
+        "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-12b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-12b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.0421
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 12B Instruct",
+        "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-12b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-12b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.164351851851852
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 12B Instruct",
+        "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-12b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-12b-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.0
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 12B Instruct",
+        "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-27b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-27b-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.206666666666667
+      },
+      "model": "google/gemma-3-27b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 27B Instruct",
+        "source_model_slug": "gemma-3-27b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gemma-3-12b",
+        "verification": "imported"
+      },
+      "id": "independent/gemma-3-12b-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.183333333333333
+      },
+      "model": "google/gemma-3-12b-it",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Gemma 3 12B Instruct",
+        "source_model_slug": "gemma-3-12b"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/briefcase@1.0.0",
       "benchmark_profile": "independent-agent",
       "evidence": {
@@ -13868,6 +14562,98 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct/blob/73d14711bcc77c16df3470856949c3764056b617/README.md",
+        "verification": "claimed"
+      },
+      "id": "meta/llama-4-maverick-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.805
+      },
+      "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "metric_variant": "zero_shot_macro_average",
+        "source_kind": "official_model_card",
+        "variant": "Llama-4-Maverick-17B-128E-Instruct"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/llama-4-maverick",
+        "verification": "imported"
+      },
+      "id": "independent/llama-4-maverick-scicode@1.0.0",
+      "metrics": {
+        "score": 0.31712962962963
+      },
+      "model": "meta/llama-4-maverick-17b-128e-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Llama 4 Maverick",
+        "source_model_slug": "llama-4-maverick"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-llama/Llama-4-Scout-17B-16E-Instruct/blob/92f3b1597a195b523d8d9e5700e57e4fbb8f20d3/README.md",
+        "verification": "claimed"
+      },
+      "id": "meta/llama-4-scout-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.743
+      },
+      "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "metric_variant": "zero_shot_macro_average",
+        "source_kind": "official_model_card",
+        "variant": "Llama-4-Scout-17B-16E-Instruct"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/llama-4-scout",
+        "verification": "imported"
+      },
+      "id": "independent/llama-4-scout-scicode@1.0.0",
+      "metrics": {
+        "score": 0.212962962962963
+      },
+      "model": "meta/llama-4-scout-17b-16e-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Llama 4 Scout",
+        "source_model_slug": "llama-4-scout"
+      }
+    },
+    {
       "benchmark": "ai2d/ai2d@1.0.0",
       "benchmark_profile": "test",
       "evidence": {
@@ -15541,6 +16327,55 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.819
+      },
+      "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "MiniMax-2.7 230B-A10B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/minimax-m2.7-scicode@1.0.0",
+      "metrics": {
+        "score": 0.383
+      },
+      "model": "minimax/minimax-m2.7",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "metric_variant": "subtask",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "MiniMax-2.7 230B-A10B"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -16305,6 +17140,145 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Mistral Medium 3.5",
         "source_model_slug": "mistralai-mistral-medium-3-5-none"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506/blob/95a6d26c4bfb886c58daf9d3f7332c857cb27b43/README.md",
+        "verification": "claimed"
+      },
+      "id": "mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.6676
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Mistral-Small-3.2-24B-Instruct-2506"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/mistral-small-3-2",
+        "verification": "imported"
+      },
+      "id": "independent/mistral-small-3.2-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.505050505050505
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Mistral Small 3.2",
+        "source_model_slug": "mistral-small-3-2"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/mistral-small-3-2",
+        "verification": "imported"
+      },
+      "id": "independent/mistral-small-3.2-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.0430954587581094
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Mistral Small 3.2",
+        "source_model_slug": "mistral-small-3-2"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/mistral-small-3-2",
+        "verification": "imported"
+      },
+      "id": "independent/mistral-small-3.2-scicode@1.0.0",
+      "metrics": {
+        "score": 0.28587962962963
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "evaluation_unit": "subproblem",
+        "run_kind": "independent",
+        "source_model": "Mistral Small 3.2",
+        "source_model_slug": "mistral-small-3-2",
+        "test_subproblems": 288
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/mistral-small-3-2",
+        "verification": "imported"
+      },
+      "id": "independent/mistral-small-3.2-terminal-bench-2.1@1.0.0",
+      "metrics": {
+        "resolved": 0.0561797752808989
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Mistral Small 3.2",
+        "source_model_slug": "mistral-small-3-2"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/mistral-small-3-2",
+        "verification": "imported"
+      },
+      "id": "independent/mistral-small-3.2-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.27
+      },
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Mistral Small 3.2",
+        "source_model_slug": "mistral-small-3-2"
       }
     },
     {
@@ -17879,6 +18853,55 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.881
+      },
+      "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "Kimi-K2.6 1T-A32B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/kimi-k2.6-scicode@1.0.0",
+      "metrics": {
+        "score": 0.52
+      },
+      "model": "moonshot/kimi-k2.6",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "metric_variant": "subtask",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "Kimi-K2.6 1T-A32B"
+      }
+    },
+    {
       "benchmark": "scicode-bench/scicode@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -18906,6 +19929,191 @@ const builtInCatalogJSON = `{
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Nemotron-Cascade-2-30B-A3B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.8373
+      },
+      "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3-super-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.4205
+      },
+      "model": "nvidia/nemotron-3-super",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "metric_variant": "subtask",
+        "source_kind": "official_model_card",
+        "variant": "NVIDIA-Nemotron-3-Super-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0",
+      "metrics": {
+        "accuracy": 0.783
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Nemotron-3-Nano-30B-A3B(BF16)",
+        "source_model_slug": "nemotron-3-nano-30b-a3b-bf16"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.756565656565657
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)",
+        "source_model_slug": "nvidia-nemotron-3-nano-30b-a3b-reasoning"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.113994439295644
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)",
+        "source_model_slug": "nvidia-nemotron-3-nano-30b-a3b-reasoning"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/nemotron-3-nano-30b-a3b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.305555555555556
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_unit": "subproblem",
+        "run_kind": "independent",
+        "source_model": "NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)",
+        "source_model_slug": "nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "test_subproblems": 288
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0",
+      "metrics": {
+        "resolved": 0.0674157303370786
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)",
+        "source_model_slug": "nvidia-nemotron-3-nano-30b-a3b-reasoning"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/nemotron-3-nano-30b-a3b-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.91
+      },
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)",
+        "source_model_slug": "nvidia-nemotron-3-nano-30b-a3b-reasoning"
       }
     },
     {
@@ -25833,6 +27041,54 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0",
+      "metrics": {
+        "accuracy": 0.736
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "metric_variant": "five_shot_chain_of_thought",
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "GPT-oss-20B(high)",
+        "source_model_slug": "gpt-oss-20b-high",
+        "variant": "gpt-oss-20b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/gpt-oss-20b",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-oss-20b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.388888888888889
+      },
+      "model": "openai/gpt-oss-20b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "gpt-oss-20b (high)",
+        "source_model_slug": "gpt-oss-20b"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -28307,6 +29563,564 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Qwen3.8 Max",
         "source_model_slug": "qwen-qwen3-8-max-medium"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0",
+      "metrics": {
+        "accuracy": 0.878
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "mode": "reasoning",
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Qwen3.5-397B-A17B",
+        "source_model_slug": "qwen3-5-397b-a17b",
+        "variant": "Qwen3.5-397B-A17B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.892929292929293
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 397B A17B (Reasoning)",
+        "source_model_slug": "qwen3-5-397b-a17b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.289620018535681
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 397B A17B (Reasoning)",
+        "source_model_slug": "qwen3-5-397b-a17b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-397b-a17b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.447916666666667
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 397B A17B (Reasoning)",
+        "source_model_slug": "qwen3-5-397b-a17b"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.51310861423221
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 397B A17B (Reasoning)",
+        "source_model_slug": "qwen3-5-397b-a17b"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0",
+      "metrics": {
+        "accuracy": 0.867
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "mode": "reasoning",
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Qwen3.5-122B-A10B",
+        "source_model_slug": "qwen3-5-122b-a10b",
+        "variant": "Qwen3.5-122B-A10B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-122b-a10b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.856565656565657
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 122B A10B (Reasoning)",
+        "source_model_slug": "qwen3-5-122b-a10b"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-122b-a10b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.252085264133457
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 122B A10B (Reasoning)",
+        "source_model_slug": "qwen3-5-122b-a10b"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-122b-a10b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-122b-a10b-scicode@1.0.0",
+      "metrics": {
+        "score": 0.396990740740741
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 122B A10B (Reasoning)",
+        "source_model_slug": "qwen3-5-122b-a10b"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-122b-a10b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.47565543071161
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 122B A10B (Reasoning)",
+        "source_model_slug": "qwen3-5-122b-a10b"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0",
+      "metrics": {
+        "accuracy": 0.845
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Qwen3-235B-A22B-Thinking-2507",
+        "source_model_slug": "qwen3-235b-a22b-thinking-2507",
+        "variant": "Qwen3-235B-A22B-Thinking-2507"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.78989898989899
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 235B A22B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-235b-a22b-instruct-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.158943466172382
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 235B A22B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-235b-a22b-instruct-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0",
+      "metrics": {
+        "score": 0.414351851851852
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 235B A22B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-235b-a22b-instruct-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.119850187265918
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 235B A22B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-235b-a22b-instruct-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv",
+        "verification": "claimed"
+      },
+      "id": "mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0",
+      "metrics": {
+        "accuracy": 0.809
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_benchmark_leaderboard",
+        "source_model": "Qwen3-30B-A3B-Thinking-2507",
+        "source_model_slug": "qwen3-30b-a3b-thinking-2507",
+        "variant": "Qwen3-30B-A3B-Thinking-2507"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.707070707070707
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.102873030583874
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0",
+      "metrics": {
+        "score": 0.329861111111111
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.0149812734082397
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-397b-a17b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3.5-397b-a17b-lcr@1.1.0",
+      "metrics": {
+        "score": 0.773333333333333
+      },
+      "model": "qwen/qwen3.5-397b-a17b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 397B A17B (Reasoning)",
+        "source_model_slug": "qwen3-5-397b-a17b"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-5-122b-a10b",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3.5-122b-a10b-lcr@1.1.0",
+      "metrics": {
+        "score": 0.763333333333333
+      },
+      "model": "qwen/qwen3.5-122b-a10b",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3.5 122B A10B (Reasoning)",
+        "source_model_slug": "qwen3-5-122b-a10b"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-235b-a22b-instruct-2507-reasoning-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.91
+      },
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 235B A22B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-235b-a22b-instruct-2507-reasoning"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning",
+        "verification": "imported"
+      },
+      "id": "independent/qwen3-30b-a3b-2507-reasoning-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.563333333333333
+      },
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Qwen3 30B A3B 2507 (Reasoning)",
+        "source_model_slug": "qwen3-30b-a3b-2507-reasoning"
       }
     },
     {
@@ -34338,6 +36152,55 @@ const builtInCatalogJSON = `{
         "source_model": "GLM 5.2",
         "source_model_slug": "glm-5-2-high"
       }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/glm-5.1-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.859
+      },
+      "model": "zai/glm-5.1",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "GLM-5.1 744B-A40B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf",
+        "verification": "imported"
+      },
+      "id": "nvidia-comparative/glm-5.1-scicode@1.0.0",
+      "metrics": {
+        "score": 0.477
+      },
+      "model": "zai/glm-5.1",
+      "observed_at": "2026-09-09",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "NVIDIA NeMo Evaluator",
+        "metric_variant": "subtask",
+        "run_kind": "independent",
+        "source_kind": "official_cross-vendor_comparison",
+        "source_model": "GLM-5.1 744B-A40B"
+      }
     }
   ],
   "index_results": [
@@ -39575,6 +41438,501 @@ const builtInCatalogJSON = `{
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.85,
+          "status": "available",
+          "value": 0.85,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.791919191919192,
+          "status": "available",
+          "value": 0.791919191919192,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.163577386468953,
+          "status": "available",
+          "value": 0.163577386468953,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.37962962962963,
+          "status": "available",
+          "value": 0.37962962962963,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.449438202247191,
+          "status": "available",
+          "value": 0.449438202247191,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 44.9438202247191,
+        "frontier_reasoning": 16.3577386468953,
+        "general_reasoning": 85.0,
+        "scientific_coding": 37.962962962963005,
+        "scientific_reasoning": 79.1919191919192
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "provenance": [
+        "deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0",
+        "independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0",
+        "independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0",
+        "independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0",
+        "independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 52.69128820529932,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3.1-terminus",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3-0324",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.813,
+          "status": "available",
+          "value": 0.813,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-0324-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.654545454545455,
+          "status": "available",
+          "value": 0.654545454545455,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/deepseek-v3-0324-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.0474,
+          "status": "available",
+          "value": 0.0474,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-0324-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.390046296296296,
+          "status": "available",
+          "value": 0.390046296296296,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.138576779026217,
+          "status": "available",
+          "value": 0.138576779026217,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 13.8576779026217,
+        "frontier_reasoning": 4.74,
+        "general_reasoning": 81.3,
+        "scientific_coding": 39.0046296296296,
+        "scientific_reasoning": 65.4545454545455
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3-0324",
+      "provenance": [
+        "independent/deepseek-v3-0324-gpqa-diamond@1.0.0",
+        "independent/deepseek-v3-0324-humanitys-last-exam@1.0.0",
+        "independent/deepseek-v3-0324-scicode@1.0.0",
+        "independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 40.871370597359366,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/deepseek-v3@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.7587,
+          "status": "available",
+          "value": 0.7587,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.556565656565657,
+          "status": "available",
+          "value": 0.556565656565657,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/deepseek-v3-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.029,
+          "status": "available",
+          "value": 0.029,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/deepseek-v3-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.357638888888889,
+          "status": "available",
+          "value": 0.357638888888889,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/deepseek-v3-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.168539325842697,
+          "status": "available",
+          "value": 0.168539325842697,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 16.8539325842697,
+        "frontier_reasoning": 2.9000000000000004,
+        "general_reasoning": 75.87,
+        "scientific_coding": 35.7638888888889,
+        "scientific_reasoning": 55.656565656565704
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v3",
+      "provenance": [
+        "independent/deepseek-v3-gpqa-diamond@1.0.0",
+        "independent/deepseek-v3-humanitys-last-exam@1.0.0",
+        "independent/deepseek-v3-scicode@1.0.0",
+        "independent/deepseek-v3-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/deepseek-v3@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 37.40887742594487,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
           "evaluation": "deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
           "normalized": 0.84,
@@ -40635,6 +42993,336 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "disabled",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-3-27b-it",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.675,
+          "status": "available",
+          "value": 0.675,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/gemma-3-27b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.428282828282828,
+          "status": "available",
+          "value": 0.428282828282828,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/gemma-3-27b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.044,
+          "status": "available",
+          "value": 0.044,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/gemma-3-27b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.232638888888889,
+          "status": "available",
+          "value": 0.232638888888889,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/gemma-3-27b-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0449438202247191,
+          "status": "available",
+          "value": 0.0449438202247191,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 4.49438202247191,
+        "frontier_reasoning": 4.3999999999999995,
+        "general_reasoning": 67.5,
+        "scientific_coding": 23.263888888888903,
+        "scientific_reasoning": 42.8282828282828
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-3-27b-it",
+      "provenance": [
+        "independent/gemma-3-27b-gpqa-diamond@1.0.0",
+        "independent/gemma-3-27b-humanitys-last-exam@1.0.0",
+        "independent/gemma-3-27b-scicode@1.0.0",
+        "independent/gemma-3-27b-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 28.497310747928722,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-3-12b-it",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.606,
+          "status": "available",
+          "value": 0.606,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/gemma-3-12b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.349494949494949,
+          "status": "available",
+          "value": 0.349494949494949,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/gemma-3-12b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.0421,
+          "status": "available",
+          "value": 0.0421,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/gemma-3-12b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.164351851851852,
+          "status": "available",
+          "value": 0.164351851851852,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/gemma-3-12b-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0,
+          "status": "available",
+          "value": 0.0,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 0.0,
+        "frontier_reasoning": 4.21,
+        "general_reasoning": 60.6,
+        "scientific_coding": 16.4351851851852,
+        "scientific_reasoning": 34.949494949494905
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-3-12b-it",
+      "provenance": [
+        "independent/gemma-3-12b-gpqa-diamond@1.0.0",
+        "independent/gemma-3-12b-humanitys-last-exam@1.0.0",
+        "independent/gemma-3-12b-scicode@1.0.0",
+        "independent/gemma-3-12b-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 23.238936026936024,
+      "status": "available"
     },
     {
       "components": [
@@ -41828,14 +44516,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "meta/llama-4-maverick-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.805,
+          "status": "available",
+          "value": 0.805,
           "weight": 0.2
         },
         {
@@ -41868,14 +44558,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "independent/llama-4-maverick-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.31712962962963,
+          "status": "available",
+          "value": 0.31712962962963,
           "weight": 0.2
         },
         {
@@ -41893,17 +44585,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 7.86516853932584,
+        "frontier_reasoning": 4.91195551436515,
+        "general_reasoning": 80.50000000000001,
+        "scientific_coding": 31.712962962962997,
+        "scientific_reasoning": 67.07070707070709
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "meta/llama-4-maverick-17b-128e-instruct",
       "provenance": [
         "independent/llama-4-maverick-gpqa-diamond@1.0.0",
         "independent/llama-4-maverick-humanitys-last-exam@1.0.0",
-        "independent/llama-4-maverick-terminalbench-v2-1@1.0.0"
+        "independent/llama-4-maverick-scicode@1.0.0",
+        "independent/llama-4-maverick-terminalbench-v2-1@1.0.0",
+        "meta/llama-4-maverick-model-card-mmlu-pro@1.0.0"
       ],
       "reasoning_effort": "disabled",
-      "score": null,
-      "status": "partial"
+      "score": 38.412158817472225,
+      "status": "available"
     },
     {
       "components": [
@@ -41980,14 +44681,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "meta/llama-4-scout-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.743,
+          "status": "available",
+          "value": 0.743,
           "weight": 0.2
         },
         {
@@ -42020,14 +44723,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "independent/llama-4-scout-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.212962962962963,
+          "status": "available",
+          "value": 0.212962962962963,
           "weight": 0.2
         },
         {
@@ -42045,17 +44750,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 3.7453183520599302,
+        "frontier_reasoning": 3.7800000000000002,
+        "general_reasoning": 74.3,
+        "scientific_coding": 21.296296296296298,
+        "scientific_reasoning": 58.6868686868687
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "meta/llama-4-scout-17b-16e-instruct",
       "provenance": [
         "independent/llama-4-scout-gpqa-diamond@1.0.0",
         "independent/llama-4-scout-humanitys-last-exam@1.0.0",
-        "independent/llama-4-scout-terminalbench-v2-1@1.0.0"
+        "independent/llama-4-scout-scicode@1.0.0",
+        "independent/llama-4-scout-terminalbench-v2-1@1.0.0",
+        "meta/llama-4-scout-model-card-mmlu-pro@1.0.0"
       ],
       "reasoning_effort": "disabled",
-      "score": null,
-      "status": "partial"
+      "score": 32.361696667044995,
+      "status": "available"
     },
     {
       "components": [
@@ -42866,14 +45580,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.819,
+          "status": "available",
+          "value": 0.819,
           "weight": 0.2
         },
         {
@@ -42906,14 +45622,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/minimax-m2.7-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.383,
+          "status": "available",
+          "value": 0.383,
           "weight": 0.2
         },
         {
@@ -42931,17 +45649,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 55.4307116104869,
+        "frontier_reasoning": 29.610750695088,
+        "general_reasoning": 81.89999999999999,
+        "scientific_coding": 38.3,
+        "scientific_reasoning": 87.3737373737374
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "minimax/minimax-m2.7",
       "provenance": [
         "independent/minimax-m2-7-gpqa-diamond@1.0.0",
         "independent/minimax-m2-7-humanitys-last-exam@1.0.0",
-        "independent/minimax-m2-7-terminalbench-v2-1@1.0.0"
+        "independent/minimax-m2-7-terminalbench-v2-1@1.0.0",
+        "nvidia-comparative/minimax-m2.7-mmlu-pro@1.0.0",
+        "nvidia-comparative/minimax-m2.7-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 58.523039935862464,
+      "status": "available"
     },
     {
       "components": [
@@ -43516,6 +46243,171 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.6676,
+          "status": "available",
+          "value": 0.6676,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/mistral-small-3.2-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.505050505050505,
+          "status": "available",
+          "value": 0.505050505050505,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/mistral-small-3.2-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.0430954587581094,
+          "status": "available",
+          "value": 0.0430954587581094,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/mistral-small-3.2-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.28587962962963,
+          "status": "available",
+          "value": 0.28587962962963,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/mistral-small-3.2-terminal-bench-2.1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0561797752808989,
+          "status": "available",
+          "value": 0.0561797752808989,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 5.617977528089891,
+        "frontier_reasoning": 4.30954587581094,
+        "general_reasoning": 66.75999999999999,
+        "scientific_coding": 28.587962962962997,
+        "scientific_reasoning": 50.5050505050505
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "mistral/mistral-small-3.2-24b-instruct",
+      "provenance": [
+        "independent/mistral-small-3.2-gpqa-diamond@1.0.0",
+        "independent/mistral-small-3.2-humanitys-last-exam@1.0.0",
+        "independent/mistral-small-3.2-scicode@1.0.0",
+        "independent/mistral-small-3.2-terminal-bench-2.1@1.0.0",
+        "mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 31.15610737438287,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
           "benchmark_profile": "independent-standard",
           "benchmark_profiles": [
             "independent-standard",
@@ -43824,14 +46716,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.881,
+          "status": "available",
+          "value": 0.881,
           "weight": 0.2
         },
         {
@@ -43864,14 +46758,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/kimi-k2.6-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.52,
+          "status": "available",
+          "value": 0.52,
           "weight": 0.2
         },
         {
@@ -43889,17 +46785,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 65.91760299625469,
+        "frontier_reasoning": 37.4884151992586,
+        "general_reasoning": 88.10000000000001,
+        "scientific_coding": 52.0,
+        "scientific_reasoning": 91.1111111111111
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "moonshot/kimi-k2.6",
       "provenance": [
         "independent/kimi-k2-6-gpqa-diamond@1.0.0",
         "independent/kimi-k2-6-humanitys-last-exam@1.0.0",
-        "independent/kimi-k2-6-terminalbench-v2-1@1.0.0"
+        "independent/kimi-k2-6-terminalbench-v2-1@1.0.0",
+        "nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0",
+        "nvidia-comparative/kimi-k2.6-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 66.92342586132489,
+      "status": "available"
     },
     {
       "components": [
@@ -44711,14 +47616,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.8373,
+          "status": "available",
+          "value": 0.8373,
           "weight": 0.2
         },
         {
@@ -44751,14 +47658,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "nvidia/nemotron-3-super-model-card-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.4205,
+          "status": "available",
+          "value": 0.4205,
           "weight": 0.2
         },
         {
@@ -44776,17 +47685,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 38.5767790262172,
+        "frontier_reasoning": 20.7599629286376,
+        "general_reasoning": 83.73,
+        "scientific_coding": 42.050000000000004,
+        "scientific_reasoning": 80.00000000000001
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "nvidia/nemotron-3-super",
       "provenance": [
         "independent/nvidia-nemotron-3-super-120b-a12b-gpqa-diamond@1.0.0",
         "independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0",
-        "independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0"
+        "independent/nvidia-nemotron-3-super-120b-a12b-terminalbench-v2-1@1.0.0",
+        "nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0",
+        "nvidia/nemotron-3-super-model-card-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 53.02334839097097,
+      "status": "available"
     },
     {
       "components": [
@@ -45165,6 +48083,171 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.783,
+          "status": "available",
+          "value": 0.783,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.756565656565657,
+          "status": "available",
+          "value": 0.756565656565657,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.113994439295644,
+          "status": "available",
+          "value": 0.113994439295644,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/nemotron-3-nano-30b-a3b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.305555555555556,
+          "status": "available",
+          "value": 0.305555555555556,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0674157303370786,
+          "status": "available",
+          "value": 0.0674157303370786,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 6.741573033707859,
+        "frontier_reasoning": 11.3994439295644,
+        "general_reasoning": 78.3,
+        "scientific_coding": 30.555555555555603,
+        "scientific_reasoning": 75.6565656565657
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "provenance": [
+        "independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0",
+        "independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0",
+        "independent/nemotron-3-nano-30b-a3b-scicode@1.0.0",
+        "independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0",
+        "mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 40.53062763507872,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -48739,14 +51822,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.736,
+          "status": "available",
+          "value": 0.736,
           "weight": 0.2
         },
         {
@@ -48779,14 +51864,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "independent/gpt-oss-20b-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.388888888888889,
+          "status": "available",
+          "value": 0.388888888888889,
           "weight": 0.2
         },
         {
@@ -48804,17 +51891,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 13.8576779026217,
+        "frontier_reasoning": 10.982391102873,
+        "general_reasoning": 73.6,
+        "scientific_coding": 38.8888888888889,
+        "scientific_reasoning": 68.7878787878788
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "openai/gpt-oss-20b",
       "provenance": [
         "independent/gpt-oss-20b-gpqa-diamond@1.0.0",
         "independent/gpt-oss-20b-humanitys-last-exam@1.0.0",
-        "independent/gpt-oss-20b-terminalbench-v2-1@1.0.0"
+        "independent/gpt-oss-20b-scicode@1.0.0",
+        "independent/gpt-oss-20b-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0"
       ],
       "reasoning_effort": "high",
-      "score": null,
-      "status": "partial"
+      "score": 41.223367336452476,
+      "status": "available"
     },
     {
       "components": [
@@ -50219,6 +53315,524 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.878,
+          "status": "available",
+          "value": 0.878,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.892929292929293,
+          "status": "available",
+          "value": 0.892929292929293,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.289620018535681,
+          "status": "available",
+          "value": 0.289620018535681,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-5-397b-a17b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.447916666666667,
+          "status": "available",
+          "value": 0.447916666666667,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.51310861423221,
+          "status": "available",
+          "value": 0.51310861423221,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 51.310861423221,
+        "frontier_reasoning": 28.962001853568097,
+        "general_reasoning": 87.8,
+        "scientific_coding": 44.7916666666667,
+        "scientific_reasoning": 89.29292929292932
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "provenance": [
+        "independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0",
+        "independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0",
+        "independent/qwen3-5-397b-a17b-scicode@1.0.0",
+        "independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 60.431491847277016,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3.5-397b-a17b",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.867,
+          "status": "available",
+          "value": 0.867,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.856565656565657,
+          "status": "available",
+          "value": 0.856565656565657,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.252085264133457,
+          "status": "available",
+          "value": 0.252085264133457,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-5-122b-a10b-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.396990740740741,
+          "status": "available",
+          "value": 0.396990740740741,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.47565543071161,
+          "status": "available",
+          "value": 0.47565543071161,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 47.565543071160995,
+        "frontier_reasoning": 25.2085264133457,
+        "general_reasoning": 86.7,
+        "scientific_coding": 39.6990740740741,
+        "scientific_reasoning": 85.6565656565657
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3.5-122b-a10b",
+      "provenance": [
+        "independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0",
+        "independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0",
+        "independent/qwen3-5-122b-a10b-scicode@1.0.0",
+        "independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 56.9659418430293,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3.5-122b-a10b",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.845,
+          "status": "available",
+          "value": 0.845,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.78989898989899,
+          "status": "available",
+          "value": 0.78989898989899,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.158943466172382,
+          "status": "available",
+          "value": 0.158943466172382,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.414351851851852,
+          "status": "available",
+          "value": 0.414351851851852,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.119850187265918,
+          "status": "available",
+          "value": 0.119850187265918,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 11.9850187265918,
+        "frontier_reasoning": 15.8943466172382,
+        "general_reasoning": 84.5,
+        "scientific_coding": 41.435185185185205,
+        "scientific_reasoning": 78.989898989899
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3-235b-a22b-thinking-2507",
+      "provenance": [
+        "independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0",
+        "independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0",
+        "independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0",
+        "independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 46.56088990378285,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.809,
+          "status": "available",
+          "value": 0.809,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.707070707070707,
+          "status": "available",
+          "value": 0.707070707070707,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "evaluation": "independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.102873030583874,
+          "status": "available",
+          "value": 0.102873030583874,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.329861111111111,
+          "status": "available",
+          "value": 0.329861111111111,
+          "weight": 0.2
+        },
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.0149812734082397,
+          "status": "available",
+          "value": 0.0149812734082397,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 1.4981273408239701,
+        "frontier_reasoning": 10.2873030583874,
+        "general_reasoning": 80.9,
+        "scientific_coding": 32.98611111111109,
+        "scientific_reasoning": 70.7070707070707
+      },
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "qwen/qwen3-30b-a3b-thinking-2507",
+      "provenance": [
+        "independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0",
+        "independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0",
+        "independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0",
+        "independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0",
+        "mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 39.27572244347864,
+      "status": "available"
     },
     {
       "components": [
@@ -54415,14 +58029,16 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/glm-5.1-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.859,
+          "status": "available",
+          "value": 0.859,
           "weight": 0.2
         },
         {
@@ -54455,14 +58071,16 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
+          "evaluation": "nvidia-comparative/glm-5.1-scicode@1.0.0",
           "metric": "score",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.477,
+          "status": "available",
+          "value": 0.477,
           "weight": 0.2
         },
         {
@@ -54480,17 +58098,26 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.6000000000000001,
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 61.797752808988804,
+        "frontier_reasoning": 30.0741427247451,
+        "general_reasoning": 85.9,
+        "scientific_coding": 47.699999999999996,
+        "scientific_reasoning": 86.7676767676768
+      },
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "zai/glm-5.1",
       "provenance": [
         "independent/glm-5-1-gpqa-diamond@1.0.0",
         "independent/glm-5-1-humanitys-last-exam@1.0.0",
-        "independent/glm-5-1-terminalbench-v2-1@1.0.0"
+        "independent/glm-5-1-terminalbench-v2-1@1.0.0",
+        "nvidia-comparative/glm-5.1-mmlu-pro@1.0.0",
+        "nvidia-comparative/glm-5.1-scicode@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": null,
-      "status": "partial"
+      "score": 62.44791446028214,
+      "status": "available"
     },
     {
       "components": [
@@ -56253,6 +59880,155 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Refined V3.1 checkpoint with switchable reasoning and improved agent behavior.",
+      "display_name": "DeepSeek V3.1 Terminus",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus",
+        "type": "open_weights"
+      },
+      "family": "deepseek-v3.1",
+      "id": "deepseek/deepseek-v3.1-terminus",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "671B (37B active)",
+      "presentation": {
+        "logo": "package:deepseek",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "publisher": "DeepSeek",
+      "reasoning_family": "deepseek-v3.1",
+      "released_at": "2025-09-22",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "DeepSeek",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Updated V3 checkpoint with stronger reasoning, coding, and tool-use quality.",
+      "display_name": "DeepSeek V3 0324",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3-0324",
+        "type": "open_weights"
+      },
+      "family": "deepseek-v3",
+      "id": "deepseek/deepseek-v3-0324",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "671B (37B active)",
+      "presentation": {
+        "logo": "package:deepseek",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "publisher": "DeepSeek",
+      "released_at": "2025-03-24",
+      "tags": [
+        "open_weights",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "DeepSeek",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3-0324",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "First V3 open-weight mixture-of-experts checkpoint for general and coding workloads.",
+      "display_name": "DeepSeek V3",
+      "distribution": {
+        "license": "DeepSeek-Model-License",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3",
+        "type": "open_weights"
+      },
+      "family": "deepseek-v3",
+      "id": "deepseek/deepseek-v3",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "671B (37B active)",
+      "presentation": {
+        "logo": "package:deepseek",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "publisher": "DeepSeek",
+      "released_at": "2024-12-26",
+      "tags": [
+        "open_weights",
+        "moe"
+      ],
+      "verification": {
+        "authority": "DeepSeek",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "long_context"
       ],
       "description": "First-generation open-weight DeepSeek reasoning model derived from DeepSeek V3.",
@@ -56519,6 +60295,104 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/google/gemma-4-31b-it",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "vision",
+        "long_context"
+      ],
+      "description": "Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.",
+      "display_name": "Gemma 3 27B IT",
+      "distribution": {
+        "license": "Gemma",
+        "source": "https://huggingface.co/google/gemma-3-27b-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-3",
+      "id": "google/gemma-3-27b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "27B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "released_at": "2025-03-12",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "dense"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-3-27b-it",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "vision",
+        "long_context"
+      ],
+      "description": "Mid-size Gemma 3 instruction-tuned checkpoint for multimodal local serving.",
+      "display_name": "Gemma 3 12B IT",
+      "distribution": {
+        "license": "Gemma",
+        "source": "https://huggingface.co/google/gemma-3-12b-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-3",
+      "id": "google/gemma-3-12b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "12B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "released_at": "2025-03-12",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "dense"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-3-12b-it",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
       }
     },
     {
@@ -57263,6 +61137,58 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Compact multimodal Mistral instruction checkpoint for local and edge deployment.",
+      "display_name": "Mistral Small 3.2 24B Instruct",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+        "type": "open_weights"
+      },
+      "family": "mistral-small-3",
+      "id": "mistral/mistral-small-3.2-24b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "24B",
+      "presentation": {
+        "logo": "package:mistral",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Mistral AI",
+      "released_at": "2025-06-19",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "dense",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Mistral AI",
+        "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -57748,6 +61674,58 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Compact text-only Nemotron 3 reasoning model with open evaluation recipes.",
+      "display_name": "NVIDIA Nemotron 3 Nano 30B A3B",
+      "distribution": {
+        "license": "NVIDIA-Nemotron-Open-Model-License",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+        "type": "open_weights"
+      },
+      "family": "nemotron-3",
+      "id": "nvidia/nemotron-3-nano-30b-a3b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "30B (3B active)",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-thinking-toggle",
+      "released_at": "2025-12-15",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "moe",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "NVIDIA",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
       }
     },
     {
@@ -58489,6 +62467,222 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/Qwen/Qwen3.6-35B-A3B",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Frontier Qwen3.5 multimodal MoE checkpoint with switchable reasoning.",
+      "display_name": "Qwen3.5 397B A17B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B",
+        "type": "open_weights"
+      },
+      "family": "qwen3.5",
+      "id": "qwen/qwen3.5-397b-a17b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "397B (17B active)",
+      "presentation": {
+        "logo": "package:qwen",
+        "monochrome": false,
+        "monogram": "Q"
+      },
+      "publisher": "Alibaba / Qwen",
+      "reasoning_family": "qwen3",
+      "released_at": "2026-02-16",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "moe",
+        "frontier"
+      ],
+      "verification": {
+        "authority": "Qwen Team",
+        "source": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Efficient Qwen3.5 multimodal MoE checkpoint with switchable reasoning.",
+      "display_name": "Qwen3.5 122B A10B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/Qwen/Qwen3.5-122B-A10B",
+        "type": "open_weights"
+      },
+      "family": "qwen3.5",
+      "id": "qwen/qwen3.5-122b-a10b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "122B (10B active)",
+      "presentation": {
+        "logo": "package:qwen",
+        "monochrome": false,
+        "monogram": "Q"
+      },
+      "publisher": "Alibaba / Qwen",
+      "reasoning_family": "qwen3",
+      "released_at": "2026-02-24",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "moe",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Qwen Team",
+        "source": "https://huggingface.co/Qwen/Qwen3.5-122B-A10B",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Updated large Qwen3 thinking checkpoint for reasoning and agentic workloads.",
+      "display_name": "Qwen3 235B A22B Thinking 2507",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507",
+        "type": "open_weights"
+      },
+      "family": "qwen3",
+      "id": "qwen/qwen3-235b-a22b-thinking-2507",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "235B (22B active)",
+      "presentation": {
+        "logo": "package:qwen",
+        "monochrome": false,
+        "monogram": "Q"
+      },
+      "publisher": "Alibaba / Qwen",
+      "reasoning_family": "qwen3-always-on",
+      "released_at": "2025-07-25",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Qwen Team",
+        "source": "https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Updated compact Qwen3 thinking MoE checkpoint for efficient reasoning.",
+      "display_name": "Qwen3 30B A3B Thinking 2507",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507",
+        "type": "open_weights"
+      },
+      "family": "qwen3",
+      "id": "qwen/qwen3-30b-a3b-thinking-2507",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "30B (3B active)",
+      "presentation": {
+        "logo": "package:qwen",
+        "monochrome": false,
+        "monogram": "Q"
+      },
+      "publisher": "Alibaba / Qwen",
+      "reasoning_family": "qwen3-always-on",
+      "released_at": "2025-07-29",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "moe",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Qwen Team",
+        "source": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507",
+        "status": "claimed",
+        "verified_at": "2026-09-09"
       }
     },
     {
@@ -64323,6 +68517,171 @@ const builtInCatalogJSON = `{
             "status": "claimed",
             "verified_at": "2026-09-06"
           }
+        },
+        {
+          "catalog": "deepseek/deepseek-v3",
+          "id": "deepseek-ai/DeepSeek-V3",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "deepseek/deepseek-v3-0324",
+          "id": "deepseek-ai/DeepSeek-V3-0324",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3-0324",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "deepseek/deepseek-v3.1-terminus",
+          "id": "deepseek-ai/DeepSeek-V3.1-Terminus",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "google/gemma-3-27b-it",
+          "id": "google/gemma-3-27b-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/google/gemma-3-27b-it",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "google/gemma-3-12b-it",
+          "id": "google/gemma-3-12b-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/google/gemma-3-12b-it",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "mistral/mistral-small-3.2-24b-instruct",
+          "id": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "nvidia/nemotron-3-nano-30b-a3b",
+          "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.5-397b-a17b",
+          "id": "Qwen/Qwen3.5-397B-A17B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3.5-397B-A17B",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.5-122b-a10b",
+          "id": "Qwen/Qwen3.5-122B-A10B",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3.5-122B-A10B",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3-235b-a22b-thinking-2507",
+          "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3-30b-a3b-thinking-2507",
+          "id": "Qwen/Qwen3-30B-A3B-Thinking-2507",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507",
+            "status": "claimed",
+            "verified_at": "2026-09-09"
+          }
         }
       ],
       "presentation": {
@@ -64738,10 +69097,29 @@ const builtInCatalogJSON = `{
     },
     {
       "default_mode": "enabled",
+      "id": "deepseek-v3.1",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "enabled",
       "id": "qwen3",
       "modes": [
         "enabled",
         "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "qwen3-always-on",
+      "modes": [
+        "enabled"
       ],
       "parameter": "enable_thinking",
       "type": "chat_template_kwargs"
