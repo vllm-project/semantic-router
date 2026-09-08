@@ -62,10 +62,14 @@ type dashboardEvaluationReport struct {
 }
 
 type evaluationReportSummary struct {
-	Verdict          string   `json:"verdict"`
-	QualityScore     *float64 `json:"quality_score"`
-	FailedGates      int      `json:"failed_gates"`
-	UnavailableGates int      `json:"unavailable_gates"`
+	Verdict       string `json:"verdict"`
+	PrimaryMetric *struct {
+		ID    string  `json:"id"`
+		Value float64 `json:"value"`
+		Unit  string  `json:"unit"`
+	} `json:"primary_metric"`
+	FailedGates      int `json:"failed_gates"`
+	UnavailableGates int `json:"unavailable_gates"`
 	Coverage         struct {
 		Fraction float64 `json:"fraction"`
 	} `json:"coverage"`
@@ -401,8 +405,8 @@ func verifyEvaluationReportIdentity(report dashboardEvaluationReport) error {
 }
 
 func verifyEvaluationReportSummary(report dashboardEvaluationReport) error {
-	if report.Summary.QualityScore != nil {
-		return fmt.Errorf("E0 fixture quality score = %v, want unavailable", *report.Summary.QualityScore)
+	if report.Summary.PrimaryMetric != nil {
+		return fmt.Errorf("E0 fixture primary metric = %+v, want unavailable", *report.Summary.PrimaryMetric)
 	}
 	if report.Summary.Coverage.Fraction < 0.95 {
 		return fmt.Errorf("fixture coverage = %.3f, want >= 0.95", report.Summary.Coverage.Fraction)

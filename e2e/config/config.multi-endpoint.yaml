@@ -2,7 +2,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-dev
+    model: qwen14b-dev
   models:
     - name: qwen14b-dev
       external_model_ids:
@@ -11,7 +11,7 @@ providers:
         - name: vllm-14b-dev
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-prod
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -19,7 +19,7 @@ providers:
         - name: vllm-14b-prod
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: code_to_dev
@@ -97,7 +97,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
     - name: qwen14b-prod
       param_size: 14b
       description: Qwen2.5 14B — Prod environment (user-facing)
@@ -106,7 +109,10 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.85
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.85
 global:
   router:
     strategy: priority

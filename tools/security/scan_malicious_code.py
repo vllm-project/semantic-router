@@ -40,6 +40,8 @@ SIGNATURES_CONFIG = SECURITY_DIR / "scan_sensitive_paths.toml"
 
 SKIP_DIRS = {
     ".git",
+    ".agent-harness",
+    ".codex",
     "__pycache__",
     "node_modules",
     ".venv",

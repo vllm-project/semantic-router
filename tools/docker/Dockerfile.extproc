@@ -304,8 +304,12 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     else \
         mkdir -p openvino-binding/build && \
         cd openvino-binding/build && \
-        cmake .. && \
-        make -j$(nproc) && \
+        python_purelib="$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" && \
+        cmake \
+            -DOpenVINO_DIR="${python_purelib}/openvino/cmake" \
+            -DOPENVINO_TOKENIZERS_PATH="${python_purelib}/openvino_tokenizers" \
+            .. && \
+        make -j"$(nproc)" && \
         echo "=== Verifying OpenVINO library ===" && \
         ls -la libopenvino_semantic_router.so; \
     fi
@@ -315,8 +319,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # OpenVINO stays unsupported there.
 RUN mkdir -p /app/openvino-runtime && \
     if [ "$TARGETARCH" != "arm64" ]; then \
-        ov_libs="$(python3 -c 'import openvino, os; print(os.path.join(os.path.dirname(openvino.__file__), "libs"))')" && \
-        ov_tokenizers="$(python3 -c 'import openvino_tokenizers, os; print(os.path.join(os.path.dirname(openvino_tokenizers.__file__), "lib"))')" && \
+        python_purelib="$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" && \
+        ov_libs="${python_purelib}/openvino/libs" && \
+        ov_tokenizers="${python_purelib}/openvino_tokenizers/lib" && \
         cp -a \
             "$ov_libs"/libopenvino.so.* \
             "$ov_libs"/libopenvino_auto_plugin.so \
