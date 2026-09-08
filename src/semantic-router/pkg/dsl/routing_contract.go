@@ -209,6 +209,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
+	for i := range d.cfg.HallucinationRules {
+		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
+	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}

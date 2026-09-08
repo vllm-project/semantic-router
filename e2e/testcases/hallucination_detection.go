@@ -24,6 +24,15 @@ const responseWarningsHeader = "x-vsr-response-warnings"
 
 const hallucinationWarningCode = "hallucination"
 
+// hallucinationMatchedHeader names, under x-vsr-debug, the hallucination rules
+// that matched once the answer was checked; hallucinationRuleName is the rule
+// the profile declares, so a warning that arrives without it came from the
+// plugin classifying the answer itself rather than from the signal.
+const (
+	hallucinationMatchedHeader = "x-vsr-matched-hallucination"
+	hallucinationRuleName      = "ungrounded_claims"
+)
+
 func init() {
 	pkgtestcases.Register("hallucination-detection", pkgtestcases.TestCase{
 		Description: "Test the pluggable hallucination detector endpoint backend end-to-end",
@@ -47,7 +56,9 @@ type HallucinationResult struct {
 	Question            string
 	SelectedDecision    string
 	WarningsHeader      string
+	MatchedHeader       string
 	HallucinationWarned bool
+	RuleMatched         bool
 	Error               string
 }
 
@@ -99,8 +110,9 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 			}
 			detail := result.Error
 			if detail == "" {
-				detail = fmt.Sprintf("no %q warning (decision=%q, warnings=%q)",
-					hallucinationWarningCode, result.SelectedDecision, result.WarningsHeader)
+				detail = fmt.Sprintf("no %q warning from rule %q (decision=%q, warnings=%q, %s=%q)",
+					hallucinationWarningCode, hallucinationRuleName, result.SelectedDecision, result.WarningsHeader,
+					hallucinationMatchedHeader, result.MatchedHeader)
 			}
 			failures = append(failures, fmt.Sprintf("%s: %s", result.Description, detail))
 		}
@@ -146,7 +158,11 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 
 	result.SelectedDecision = response.Headers.Get("x-vsr-selected-decision")
 	result.WarningsHeader = response.Headers.Get(responseWarningsHeader)
-	result.HallucinationWarned = headerListContains(result.WarningsHeader, hallucinationWarningCode)
+	result.MatchedHeader = response.Headers.Get(hallucinationMatchedHeader)
+	result.RuleMatched = headerListContains(result.MatchedHeader, hallucinationRuleName)
+	// The warning counts only when the declared rule produced it: the plugin
+	// enforces on the signal, it does not classify the answer itself.
+	result.HallucinationWarned = headerListContains(result.WarningsHeader, hallucinationWarningCode) && result.RuleMatched
 
 	if verbose {
 		if result.HallucinationWarned {
@@ -161,6 +177,13 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 	return result
 }
 
+// hallucinationToolCallID links the tool result to the assistant tool call it
+// answers. A tool result without a call ID, or one whose call is not in the
+// request, is rejected before routing (invalid_tool_result, orphan_tool_result
+// in llmprotocol/validate.go), so the grounding context has to arrive as a
+// complete call and result pair.
+const hallucinationToolCallID = "call-grounding-context"
+
 // sendHallucinationChatCompletion sends a factual question together with a tool
 // result carrying the grounding context. The tool message is what makes the
 // router run hallucination detection (HasToolsForFactCheck + tool context), and
@@ -173,10 +196,22 @@ func sendHallucinationChatCompletion(
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{
-		"model": "openai/gpt-oss-20b",
+		// The auto model, not the backend model the decision routes to: a
+		// concrete model name bypasses every signal, decision and plugin by
+		// design (processor_req_body.go), so asking for one here would leave
+		// nothing to detect with.
+		"model": "MoM",
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": testCase.Question},
-			{"role": "tool", "content": testCase.Context},
+			{"role": "assistant", "tool_calls": []map[string]interface{}{{
+				"id":   hallucinationToolCallID,
+				"type": "function",
+				"function": map[string]interface{}{
+					"name":      "lookup_grounding_context",
+					"arguments": "{}",
+				},
+			}}},
+			{"role": "tool", "tool_call_id": hallucinationToolCallID, "content": testCase.Context},
 		},
 	}
 
