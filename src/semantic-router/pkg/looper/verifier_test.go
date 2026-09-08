@@ -164,6 +164,41 @@ func TestValidVerifierConfidenceRejectsOutOfDomain(t *testing.T) {
 	}
 }
 
+// TestVerifierCandidateHidesProducingIdentity pins the blind-identity
+// contract (#2857): a verifier only sees the opaque CandidateID and content,
+// never the producing model/identity, so model-based judges cannot be biased
+// by provider identity. The invariant is structural — VerifierCandidate has
+// no identity field — and this regression fails if one is added without intent.
+func TestVerifierCandidateHidesProducingIdentity(t *testing.T) {
+	var seen []VerifierCandidate
+	v := NewDeterministicVerifier("test/blind", func(c VerifierCandidate) bool {
+		seen = append(seen, c)
+		return true
+	})
+	modelName := "gpt-internal-4o"
+	if _, err := v.Verify(context.Background(), &VerifierRequest{
+		Task: "summarize",
+		Candidates: []VerifierCandidate{
+			{ID: "c1", Content: "answer"},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(seen) != 1 {
+		t.Fatalf("verifier saw %d candidates, want 1", len(seen))
+	}
+	c := seen[0]
+	for _, leak := range []string{modelName, "model", "provider"} {
+		if strings.Contains(c.ID, leak) || strings.Contains(c.Content, leak) {
+			t.Fatalf("candidate leaked producing identity %q into %+v", leak, c)
+		}
+	}
+	// The opaque ID is the only identifier the verifier receives.
+	if c.ID != "c1" {
+		t.Fatalf("candidate ID = %q, want opaque c1", c.ID)
+	}
+}
+
 // netTimeoutErr implements the net.Error timeout interface used by HTTP
 // clients to signal deadline expiry.
 type netTimeoutErr struct{ error }
