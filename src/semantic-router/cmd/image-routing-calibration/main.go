@@ -54,23 +54,27 @@
 //
 //	hf download llm-semantic-router/multi-modal-embed-small \
 //	  config.json model.safetensors tokenizer.json tokenizer_config.json \
-//	  special_tokens_map.json --local-dir models/mom-embedding-multimodal
+//	  special_tokens_map.json \
+//	  --revision fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4 \
+//	  --local-dir models/mom-embedding-multimodal
 //
 //	cd src/semantic-router && \
 //	  DYLD_LIBRARY_PATH=$PWD/../../candle-binding/target/release \
 //	  LD_LIBRARY_PATH=$PWD/../../candle-binding/target/release \
 //	  go run ./cmd/image-routing-calibration \
 //	    -model ../../models/mom-embedding-multimodal \
-//	    -artifact-revision <resolved model snapshot commit> \
+//	    -artifact-revision fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4 \
 //	    -rules ../../config/fragments/signal/embedding/image-routing.yaml \
 //	    -cases ./cmd/image-routing-calibration/testdata/calibration-set.json \
 //	    -fixture-root ../.. \
 //	    -output /tmp/image-routing-calibration.json \
 //	    -markdown /tmp/image-routing-calibration.md
 //
-// -artifact-revision is recorded verbatim; the model Revision defaults to
-// "main" (pkg/modeldownload/config_parser.go), so pass the resolved snapshot
-// commit or the report claims reproducibility it does not have.
+// -artifact-revision is recorded verbatim: pass the snapshot the model was
+// downloaded at (the --revision above; the router's own downloader tracks
+// "main", see pkg/modeldownload/config_parser.go), or the report claims
+// reproducibility it does not have. The CI workflow pins the download to the
+// same snapshot and fails closed if the resolved revision differs.
 package main
 
 import (
