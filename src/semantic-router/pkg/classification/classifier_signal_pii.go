@@ -16,28 +16,26 @@ type cachedPIIResult struct {
 	err    error
 }
 
-func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string) {
+const (
+	piiEvaluationIncompleteCode = "pii_evaluation_incomplete"
+	piiEvaluationFailedCode     = "pii_evaluation_failed"
+)
+
+func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string) {
 	start := time.Now()
 
-	// Step 1: Collect the union of unique content pieces across all PII rules.
+	// Step 1: Collect the union of unique content pieces selected by all PII
+	// rules. A source-scoped rule controls which request content enters the
+	// shared cache; this keeps tool-result scanning opt-in.
 	contentSeen := make(map[string]struct{})
 	var uniqueContents []string
-	if piiText != "" {
-		contentSeen[piiText] = struct{}{}
-		uniqueContents = append(uniqueContents, piiText)
-	}
 	for _, rule := range c.Config.PIIRules {
-		if !rule.IncludeHistory {
-			continue
-		}
-		for _, msg := range nonUserMessages {
-			if msg == "" {
+		for _, content := range collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts) {
+			if _, ok := contentSeen[content]; ok {
 				continue
 			}
-			if _, ok := contentSeen[msg]; !ok {
-				contentSeen[msg] = struct{}{}
-				uniqueContents = append(uniqueContents, msg)
-			}
+			contentSeen[content] = struct{}{}
+			uniqueContents = append(uniqueContents, content)
 		}
 	}
 
@@ -61,7 +59,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 		ruleWg.Add(1)
 		go func() {
 			defer ruleWg.Done()
-			c.evaluatePIIRule(rule, piiText, nonUserMessages, piiCache, start, results, mu)
+			c.evaluatePIIRule(rule, piiText, nonUserMessages, toolResultTexts, piiCache, start, results, mu)
 		}()
 	}
 	ruleWg.Wait()
@@ -77,13 +75,16 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
-	ruleContents := collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+	ruleContents := collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts)
 	if len(ruleContents) == 0 {
 		return
 	}
 
-	entityTypes := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
+	entityTypes, status := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
+	if status != piiScanClean {
+		c.recordPIIRuleError(rule, status, results, mu)
+	}
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
 
 	if len(deniedEntities) > 0 {
@@ -102,4 +103,26 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		}
 		mu.Unlock()
 	}
+}
+
+type piiScanStatus string
+
+const (
+	piiScanClean       piiScanStatus = "clean"
+	piiScanIncomplete  piiScanStatus = "incomplete"
+	piiScanFailed      piiScanStatus = "error"
+)
+
+func (c *Classifier) recordPIIRuleError(rule config.PIIRule, status piiScanStatus, results *SignalResults, mu *sync.Mutex) {
+	code := piiEvaluationFailedCode
+	if status == piiScanIncomplete {
+		code = piiEvaluationIncompleteCode
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if results.SignalErrors == nil {
+		results.SignalErrors = make(map[string]string)
+	}
+	results.SignalErrors[signalConfidenceKey(config.SignalTypePII, rule.Name)] = code
 }

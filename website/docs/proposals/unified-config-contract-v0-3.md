@@ -72,6 +72,12 @@ conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,
 and decisions consume the resulting policy-facing output.
 
+PII rule scope is explicit. An omitted or empty `source` preserves the legacy
+prompt/history behavior; `source: tool_result` selects textual tool-result
+content after protocol decoding. Tool-result scope is opt-in and does not
+implicitly include prompt or history content. Unsupported source values are
+configuration errors rather than silently falling back to another scope.
+
 Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 

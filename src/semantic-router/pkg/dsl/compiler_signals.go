@@ -325,6 +325,9 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "include_history"); ok {
 		rule.IncludeHistory = v
 	}
+	if v, ok := getStringField(s.Fields, "source"); ok {
+		rule.Source = v
+	}
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}

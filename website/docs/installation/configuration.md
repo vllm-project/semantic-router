@@ -77,6 +77,13 @@ response contract. Omit `backend` to retain local behavior. The deprecated
 canonical configuration uses `variant: candle`, `variant: modernbert`, or
 `variant: mmbert32k`.
 
+PII rules default to the legacy prompt and optional history scope. To inspect
+textual tool results, opt in per rule with `source: tool_result`; the router
+uses the neutral protocol representation, so the same rule applies to the
+supported chat, responses, and messages wire formats. Tool-result scope does
+not implicitly include the prompt or conversation history, and unsupported
+source values fail configuration validation.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.

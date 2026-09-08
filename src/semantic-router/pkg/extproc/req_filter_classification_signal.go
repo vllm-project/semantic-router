@@ -18,6 +18,7 @@ type signalEvaluationInput struct {
 	skipCompressionSignals map[string]bool
 	currentUserText        string
 	priorUserMessages      []string
+	toolResultTexts        []string
 	hasAssistantReply      bool
 	conversationFacts      classification.ConversationFacts
 	requestFacts           classification.RequestFacts
@@ -30,6 +31,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		allMessagesText:   strings.Join(history.nonUserMessages, " "),
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
+		toolResultTexts:   append([]string(nil), history.toolResultTexts...),
 		hasAssistantReply: history.hasAssistantReply,
 		conversationFacts: classification.ConversationFacts{
 			HasDeveloperMessage:       history.hasDeveloperMessage,

@@ -10,6 +10,7 @@ type signalConversationHistory struct {
 	currentUserMessage     string
 	priorUserMessages      []string
 	nonUserMessages        []string
+	toolResultTexts        []string
 	hasAssistantReply      bool
 	metadata               map[string]string
 	contextTokenFloor      int
@@ -73,6 +74,14 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 	}
 }
 
+func signalConversationHistoryFromRequest(req *llmprotocol.Request, snapshot *requestSignalSnapshot) signalConversationHistory {
+	history := signalConversationHistoryFromSnapshot(snapshot)
+	if req != nil {
+		history.toolResultTexts = extractToolResultTexts(req)
+	}
+	return history
+}
+
 func cloneRoutingMetadata(values map[string]string) map[string]string {
 	if len(values) == 0 {
 		return nil
@@ -105,7 +114,7 @@ func extractSignalConversationHistory(req *llmprotocol.Request) signalConversati
 	if req == nil {
 		return signalConversationHistory{}
 	}
-	return signalConversationHistoryFromSnapshot(extractSemanticRequestSignals(req))
+	return signalConversationHistoryFromRequest(req, extractSemanticRequestSignals(req))
 }
 
 func recentToolNames(names []string, historyWindow int) []string {

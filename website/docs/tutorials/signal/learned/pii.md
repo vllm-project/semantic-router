@@ -46,9 +46,29 @@ routing:
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
 
+To scan textual results returned by tools, opt in with `source: tool_result`:
+
+```yaml
+routing:
+  signals:
+    pii:
+      - name: tool_result_pii
+        source: tool_result
+        threshold: 0.85
+        pii_types_allowed: []
+        description: Keep tool results containing sensitive data on a protected route.
+```
+
+This source is evaluated from the protocol-neutral tool-result representation,
+so the rule works across the supported chat, responses, and messages formats.
+It scans textual tool-result content only; tool calls and non-text content are
+not included. Tool-result scope is independent from prompt/history scope, so
+it does not automatically scan either of those inputs. Omitting `source` (or
+leaving it empty) preserves the legacy prompt and optional history behavior.
+
 ## Dependencies and Limitations
 
-The PII classifier processes the prompt and optional history. It is a routing
+The PII classifier processes the configured source scope. It is a routing
 control, not a substitute for redaction, encryption, access control, or data
 loss prevention. Calibrate thresholds by entity type. See a complete example:
 [`config/fragments/signal/pii/strict.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/pii/strict.yaml).

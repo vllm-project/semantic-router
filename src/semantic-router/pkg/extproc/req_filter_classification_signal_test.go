@@ -28,6 +28,18 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 	assert.Nil(t, input.skipCompressionSignals)
 }
 
+func TestPrepareSignalEvaluationInputCopiesToolResultTexts(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	history := signalConversationHistory{
+		toolResultTexts: []string{"customer@example.com", "order result"},
+	}
+
+	input := router.prepareSignalEvaluationInput(history)
+	history.toolResultTexts[0] = "mutated"
+
+	assert.Equal(t, []string{"customer@example.com", "order result"}, input.toolResultTexts)
+}
+
 func TestPrepareSignalEvaluationInput_UsesNonUserMessagesWhenUserContentMissing(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{},

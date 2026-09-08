@@ -17,6 +17,10 @@ type SignalEvaluationInput struct {
 	CurrentUserText        string
 	PriorUserMessages      []string
 	NonUserMessages        []string
+	// ToolResultTexts contains request-scoped textual tool results for PII
+	// source selection. It is kept separate from RequestFacts because that
+	// structure intentionally contains only content-free request facts.
+	ToolResultTexts        []string
 	HasPriorAssistantReply bool
 	Headers                map[string]string
 	ForceEvaluateAll       bool
@@ -44,6 +48,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) 
 		input.ConversationFacts,
 		input.ImageURL,
 		input.RequestFacts,
+		input.ToolResultTexts,
 		nil,
 		false,
 	)

@@ -48,6 +48,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		ContextText:            signalInput.allMessagesText,
 		CurrentUserText:        signalInput.currentUserText,
 		PriorUserMessages:      signalInput.priorUserMessages,
+		ToolResultTexts:        signalInput.toolResultTexts,
 		NonUserMessages:        nonUserMessages,
 		HasPriorAssistantReply: signalInput.hasAssistantReply,
 		Headers:                ctx.Headers,

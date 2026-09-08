@@ -15,7 +15,6 @@ SIGNAL metadata "canary" {
   predicate: { equals: "canary" }
 }
 
-
 SIGNAL classifier "risk" {
   type: "local"
   model_path: "models/risk"
@@ -52,6 +51,37 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
 	)
+}
+
+func TestPIISourceRoundTrip(t *testing.T) {
+	input := `
+SIGNAL pii "tool-data" {
+  source: "tool_result"
+}
+
+ROUTE "tool-route" {
+  PRIORITY 100
+  WHEN pii("tool-data")
+  MODEL "model-a"
+}`
+
+	cfg := mustCompilePolicyDSL(t, input)
+	if len(cfg.PIIRules) != 1 || cfg.PIIRules[0].Source != config.PIISourceToolResult {
+		t.Fatalf("PII rules = %#v, want source %q", cfg.PIIRules, config.PIISourceToolResult)
+	}
+
+	source, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(source, `source: "tool_result"`) {
+		t.Fatalf("decompiled DSL missing PII source:\n%s", source)
+	}
+
+	roundTrip := mustCompilePolicyDSL(t, source)
+	if len(roundTrip.PIIRules) != 1 || roundTrip.PIIRules[0].Source != config.PIISourceToolResult {
+		t.Fatalf("round-trip PII rules = %#v, want source %q", roundTrip.PIIRules, config.PIISourceToolResult)
+	}
 }
 
 func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
