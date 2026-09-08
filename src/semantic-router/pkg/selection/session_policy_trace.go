@@ -54,6 +54,34 @@ type SessionPolicyTrace struct {
 	BaseScores      map[string]float64
 	FinalScores     map[string]float64
 	CandidateTraces map[string]SessionCandidateTrace
+
+	// SwitchGate explains the evidence-calibrated gate verdict when the gate
+	// evaluated this decision. Nil means the gate did not run.
+	SwitchGate *SessionSwitchGateTrace
+}
+
+// SessionSwitchGateTrace records why trajectory evidence allowed or suppressed
+// a switch, so replay can reconstruct the verdict without hidden reasoning.
+type SessionSwitchGateTrace struct {
+	EvidenceVersion string
+	Mode            string
+	Decision        string
+	Reason          string
+	Origin          string
+	Enforced        bool
+
+	RegressionStreak int
+	RecoveryStreak   int
+	Trend            float64
+
+	AttributableCount int
+	MissingCount      int
+	WindowCount       int
+	ColdStart         bool
+
+	SwitchesInWindow       int
+	SecondsSinceLastSwitch float64
+	LastSwitchKnown        bool
 }
 
 // SessionCandidateTrace captures the per-model decomposition used by
@@ -143,6 +171,26 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 			}
 		}
 		out["candidate_traces"] = candidates
+	}
+	if g := t.SwitchGate; g != nil {
+		out["switch_gate"] = map[string]interface{}{
+			"evidence_version":          g.EvidenceVersion,
+			"mode":                      g.Mode,
+			"decision":                  g.Decision,
+			"suppression_reason":        g.Reason,
+			"switch_origin":             g.Origin,
+			"enforced":                  g.Enforced,
+			"regression_streak":         g.RegressionStreak,
+			"recovery_streak":           g.RecoveryStreak,
+			"trend":                     g.Trend,
+			"attributable_count":        g.AttributableCount,
+			"missing_count":             g.MissingCount,
+			"window_count":              g.WindowCount,
+			"cold_start":                g.ColdStart,
+			"switches_in_window":        g.SwitchesInWindow,
+			"seconds_since_last_switch": g.SecondsSinceLastSwitch,
+			"last_switch_known":         g.LastSwitchKnown,
+		}
 	}
 	return out
 }
