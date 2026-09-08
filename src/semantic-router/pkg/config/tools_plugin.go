@@ -93,6 +93,9 @@ type TrustedFactsConfig struct {
 	// and final stages. Must be one of "disabled", "advisory", or
 	// "authoritative". When empty, EffectiveEnforcement returns "advisory"
 	// (observe-only) so enabling the block without a mode never enforces.
+	// Disabled-by-default means a nil or Enabled=false block; an Enabled
+	// block with empty enforcement is intentionally advisory, not disabled.
+	// Production authoritative use must set enforcement explicitly.
 	Enforcement string `json:"enforcement,omitempty" yaml:"enforcement,omitempty"`
 	// TrustSources lists the authoritative sources consulted. Allowed values
 	// are "operator-policy", "gateway-attested", and "runtime-fresh".
@@ -100,7 +103,9 @@ type TrustedFactsConfig struct {
 	// "client-metadata", "prompt", or "model-output" are never allowed.
 	TrustSources []string `json:"trust_sources,omitempty" yaml:"trust_sources,omitempty"`
 	// FreshnessSeconds bounds how old runtime availability evidence may be.
-	// 0 disables the freshness check. Must be in [0, 86400] when Enabled.
+	// 0 disables the freshness check. Must be in [0, 86400] when Enabled,
+	// and must be >0 when trust_sources includes "runtime-fresh" (a
+	// runtime-fresh claim without a bound would accept stale evidence).
 	FreshnessSeconds int `json:"freshness_seconds,omitempty" yaml:"freshness_seconds,omitempty"`
 	// StageRoles lists the Looper stage roles this decision may authorize.
 	// Allowed values are "candidate", "verifier", "advisor", and "final".

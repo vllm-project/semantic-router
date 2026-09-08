@@ -51,11 +51,22 @@ func TestTrustedFactsValidate(t *testing.T) {
 		{Enabled: true, TrustSources: []string{TrustedSourceOperatorPolicy}, StageRoles: []string{TrustedStageCandidate}, FreshnessSeconds: -1},
 		{Enabled: true, TrustSources: []string{TrustedSourceOperatorPolicy}, StageRoles: []string{TrustedStageCandidate}, FreshnessSeconds: 99999},
 		{Enabled: true, TrustSources: []string{TrustedSourceOperatorPolicy}, StageRoles: []string{"unknown-stage"}},
+		{Enabled: true, TrustSources: []string{TrustedSourceRuntimeFresh}, StageRoles: []string{TrustedStageCandidate}, FreshnessSeconds: 0},
 	}
 	for i, tc := range cases {
 		if err := tc.Validate(); err == nil {
 			t.Fatalf("case %d should fail: %+v", i, tc)
 		}
+	}
+	// runtime-fresh with an explicit bound passes.
+	freshBounded := &TrustedFactsConfig{
+		Enabled:          true,
+		TrustSources:     []string{TrustedSourceRuntimeFresh},
+		StageRoles:       []string{TrustedStageCandidate},
+		FreshnessSeconds: 60,
+	}
+	if err := freshBounded.Validate(); err != nil {
+		t.Fatalf("runtime-fresh with bound should pass: %v", err)
 	}
 }
 

@@ -55,6 +55,11 @@ const (
 // stage is known, and freshness holds; otherwise it narrows (stale) or
 // denies (missing source or unknown stage). It never widens privileges and
 // never executes tools.
+//
+// Contract-only in this change (issue #3476): the helper and its unit tests
+// define the gate vocabulary. Wiring into the decision engine before
+// relevance/ranking is a tracked follow-up so this change stays additive
+// and cannot alter existing selection when trusted_facts is disabled.
 func EvaluateTrustedFacts(f TrustedFacts) TrustedOutcome {
 	switch f.Enforcement {
 	case TrustedDisabled:

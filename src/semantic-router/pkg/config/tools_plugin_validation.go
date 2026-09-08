@@ -141,6 +141,15 @@ func (t *TrustedFactsConfig) Validate() error {
 		return fmt.Errorf("tools plugin: trusted_facts.freshness_seconds must be in [0, 86400]")
 	}
 
+	// A runtime-fresh claim without a freshness bound disables the very check
+	// that makes the claim meaningful. Require an explicit bound when the
+	// source is declared.
+	for _, s := range t.TrustSources {
+		if s == TrustedSourceRuntimeFresh && t.FreshnessSeconds == 0 {
+			return fmt.Errorf("tools plugin: trusted_facts.freshness_seconds must be >0 when trust_sources includes %q", TrustedSourceRuntimeFresh)
+		}
+	}
+
 	if len(t.StageRoles) == 0 {
 		return fmt.Errorf("tools plugin: trusted_facts.stage_roles must declare at least one Looper stage role")
 	}
