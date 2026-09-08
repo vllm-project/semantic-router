@@ -1,4 +1,6 @@
-import React from 'react'
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import useIsBrowser from '@docusaurus/useIsBrowser'
 
 import type { BenchmarkMetric, CatalogModel } from '../../data/modelHubCatalogTypes'
 import { modelHubBenchmarkNormalizedValue } from '../../data/modelHubBenchmarkSupport'
@@ -84,20 +86,113 @@ export function SelectControl({
   options: Array<[string, string]>
   onChange: (value: string) => void
 }) {
+  const isBrowser = useIsBrowser()
+  const labelId = useId()
+  const [open, setOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLUListElement>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
+  const selected = options.find(([optionValue]) => optionValue === value)?.[1] ?? value
+
+  const placeMenu = useCallback(() => {
+    const button = buttonRef.current
+    if (!button) return
+    const rect = button.getBoundingClientRect()
+    const gutter = 8
+    const width = Math.min(Math.max(rect.width, 14 * 16), window.innerWidth - gutter * 2)
+    const spaceBelow = window.innerHeight - rect.bottom - gutter
+    const spaceAbove = rect.top - gutter
+    const openUp = spaceBelow < 12 * 16 && spaceAbove > spaceBelow
+    const maxHeight = Math.max(8 * 16, Math.min(18 * 16, openUp ? spaceAbove : spaceBelow))
+    let left = rect.left
+    if (left + width > window.innerWidth - gutter) {
+      left = Math.max(gutter, window.innerWidth - width - gutter)
+    }
+    setMenuStyle({
+      position: 'fixed',
+      zIndex: 10050,
+      left,
+      width,
+      maxHeight,
+      ...(openUp
+        ? { top: 'auto', bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4, bottom: 'auto' }),
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    placeMenu()
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+    window.addEventListener('mousedown', onPointer)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('resize', placeMenu)
+    window.addEventListener('scroll', placeMenu, true)
+    return () => {
+      window.removeEventListener('mousedown', onPointer)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', placeMenu)
+      window.removeEventListener('scroll', placeMenu, true)
+    }
+  }, [open, placeMenu])
+
   return (
-    <label className={styles.selectControl}>
-      <span>{label}</span>
-      <span className={styles.selectShell}>
-        <select value={value} onChange={event => onChange(event.target.value)}>
-          {options.map(([optionValue, optionLabel]) => (
-            <option key={optionValue} value={optionValue}>
-              {optionLabel}
-            </option>
-          ))}
-        </select>
+    <div className={styles.selectControl}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={styles.selectTrigger}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={`${labelId} ${labelId}-value`}
+        onClick={() => setOpen(current => !current)}
+      >
+        <span id={labelId} className={styles.selectPrefix}>{label}</span>
+        <span id={`${labelId}-value`} className={styles.selectValue}>{selected}</span>
         <i aria-hidden="true">⌄</i>
-      </span>
-    </label>
+      </button>
+      {isBrowser && open
+        ? createPortal(
+            <ul
+              ref={menuRef}
+              className={styles.selectMenu}
+              role="listbox"
+              style={menuStyle}
+              aria-labelledby={labelId}
+            >
+              {options.map(([optionValue, optionLabel]) => (
+                <li key={optionValue}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={optionValue === value}
+                    className={optionValue === value ? styles.selectOptionActive : undefined}
+                    onClick={() => {
+                      onChange(optionValue)
+                      setOpen(false)
+                      buttonRef.current?.focus()
+                    }}
+                  >
+                    {optionLabel}
+                  </button>
+                </li>
+              ))}
+            </ul>,
+            document.body,
+          )
+        : null}
+    </div>
   )
 }
 
