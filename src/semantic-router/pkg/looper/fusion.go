@@ -26,6 +26,7 @@ func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
 type fusionExecutionConfig struct {
 	Model                        string
 	AnalysisModels               []string
+	AnalysisMode                 string
 	AnalysisOverrides            map[string]config.FusionModelOverride
 	MaxConcurrent                int
 	MaxCompletionTokens          int
@@ -70,6 +71,7 @@ type FusionFailedModel struct {
 }
 
 type FusionTrace struct {
+	AnalysisMode   string                `json:"analysis_mode,omitempty"`
 	Analysis       *FusionAnalysis       `json:"analysis,omitempty"`
 	Responses      []FusionPanelResponse `json:"responses,omitempty"`
 	FailedModels   []FusionFailedModel   `json:"failed_models,omitempty"`
@@ -101,6 +103,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"decision":        req.DecisionName,
 		"judge_model":     cfg.Model,
 		"analysis_models": len(cfg.AnalysisModels),
+		"analysis_mode":   cfg.AnalysisMode,
 		"streaming":       req.IsStreaming,
 	})
 
@@ -123,21 +126,20 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
-	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
-	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
+	judge, err := l.runFusionJudgeStages(ctx, req, cfg, groundedPanel, groundingScores)
 	if err != nil {
 		return nil, err
 	}
-	usage := panel.usage.Add(analysisResp, finalResp)
+	usage := panel.usage.Add(judge.analysisResponse, judge.finalResponse)
 
-	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, analysis, groundingMode, groundingScores)
+	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, judge.analysis, groundingMode, groundingScores)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
-	iterations := len(cfg.AnalysisModels) + 2
+	iterations := len(cfg.AnalysisModels) + judge.iterations
 
 	if req.IsStreaming {
-		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+		return l.formatFusionStreamingResponse(judge.finalResponse, modelsUsed, iterations, cfg, trace, usage)
 	}
-	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+	return l.formatFusionJSONResponse(judge.finalResponse, modelsUsed, iterations, cfg, trace, usage)
 }
 
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
@@ -366,6 +368,7 @@ func buildFusionTrace(
 	groundingScores []groundingScore,
 ) *FusionTrace {
 	trace := &FusionTrace{
+		AnalysisMode:   config.EffectiveFusionAnalysisMode(cfg.AnalysisMode),
 		JudgeModel:     cfg.Model,
 		AnalysisModels: append([]string(nil), cfg.AnalysisModels...),
 		FailedModels:   failedModels,

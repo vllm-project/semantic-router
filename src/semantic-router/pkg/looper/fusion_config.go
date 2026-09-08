@@ -9,6 +9,7 @@ import (
 
 func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutionConfig {
 	cfg := fusionExecutionConfig{
+		AnalysisMode:                 config.FusionAnalysisModeSeparate,
 		IncludeAnalysis:              true,
 		IncludeIntermediateResponses: true,
 	}
@@ -32,6 +33,7 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 }
 
 func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionConfig {
+	cfg.AnalysisMode = config.EffectiveFusionAnalysisMode(cfg.AnalysisMode)
 	cfg.OnError = strings.TrimSpace(cfg.OnError)
 	if cfg.OnError == "" {
 		cfg.OnError = config.FusionOnErrorSkip
@@ -85,6 +87,20 @@ func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
 			len(cfg.AnalysisModels),
 		)
 	}
+	switch cfg.AnalysisMode {
+	case config.FusionAnalysisModeSeparate, config.FusionAnalysisModeOneCall, config.FusionAnalysisModeNone:
+	default:
+		return fmt.Errorf(
+			"fusion analysis_mode must be %q, %q, or %q, got %q",
+			config.FusionAnalysisModeSeparate,
+			config.FusionAnalysisModeOneCall,
+			config.FusionAnalysisModeNone,
+			cfg.AnalysisMode,
+		)
+	}
+	if cfg.AnalysisMode != config.FusionAnalysisModeSeparate && strings.TrimSpace(cfg.AnalysisTemplate) != "" {
+		return fmt.Errorf("fusion analysis_template requires analysis_mode=%q", config.FusionAnalysisModeSeparate)
+	}
 	switch cfg.OnError {
 	case config.FusionOnErrorSkip, config.FusionOnErrorFail:
 		return nil
@@ -95,6 +111,9 @@ func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
 
 func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAlgorithmConfig) {
 	mergeFusionModels(dst, src.Model, src.AnalysisModels)
+	if src.AnalysisMode != "" {
+		dst.AnalysisMode = src.AnalysisMode
+	}
 	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
