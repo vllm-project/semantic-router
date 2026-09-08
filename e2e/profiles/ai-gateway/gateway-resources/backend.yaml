@@ -92,7 +92,7 @@ metadata:
   namespace: default
 spec:
   endpoints:
-    - fqdn:
-        hostname: 198.51.100.1
+    - ip:
+        address: 198.51.100.1
         port: 81
 

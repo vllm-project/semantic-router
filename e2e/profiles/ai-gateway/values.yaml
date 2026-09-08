@@ -25,7 +25,7 @@ config:
       - name: timeout-probe-fast
         reasoning:
           family: qwen3
-        provider_model_id: general-expert
+        provider_model_id: timeout-probe-fast
         reliability:
           request_timeout: 2s
           stream_idle_timeout: 2s
@@ -37,7 +37,7 @@ config:
       - name: timeout-probe-slow
         reasoning:
           family: qwen3
-        provider_model_id: general-expert
+        provider_model_id: timeout-probe-slow
         reliability:
           request_timeout: 15s
           stream_idle_timeout: 15s
