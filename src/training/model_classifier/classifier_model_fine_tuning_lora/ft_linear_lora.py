@@ -35,6 +35,12 @@ Dataset:
       * Format: Question-answer pairs with category labels
       * Source: Downloaded from Hugging Face with automatic caching
       * Quality: High-quality academic questions with verified category labels
+      * Splits: MMLU-Pro ships only 'validation' (70 rows) and 'test' (12032 rows),
+        so the training pool has to come out of 'test'. HELDOUT_FRACTION of 'test'
+        is reserved before any sampling and never used for gradients, and the
+        reserved row indices are written to heldout_eval.json next to the model.
+        Accuracy over the whole 'test' split is therefore NOT held-out evidence;
+        quote the held-out number instead.
 
 Key Features:
     - LoRA (Low-Rank Adaptation) for multi-class intent classification
@@ -45,7 +51,7 @@ Key Features:
     - Configurable LoRA hyperparameters (rank, alpha, dropout)
     - Real-time MMLU-Pro dataset loading and preprocessing
     - Comprehensive evaluation metrics (accuracy, F1, precision, recall)
-    - Automatic train/validation/test split with stratification
+    - Stratified held-out slice reserved before sampling, never used for gradients
     - Model checkpointing and best model selection
     - Built-in inference testing with sample questions
     - Auto-merge functionality: Generates both LoRA adapters and Rust-compatible models
@@ -106,6 +112,14 @@ REQUIRED_CATEGORIES = [
     "psychology",
 ]
 
+# MMLU-Pro has no train split, so the training pool is carved out of 'test'.
+# Reserve this fraction of 'test' up front and keep it out of the pool, so there
+# is data the model provably never trained on to report accuracy against.
+HELDOUT_FRACTION = 0.2
+
+# Fixed seed for every split, so a rerun reserves the same rows.
+SPLIT_SEED = 42
+
 
 def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
@@ -148,6 +162,11 @@ class MMLUDataset:
         self.supplement_dataset = supplement_dataset
         self.label2id = {}
         self.id2label = {}
+        # Rows reserved out of MMLU-Pro 'test' before sampling, populated by
+        # load_huggingface_dataset. Never reaches the training pool.
+        self.heldout_indices = []
+        self.heldout_texts = []
+        self.heldout_labels = []
 
     def _load_supplement_data(self) -> list:
         """
@@ -187,16 +206,55 @@ class MMLUDataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            # Extract questions and categories from the test split
-            # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = list(dataset["test"]["question"])
-            all_labels = list(dataset["test"]["category"])
+            # MMLU-Pro ships only 'validation' (70 rows) and 'test' (12032 rows),
+            # so the training pool has to be carved out of 'test'.
+            test_texts = list(dataset["test"]["question"])
+            test_labels = list(dataset["test"]["category"])
+            logger.info(f"MMLU-Pro 'test' rows: {len(test_texts)}")
 
-            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+            # Reserve the evaluation rows before any sampling, so nothing that is
+            # scored later can reach the gradient path.
+            pool_indices, heldout_indices = train_test_split(
+                list(range(len(test_texts))),
+                test_size=HELDOUT_FRACTION,
+                random_state=SPLIT_SEED,
+                stratify=test_labels,
+            )
+            self.heldout_indices = sorted(heldout_indices)
+            self.heldout_texts = [test_texts[i] for i in self.heldout_indices]
+            self.heldout_labels = [test_labels[i] for i in self.heldout_indices]
+            logger.info(f"Reserved {len(self.heldout_indices)} rows as held-out")
+
+            # MMLU-Pro repeats some question texts across rows, so splitting on the
+            # row index alone still lands the same question on both sides. Anything
+            # a held-out row also asks stays out of the training pool.
+            heldout_lookup = set(self.heldout_texts)
+            pool_indices = [
+                i for i in sorted(pool_indices) if test_texts[i] not in heldout_lookup
+            ]
+            repeats = len(test_texts) - len(self.heldout_indices) - len(pool_indices)
+            if repeats:
+                logger.info(
+                    f"Dropped {repeats} pool rows that repeat a held-out question"
+                )
+
+            all_texts = [test_texts[i] for i in pool_indices]
+            all_labels = [test_labels[i] for i in pool_indices]
+            logger.info(f"MMLU-Pro training pool: {len(all_texts)}")
 
             # Load and merge supplementary training data
             # This includes casual "other" examples for better fallback detection
-            supplement_samples = self._load_supplement_data()
+            raw_supplement = self._load_supplement_data()
+            supplement_samples = [
+                (text, label)
+                for text, label in raw_supplement
+                if text not in heldout_lookup
+            ]
+            if len(supplement_samples) != len(raw_supplement):
+                logger.warning(
+                    f"Dropped {len(raw_supplement) - len(supplement_samples)} "
+                    "supplement samples that repeat a held-out question"
+                )
             if supplement_samples:
                 supp_texts, supp_labels = zip(*supplement_samples, strict=True)
                 all_texts.extend(supp_texts)
@@ -326,28 +384,36 @@ class MMLUDataset:
         # Convert labels to IDs
         label_ids = [self.label2id[label] for label in labels]
 
-        # Split the data
-        train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-            texts, label_ids, test_size=0.4, random_state=42, stratify=label_ids
+        # Split the sampled pool into train and validation. Both sides of this
+        # split are training data; the evaluation set is the slice reserved in
+        # load_huggingface_dataset, not a cut of this pool.
+        train_texts, val_texts, train_labels, val_labels = train_test_split(
+            texts,
+            label_ids,
+            test_size=0.2,
+            random_state=SPLIT_SEED,
+            stratify=label_ids,
         )
 
-        val_texts, test_texts, val_labels, test_labels = train_test_split(
-            temp_texts,
-            temp_labels,
-            test_size=0.5,
-            random_state=42,
-            stratify=temp_labels,
-        )
+        # Reserved rows carry MMLU-Pro categories, which are all required
+        # categories, but guard against a category the pool never produced.
+        heldout_pairs = [
+            (text, self.label2id[label])
+            for text, label in zip(self.heldout_texts, self.heldout_labels, strict=True)
+            if label in self.label2id
+        ]
+        heldout_texts = [text for text, _ in heldout_pairs]
+        heldout_labels = [label for _, label in heldout_pairs]
 
         logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
-        logger.info(f"  Test: {len(test_texts)}")
+        logger.info(f"  Held-out: {len(heldout_texts)}")
 
         return {
             "train": (train_texts, train_labels),
             "validation": (val_texts, val_labels),
-            "test": (test_texts, test_labels),
+            "heldout": (heldout_texts, heldout_labels),
         }
 
 
@@ -358,6 +424,7 @@ def create_mmlu_dataset(max_samples=1000):
 
     train_texts, train_labels = datasets["train"]
     val_texts, val_labels = datasets["validation"]
+    heldout_texts, heldout_labels = datasets["heldout"]
 
     # Convert to the format expected by our training
     sample_data = []
@@ -366,10 +433,19 @@ def create_mmlu_dataset(max_samples=1000):
     ):
         sample_data.append({"text": text, "label": label})
 
+    heldout = {
+        "data": [
+            {"text": text, "label": label}
+            for text, label in zip(heldout_texts, heldout_labels, strict=True)
+        ],
+        "row_indices": dataset_loader.heldout_indices,
+    }
+
     logger.info(f"Created dataset with {len(sample_data)} samples")
+    logger.info(f"Held-out evaluation samples: {len(heldout['data'])}")
     logger.info(f"Label mapping: {dataset_loader.label2id}")
 
-    return sample_data, dataset_loader.label2id, dataset_loader.id2label
+    return sample_data, heldout, dataset_loader.label2id, dataset_loader.id2label
 
 
 class EnhancedLoRATrainer(Trainer):
@@ -530,11 +606,16 @@ def main(
         raise
 
     # Load real MMLU-Pro dataset
-    all_data, category_to_idx, idx_to_category = create_mmlu_dataset(max_samples)
-    train_data, val_data = train_test_split(all_data, test_size=0.2, random_state=42)
+    all_data, heldout, category_to_idx, idx_to_category = create_mmlu_dataset(
+        max_samples
+    )
+    train_data, val_data = train_test_split(
+        all_data, test_size=0.2, random_state=SPLIT_SEED
+    )
 
     logger.info(f"Training samples: {len(train_data)}")
     logger.info(f"Validation samples: {len(val_data)}")
+    logger.info(f"Held-out evaluation samples: {len(heldout['data'])}")
     logger.info(f"Categories: {len(category_to_idx)}")
 
     # Create LoRA model
@@ -543,6 +624,7 @@ def main(
     # Prepare datasets
     train_dataset = tokenize_data(train_data, tokenizer)
     val_dataset = tokenize_data(val_data, tokenizer)
+    heldout_dataset = tokenize_data(heldout["data"], tokenizer)
 
     # Setup output directory
     if output_dir is None:
@@ -615,12 +697,35 @@ def main(
     logger.info(f"LoRA adapter saved to: {output_dir}")
     logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
 
-    # Final evaluation
+    # Final evaluation. The validation set comes out of the training pool, so it
+    # only measures fit; the reserved rows are the ones the model never saw.
     logger.info("Final evaluation on validation set...")
     val_results = trainer.evaluate()
-    logger.info("Validation Results:")
+    logger.info("Validation Results (drawn from the training pool, not held out):")
     logger.info(f"  Accuracy: {val_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {val_results['eval_f1']:.4f}")
+
+    logger.info("Evaluating on the reserved MMLU-Pro rows...")
+    heldout_results = trainer.evaluate(eval_dataset=heldout_dataset)
+    logger.info("Held-out Results:")
+    logger.info(f"  Accuracy: {heldout_results['eval_accuracy']:.4f}")
+    logger.info(f"  F1: {heldout_results['eval_f1']:.4f}")
+
+    # Record which rows were reserved, so the number above can be reproduced and
+    # the trained rows excluded from any later scoring of the public split.
+    heldout_manifest = {
+        "dataset": "TIGER-Lab/MMLU-Pro",
+        "split": "test",
+        "heldout_fraction": HELDOUT_FRACTION,
+        "seed": SPLIT_SEED,
+        "num_heldout_rows": len(heldout["row_indices"]),
+        "heldout_row_indices": heldout["row_indices"],
+        "accuracy": heldout_results["eval_accuracy"],
+        "f1": heldout_results["eval_f1"],
+    }
+    with open(os.path.join(output_dir, "heldout_eval.json"), "w") as f:
+        json.dump(heldout_manifest, f, indent=2)
+    logger.info("Saved held-out row indices and metrics to heldout_eval.json")
 
 
 def merge_lora_adapter_to_full_model(
