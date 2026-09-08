@@ -365,6 +365,9 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	if ctx.RequestModel != imageBackend {
 		t.Fatalf("ctx.RequestModel = %q, want %q (rerouted images serving model for token/ttfb/usage attribution)", ctx.RequestModel, imageBackend)
 	}
+	if ctx.VSRSelectedModel != imageBackend {
+		t.Fatalf("ctx.VSRSelectedModel = %q, want %q (selected-model header reflects the final dispatch model)", ctx.VSRSelectedModel, imageBackend)
+	}
 }
 
 // A pure image request that omits tool_choice is defaulted to auto by

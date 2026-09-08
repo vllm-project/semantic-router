@@ -87,9 +87,11 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	ctx.SemanticRequest = request
 	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
 	// the model that actually serves the request. A capability reroute may
-	// redirect this request to a sibling modelRef, so RequestModel must be the
-	// final dispatch model, not the decision-selected one.
+	// redirect this request to a sibling modelRef, so RequestModel and the
+	// client-visible selected-model header must be the final dispatch model,
+	// not the decision-selected one.
 	ctx.RequestModel = dispatch.logicalModel
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -190,6 +192,7 @@ func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
 		"to":          model,
 		"wire_format": candidate.targetFormat,
 	})
+	metrics.ModelRoutingModifications.WithLabelValues(selected.logicalModel, model).Inc()
 	return candidate, true
 }
 

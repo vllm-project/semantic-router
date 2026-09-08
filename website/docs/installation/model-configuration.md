@@ -80,6 +80,27 @@ The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+## Routing capabilities
+
+Author-declared model capabilities drive capability-aware dispatch: a request
+whose required capability the originally selected backend cannot express is
+rerouted to the first qualified model in the decision whose declared
+capabilities cover it. Declare them on a model card:
+
+```yaml
+routing:
+  modelCards:
+    - name: image-backend
+      capabilities: [image_generation]
+```
+
+The protocol capability vocabulary is defined by the `llmprotocol` package.
+The Router recognizes the names it compares during negotiation — for example
+`image_input`, `image_output`, `image_generation`, `audio_output`, `tools`,
+`reasoning`, `streaming`, `structured_json` — and treats a declared name it
+does not recognize as unannotated, judging the model on wire expressibility
+alone.
+
 ## Validate the result
 
 ```bash
