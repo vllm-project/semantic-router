@@ -122,7 +122,8 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if ctx.SourceFormat == llmprotocol.OpenAIChatV1 {
 		if err := validateDynamoRoutingHeaders(ctx, llmprotocol.DefaultPolicy().Limits); err != nil {
 			recordIngressProtocolError(ctx, err)
-			if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+			var protocolError *llmprotocol.ProtocolError
+			if errors.As(err, &protocolError) {
 				copy := *protocolError
 				ctx.ImmediateProtocolError = &copy
 			}
