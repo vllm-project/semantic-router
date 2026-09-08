@@ -112,6 +112,11 @@
           "items": {"enum": ["enabled", "disabled", "adaptive"]}
         },
         "reasoning_efforts": {"$ref": "#/$defs/stringSet"},
+        "reasoning_efforts_by_protocol": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"$ref": "#/$defs/stringSet"}
+        },
         "pricing": {
           "type": "object",
           "additionalProperties": {"type": ["number", "string", "boolean"]}

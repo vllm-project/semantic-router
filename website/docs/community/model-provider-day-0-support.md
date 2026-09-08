@@ -170,6 +170,97 @@ metadata endpoints are rejected. Redirects and environment proxies are disabled,
 and resolved addresses are checked again by the dialer before credentials are
 sent.
 
+## Worked example: GPT-6 Astra
+
+GPT-6 Astra is an existing-provider model addition, so its implementation stays
+inside the shared catalog and the existing OpenAI protocol adapters. It is a
+complete worked example of the contribution path above, without claiming that
+the change landed on the model's launch day. Its source packet is the official
+[model reference](https://developers.openai.com/api/docs/models/gpt-6-astra),
+[latest-model guide](https://developers.openai.com/api/docs/guides/latest-model),
+and [launch evaluation report](https://openai.com/index/gpt-6-astra/):
+
+| Contract | Source of truth |
+| --- | --- |
+| Identity, limits, modalities, capabilities, and presentation | `config/catalog/resources/models/single/openai.yaml` |
+| OpenAI model ID, Chat/Responses availability, pricing, and API constraints | `config/catalog/resources/providers/openai.yaml` |
+| Always-on `low`, `medium`, `high`, `xhigh`, and `max` reasoning | `config/catalog/resources/reasoning-families.yaml` |
+| Exact vendor-published benchmark results | `config/catalog/resources/evaluations/single/openai.yaml` |
+| Final Chat and Responses request shapes | `src/semantic-router/pkg/extproc/provider_request_catalog_contract_test.go` |
+| Runnable aliases and mock-provider credentials | `e2e/profiles/response-api/values.yaml` |
+| Default CI profile membership | `e2e/profiles/response-api/profile.go` |
+| Black-box model-ID and reasoning projection | `e2e/testcases/model_catalog_astra.go` |
+
+The official model page does not name a default reasoning effort, so the
+catalog does not invent one. It also does not expose a disabled mode: omitting
+an effort lets the API choose its default, while `use_reasoning: false` is
+rejected during configuration validation. Published launch scores are marked
+`unspecified` because the source reports the maximum result across supported
+efforts rather than attributing each score to one effort.
+
+The OpenAI binding records that tools require Responses; requests beyond
+272,000 input tokens use the published long-context multipliers; and
+`temperature`, `top_p`, and `top_logprobs` are unsupported (`logprobs` is also
+unsupported for Chat Completions, and Responses cannot include
+`message.output_text.logprobs`). It also narrows Chat Completions to `low`,
+`medium`, `high`, and `xhigh`, because `max` is Responses-only. These are
+discoverable catalog constraints,
+not silent request rewriting: the Router projects protocol and reasoning
+fields exactly, while OpenAI remains authoritative for rejecting unsupported
+request fields.
+
+Use Responses for Astra tool calls. A minimal routed configuration needs no
+handwritten Model Card or reasoning family:
+
+```yaml
+version: v0.3
+providers:
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      api_format: responses
+      backend_refs:
+        - name: primary
+          provider: openai
+          api_key_env: OPENAI_API_KEY
+
+routing:
+  decisions:
+    - name: astra_default
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: astra
+          use_reasoning: true
+          reasoning_effort: high
+```
+
+For a plain Chat Completions workload without tools, omit
+`api_format: responses`; the same catalog binding emits top-level
+`reasoning_effort` and rejects a Responses-only effort during startup.
+Responses emits `reasoning.effort`. The black-box E2E also
+proves that a Responses tool definition survives the Router-to-provider hop.
+The generated Router, CLI, Dashboard, and website views all come from these
+authored resources.
+
+Run the worked example by name:
+
+```bash
+make e2e-test-specific \
+  E2E_PROFILE=response-api \
+  E2E_TESTS=model-catalog-astra
+```
+
+The profile uses a fixture credential and local mock provider; it never calls
+the external model API. The test sends Chat with `xhigh`, Responses with
+Responses-only `max`, and a Responses `high` tool request. It then reads the
+mock provider's captured request and checks the provider-native model ID,
+protocol-specific reasoning field, absence of the competing protocol shape,
+and tool preservation. Keep this final-hop assertion when copying the example
+for another model whose protocol or reasoning contract differs.
+
 ## Built-in and custom user configuration
 
 A built-in card is selected with one optional `catalog` reference. The model
@@ -272,14 +363,19 @@ versioned, while metric values must be finite.
 ```bash
 make model-catalog-generate
 make model-catalog-check
-make agent-report ENV=cpu CHANGED_FILES="config/catalog/resources/models/organization.yaml"
+make impact ENV=cpu BASE_REF=upstream/main
+make check BASE_REF=upstream/main
+make verify PROFILE=response-api
 ```
 
 Commit the authored resources, built-in distribution snapshot, Router embed,
-and shared public snapshot together. CLI package assets are ignored build
-staging and must not be committed. Then
-run the gates reported for the actual changed files. A complete Day-0 pull
-request demonstrates:
+and shared public snapshot together. CLI package assets are build-time staging
+outputs, are ignored by Git, and must not be committed. Use the E2E profile
+reported by `impact`
+instead of `response-api` when the model or provider belongs to another
+profile; use `make verify DOMAIN=<domain>` for an explicit integration domain.
+Run `make ci-full BASE_REF=upstream/main` when a complete local PR baseline is
+required. A complete Day-0 pull request demonstrates:
 
 - stable identities and valid references;
 - protocol and capability conformance for every support claim;
