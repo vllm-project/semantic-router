@@ -1,3 +1,21 @@
+- id: moonshot/kimi-k2-5-model-card-scicode@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Kimi K2.5 Thinking
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.487
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.5/blob/4d01dfe0332d63057c186e0b262165819efb6611/README.md
+    redistributable: true
 - id: independent/kimi-k3-low-critpt@1.0.0
   model: moonshot/kimi-k3
   benchmark: artificial-analysis/critpt@1.0.0

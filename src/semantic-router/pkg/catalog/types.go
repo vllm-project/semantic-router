@@ -467,12 +467,13 @@ type Normalization struct {
 }
 
 type IndexComponent struct {
-	Benchmark        string        `json:"benchmark,omitempty" yaml:"benchmark,omitempty"`
-	Metric           string        `json:"metric,omitempty" yaml:"metric,omitempty"`
-	BenchmarkProfile string        `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
-	Index            string        `json:"index,omitempty" yaml:"index,omitempty"`
-	Weight           float64       `json:"weight" yaml:"weight"`
-	Normalization    Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
+	Benchmark         string        `json:"benchmark,omitempty" yaml:"benchmark,omitempty"`
+	Metric            string        `json:"metric,omitempty" yaml:"metric,omitempty"`
+	BenchmarkProfile  string        `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
+	BenchmarkProfiles []string      `json:"benchmark_profiles,omitempty" yaml:"benchmark_profiles,omitempty"`
+	Index             string        `json:"index,omitempty" yaml:"index,omitempty"`
+	Weight            float64       `json:"weight" yaml:"weight"`
+	Normalization     Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
 }
 
 type MissingPolicy struct {
@@ -493,15 +494,16 @@ type IndexDefinition struct {
 }
 
 type IndexComponentResult struct {
-	Benchmark        string   `json:"benchmark,omitempty"`
-	Metric           string   `json:"metric,omitempty"`
-	BenchmarkProfile string   `json:"benchmark_profile,omitempty"`
-	Index            string   `json:"index,omitempty"`
-	Evaluation       string   `json:"evaluation,omitempty"`
-	Weight           float64  `json:"weight"`
-	Status           string   `json:"status"`
-	Value            *float64 `json:"value,omitempty"`
-	Normalized       *float64 `json:"normalized,omitempty"`
+	Benchmark         string   `json:"benchmark,omitempty"`
+	Metric            string   `json:"metric,omitempty"`
+	BenchmarkProfile  string   `json:"benchmark_profile,omitempty"`
+	BenchmarkProfiles []string `json:"benchmark_profiles,omitempty"`
+	Index             string   `json:"index,omitempty"`
+	Evaluation        string   `json:"evaluation,omitempty"`
+	Weight            float64  `json:"weight"`
+	Status            string   `json:"status"`
+	Value             *float64 `json:"value,omitempty"`
+	Normalized        *float64 `json:"normalized,omitempty"`
 }
 
 type IndexResult struct {

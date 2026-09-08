@@ -5,6 +5,7 @@ import Layout from '@theme/Layout'
 import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
+import { ModelHubArena } from '../components/model-hub/ModelHubArena'
 import { ModelHubBenchmark } from '../components/model-hub/ModelHubBenchmark'
 import { ModelHubDirectory } from '../components/model-hub/ModelHubDirectory'
 import { ModelHubDetail } from '../components/model-hub/ModelHubDetail'
@@ -38,6 +39,7 @@ import styles from './models.module.css'
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
 const MODEL_HUB_SECTIONS = [
+  { key: 'arena', label: 'Arena' },
   { key: 'models', label: 'Models' },
   { key: 'benchmarks', label: 'Benchmarks' },
   { key: 'providers', label: 'Providers' },
@@ -50,7 +52,7 @@ type UpdateModelHubUrlState = (
 
 function modelHubActiveSection(hash: string): string {
   const id = hash.replace('#', '')
-  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'arena'
 }
 
 const supportedLifecycle = (
@@ -394,6 +396,19 @@ export default function ModelsPage() {
             </dl>
           )}
         >
+          <section id="arena" className={styles.section} aria-labelledby="arena-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="arena-heading">Arena</h2>
+              <span>One index · same rules for single and virtual models</span>
+            </header>
+            <ModelHubArena
+              catalog={catalog}
+              scope={urlState.arenaScope}
+              setScope={arenaScope => updateUrlState(current => ({ ...current, arenaScope }))}
+              selectModel={selectModel}
+            />
+          </section>
+
           <section id="models" className={styles.section} aria-labelledby="models-heading">
             <header className={styles.sectionHeading}>
               <h2 id="models-heading">Models</h2>

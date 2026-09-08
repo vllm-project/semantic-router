@@ -7919,6 +7919,10 @@ benchmarks:
   - id: published-standard
     display_name: Published standard
     description: Vendor-published MMLU-Pro result using the source's documented standard setup.
+  - id: independent-standard
+    display_name: Independent standard run
+    description: Independently measured MMLU-Pro accuracy with the exact model variant and reasoning effort retained on the
+      evaluation record.
   - id: medmarks-v1-three-order-average
     display_name: Medmarks v1 three-order average
     description: Accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds for the
@@ -7986,8 +7990,6 @@ benchmarks:
 - id: swe-bench/verified@1.0.0
   display_name: SWE-bench Verified
   domain: software_engineering
-  tags:
-  - core
   source: https://github.com/SWE-bench/SWE-bench
   default_profile: published-agent
   profiles:
@@ -14417,6 +14419,46 @@ evaluations:
     verification: imported
     source: https://huggingface.co/CohereLabs/tiny-aya-global
     redistributable: true
+- id: deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.84
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md
+    redistributable: true
+- id: scicode/deepseek-r1-subproblem-score@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_benchmark_leaderboard
+    source_model: DeepSeek-R1
+    source_model_slug: deepseek-r1
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.285
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/scicode-bench/SciCode/blob/e3158ea011d4235245a547460d3688d7ccbf9900/README.md
+    redistributable: true
 - id: independent/deepseek-v3-2-critpt@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: artificial-analysis/critpt@1.0.0
@@ -20456,6 +20498,24 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-mistralai-mistral-medium-3-5
     redistributable: true
+- id: moonshot/kimi-k2-5-model-card-scicode@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Kimi K2.5 Thinking
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.487
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.5/blob/4d01dfe0332d63057c186e0b262165819efb6611/README.md
+    redistributable: true
 - id: independent/kimi-k3-low-critpt@1.0.0
   model: moonshot/kimi-k3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -21669,6 +21729,24 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-moonshotai-kimi-k3
     redistributable: true
+- id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-2-30B-A3B
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.364
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B/blob/6327cdbcf907e1c7cec9cb29fb6e6cebdf8feaf7/README.md
+    redistributable: true
 - id: nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
   model: nvidia/nemotron-3.5-lightning
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -21812,6 +21890,24 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.868
+  status: available
+  measured_at: '2026-06-03'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4/blob/7a3521b81a7294f7785eb7ae115a6186fc1220a8/.eval_results/mmlu_pro.yaml
     redistributable: true
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-ifbench@1.0.0
   model: nvidia/nemotron-3-ultra
@@ -26583,6 +26679,25 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-120b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-120B(high)
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.808
+  status: available
+  observed_at: '2026-09-09'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
     redistributable: true
 - id: independent/gpt-oss-120b-aa-briefcase@1.0.0
   model: openai/gpt-oss-120b
@@ -34527,112 +34642,68 @@ evaluations:
     redistributable: true
 indices:
 - id: vllm-sr/intelligence@1.0.0
-  display_name: vLLM-SR Published Intelligence Index
-  description: Directional composite of five public benchmarks reported by primary model sources.
-  methodology: https://github.com/vllm-project/semantic-router/blob/main/website/docs/proposals/unified-model-catalog-and-evaluation-index.md
+  display_name: vLLM-SR Open Intelligence Index
+  description: Complete-case composite of five open benchmarks for reasoning, scientific coding, and agentic execution.
+  methodology: https://github.com/vllm-project/semantic-router/blob/main/website/docs/proposals/open-intelligence-index-and-model-arena.md
   aggregation: weighted_mean
   scale:
   - 0
   - 100
   missing:
-    policy: require_coverage
-    minimum: 0.6
+    policy: require_all
   domains:
     general_reasoning: 0.2
     scientific_reasoning: 0.2
     frontier_reasoning: 0.2
-    software_engineering: 0.2
+    scientific_coding: 0.2
     agentic_systems: 0.2
   components:
   - benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     weight: 0.2
     normalization:
       type: identity
   - benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     weight: 0.2
     normalization:
       type: identity
   - benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
     weight: 0.2
     normalization:
       type: identity
-  - benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
+  - benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
     weight: 0.2
     normalization:
       type: identity
   - benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
     weight: 0.2
     normalization:
       type: identity
 index_results:
-- model: bytedance/seed-oss-36b-instruct
-  reasoning_effort: default
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 70.03333333333333
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.827
-    normalized: 0.827
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: bytedance/seed-oss-36b-instruct-model-card-mmlu-pro@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.714
-    normalized: 0.714
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: bytedance/seed-oss-36b-instruct-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: available
-    value: 0.56
-    normalized: 0.56
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: bytedance/seed-oss-36b-instruct-model-card-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - bytedance/seed-oss-36b-instruct-model-card-gpqa-diamond@1.0.0
-  - bytedance/seed-oss-36b-instruct-model-card-mmlu-pro@1.0.0
-  - bytedance/seed-oss-36b-instruct-model-card-verified@1.0.0
-  domains:
-    general_reasoning: 82.69999999999999
-    scientific_reasoning: 71.39999999999999
-    software_engineering: 56.00000000000001
 - model: deepseek/deepseek-v4-pro
   reasoning_effort: max
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 76.76
+  score: 70.20636590257209
   coverage: 1.0
   components:
   - weight: 0.2
@@ -34641,57 +34712,72 @@ index_results:
     normalized: 0.875
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: deepseek/deepseek-v4-pro-model-card-max-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
-    value: 0.901
-    normalized: 0.901
+    value: 0.928282828282828
+    normalized: 0.928282828282828
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: deepseek/deepseek-v4-pro-model-card-max-gpqa-diamond@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-v4-pro-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.377
-    normalized: 0.377
+    value: 0.410101946246525
+    normalized: 0.410101946246525
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: deepseek/deepseek-v4-pro-model-card-max-humanitys-last-exam@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.806
-    normalized: 0.806
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: deepseek/deepseek-v4-pro-model-card-max-verified@1.0.0
+    value: 0.510416666666667
+    normalized: 0.510416666666667
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/deepseek-v4-pro-scicode@1.0.0
+    benchmark_profile: independent-test-288
   - weight: 0.2
     status: available
-    value: 0.879
-    normalized: 0.879
+    value: 0.786516853932584
+    normalized: 0.786516853932584
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
-    evaluation: deepseek/deepseek-v4-pro-release-eval-terminal-bench@1.0.0
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-v4-pro-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
   provenance:
-  - deepseek/deepseek-v4-pro-model-card-max-gpqa-diamond@1.0.0
-  - deepseek/deepseek-v4-pro-model-card-max-humanitys-last-exam@1.0.0
   - deepseek/deepseek-v4-pro-model-card-max-mmlu-pro@1.0.0
-  - deepseek/deepseek-v4-pro-model-card-max-verified@1.0.0
-  - deepseek/deepseek-v4-pro-release-eval-terminal-bench@1.0.0
+  - independent/deepseek-v4-pro-gpqa-diamond@1.0.0
+  - independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
+  - independent/deepseek-v4-pro-scicode@1.0.0
+  - independent/deepseek-v4-pro-terminalbench-v2-1@1.0.0
   domains:
-    agentic_systems: 87.9
-    frontier_reasoning: 37.7
+    agentic_systems: 78.65168539325839
+    frontier_reasoning: 41.0101946246525
     general_reasoning: 87.5
-    scientific_reasoning: 90.10000000000001
-    software_engineering: 80.60000000000001
+    scientific_coding: 51.0416666666667
+    scientific_reasoning: 92.82828282828281
 - model: deepseek/deepseek-v4-flash
   reasoning_effort: max
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 74.16
+  score: 68.91224105820626
   coverage: 1.0
   components:
   - weight: 0.2
@@ -34700,58 +34786,147 @@ index_results:
     normalized: 0.862
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: deepseek/deepseek-v4-flash-model-card-max-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
-    value: 0.881
-    normalized: 0.881
+    value: 0.908080808080808
+    normalized: 0.908080808080808
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: deepseek/deepseek-v4-flash-model-card-max-gpqa-diamond@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-v4-flash-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.348
-    normalized: 0.348
+    value: 0.385542168674699
+    normalized: 0.385542168674699
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: deepseek/deepseek-v4-flash-model-card-max-humanitys-last-exam@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.79
-    normalized: 0.79
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: deepseek/deepseek-v4-flash-model-card-max-verified@1.0.0
+    value: 0.503472222222222
+    normalized: 0.503472222222222
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/deepseek-v4-flash-scicode@1.0.0
+    benchmark_profile: independent-test-288
   - weight: 0.2
     status: available
-    value: 0.827
-    normalized: 0.827
+    value: 0.786516853932584
+    normalized: 0.786516853932584
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
-    evaluation: deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-v4-flash-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
   provenance:
-  - deepseek/deepseek-v4-flash-model-card-max-gpqa-diamond@1.0.0
-  - deepseek/deepseek-v4-flash-model-card-max-humanitys-last-exam@1.0.0
   - deepseek/deepseek-v4-flash-model-card-max-mmlu-pro@1.0.0
-  - deepseek/deepseek-v4-flash-model-card-max-verified@1.0.0
-  - deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0
+  - independent/deepseek-v4-flash-gpqa-diamond@1.0.0
+  - independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
+  - independent/deepseek-v4-flash-scicode@1.0.0
+  - independent/deepseek-v4-flash-terminalbench-v2-1@1.0.0
   domains:
-    agentic_systems: 82.69999999999999
-    frontier_reasoning: 34.8
+    agentic_systems: 78.65168539325839
+    frontier_reasoning: 38.554216867469904
     general_reasoning: 86.2
-    scientific_reasoning: 88.10000000000001
-    software_engineering: 79.00000000000001
+    scientific_coding: 50.3472222222222
+    scientific_reasoning: 90.8080808080808
+- model: deepseek/deepseek-r1
+  reasoning_effort: default
+  index: vllm-sr/intelligence@1.0.0
+  status: available
+  score: 42.18184088071728
+  coverage: 1.0
+  components:
+  - weight: 0.2
+    status: available
+    value: 0.84
+    normalized: 0.84
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  - weight: 0.2
+    status: available
+    value: 0.708080808080808
+    normalized: 0.708080808080808
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/deepseek-r1-0120-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.085
+    normalized: 0.085
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.2
+    status: available
+    value: 0.285
+    normalized: 0.285
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: scicode/deepseek-r1-subproblem-score@1.0.0
+    benchmark_profile: independent-test-288
+  - weight: 0.2
+    status: available
+    value: 0.191011235955056
+    normalized: 0.191011235955056
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/deepseek-r1-0120-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0
+  - independent/deepseek-r1-0120-gpqa-diamond@1.0.0
+  - independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
+  - independent/deepseek-r1-0120-terminalbench-v2-1@1.0.0
+  - scicode/deepseek-r1-subproblem-score@1.0.0
+  domains:
+    agentic_systems: 19.1011235955056
+    frontier_reasoning: 8.5
+    general_reasoning: 84.0
+    scientific_coding: 28.499999999999996
+    scientific_reasoning: 70.8080808080808
 - model: google/gemma-4-31b-it
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 62.999999999999986
-  coverage: 0.6000000000000001
+  score: 56.6842726328167
+  coverage: 1.0
   components:
   - weight: 0.2
     status: available
@@ -34759,320 +34934,73 @@ index_results:
     normalized: 0.852
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: google/gemma-4-31b-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
-    value: 0.843
-    normalized: 0.843
+    value: 0.856565656565657
+    normalized: 0.856565656565657
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: google/gemma-4-31b-model-card-gpqa-diamond@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/gemma-4-31b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.195
-    normalized: 0.195
+    value: 0.236329935125116
+    normalized: 0.236329935125116
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/gemma-4-31b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
+    status: available
+    value: 0.454861111111111
+    normalized: 0.454861111111111
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/gemma-4-31b-scicode@1.0.0
+    benchmark_profile: independent-test-288
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.434456928838951
+    normalized: 0.434456928838951
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/gemma-4-31b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
   provenance:
-  - google/gemma-4-31b-model-card-gpqa-diamond@1.0.0
-  - google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
   - google/gemma-4-31b-model-card-mmlu-pro@1.0.0
+  - independent/gemma-4-31b-gpqa-diamond@1.0.0
+  - independent/gemma-4-31b-humanitys-last-exam@1.0.0
+  - independent/gemma-4-31b-scicode@1.0.0
+  - independent/gemma-4-31b-terminalbench-v2-1@1.0.0
   domains:
-    frontier_reasoning: 19.500000000000004
+    agentic_systems: 43.445692883895106
+    frontier_reasoning: 23.6329935125116
     general_reasoning: 85.2
-    scientific_reasoning: 84.3
-- model: meta/muse-glimmer-30b
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 58.3
-  coverage: 0.8
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.835
-    normalized: 0.835
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: meta/muse-glimmer-30b-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.22
-    normalized: 0.22
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: meta/muse-glimmer-30b-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.76
-    normalized: 0.76
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: meta/muse-glimmer-30b-model-card-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.517
-    normalized: 0.517
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: meta/muse-glimmer-30b-model-card-terminal-bench@1.0.0
-  provenance:
-  - meta/muse-glimmer-30b-model-card-gpqa-diamond@1.0.0
-  - meta/muse-glimmer-30b-model-card-humanitys-last-exam@1.0.0
-  - meta/muse-glimmer-30b-model-card-swe-bench-verified@1.0.0
-  - meta/muse-glimmer-30b-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 51.7
-    frontier_reasoning: 22.0
-    scientific_reasoning: 83.5
-    software_engineering: 76.00000000000001
-- model: microsoft/mai-thinking-1
-  reasoning_effort: unspecified
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 80.89999999999999
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.85
-    normalized: 0.85
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.842
-    normalized: 0.842
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: microsoft/mai-thinking-1-report-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: available
-    value: 0.735
-    normalized: 0.735
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: microsoft/mai-thinking-1-report-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - microsoft/mai-thinking-1-report-gpqa-diamond@1.0.0
-  - microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
-  - microsoft/mai-thinking-1-report-swe-bench-verified@1.0.0
-  domains:
-    general_reasoning: 85.0
-    scientific_reasoning: 84.2
-    software_engineering: 73.49999999999999
-- model: minimax/minimax-m2.5
-  reasoning_effort: default
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 61.6
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.852
-    normalized: 0.852
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.194
-    normalized: 0.194
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.802
-    normalized: 0.802
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: minimax/minimax-m2.5-model-card-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - minimax/minimax-m2.5-model-card-gpqa-diamond@1.0.0
-  - minimax/minimax-m2.5-model-card-humanitys-last-exam@1.0.0
-  - minimax/minimax-m2.5-model-card-verified@1.0.0
-  domains:
-    frontier_reasoning: 19.400000000000002
-    scientific_reasoning: 85.2
-    software_engineering: 80.2
-- model: moonshot/kimi-k3
-  reasoning_effort: max
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 75.1
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.935
-    normalized: 0.935
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: moonshot/kimi-k3-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.435
-    normalized: 0.435
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: moonshot/kimi-k3-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.883
-    normalized: 0.883
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: moonshot/kimi-k3-model-card-terminal-bench@1.0.0
-  provenance:
-  - moonshot/kimi-k3-model-card-gpqa-diamond@1.0.0
-  - moonshot/kimi-k3-model-card-humanitys-last-exam@1.0.0
-  - moonshot/kimi-k3-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 88.3
-    frontier_reasoning: 43.5
-    scientific_reasoning: 93.5
-- model: moonshot/kimi-k2.6
-  reasoning_effort: enabled
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 68.46666666666667
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.905
-    normalized: 0.905
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: moonshot/kimi-k2.6-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.347
-    normalized: 0.347
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: moonshot/kimi-k2.6-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.802
-    normalized: 0.802
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: moonshot/kimi-k2.6-model-card-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - moonshot/kimi-k2.6-model-card-gpqa-diamond@1.0.0
-  - moonshot/kimi-k2.6-model-card-humanitys-last-exam@1.0.0
-  - moonshot/kimi-k2.6-model-card-verified@1.0.0
-  domains:
-    frontier_reasoning: 34.699999999999996
-    scientific_reasoning: 90.5
-    software_engineering: 80.2
+    scientific_coding: 45.4861111111111
+    scientific_reasoning: 85.6565656565657
 - model: moonshot/kimi-k2.5
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 68.26666666666667
-  coverage: 0.6000000000000001
+  score: 60.01891266803682
+  coverage: 1.0
   components:
   - weight: 0.2
     status: available
@@ -35080,51 +35008,72 @@ index_results:
     normalized: 0.871
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: moonshot/kimi-k2.5-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
-    value: 0.876
-    normalized: 0.876
+    value: 0.878787878787879
+    normalized: 0.878787878787879
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: moonshot/kimi-k2.5-model-card-gpqa-diamond@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/kimi-k2-5-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.301
-    normalized: 0.301
+    value: 0.307228915662651
+    normalized: 0.307228915662651
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: moonshot/kimi-k2.5-model-card-humanitys-last-exam@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/kimi-k2-5-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
+    status: available
+    value: 0.487
+    normalized: 0.487
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: moonshot/kimi-k2-5-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.456928838951311
+    normalized: 0.456928838951311
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/kimi-k2-5-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
   provenance:
-  - moonshot/kimi-k2.5-model-card-gpqa-diamond@1.0.0
-  - moonshot/kimi-k2.5-model-card-humanitys-last-exam@1.0.0
+  - independent/kimi-k2-5-gpqa-diamond@1.0.0
+  - independent/kimi-k2-5-humanitys-last-exam@1.0.0
+  - independent/kimi-k2-5-terminalbench-v2-1@1.0.0
+  - moonshot/kimi-k2-5-model-card-scicode@1.0.0
   - moonshot/kimi-k2.5-model-card-mmlu-pro@1.0.0
   domains:
-    frontier_reasoning: 30.099999999999998
+    agentic_systems: 45.6928838951311
+    frontier_reasoning: 30.722891566265098
     general_reasoning: 87.10000000000001
-    scientific_reasoning: 87.60000000000001
+    scientific_coding: 48.699999999999996
+    scientific_reasoning: 87.8787878787879
 - model: nvidia/nemotron-3.5-lightning
   reasoning_effort: enabled
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 49.048
+  score: 45.25600000000001
   coverage: 1.0
   components:
   - weight: 0.2
@@ -35133,65 +35082,84 @@ index_results:
     normalized: 0.8194
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
     value: 0.7544
     normalized: 0.7544
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
     value: 0.1172
     normalized: 0.1172
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
     evaluation: nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
+    benchmark_profile: no-tools
   - weight: 0.2
     status: available
-    value: 0.5156
-    normalized: 0.5156
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: nvidia/nemotron-3.5-lightning-model-card-swe-bench-verified@1.0.0
+    value: 0.326
+    normalized: 0.326
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia/nemotron-3.5-lightning-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
     value: 0.2458
     normalized: 0.2458
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
     evaluation: nvidia/nemotron-3.5-lightning-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
   provenance:
   - nvidia/nemotron-3.5-lightning-model-card-gpqa-diamond@1.0.0
   - nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
   - nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
-  - nvidia/nemotron-3.5-lightning-model-card-swe-bench-verified@1.0.0
+  - nvidia/nemotron-3.5-lightning-model-card-scicode@1.0.0
   - nvidia/nemotron-3.5-lightning-model-card-terminal-bench-2-1@1.0.0
   domains:
     agentic_systems: 24.58
     frontier_reasoning: 11.72
     general_reasoning: 81.94000000000001
+    scientific_coding: 32.6
     scientific_reasoning: 75.44000000000001
-    software_engineering: 51.559999999999995
 - model: nvidia/nemotron-3-ultra
   reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 59.349999999999994
-  coverage: 0.8
+  score: 59.64
+  coverage: 1.0
   components:
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.868
+    normalized: 0.868
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
     benchmark_profile: published-standard
   - weight: 0.2
     status: available
@@ -35199,743 +35167,127 @@ index_results:
     normalized: 0.879
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
     evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
     value: 0.261
     normalized: 0.261
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
     evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
+    benchmark_profile: no-tools
   - weight: 0.2
     status: available
-    value: 0.695
-    normalized: 0.695
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0
+    value: 0.435
+    normalized: 0.435
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
   - weight: 0.2
     status: available
     value: 0.539
     normalized: 0.539
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
     evaluation: nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0
+    benchmark_profile: published-agent
   provenance:
   - nvidia/nemotron-3-ultra-nvfp4-model-card-gpqa@1.0.0
   - nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
+  - nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
+  - nvidia/nemotron-3-ultra-nvfp4-model-card-scicode@1.0.0
   - nvidia/nemotron-3-ultra-nvfp4-model-card-terminal-bench@1.0.0
-  - nvidia/nemotron-3-ultra-nvfp4-model-card-verified@1.0.0
   domains:
     agentic_systems: 53.900000000000006
     frontier_reasoning: 26.1
+    general_reasoning: 86.8
+    scientific_coding: 43.5
     scientific_reasoning: 87.9
-    software_engineering: 69.49999999999999
-- model: nvidia/nemotron-cascade-2-30b-a3b
-  reasoning_effort: unspecified
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 55.95
-  coverage: 0.8
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.798
-    normalized: 0.798
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: nvidia/nemotron-cascade-2-model-card-mmlu-pro@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.761
-    normalized: 0.761
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.177
-    normalized: 0.177
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.502
-    normalized: 0.502
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: nvidia/nemotron-cascade-2-model-card-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - nvidia/nemotron-cascade-2-model-card-gpqa-diamond@1.0.0
-  - nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
-  - nvidia/nemotron-cascade-2-model-card-mmlu-pro@1.0.0
-  - nvidia/nemotron-cascade-2-model-card-swe-bench-verified@1.0.0
-  domains:
-    frontier_reasoning: 17.7
-    general_reasoning: 79.80000000000001
-    scientific_reasoning: 76.1
-    software_engineering: 50.2
-- model: openai/gpt-5.5
-  reasoning_effort: unspecified
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 73.53333333333333
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.936
-    normalized: 0.936
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.414
-    normalized: 0.414
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.856
-    normalized: 0.856
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: openai/gpt-5.5-later-comparison-terminal-bench@1.0.0
-  provenance:
-  - openai/gpt-5.5-later-comparison-terminal-bench@1.0.0
-  - openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
-  - openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
-  domains:
-    agentic_systems: 85.60000000000001
-    frontier_reasoning: 41.4
-    scientific_reasoning: 93.60000000000002
 - model: openai/gpt-oss-120b
-  reasoning_effort: medium
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 44.76666666666666
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.731
-    normalized: 0.731
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.086
-    normalized: 0.086
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.526
-    normalized: 0.526
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0
-  - openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
-  - openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0
-  domains:
-    frontier_reasoning: 8.6
-    scientific_reasoning: 73.1
-    software_engineering: 52.6
-- model: openai/gpt-oss-20b
-  reasoning_effort: medium
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 42.06666666666666
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.66
-    normalized: 0.66
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.07
-    normalized: 0.07
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.532
-    normalized: 0.532
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0
-  - openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
-  - openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0
-  domains:
-    frontier_reasoning: 7.000000000000001
-    scientific_reasoning: 66.0
-    software_engineering: 53.2
-- model: qwen/qwen3.8-max
-  reasoning_effort: xhigh
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 74.26666666666667
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.926
-    normalized: 0.926
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: qwen/qwen3.8-max-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.436
-    normalized: 0.436
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: qwen/qwen3.8-max-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.866
-    normalized: 0.866
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: qwen/qwen3.8-max-model-card-terminal-bench@1.0.0
-  provenance:
-  - qwen/qwen3.8-max-model-card-gpqa-diamond@1.0.0
-  - qwen/qwen3.8-max-model-card-humanitys-last-exam@1.0.0
-  - qwen/qwen3.8-max-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 86.60000000000001
-    frontier_reasoning: 43.6
-    scientific_reasoning: 92.60000000000002
-- model: qwen/qwen3.8-27b
-  reasoning_effort: xhigh
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 64.33333333333331
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.892
-    normalized: 0.892
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: qwen/qwen3.8-27b-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.308
-    normalized: 0.308
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: qwen/qwen3.8-27b-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.73
-    normalized: 0.73
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: qwen/qwen3.8-27b-model-card-terminal-bench@1.0.0
-  provenance:
-  - qwen/qwen3.8-27b-model-card-gpqa-diamond@1.0.0
-  - qwen/qwen3.8-27b-model-card-humanitys-last-exam@1.0.0
-  - qwen/qwen3.8-27b-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 72.99999999999999
-    frontier_reasoning: 30.8
-    scientific_reasoning: 89.2
-- model: qwen/qwen3.6-27b
-  reasoning_effort: unspecified
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 83.73333333333332
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.862
-    normalized: 0.862
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: qwen/qwen3.6-27b-model-card-mmlu-pro@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.878
-    normalized: 0.878
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: qwen/qwen3.6-27b-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-  - weight: 0.2
-    status: available
-    value: 0.772
-    normalized: 0.772
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: qwen/qwen3.6-27b-model-card-verified@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-  provenance:
-  - qwen/qwen3.6-27b-model-card-gpqa-diamond@1.0.0
-  - qwen/qwen3.6-27b-model-card-mmlu-pro@1.0.0
-  - qwen/qwen3.6-27b-model-card-verified@1.0.0
-  domains:
-    general_reasoning: 86.2
-    scientific_reasoning: 87.8
-    software_engineering: 77.2
-- model: tencent/hy4-preview
   reasoning_effort: high
   index: vllm-sr/intelligence@1.0.0
   status: available
-  score: 73.7
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.923
-    normalized: 0.923
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.434
-    normalized: 0.434
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.854
-    normalized: 0.854
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: tencent/hy4-preview-model-card-terminal-bench@1.0.0
-  provenance:
-  - tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
-  - tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
-  - tencent/hy4-preview-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 85.39999999999999
-    frontier_reasoning: 43.4
-    scientific_reasoning: 92.30000000000001
-- model: tencent/hy3
-  reasoning_effort: high
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 69.27499999999999
-  coverage: 0.8
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.904
-    normalized: 0.904
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: tencent/hy3-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.37
-    normalized: 0.37
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: tencent/hy3-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.78
-    normalized: 0.78
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: tencent/hy3-model-card-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.717
-    normalized: 0.717
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: tencent/hy3-model-card-terminal-bench@1.0.0
-  provenance:
-  - tencent/hy3-model-card-gpqa-diamond@1.0.0
-  - tencent/hy3-model-card-humanitys-last-exam@1.0.0
-  - tencent/hy3-model-card-swe-bench-verified@1.0.0
-  - tencent/hy3-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 71.7
-    frontier_reasoning: 36.99999999999999
-    scientific_reasoning: 90.4
-    software_engineering: 78.00000000000001
-- model: thinking-machines/inkling
-  reasoning_effort: max
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 64.575
-  coverage: 0.8
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.872
-    normalized: 0.872
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: thinking-machines/inkling-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.297
-    normalized: 0.297
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.776
-    normalized: 0.776
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: thinking-machines/inkling-model-card-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.638
-    normalized: 0.638
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: thinking-machines/inkling-model-card-terminal-bench@1.0.0
-  provenance:
-  - thinking-machines/inkling-model-card-gpqa-diamond@1.0.0
-  - thinking-machines/inkling-model-card-humanitys-last-exam@1.0.0
-  - thinking-machines/inkling-model-card-swe-bench-verified@1.0.0
-  - thinking-machines/inkling-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 63.800000000000004
-    frontier_reasoning: 29.7
-    scientific_reasoning: 87.2
-    software_engineering: 77.60000000000001
-- model: thinking-machines/inkling-small
-  reasoning_effort: max
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 66.5
-  coverage: 0.8
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.895
-    normalized: 0.895
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.316
-    normalized: 0.316
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.802
-    normalized: 0.802
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.647
-    normalized: 0.647
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
-  provenance:
-  - thinking-machines/inkling-small-model-card-gpqa-diamond@1.0.0
-  - thinking-machines/inkling-small-model-card-humanitys-last-exam@1.0.0
-  - thinking-machines/inkling-small-model-card-swe-bench-verified@1.0.0
-  - thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 64.7
-    frontier_reasoning: 31.6
-    scientific_reasoning: 89.5
-    software_engineering: 80.2
-- model: xiaomi/mimo-v2-flash
-  reasoning_effort: enabled
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 66.025
-  coverage: 0.8
+  score: 47.76566145570209
+  coverage: 1.0
   components:
   - weight: 0.2
     status: available
-    value: 0.849
-    normalized: 0.849
+    value: 0.808
+    normalized: 0.808
     benchmark: tiger-ai-lab/mmlu-pro@1.0.0
     metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
     benchmark_profile: published-standard
-    evaluation: xiaomi/mimo-v2-flash-model-card-mmlu-pro@1.0.0
   - weight: 0.2
     status: available
-    value: 0.837
-    normalized: 0.837
+    value: 0.781818181818182
+    normalized: 0.781818181818182
     benchmark: idavidrein/gpqa-diamond@1.0.0
     metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: xiaomi/mimo-v2-flash-model-card-gpqa-diamond@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/gpt-oss-120b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.221
-    normalized: 0.221
+    value: 0.196014828544949
+    normalized: 0.196014828544949
     benchmark: cais/humanitys-last-exam@1.0.0
     metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: xiaomi/mimo-v2-flash-model-card-humanitys-last-exam@1.0.0
+    benchmark_profiles:
+    - independent-standard
+    - no-tools
+    evaluation: independent/gpt-oss-120b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-standard
   - weight: 0.2
     status: available
-    value: 0.734
-    normalized: 0.734
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: xiaomi/mimo-v2-flash-model-card-swe-bench-verified@1.0.0
+    value: 0.340277777777778
+    normalized: 0.340277777777778
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: independent/gpt-oss-120b-scicode@1.0.0
+    benchmark_profile: independent-test-288
   - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
+    status: available
+    value: 0.262172284644195
+    normalized: 0.262172284644195
     benchmark: harbor/terminal-bench@2.1.0
     metric: resolved
-    benchmark_profile: published-agent
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/gpt-oss-120b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
   provenance:
-  - xiaomi/mimo-v2-flash-model-card-gpqa-diamond@1.0.0
-  - xiaomi/mimo-v2-flash-model-card-humanitys-last-exam@1.0.0
-  - xiaomi/mimo-v2-flash-model-card-mmlu-pro@1.0.0
-  - xiaomi/mimo-v2-flash-model-card-swe-bench-verified@1.0.0
+  - independent/gpt-oss-120b-gpqa-diamond@1.0.0
+  - independent/gpt-oss-120b-humanitys-last-exam@1.0.0
+  - independent/gpt-oss-120b-scicode@1.0.0
+  - independent/gpt-oss-120b-terminalbench-v2-1@1.0.0
+  - mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
   domains:
-    frontier_reasoning: 22.1
-    general_reasoning: 84.89999999999999
-    scientific_reasoning: 83.7
-    software_engineering: 73.4
-- model: zai/glm-5.2
-  reasoning_effort: unspecified
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 70.89999999999999
-  coverage: 0.6000000000000001
-  components:
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-  - weight: 0.2
-    status: available
-    value: 0.912
-    normalized: 0.912
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profile: published-standard
-    evaluation: zai/glm-5.2-model-card-gpqa-diamond@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.405
-    normalized: 0.405
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profile: no-tools
-    evaluation: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
-  - weight: 0.2
-    status: missing
-    value: null
-    normalized: null
-    benchmark: swe-bench/verified@1.0.0
-    metric: resolved
-    benchmark_profile: published-agent
-  - weight: 0.2
-    status: available
-    value: 0.81
-    normalized: 0.81
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profile: published-agent
-    evaluation: zai/glm-5.2-model-card-terminal-bench@1.0.0
-  provenance:
-  - zai/glm-5.2-model-card-gpqa-diamond@1.0.0
-  - zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
-  - zai/glm-5.2-model-card-terminal-bench@1.0.0
-  domains:
-    agentic_systems: 81.00000000000001
-    frontier_reasoning: 40.50000000000001
-    scientific_reasoning: 91.2
+    agentic_systems: 26.217228464419502
+    frontier_reasoning: 19.6014828544949
+    general_reasoning: 80.80000000000001
+    scientific_coding: 34.0277777777778
+    scientific_reasoning: 78.1818181818182

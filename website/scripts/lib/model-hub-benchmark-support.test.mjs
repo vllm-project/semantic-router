@@ -137,7 +137,7 @@ test('website benchmark display normalizes Elo while retaining its raw unit', ()
   assert.equal(metric.unit, 'elo')
 })
 
-test('website catalog owns the exact six core benchmark filters', () => {
+test('website catalog owns the exact five core benchmark filters', () => {
   assert.deepEqual(
     catalog.benchmarks
       .filter(benchmark => benchmark.tags?.includes('core'))
@@ -146,7 +146,6 @@ test('website catalog owns the exact six core benchmark filters', () => {
       'MMLU-Pro',
       'GPQA Diamond',
       'Humanity\'s Last Exam',
-      'SWE-bench Verified',
       'Terminal-Bench 2.1',
       'SciCode',
     ],

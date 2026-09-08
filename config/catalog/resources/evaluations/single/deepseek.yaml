@@ -1,3 +1,43 @@
+- id: deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.84
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md
+    redistributable: true
+- id: scicode/deepseek-r1-subproblem-score@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_benchmark_leaderboard
+    source_model: DeepSeek-R1
+    source_model_slug: deepseek-r1
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.285
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/scicode-bench/SciCode/blob/e3158ea011d4235245a547460d3688d7ccbf9900/README.md
+    redistributable: true
 - id: independent/deepseek-v3-2-critpt@1.0.0
   model: deepseek/deepseek-v3.2
   benchmark: artificial-analysis/critpt@1.0.0

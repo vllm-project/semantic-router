@@ -141,7 +141,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             [
                 {
                     "benchmark": "bench/a@1.0.0",
-                    "benchmark_profile": "standard",
+                    "benchmark_profiles": ["standard"],
                     "metric": "accuracy",
                 }
             ],
@@ -151,7 +151,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             [
                 {
                     "benchmark": "bench/b@1.0.0",
-                    "benchmark_profile": "agent",
+                    "benchmark_profiles": ["agent"],
                     "metric": "resolved",
                 }
             ],

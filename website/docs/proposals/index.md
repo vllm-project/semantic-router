@@ -50,6 +50,7 @@ different client and transport protocols.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
+| [Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | Implemented | Defines the five open core benchmarks, complete-case index, physical/virtual ranking, missing-evidence semantics, and benchmark-version migration. |
 | [Unified Model Catalog and Evaluation Index](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | Implemented | Unifies provider, protocol, model, reasoning, presentation, Day-0, and benchmark-comparison metadata. |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |

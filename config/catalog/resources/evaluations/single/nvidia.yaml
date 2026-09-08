@@ -1,3 +1,21 @@
+- id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-2-30B-A3B
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.364
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B/blob/6327cdbcf907e1c7cec9cb29fb6e6cebdf8feaf7/README.md
+    redistributable: true
 - id: nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
   model: nvidia/nemotron-3.5-lightning
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -141,6 +159,24 @@
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.868
+  status: available
+  measured_at: 2026-06-03
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4/blob/7a3521b81a7294f7785eb7ae115a6186fc1220a8/.eval_results/mmlu_pro.yaml
     redistributable: true
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-ifbench@1.0.0
   model: nvidia/nemotron-3-ultra

@@ -60,33 +60,43 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         public_snapshot = json.loads(outputs[catalog.WEBSITE_OUTPUT])
         self.assertNotIn("inventory", public_snapshot)
         self.assertNotIn("evaluation_coverage", public_snapshot)
+        statuses = {result["status"] for result in public_snapshot["index_results"]}
+        self.assertEqual(statuses, {"available", "partial", "missing"})
         self.assertTrue(
             all(
-                result["status"] == "available"
+                (result["score"] is not None) == (result["status"] == "available")
                 for result in public_snapshot["index_results"]
             )
         )
         runtime_manifest = yaml.safe_load(outputs[catalog.RECIPE_MANIFEST])
         self.assertNotIn("inventory", runtime_manifest)
         self.assertNotIn("evaluation_coverage", runtime_manifest)
+        self.assertTrue(
+            all(
+                result["status"] == "available"
+                for result in runtime_manifest["index_results"]
+            )
+        )
+        self.assertLess(
+            len(runtime_manifest["index_results"]),
+            len(public_snapshot["index_results"]),
+        )
 
-    def test_default_intelligence_index_is_public_and_coverage_aware(self) -> None:
+    def test_default_intelligence_index_is_public_and_complete_case(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         index = next(
             item
             for item in resources["indices"]
             if item["id"] == "vllm-sr/intelligence@1.0.0"
         )
-        self.assertEqual(
-            index["missing"], {"policy": "require_coverage", "minimum": 0.6}
-        )
+        self.assertEqual(index["missing"], {"policy": "require_all"})
         self.assertEqual(
             index["domains"],
             {
                 "general_reasoning": 0.20,
                 "scientific_reasoning": 0.20,
                 "frontier_reasoning": 0.20,
-                "software_engineering": 0.20,
+                "scientific_coding": 0.20,
                 "agentic_systems": 0.20,
             },
         )
@@ -99,7 +109,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.20,
                 "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.20,
                 "cais/humanitys-last-exam@1.0.0#accuracy": 0.20,
-                "swe-bench/verified@1.0.0#resolved": 0.20,
+                "scicode-bench/scicode@1.0.0#score": 0.20,
                 "harbor/terminal-bench@2.1.0#resolved": 0.20,
             },
         )
@@ -125,7 +135,6 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "tiger-ai-lab/mmlu-pro@1.0.0",
                 "idavidrein/gpqa-diamond@1.0.0",
                 "cais/humanitys-last-exam@1.0.0",
-                "swe-bench/verified@1.0.0",
                 "harbor/terminal-bench@2.1.0",
                 "scicode-bench/scicode@1.0.0",
             },
@@ -862,7 +871,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             all(
                 len(
                     {
-                        (row["benchmark"], row["benchmark_profile"], row["metric"])
+                        (
+                            row["benchmark"],
+                            tuple(row["benchmark_profiles"]),
+                            row["metric"],
+                        )
                         for row in rows
                     }
                 )
@@ -874,11 +887,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {model["id"] for model in resources["models"]},
             {model for model, _ in slots},
         )
-        missing_qwen_low = slots[("qwen/qwen3.8-27b", "low")]
-        self.assertEqual(len(missing_qwen_low), DEFAULT_INDEX_COMPONENT_COUNT)
+        qwen_low = slots[("qwen/qwen3.8-27b", "low")]
+        self.assertEqual(len(qwen_low), DEFAULT_INDEX_COMPONENT_COUNT)
         self.assertEqual(
-            {row["status"] for row in missing_qwen_low},
-            {"missing"},
+            {row["status"] for row in qwen_low},
+            {"available", "missing"},
         )
         self.assertTrue(
             any(row["status"] == "available" for rows in slots.values() for row in rows)
@@ -901,11 +914,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         expected_counts = {
             ("deepseek/deepseek-v4-flash", "max"): 5,
             ("deepseek/deepseek-v4-pro", "max"): 5,
-            ("zai/glm-5.3-flash", "max"): 2,
-            ("qwen/qwen3.8-27b", "xhigh"): 3,
-            ("tencent/hy3", "high"): 4,
+            ("zai/glm-5.3-flash", "max"): 4,
+            ("qwen/qwen3.8-27b", "xhigh"): 4,
+            ("tencent/hy3", "high"): 3,
             ("thinking-machines/inkling", "max"): 4,
-            ("microsoft/mai-thinking-1", "unspecified"): 3,
+            ("microsoft/mai-thinking-1", "unspecified"): 2,
             ("cohere/tiny-aya-global", "unspecified"): 1,
         }
         self.assertEqual(
@@ -913,11 +926,15 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             expected_counts,
         )
         self.assertNotIn(
-            "cais/humanitys-last-exam@1.0.0",
+            "tiger-ai-lab/mmlu-pro@1.0.0",
             available[("zai/glm-5.3-flash", "max")],
         )
-        for effort in ("none", "low", "medium"):
-            self.assertNotIn(("qwen/qwen3.8-27b", effort), available)
+        self.assertNotIn(("qwen/qwen3.8-27b", "none"), available)
+        for effort in ("low", "medium", "xhigh"):
+            self.assertNotIn(
+                "tiger-ai-lab/mmlu-pro@1.0.0",
+                available[("qwen/qwen3.8-27b", effort)],
+            )
 
     def test_glm_5_2_independent_max_runs_keep_their_exact_effort(self) -> None:
         _, resources, _ = catalog.load_and_validate()

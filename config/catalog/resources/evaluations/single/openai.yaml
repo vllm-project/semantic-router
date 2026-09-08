@@ -4144,6 +4144,25 @@
     verification: claimed
     source: https://openai.com/index/introducing-gpt-5-5/
     redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-120b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-120B(high)
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.808
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
 - id: independent/gpt-oss-120b-aa-briefcase@1.0.0
   model: openai/gpt-oss-120b
   benchmark: artificial-analysis/briefcase@1.0.0

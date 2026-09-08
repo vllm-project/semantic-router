@@ -858,7 +858,10 @@ into user YAML. Selection uses it only when candidates have comparable results.
 For a missing result, the quality factor is omitted and the remaining available
 factors are renormalized. An operator rating can be represented explicitly as
 `vllm-sr/operator-rating@1.0.0`, but it is not presented as public benchmark
-evidence or an overall Model Hub rank.
+evidence. The later
+[Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena)
+supersedes this document's initial benchmark pool, coverage threshold, and
+no-overall-rank decision.
 
 ## Dashboard experience
 
@@ -934,7 +937,10 @@ recommended backend pool.
 
 ### Benchmark-specific comparisons
 
-There is no composite model rank. Model Hub renders a benchmark gallery and
+This initial implementation did not expose a composite model rank. The later
+[Open Intelligence Index 1.0 and Unified Model Arena](./open-intelligence-index-and-model-arena)
+adds a complete-case Arena while retaining the benchmark gallery described
+here. The gallery
 shows every admitted benchmark by default. Catalog-owned domain tags narrow the
 gallery without inventing a second UI taxonomy; model search and creator filters
 apply across all visible panels. Each benchmark pins one deterministic,
