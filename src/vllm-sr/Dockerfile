@@ -255,12 +255,6 @@ ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 RUN set -eux; \
-    rm -f /etc/apt/sources.list.d/debian.sources; \
-    printf '%s\n' \
-        'deb http://mirrors.aliyun.com/debian bookworm main' \
-        'deb http://mirrors.aliyun.com/debian bookworm-updates main' \
-        'deb http://mirrors.aliyun.com/debian-security bookworm-security main' \
-        > /etc/apt/sources.list; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         bash \

@@ -209,8 +209,11 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi
 
-RUN sed -i 's|http://deb.debian.org/debian-security|https://security.debian.org/debian-security|g' /etc/apt/sources.list && \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i \
+      -e 's|^# deb http://snapshot.debian.org/|deb https://snapshot.debian.org/|' \
+      -e '\|^deb http://deb\.debian\.org/debian|d' \
+      /etc/apt/sources.list && \
+    apt-get -o Acquire::Check-Valid-Until=false update && apt-get install -y --no-install-recommends \
       build-essential \
       pkg-config \
       libssl-dev && \
