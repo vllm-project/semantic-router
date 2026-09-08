@@ -5,6 +5,7 @@ recorded hyperparameters, and the split digests. They stub revision lookups so
 no network or checkpoint is needed.
 """
 
+import functools
 import pathlib
 import sys
 import types
@@ -17,6 +18,7 @@ sys.path.insert(0, str(TEST_DIR))
 sys.path.insert(0, str(TEST_DIR.parents[1] / "model_eval"))
 
 import jailbreak_provenance  # noqa: E402
+from provenance import emit  # noqa: E402
 from provenance.crossref import artifact_identity_digest  # noqa: E402
 from provenance.manifest import load_manifest  # noqa: E402
 
@@ -54,6 +56,13 @@ def emitted(tmp_path, monkeypatch):
         jailbreak_provenance, "resolve_hf_revision", lambda *a, **k: FAKE_REVISION
     )
     monkeypatch.setattr(jailbreak_provenance, "_code_sha", lambda: FAKE_REVISION)
+    # Track a package the check environment always has, so the real version
+    # capture still runs where the training stack is not installed.
+    monkeypatch.setattr(
+        emit,
+        "dependency_versions",
+        functools.partial(emit.dependency_versions, ("jsonschema",)),
+    )
     artifact_dir = tmp_path / "adapter"
     artifact_dir.mkdir()
     (artifact_dir / "label_mapping.json").write_text("{}", encoding="utf-8")

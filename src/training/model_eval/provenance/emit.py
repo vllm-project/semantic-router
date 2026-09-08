@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from huggingface_hub import HfApi
 
 from .crossref import artifact_identity_digest
 from .manifest import load_manifest
@@ -57,7 +56,14 @@ class ProvenanceError(RuntimeError):
 
 
 def resolve_hf_revision(repo_id: str, repo_type: str = "model") -> str:
-    """Resolve a Hugging Face repo to the immutable commit sha it currently points at."""
+    """Resolve a Hugging Face repo to the immutable commit sha it currently points at.
+
+    The Hub client is imported here rather than at module scope so that reading
+    and validating manifests stays possible wherever only the schema
+    dependencies are installed.
+    """
+    from huggingface_hub import HfApi  # noqa: PLC0415 - lazy: emission only
+
     api = HfApi()
     if repo_type == "dataset":
         info = api.dataset_info(repo_id)
