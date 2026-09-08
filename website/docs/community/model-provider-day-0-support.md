@@ -172,9 +172,11 @@ sent.
 
 ## Worked example: GPT-6 Astra
 
-GPT-6 Astra is an existing-provider Day-0 change, so its implementation stays
-inside the shared catalog and the existing OpenAI protocol adapters. Its source
-packet is the official [model reference](https://developers.openai.com/api/docs/models/gpt-6-astra),
+GPT-6 Astra is an existing-provider model addition, so its implementation stays
+inside the shared catalog and the existing OpenAI protocol adapters. It is a
+complete worked example of the contribution path above, without claiming that
+the change landed on the model's launch day. Its source packet is the official
+[model reference](https://developers.openai.com/api/docs/models/gpt-6-astra),
 [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model),
 and [launch evaluation report](https://openai.com/index/gpt-6-astra/):
 
@@ -187,7 +189,7 @@ and [launch evaluation report](https://openai.com/index/gpt-6-astra/):
 | Final Chat and Responses request shapes | `src/semantic-router/pkg/extproc/provider_request_catalog_contract_test.go` |
 | Runnable aliases and mock-provider credentials | `e2e/profiles/response-api/values.yaml` |
 | Default CI profile membership | `e2e/profiles/response-api/profile.go` |
-| Black-box model-ID and reasoning projection | `e2e/testcases/model_catalog_astra_day0.go` |
+| Black-box model-ID and reasoning projection | `e2e/testcases/model_catalog_astra.go` |
 
 The official model page does not name a default reasoning effort, so the
 catalog does not invent one. It also does not expose a disabled mode: omitting
@@ -248,7 +250,7 @@ Run the worked example by name:
 ```bash
 make e2e-test-specific \
   E2E_PROFILE=response-api \
-  E2E_TESTS=model-catalog-astra-day0
+  E2E_TESTS=model-catalog-astra
 ```
 
 The profile uses a fixture credential and local mock provider; it never calls

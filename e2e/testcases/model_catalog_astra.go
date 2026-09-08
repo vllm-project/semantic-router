@@ -12,20 +12,20 @@ import (
 )
 
 const (
-	astraChatAlias      = "astra-chat-day0"
-	astraResponsesAlias = "astra-responses-day0"
+	astraChatAlias      = "astra-chat"
+	astraResponsesAlias = "astra-responses"
 	astraProviderModel  = "gpt-6-astra"
 )
 
 func init() {
-	pkgtestcases.Register("model-catalog-astra-day0", pkgtestcases.TestCase{
-		Description: "A catalog-only Day-0 model materializes and emits exact OpenAI Chat and Responses reasoning controls",
-		Tags:        []string{"model-catalog", "day0", "openai", "reasoning", "response-api"},
-		Fn:          testModelCatalogAstraDay0,
+	pkgtestcases.Register("model-catalog-astra", pkgtestcases.TestCase{
+		Description: "A catalog-backed built-in model materializes and emits exact OpenAI Chat and Responses reasoning controls",
+		Tags:        []string{"model-catalog", "built-in", "openai", "reasoning", "response-api"},
+		Fn:          testModelCatalogAstra,
 	})
 }
 
-func testModelCatalogAstraDay0(
+func testModelCatalogAstra(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
@@ -42,7 +42,7 @@ func testModelCatalogAstraDay0(
 	}
 	defer providerSession.Close()
 
-	chatSessionID := "astra-day0-chat"
+	chatSessionID := "astra-chat-contract"
 	if _, err := sendProtocolMatrixRequestWithHeaders(
 		ctx,
 		routerSession,
@@ -50,7 +50,7 @@ func testModelCatalogAstraDay0(
 		map[string]any{
 			"model": astraChatAlias,
 			"messages": []map[string]string{{
-				"role": "user", "content": "Astra Day-0 Chat contract",
+				"role": "user", "content": "Astra Chat contract",
 			}},
 			"reasoning_effort": "xhigh",
 		},
@@ -63,14 +63,14 @@ func testModelCatalogAstraDay0(
 		return err
 	}
 
-	responsesSessionID := "astra-day0-responses"
+	responsesSessionID := "astra-responses-contract"
 	if _, err := sendProtocolMatrixRequestWithHeaders(
 		ctx,
 		routerSession,
 		"/v1/responses",
 		map[string]any{
 			"model":     astraResponsesAlias,
-			"input":     "Astra Day-0 Responses contract",
+			"input":     "Astra Responses contract",
 			"reasoning": map[string]any{"effort": "max"},
 			"store":     false,
 		},
@@ -83,7 +83,7 @@ func testModelCatalogAstraDay0(
 		return err
 	}
 
-	toolSessionID := "astra-day0-responses-tools"
+	toolSessionID := "astra-responses-tools-contract"
 	if _, err := sendProtocolMatrixRequestWithHeaders(
 		ctx,
 		routerSession,

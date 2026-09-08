@@ -75,7 +75,8 @@ on roughly twenty mainstream creator companies (22 in this snapshot) and
 represents roughly their latest three generations or product lines. Closely
 related sizes or reasoning variants are included only when they are separately
 selectable and materially useful to operators. GPT-6 Astra is added separately
-as the focused Day-0 example rather than being folded into the baseline change.
+as the focused model-onboarding example rather than being folded into the
+baseline change.
 
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
@@ -165,7 +166,7 @@ and representative.
 - It does not require every new model to have a composite score on release day;
   missing evidence remains explicitly unavailable.
 - GPT-6 Astra was intentionally excluded from the architecture baseline and is
-  added by a separate representative model-onboarding contribution.
+  added by the separate representative model-onboarding contribution.
 
 ## Design principles
 

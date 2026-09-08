@@ -72,7 +72,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-edge-concurrent-requests",
 		"response-api-image-file-id",
 		"input-modality-cross-protocol",
-		"model-catalog-astra-day0",
+		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",
 		"protocol-codec-chat-backend-streaming-matrix",
 		"protocol-codec-responses-backend-buffered-matrix",
