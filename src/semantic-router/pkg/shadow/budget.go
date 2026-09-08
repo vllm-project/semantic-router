@@ -23,9 +23,11 @@ const (
 )
 
 // Budget is the per-request aggregate resource budget for shadow dispatch.
-// Hard limits (calls, concurrency) are reserved before an arm starts; soft
-// limits (tokens, cost) are accounted on completion and enforced for
-// subsequently admitted arms.
+// Hard limits (calls, concurrency) are reserved before an arm starts; token
+// and cost are also reserved at admission when the request declares an output
+// cap (see outputReserve), so concurrent arms cannot collectively overshoot
+// those limits. Tokens/cost without a declared cap are accounted on completion
+// and enforced for subsequently admitted arms.
 type Budget struct {
 	mu         sync.Mutex
 	cfg        config.ShadowBudgetConfig
@@ -39,10 +41,12 @@ func newBudget(cfg config.ShadowBudgetConfig) *Budget {
 	return &Budget{cfg: cfg}
 }
 
-// tryEnter reserves one call and one concurrency slot for an arm when every
-// enforced dimension allows it. On rejection it returns the deterministic
-// skipped result; the caller must not invoke release for a rejected arm.
-func (b *Budget) tryEnter(armName, model string) (ArmResult, bool) {
+// tryEnter reserves one call, one concurrency slotainer, and reserveTokens of
+// token/cost headroom for an arm when every enforced dimension allows it. On
+// rejection it returns the deterministic skipped result; the caller must not
+// invoke settle for a rejected arm. Admission failure leaves any prior
+// reservation untouched.
+func (b *Budget) tryEnter(armName, model string, reserveTokens int64) (ArmResult, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.cfg.MaxCalls > 0 && b.usedCalls >= b.cfg.MaxCalls {
@@ -57,13 +61,17 @@ func (b *Budget) tryEnter(armName, model string) (ArmResult, bool) {
 			Err: fmt.Sprintf("budget: concurrency limit reached (%d)", b.cfg.MaxConcurrency),
 		}, false
 	}
-	if b.cfg.MaxTokens > 0 && b.usedTokens >= b.cfg.MaxTokens {
+	reserveCost := 0.0
+	if b.cfg.PricePerMillionTokens > 0 {
+		reserveCost = float64(reserveTokens) / 1e6 * b.cfg.PricePerMillionTokens
+	}
+	if b.cfg.MaxTokens > 0 && b.usedTokens+reserveTokens > b.cfg.MaxTokens {
 		return ArmResult{
 			Arm: armName, Model: model, Outcome: OutcomeSkipped,
 			Err: fmt.Sprintf("budget: token limit reached (%d)", b.cfg.MaxTokens),
 		}, false
 	}
-	if b.cfg.MaxCost > 0 && b.usedCost >= b.cfg.MaxCost {
+	if b.cfg.MaxCost > 0 && b.usedCost+reserveCost > b.cfg.MaxCost {
 		return ArmResult{
 			Arm: armName, Model: model, Outcome: OutcomeSkipped,
 			Err: fmt.Sprintf("budget: cost limit reached (%v)", b.cfg.MaxCost),
@@ -71,31 +79,29 @@ func (b *Budget) tryEnter(armName, model string) (ArmResult, bool) {
 	}
 	b.usedCalls++
 	b.active++
+	b.usedTokens += reserveTokens
+	b.usedCost += reserveCost
 	return ArmResult{}, true
 }
 
-// release frees one concurrency slot after an admitted arm finishes.
-func (b *Budget) release() {
+// settle frees one concurrency slot after an admitted arm finishes and swaps
+// the admission-time token/cost reservation for the accounted reality: a
+// completed arm records its actual usage (net of the reservation); any other
+// outcome keeps the reservation (the arm did fire and conservatively consumed
+// budget), so aggregate accounting never exceeds reserved + actual totals.
+func (b *Budget) settle(outcome Outcome, promptTokens, completionTokens, reserveTokens int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.active > 0 {
 		b.active--
 	}
-}
-
-// reconcile accounts an arm outcome under the aggregate budget. Only completed
-// arms consume tokens and cost; failed/timed_out/cancelled arms still consumed
-// their admitted call slot (already counted by tryEnter).
-func (b *Budget) reconcile(outcome Outcome, promptTokens, completionTokens int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
 	if outcome != OutcomeCompleted {
 		return
 	}
 	tokens := promptTokens + completionTokens
-	b.usedTokens += tokens
+	b.usedTokens += tokens - reserveTokens
 	if b.cfg.PricePerMillionTokens > 0 {
-		b.usedCost += float64(tokens) / 1e6 * b.cfg.PricePerMillionTokens
+		b.usedCost += float64(tokens-reserveTokens) / 1e6 * b.cfg.PricePerMillionTokens
 	}
 }
 

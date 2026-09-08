@@ -96,58 +96,85 @@ func runArm(ctx context.Context, budget *Budget, arm config.ShadowArmConfig, par
 		ctx = context.Background()
 	}
 
-	// Aggregate budget gates admission deterministically.
-	rejected, ok := budget.tryEnter(arm.Name, arm.Model)
+	// Aggregate budget gates admission deterministically. The request's
+	// declared output cap is reserved so concurrent arms cannot jointly
+	// overshoot token/cost budgets (issue #3376, review feedback).
+	reserve := outputReserve(params)
+	rejected, ok := budget.tryEnter(arm.Name, arm.Model, reserve)
 	if !ok {
 		return rejected
 	}
-	defer budget.release()
+	outcome := OutcomeFailed
+	pTokens, cTokens := int64(0), int64(0)
+	defer func() { budget.settle(outcome, pTokens, cTokens, reserve) }()
 
 	// Each arm gets its own bounded context so one slow arm cannot outlive the
 	// aggregate shadow window.
-	// ponytail: per-arm timeout only; token/cost are soft (accounted on
-	// completion, enforced for later arms), wall time is bounded by the
-	// caller's aggregate context.
+	// ponytail: per-arm timeout only; token/cost without a declared output cap
+	// are accounted on completion and enforced for later arms; wall time is
+	// bounded by the caller's aggregate context.
 	armCtx, cancel, armTimeout := boundedContext(ctx, arm)
 	defer cancel()
 
 	req, reqErr := buildArmRequest(armCtx, arm, params, key)
 	if reqErr != "" {
-		return budgetedFailure(arm, outcomeFor(armCtx), reqErr)
+		outcome = outcomeFor(armCtx)
+		return budgetedFailure(arm, outcome, reqErr)
 	}
 
 	client := &http.Client{Timeout: armTimeout}
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		msg := fmt.Sprintf("request: %v", err)
-		return budgetedFailure(arm, outcomeFor(armCtx), msg)
+		outcome = outcomeFor(armCtx)
+		return budgetedFailure(arm, outcome, fmt.Sprintf("request: %v", err))
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
-		return budgetedFailure(arm, OutcomeFailed, fmt.Sprintf("read response: %v", err))
+		outcome = OutcomeFailed
+		return budgetedFailure(arm, outcome, fmt.Sprintf("read response: %v", err))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return budgetedFailure(arm, OutcomeFailed,
+		outcome = OutcomeFailed
+		return budgetedFailure(arm, outcome,
 			fmt.Sprintf("status %d: %s", resp.StatusCode, truncate(respBody)))
 	}
 
 	completion, parseErr := parseCompletion(respBody)
 	if parseErr != "" {
-		return budgetedFailure(arm, OutcomeFailed, parseErr)
+		outcome = OutcomeFailed
+		return budgetedFailure(arm, outcome, parseErr)
 	}
-	budget.reconcile(OutcomeCompleted, completion.PromptTokens, completion.CompletionTokens)
+	pTokens, cTokens = completion.PromptTokens, completion.CompletionTokens
+	outcome = OutcomeCompleted
 	return ArmResult{
 		Arm:              arm.Name,
 		Model:            arm.Model,
-		Outcome:          OutcomeCompleted,
+		Outcome:          outcome,
 		LatencyMS:        time.Since(start).Milliseconds(),
 		Content:          completion.Content,
 		PromptTokens:     completion.PromptTokens,
 		CompletionTokens: completion.CompletionTokens,
 	}
+}
+
+// outputReserve returns the request's declared maximum output tokens, used to
+// reserve token/cost headroom at arm admission. MaxCompletionTokens takes
+// precedence over the legacy MaxTokens; 0 means the request declares no output
+// cap, so token/cost can only be reconciled after completion.
+func outputReserve(params *openai.ChatCompletionNewParams) int64 {
+	if params == nil {
+		return 0
+	}
+	if v := params.MaxCompletionTokens; v.Valid() {
+		return v.Value
+	}
+	if v := params.MaxTokens; v.Valid() {
+		return v.Value
+	}
+	return 0
 }
 
 // budgetedFailure returns the ArmResult for a non-completed outcome; only

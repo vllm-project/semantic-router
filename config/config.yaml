@@ -1707,6 +1707,22 @@ global:
           password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
           database: 2
           key_prefix: "vsr:router-session:v1:"
+    shadow_comparison:
+      enabled: false
+      max_wait_ms: 3000
+      budget:
+        max_calls: 0
+        max_tokens: 0
+        max_cost: 0
+        max_concurrency: 0
+        price_per_million_tokens: 0
+      judge:
+        enabled: false
+        model: ""
+        endpoint: ""
+        rubric_version: "v1"
+        timeout_seconds: 0
+      arms: []
 
   services:
     api:
