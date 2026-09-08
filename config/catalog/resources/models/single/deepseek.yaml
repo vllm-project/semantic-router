@@ -52,7 +52,7 @@
     monochrome: false
   distribution:
     type: open_weights
-    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
     license: MIT
   family: deepseek-v4
   parameter_size: 284B (13B active)
@@ -76,8 +76,8 @@
   verification:
     authority: DeepSeek
     status: claimed
-    verified_at: 2026-09-05
-    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    verified_at: 2026-09-09
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
   tags:
   - efficient
   - open_weights

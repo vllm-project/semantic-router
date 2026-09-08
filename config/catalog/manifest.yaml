@@ -36,8 +36,8 @@ inventory:
       - publisher: Alibaba / Qwen
         representative_models:
           - qwen/qwen3.8-max
+          - qwen/qwen3.8-flash-next
           - qwen/qwen3.7-max
-          - qwen/qwen3.6-27b
       - publisher: Amazon
         representative_models:
           - amazon/nova-2-lite

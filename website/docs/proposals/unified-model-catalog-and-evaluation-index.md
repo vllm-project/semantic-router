@@ -48,15 +48,15 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
-serving providers, three protocol definitions, 84 physical Model Cards, five
-virtual Model Cards, 169 provider-owned model mappings, 64 benchmark
-definitions, and 1,365 exact evaluation records. The five default benchmark
-components produce 1,325 explicit slots over 265 model/effort rows; 125 slots
+serving providers, three protocol definitions, 85 physical Model Cards, five
+virtual Model Cards, 171 provider-owned model mappings, 64 benchmark
+definitions, and 1,394 exact evaluation records. The five default benchmark
+components produce 1,345 explicit slots over 269 model/effort rows; 126 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
 
-All 84 physical cards pass the hard admission rule: at least one exact
+All 85 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
@@ -81,7 +81,7 @@ baseline change.
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
 | AI21 Labs | Jamba2 Mini, Jamba Reasoning 3B, Jamba Large 1.7 | 3 |
-| Alibaba / Qwen | Qwen3.8 Max/27B/2.4T, Qwen3.7 Max, Qwen3.6 27B/35B | 6 |
+| Alibaba / Qwen | Qwen3.8 Max/Flash Next/27B/2.4T, Qwen3.7 Max, Qwen3.6 27B/35B | 7 |
 | Amazon | Nova 2 Lite, Nova Premier, Nova Pro | 3 |
 | Anthropic | Claude Fable 5.1/5, Opus 5/4.8, Sonnet 5 | 5 |
 | Baidu | ERNIE 5.1, ERNIE 5.0, ERNIE 4.5 300B A47B | 3 |
@@ -726,8 +726,8 @@ The initial population audit makes both coverage and gaps visible. The 64
 benchmark definitions retain all exact measurements as source records, while
 public Hub surfaces remove every exact benchmark/profile/metric tuple measured
 on fewer than ten distinct models. The default five-component matrix
-materializes 1,325 slots over 265
-model/effort rows. At this snapshot, 125 of those slots have an exact
+materializes 1,345 slots over 269
+model/effort rows. At this snapshot, 126 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
 
@@ -1031,8 +1031,9 @@ URL/path semantics, supported operations, discovery policy, conformance, and
 the model mappings that can be verified in that change. An issue must not
 silently broaden into another creator or unrelated provider.
 
-The first current-line candidates are Qwen3.8 Flash, NVIDIA Nemotron 3 Nano
-text, and Claude Haiku 4.5. Nova 2 Pro Preview, Cohere North Micro Vision,
+With Qwen3.8 Flash Next now included, the first remaining current-line
+candidates are NVIDIA Nemotron 3 Nano text and Claude Haiku 4.5. Nova 2 Pro
+Preview, Cohere North Micro Vision,
 MAI-Code 1.1 Flash, and Jamba2 3B remain blocked candidates until
 their runtime binding, public endpoint, or fifth distinct exact benchmark
 is verifiable. Baidu/ERNIE 5.1, 5.0, and 4.5 and StepFun 3.7, 3.5, and Step3-VL

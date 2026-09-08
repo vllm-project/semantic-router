@@ -103,7 +103,7 @@ func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
 		{
-			name: "vLLM Qwen top-level effort and template switch", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			name: "vLLM Qwen Flash Next top-level effort and template switch", catalog: "qwen/qwen3.8-flash-next", provider: "vllm",
 			enabled: true, mode: config.ReasoningModeEnabled, effort: "xhigh",
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
 			wantControls: map[string]interface{}{
@@ -112,7 +112,7 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			},
 		},
 		{
-			name: "vLLM Qwen template switch disabled", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			name: "vLLM Qwen Flash Next template switch disabled", catalog: "qwen/qwen3.8-flash-next", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
 			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
@@ -120,7 +120,7 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
-			name: "vLLM Qwen Responses uses protocol-native reasoning object", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			name: "vLLM Qwen Flash Next Responses uses protocol-native reasoning object", catalog: "qwen/qwen3.8-flash-next", provider: "vllm",
 			apiFormat: config.APIFormatResponses, enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},

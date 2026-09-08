@@ -369,6 +369,143 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
         )
 
+    def test_qwen_3_8_flash_next_day_zero_contract_is_complete(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        models = {model["id"]: model for model in resources["models"]}
+        flash_next = models["qwen/qwen3.8-flash-next"]
+        self.assertEqual(
+            flash_next["distribution"],
+            {
+                "type": "open_weights",
+                "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+                "license": "Qwen Community License 1.0",
+            },
+        )
+        self.assertEqual(flash_next["lifecycle"], "experimental")
+        self.assertEqual(flash_next["limits"], {"context_window_size": 262_144})
+        self.assertEqual(flash_next["reasoning_family"], "qwen3.8")
+        self.assertEqual(
+            flash_next["modalities"],
+            {"input": ["text", "image", "video"], "output": ["text"]},
+        )
+        self.assertTrue(
+            {"chat", "reasoning", "tools", "structured_output", "vision"}.issubset(
+                flash_next["capabilities"]
+            )
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        expected_sources = {
+            "vllm": "https://recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next",
+            "sglang": (
+                "https://docs.sglang.io/cookbook/autoregressive/Qwen/"
+                "Qwen3.8-Flash-Next"
+            ),
+        }
+        for provider_id, source in expected_sources.items():
+            binding = next(
+                item
+                for item in providers[provider_id]["models"]
+                if item["catalog"] == "qwen/qwen3.8-flash-next"
+            )
+            self.assertEqual(binding["id"], "Qwen/Qwen3.8-Flash-Next")
+            self.assertEqual(binding["relationship"], "self_hosted")
+            self.assertEqual(
+                binding["protocols"],
+                ["openai/chat-completions@1", "openai/responses@1"],
+            )
+            self.assertEqual(
+                binding["reasoning_transport"],
+                "top_level_effort_template_switch",
+            )
+            self.assertEqual(binding["verification"]["source"], source)
+
+        evaluations = {
+            (item["benchmark"], item["benchmark_profile"]): item
+            for item in resources["evaluations"]
+            if item["model"] == "qwen/qwen3.8-flash-next"
+        }
+        self.assertEqual(
+            {key: item["metrics"] for key, item in evaluations.items()},
+            {
+                ("datacurve/deep-swe@1.1.0", "published-agent"): {"resolved": 0.587},
+                ("swe-bench/pro@1.0.0", "published-agent"): {"resolved": 0.625},
+                ("berkeley-rdi/agents-last-exam@1.0.0", "published-agent"): {
+                    "pass_rate": 0.243,
+                    "score": 0.512,
+                },
+                ("allenai/ifbench@1.0.0", "prompt-loose"): {"accuracy": 0.813},
+                ("idavidrein/gpqa-diamond@1.0.0", "published-standard"): {
+                    "accuracy": 0.917
+                },
+                ("cais/humanitys-last-exam@1.0.0", "published-unspecified"): {
+                    "accuracy": 0.359
+                },
+                (
+                    "livecodebench/livecodebench@6.0.0",
+                    "code-generation-pass-at-1",
+                ): {"pass_at_1": 0.919},
+                ("princeton-nlp/charxiv@1.0.0", "no-tools"): {"score": 0.846},
+                ("princeton-nlp/charxiv@1.0.0", "with-tools"): {"score": 0.906},
+            },
+        )
+        self.assertTrue(
+            all(
+                item["reasoning_effort"] == "unspecified"
+                and item["subject"]["model_revision"]
+                == "de4b8e4d43b917e7706784d8bb445c9af86a3540"
+                and item["evidence"]["provenance"] == "vendor_claimed"
+                and item["evidence"]["verification"] == "claimed"
+                for item in evaluations.values()
+            )
+        )
+
+        qwen_inventory = next(
+            creator
+            for creator in manifest["inventory"]["physical"]["creators"]
+            if creator["publisher"] == "Alibaba / Qwen"
+        )
+        self.assertEqual(
+            qwen_inventory["representative_models"],
+            [
+                "qwen/qwen3.8-max",
+                "qwen/qwen3.8-flash-next",
+                "qwen/qwen3.7-max",
+            ],
+        )
+
+    def test_deepseek_v4_flash_uses_the_exact_0731_self_hosted_checkpoint(
+        self,
+    ) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        models = {model["id"]: model for model in resources["models"]}
+        flash = models["deepseek/deepseek-v4-flash"]
+        exact_source = "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731"
+        self.assertEqual(flash["revision"], "DeepSeek-V4-Flash-0731")
+        self.assertEqual(flash["distribution"]["source"], exact_source)
+        self.assertEqual(flash["verification"]["source"], exact_source)
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        binding = next(
+            item
+            for item in providers["vllm"]["models"]
+            if item["catalog"] == "deepseek/deepseek-v4-flash"
+        )
+        self.assertEqual(binding["id"], "deepseek-ai/DeepSeek-V4-Flash-0731")
+        self.assertEqual(binding["verification"]["source"], exact_source)
+
+        release_eval = next(
+            item
+            for item in resources["evaluations"]
+            if item["id"]
+            == "deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0"
+        )
+        self.assertEqual(release_eval["subject"]["variant"], "DeepSeek-V4-Flash-0731")
+        self.assertEqual(
+            release_eval["subject"]["model_revision"], "DeepSeek-V4-Flash-0731"
+        )
+        self.assertEqual(release_eval["evidence"]["source"], exact_source)
+
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         baidu_models = {
@@ -724,6 +861,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "mistral/mistral-medium-3.5": "mistral-none-high",
             "mistral/mistral-small-4": "mistral-none-high",
             "qwen/qwen3.8-27b": "qwen3.8",
+            "qwen/qwen3.8-flash-next": "qwen3.8",
             "qwen/qwen3.8-2.4t-a95b": "qwen3.8-always-on",
             "zai/glm-5.2": "glm-5.2",
             "anthropic/claude-fable-5": "claude-effort-always-on",
@@ -772,15 +910,16 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             minimax_binding["reasoning_modes"], ["disabled", "adaptive", "enabled"]
         )
         for runtime in ("vllm", "sglang"):
-            qwen_binding = next(
-                binding
-                for binding in providers[runtime]["models"]
-                if binding["catalog"] == "qwen/qwen3.8-27b"
-            )
-            self.assertEqual(
-                qwen_binding["reasoning_transport"],
-                "top_level_effort_template_switch",
-            )
+            for model_id in ("qwen/qwen3.8-27b", "qwen/qwen3.8-flash-next"):
+                qwen_binding = next(
+                    binding
+                    for binding in providers[runtime]["models"]
+                    if binding["catalog"] == model_id
+                )
+                self.assertEqual(
+                    qwen_binding["reasoning_transport"],
+                    "top_level_effort_template_switch",
+                )
         dashscope_qwen = next(
             binding
             for binding in providers["dashscope"]["models"]

@@ -24,6 +24,18 @@ presentation:
 conformance:
   status: unverified
 models:
+- catalog: qwen/qwen3.8-flash-next
+  relationship: self_hosted
+  id: Qwen/Qwen3.8-Flash-Next
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort_template_switch
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://docs.sglang.io/cookbook/autoregressive/Qwen/Qwen3.8-Flash-Next
 - catalog: qwen/qwen3.8-27b
   relationship: self_hosted
   id: Qwen/Qwen3.8-27B
