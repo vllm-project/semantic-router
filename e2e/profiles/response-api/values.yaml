@@ -13,9 +13,8 @@ config:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: test-endpoint
-            provider: vllm
+            provider: dynamo
             endpoint: mock-vllm.default.svc.cluster.local:8000
-            type: dynamo
             weight: 1
       - name: mock/native-responses
         api_format: responses
