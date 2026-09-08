@@ -787,8 +787,9 @@ def merge_lora_adapter_to_full_model(
             "Updated config.json with correct intent classification label mappings"
         )
 
-    # Copy important files from LoRA adapter
-    for file_name in ["label_mapping.json"]:
+    # Copy important files from LoRA adapter. heldout_eval.json rides along so the
+    # merged artifact carries the evidence for the accuracy quoted against it.
+    for file_name in ["label_mapping.json", "heldout_eval.json"]:
         src_file = Path(lora_adapter_path) / file_name
         if src_file.exists():
             shutil.copy(src_file, Path(output_path) / file_name)
