@@ -217,8 +217,16 @@ func SetupActivateHandler(
 			return
 		}
 
+		// Fails closed for the same reason as deploy: config.yaml carries
+		// credentials, so no backup means no activation.
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
+			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
+			http.Error(
+				w,
+				"Setup activation aborted: the config backup could not be written with owner-only permissions.",
+				http.StatusInternalServerError,
+			)
+			return
 		}
 
 		tmpConfigFile := configPath + ".tmp"

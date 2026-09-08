@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -48,7 +50,9 @@ func TestCreateConfigBackupWritesOwnerOnly(t *testing.T) {
 	skipWithoutPOSIXModes(t)
 	configDir := t.TempDir()
 
-	createConfigBackup(configDir, []byte("providers:\n  models: []\n"))
+	if _, err := createConfigBackup(configDir, []byte("providers:\n  models: []\n")); err != nil {
+		t.Fatalf("createConfigBackup: %v", err)
+	}
 
 	backupDir := configBackupDir(configDir)
 	if got := filePerm(t, backupDir); got != configSnapshotDirMode {
@@ -67,7 +71,9 @@ func TestSnapshotBeforeRollbackWritesOwnerOnly(t *testing.T) {
 		t.Fatalf("seed config: %v", err)
 	}
 
-	snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	if _, err := snapshotCurrentConfigBeforeRollback(configPath, configDir); err != nil {
+		t.Fatalf("snapshotCurrentConfigBeforeRollback: %v", err)
+	}
 
 	backupDir := configBackupDir(configDir)
 	if got := filePerm(t, backupDir); got != configSnapshotDirMode {
@@ -129,7 +135,9 @@ func TestCreateConfigBackupRepairsExistingSnapshots(t *testing.T) {
 		t.Fatalf("seed unrelated file: %v", err)
 	}
 
-	createConfigBackup(configDir, []byte("version: v0.3\n"))
+	if _, err := createConfigBackup(configDir, []byte("version: v0.3\n")); err != nil {
+		t.Fatalf("createConfigBackup: %v", err)
+	}
 
 	if got := filePerm(t, backupDir); got != configSnapshotDirMode {
 		t.Fatalf("pre-existing dir mode = %04o, want %04o", got, configSnapshotDirMode)
@@ -181,5 +189,178 @@ func TestEnsureConfigSnapshotDirLeavesParentAlone(t *testing.T) {
 
 	if got := filePerm(t, parent); got != 0o755 {
 		t.Fatalf("parent mode = %04o, want it untouched at 0755", got)
+	}
+}
+
+// The review case: a snapshot must not be written through the existing inode.
+// Anything holding the old file open must keep seeing the old bytes, and the
+// new bytes must land on a fresh 0600 inode.
+func TestWriteConfigSnapshotReplacesInodeAndNeverExposesNewBytes(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("api_key: old\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	beforeInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+
+	// A reader that opened the world-readable file before the write.
+	stale, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer stale.Close()
+
+	if err := writeConfigSnapshot(path, []byte("api_key: new-secret\n")); err != nil {
+		t.Fatalf("writeConfigSnapshot: %v", err)
+	}
+
+	staleBytes, err := io.ReadAll(stale)
+	if err != nil {
+		t.Fatalf("read stale descriptor: %v", err)
+	}
+	if strings.Contains(string(staleBytes), "new-secret") {
+		t.Fatalf("descriptor opened before the write saw the new credential: %q", staleBytes)
+	}
+
+	afterInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat after: %v", err)
+	}
+	if os.SameFile(beforeInfo, afterInfo) {
+		t.Fatal("snapshot reused the original inode instead of replacing it")
+	}
+	if got := filePerm(t, path); got != configSnapshotFileMode {
+		t.Fatalf("mode = %04o, want %04o", got, configSnapshotFileMode)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if string(data) != "api_key: new-secret\n" {
+		t.Fatalf("content = %q", data)
+	}
+	if leftovers := tempSnapshotLeftovers(t, filepath.Dir(path)); len(leftovers) != 0 {
+		t.Fatalf("temp files left behind: %v", leftovers)
+	}
+}
+
+func tempSnapshotLeftovers(t *testing.T, dir string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
+	var found []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tmp") {
+			found = append(found, entry.Name())
+		}
+	}
+	return found
+}
+
+// A planted symlink must not redirect credentials out of the snapshot directory.
+func TestWriteConfigSnapshotRejectsSymlinkTarget(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	dir := t.TempDir()
+	outside := filepath.Join(dir, "outside.yaml")
+	if err := os.WriteFile(outside, []byte("untouched\n"), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	link := filepath.Join(dir, "config.20200101-000000.yaml")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if err := writeConfigSnapshot(link, []byte("api_key: secret\n")); err == nil {
+		t.Fatal("expected a symlink target to be refused")
+	}
+
+	data, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatalf("read outside: %v", err)
+	}
+	if string(data) != "untouched\n" {
+		t.Fatalf("symlink target was written through: %q", data)
+	}
+}
+
+func TestWriteConfigSnapshotRejectsNonRegularTarget(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "config.20200101-000000.yaml")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	if err := writeConfigSnapshot(target, []byte("api_key: secret\n")); err == nil {
+		t.Fatal("expected a directory target to be refused")
+	}
+}
+
+func TestEnsureConfigSnapshotDirRejectsSymlink(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if err := ensureConfigSnapshotDir(link); err == nil {
+		t.Fatal("expected a symlinked snapshot directory to be refused")
+	}
+}
+
+// Fail closed: an unsafe backup directory must abort before any snapshot lands.
+func TestCreateConfigBackupFailsClosedOnSymlinkedDir(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	configDir := t.TempDir()
+	elsewhere := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(configDir, ".vllm-sr"), 0o700); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := os.Symlink(elsewhere, configBackupDir(configDir)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	version, err := createConfigBackup(configDir, []byte("api_key: secret\n"))
+	if err == nil {
+		t.Fatal("expected createConfigBackup to fail closed")
+	}
+	if version != "" {
+		t.Fatalf("version = %q, want empty on failure", version)
+	}
+
+	entries, readErr := os.ReadDir(elsewhere)
+	if readErr != nil {
+		t.Fatalf("read symlink destination: %v", readErr)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("wrote %d file(s) through the symlinked directory", len(entries))
+	}
+}
+
+// A backup directory this process cannot write must abort, not proceed.
+func TestCreateConfigBackupFailsClosedOnUnwritableDir(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	configDir := t.TempDir()
+	parent := filepath.Join(configDir, ".vllm-sr")
+	if err := os.MkdirAll(parent, 0o500); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0o700) })
+
+	if _, err := createConfigBackup(configDir, []byte("api_key: secret\n")); err == nil {
+		t.Fatal("expected createConfigBackup to fail closed on an unwritable parent")
 	}
 }
