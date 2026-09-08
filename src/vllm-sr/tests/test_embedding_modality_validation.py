@@ -42,12 +42,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen3-8b
+    model: qwen3-8b
   models:
     - name: qwen3-8b
       backend_refs:
         - name: primary
           endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     embeddings:
@@ -118,12 +119,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen3-8b
+    model: qwen3-8b
   models:
     - name: qwen3-8b
       backend_refs:
         - name: primary
           endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals: {}
 """
@@ -141,12 +143,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen3-8b
+    model: qwen3-8b
   models:
     - name: qwen3-8b
       backend_refs:
         - name: primary
           endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     embeddings:
@@ -172,12 +175,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen3-8b
+    model: qwen3-8b
   models:
     - name: qwen3-8b
       backend_refs:
         - name: primary
           endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   signals:
     embeddings:

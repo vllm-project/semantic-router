@@ -248,6 +248,20 @@ const sidebars: SidebarsConfig = {
           },
           items: [
             'installation/configuration-workflows',
+            {
+              type: 'category',
+              label: 'Models',
+              link: {
+                type: 'doc',
+                id: 'installation/model-configuration',
+              },
+              items: [
+                'installation/catalog-backed-models',
+                'installation/custom-models',
+                'installation/model-reasoning',
+                'installation/model-configuration-patterns',
+              ],
+            },
           ],
         },
         {
@@ -409,6 +423,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -428,9 +443,39 @@ const sidebars: SidebarsConfig = {
       label: 'Model Training',
       collapsed: false,
       items: [
-        'training/training-overview',
-        'training/model-performance-eval',
-        'training/ml-model-selection',
+        {
+          type: 'category',
+          label: 'Start Here',
+          collapsed: false,
+          items: [
+            'training/training-overview',
+            'training/model-catalog',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Embedding Models',
+          items: [
+            'training/mmbert-32k-models',
+            'training/multimodal-embeddings',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Classifier Models',
+          items: [
+            'training/classifier-models',
+            'training/mmbert-safety-classifier',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluate and Select',
+          items: [
+            'training/model-performance-eval',
+            'training/ml-model-selection',
+          ],
+        },
       ],
     },
     {
@@ -471,6 +516,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'community/overview',
+        'community/model-provider-day-0-support',
         'community/development',
         'community/documentation',
         'community/translation-guide',

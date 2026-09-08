@@ -33,7 +33,9 @@ global: {}
 - `listeners` exposes inference and management endpoints.
 - `providers.defaults` defines shared provider behavior;
   `providers.models[]` binds model names to concrete backends and owns their
-  deployment pricing metadata.
+  deployment pricing metadata. A built-in model may add an optional `catalog`
+  identity, while `backend_refs[].provider` selects the stable runtime Provider
+  ID. Custom vLLM/SGLang models continue to omit `catalog`.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -96,6 +98,22 @@ runtime dependency; they do not define routing behavior by themselves.
 
 - Model backend credentials belong in environment references, not literal YAML
   values.
+- Catalog-backed models materialize their built-in Model Card, reasoning family,
+  provider protocol, path, and non-secret defaults automatically. A handwritten
+  override uses the canonical `catalog` identity as `routing.modelCards[].name`;
+  a fully custom model uses its request alias as the card name.
+- `api_format` selects the upstream wire format; it never selects a Provider.
+  When this config declares a listener, every physical model must use
+  `backend_refs` with an explicit Provider ID. Metadata-only external-gateway
+  configs (`listeners: []`) and built-in virtual models may remain backendless.
+  The local `vllm-sr serve` path manages an Envoy listener, so it rejects a
+  backendless physical model even when the authored listener list is empty;
+  deploy state-only metadata through the external-gateway integration instead.
+- Multiple `backend_refs` on one alias are homogeneous replicas. HTTP targets
+  may vary by host, port, and weight. HTTPS targets may vary by port and weight
+  but must keep one DNS hostname. Provider ID, wire protocol, native model ID,
+  credentials, headers, request path, and TLS semantics must also match; use
+  separate aliases for heterogeneous providers.
 - `routing.modelCards` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
 - Protocol controls such as `tool_choice` enter routing as conversation facts;
@@ -136,14 +154,14 @@ runtime dependency; they do not define routing behavior by themselves.
 When a public config field or supported routing surface changes, update its
 fragment, the exhaustive reference, affected recipes, and the matching website
 page together. Run `go test ./pkg/config/...` from `src/semantic-router`, then
-run `make agent-lint` from the repository root:
+run `make check` from the repository root:
 
 ```bash
 cd src/semantic-router
 go test ./pkg/config/...
 
 cd ../..
-make agent-lint
+make check
 ```
 
 Complete routing scenarios belong in `config/recipes/`; backend support files

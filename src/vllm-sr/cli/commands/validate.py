@@ -2,9 +2,15 @@
 
 import sys
 
+from cli.catalog_provider_projection import (
+    CatalogProviderProjectionError,
+    validate_provider_model_configuration,
+)
 from cli.config_contract import iter_routing_profiles
+from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.terminal import echo, error, fields, heading, success
+from cli.validation_error import ValidationError
 from cli.validator import print_validation_errors, validate_user_config
 
 _SIGNAL_SUMMARY_FIELDS = (
@@ -120,6 +126,26 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
+def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
+    """Validate the same provider projection used by Envoy generation.
+
+    Projection works on deep copies and resolves only structural catalog
+    defaults. It neither reads provider credentials nor mutates the authored
+    configuration, so it is safe for the validation-only command path.
+    """
+
+    try:
+        validate_provider_model_configuration(
+            config,
+            allow_backendless_physical=(
+                "listeners" in config.model_fields_set and not config.listeners
+            ),
+        )
+    except CatalogProviderProjectionError as projection_error:
+        return [ValidationError(str(projection_error))]
+    return []
+
+
 def validate_command(config_path: str):
     """
     Validate user configuration.
@@ -136,6 +162,8 @@ def validate_command(config_path: str):
 
     # Validate config
     errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(_provider_projection_errors(user_config))
 
     if errors:
         print_validation_errors(errors)

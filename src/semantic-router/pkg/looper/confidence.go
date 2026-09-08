@@ -19,6 +19,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -246,27 +247,21 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 
 	// Helper to compute AutoMix value for a model
 	getValue := func(ref config.ModelRef) float64 {
-		quality := 0.5   // Default quality estimate
-		costScore := 0.5 // Default cost score (mid-range)
+		quality, costScore := 0.0, 0.0
+		hasQuality, hasCost := false, false
 
 		if modelParams != nil {
 			if params, ok := modelParams[ref.Model]; ok {
-				// Use configured QualityScore if available
-				if params.QualityScore > 0 && params.QualityScore <= 1.0 {
-					quality = params.QualityScore
-				} else {
-					// Fallback: estimate quality from param_size (larger = higher quality)
-					size := parseParamSize(params.ParamSize)
-					if size > 0 {
-						// Normalize size: assume 1B-70B range maps to 0.3-1.0 quality
-						quality = 0.3 + 0.7*math.Min(float64(size)/70000, 1.0)
-					}
+				if score, available := params.EvidenceScore(""); available {
+					quality = math.Max(0, math.Min(1, score/100))
+					hasQuality = true
 				}
 
 				// Normalize cost: 0 = most expensive, 1 = cheapest
 				cost := params.Pricing.PromptPer1M
 				if cost > 0 && costRange > 0 {
 					costScore = 1.0 - (cost-minCost)/costRange
+					hasCost = true
 				}
 			}
 		}
@@ -276,8 +271,17 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 		// When tradeoff = 0: pure quality ordering
 		// When tradeoff = 1: pure cost ordering (cheapest first)
 		// When tradeoff = 0.3: favor quality but consider cost
-		value := (1-tradeoff)*quality + tradeoff*costScore
-		return value
+		qualityWeight, costWeight := 1-tradeoff, tradeoff
+		if !hasQuality {
+			qualityWeight = 0
+		}
+		if !hasCost {
+			costWeight = 0
+		}
+		if qualityWeight+costWeight == 0 {
+			return 0
+		}
+		return (qualityWeight*quality + costWeight*costScore) / (qualityWeight + costWeight)
 	}
 
 	// Sort by value ascending (start with lower-value/cheaper models for cascading)
@@ -1069,8 +1073,6 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
 
-	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes)
-
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
 		"looper":     "confidence",
 		"decision":   req.DecisionName,
@@ -1078,11 +1080,25 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		"server_url": evaluator.VerifierServerURL,
 	})
 
-	verifyResp, err := client.Verify(ctx, question, responseContent, "", evaluator.Threshold)
+	// Verify through the shared verifier contract so the AutoMix HTTP adapter
+	// is the single verifier seam (issue #2857). Public behavior is unchanged:
+	// the returned confidence and accept decision are identical.
+	verifier := NewAutoMixVerifier(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes, evaluator.Threshold)
+	result, err := verifier.Verify(ctx, &VerifierRequest{
+		Task: question,
+		Candidates: []VerifierCandidate{
+			{ID: modelName, Content: responseContent},
+		},
+	})
 	if err != nil {
+		var verr *VerifierError
+		if errors.As(err, &verr) && verr.Code == VerifierFailureTimeout {
+			return 0, false, fmt.Errorf("verifier call failed (timeout): %w", err)
+		}
 		return 0, false, fmt.Errorf("verifier call failed: %w", err)
 	}
-
-	accepted := verifyResp.Confidence >= evaluator.Threshold
-	return verifyResp.Confidence, accepted, nil
+	if result.Confidence == nil {
+		return 0, false, fmt.Errorf("verifier returned no confidence")
+	}
+	return *result.Confidence, result.Disposition == DispositionApprove, nil
 }

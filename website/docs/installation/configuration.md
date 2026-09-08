@@ -184,7 +184,7 @@ listeners:
 
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: my-served-model
@@ -192,6 +192,7 @@ providers:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
+          provider: vllm
 
 routing:
   strategy: priority
@@ -222,6 +223,34 @@ global:
       metrics:
         enabled: true
 ```
+
+### Model configuration
+
+Models can inherit identity and reasoning from the built-in catalog or define a
+private model locally. This catalog-backed example lets the selected Provider
+mapping supply the native model ID, protocol, reasoning transport, and request
+path:
+
+```yaml
+providers:
+  defaults:
+    model: production
+    reasoning_effort: medium
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
+      backend_refs:
+        - provider: openai
+          api_key_env: OPENAI_API_KEY
+```
+
+The `name` remains the local Router alias. A private or newly released model
+omits `catalog` and can optionally define a Model Card and reasoning contract
+under that alias. Start with [Configure models](model-configuration), then use
+[Model configuration patterns](model-configuration-patterns) to compare the
+catalog, custom, reasoning, Provider, and replica combinations. The
+[Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
+is for contributors adding reusable support to the repository catalog.
 
 Classifier backend failures remain `Unknown` while the complete boolean tree
 is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
@@ -283,7 +312,7 @@ In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
+If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
 
 See
