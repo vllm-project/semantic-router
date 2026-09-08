@@ -85,7 +85,7 @@ repos:
         entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py website
         language: system
         files: \.(js|ts|tsx)$
-        exclude: ^(\node_modules/)
+        exclude: ^(node_modules/)
         pass_filenames: false
 
   # Rust specific hooks
