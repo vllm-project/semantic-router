@@ -212,8 +212,8 @@ func ruleTreeShapeCorpus() []ruleTreeShapeCase {
 			wantErr: `rules: unsupported operator "XOR"`,
 		},
 		{
-			name: "root typo ANND", rules: RuleNode{Operator: "ANND", Conditions: []RuleNode{kw("a"), kw("b")}},
-			wantErr: `rules: unsupported operator "ANND"`,
+			name: "root typo NAD", rules: RuleNode{Operator: "NAD", Conditions: []RuleNode{kw("a"), kw("b")}},
+			wantErr: `rules: unsupported operator "NAD"`,
 		},
 		{name: "nested NOR", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{
 			kw("a"),
