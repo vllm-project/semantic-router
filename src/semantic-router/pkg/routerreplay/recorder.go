@@ -126,14 +126,6 @@ func (r *Recorder) SetMaxToolTraceSteps(max int) {
 	}
 }
 
-func (r *Recorder) ShouldCaptureRequest() bool {
-	return r.policySnapshot().captureRequestBody
-}
-
-func (r *Recorder) ShouldCaptureResponse() bool {
-	return r.policySnapshot().captureResponseBody
-}
-
 type recorderPolicy struct {
 	maxBodyBytes        int
 	maxToolTraceBytes   int
