@@ -172,7 +172,7 @@ def _project_backend_endpoint(
         "host_authority": _host_authority(host, int(port), protocol),
         "path": path,
         "weight": backend.weight,
-        "backend_type": (backend.type or "vllm").strip().lower(),
+        "backend_type": backend.provider.strip().lower(),
         "protocol": protocol,
         "is_https": is_https,
         "is_domain": is_domain,

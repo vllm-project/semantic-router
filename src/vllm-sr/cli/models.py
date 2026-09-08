@@ -2160,7 +2160,6 @@ class BackendRef(BaseModel):
     endpoint: Optional[str] = None
     protocol: str = "http"
     weight: int = Field(default=1, ge=0)
-    type: Optional[str] = None
     base_url: Optional[str] = None
     provider: str = "vllm"
     auth_header: Optional[str] = None

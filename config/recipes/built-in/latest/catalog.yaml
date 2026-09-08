@@ -900,6 +900,31 @@ providers:
     featured: true
   conformance:
     status: unverified
+- id: dynamo
+  display_name: NVIDIA Dynamo
+  description: Connect a private NVIDIA Dynamo endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  - openai/responses@1#create
+  - openai/responses@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: package:nvidia
+    monogram: D
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-07'
 - id: featherless
   display_name: Featherless AI
   description: On-demand serverless open-model inference.

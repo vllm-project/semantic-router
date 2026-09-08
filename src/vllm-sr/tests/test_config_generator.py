@@ -75,19 +75,16 @@ listeners:
     port: 8899
 providers:
   defaults:
-    model: "mixed-model"
+    model: "dynamo-model"
   models:
-    - name: "mixed-model"
+    - name: "dynamo-model"
       backend_refs:
         - name: "dynamo-a"
           endpoint: "10.0.0.1:8000"
-          type: dynamo
-        - name: "vllm-a"
-          endpoint: "10.0.0.2:8000"
-          type: vllm
+          provider: dynamo
 routing:
   modelCards:
-    - name: "mixed-model"
+    - name: "dynamo-model"
   decisions:
     - name: "default-route"
       description: "default route"
@@ -96,7 +93,7 @@ routing:
         operator: "AND"
         conditions: []
       modelRefs:
-        - model: "mixed-model"
+        - model: "dynamo-model"
           use_reasoning: false
 """,
         extproc_host="localhost",
@@ -109,7 +106,7 @@ routing:
         'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
     ]
 
-    cluster = _cluster_by_name(rendered, "mixed_model_cluster")
+    cluster = _cluster_by_name(rendered, "dynamo_model_cluster")
     endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
     identities = [
         endpoint["metadata"]["filter_metadata"]["semantic-router"]
@@ -117,7 +114,6 @@ routing:
     ]
     assert identities == [
         {"backend_name": "dynamo-a", "backend_type": "dynamo"},
-        {"backend_name": "vllm-a", "backend_type": "vllm"},
     ]
 
 

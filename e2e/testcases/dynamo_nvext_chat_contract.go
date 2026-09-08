@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -33,8 +34,8 @@ func testDynamoNVExtChatContract(
 	if err != nil {
 		return fmt.Errorf("buffered Dynamo nvext request: %w", err)
 	}
-	if err := verifyBufferedDynamoNVExt(buffered); err != nil {
-		return err
+	if verifyErr := verifyBufferedDynamoNVExt(buffered); verifyErr != nil {
+		return verifyErr
 	}
 
 	streamed, err := sendProtocolMatrixRequest(ctx, session, "/v1/chat/completions", dynamoNVExtRequest(true), true)
@@ -94,7 +95,7 @@ func verifyStreamedDynamoNVExt(body []byte) error {
 		}
 	}
 	if found != 1 {
-		return fmt.Errorf("Dynamo Chat stream contained %d nvext chunks, want 1: %s", found, truncateString(string(body), 1200))
+		return fmt.Errorf("dynamo Chat stream contained %d nvext chunks, want 1: %s", found, truncateString(string(body), 1200))
 	}
 	return nil
 }
