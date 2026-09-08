@@ -3,6 +3,8 @@ package testcases_test
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
@@ -76,4 +78,66 @@ func loadSelectorCoverage(t *testing.T) []selectorCoverageEntry {
 		t.Fatal("selector coverage manifest is empty")
 	}
 	return entries
+}
+
+func TestSelectorAlgorithmCoverageTracksRuntimeCatalog(t *testing.T) {
+	coverage := loadSelectorCoverage(t)
+	byAlgorithm := make(map[string]selectorCoverageEntry, len(coverage))
+	for _, entry := range coverage {
+		if entry.Algorithm == "" {
+			t.Fatal("selector coverage entry has empty algorithm")
+		}
+		if _, exists := byAlgorithm[entry.Algorithm]; exists {
+			t.Errorf("selector coverage has duplicate entry for %q", entry.Algorithm)
+		}
+		byAlgorithm[entry.Algorithm] = entry
+	}
+
+	selectorCount := 0
+	for _, algorithm := range loadRuntimeAlgorithmCatalog(t) {
+		if algorithm.Execution != "selector" {
+			continue
+		}
+		selectorCount++
+		entry, ok := byAlgorithm[algorithm.Type]
+		if !ok {
+			t.Errorf("selector algorithm %q has no E2E coverage entry", algorithm.Type)
+			continue
+		}
+		if entry.Tier != algorithm.Tier {
+			t.Errorf("selector algorithm %q coverage tier = %q, runtime tier = %q", algorithm.Type, entry.Tier, algorithm.Tier)
+		}
+		delete(byAlgorithm, algorithm.Type)
+	}
+
+	if len(coverage) != selectorCount {
+		t.Errorf("selector coverage has %d entries, runtime catalog has %d selectors", len(coverage), selectorCount)
+	}
+	for algorithm := range byAlgorithm {
+		t.Errorf("selector coverage entry %q is absent from the runtime selector catalog", algorithm)
+	}
+}
+
+// Run inside the router module so E2E can inspect the public catalog without
+// adding the router's dependency graph to the E2E module.
+func loadRuntimeAlgorithmCatalog(t *testing.T) []struct{ Type, Tier, Execution string } {
+	t.Helper()
+	helper, err := filepath.Abs("testdata/algorithm_catalog.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", helper)
+	cmd.Dir = "../../../src/semantic-router"
+	raw, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			t.Fatalf("read runtime algorithm catalog: %v\n%s", err, exitErr.Stderr)
+		}
+		t.Fatal(err)
+	}
+	var catalog []struct{ Type, Tier, Execution string }
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	return catalog
 }

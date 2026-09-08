@@ -14,9 +14,11 @@ Coverage states have these meanings:
 - `covered`: the named testcase and profile provide the complete deterministic
   contract required by issue #3179.
 
-The config package test derives the selector set and tiers from the runtime
+The E2E package test derives the selector set and tiers from the runtime
 catalog and rejects missing, extra, duplicate, or tier-mismatched manifest
-entries. The E2E package test rejects unknown states and ensures every
+entries. It runs `algorithm_catalog.go` from the router module to query the
+public catalog without adding router dependencies to the E2E module. It also
+rejects unknown states and ensures every
 `partial` or `covered` testcase is registered and reachable from its profile.
 
 An algorithm-specific PR should update one existing entry rather than add a
