@@ -2,10 +2,16 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// errNothingScored marks a scan that produced neither a result nor a failure,
+// which is what an empty text does: there was nothing to score, and that is not
+// a detection and not a failure.
+var errNothingScored = errors.New("no text was scored")
 
 // jailbreakPositiveLabel is the default mapping label that denotes an actual
 // jailbreak attempt (as opposed to benign / other classes), used when
@@ -100,9 +106,10 @@ func jailbreakRiskScore(mapping *JailbreakMapping, positiveLabels []string, resu
 
 // isJailbreakRiskAboveThreshold reports whether result's summed positive-label
 // risk score meets or exceeds threshold, returning that score alongside the
-// decision. Shared by CheckForJailbreakWithRisk and the signal-evaluation
-// path (findBestJailbreakMatch) so both always threshold the exact same
-// value - see jailbreakRiskScore's doc comment for why this must stay
+// decision. The signal-evaluation path (findBestJailbreakMatch) thresholds
+// through here and ScanJailbreakRisk's callers threshold the same
+// jailbreakRiskScore value, so no surface ends up thresholding a different
+// quantity - see jailbreakRiskScore's doc comment for why this must stay
 // independent of which class wins argmax.
 func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []string, result SequenceClassificationResult, threshold float32) (bool, float32) {
 	riskScore := jailbreakRiskScore(mapping, positiveLabels, result)
@@ -114,11 +121,12 @@ func isJailbreakRiskAboveThreshold(mapping *JailbreakMapping, positiveLabels []s
 // single call only ever sees the start of a long text; every jailbreak surface
 // scans through here so none of them can silently answer on a prefix.
 //
-// A chunk that fails is skipped rather than failing the whole scan, the way the
-// routing path records it as unresolved and keeps going: a genuine match in a
-// later chunk still has to survive a transient failure in an earlier one, or
-// the surfaces disagree again. scanned is false when no chunk produced a
-// result, in which case lastErr carries the final failure if there was one.
+// A chunk that fails is skipped so a match in another chunk still counts, the
+// way the routing path keeps scanning past an unresolved chunk. lastErr keeps
+// the failure whether or not other chunks were scored: a clean verdict needs
+// every chunk, so the callers turn a partial scan without a match into an
+// error rather than a clean result. scanned is false when no chunk produced a
+// result.
 func (c *Classifier) scanJailbreakChunks(ctx context.Context, text string) (result SequenceClassificationResult, scanned bool, lastErr error) {
 	bestRisk := float32(-1)
 	for _, chunk := range jailbreakSignalChunks(text) {
@@ -148,48 +156,87 @@ func (c *Classifier) CheckForJailbreakWithRisk(ctx context.Context, text string)
 	return c.CheckForJailbreakRiskWithThreshold(ctx, text, c.Config.PromptGuard.Threshold)
 }
 
+// JailbreakScan is what one scan of a text saw, before any threshold is drawn
+// across it: the riskiest chunk's predicted type and confidence, its
+// positive-label risk score, and, when some chunk could not be scored while
+// another was, the failure that leaves the text only partly inspected.
+//
+// PartialErr sits next to the score rather than being folded into an error
+// because whether a skipped chunk matters depends on where the line is drawn. A
+// score at or above a threshold is a match whatever the skipped chunk held,
+// while a score below it is clean only if every chunk was scored. A caller with
+// one threshold resolves that once (CheckForJailbreakRiskWithThreshold); a
+// caller that thresholds the same score once per rule has to resolve it per
+// rule, or a rule whose threshold the score misses is published as clean on a
+// text that was never fully read.
+type JailbreakScan struct {
+	Type       string
+	Confidence float32
+	RiskScore  float32
+	PartialErr error
+}
+
+// ScanJailbreakRisk scans text in chunks and reports what it saw, without
+// applying a threshold.
+//
+// The model truncates at its own sequence limit, so a single call only ever
+// sees the start of a long text. The routing path already scans the whole text
+// in chunks and keeps the riskiest one; every jailbreak surface goes through
+// here so they all answer the same question. A chunk that fails does not stop
+// the scan, because a genuine match in a later chunk still has to survive a
+// transient failure in an earlier one; it is reported as PartialErr instead.
+// An error is returned only when no chunk was scored at all.
+func (c *Classifier) ScanJailbreakRisk(ctx context.Context, text string) (JailbreakScan, error) {
+	if !c.IsJailbreakEnabled() {
+		return JailbreakScan{}, fmt.Errorf("jailbreak detection is not enabled or properly configured")
+	}
+
+	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
+	if !scanned {
+		if lastErr != nil {
+			return JailbreakScan{}, fmt.Errorf("jailbreak classification failed: %w", lastErr)
+		}
+		return JailbreakScan{}, errNothingScored
+	}
+
+	class, confidence := deriveArgmax(result.Probabilities)
+	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
+	if !ok {
+		return JailbreakScan{}, fmt.Errorf("unknown jailbreak class index: %d", class)
+	}
+
+	return JailbreakScan{
+		Type:       jailbreakType,
+		Confidence: confidence,
+		RiskScore:  jailbreakRiskScore(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result),
+		PartialErr: lastErr,
+	}, nil
+}
+
 // CheckForJailbreakRiskWithThreshold is CheckForJailbreakWithRisk against a
 // caller-supplied threshold, for surfaces that carry their own (the
 // response_jailbreak plugin thresholds per decision). Both share one scan so a
 // caller cannot end up thresholding a different quantity than the routing
 // signal does.
 func (c *Classifier) CheckForJailbreakRiskWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, float32, error) {
-	if !c.IsJailbreakEnabled() {
-		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
-	}
-
-	if text == "" {
+	scan, err := c.ScanJailbreakRisk(ctx, text)
+	if errors.Is(err, errNothingScored) {
 		return false, "", 0.0, 0.0, nil
 	}
-
-	// The model truncates at its own sequence limit, so a single call only ever
-	// sees the start of a long prompt. The routing path already scans the whole
-	// text in chunks and keeps the riskiest one; do the same here so both
-	// surfaces answer the same question.
-	// A chunk that fails is left out rather than failing the whole call, the
-	// way the routing path records it as unresolved and keeps scanning. A
-	// genuine match in a later chunk still has to survive a transient failure
-	// in an earlier one, or the two paths disagree again.
-	result, scanned, lastErr := c.scanJailbreakChunks(ctx, text)
-	if !scanned {
-		if lastErr != nil {
-			return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed: %w", lastErr)
-		}
-		return false, "", 0.0, 0.0, nil
+	if err != nil {
+		return false, "", 0.0, 0.0, err
 	}
 
-	class, confidence := deriveArgmax(result.Probabilities)
-	jailbreakType, ok := c.JailbreakMapping.GetJailbreakTypeFromIndex(class)
-	if !ok {
-		return false, "", 0.0, 0.0, fmt.Errorf("unknown jailbreak class index: %d", class)
+	isJailbreak := scan.RiskScore >= threshold
+	if !isJailbreak && scan.PartialErr != nil {
+		// Text that was only partly scored has not been found clean.
+		return false, "", 0.0, 0.0, fmt.Errorf("jailbreak classification failed on part of the text: %w", scan.PartialErr)
 	}
-
-	isJailbreak, riskScore := isJailbreakRiskAboveThreshold(c.JailbreakMapping, c.Config.PromptGuard.PositiveLabels, result, threshold)
 
 	if isJailbreak {
 		logging.Warnf("JAILBREAK DETECTED: '%s' (confidence: %.3f, risk: %.3f, threshold: %.3f)",
-			jailbreakType, confidence, riskScore, threshold)
+			scan.Type, scan.Confidence, scan.RiskScore, threshold)
 	}
 
-	return isJailbreak, jailbreakType, confidence, riskScore, nil
+	return isJailbreak, scan.Type, scan.Confidence, scan.RiskScore, nil
 }

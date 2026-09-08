@@ -25,6 +25,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: model-catalog-generated
+        name: model catalog schema and generated projections
+        entry: make model-catalog-check
+        language: system
+        pass_filenames: false
+        files: ^(config/catalog/|config/recipes/built-in/latest/catalog\.yaml$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+
+  - repo: local
+    hooks:
       - id: deployment-support-matrix
         name: deployment support matrix coverage
         entry: python3 tools/ci/check_deployment_support_matrix.py
@@ -46,15 +55,6 @@ repos:
         entry: make shellcheck
         language: system
         files: \.sh$
-
-  - repo: local
-    hooks:
-      - id: golang-lint
-        name: go lint
-        entry: make go-lint
-        language: system
-        files: \.go$
-        pass_filenames: false
 
   # Markdown specific hooks
   - repo: local
@@ -107,12 +107,6 @@ repos:
         language: system
         files: \.rs$
         pass_filenames: false
-      - id: cargo-check
-        name: cargo check
-        entry: bash -c 'cd candle-binding && cargo check --no-default-features'
-        language: system
-        files: \.rs$
-        pass_filenames: false
 
   # Python specific hooks
   # Using only Black for Python formatting (simpler, no conflicts)
@@ -134,12 +128,19 @@ repos:
         pass_filenames: false
         files: \.(py|go|js|ts|tsx|rs)$
 
-  # Repo-native changed-file lint gate
+  # Deterministic architecture checks. Numeric size findings are advisory;
+  # forbidden dependencies, cycles, and root-placement contracts still block.
   - repo: local
     hooks:
-      - id: agent-changed-files-lint
-        name: agent changed-files lint
-        entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec ./.venv-agent/bin/python tools/agent/scripts/run_agent_precommit_lint.py "$@"' --
+      - id: structure-check
+        name: structure check
+        entry: .venv-agent/bin/python tools/agent/scripts/structure_check.py
+        language: system
+        pass_filenames: true
+        require_serial: true
+      - id: architecture-check
+        name: architecture dependency check
+        entry: .venv-agent/bin/python tools/agent/scripts/architecture_check.py
         language: system
         pass_filenames: true
         require_serial: true

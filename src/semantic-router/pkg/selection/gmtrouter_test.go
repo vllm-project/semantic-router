@@ -50,16 +50,14 @@ func TestGMTRouterSelector_InitializeFromConfig(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4": {
-			Pricing:      config.ModelPricing{PromptPer1M: 30.0},
-			QualityScore: 0.95,
-			Description:  "Advanced reasoning model",
-		},
-		"gpt-3.5-turbo": {
-			Pricing:      config.ModelPricing{PromptPer1M: 1.0},
-			QualityScore: 0.85,
-			Description:  "Fast general-purpose model",
-		},
+		"gpt-4": addTestQuality(config.ModelParams{
+			Pricing:     config.ModelPricing{PromptPer1M: 30.0},
+			Description: "Advanced reasoning model",
+		}, 0.95),
+		"gpt-3.5-turbo": addTestQuality(config.ModelParams{
+			Pricing:     config.ModelPricing{PromptPer1M: 1.0},
+			Description: "Fast general-purpose model",
+		}, 0.85),
 	}
 
 	selector.InitializeFromConfig(modelConfig)
@@ -74,8 +72,8 @@ func TestGMTRouterSelector_ColdStartSelection(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -108,8 +106,8 @@ func TestGMTRouterSelector_UpdateFeedback(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -141,8 +139,8 @@ func TestGMTRouterSelector_PersonalizedSelection(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -183,7 +181,7 @@ func TestGMTRouterSelector_GraphNodeCreation(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-1": {QualityScore: 0.9},
+		"model-1": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -246,7 +244,7 @@ func TestGMTRouterSelector_Persistence(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-1": {QualityScore: 0.9},
+		"model-1": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -340,7 +338,7 @@ func TestGMTRouterSelector_AnonymousUser(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4": {QualityScore: 0.95},
+		"gpt-4": modelParamsWithTestQuality(0.95),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -383,8 +381,8 @@ func TestGMTRouterSelector_MultipleUsers(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-a": {QualityScore: 0.9},
-		"model-b": {QualityScore: 0.8},
+		"model-a": modelParamsWithTestQuality(0.9),
+		"model-b": modelParamsWithTestQuality(0.8),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
