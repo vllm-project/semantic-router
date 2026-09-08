@@ -305,14 +305,11 @@ type ConfigSpec struct {
 	// +optional
 	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
-	// Reasoning families
+	// ReasoningEffort is the default reasoning effort for model bindings that do
+	// not select a different effort. The selected model family validates the
+	// value because built-in and custom families may expose different ladders.
 	// +optional
-	ReasoningFamilies map[string]ReasoningFamily `json:"reasoning_families,omitempty"`
-
-	// Default reasoning effort
-	// +kubebuilder:validation:Enum=low;medium;high
-	// +optional
-	DefaultReasoningEffort string `json:"default_reasoning_effort,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
 	// API configuration
 	// +optional
@@ -1227,7 +1224,13 @@ type ModelRefConfig struct {
 	// +optional
 	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
 
-	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// ReasoningMode selects the model's reasoning activation mode when the
+	// family supports more than a boolean switch.
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	ReasoningMode string `json:"reasoning_mode,omitempty" yaml:"reasoning_mode,omitempty"`
+
+	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
@@ -1337,14 +1340,6 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
-}
-
-// ReasoningFamily defines reasoning family configuration
-type ReasoningFamily struct {
-	// +optional
-	Type string `json:"type,omitempty"`
-	// +optional
-	Parameter string `json:"parameter,omitempty"`
 }
 
 // APIConfig defines API configuration
@@ -1606,9 +1601,15 @@ type VLLMEndpointSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model"`
 
-	// Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt")
+	// Catalog optionally selects a repository built-in Model Card. Model remains
+	// the request-facing alias.
 	// +optional
-	ReasoningFamily string `json:"reasoningFamily,omitempty"`
+	Catalog string `json:"catalog,omitempty"`
+
+	// Reasoning optionally selects a built-in family or defines inline wire
+	// behavior for this self-hosted model. Catalog-backed models normally omit it.
+	// +optional
+	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
 	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
 	// +optional
@@ -1622,6 +1623,45 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// ModelReasoningSpec selects a catalog reasoning family or defines the request
+// projection for a custom self-hosted model. Family and inline fields are
+// mutually exclusive and are validated by the Router's canonical compiler.
+type ModelReasoningSpec struct {
+	// +optional
+	Family string `json:"family,omitempty"`
+
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;reasoning_mode;top_level_reasoning_effort
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// +optional
+	Parameter string `json:"parameter,omitempty"`
+
+	// +optional
+	ActivationParameter string `json:"activationParameter,omitempty"`
+
+	// EffortFlags maps a logical effort to a boolean chat-template parameter.
+	// +optional
+	EffortFlags map[string]string `json:"effortFlags,omitempty"`
+
+	// +optional
+	Levels []string `json:"levels,omitempty"`
+
+	// +optional
+	Default string `json:"default,omitempty"`
+
+	// +kubebuilder:validation:items:Enum=enabled;disabled;adaptive
+	// +optional
+	Modes []string `json:"modes,omitempty"`
+
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	DefaultMode string `json:"defaultMode,omitempty"`
+
+	// +optional
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.

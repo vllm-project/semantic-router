@@ -42,10 +42,8 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
             "src/vllm-sr/cli/model_catalog_types.py",
             "src/vllm-sr/cli/model_catalog_validation.py",
             "src/vllm-sr/pyproject.toml",
-            "tools/agent/schemas/recipe-probes-v1.schema.json",
-            "tools/agent/scripts/recipe_conformance*.py",
-            "tools/agent/scripts/recipe_metadata_schema.py",
-            "tools/agent/scripts/router_calibration_*.py",
+            "config/schemas/recipe-probes-v1.schema.json",
+            "tools/dev/router-calibration/**",
             "tools/make/recipe-conformance.mk",
             "tools/release/sync_model_catalog.py",
             "tools/release/snapshot_model_catalog.py",
@@ -75,6 +73,29 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("make recipe-conformance-static", self.text)
         self.assertIn("python -m cli.model_catalog_export", self.text)
         self.assertNotIn("vllm-sr model ", self.text)
+
+    def test_catalog_make_targets_work_without_an_agent_virtualenv(self) -> None:
+        make_text = (REPO_ROOT / "tools" / "make" / "model-catalog.mk").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("MODEL_CATALOG_PYTHON ?=", make_text)
+        self.assertIn(",python3)", make_text)
+        self.assertNotIn("@.venv-agent/bin/python", make_text)
+
+    def test_live_conformance_runs_the_image_built_for_the_source_tree(self) -> None:
+        make_text = (REPO_ROOT / "tools" / "make" / "recipe-conformance.mk").read_text(
+            encoding="utf-8"
+        )
+        runner_text = (
+            REPO_ROOT / "e2e" / "testing" / "run_recipe_conformance.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)"', make_text)
+        self.assertIn('ROUTER_IMAGE="${ROUTER_IMAGE:-}"', runner_text)
+        self.assertIn('--router-image "${ROUTER_IMAGE}"', runner_text)
+        self.assertIn("8080 + $(VLLM_SR_PORT_OFFSET)", make_text)
+        self.assertIn("8080 + VLLM_SR_PORT_OFFSET", runner_text)
 
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
         self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)
