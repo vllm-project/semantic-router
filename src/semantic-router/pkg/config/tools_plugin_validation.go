@@ -18,7 +18,11 @@ func (c *ToolsPluginConfig) Validate() error {
 		return fmt.Errorf("tools plugin: strip_tool_history requires mode=%q", ToolsPluginModeNone)
 	}
 
-	return c.DynamicRetrieval.Validate()
+	if err := c.DynamicRetrieval.Validate(); err != nil {
+		return err
+	}
+
+	return c.TrustedFacts.Validate()
 }
 
 func validateToolsPluginMode(mode string) error {
@@ -95,5 +99,63 @@ func (w *DynamicRetrievalWeights) Validate() error {
 			return fmt.Errorf("tools plugin: dynamic_retrieval.weights.%s must be non-negative", name)
 		}
 	}
+	return nil
+}
+
+// Validate checks the trusted_facts block for legal enforcement modes,
+// trust sources, freshness bounds, and stage roles (issue #3476). When the
+// receiver is nil or Enabled is false, validation is a no-op so that adding
+// the block never breaks existing deployments. Only operator-owned recipe
+// policy, gateway-attested authorization, and bounded fresh runtime
+// availability are authoritative; client metadata, prompt text, and model
+// output are never allowed as trust sources. The check can only narrow
+// availability, never widen privileges.
+func (t *TrustedFactsConfig) Validate() error {
+	if t == nil || !t.Enabled {
+		return nil
+	}
+
+	switch t.EffectiveEnforcement() {
+	case TrustedEnforcementDisabled, TrustedEnforcementAdvisory, TrustedEnforcementAuthoritative:
+	default:
+		return fmt.Errorf("tools plugin: trusted_facts.enforcement must be one of %q, %q, or %q",
+			TrustedEnforcementDisabled, TrustedEnforcementAdvisory, TrustedEnforcementAuthoritative)
+	}
+
+	if len(t.TrustSources) == 0 {
+		return fmt.Errorf("tools plugin: trusted_facts.trust_sources must declare at least one authoritative source")
+	}
+	allowedSources := map[string]bool{
+		TrustedSourceOperatorPolicy:  true,
+		TrustedSourceGatewayAttested: true,
+		TrustedSourceRuntimeFresh:    true,
+	}
+	for _, s := range t.TrustSources {
+		if !allowedSources[s] {
+			return fmt.Errorf("tools plugin: trusted_facts.trust_sources %q is not authoritative (must be one of %q, %q, %q)",
+				s, TrustedSourceOperatorPolicy, TrustedSourceGatewayAttested, TrustedSourceRuntimeFresh)
+		}
+	}
+
+	if t.FreshnessSeconds < 0 || t.FreshnessSeconds > 86400 {
+		return fmt.Errorf("tools plugin: trusted_facts.freshness_seconds must be in [0, 86400]")
+	}
+
+	if len(t.StageRoles) == 0 {
+		return fmt.Errorf("tools plugin: trusted_facts.stage_roles must declare at least one Looper stage role")
+	}
+	allowedRoles := map[string]bool{
+		TrustedStageCandidate: true,
+		TrustedStageVerifier:  true,
+		TrustedStageAdvisor:   true,
+		TrustedStageFinal:     true,
+	}
+	for _, r := range t.StageRoles {
+		if !allowedRoles[r] {
+			return fmt.Errorf("tools plugin: trusted_facts.stage_roles %q must be one of %q, %q, %q, %q",
+				r, TrustedStageCandidate, TrustedStageVerifier, TrustedStageAdvisor, TrustedStageFinal)
+		}
+	}
+
 	return nil
 }
