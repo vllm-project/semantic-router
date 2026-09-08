@@ -75,13 +75,15 @@ type CatalogModelBinding struct {
 	Protocols          []string                 `json:"protocols"`
 	ReasoningTransport ReasoningTransport       `json:"reasoning_transport,omitempty"`
 	// ReasoningModes and ReasoningEfforts narrow the model-level capability to
-	// values accepted by this provider's API. They never expand the family.
-	ReasoningModes   []string                   `json:"reasoning_modes,omitempty"`
-	ReasoningEfforts []string                   `json:"reasoning_efforts,omitempty"`
-	Pricing          Pricing                    `json:"pricing,omitempty"`
-	Restrictions     map[string]any             `json:"restrictions,omitempty"`
-	Lifecycle        string                     `json:"lifecycle,omitempty"`
-	Verification     CatalogBindingVerification `json:"verification"`
+	// values accepted by this provider's API. A protocol override can narrow the
+	// common effort set further; neither form may expand the model family.
+	ReasoningModes             []string                   `json:"reasoning_modes,omitempty"`
+	ReasoningEfforts           []string                   `json:"reasoning_efforts,omitempty"`
+	ReasoningEffortsByProtocol map[string][]string        `json:"reasoning_efforts_by_protocol,omitempty"`
+	Pricing                    Pricing                    `json:"pricing,omitempty"`
+	Restrictions               map[string]any             `json:"restrictions,omitempty"`
+	Lifecycle                  string                     `json:"lifecycle,omitempty"`
+	Verification               CatalogBindingVerification `json:"verification"`
 }
 
 type ReasoningTransport string
@@ -452,17 +454,6 @@ type EvaluationRecord struct {
 	Evidence         EvaluationEvidence `json:"evidence" yaml:"evidence"`
 }
 
-type EvaluationCoverage struct {
-	Model            string   `json:"model"`
-	ReasoningEffort  string   `json:"reasoning_effort"`
-	Benchmark        string   `json:"benchmark"`
-	BenchmarkProfile string   `json:"benchmark_profile"`
-	Metric           string   `json:"metric"`
-	Status           string   `json:"status"`
-	Value            *float64 `json:"value,omitempty"`
-	Evaluation       string   `json:"evaluation,omitempty"`
-}
-
 type NormalizationPoint struct {
 	Input  float64 `json:"input" yaml:"input"`
 	Output float64 `json:"output" yaml:"output"`
@@ -573,15 +564,14 @@ type CompileInput struct {
 }
 
 type snapshot struct {
-	SchemaVersion      string                      `json:"schema_version"`
-	Catalogs           []CatalogHeader             `json:"catalogs"`
-	Protocols          []ProtocolDefinition        `json:"protocols"`
-	Providers          []ProviderDefinition        `json:"providers"`
-	ReasoningFamilies  []ReasoningFamilyDefinition `json:"reasoning_families"`
-	Models             []ModelCard                 `json:"models"`
-	Benchmarks         []BenchmarkDefinition       `json:"benchmarks"`
-	Evaluations        []EvaluationRecord          `json:"evaluations"`
-	EvaluationCoverage []EvaluationCoverage        `json:"evaluation_coverage"`
-	Indices            []IndexDefinition           `json:"indices"`
-	IndexResults       []IndexResult               `json:"index_results"`
+	SchemaVersion     string                      `json:"schema_version"`
+	Catalogs          []CatalogHeader             `json:"catalogs"`
+	Protocols         []ProtocolDefinition        `json:"protocols"`
+	Providers         []ProviderDefinition        `json:"providers"`
+	ReasoningFamilies []ReasoningFamilyDefinition `json:"reasoning_families"`
+	Models            []ModelCard                 `json:"models"`
+	Benchmarks        []BenchmarkDefinition       `json:"benchmarks"`
+	Evaluations       []EvaluationRecord          `json:"evaluations"`
+	Indices           []IndexDefinition           `json:"indices"`
+	IndexResults      []IndexResult               `json:"index_results"`
 }

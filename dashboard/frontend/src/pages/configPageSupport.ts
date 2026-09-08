@@ -1,5 +1,5 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 

@@ -259,6 +259,31 @@ function isValidReasoningEffortFlags(value: Record<string, unknown>): boolean {
   )
 }
 
+function isReasoningEffortsByProtocol(
+  value: unknown,
+  protocols: unknown,
+  reasoningEfforts: unknown,
+): value is Record<string, string[]> | undefined {
+  if (value === undefined) return true
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length === 0 ||
+    !isStringArray(protocols) ||
+    !isStringArray(reasoningEfforts)
+  ) {
+    return false
+  }
+  const boundProtocols = new Set(protocols)
+  const providerEfforts = new Set(reasoningEfforts)
+  return Object.entries(value).every(
+    ([protocol, efforts]) =>
+      boundProtocols.has(protocol) &&
+      isStringArray(efforts) &&
+      new Set(efforts).size === efforts.length &&
+      efforts.every((effort) => providerEfforts.has(effort)),
+  )
+}
+
 function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
   return (
     isRecord(value) &&
@@ -287,6 +312,11 @@ function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
           ['enabled', 'disabled', 'adaptive'].includes(mode),
         ))) &&
     (value.reasoning_efforts === undefined || isStringArray(value.reasoning_efforts)) &&
+    isReasoningEffortsByProtocol(
+      value.reasoning_efforts_by_protocol,
+      value.protocols,
+      value.reasoning_efforts,
+    ) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isRecord(value.verification) &&
     ['claimed', 'imported', 'reproduced'].includes(String(value.verification.status))
@@ -401,22 +431,6 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
   )
 }
 
-function isEvaluationCoverage(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    isNonEmptyString(value.model) &&
-    isNonEmptyString(value.reasoning_effort) &&
-    isNonEmptyString(value.benchmark) &&
-    isNonEmptyString(value.benchmark_profile) &&
-    isNonEmptyString(value.metric) &&
-    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-      String(value.status),
-    ) &&
-    (value.value === undefined || typeof value.value === 'number') &&
-    (value.evaluation === undefined || isNonEmptyString(value.evaluation))
-  )
-}
-
 function isNormalization(value: unknown): boolean {
   if (!isRecord(value)) return false
   const type = String(value.type)
@@ -482,10 +496,8 @@ function isIndexResult(value: unknown): value is CatalogIndexResult {
     isNonEmptyString(value.model) &&
     isNonEmptyString(value.reasoning_effort) &&
     isNonEmptyString(value.index) &&
-    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-      String(value.status),
-    ) &&
-    (value.score === null || typeof value.score === 'number') &&
+    value.status === 'available' &&
+    typeof value.score === 'number' &&
     typeof value.coverage === 'number' &&
     value.coverage >= 0 &&
     value.coverage <= 1 &&
@@ -543,8 +555,6 @@ function isBuiltInModelCatalog(value: unknown): value is BuiltInModelCatalog {
     value.benchmarks.every(isBenchmark) &&
     Array.isArray(value.evaluations) &&
     value.evaluations.every(isEvaluation) &&
-    Array.isArray(value.evaluation_coverage) &&
-    value.evaluation_coverage.every(isEvaluationCoverage) &&
     Array.isArray(value.indices) &&
     value.indices.length > 0 &&
     value.indices.every(isIndex) &&

@@ -1,5 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
+import { useLocation } from '@docusaurus/router'
+import Translate from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
+import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
 import { ModelHubBenchmark } from '../components/model-hub/ModelHubBenchmark'
@@ -28,6 +31,16 @@ import styles from './models.module.css'
 
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
+const MODEL_HUB_SECTIONS = [
+  { key: 'models', label: 'Models', to: '/models#models' },
+  { key: 'benchmarks', label: 'Benchmarks', to: '/models#benchmarks' },
+  { key: 'providers', label: 'Providers', to: '/models#providers' },
+] as const
+
+function modelHubActiveSection(hash: string): string {
+  const id = hash.replace('#', '')
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
+}
 
 const supportedLifecycle = (
   model: CatalogModel,
@@ -255,6 +268,7 @@ function useBenchmarkExplorer() {
 }
 
 export default function ModelsPage() {
+  const { hash } = useLocation()
   const directory = useCatalogDirectory()
   const [selectedModelID, setSelectedModelID] = useState<string | null>(null)
   const modelByID = useMemo(() => new Map(catalog.models.map(model => [model.id, model])), [])
@@ -281,7 +295,6 @@ export default function ModelsPage() {
   const creators = new Set(
     catalog.models.filter(model => model.kind === 'physical').map(model => model.publisher),
   ).size
-  const mappedProviders = catalog.providers.filter(provider => provider.models?.length).length
   const evaluations = modelHubPublicEvaluations(catalog.evaluations).length
 
   return (
@@ -289,73 +302,81 @@ export default function ModelsPage() {
       title="Model Hub"
       description="Built-in models and exact benchmark evidence for vLLM Semantic Router."
     >
-      <main className={styles.page}>
-        <header className={styles.pageHeader}>
-          <div>
-            <h1>Model Hub</h1>
-            <p>Models, ready to route.</p>
-          </div>
-          <dl>
-            <div>
-              <dd>{catalog.models.length}</dd>
-              <dt>models</dt>
-            </div>
-            <div>
-              <dd>{creators}</dd>
-              <dt>creators</dt>
-            </div>
-            <div>
-              <dd>{mappedProviders}</dd>
-              <dt>mapped providers</dt>
-            </div>
-            <div>
-              <dd>{evaluations}</dd>
-              <dt>evaluations</dt>
-            </div>
-          </dl>
-        </header>
+      <div className={styles.page}>
+        <BrowseLayout
+          activeKey={modelHubActiveSection(hash)}
+          description="Models, ready to route."
+          eyebrow={<Translate id="models.layout.eyebrow">Catalog</Translate>}
+          groups={[
+            {
+              key: 'explore',
+              label: 'Explore',
+              items: [...MODEL_HUB_SECTIONS],
+            },
+          ]}
+          sidebarLabel="Model Hub sections"
+          title="Model Hub"
+          actions={(
+            <dl className={styles.stats}>
+              <div>
+                <dd>{catalog.models.length}</dd>
+                <dt>models</dt>
+              </div>
+              <div>
+                <dd>{creators}</dd>
+                <dt>creators</dt>
+              </div>
+              <div>
+                <dd>{catalog.providers.length}</dd>
+                <dt>providers</dt>
+              </div>
+              <div>
+                <dd>{evaluations}</dd>
+                <dt>evaluations</dt>
+              </div>
+            </dl>
+          )}
+        >
+          <section id="models" className={styles.section} aria-labelledby="models-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="models-heading">Models</h2>
+              <span>
+                {physicalModels}
+                {' '}
+                single ·
+                {' '}
+                {virtualModels}
+                {' '}
+                virtual
+              </span>
+            </header>
+            <ModelHubDirectory
+              {...directory}
+              pageSize={MODEL_PAGE_SIZE}
+              selectModel={setSelectedModelID}
+            />
+          </section>
 
-        <section id="models" className={styles.section} aria-labelledby="models-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="models-heading">Models</h2>
-            <span>
-              {physicalModels}
-              {' '}
-              single ·
-              {virtualModels}
-              {' '}
-              virtual
-            </span>
-          </header>
-          <ModelHubDirectory
-            {...directory}
-            pageSize={MODEL_PAGE_SIZE}
-            selectModel={setSelectedModelID}
-          />
-        </section>
+          <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="benchmarks-heading">Benchmarks</h2>
+              <span>Exact published results</span>
+            </header>
+            <ModelHubBenchmark {...benchmark} selectModel={setSelectedModelID} />
+          </section>
 
-        <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="benchmarks-heading">Benchmarks</h2>
-            <span>Exact published results</span>
-          </header>
-          <ModelHubBenchmark {...benchmark} selectModel={setSelectedModelID} />
-        </section>
-
-        <section id="providers" className={styles.section} aria-labelledby="providers-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="providers-heading">Providers</h2>
-            <span>
-              {mappedProviders}
-              {' '}
-              mapped ·
-              {catalog.providers.length}
-              {' '}
-              runtime contracts
-            </span>
-          </header>
-          <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />
-        </section>
+          <section id="providers" className={styles.section} aria-labelledby="providers-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="providers-heading">Providers</h2>
+              <span>
+                {catalog.providers.length}
+                {' '}
+                available providers
+              </span>
+            </header>
+            <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />
+          </section>
+        </BrowseLayout>
 
         {selectedModel
           ? (
@@ -370,7 +391,7 @@ export default function ModelsPage() {
               />
             )
           : null}
-      </main>
+      </div>
     </Layout>
   )
 }

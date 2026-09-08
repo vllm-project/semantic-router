@@ -87,6 +87,12 @@
   disabled: none
   modes: [enabled, disabled]
   default_mode: enabled
+- id: gpt-6-astra
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh, max]
+  modes: [enabled]
+  default_mode: enabled
 - id: gpt-5.6
   type: reasoning_effort
   parameter: reasoning_effort

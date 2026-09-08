@@ -53,6 +53,8 @@ var BaselineRouterContract = []string{
 	"session-pricing-response-api",
 	// Event signal rule matching and routing (issue #3178)
 	"event-routing",
+	// Language signal rule matching and routing (issue #3178)
+	"language-routing",
 	// Reliability timeouts runtime contract (issue #3210)
 	"reliability-timeouts",
 }
