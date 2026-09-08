@@ -294,6 +294,10 @@ const config: Config = {
           position: 'right',
           items: [
             {
+              label: 'Model Hub',
+              to: '/models',
+            },
+            {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },

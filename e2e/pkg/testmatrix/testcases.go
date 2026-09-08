@@ -26,6 +26,8 @@ var BaselineRouterContract = []string{
 	"pii-entity-offsets",
 	// PII past the classifier's sequence limit is still detected (issue #3364)
 	"pii-long-text",
+	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
+	"security-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
@@ -43,6 +45,8 @@ var BaselineRouterContract = []string{
 	"entrypoint-recipe-routing",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
+	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
+	"plugin-short-circuit-no-dispatch",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

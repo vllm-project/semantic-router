@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 import type { Diagnostic } from "@/types/dsl";
 
@@ -14,6 +14,82 @@ interface BuilderValidationPanelProps {
   onApplyFix: (diag: Diagnostic, newText: string) => void;
 }
 
+interface ValidationHeaderProps {
+  validationOpen: boolean;
+  errorDiags: Diagnostic[];
+  warnDiags: Diagnostic[];
+  constraintDiags: Diagnostic[];
+  bodyId: string;
+  onToggle: () => void;
+}
+
+/** Toggle for the validation panel. Extracted so the panel body keeps its own seam. */
+const ValidationHeader: React.FC<ValidationHeaderProps> = ({
+  validationOpen,
+  errorDiags,
+  warnDiags,
+  constraintDiags,
+  bodyId,
+  onToggle,
+}) => (
+  <button
+    type="button"
+    className={styles.validationHeader}
+    onClick={onToggle}
+    aria-expanded={validationOpen}
+    aria-controls={bodyId}
+  >
+    <span className={styles.validationTitle}>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
+        <path
+          d="M3 8.5l3 3 7-7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Validation
+    </span>
+    <span className={styles.validationCounts}>
+      {errorDiags.length > 0 && (
+        <span className={styles.valCountError}>
+          {errorDiags.length} error{errorDiags.length !== 1 ? "s" : ""}
+        </span>
+      )}
+      {warnDiags.length > 0 && (
+        <span className={styles.valCountWarn}>
+          {warnDiags.length} warning{warnDiags.length !== 1 ? "s" : ""}
+        </span>
+      )}
+      {constraintDiags.length > 0 && (
+        <span className={styles.valCountConstraint}>
+          {constraintDiags.length} constraint
+          {constraintDiags.length !== 1 ? "s" : ""}
+        </span>
+      )}
+    </span>
+    <svg
+      className={`${styles.validationChevron} ${validationOpen ? styles.validationChevronOpen : ""}`}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        d="M4 6l4 4 4-4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </button>
+);
+
 const BuilderValidationPanel: React.FC<BuilderValidationPanelProps> = ({
   diagnostics,
   validationOpen,
@@ -23,64 +99,24 @@ const BuilderValidationPanel: React.FC<BuilderValidationPanelProps> = ({
   onToggle,
   onApplyFix,
 }) => {
+  const bodyId = useId();
+
   if (diagnostics.length === 0) {
     return null;
   }
 
   return (
     <div className={styles.validationPanel}>
-      <div className={styles.validationHeader} onClick={onToggle}>
-        <span className={styles.validationTitle}>
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path
-              d="M3 8.5l3 3 7-7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Validation
-        </span>
-        <span className={styles.validationCounts}>
-          {errorDiags.length > 0 && (
-            <span className={styles.valCountError}>
-              {errorDiags.length} error{errorDiags.length !== 1 ? "s" : ""}
-            </span>
-          )}
-          {warnDiags.length > 0 && (
-            <span className={styles.valCountWarn}>
-              {warnDiags.length} warning{warnDiags.length !== 1 ? "s" : ""}
-            </span>
-          )}
-          {constraintDiags.length > 0 && (
-            <span className={styles.valCountConstraint}>
-              {constraintDiags.length} constraint
-              {constraintDiags.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </span>
-        <svg
-          className={`${styles.validationChevron} ${validationOpen ? styles.validationChevronOpen : ""}`}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path
-            d="M4 6l4 4 4-4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
+      <ValidationHeader
+        validationOpen={validationOpen}
+        errorDiags={errorDiags}
+        warnDiags={warnDiags}
+        constraintDiags={constraintDiags}
+        bodyId={bodyId}
+        onToggle={onToggle}
+      />
       {validationOpen && (
-        <div className={styles.validationBody}>
+        <div id={bodyId} className={styles.validationBody}>
           {errorDiags.length > 0 && (
             <div className={styles.valGroup}>
               <div className={styles.valGroupTitle}>

@@ -120,7 +120,7 @@ func createValidSetupPatch() map[string]interface{} {
 	return map[string]interface{}{
 		"providers": map[string]interface{}{
 			"defaults": map[string]interface{}{
-				"default_model": "test-model",
+				"model": "test-model",
 			},
 			"models": []map[string]interface{}{
 				{
@@ -128,6 +128,7 @@ func createValidSetupPatch() map[string]interface{} {
 					"backend_refs": []map[string]interface{}{
 						{
 							"name":     "primary",
+							"provider": "vllm",
 							"endpoint": "host.docker.internal:8000",
 							"protocol": "http",
 							"weight":   1,
@@ -331,11 +332,12 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 version: v0.3
 providers:
   defaults:
-    default_model: remote-model
+    model: remote-model
   models:
     - name: remote-model
       backend_refs:
         - name: primary
+          provider: openai-compatible
           endpoint: remote.example.com
           protocol: https
           weight: 100
@@ -397,8 +399,8 @@ routing:
 	}
 	if providers, ok := importedConfig["providers"].(map[string]interface{}); !ok {
 		t.Fatalf("expected imported config providers map, got %#v", importedConfig["providers"])
-	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["default_model"] != "remote-model" {
-		t.Fatalf("expected imported config providers.defaults.default_model=remote-model, got %#v", importedConfig["providers"])
+	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["model"] != "remote-model" {
+		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
 	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
 		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
@@ -430,11 +432,12 @@ func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testi
 version: v0.3
 providers:
   defaults:
-    default_model: remote-model
+    model: remote-model
   models:
     - name: remote-model
       backend_refs:
         - name: primary
+          provider: openai-compatible
           endpoint: remote.example.com
           protocol: https
           weight: 100
