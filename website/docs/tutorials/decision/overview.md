@@ -55,7 +55,11 @@ Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
 `match`, or `fail_request`. If omitted, existing generic-classifier
-`on_error` and prompt-guard `on_error` behavior is retained.
+`on_error` and prompt-guard `on_error` behavior is retained, and the router
+warns at startup about classifier conditions that set neither. Applied policies
+appear in the `x-vsr-applied-unknown-policy` response header and the
+`llm_decision_unknown_total{decision, policy}` metric; the `fail_request` 503
+message names the fix.
 
 Decision matching stays separate from:
 
@@ -81,7 +85,7 @@ Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one c
 - Every leaf must reference a signal or projection output declared in the same
   recipe.
 - Higher `priority` wins when more than one decision matches. Keep an explicit
-  unconditional fallback or configure `providers.defaults.default_model`.
+  unconditional fallback or configure `providers.defaults.model`.
 - Decision names and route diagnostics can become operational metadata; avoid
   secrets or personal identifiers in names and descriptions.
 - Boolean logic is policy, not authentication. Use trusted identity through
