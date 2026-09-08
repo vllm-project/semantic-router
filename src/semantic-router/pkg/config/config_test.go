@@ -3709,6 +3709,17 @@ model_config:
 				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
 			})
 
+			It("should resolve the azure-openai responses path", func() {
+				profile := &ProviderProfile{
+					Type:       "azure-openai",
+					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/astra-prod",
+					APIVersion: "2026-09-03",
+				}
+				path, err := profile.ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/openai/deployments/astra-prod/responses?api-version=2026-09-03"))
+			})
+
 			It("should resolve catalog-backed private runtimes", func() {
 				path, err := (&ProviderProfile{Type: "vllm"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())

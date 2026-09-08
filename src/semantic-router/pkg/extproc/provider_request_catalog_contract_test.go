@@ -14,15 +14,16 @@ import (
 )
 
 type catalogReasoningWireCase struct {
-	name          string
-	catalog       string
-	provider      string
-	apiFormat     string
-	enabled       bool
-	mode          string
-	effort        string
-	wantTransport modelcatalog.ReasoningTransport
-	wantControls  map[string]interface{}
+	name            string
+	catalog         string
+	provider        string
+	providerModelID string
+	apiFormat       string
+	enabled         bool
+	mode            string
+	effort          string
+	wantTransport   modelcatalog.ReasoningTransport
+	wantControls    map[string]interface{}
 }
 
 // TestBuiltInCatalogReasoningWireContracts crosses the complete maintained
@@ -32,6 +33,19 @@ type catalogReasoningWireCase struct {
 // runtime adapter from drifting independently.
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
+		{
+			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Azure Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			apiFormat:       config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
 		{
 			name: "OpenAI Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "openai",
 			enabled: true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
@@ -238,7 +252,7 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 	t.Helper()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, profile := renderCatalogReasoningWire(t, test.catalog, test.provider, test.apiFormat, test.enabled, test.mode, test.effort)
+			request, profile := renderCatalogReasoningWire(t, test)
 			transport, err := profile.ResolveReasoningTransport()
 			require.NoError(t, err)
 			assert.Equal(t, test.wantTransport, transport)
@@ -249,17 +263,22 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 
 func renderCatalogReasoningWire(
 	t *testing.T,
-	catalogID string,
-	providerID string,
-	apiFormat string,
-	enabled bool,
-	mode string,
-	effort string,
+	test catalogReasoningWireCase,
 ) (map[string]interface{}, config.ProviderProfile) {
 	t.Helper()
+	catalogID := test.catalog
+	providerID := test.provider
+	apiFormat := test.apiFormat
+	enabled := test.enabled
+	mode := test.mode
+	effort := test.effort
 	apiFormatLine := ""
 	if apiFormat != "" {
 		apiFormatLine = fmt.Sprintf("      api_format: %s\n", apiFormat)
+	}
+	providerModelIDLine := ""
+	if test.providerModelID != "" {
+		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
 version: v0.3
@@ -267,13 +286,13 @@ providers:
   models:
     - name: routed
       catalog: %s
-%s      backend_refs:
+%s%s      backend_refs:
         - name: primary
           provider: %s
           endpoint: 127.0.0.1:8000
           protocol: http
 routing: {}
-`, catalogID, apiFormatLine, providerID)))
+`, catalogID, apiFormatLine, providerModelIDLine, providerID)))
 	require.NoError(t, err)
 
 	decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{

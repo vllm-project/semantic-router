@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:b0ffa7072ac6a77e8d40f3a6fc1bf8b0be230ffd643651cb013a0124bcafc432"
+const builtInCatalogDigest = "sha256:21c8a2583128a7d6f2dcde1aa238d25ebe0ddf5f954be823bca7166d77a3a4c9"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -40825,8 +40825,67 @@ const builtInCatalogJSON = `{
       "description": "Azure-hosted OpenAI deployments.",
       "display_name": "Azure OpenAI",
       "id": "azure-openai",
+      "models": [
+        {
+          "catalog": "openai/gpt-6-astra",
+          "id": "gpt-6-astra",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "reasoning_efforts_by_protocol": {
+            "openai/chat-completions@1": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "catalog_model_name": "gpt-6-astra",
+            "provider_model_id_kind": "deployment_name",
+            "tools_protocols": [
+              "openai/responses@1"
+            ],
+            "unsupported_include_values": [
+              "message.output_text.logprobs"
+            ],
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs",
+                "logprobs"
+              ],
+              "openai/responses@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
+          }
+        }
+      ],
       "path_overrides": {
-        "openai/chat-completions@1#create": "/chat/completions"
+        "openai/chat-completions@1#create": "/chat/completions",
+        "openai/responses@1#create": "/responses"
       },
       "presentation": {
         "featured": true,
@@ -40835,11 +40894,14 @@ const builtInCatalogJSON = `{
         "monogram": "Az"
       },
       "protocols": [
-        "openai/chat-completions@1"
+        "openai/chat-completions@1",
+        "openai/responses@1"
       ],
+      "reasoning_transport": "top_level_effort",
       "support_tier": "native",
       "supported_operations": [
-        "openai/chat-completions@1#create"
+        "openai/chat-completions@1#create",
+        "openai/responses@1#create"
       ]
     },
     {

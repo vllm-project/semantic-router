@@ -288,12 +288,16 @@ providers:
   support_tier: native
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
+  - openai/responses@1#create
   path_overrides:
     openai/chat-completions@1#create: /chat/completions
+    openai/responses@1#create: /responses
   api_version_query: true
+  reasoning_transport: top_level_effort
   auth:
     strategy: api_key_header
     header: api-key
@@ -307,6 +311,49 @@ providers:
   conformance:
     status: fixture_verified
     verified_at: '2026-09-04'
+  models:
+  - catalog: openai/gpt-6-astra
+    relationship: managed_cloud
+    id: gpt-6-astra
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    reasoning_efforts_by_protocol:
+      openai/chat-completions@1:
+      - low
+      - medium
+      - high
+      - xhigh
+    restrictions:
+      provider_model_id_kind: deployment_name
+      catalog_model_name: gpt-6-astra
+      tools_protocols:
+      - openai/responses@1
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - temperature
+        - top_p
+        - top_logprobs
+        - logprobs
+        openai/responses@1:
+        - temperature
+        - top_p
+        - top_logprobs
+      unsupported_include_values:
+      - message.output_text.logprobs
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-08'
+      source: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
 - id: baidu-ai-studio
   display_name: Baidu AI Studio
   description: ERNIE models through Baidu AI Studio's OpenAI-compatible LLM API.
