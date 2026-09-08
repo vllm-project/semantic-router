@@ -26,7 +26,14 @@ ENV/
 # Local artifacts not copied by any repo Dockerfile
 models/
 e2e/
-website/
+# Dashboard imports the one public Model Hub snapshot published by the website.
+# Keep the rest of the website out of image build contexts.
+website/*
+!website/static/
+website/static/*
+!website/static/model-catalog/
+website/static/model-catalog/*
+!website/static/model-catalog/catalog.json
 docs/
 paper/
 perf/
