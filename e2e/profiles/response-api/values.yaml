@@ -23,6 +23,23 @@ config:
             provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      # Day-0 catalog coverage: the card supplies the provider-native model ID,
+      # reasoning family, pricing, limits, capabilities, and presentation.
+      - name: astra-chat-day0
+        catalog: openai/gpt-6-astra
+        backend_refs:
+          - name: mock-openai
+            provider: openai
+            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            api_key_env: VSR_E2E_OPENAI_API_KEY
+      - name: astra-responses-day0
+        catalog: openai/gpt-6-astra
+        api_format: responses
+        backend_refs:
+          - name: mock-openai
+            provider: openai
+            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            api_key_env: VSR_E2E_OPENAI_API_KEY
   routing:
     decisions:
       - name: default_decision
@@ -130,3 +147,7 @@ resources:
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false
+
+extraEnv:
+  - name: VSR_E2E_OPENAI_API_KEY
+    value: astra-day0-fixture-key

@@ -75,13 +75,15 @@ type CatalogModelBinding struct {
 	Protocols          []string                 `json:"protocols"`
 	ReasoningTransport ReasoningTransport       `json:"reasoning_transport,omitempty"`
 	// ReasoningModes and ReasoningEfforts narrow the model-level capability to
-	// values accepted by this provider's API. They never expand the family.
-	ReasoningModes   []string                   `json:"reasoning_modes,omitempty"`
-	ReasoningEfforts []string                   `json:"reasoning_efforts,omitempty"`
-	Pricing          Pricing                    `json:"pricing,omitempty"`
-	Restrictions     map[string]any             `json:"restrictions,omitempty"`
-	Lifecycle        string                     `json:"lifecycle,omitempty"`
-	Verification     CatalogBindingVerification `json:"verification"`
+	// values accepted by this provider's API. A protocol override can narrow the
+	// common effort set further; neither form may expand the model family.
+	ReasoningModes             []string                   `json:"reasoning_modes,omitempty"`
+	ReasoningEfforts           []string                   `json:"reasoning_efforts,omitempty"`
+	ReasoningEffortsByProtocol map[string][]string        `json:"reasoning_efforts_by_protocol,omitempty"`
+	Pricing                    Pricing                    `json:"pricing,omitempty"`
+	Restrictions               map[string]any             `json:"restrictions,omitempty"`
+	Lifecycle                  string                     `json:"lifecycle,omitempty"`
+	Verification               CatalogBindingVerification `json:"verification"`
 }
 
 type ReasoningTransport string

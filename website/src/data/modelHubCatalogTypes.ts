@@ -34,6 +34,9 @@ export interface CatalogModelBinding {
   id: string
   protocols: string[]
   reasoning_transport?: ReasoningTransport
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
+  reasoning_efforts_by_protocol?: Record<string, string[]>
   lifecycle: string
 }
 

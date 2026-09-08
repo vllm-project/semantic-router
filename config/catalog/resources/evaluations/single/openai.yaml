@@ -4912,3 +4912,94 @@
     verification: claimed
     source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
     redistributable: true
+- id: openai/gpt-6-astra-launch-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.96
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-humanitys-last-exam-tools@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    tool_policy: tools_enabled
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.572
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-deep-swe-1.1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.741
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-2@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.95
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
