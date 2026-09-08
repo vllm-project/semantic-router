@@ -149,17 +149,17 @@ export function SelectControl({
 
   return (
     <div className={styles.selectControl}>
-      <span id={labelId}>{label}</span>
       <button
         ref={buttonRef}
         type="button"
         className={styles.selectTrigger}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-labelledby={labelId}
+        aria-labelledby={`${labelId} ${labelId}-value`}
         onClick={() => setOpen(current => !current)}
       >
-        <span>{selected}</span>
+        <span id={labelId} className={styles.selectPrefix}>{label}</span>
+        <span id={`${labelId}-value`} className={styles.selectValue}>{selected}</span>
         <i aria-hidden="true">⌄</i>
       </button>
       {isBrowser && open

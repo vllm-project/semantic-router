@@ -6,30 +6,38 @@
 }
 
 .toolbar {
-  display: grid;
-  grid-template-columns: minmax(12rem, 1fr) auto minmax(8rem, 10rem) auto;
-  align-items: end;
-  gap: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
   padding: var(--space-4);
   border-bottom: 1px solid var(--site-border);
 }
 
 .filterRow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
-  align-items: end;
-  gap: var(--space-3);
-  padding: 0 var(--space-4) var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--site-border);
 }
 
+.filterRow > * {
+  flex: 1 1 9.75rem;
+  min-width: 9.75rem;
+}
+
 .resetFilters {
+  flex: 0 0 auto;
+  min-width: auto;
+  margin-left: auto;
   min-height: 2.25rem;
   padding: 0 var(--space-3);
-  border: 1px solid var(--site-border-strong);
+  border: 1px solid var(--site-border);
   border-radius: var(--radius-md);
-  background: var(--site-surface);
-  color: var(--site-text-strong);
+  background: transparent;
+  color: var(--site-muted);
   cursor: pointer;
   font: inherit;
   font-size: var(--text-sm);
@@ -50,6 +58,8 @@
 .search {
   position: relative;
   display: flex;
+  flex: 1 1 16rem;
+  min-width: 12rem;
   align-items: center;
 }
 
@@ -84,6 +94,7 @@
 .typeTabs,
 .viewToggle {
   display: flex;
+  flex: 0 0 auto;
   gap: 2px;
   padding: 0.18rem;
   border: 1px solid var(--site-border);
@@ -326,12 +337,11 @@
 
 .tableFrame {
   overflow-x: auto;
-  border-top: 1px solid var(--site-border);
 }
 
 .tableFrame table {
   width: 100%;
-  min-width: 900px;
+  min-width: 52rem;
   margin: 0;
   border-collapse: collapse;
   border: 0;
@@ -340,10 +350,11 @@
 
 .tableFrame th,
 .tableFrame td {
-  padding: var(--space-3) var(--space-4);
+  padding: 0.7rem 0.9rem;
   border: 0;
   border-bottom: 1px solid var(--site-border);
   text-align: left;
+  vertical-align: middle;
 }
 
 .tableFrame th {
@@ -351,8 +362,20 @@
   color: var(--site-muted);
   font-size: var(--text-xs);
   font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+}
+
+.tableFrame td {
+  color: var(--site-muted-bright);
+}
+
+.tableFrame tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tableFrame tbody tr:hover {
+  background: var(--site-hover-subtle-bg);
 }
 
 .tableModel {
@@ -388,15 +411,16 @@
 
 @media (max-width: 996px) {
   .toolbar {
-    grid-template-columns: 1fr auto;
+    align-items: stretch;
   }
 
-  .filterRow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .filterRow > * {
+    flex: 1 1 calc(50% - var(--space-2));
   }
 
   .resetFilters {
-    grid-column: 1 / -1;
+    width: 100%;
+    margin-left: 0;
   }
 }
 
@@ -407,9 +431,9 @@
 }
 
 @media (max-width: 640px) {
-  .toolbar,
-  .filterRow {
-    grid-template-columns: 1fr;
+  .filterRow > * {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 
   .typeTabs button {
