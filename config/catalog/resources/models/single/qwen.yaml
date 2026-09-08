@@ -77,7 +77,7 @@
   verification:
     authority: Qwen Team
     status: claimed
-    verified_at: 2026-09-09
+    verified_at: 2026-09-08
     source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
   tags:
   - open_weights

@@ -919,7 +919,7 @@
   metrics:
     resolved: 0.827
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed

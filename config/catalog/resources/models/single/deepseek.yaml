@@ -76,7 +76,7 @@
   verification:
     authority: DeepSeek
     status: claimed
-    verified_at: 2026-09-09
+    verified_at: 2026-09-08
     source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
   tags:
   - efficient

@@ -2378,7 +2378,7 @@ providers:
     lifecycle: experimental
     verification:
       status: claimed
-      verified_at: '2026-09-09'
+      verified_at: '2026-09-08'
       source: https://docs.sglang.io/cookbook/autoregressive/Qwen/Qwen3.8-Flash-Next
   - catalog: qwen/qwen3.8-27b
     relationship: self_hosted
@@ -2810,7 +2810,7 @@ providers:
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-09'
+      verified_at: '2026-09-08'
       source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
   - catalog: deepseek/deepseek-v4-pro
     relationship: self_hosted
@@ -3044,7 +3044,7 @@ providers:
     lifecycle: experimental
     verification:
       status: claimed
-      verified_at: '2026-09-09'
+      verified_at: '2026-09-08'
       source: https://recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next
   - catalog: qwen/qwen3.8-2.4t-a95b
     relationship: self_hosted
@@ -4913,7 +4913,7 @@ models:
   verification:
     authority: DeepSeek
     status: claimed
-    verified_at: '2026-09-09'
+    verified_at: '2026-09-08'
     source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
   tags:
   - efficient
@@ -6563,7 +6563,7 @@ models:
   verification:
     authority: Qwen Team
     status: claimed
-    verified_at: '2026-09-09'
+    verified_at: '2026-09-08'
     source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
   tags:
   - open_weights
@@ -15384,7 +15384,7 @@ evaluations:
   metrics:
     resolved: 0.827
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28856,7 +28856,7 @@ evaluations:
   metrics:
     resolved: 0.587
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28880,7 +28880,7 @@ evaluations:
   metrics:
     resolved: 0.625
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28900,7 +28900,7 @@ evaluations:
     pass_rate: 0.243
     score: 0.512
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28919,7 +28919,7 @@ evaluations:
   metrics:
     accuracy: 0.813
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28938,7 +28938,7 @@ evaluations:
   metrics:
     accuracy: 0.917
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28958,7 +28958,7 @@ evaluations:
   metrics:
     accuracy: 0.359
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28977,7 +28977,7 @@ evaluations:
   metrics:
     pass_at_1: 0.919
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -28997,7 +28997,7 @@ evaluations:
   metrics:
     score: 0.846
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -29017,7 +29017,7 @@ evaluations:
   metrics:
     score: 0.906
   status: available
-  observed_at: '2026-09-09'
+  observed_at: '2026-09-08'
   evidence:
     provenance: vendor_claimed
     verification: claimed

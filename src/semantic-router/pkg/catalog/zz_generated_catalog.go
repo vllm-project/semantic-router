@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:d49640f2c620de7b653073124d643240431ddc0874795af670dd2f2303d5e0c5"
+const builtInCatalogDigest = "sha256:d471331e99da2407e6277debf0f6e5e817993d16e3315388eb8ef0315531dc82"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -9761,7 +9761,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.827
       },
       "model": "deepseek/deepseek-v4-flash",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
@@ -26909,7 +26909,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.587
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -26938,7 +26938,7 @@ const builtInCatalogJSON = `{
         "resolved": 0.625
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -26968,7 +26968,7 @@ const builtInCatalogJSON = `{
         "score": 0.512
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -26992,7 +26992,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.813
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27016,7 +27016,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.917
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27040,7 +27040,7 @@ const builtInCatalogJSON = `{
         "accuracy": 0.359
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27065,7 +27065,7 @@ const builtInCatalogJSON = `{
         "pass_at_1": 0.919
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27089,7 +27089,7 @@ const builtInCatalogJSON = `{
         "score": 0.846
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -27114,7 +27114,7 @@ const builtInCatalogJSON = `{
         "score": 0.906
       },
       "model": "qwen/qwen3.8-flash-next",
-      "observed_at": "2026-09-09",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "unspecified",
       "status": "available",
       "subject": {
@@ -37429,7 +37429,7 @@ const builtInCatalogJSON = `{
         "authority": "DeepSeek",
         "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
         "status": "claimed",
-        "verified_at": "2026-09-09"
+        "verified_at": "2026-09-08"
       }
     },
     {
@@ -39508,7 +39508,7 @@ const builtInCatalogJSON = `{
         "authority": "Qwen Team",
         "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
         "status": "claimed",
-        "verified_at": "2026-09-09"
+        "verified_at": "2026-09-08"
       }
     },
     {
@@ -44404,7 +44404,7 @@ const builtInCatalogJSON = `{
           "verification": {
             "source": "https://docs.sglang.io/cookbook/autoregressive/Qwen/Qwen3.8-Flash-Next",
             "status": "claimed",
-            "verified_at": "2026-09-09"
+            "verified_at": "2026-09-08"
           }
         },
         {
@@ -44985,7 +44985,7 @@ const builtInCatalogJSON = `{
           "verification": {
             "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
             "status": "claimed",
-            "verified_at": "2026-09-09"
+            "verified_at": "2026-09-08"
           }
         },
         {
@@ -45303,7 +45303,7 @@ const builtInCatalogJSON = `{
           "verification": {
             "source": "https://recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next",
             "status": "claimed",
-            "verified_at": "2026-09-09"
+            "verified_at": "2026-09-08"
           }
         },
         {

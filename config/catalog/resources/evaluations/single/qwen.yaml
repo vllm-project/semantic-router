@@ -954,7 +954,7 @@
   metrics:
     resolved: 0.587
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -978,7 +978,7 @@
   metrics:
     resolved: 0.625
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -998,7 +998,7 @@
     pass_rate: 0.243
     score: 0.512
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1017,7 +1017,7 @@
   metrics:
     accuracy: 0.813
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1036,7 +1036,7 @@
   metrics:
     accuracy: 0.917
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1056,7 +1056,7 @@
   metrics:
     accuracy: 0.359
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1075,7 +1075,7 @@
   metrics:
     pass_at_1: 0.919
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1095,7 +1095,7 @@
   metrics:
     score: 0.846
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
@@ -1115,7 +1115,7 @@
   metrics:
     score: 0.906
   status: available
-  observed_at: 2026-09-09
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
