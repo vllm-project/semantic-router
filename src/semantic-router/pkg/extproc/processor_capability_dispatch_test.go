@@ -286,6 +286,9 @@ func TestPrepareProviderDispatchReroutesToCapabilityQualifiedModelRef(t *testing
 	if ctx.ImmediateProtocolError != nil {
 		t.Fatalf("ImmediateProtocolError must be cleared after a successful reroute")
 	}
+	if ctx.RequestModel != fallback {
+		t.Fatalf("ctx.RequestModel = %q, want %q (rerouted serving model for token/ttfb/usage attribution)", ctx.RequestModel, fallback)
+	}
 }
 
 // When the decision offers no modelRef that can express the required
@@ -358,6 +361,9 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	}
 	if ctx.SemanticRequest != request {
 		t.Fatalf("ctx.SemanticRequest must be the prepared request after reroute")
+	}
+	if ctx.RequestModel != imageBackend {
+		t.Fatalf("ctx.RequestModel = %q, want %q (rerouted images serving model for token/ttfb/usage attribution)", ctx.RequestModel, imageBackend)
 	}
 }
 

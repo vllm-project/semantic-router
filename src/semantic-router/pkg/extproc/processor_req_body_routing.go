@@ -85,6 +85,11 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
+	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
+	// the model that actually serves the request. A capability reroute may
+	// redirect this request to a sibling modelRef, so RequestModel must be the
+	// final dispatch model, not the decision-selected one.
+	ctx.RequestModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
