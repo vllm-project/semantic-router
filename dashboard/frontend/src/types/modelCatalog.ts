@@ -89,6 +89,7 @@ export interface CatalogModelBinding {
     | 'deepseek_thinking'
   reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
   reasoning_efforts?: string[]
+  reasoning_efforts_by_protocol?: Record<string, string[]>
   pricing?: Record<string, string | number | boolean>
   restrictions?: Record<string, unknown>
   lifecycle: ModelCatalogLifecycle
