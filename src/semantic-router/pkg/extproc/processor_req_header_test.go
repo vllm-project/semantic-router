@@ -7,6 +7,8 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -64,6 +66,127 @@ func TestApplyHeaderPassThroughPolicyDropsOnlyTransportHeaders(t *testing.T) {
 		}
 	}
 	applyHeaderPassThroughPolicy(nil)
+}
+
+func TestHandleRequestHeadersStripsIdentityHeadersWithoutExternalAuth(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Authz: config.AuthzConfig{
+			Identity: config.IdentityConfig{
+				UserIDHeader:     "x-user-id",
+				UserGroupsHeader: "x-user-groups",
+			},
+		},
+	}}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := &ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: "/v1/chat/completions"},
+				{Key: "X-Authz-User-Id", Value: "admin"},
+				{Key: "x-authz-user-groups", Value: "platform-admins"},
+				{Key: "X-User-Id", Value: "alice"},
+				{Key: "x-user-groups", Value: "premium"},
+				{Key: "x-application", Value: "kept"},
+			}},
+		},
+	}
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	for _, name := range []string{
+		headers.AuthzUserID,
+		headers.AuthzUserGroups,
+		"x-user-id",
+		"x-user-groups",
+	} {
+		if _, found := ctx.Headers[name]; found {
+			t.Fatalf("untrusted identity header %q remained in semantic headers: %#v", name, ctx.Headers)
+		}
+	}
+	if got := ctx.Headers["x-application"]; got != "kept" {
+		t.Fatalf("unrelated application header = %q, want kept", got)
+	}
+
+	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+	for _, name := range []string{headers.AuthzUserID, headers.AuthzUserGroups, "x-user-id", "x-user-groups"} {
+		if !containsStringForTest(mutation.GetRemoveHeaders(), name) {
+			t.Fatalf("request mutation did not remove identity header %q: %#v", name, mutation.GetRemoveHeaders())
+		}
+	}
+}
+
+func TestHandleRequestHeadersPreservesTrustedIdentityHeadersForExternalAuth(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Authz: config.AuthzConfig{
+			Identity: config.IdentityConfig{
+				UserIDHeader:     "x-user-id",
+				UserGroupsHeader: "x-user-groups",
+			},
+			Providers: []config.AuthzProviderConfig{{Type: "header-injection"}},
+		},
+	}}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := &ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: "/v1/chat/completions"},
+				{Key: "x-user-id", Value: "alice"},
+				{Key: "x-user-groups", Value: "premium"},
+			}},
+		},
+	}
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	for name, want := range map[string]string{
+		"x-user-id":     "alice",
+		"x-user-groups": "premium",
+	} {
+		if got := ctx.Headers[name]; got != want {
+			t.Fatalf("trusted identity header %q = %q, want %q", name, got, want)
+		}
+	}
+
+	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+	for _, name := range []string{"x-user-id", "x-user-groups"} {
+		if !containsStringForTest(mutation.GetRemoveHeaders(), name) {
+			t.Fatalf("trusted identity header %q was not removed before upstream forwarding: %#v", name, mutation.GetRemoveHeaders())
+		}
+	}
+}
+
+func TestHandleRequestHeadersSkipProcessingStillRemovesIdentityHeaders(t *testing.T) {
+	router := newRouterWithSkipProcessingGate(true)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "true")
+	request.RequestHeaders.Headers.Headers = append(
+		request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: headers.AuthzUserID, Value: "admin"},
+		&core.HeaderValue{Key: headers.AuthzUserGroups, Value: "platform-admins"},
+	)
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	if _, found := ctx.Headers[headers.AuthzUserID]; found {
+		t.Fatal("identity user header remained after skip-processing capture")
+	}
+	if _, found := ctx.Headers[headers.AuthzUserGroups]; found {
+		t.Fatal("identity groups header remained after skip-processing capture")
+	}
+	removed := response.GetRequestHeaders().Response.GetHeaderMutation().GetRemoveHeaders()
+	for _, name := range []string{headers.AuthzUserID, headers.AuthzUserGroups} {
+		if !containsStringForTest(removed, name) {
+			t.Fatalf("skip-processing mutation did not remove identity header %q: %#v", name, removed)
+		}
+	}
 }
 
 func TestValidatePublicGenerationEndpoints(t *testing.T) {

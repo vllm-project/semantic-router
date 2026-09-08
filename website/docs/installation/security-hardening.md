@@ -50,6 +50,15 @@ request_headers_to_remove:
   - x-authz-user-groups
 ```
 
+The Router also enforces this boundary for its semantic request view. If
+`global.services.authz.providers` does not contain an explicit
+`header-injection` provider, configured identity headers are discarded before
+authz signals, rate limits, memory, or other user-scoped behavior can use them.
+Configure `header-injection` only when a trusted external authorization layer
+validates the caller and injects the headers; the provider declaration alone is
+not an authentication mechanism. Identity headers are removed before the
+request is forwarded to model providers as well.
+
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
 boundary and allow only that component to supply identity headers.

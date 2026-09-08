@@ -26,6 +26,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	detectSourceFormat(path, ctx)
+	r.applyIdentityHeaderPolicy(ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
 	// Router Replay contains captured request, response, and tool data. It is a
@@ -43,7 +44,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
+		return newContinueRequestHeadersResponse(&ext_proc.HeaderMutation{
+			RemoveHeaders: r.requestHeadersToRemove(),
+		}), nil
 	}
 
 	detectStreamingExpectation(ctx)
@@ -56,7 +59,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	return newContinueRequestHeadersResponse(r.buildIdentityEncodingRequestMutation()), nil
 }
 
 func startRequestHeaderSpan(
@@ -173,7 +176,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func (r *OpenAIRouter) buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -181,8 +184,84 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: r.requestHeadersToRemove(),
 	}
+}
+
+func (r *OpenAIRouter) requestHeadersToRemove() []string {
+	return appendUniqueHeaderNames(
+		looperInternalHeadersForRemoval(),
+		r.identityHeaderNames()...,
+	)
+}
+
+// identityHeaderNames returns every identity header name understood by the
+// router. The built-in names remain included because a few compatibility
+// paths still consume them directly even when custom authz header names are
+// configured.
+func (r *OpenAIRouter) identityHeaderNames() []string {
+	names := []string{headers.AuthzUserID, headers.AuthzUserGroups}
+	if r != nil && r.Config != nil {
+		names = append(names,
+			r.Config.Authz.Identity.GetUserIDHeader(),
+			r.Config.Authz.Identity.GetUserGroupsHeader(),
+		)
+	}
+	return appendUniqueHeaderNames(nil, names...)
+}
+
+// applyIdentityHeaderPolicy removes identity headers from the Router's
+// semantic request view unless an explicit header-injection provider is
+// configured. The provider declaration is the trust boundary: fail-open
+// behavior or a static-config provider must not make client headers trusted.
+func (r *OpenAIRouter) applyIdentityHeaderPolicy(ctx *RequestContext) {
+	if ctx == nil || ctx.Headers == nil {
+		return
+	}
+	if r != nil && r.Config != nil && r.Config.Authz.HasExternalAuthProvider() {
+		return
+	}
+
+	stripped := make([]string, 0)
+	for _, name := range r.identityHeaderNames() {
+		for key := range ctx.Headers {
+			if !strings.EqualFold(key, name) {
+				continue
+			}
+			delete(ctx.Headers, key)
+			stripped = appendUniqueHeaderNames(stripped, key)
+		}
+	}
+	if len(stripped) == 0 {
+		return
+	}
+
+	logging.ComponentWarnEvent("extproc", "untrusted_identity_headers_removed", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"headers":    stripped,
+		"reason":     "no_explicit_external_auth_provider",
+	})
+}
+
+func appendUniqueHeaderNames(names []string, additions ...string) []string {
+	seen := make(map[string]struct{}, len(names)+len(additions))
+	for _, name := range names {
+		if name != "" {
+			seen[strings.ToLower(name)] = struct{}{}
+		}
+	}
+	for _, name := range additions {
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		names = append(names, name)
+	}
+	return names
 }
 
 // hopByHopDropList is the set of HTTP framing headers we strip from
@@ -206,7 +285,8 @@ var hopByHopDropList = []string{
 // applyHeaderPassThroughPolicy enforces the request-header pass-through
 // contract by stripping transport framing from the semantic request view.
 // Provider headers are supplied by the selected provider profile rather than
-// copied from an untrusted client request.
+// copied from an untrusted client request. Identity headers are handled by
+// applyIdentityHeaderPolicy because their treatment depends on authz config.
 func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 	if ctx == nil || ctx.Headers == nil {
 		return
