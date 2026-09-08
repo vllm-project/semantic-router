@@ -1,13 +1,13 @@
 ---
 title: Model and Provider Day-0 Support
-description: Add a built-in model or provider once and generate the Router, CLI, Dashboard, website, and validation views from the shared catalog.
+description: Add a built-in model or provider once and generate every runtime and product view from the shared catalog.
 ---
 
 # Model and Provider Day-0 Support
 
 Built-in support is a validated resource graph, not a name added to several
 independent lists. The repository catalog under `config/catalog/` generates the
-runtime registry, CLI bundle, Dashboard Model Hub and Add Model cards, and the
+runtime registry, built-in distribution, Dashboard Model Hub and Add Model cards, and the
 public [Models page](/models).
 
 ## Choose the smallest change
@@ -32,7 +32,7 @@ The built-in physical catalog is curated by mainstream model creator, not by a
 global top-model count. For an existing creator, a Day-0 contribution normally
 adds or rotates the catalog toward roughly its latest three generations or
 representative product lines. Adding a new creator changes the reviewed
-baseline in `catalog.yaml.inventory.physical`; it should explain why the company
+baseline in `manifest.yaml.inventory.physical`; it should explain why the company
 belongs in the mainstream set and which current lines form a useful operator
 surface. The generator enforces creator membership and minimum depth, while the
 human review decides recency and relevance.
@@ -275,7 +275,9 @@ make model-catalog-check
 make agent-report ENV=cpu CHANGED_FILES="config/catalog/resources/models/organization.yaml"
 ```
 
-Commit the authored resources and every generated projection together. Then
+Commit the authored resources, built-in distribution snapshot, Router embed,
+and shared public snapshot together. CLI package assets are ignored build
+staging and must not be committed. Then
 run the gates reported for the actual changed files. A complete Day-0 pull
 request demonstrates:
 
@@ -284,7 +286,8 @@ request demonstrates:
 - generated Dashboard provider/model cards and logo fallback;
 - generated website support and benchmark-comparison rows;
 - no secrets or restricted benchmark data;
-- explicit missing evaluation status rather than a fabricated score.
+- absent score data rather than a fabricated zero or placeholder row.
 
-Do not hand-edit generated JSON, Go, or CLI catalog snapshots. If a generated
-view is wrong, fix the source resource or generator and regenerate it.
+Do not hand-edit generated JSON, Go, or built-in catalog snapshots. If a
+generated view is wrong, fix the source resource or generator and regenerate
+it.
