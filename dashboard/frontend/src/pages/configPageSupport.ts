@@ -1,5 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
+import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
+import type { BuiltInModelCatalog } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -59,6 +61,7 @@ export interface ModelScore {
   score: number
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
 }
 
@@ -99,6 +102,13 @@ export interface Tool {
 export interface ReasoningFamily {
   type: string
   parameter: string
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
 }
 
 export interface ModelPricing {
@@ -149,7 +159,6 @@ export interface BackendRefEntry {
   endpoint?: string
   protocol?: 'http' | 'https'
   weight?: number
-  type?: string
   base_url?: string
   provider?: string
   auth_header?: string
@@ -161,8 +170,34 @@ export interface BackendRefEntry {
   api_key_env?: string
 }
 
+export interface ModelReasoningConfig {
+  family?: string
+  type?: string
+  parameter?: string
+  activation_parameter?: string
+  effort_flags?: Record<string, string>
+  levels?: string[]
+  default?: string
+  modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  default_mode?: 'enabled' | 'disabled' | 'adaptive'
+  disabled?: string
+}
+
+export interface ModelEvaluationConfig {
+  benchmark: string
+  benchmark_profile?: string
+  reasoning_effort?: string
+  metrics: Record<string, number>
+  source?: string
+  measured_at?: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
 export interface ProviderModelConfig {
   name: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
+  /** @deprecated Use reasoning. */
   reasoning_family?: string
   provider_model_id?: string
   api_format?: string
@@ -180,9 +215,10 @@ export interface ProviderModelConfig {
 }
 
 export interface ProviderDefaultsConfig {
-  default_model?: string
+  model?: string
+  reasoning_effort?: string
+  /** @deprecated Reasoning definitions are now catalog-backed or inline on a provider model. */
   reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
 }
 
 export interface ProvidersConfig {
@@ -192,13 +228,32 @@ export interface ProvidersConfig {
 
 export interface RoutingModelCard {
   name: string
+  display_name?: string
+  publisher?: string
+  presentation?: {
+    logo: string
+    monogram: string
+    monochrome: boolean
+  }
+  distribution?: {
+    type: 'proprietary_api' | 'open_weights' | 'router_recipe'
+    source: string
+    license?: string
+  }
+  family?: string
+  revision?: string
+  released_at?: string
+  knowledge_cutoff?: string
+  lifecycle?: 'experimental' | 'active' | 'deprecated' | 'removed'
   param_size?: string
   context_window_size?: number
+  max_output_tokens?: number
   description?: string
   capabilities?: string[]
+  modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -222,6 +277,7 @@ export interface DecisionModelRef {
   model: string
   use_reasoning: boolean
   reasoning_description?: string
+  reasoning_mode?: '' | 'enabled' | 'disabled' | 'adaptive'
   reasoning_effort?: string
   lora_name?: string
   weight?: number
@@ -278,7 +334,11 @@ export interface RecipeConfig {
 
 export interface NormalizedModel {
   name: string
+  catalog?: string
+  reasoning?: ModelReasoningConfig
   reasoning_family?: string
+  reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
+  reasoning_efforts?: string[]
   provider_model_id?: string
   api_format?: string
   external_model_ids?: Record<string, string>
@@ -290,7 +350,8 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  quality_score?: number
+  evaluations?: ModelEvaluationConfig[]
+  card_override?: RoutingModelCard
   modality?: string
   pricing?: {
     currency?: string
@@ -367,7 +428,6 @@ export interface MemoryConfig {
   embedding_model?: string
   default_retrieval_limit?: number
   default_similarity_threshold?: number
-  extraction_batch_size?: number
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
@@ -470,7 +530,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      model_metrics?: boolean
       queue_depth_estimation?: boolean
       max_models?: number
     }
@@ -592,7 +651,6 @@ export interface ModalityDetectionConfig {
 
 export interface ModalityDetectorConfig {
   enabled?: boolean
-  prompt_prefixes?: string[]
   method?: string
   classifier?: ModalityClassifierConfig
   keywords?: string[]
@@ -1207,6 +1265,7 @@ export interface JailbreakSignal {
   threshold?: number
   method?: string
   include_history?: boolean
+  direction?: 'request' | 'response'
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
   description?: string
@@ -1368,6 +1427,7 @@ export interface AddSignalFormState {
   composer_conditions?: DecisionCondition[]
   jailbreak_threshold?: number
   jailbreak_method?: string
+  jailbreak_direction?: string
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
@@ -1507,7 +1567,7 @@ export type ConfigDecisionConditionType = DecisionConditionType
 
 export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: boolean): string => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.default_model || ''
+    return config?.providers?.defaults?.model || ''
   }
   return config?.default_model || ''
 }
@@ -1515,99 +1575,25 @@ export const getDefaultModelName = (config: ConfigData | null, isPythonCLI: bool
 export const getReasoningFamiliesMap = (
   config: ConfigData | null,
   isPythonCLI: boolean,
+  catalog: BuiltInModelCatalog | null = bundledCatalog as unknown as BuiltInModelCatalog,
 ): Record<string, ReasoningFamily> => {
   if (isPythonCLI) {
-    return config?.providers?.defaults?.reasoning_families || {}
+    return Object.fromEntries(
+      (catalog?.reasoning_families ?? []).map((family) => [
+        family.id,
+        {
+          type: family.type,
+          parameter: family.parameter,
+          activation_parameter: family.activation_parameter,
+          effort_flags: family.effort_flags ? { ...family.effort_flags } : undefined,
+          levels: [...(family.levels ?? [])],
+          default: family.default,
+          modes: family.modes ? [...family.modes] : undefined,
+          default_mode: family.default_mode,
+          disabled: family.disabled,
+        },
+      ]),
+    )
   }
   return config?.reasoning_families || {}
-}
-
-export const getNormalizedModels = (
-  config: ConfigData | null,
-  isPythonCLI: boolean,
-): NormalizedModel[] => {
-  if (isPythonCLI && config?.providers?.models) {
-    const cards = config?.routing?.modelCards || []
-    const cardByName = new Map(cards.map((card) => [card.name, card]))
-    const models = config.providers.models.map(
-      (m): NormalizedModel => ({
-        name: m.name,
-        reasoning_family: m.reasoning_family,
-        provider_model_id: m.provider_model_id,
-        api_format: m.api_format,
-        external_model_ids: m.external_model_ids,
-        backend_refs: m.backend_refs,
-        endpoints: normalizeProviderModelEndpoints(m),
-        param_size: cardByName.get(m.name)?.param_size,
-        context_window_size: cardByName.get(m.name)?.context_window_size,
-        description: cardByName.get(m.name)?.description,
-        capabilities: cardByName.get(m.name)?.capabilities,
-        loras: cardByName.get(m.name)?.loras,
-        tags: cardByName.get(m.name)?.tags,
-        quality_score: cardByName.get(m.name)?.quality_score,
-        modality: cardByName.get(m.name)?.modality,
-        pricing: m.pricing,
-        reliability: m.reliability,
-      }),
-    )
-
-    for (const card of cards) {
-      if (models.some((model) => model.name === card.name)) {
-        continue
-      }
-      models.push({
-        name: card.name,
-        reasoning_family: undefined,
-        provider_model_id: undefined,
-        api_format: undefined,
-        external_model_ids: undefined,
-        backend_refs: undefined,
-        endpoints: [],
-        param_size: card.param_size,
-        context_window_size: card.context_window_size,
-        description: card.description,
-        capabilities: card.capabilities,
-        loras: card.loras,
-        tags: card.tags,
-        quality_score: card.quality_score,
-        modality: card.modality,
-        pricing: undefined,
-        reliability: undefined,
-      })
-    }
-
-    return models
-  }
-
-  if (config?.model_config) {
-    return (Object.entries(config.model_config) as [string, ModelConfigEntry][]).map(
-      ([name, cfg]) => ({
-        name,
-        reasoning_family: cfg.reasoning_family,
-        endpoints:
-          cfg.preferred_endpoints
-            ?.map((ep: string) => {
-              const endpoint = config.vllm_endpoints?.find(
-                (entry: VLLMEndpoint) => entry.name === ep,
-              )
-              return endpoint
-                ? normalizeEndpoint(
-                    {
-                      name: ep,
-                      weight: endpoint.weight || 1,
-                      endpoint: `${endpoint.address}:${endpoint.port}`,
-                      protocol: 'http',
-                    },
-                    0,
-                  )
-                : null
-            })
-            .filter((entry): entry is NonNullable<typeof entry> => entry !== null) || [],
-        access_key: undefined,
-        pricing: cfg.pricing,
-      }),
-    )
-  }
-
-  return []
 }

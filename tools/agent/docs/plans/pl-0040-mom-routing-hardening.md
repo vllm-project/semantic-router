@@ -89,7 +89,6 @@ every required GitHub check before completing `TASK-09`.
 
 - [Architecture guardrails](../architecture-guardrails.md)
 - [Change surfaces](../change-surfaces.md)
-- [Feature-complete checklist](../feature-complete-checklist.md)
 - [Testing strategy](../testing-strategy.md)
-- [Typed request capability eligibility](../tech-debt/td-054-typed-request-capability-eligibility-gap.md)
-- [Evidence-calibrated session switch gate](../tech-debt/td-055-evidence-calibrated-session-switch-gate-gap.md)
+- Typed request capability eligibility and evidence-calibrated session
+  switching remain tracked in [architecture risks](../architecture-risks.md).

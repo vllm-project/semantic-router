@@ -246,27 +246,21 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 
 	// Helper to compute AutoMix value for a model
 	getValue := func(ref config.ModelRef) float64 {
-		quality := 0.5   // Default quality estimate
-		costScore := 0.5 // Default cost score (mid-range)
+		quality, costScore := 0.0, 0.0
+		hasQuality, hasCost := false, false
 
 		if modelParams != nil {
 			if params, ok := modelParams[ref.Model]; ok {
-				// Use configured QualityScore if available
-				if params.QualityScore > 0 && params.QualityScore <= 1.0 {
-					quality = params.QualityScore
-				} else {
-					// Fallback: estimate quality from param_size (larger = higher quality)
-					size := parseParamSize(params.ParamSize)
-					if size > 0 {
-						// Normalize size: assume 1B-70B range maps to 0.3-1.0 quality
-						quality = 0.3 + 0.7*math.Min(float64(size)/70000, 1.0)
-					}
+				if score, available := params.EvidenceScore(""); available {
+					quality = math.Max(0, math.Min(1, score/100))
+					hasQuality = true
 				}
 
 				// Normalize cost: 0 = most expensive, 1 = cheapest
 				cost := params.Pricing.PromptPer1M
 				if cost > 0 && costRange > 0 {
 					costScore = 1.0 - (cost-minCost)/costRange
+					hasCost = true
 				}
 			}
 		}
@@ -276,8 +270,17 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 		// When tradeoff = 0: pure quality ordering
 		// When tradeoff = 1: pure cost ordering (cheapest first)
 		// When tradeoff = 0.3: favor quality but consider cost
-		value := (1-tradeoff)*quality + tradeoff*costScore
-		return value
+		qualityWeight, costWeight := 1-tradeoff, tradeoff
+		if !hasQuality {
+			qualityWeight = 0
+		}
+		if !hasCost {
+			costWeight = 0
+		}
+		if qualityWeight+costWeight == 0 {
+			return 0
+		}
+		return (qualityWeight*quality + costWeight*costScore) / (qualityWeight + costWeight)
 	}
 
 	// Sort by value ascending (start with lower-value/cheaper models for cascading)

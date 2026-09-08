@@ -15,12 +15,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: qwen2.5:3b
+    model: qwen2.5:3b
   models:
     - name: qwen2.5:3b
       provider_model_id: served-qwen
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: 127.0.0.1:11434
           protocol: http
 routing:

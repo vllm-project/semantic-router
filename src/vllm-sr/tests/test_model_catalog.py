@@ -29,6 +29,11 @@ CATALOG_MODELS = {
     "vllm-sr/mom-v1-ultra",
     "vllm-sr/mom-v1-vault",
 }
+CATALOG_PROTOCOLS = (
+    "openai/chat-completions@1",
+    "openai/responses@1",
+    "anthropic/messages@1",
+)
 
 
 def _system_prompts(value: Any) -> list[str]:
@@ -50,6 +55,24 @@ def _target_at(document: dict[str, Any], path: tuple[str | int, ...]) -> Any:
     for part in path:
         target = target[part]
     return target
+
+
+def _first_virtual_model(document: dict[str, Any]) -> dict[str, Any]:
+    return next(model for model in document["models"] if model["kind"] == "virtual")
+
+
+def _catalog_target_at(document: dict[str, Any], path: tuple[str | int, ...]) -> Any:
+    """Resolve legacy model index zero as the first CLI virtual model.
+
+    The shared snapshot intentionally orders physical cards independently from
+    virtual recipe bundles. Mutation tests must select by kind rather than
+    depending on either projection's ordering.
+    """
+
+    if len(path) >= 2 and path[0:2] == ("models", 0):
+        virtual_index = document["models"].index(_first_virtual_model(document))
+        path = ("models", virtual_index, *path[2:])
+    return _target_at(document, path)
 
 
 def _stage_catalog_asset(
@@ -100,7 +123,7 @@ def _load_mutated_catalog(
     mutate: Callable[[dict[str, Any]], None],
     mutate_asset: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> None:
-    packaged_root = model_catalog.resources.files("cli.model_assets")
+    packaged_root = model_catalog._model_assets_root()
     source_version = packaged_root.joinpath("latest")
     document = yaml.safe_load(
         source_version.joinpath("catalog.yaml").read_text(encoding="utf-8")
@@ -132,8 +155,18 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert catalog.default_model == DEFAULT_MODEL
     assert catalog.enabled_models == (DEFAULT_MODEL,)
     assert {model.id for model in catalog.models} == CATALOG_MODELS
+    assert all(model.protocols == CATALOG_PROTOCOLS for model in catalog.models)
     assert all(model.compatibility.compatible for model in catalog.models)
     assert all(model.verified for model in catalog.models)
+
+
+def test_catalog_virtual_projection_is_independent_of_model_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def mutate(document: dict[str, Any]) -> None:
+        document["models"].reverse()
+
+    _load_mutated_catalog(tmp_path, monkeypatch, mutate)
 
 
 def test_packaged_catalog_export_is_complete_and_config_independent(
@@ -150,16 +183,24 @@ def test_packaged_catalog_export_is_complete_and_config_independent(
             "channel": "latest",
             "default_model": DEFAULT_MODEL,
             "enabled_models": [DEFAULT_MODEL],
+            "default_intelligence_index": "vllm-sr/intelligence@1.0.0",
         }
     ]
-    assert {model["id"] for model in document["models"]} == CATALOG_MODELS
+    assert {model["kind"] for model in document["models"]} == {
+        "physical",
+        "virtual",
+    }
+    virtual_models = [
+        model for model in document["models"] if model["kind"] == "virtual"
+    ]
+    assert {model["id"] for model in virtual_models} == CATALOG_MODELS
     assert all(
-        model["verification"]["status"] == "verified" for model in document["models"]
+        model["verification"]["status"] == "reproduced" for model in virtual_models
     )
 
 
 def test_packaged_mom_recipes_do_not_inject_system_prompts() -> None:
-    packaged_root = model_catalog.resources.files("cli.model_assets")
+    packaged_root = model_catalog._model_assets_root()
     document = yaml.safe_load(
         packaged_root.joinpath("latest", "mom-v1", "config.yaml").read_text(
             encoding="utf-8"
@@ -282,7 +323,7 @@ def test_catalog_rejects_unknown_fields_at_every_manifest_layer(
     path: tuple[str | int, ...],
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        _target_at(document, path)["unexpected_contract"] = True
+        _catalog_target_at(document, path)["unexpected_contract"] = True
 
     with pytest.raises(ModelCatalogError, match="unknown fields: unexpected_contract"):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
@@ -292,7 +333,7 @@ def test_catalog_rejects_unknown_fields_in_model_compatibility_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0]["compatibility"] = {
+        _first_virtual_model(document)["compatibility"] = {
             "cli": {"min": "0.3.0", "unsupported_bound": "0.4.0"}
         }
 
@@ -305,7 +346,7 @@ def test_catalog_rejects_secret_like_manifest_keys(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0][field] = "must-not-enter-a-package"
+        _first_virtual_model(document)[field] = "must-not-enter-a-package"
 
     with pytest.raises(ModelCatalogError, match=rf"secret-like field: .*\.{field}"):
         _load_mutated_catalog(tmp_path, monkeypatch, mutate)
@@ -325,7 +366,7 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
     literal: str,
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        document["models"][0]["description"] = literal
+        _first_virtual_model(document)["description"] = literal
 
     with pytest.raises(
         ModelCatalogError, match=r"credential-like literal at .*\.description"
@@ -347,7 +388,7 @@ def test_catalog_rejects_credential_like_literals_without_echoing_them(
         (("models", 0, "kind"), "concrete", "unsupported value"),
         (("models", 0, "family"), "MoM", "lowercase slug"),
         (("models", 0, "policy_version"), "1", "semantic version"),
-        (("models", 0, "protocols"), ["openai"], "unsupported values"),
+        (("protocols", 0, "id"), "openai", "unsupported values"),
         (
             ("models", 0, "roles", 0, "minimum_candidates"),
             99,
@@ -363,7 +404,7 @@ def test_catalog_rejects_invalid_identity_version_enum_and_cardinality(
     message: str,
 ) -> None:
     def mutate(document: dict[str, Any]) -> None:
-        parent = _target_at(document, path[:-1])
+        parent = _catalog_target_at(document, path[:-1])
         parent[path[-1]] = value
 
     with pytest.raises(ModelCatalogError, match=message):

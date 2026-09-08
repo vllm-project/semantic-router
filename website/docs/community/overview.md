@@ -19,12 +19,13 @@ contributors need.
 git clone https://github.com/vllm-project/semantic-router.git
 cd semantic-router
 
-make agent-bootstrap
-make agent-report ENV=cpu CHANGED_FILES="path/to/changed-file"
+make harness-bootstrap
+make impact ENV=cpu CHANGED_FILES="path/to/changed-file"
 ```
 
-`agent-report` identifies the smallest relevant validation commands for the
-changed paths. Use `ENV=amd` only for ROCm-specific behavior.
+`impact` reports ownership, minimum checks, and candidate CI or E2E work for
+the changed paths. It does not choose a development procedure. Use `ENV=amd`
+only for ROCm-specific behavior.
 
 For the default local image workflow:
 
@@ -42,15 +43,8 @@ Run the checks reported for your change. These repository-wide entrypoints are
 useful when their scope matches your work:
 
 ```bash
-make precommit-check
-make agent-ci-gate CHANGED_FILES="path/to/changed-file"
-make test-and-build-local
-```
-
-Documentation-only changes can use:
-
-```bash
-make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+make check CHANGED_FILES="path/to/changed-file"
+make ci-full  # high-risk changes or full local PR parity
 ```
 
 Every commit in a pull request must include a Developer Certificate of Origin
@@ -66,6 +60,7 @@ a visual change.
 
 ## Contributor guides
 
+- [Model and Provider Day-0 Support](./model-provider-day-0-support)
 - [Development Guide](./development)
 - [Documentation Guide](./documentation)
 - [Code Style and Quality](./code-style)

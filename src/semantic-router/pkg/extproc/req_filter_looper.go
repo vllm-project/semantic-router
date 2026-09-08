@@ -18,8 +18,6 @@ package extproc
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
@@ -224,40 +222,6 @@ func (r *OpenAIRouter) executeLooperRequest(
 	return resp, nil
 }
 
-func (r *OpenAIRouter) looperExecutionErrorResponse(
-	err error,
-	originalModel string,
-	decision *config.Decision,
-	reqCtx *RequestContext,
-) *ext_proc.ProcessingResponse {
-	failureFields := map[string]interface{}{
-		"request_id": reqCtx.RequestID,
-		"decision":   decision.Name,
-		"algorithm":  decision.Algorithm.Type,
-		"error":      err.Error(),
-	}
-	executionEvidence, hasExecutionEvidence := looper.ConfidenceEvidenceFromError(err)
-	var evidenceArgs []looper.ConfidenceExecutionEvidence
-	if hasExecutionEvidence {
-		failureFields["models_used"] = executionEvidence.ModelsUsed
-		failureFields["iterations"] = executionEvidence.Iterations
-		failureFields["prompt_tokens"] = executionEvidence.Usage.PromptTokens
-		failureFields["completion_tokens"] = executionEvidence.Usage.CompletionTokens
-		failureFields["total_tokens"] = executionEvidence.Usage.TotalTokens
-		evidenceArgs = append(evidenceArgs, executionEvidence)
-	}
-	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
-	return r.recordLooperFailure(
-		reqCtx,
-		originalModel,
-		decision,
-		500,
-		"Looper execution failed: "+err.Error(),
-		"looper_execution_failed",
-		evidenceArgs...,
-	)
-}
-
 func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	resp *looper.Response,
 	originalModel string,
@@ -299,44 +263,6 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	if semanticResponse != nil {
 		r.scheduleSemanticResponseMemoryStore(reqCtx, semanticResponse)
 	}
-}
-
-func (r *OpenAIRouter) recordLooperFailure(
-	ctx *RequestContext,
-	originalModel string,
-	decision *config.Decision,
-	statusCode int,
-	message string,
-	reason string,
-	executionEvidence ...looper.ConfidenceExecutionEvidence,
-) *ext_proc.ProcessingResponse {
-	response := r.createErrorResponse(statusCode, message)
-	decisionName := ""
-	if decision != nil {
-		decisionName = decision.Name
-	}
-	if len(executionEvidence) > 0 && executionEvidence[0].Iterations > 0 {
-		evidence := executionEvidence[0]
-		algorithm := "confidence"
-		ctx.VSRSelectionMethod = algorithm
-		ctx.VSRSelectionReasoning = boundedSelectionReasoning(fmt.Sprintf(
-			"%s execution failed after %d call attempts; completed models: %s",
-			algorithm,
-			evidence.Iterations,
-			strings.Join(evidence.ModelsUsed, ","),
-		))
-	}
-	r.startRouterReplay(ctx, originalModel, "", decisionName)
-	if len(executionEvidence) > 0 {
-		r.updateLooperReplayUsage(ctx, executionEvidence[0].Usage)
-	}
-	r.updateRouterReplayStatus(ctx, statusCode, false)
-	if immediate := response.GetImmediateResponse(); immediate != nil {
-		r.attachRouterReplayResponse(ctx, immediate.Body, false)
-	}
-	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
-	addRouterReplayHeaderToImmediateResponse(response, ctx.RouterReplayID)
-	return response
 }
 
 func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {

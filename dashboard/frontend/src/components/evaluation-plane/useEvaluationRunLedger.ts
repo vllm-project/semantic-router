@@ -5,7 +5,7 @@ import type {
   EvaluationRunStatus,
   EvaluationTrackId,
 } from '../../types/evaluationPlane'
-import { filterEvaluationRuns } from './evaluationRunLedger'
+import { filterEvaluationRuns } from './evaluationRunLedgerModel'
 
 const PAGE_SIZE = 10
 

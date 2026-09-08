@@ -12,6 +12,11 @@ export default defineConfig({
   },
   server: {
     port: 3001,
+    fs: {
+      // The public Model Hub snapshot is shared with the website instead of
+      // being checked in twice under both frontend trees.
+      allow: [path.resolve(import.meta.dirname, '../..')],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8700',

@@ -13,6 +13,18 @@
   <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
 
+<a href="https://trendshift.io/repositories/15581?utm_source=repository-badge&utm_medium=badge&utm_campaign=badge-repository-15581" target="_blank" rel="noopener noreferrer">
+  <img src="https://trendshift.io/api/badge/repositories/15581" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
+</a>
+<a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
+  <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
+</a>
+
+[![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
+![GitHub Release](https://img.shields.io/github/v/release/vllm-project/semantic-router?sort=semver)
+![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/vllm-project/semantic-router)
+
 </div>
 
 ---
@@ -42,13 +54,14 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev
 
 For platform notes, detailed setup options, and troubleshooting, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-<details>
-<summary>Online playground credentials</summary>
+### Online playground
+
+Try the online playground at <https://app.vllm-sr.ai/playground>.
+
+Credentials:
 
 - Username: `love@vllm-sr.ai`
 - Password: `vllm-sr-read`
-
-</details>
 
 ## Latest News
 
@@ -84,17 +97,14 @@ Track contributors, workgroups, and weekly activity at [community.vllm-sr.ai](ht
 
 ### Community Meetings
 
-We host community meetings on the first and third Tuesday of each month to sync with contributors across different time zones:
+We host two monthly community meetings across APAC and the Americas:
 
-- **First Tuesday of the month**: 9:00-10:00 AM EST (accommodates US EST, EU, and Asia Pacific contributors)
-  - [Zoom Link](https://us05web.zoom.us/j/84122485631?pwd=BB88v03mMNLVHn60YzVk4PihuqBV9d.1)
-  - [Google Calendar Invite](https://us05web.zoom.us/meeting/tZAsdeuspj4sGdVraOOR4UaXSstrH2jjPYFq/calendar/google/add?meetingMasterEventId=4jjzUKSLSLiBHtIKZpGc3g)
-  - [ics file](https://drive.google.com/file/d/15wO8cg0ZjNxdr8OtGiZyAgkSS8_Wry0J/view?usp=sharing)
-- **Third Tuesday of the month**: 1:00-2:00 PM EST (accommodates US EST and California contributors)
-  - [Zoom Link](https://us06web.zoom.us/j/86871492845?pwd=LcTtXm9gtGu23JeWqXxbnLLCCvbumB.1)
-  - [Google Calendar Invite](https://us05web.zoom.us/meeting/tZIlcOispzkiHtH2dlkWlLym68bEqvuf3MU5/calendar/google/add?meetingMasterEventId=PqWz2vk7TOCszPXqconGAA)
-  - [ics file](https://drive.google.com/file/d/1T54mwYpXXoV9QfR76I56BFBPNbykSsTw/view?usp=sharing)
-- Meeting recordings: [YouTube](https://www.youtube.com/@vLLMSemanticRouter/videos)
+- **APAC-friendly meeting — second Wednesday of the month**: 9:00-10:00 AM Singapore time (UTC+8; the same local time in Beijing)
+  - [Google Meet](https://meet.google.com/sed-jmht-ddm)
+  - [Google Calendar Invite](https://calendar.app.google/w3r6mfKf4X4xCMAm9)
+- **Americas-friendly meeting — fourth Wednesday of the month**: 8:00-9:00 PM Eastern Time (`America/New_York`) / 5:00-6:00 PM Pacific Time
+  - [Google Meet](https://meet.google.com/wvm-vbfy-xzj)
+  - [Google Calendar Invite](https://calendar.app.google/xHPHx8xhD1wHQfhH6)
 
 ## Contributing
 
