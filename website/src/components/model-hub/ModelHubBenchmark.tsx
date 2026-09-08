@@ -14,7 +14,7 @@ import {
   type ModelHubChartColor,
 } from '../../data/modelHubBenchmarkSupport'
 import { CatalogMark } from './ModelHubMark'
-import { EmptyState, formatMetric, readable, srOnlyClass } from './ModelHubPrimitives'
+import { EmptyState, formatMetric, readable, SelectControl, srOnlyClass } from './ModelHubPrimitives'
 import styles from './modelHubBenchmark.module.css'
 
 export const benchmarkColumnHeight = (
@@ -233,17 +233,15 @@ export function ModelHubBenchmark({
             placeholder="Filter models"
           />
         </label>
-        <label className={styles.publisherFilter}>
-          <span>Creator</span>
-          <select value={publisher} onChange={event => setPublisher(event.target.value)}>
-            <option value="all">All creators</option>
-            {publishers.map(item => (
-              <option value={item} key={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-        </label>
+        <SelectControl
+          label="Creator"
+          value={publisher}
+          options={[
+            ['all', 'All creators'],
+            ...publishers.map(item => [item, item] as [string, string]),
+          ]}
+          onChange={setPublisher}
+        />
       </div>
       {charts.length
         ? (
