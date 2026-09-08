@@ -44,35 +44,24 @@ def test_extract_mock_frame_stall():
     )
     assert extract_mock_frame_stall(req1) == 5.0
 
-    # Default stall duration for bare markers
-    req2 = ChatRequest(
-        model="test",
-        messages=[{"role": "user", "content": "hello __mock_frame_stall__ world"}],
-    )
-    assert extract_mock_frame_stall(req2) == 15.0
-
     # Incomplete stream does NOT trigger frame stall (decoupled)
-    req3 = ChatRequest(
+    req2 = ChatRequest(
         model="test",
         messages=[
             {"role": "user", "content": "hello __mock_incomplete_stream__ world"}
         ],
     )
-    assert extract_mock_frame_stall(req3) == 0.0
+    assert extract_mock_frame_stall(req2) == 0.0
 
-    req4 = ChatRequest(
+    req3 = ChatRequest(
         model="test", messages=[{"role": "user", "content": "normal stream"}]
     )
-    assert extract_mock_frame_stall(req4) == 0.0
+    assert extract_mock_frame_stall(req3) == 0.0
 
     # Response API dict parsing
     assert (
         response_extract_mock_frame_stall({"input": "__mock_frame_stall_3s__ test"})
         == 3.0
-    )
-    assert (
-        response_extract_mock_frame_stall({"input": "__mock_frame_stall__ test"})
-        == 15.0
     )
     assert (
         response_extract_mock_frame_stall({"input": "__mock_incomplete_stream__ test"})

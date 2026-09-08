@@ -539,8 +539,6 @@ def extract_mock_frame_stall(req: ChatRequest) -> float:
             m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", message.content)
             if m:
                 return float(m.group(1))
-            if "__mock_frame_stall__" in message.content:
-                return 15.0
     return 0.0
 
 
@@ -550,8 +548,6 @@ def response_extract_mock_frame_stall(body: dict[str, Any]) -> float:
             m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", text)
             if m:
                 return float(m.group(1))
-            if "__mock_frame_stall__" in text:
-                return 15.0
     return 0.0
 
 
