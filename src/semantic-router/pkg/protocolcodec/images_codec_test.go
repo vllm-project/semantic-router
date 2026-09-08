@@ -273,6 +273,12 @@ func TestImagesCodecDecodeResponseToGeneratedImage(t *testing.T) {
 	if block.GeneratedImage.Result == nil || *block.GeneratedImage.Result != payload {
 		t.Fatalf("result = %v, want %q", block.GeneratedImage.Result, payload)
 	}
+	// The images dialect does not carry token usage; the neutral response must
+	// keep usage explicitly unavailable so downstream accounting never
+	// misreads an image artifact as token-bearing text.
+	if response.Usage.State != llmprotocol.UsageUnavailable {
+		t.Fatalf("usage state = %v, want unavailable", response.Usage.State)
+	}
 }
 
 func TestImagesCodecDecodeResponseEmptyData(t *testing.T) {
