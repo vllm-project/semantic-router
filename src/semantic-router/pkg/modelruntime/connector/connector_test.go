@@ -99,7 +99,7 @@ func TestDoAppliesAuthAndPreservesBasePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	body, err := client.Do(context.Background(), testOperation, []byte(`{"input":"hello"}`))
 	if err != nil {
@@ -123,7 +123,7 @@ func TestDoUsesExactBaseURLWhenOperationPathIsEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	operation := testOperation
 	operation.Path = ""
@@ -172,7 +172,7 @@ func TestDoWithHeadersAppliesRequestScopedHeadersBeforeAuthorization(t *testing.
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	headers := http.Header{
 		"Authorization":   []string{"Bearer request"},

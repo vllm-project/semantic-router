@@ -71,7 +71,7 @@ func TestConnectorClientPreservesEndpointAndCallHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnectorClient() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	response, err := client.CallModelWithOptions(
 		context.Background(),
@@ -105,7 +105,7 @@ func TestConnectorClientDoesNotRetryGenerativeCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnectorClient() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	_, err = client.CallModelWithOptions(
 		context.Background(),
@@ -134,7 +134,7 @@ func TestConnectorClientRejectsNoContentStreamingResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewConnectorClient() error = %v", err)
 	}
-	defer client.Close()
+	t.Cleanup(func() { _ = client.Close() })
 
 	_, err = client.CallModelWithOptions(
 		context.Background(),

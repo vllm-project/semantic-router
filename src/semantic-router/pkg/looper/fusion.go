@@ -84,6 +84,8 @@ type FusionTrace struct {
 }
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
+	ctx = contextWithFusionDepth(ctx, 1)
+
 	cfg := l.resolveFusionExecutionConfig(req)
 	if len(cfg.AnalysisModels) == 0 {
 		return nil, fmt.Errorf("fusion analysis_models cannot be empty")

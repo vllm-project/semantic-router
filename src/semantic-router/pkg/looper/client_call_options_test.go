@@ -86,6 +86,21 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 	}
 }
 
+func TestRequestHeadersUsesContextFusionDepthAsFallback(t *testing.T) {
+	client := NewClient(&config.LooperConfig{})
+	ctx := contextWithFusionDepth(context.Background(), 1)
+
+	header := client.requestHeaders(ctx, 1, "decision-a", 0, "")
+	if got := header.Get(headers.VSRFusionDepth); got != "1" {
+		t.Fatalf("context %s = %q, want 1", headers.VSRFusionDepth, got)
+	}
+
+	header = client.requestHeaders(ctx, 1, "decision-a", 2, "")
+	if got := header.Get(headers.VSRFusionDepth); got != "2" {
+		t.Fatalf("explicit %s = %q, want 2", headers.VSRFusionDepth, got)
+	}
+}
+
 func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 	type observedRequest struct {
 		model         string

@@ -22,8 +22,12 @@ func (c *Client) setInternalRequestHeaders(
 	header.Set(headers.VSRInternalAuth, internalauth.Token())
 	header.Set(headers.VSRLooperRequest, "true")
 	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
-	if fusionDepth > 0 {
-		header.Set(headers.VSRFusionDepth, fmt.Sprintf("%d", fusionDepth))
+	depth := fusionDepth
+	if depth <= 0 {
+		depth = fusionDepthFromContext(ctx)
+	}
+	if depth > 0 {
+		header.Set(headers.VSRFusionDepth, fmt.Sprintf("%d", depth))
 	}
 	if recipe := routingRecipeFromContext(ctx); recipe != "" {
 		header.Set(headers.VSRSelectedRecipe, string(recipe))
