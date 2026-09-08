@@ -12,15 +12,9 @@ import (
 // path already has. Provider failures stay non-attributable so infrastructure
 // noise is never read as model regression; attribution itself is derived from
 // the category by sessiontelemetry.
-//
-// Tool-result failures are not classified here: the conversation facts carry
-// tool-call shape but no tool error status, so a failed tool cannot yet be
-// distinguished from a successful one. Those turns fall through to the usage
-// checks rather than being guessed at.
-// TODO: add more detailed classification logic
-
 func classifyTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) sessiontelemetry.TurnOutcomeCategory {
 	if ctx == nil {
+		return sessiontelemetry.TurnMissing
 	}
 	if status := ctx.UpstreamStatusCode; status == 429 || status >= 500 {
 		return sessiontelemetry.TurnProviderError
