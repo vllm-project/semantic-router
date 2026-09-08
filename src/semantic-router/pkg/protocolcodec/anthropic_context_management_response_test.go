@@ -123,7 +123,8 @@ func TestAnthropicStreamMessageDeltaAcceptsContextManagement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := decoder.Push(start); err != nil {
+	_, _, err = decoder.Push(start)
+	if err != nil {
 		t.Fatal(err)
 	}
 	delta, err := encodeSSE("message_delta", map[string]any{
