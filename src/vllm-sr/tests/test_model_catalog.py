@@ -123,7 +123,7 @@ def _load_mutated_catalog(
     mutate: Callable[[dict[str, Any]], None],
     mutate_asset: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> None:
-    packaged_root = model_catalog.resources.files("cli.model_assets")
+    packaged_root = model_catalog._model_assets_root()
     source_version = packaged_root.joinpath("latest")
     document = yaml.safe_load(
         source_version.joinpath("catalog.yaml").read_text(encoding="utf-8")
@@ -200,7 +200,7 @@ def test_packaged_catalog_export_is_complete_and_config_independent(
 
 
 def test_packaged_mom_recipes_do_not_inject_system_prompts() -> None:
-    packaged_root = model_catalog.resources.files("cli.model_assets")
+    packaged_root = model_catalog._model_assets_root()
     document = yaml.safe_load(
         packaged_root.joinpath("latest", "mom-v1", "config.yaml").read_text(
             encoding="utf-8"

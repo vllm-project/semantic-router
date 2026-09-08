@@ -207,12 +207,15 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "CUDA vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi
 
-RUN sed -i 's|http://deb.debian.org/debian-security|https://security.debian.org/debian-security|g' /etc/apt/sources.list && \
-    apt-get update && apt-get install -y --no-install-recommends \
-      build-essential \
-      pkg-config \
-      libssl-dev && \
-    rm -rf /var/lib/apt/lists/*
+# The official Rust bullseye image is buildpack-based and already supplies the
+# native compiler, pkg-config, and OpenSSL headers required by ort. Validate
+# that immutable builder contract instead of making the build depend on live
+# Debian repository metadata.
+RUN command -v gcc >/dev/null && \
+    command -v g++ >/dev/null && \
+    command -v make >/dev/null && \
+    command -v pkg-config >/dev/null && \
+    pkg-config --exists openssl
 
 COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 
@@ -373,6 +376,7 @@ RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/cli/ /app/cli/
+COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 
