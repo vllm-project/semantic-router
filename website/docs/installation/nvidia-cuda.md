@@ -92,7 +92,7 @@ the Router can reach a host-published port through `host.docker.internal`:
 ```yaml
 providers:
   defaults:
-    default_model: local/qwen
+    model: local/qwen
   models:
     - name: local/qwen
       provider_model_id: Qwen/Qwen3-0.6B
@@ -101,7 +101,7 @@ providers:
         - name: nvidia-vllm
           endpoint: host.docker.internal:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 ```
 

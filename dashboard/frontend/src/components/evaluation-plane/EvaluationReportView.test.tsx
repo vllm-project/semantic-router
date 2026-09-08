@@ -95,7 +95,7 @@ const report: EvaluationReport = {
   },
   summary: {
     verdict: 'unavailable',
-    quality_score: null,
+    primary_metric: null,
     latency_p95_ms: null,
     runtime_cost: 0.01,
     capacity_tco: null,

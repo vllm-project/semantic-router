@@ -77,7 +77,7 @@ listeners:
     timeout: "600s"
 providers:
   defaults:
-    default_model: "model-fast"
+    model: "model-fast"
   models:
     - name: "model-fast"
       reliability:
@@ -150,7 +150,7 @@ listeners:
     timeout: "300s"
 providers:
   defaults:
-    default_model: "model-with-retries"
+    model: "model-with-retries"
   models:
     - name: "model-with-retries"
       reliability:
@@ -201,7 +201,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "model-stream"
+    model: "model-stream"
   models:
     - name: "model-stream"
       reliability:
@@ -280,16 +280,22 @@ listeners:
     timeout: "120s"
 providers:
   defaults:
-    default_model: "claude-fast"
+    model: "claude-fast"
   models:
     - name: "claude-fast"
       api_format: "anthropic"
+      backend_refs:
+        - name: "anthropic-fast"
+          provider: "anthropic"
       reliability:
         request_timeout: "15s"
         stream_idle_timeout: "3s"
         connect_timeout: "2s"
     - name: "claude-slow"
       api_format: "anthropic"
+      backend_refs:
+        - name: "anthropic-slow"
+          provider: "anthropic"
 routing:
   modelCards:
     - name: "claude-fast"
