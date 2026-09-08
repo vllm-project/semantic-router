@@ -207,45 +207,67 @@ func ruleTreeShapeCorpus() []ruleTreeShapeCase {
 		}}},
 
 		// Rejected operators.
-		{name: "root XOR", rules: RuleNode{Operator: "XOR", Conditions: []RuleNode{kw("a")}},
-			wantErr: `rules: unsupported operator "XOR"`},
-		{name: "root typo ADN", rules: RuleNode{Operator: "ADN", Conditions: []RuleNode{kw("a"), kw("b")}},
-			wantErr: `rules: unsupported operator "ADN"`},
+		{
+			name: "root XOR", rules: RuleNode{Operator: "XOR", Conditions: []RuleNode{kw("a")}},
+			wantErr: `rules: unsupported operator "XOR"`,
+		},
+		{
+			name: "root typo ANND", rules: RuleNode{Operator: "ANND", Conditions: []RuleNode{kw("a"), kw("b")}},
+			wantErr: `rules: unsupported operator "ANND"`,
+		},
 		{name: "nested NOR", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{
 			kw("a"),
 			{Operator: "NOR", Conditions: []RuleNode{kw("b")}},
 		}}, wantErr: `rules.conditions[1]: unsupported operator "NOR"`},
 
 		// Rejected NOT arity.
-		{name: "root NOT zero children", rules: RuleNode{Operator: "NOT"},
-			wantErr: "rules: NOT requires exactly one child condition, got 0"},
-		{name: "root NOT two children", rules: RuleNode{Operator: "NOT", Conditions: []RuleNode{kw("a"), kw("b")}},
-			wantErr: "rules: NOT requires exactly one child condition, got 2"},
+		{
+			name: "root NOT zero children", rules: RuleNode{Operator: "NOT"},
+			wantErr: "rules: NOT requires exactly one child condition, got 0",
+		},
+		{
+			name: "root NOT two children", rules: RuleNode{Operator: "NOT", Conditions: []RuleNode{kw("a"), kw("b")}},
+			wantErr: "rules: NOT requires exactly one child condition, got 2",
+		},
 		{name: "nested NOT two children", rules: RuleNode{Operator: "OR", Conditions: []RuleNode{
 			kw("a"),
 			{Operator: "NOT", Conditions: []RuleNode{kw("b"), kw("c")}},
 		}}, wantErr: "rules.conditions[1]: NOT requires exactly one child condition, got 2"},
 
 		// Rejected childless combinations.
-		{name: "root childless OR never matches", rules: RuleNode{Operator: "OR"},
-			wantErr: "rules: OR combination requires at least one child condition"},
-		{name: "nested childless AND", rules: RuleNode{Operator: "OR", Conditions: []RuleNode{kw("a"), {Operator: "AND"}}},
-			wantErr: "rules.conditions[1]: AND combination requires at least one child condition"},
-		{name: "nested empty node", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{kw("a"), {}}},
-			wantErr: "rules.conditions[1]: combination condition requires an operator and at least one child condition"},
+		{
+			name: "root childless OR never matches", rules: RuleNode{Operator: "OR"},
+			wantErr: "rules: OR combination requires at least one child condition",
+		},
+		{
+			name: "nested childless AND", rules: RuleNode{Operator: "OR", Conditions: []RuleNode{kw("a"), {Operator: "AND"}}},
+			wantErr: "rules.conditions[1]: AND combination requires at least one child condition",
+		},
+		{
+			name: "nested empty node", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{kw("a"), {}}},
+			wantErr: "rules.conditions[1]: combination condition requires an operator and at least one child condition",
+		},
 
 		// Rejected node shapes.
 		{name: "leaf with operator", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{
 			{Type: SignalTypeKeyword, Name: "a", Operator: "OR"},
 		}}, wantErr: "rules.conditions[0]: condition must be either a leaf (type/name) or a combination (operator/conditions), not both"},
-		{name: "leaf with children", rules: RuleNode{Type: SignalTypeKeyword, Name: "a", Conditions: []RuleNode{kw("b")}},
-			wantErr: "rules: condition must be either a leaf (type/name) or a combination (operator/conditions), not both"},
-		{name: "name without type", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{{Name: "a"}}},
-			wantErr: "rules.conditions[0]: leaf condition requires a type"},
-		{name: "root label only satisfies IsEmpty", rules: RuleNode{Label: "positive"},
-			wantErr: "rules: leaf condition requires a type"},
-		{name: "root on_error only", rules: RuleNode{OnError: "match"},
-			wantErr: "rules: leaf condition requires a type"},
+		{
+			name: "leaf with children", rules: RuleNode{Type: SignalTypeKeyword, Name: "a", Conditions: []RuleNode{kw("b")}},
+			wantErr: "rules: condition must be either a leaf (type/name) or a combination (operator/conditions), not both",
+		},
+		{
+			name: "name without type", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{{Name: "a"}}},
+			wantErr: "rules.conditions[0]: leaf condition requires a type",
+		},
+		{
+			name: "root label only satisfies IsEmpty", rules: RuleNode{Label: "positive"},
+			wantErr: "rules: leaf condition requires a type",
+		},
+		{
+			name: "root on_error only", rules: RuleNode{OnError: "match"},
+			wantErr: "rules: leaf condition requires a type",
+		},
 		{name: "predicate without type", rules: RuleNode{Operator: "AND", Conditions: []RuleNode{
 			{Name: "a", Predicate: &NumericPredicate{}},
 		}}, wantErr: "rules.conditions[0]: leaf condition requires a type"},
@@ -358,7 +380,7 @@ func TestParseYAMLBytes_RejectsMultiChildNotInDecisionRules(t *testing.T) {
 version: v0.3
 providers:
   defaults:
-    default_model: gpt-worker
+    model: gpt-worker
   models:
     - name: gpt-worker
       provider_model_id: openai/gpt-5.5
