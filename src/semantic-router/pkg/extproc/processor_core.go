@@ -105,11 +105,19 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 }
 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
-	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+	var timeoutRecorded bool
+	if ctx != nil && ctx.RequestModel != "" && !ctx.ImmediateResponseEncoded && !ctx.SkipProcessing {
+		if (ctx.IsStreamingResponse && !ctx.StreamingComplete) || ctx.UpstreamStatusCode == 0 {
+			metrics.RecordRequestError(ctx.RequestModel, "timeout")
+			timeoutRecorded = true
+		}
+	}
+
+	if ctx != nil && ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
-	if ctx.InflightToken != 0 {
+	if ctx != nil && ctx.InflightToken != 0 {
 		inflight.End(ctx.RequestModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
@@ -122,11 +130,11 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		return nil
 	}
 
-	if handled := handleProcessStatusError(ctx, err); handled {
+	if handled := handleProcessStatusError(ctx, err, timeoutRecorded); handled {
 		return nil
 	}
 
-	if handled := handleProcessContextError(ctx, err); handled {
+	if handled := handleProcessContextError(ctx, err, timeoutRecorded); handled {
 		return nil
 	}
 
@@ -157,7 +165,7 @@ func replayLifecycleForReceiveError(err error) (string, string) {
 	return routerreplay.LifecycleFailed, "extproc_receive_failed"
 }
 
-func handleProcessStatusError(ctx *RequestContext, err error) bool {
+func handleProcessStatusError(ctx *RequestContext, err error, timeoutRecorded bool) bool {
 	s, ok := status.FromError(err)
 	if !ok {
 		return false
@@ -167,20 +175,24 @@ func handleProcessStatusError(ctx *RequestContext, err error) bool {
 	case codes.Canceled:
 		return true
 	case codes.DeadlineExceeded:
-		recordProcessTimeout(ctx)
+		if !timeoutRecorded {
+			recordProcessTimeout(ctx)
+		}
 		return true
 	default:
 		return false
 	}
 }
 
-func handleProcessContextError(ctx *RequestContext, err error) bool {
+func handleProcessContextError(ctx *RequestContext, err error, timeoutRecorded bool) bool {
 	if errors.Is(err, context.Canceled) {
 		logging.Debugf("Stream canceled gracefully")
 		return true
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		recordProcessTimeout(ctx)
+		if !timeoutRecorded {
+			recordProcessTimeout(ctx)
+		}
 		return true
 	}
 	return false

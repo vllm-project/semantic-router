@@ -2833,3 +2833,52 @@ func (m *MockResponseStore) Close() error {
 func (m *MockResponseStore) CheckConnection(ctx context.Context) error {
 	return nil
 }
+
+func TestHandleProcessReceiveErrorRecordsTimeout(t *testing.T) {
+	r := &OpenAIRouter{}
+
+	// Case 1: Stream ends before response headers received (UpstreamStatusCode == 0) -> records timeout
+	ctx1 := &RequestContext{RequestModel: "fast-model", UpstreamStatusCode: 0}
+	before1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	_ = r.handleProcessReceiveError(ctx1, io.EOF)
+	after1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	if after1 != before1+1 {
+		t.Fatalf("expected timeout to increase on premature stream EOF (upstream status 0): before=%v after=%v", before1, after1)
+	}
+
+	// Case 2: Stalled streaming response aborted before completion -> records timeout
+	ctx2 := &RequestContext{RequestModel: "stream-model", IsStreamingResponse: true, StreamingComplete: false, UpstreamStatusCode: 200}
+	before2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "stream-model"})
+	_ = r.handleProcessReceiveError(ctx2, io.EOF)
+	after2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "stream-model"})
+	if after2 != before2+1 {
+		t.Fatalf("expected timeout to increase on incomplete stream abort: before=%v after=%v", before2, after2)
+	}
+
+	// Case 3: Gracefully completed non-streaming response -> does NOT record timeout
+	ctx3 := &RequestContext{RequestModel: "ok-model", UpstreamStatusCode: 200}
+	before3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-model"})
+	_ = r.handleProcessReceiveError(ctx3, io.EOF)
+	after3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-model"})
+	if after3 != before3 {
+		t.Fatalf("expected no timeout increase on graceful response completion: before=%v after=%v", before3, after3)
+	}
+
+	// Case 4: Gracefully completed streaming response -> does NOT record timeout
+	ctx4 := &RequestContext{RequestModel: "ok-stream-model", IsStreamingResponse: true, StreamingComplete: true, UpstreamStatusCode: 200}
+	before4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-stream-model"})
+	_ = r.handleProcessReceiveError(ctx4, io.EOF)
+	after4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-stream-model"})
+	if after4 != before4 {
+		t.Fatalf("expected no timeout increase on completed stream: before=%v after=%v", before4, after4)
+	}
+
+	// Case 5: Immediate response (e.g. cache hit / short-circuit) -> does NOT record timeout
+	ctx5 := &RequestContext{RequestModel: "immediate-model", ImmediateResponseEncoded: true, UpstreamStatusCode: 0}
+	before5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "immediate-model"})
+	_ = r.handleProcessReceiveError(ctx5, io.EOF)
+	after5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "immediate-model"})
+	if after5 != before5 {
+		t.Fatalf("expected no timeout increase on immediate response: before=%v after=%v", before5, after5)
+	}
+}
