@@ -155,3 +155,43 @@ func TestConfiguredTimeoutBoundsConstants(t *testing.T) {
 			expectedConnectMaxBound, expectedConnectTimeout)
 	}
 }
+
+func TestParseRequestErrorCount(t *testing.T) {
+	t.Parallel()
+
+	metricsExposition := `# HELP llm_request_errors_total Total number of request errors
+# TYPE llm_request_errors_total counter
+llm_request_errors_total{model="timeout-probe-fast",reason="timeout"} 2
+llm_request_errors_total{model="timeout-probe-slow",reason="timeout"} 0
+llm_request_errors_total{model="timeout-probe-unreachable",reason="upstream_5xx"} 1
+llm_request_errors_total{model="other-model",reason="invalid_request"} 5
+`
+
+	// Match exact model and reason
+	fastCount := parseRequestErrorCount(metricsExposition, "timeout-probe-fast", "timeout")
+	if fastCount != 2 {
+		t.Errorf("expected fast timeout count 2, got %v", fastCount)
+	}
+
+	slowCount := parseRequestErrorCount(metricsExposition, "timeout-probe-slow", "timeout")
+	if slowCount != 0 {
+		t.Errorf("expected slow timeout count 0, got %v", slowCount)
+	}
+
+	unreachable5xx := parseRequestErrorCount(metricsExposition, "timeout-probe-unreachable", "upstream_5xx")
+	if unreachable5xx != 1 {
+		t.Errorf("expected unreachable upstream_5xx count 1, got %v", unreachable5xx)
+	}
+
+	// Model not present or reason not matched returns 0
+	nonExistent := parseRequestErrorCount(metricsExposition, "non-existent-model", "timeout")
+	if nonExistent != 0 {
+		t.Errorf("expected non-existent metric to return 0, got %v", nonExistent)
+	}
+
+	// Empty body returns 0
+	empty := parseRequestErrorCount("", "timeout-probe-fast", "timeout")
+	if empty != 0 {
+		t.Errorf("expected empty body to return 0, got %v", empty)
+	}
+}

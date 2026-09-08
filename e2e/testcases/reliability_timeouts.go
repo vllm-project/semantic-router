@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +73,18 @@ func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, 
 		fmt.Println("[Test] Running comprehensive reliability timeouts test suite")
 	}
 
+	var initialMetricsBody string
+	if client != nil && opts.RestConfig != nil {
+		body, err := fetchMetricsBody(ctx, client, opts)
+		if err != nil {
+			if opts.Verbose {
+				fmt.Printf("[Test] Note: initial metrics not accessible: %v\n", err)
+			}
+		} else {
+			initialMetricsBody = body
+		}
+	}
+
 	var failures []error
 
 	if err := testReliabilityDistinctDeadlines(ctx, client, opts); err != nil {
@@ -83,7 +96,7 @@ func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, 
 	if err := testReliabilityShortConnectFailures(ctx, client, opts); err != nil {
 		failures = append(failures, fmt.Errorf("short-connect-failures: %w", err))
 	}
-	if err := verifyTimeoutMetrics(ctx, client, opts); err != nil {
+	if err := verifyTimeoutMetrics(ctx, client, opts, initialMetricsBody); err != nil {
 		failures = append(failures, fmt.Errorf("timeout-metrics: %w", err))
 	}
 
@@ -308,35 +321,98 @@ func evaluateTimeoutBounds(name string, elapsed, minBound, maxBound time.Duratio
 	return nil
 }
 
-// verifyTimeoutMetrics verifies that the router's Prometheus /metrics endpoint records
-// timeout errors in llm_request_errors_total.
-func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+// fetchMetricsBody establishes a port-forward and retrieves the /metrics response body.
+func fetchMetricsBody(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, error) {
 	if client == nil || opts.RestConfig == nil {
-		return nil
+		return "", nil
 	}
 	metricsSession, err := fixtures.OpenSemanticRouterMetricsSession(ctx, client, opts)
 	if err != nil {
-		if opts.Verbose {
-			fmt.Printf("[Test] Note: metrics session not accessible: %v\n", err)
-		}
-		return nil
+		return "", err
 	}
 	defer metricsSession.Close()
 
 	metricsHTTP := metricsSession.HTTPClient(10 * time.Second)
 	metricsResp, err := fixtures.DoGETRequest(ctx, metricsHTTP, metricsSession.URL("/metrics"))
 	if err != nil {
-		return fmt.Errorf("fetch /metrics: %w", err)
+		return "", fmt.Errorf("fetch /metrics: %w", err)
 	}
 	if metricsResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("/metrics: expected 200, got %d", metricsResp.StatusCode)
+		return "", fmt.Errorf("/metrics: expected 200, got %d", metricsResp.StatusCode)
+	}
+	return string(metricsResp.Body), nil
+}
+
+// verifyTimeoutMetrics verifies that the router's Prometheus /metrics endpoint records
+// timeout errors in llm_request_errors_total, expecting a delta of 2 for timeout-probe-fast
+// (1 from deadline timeout and 1 from stalled stream idle timeout).
+func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, initialBody string) error {
+	if client == nil || opts.RestConfig == nil {
+		return nil
+	}
+	finalBody, err := fetchMetricsBody(ctx, client, opts)
+	if err != nil {
+		if opts.Verbose {
+			fmt.Printf("[Test] Note: metrics endpoint not accessible: %v\n", err)
+		}
+		return nil
 	}
 
-	body := string(metricsResp.Body)
-	if !strings.Contains(body, "llm_request_errors_total") || !strings.Contains(body, `reason="timeout"`) {
-		return fmt.Errorf("metrics body missing llm_request_errors_total with reason=\"timeout\": %s", body)
+	if !strings.Contains(finalBody, "llm_request_errors_total") || !strings.Contains(finalBody, `reason="timeout"`) {
+		return fmt.Errorf("metrics body missing llm_request_errors_total with reason=\"timeout\": %s", finalBody)
+	}
+
+	initialFast := parseRequestErrorCount(initialBody, timeoutProbeFastModel, "timeout")
+	finalFast := parseRequestErrorCount(finalBody, timeoutProbeFastModel, "timeout")
+	deltaFast := finalFast - initialFast
+	if deltaFast != 2 {
+		return fmt.Errorf("expected 2 timeout errors for model %q (1 from deadline, 1 from stalled stream), got delta %.0f (before=%.0f, after=%.0f)",
+			timeoutProbeFastModel, deltaFast, initialFast, finalFast)
+	}
+
+	initialSlow := parseRequestErrorCount(initialBody, timeoutProbeSlowModel, "timeout")
+	finalSlow := parseRequestErrorCount(finalBody, timeoutProbeSlowModel, "timeout")
+	deltaSlow := finalSlow - initialSlow
+	if deltaSlow != 0 {
+		return fmt.Errorf("expected 0 timeout errors for slow model %q within deadline, got delta %.0f (before=%.0f, after=%.0f)",
+			timeoutProbeSlowModel, deltaSlow, initialSlow, finalSlow)
+	}
+
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"timeout_metrics_verified": true,
+			"initial_timeout_count":    initialFast,
+			"final_timeout_count":      finalFast,
+			"timeout_delta":            deltaFast,
+		})
 	}
 	return nil
+}
+
+// parseRequestErrorCount extracts the counter value of llm_request_errors_total
+// for the given model and reason. Returns 0 if the metric is not present.
+func parseRequestErrorCount(body, model, reason string) float64 {
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "llm_request_errors_total") {
+			continue
+		}
+		if strings.Contains(line, fmt.Sprintf(`model="%s"`, model)) &&
+			strings.Contains(line, fmt.Sprintf(`reason="%s"`, reason)) {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				val, err := strconv.ParseFloat(fields[len(fields)-1], 64)
+				if err == nil {
+					return val
+				}
+			}
+		}
+	}
+	return 0
 }
 
 // isTimeoutOrConnectionError checks if an error indicates a network timeout or connection reset.
