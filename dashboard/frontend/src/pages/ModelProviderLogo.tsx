@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { isMonochromeModelProviderIcon, type ModelProviderPreset } from './modelProviderCatalog'
+import type { ModelProviderPreset } from './modelProviderCatalog'
 import styles from './ModelProviderLogo.module.css'
 
 interface ModelProviderLogoProps {
@@ -14,14 +14,18 @@ export default function ModelProviderLogo({
   size = 'medium',
   fallbackSource = '/vllm.png',
 }: ModelProviderLogoProps) {
-  const initialSource = provider?.icon || fallbackSource
+  // A missing catalog icon is intentional: render the provider's monogram.
+  // The vLLM image is only the anonymous-model fallback and must never leak
+  // into unrelated provider cards.
+  const initialSource = provider ? provider.icon : fallbackSource
+  const usesMonogram = Boolean(provider && !provider.icon)
   const [source, setSource] = useState(initialSource)
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(usesMonogram)
 
   useEffect(() => {
     setSource(initialSource)
-    setFailed(false)
-  }, [initialSource])
+    setFailed(usesMonogram)
+  }, [initialSource, usesMonogram])
 
   const handleError = () => {
     if (provider) {
@@ -41,12 +45,12 @@ export default function ModelProviderLogo({
       aria-label={`${provider?.name ?? 'vLLM'} logo`}
       title={provider?.name ?? 'vLLM'}
     >
-      {!failed ? (
+      {source && !failed ? (
         <img
           src={source}
           alt=""
           referrerPolicy="no-referrer"
-          data-monochrome={isMonochromeModelProviderIcon(source)}
+          data-monochrome={Boolean(provider?.monochrome)}
           onError={handleError}
         />
       ) : (

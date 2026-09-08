@@ -458,12 +458,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100
@@ -504,12 +505,13 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: openai/gpt-oss-120b
+    model: openai/gpt-oss-120b
   models:
     - name: openai/gpt-oss-120b
       provider_model_id: openai/gpt-oss-120b
       backend_refs:
         - name: primary
+          provider: vllm
           endpoint: localhost:8000
           protocol: http
           weight: 100

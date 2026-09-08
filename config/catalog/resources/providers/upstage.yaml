@@ -1,0 +1,24 @@
+id: upstage
+display_name: Upstage
+description: Solar models through Upstage's OpenAI-compatible API.
+category: model_api
+support_tier: native
+default_base_url: https://api.upstage.ai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: top_level_effort
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:upstage
+  monogram: U
+  monochrome: false
+conformance:
+  status: unverified
+models: []
