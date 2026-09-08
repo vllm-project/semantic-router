@@ -248,6 +248,20 @@ const sidebars: SidebarsConfig = {
           },
           items: [
             'installation/configuration-workflows',
+            {
+              type: 'category',
+              label: 'Models',
+              link: {
+                type: 'doc',
+                id: 'installation/model-configuration',
+              },
+              items: [
+                'installation/catalog-backed-models',
+                'installation/custom-models',
+                'installation/model-reasoning',
+                'installation/model-configuration-patterns',
+              ],
+            },
           ],
         },
         {

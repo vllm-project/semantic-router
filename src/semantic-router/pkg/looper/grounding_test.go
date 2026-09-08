@@ -52,6 +52,15 @@ func TestScoreByPanel_RanksContradictedLower(t *testing.T) {
 	// The contradicted response is flagged by its peers.
 	assert.NotEmpty(t, scores[2].FlaggedSpans)
 	assert.Empty(t, scores[0].FlaggedSpans)
+	// Regression (#2857): flags carry caller-visible peer model labels, never
+	// internal panel candidate IDs, so traces and the synthesis notes stay
+	// associated with real responses.
+	assert.ElementsMatch(t, []string{"a", "b"}, scores[2].FlaggedSpans)
+	assert.NotContains(t, strings.Join(scores[2].FlaggedSpans, ","), "panel-")
+	// And the synthesis notes render the model labels, not synthetic IDs.
+	notes := formatGroundingNotes(scores)
+	assert.Contains(t, notes, "c: score")
+	assert.NotContains(t, notes, "panel-")
 }
 
 // TestScoreByPanel_LongAnswerSentenceChunking verifies that on long answers (which

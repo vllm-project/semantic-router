@@ -218,11 +218,6 @@ export const BenchmarkExplorer: React.FC<{
                       {readable(chart.selection.profile)} · {readable(chart.selection.metric)}
                     </span>
                   </div>
-                  {chart.benchmark?.source ? (
-                    <a href={chart.benchmark.source} target="_blank" rel="noreferrer">
-                      Source ↗
-                    </a>
-                  ) : null}
                 </header>
                 <div className={styles.chartMeta}>
                   <span>{chart.points.length} results</span>

@@ -175,13 +175,14 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 
 	for name, payload := range map[string]string{
 		"invalid json":              `{`,
-		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"evaluation_coverage":[],"indices":[],"index_results":[]}`,
+		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
 		"missing protocols":         validModelCatalogPayload(","),
 		"missing default base path": validModelCatalogPayload(","),
 		"missing roles":             validModelCatalogPayload(","),
 		"missing authority":         validModelCatalogPayload(","),
 		"invalid asset digest":      validModelCatalogPayload(","),
 		"orphan physical model":     validModelCatalogPayload(","),
+		"placeholder index result":  validModelCatalogPayload(","),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -216,6 +217,16 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
     "modalities":{"input":["text"],"output":["text"]},
     "verification":{"status":"claimed","authority":"Example","verified_at":"2026-09-05","source":"https://models.example/model"}
   },{`, 1)
+			}
+			if name == "placeholder index result" {
+				payload = strings.Replace(
+					payload,
+					`"status":"available",
+    "score":50`,
+					`"status":"missing",
+    "score":null`,
+					1,
+				)
 			}
 			response := httptest.NewRecorder()
 			ModelCatalogHandler(&fakeModelCatalogSource{payload: []byte(payload)}).ServeHTTP(
@@ -304,6 +315,86 @@ func TestCatalogProviderBindingMustProjectCompleteReasoningContract(t *testing.T
 	}
 }
 
+func TestCatalogProviderBindingValidatesProtocolReasoningEfforts(t *testing.T) {
+	t.Parallel()
+
+	const (
+		chat      = "openai/chat-completions@1"
+		responses = "openai/responses@1"
+	)
+	models := map[string]struct{}{"example/model": {}}
+	protocols := map[string]struct{}{chat: {}, responses: {}}
+	definitions := []modelcatalog.ModelCard{{
+		ID: "example/model", Kind: "physical", Lifecycle: "active", ReasoningFamily: "effort",
+	}}
+	reasoning := map[string]modelcatalog.ReasoningFamilyDefinition{
+		"effort": {
+			ID: "effort", Type: "reasoning_effort", Parameter: "reasoning_effort",
+			Levels: []string{"low", "max"}, Default: "low",
+			Modes: []string{"enabled"}, DefaultMode: "enabled",
+		},
+	}
+
+	for _, test := range []struct {
+		name       string
+		efforts    []string
+		byProtocol map[string][]string
+		wantError  bool
+	}{
+		{
+			name: "valid narrowing", efforts: []string{"low", "max"},
+			byProtocol: map[string][]string{chat: {"low"}},
+		},
+		{
+			name: "empty overrides", efforts: []string{"low", "max"},
+			byProtocol: map[string][]string{}, wantError: true,
+		},
+		{
+			name:       "requires provider efforts",
+			byProtocol: map[string][]string{chat: {"low"}}, wantError: true,
+		},
+		{
+			name: "requires bound protocol", efforts: []string{"low", "max"},
+			byProtocol: map[string][]string{"anthropic/messages@1": {"low"}}, wantError: true,
+		},
+		{
+			name: "cannot expand provider efforts", efforts: []string{"low"},
+			byProtocol: map[string][]string{chat: {"max"}}, wantError: true,
+		},
+		{
+			name: "requires nonempty effort set", efforts: []string{"low", "max"},
+			byProtocol: map[string][]string{chat: {}}, wantError: true,
+		},
+		{
+			name: "preserves family default", efforts: []string{"low", "max"},
+			byProtocol: map[string][]string{chat: {"max"}}, wantError: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			provider := modelcatalog.ProviderDefinition{
+				ID: "example", Protocols: []string{chat, responses},
+				ReasoningTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+				Models: []modelcatalog.CatalogModelBinding{{
+					Catalog: "example/model", Relationship: modelcatalog.CatalogModelRelationshipFirstParty,
+					ID: "example-model", Protocols: []string{chat, responses},
+					ReasoningEfforts: test.efforts, ReasoningEffortsByProtocol: test.byProtocol,
+					Lifecycle: "active", Verification: modelcatalog.CatalogBindingVerification{Status: "claimed"},
+				}},
+			}
+			err := validateCatalogProviderBindings(
+				[]modelcatalog.ProviderDefinition{provider}, models, protocols, definitions, reasoning,
+			)
+			if test.wantError && (err == nil || !strings.Contains(err.Error(), "malformed provider catalog model")) {
+				t.Fatalf("malformed protocol effort contract accepted: %v", err)
+			}
+			if !test.wantError && err != nil {
+				t.Fatalf("valid protocol effort contract rejected: %v", err)
+			}
+		})
+	}
+}
+
 func TestCatalogHTTPSURLsAllowDocumentFragments(t *testing.T) {
 	t.Parallel()
 
@@ -360,7 +451,7 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
 		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
 	}
-	if len(document.Models) != 88 || len(document.Providers) != 60 || len(document.Evaluations) != 1360 {
+	if len(document.Models) != 89 || len(document.Providers) != 60 || len(document.Evaluations) != 1365 {
 		t.Fatalf(
 			"unexpected generated inventory: models=%d providers=%d evaluations=%d",
 			len(document.Models),
@@ -518,7 +609,6 @@ func validModelCatalogPayload(extra string) string {
     "roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}],
     "verification":{"status":"reproduced","authority":"vllm-sr-maintainers","verified_at":"2026-09-04","asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
   }],
-  "evaluation_coverage":[],
   "benchmarks":[{
     "id":"example/benchmark@1.0.0",
     "display_name":"Example Benchmark",
@@ -542,9 +632,9 @@ func validModelCatalogPayload(extra string) string {
     "model":"vllm-sr/mom-v1-blend",
     "reasoning_effort":"default",
     "index":"example/index@1.0.0",
-    "status":"not_applicable",
-    "score":null,
-    "coverage":0,
+    "status":"available",
+    "score":50,
+    "coverage":1,
     "components":[],
     "provenance":[]
   }]` + extra + `}`
