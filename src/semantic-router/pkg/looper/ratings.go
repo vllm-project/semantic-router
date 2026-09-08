@@ -118,7 +118,7 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 				ModelTarget{Name: modelName, AccessKey: accessKey},
 				CallOptions{
 					DecisionName: req.DecisionName,
-					Iteration:    uint32(idx + 1),
+					Iteration:    idx + 1,
 					Mode:         responseMode(req.IsStreaming),
 				},
 			)

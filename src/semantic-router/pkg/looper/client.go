@@ -173,8 +173,8 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		ModelTarget{Name: modelName, AccessKey: accessKey},
 		CallOptions{
 			DecisionName: c.decisionName,
-			Iteration:    uint32(iteration),
-			FusionDepth:  uint32(c.fusionDepth),
+			Iteration:    iteration,
+			FusionDepth:  c.fusionDepth,
 			Mode:         responseMode(streaming),
 			Logprobs:     logprobsCfg,
 		},

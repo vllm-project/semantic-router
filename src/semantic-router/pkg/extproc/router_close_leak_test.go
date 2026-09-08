@@ -78,10 +78,11 @@ func TestOpenAIRouterOwnsOneLooperConnectorPerGeneration(t *testing.T) {
 	})
 	require.NoError(t, err)
 	router := components.buildRouter()
-	require.Same(t, components.looperClient, router.looperModelClient())
-	require.Same(t, router.looperModelClient(), router.looperModelClient())
+	client := router.looperModelClient()
+	require.Same(t, components.looperClient, client)
+	require.Same(t, client, router.looperModelClient())
 
-	_, err = router.looperModelClient().CallModelWithOptions(
+	_, err = client.CallModelWithOptions(
 		context.Background(),
 		openai.ChatCompletionNewParams{},
 		looper.ModelTarget{Name: "model-a"},

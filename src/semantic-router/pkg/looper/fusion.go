@@ -184,7 +184,7 @@ func (l *FusionLooper) callFusionModel(
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
 		CallOptions{
 			DecisionName: req.DecisionName,
-			Iteration:    uint32(iteration),
+			Iteration:    iteration,
 			FusionDepth:  1,
 			Mode:         responseMode(streaming),
 		},

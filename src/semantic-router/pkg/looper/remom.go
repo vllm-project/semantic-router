@@ -125,7 +125,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		req,
 		msgCopy,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
-		CallOptions{DecisionName: req.DecisionName, Iteration: uint32(idx + 1)},
+		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
 	)
 	elapsed := time.Since(startTime)
 

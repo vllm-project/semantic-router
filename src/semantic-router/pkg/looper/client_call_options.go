@@ -50,8 +50,8 @@ func responseMode(streaming bool) ResponseMode {
 // data off Client allows one Client to be reused safely by concurrent calls.
 type CallOptions struct {
 	DecisionName string
-	Iteration    uint32
-	FusionDepth  uint32
+	Iteration    int
+	FusionDepth  int
 	Mode         ResponseMode
 	Logprobs     *LogprobsConfig
 }
@@ -60,8 +60,11 @@ func (options CallOptions) validate(target ModelTarget) error {
 	if target.Name == "" {
 		return fmt.Errorf("model target name is required")
 	}
-	if options.Iteration == 0 {
+	if options.Iteration <= 0 {
 		return fmt.Errorf("looper iteration must be positive")
+	}
+	if options.FusionDepth < 0 {
+		return fmt.Errorf("fusion depth must not be negative")
 	}
 	if options.Mode != ResponseJSON && options.Mode != ResponseSSE {
 		return fmt.Errorf("unsupported looper response mode %d", options.Mode)
@@ -86,10 +89,10 @@ func (c *Client) CallModelWithOptions(
 		&request,
 		target.Name,
 		options.Mode == ResponseSSE,
-		int(options.Iteration),
+		options.Iteration,
 		options.Logprobs,
 		target.AccessKey,
 		options.DecisionName,
-		int(options.FusionDepth),
+		options.FusionDepth,
 	)
 }

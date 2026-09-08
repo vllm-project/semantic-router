@@ -101,7 +101,7 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 			ModelTarget{Name: modelName, AccessKey: accessKey},
 			CallOptions{
 				DecisionName: req.DecisionName,
-				Iteration:    uint32(iteration),
+				Iteration:    iteration,
 				Mode:         responseMode(req.IsStreaming),
 			},
 		)

@@ -718,6 +718,6 @@ func (l *WorkflowsLooper) callWorkflowModel(
 		baseReq,
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
-		CallOptions{DecisionName: baseReq.DecisionName, Iteration: uint32(iteration)},
+		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration},
 	)
 }

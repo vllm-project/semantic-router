@@ -669,7 +669,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			ModelTarget{Name: modelName, AccessKey: accessKey},
 			CallOptions{
 				DecisionName: req.DecisionName,
-				Iteration:    uint32(attempts),
+				Iteration:    attempts,
 				Mode: responseMode(
 					confidenceModelCallStreaming(req.IsStreaming, evaluator),
 				),
@@ -914,7 +914,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 		req,
 		verifyRequest,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
-		CallOptions{DecisionName: req.DecisionName, Iteration: uint32(iteration)},
+		CallOptions{DecisionName: req.DecisionName, Iteration: iteration},
 	)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)

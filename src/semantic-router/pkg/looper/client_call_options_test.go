@@ -144,7 +144,6 @@ func TestCallModelWithOptionsIsolatesConcurrentMetadata(t *testing.T) {
 
 	errs := make(chan error, len(calls))
 	for _, call := range calls {
-		call := call
 		go func() {
 			_, err := client.CallModelWithOptions(
 				context.Background(),
@@ -200,6 +199,16 @@ func TestCallModelWithOptionsValidatesRequiredFields(t *testing.T) {
 			name:    "missing iteration",
 			target:  ModelTarget{Name: "model-a"},
 			options: CallOptions{Mode: ResponseJSON},
+		},
+		{
+			name:    "negative iteration",
+			target:  ModelTarget{Name: "model-a"},
+			options: CallOptions{Iteration: -1, Mode: ResponseJSON},
+		},
+		{
+			name:    "negative fusion depth",
+			target:  ModelTarget{Name: "model-a"},
+			options: CallOptions{Iteration: 1, FusionDepth: -1, Mode: ResponseJSON},
 		},
 		{
 			name:    "unsupported mode",
