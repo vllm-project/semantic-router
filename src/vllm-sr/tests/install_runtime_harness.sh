@@ -125,8 +125,9 @@ ensure_runtime
 # Report the selected runtime and the exact runtime.env contents so the
 # Python side can assert both behavior and persisted state.
 printf 'SELECTED_RUNTIME=%s\n' "$SELECTED_RUNTIME"
-# Replay the call trace so the Python side can assert which runtime probes
-# were (or were not) invoked.
+# Snapshot the call trace once ensure_runtime has finished. Only
+# ensure_runtime's own probes are visible here; the print path below appends
+# further entries that this line cannot observe.
 if [ -f "$CALL_TRACE" ]; then
   printf 'CALLS=%s\n' "$(tr '\n' ',' < "$CALL_TRACE" | sed 's/,$//')"
 else
@@ -140,9 +141,9 @@ else
 fi
 
 # For scenarios that need to verify printed commands, invoke the full
-# installer path that prints plans + restart/start commands. This also
-# exercises detect_existing_runtime() so CALLS reflects whether Docker
-# was probed during print_install_plan, not just during ensure_runtime.
+# installer print path. print_install_plan() is the only production caller of
+# detect_existing_runtime(), so those probes land in CALL_TRACE after the
+# CALLS= snapshot above and are only visible in the accumulated trace below.
 if [ "$SCENARIO" = "print-command-podman" ]; then
   LAUNCH_PLATFORM=""
   printf '[PRINT_INSTALL_PLAN]\n'
@@ -152,4 +153,12 @@ if [ "$SCENARIO" = "print-command-podman" ]; then
   printf '[PRINT_NEXT_STEPS]\n'
   AUTO_LAUNCH_RAN=0
   print_next_steps
+fi
+
+# Accumulated trace for every scenario, taken after the print path has run.
+# Scenarios that skip the print path report the same value as CALLS=.
+if [ -f "$CALL_TRACE" ]; then
+  printf 'CALLS_TOTAL=%s\n' "$(tr '\n' ',' < "$CALL_TRACE" | sed 's/,$//')"
+else
+  printf 'CALLS_TOTAL=\n'
 fi

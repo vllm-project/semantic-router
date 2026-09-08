@@ -33,6 +33,11 @@ def _run_harness(scenario: str) -> str:
     return result.stdout
 
 
+def _trace_entries(line: str) -> list[str]:
+    """Split a CALLS=/CALLS_TOTAL= line into the probe names it recorded."""
+    return [entry for entry in line.split("=", 1)[1].split(",") if entry]
+
+
 def test_auto_prefers_docker_when_both_ready() -> None:
     """Docker and Podman both available under --runtime auto picks Docker."""
     out = _run_harness("auto-both-ready")
@@ -88,19 +93,31 @@ def test_printed_commands_include_runtime_flag() -> None:
     """When --runtime podman is selected, the printed restart/start commands
     must carry `--runtime podman` so users copy-paste the right invocation.
 
-    This scenario also exercises the full installer print path
-    (print_install_plan → detect_existing_runtime) so the CALLS trace
-    proves Docker is never probed -- not just in ensure_runtime, but
-    across the entire installer surface (#3441)."""
+    print_install_plan() is the only production caller of
+    detect_existing_runtime(), and the harness takes its CALLS= snapshot
+    before that path runs. The accumulated CALLS_TOTAL= trace is therefore
+    what proves Docker is never probed across the print path (#3441)."""
     out = _run_harness("print-command-podman")
 
     assert "SELECTED_RUNTIME=podman" in out
 
-    # Docker must not be probed anywhere in the full installer path.
-    calls_line = next(line for line in out.splitlines() if line.startswith("CALLS="))
+    early_calls = _trace_entries(
+        next(line for line in out.splitlines() if line.startswith("CALLS="))
+    )
+    total_line = next(
+        line for line in out.splitlines() if line.startswith("CALLS_TOTAL=")
+    )
+    total_calls = _trace_entries(total_line)
+
+    # Keeps the assertion below from passing on a trace that never observed
+    # the print path -- the blind spot this coverage exists to close.
+    assert len(total_calls) > len(early_calls), (
+        f"print path recorded no extra runtime probe: early={early_calls} "
+        f"total={total_calls}"
+    )
     assert (
-        "docker" not in calls_line
-    ), f"Docker was probed despite --runtime podman: {calls_line}"
+        "docker" not in total_calls
+    ), f"Docker was probed despite --runtime podman: {total_line}"
 
     restart_section = out.split("[PRINT_RESTART_COMMAND]")[1].split(
         "[PRINT_NEXT_STEPS]"
