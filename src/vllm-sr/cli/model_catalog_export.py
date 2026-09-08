@@ -35,7 +35,6 @@ def packaged_model_catalog_document() -> dict[str, Any]:
         "models",
         "benchmarks",
         "evaluations",
-        "evaluation_coverage",
         "indices",
         "index_results",
     ):
