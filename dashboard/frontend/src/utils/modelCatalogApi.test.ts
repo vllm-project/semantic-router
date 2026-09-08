@@ -193,6 +193,18 @@ describe('built-in model catalog API nested metadata', () => {
       },
     ],
     [
+      'protocol-specific reasoning efforts',
+      (payload: Record<string, unknown>) => {
+        const providers = payload.providers as Array<Record<string, unknown>>
+        const provider = providers.find((candidate) => candidate.id === 'openai')!
+        const models = provider.models as Array<Record<string, unknown>>
+        const astra = models.find((candidate) => candidate.catalog === 'openai/gpt-6-astra')!
+        astra.reasoning_efforts_by_protocol = {
+          'anthropic/messages@1': ['low'],
+        }
+      },
+    ],
+    [
       'index normalization',
       (payload: Record<string, unknown>) => {
         const indices = payload.indices as Array<Record<string, unknown>>

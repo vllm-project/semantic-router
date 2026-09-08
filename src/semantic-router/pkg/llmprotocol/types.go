@@ -15,6 +15,12 @@ const (
 	OpenAIChatV1        WireFormat = "openai.chat.v1"
 	OpenAIResponsesV1   WireFormat = "openai.responses.v1"
 	AnthropicMessagesV1 WireFormat = "anthropic.messages.v1"
+	// OpenAIImagesV1 is the DALL-E-compatible image-generation dialect exposed
+	// by diffusion-style backends (e.g. vLLM-Omni image servers). It is a
+	// sink dialect: a responses hosted image_generation request is re-encoded
+	// to /v1/images/generations, and the generated image is decoded back into
+	// the protocol-neutral GeneratedImage output item.
+	OpenAIImagesV1 WireFormat = "openai.images.v1"
 )
 
 type Role string
