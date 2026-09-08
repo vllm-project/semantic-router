@@ -4,181 +4,188 @@
   inset: 0;
   display: flex;
   justify-content: flex-end;
-  background: rgb(2 6 23 / 55%);
-  backdrop-filter: blur(5px);
+  background: rgba(4, 8, 14, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 
 .detail {
   position: relative;
-  width: min(46rem, 94vw);
+  width: min(36rem, 100vw);
   height: 100%;
   overflow-y: auto;
-  padding: clamp(1.2rem, 3vw, 2rem);
-  border-left: 1px solid var(--hub-border);
-  background: var(--ifm-background-color);
-  box-shadow: -28px 0 80px rgb(2 6 23 / 25%);
+  padding: var(--space-6) var(--space-5) var(--space-8);
+  border-left: 1px solid var(--site-border-strong);
+  background: var(--site-surface);
+  box-shadow: var(--site-shadow-raised);
+  animation: hub-drawer-in 180ms var(--site-ease-out);
+}
+
+@keyframes hub-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
 }
 
 .closeButton {
-  position: sticky;
-  z-index: 3;
-  top: 0.7rem;
   display: grid;
-  width: 2.1rem;
-  height: 2.1rem;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
   place-items: center;
-  margin: 0 0 -2.1rem auto;
-  border: 1px solid var(--hub-border);
-  border-radius: 50%;
-  background: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
+  margin-left: auto;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-surface);
+  color: var(--site-muted);
   cursor: pointer;
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
+}
+
+.closeButton:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
+}
+
+.eyebrow {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
 }
 
 .detailHero {
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 0.8rem;
-  padding-right: 3rem;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--site-border);
 }
 
-.detailHero > span:last-child {
+.detailHero > span:nth-child(2) {
   display: grid;
   min-width: 0;
-}
-
-.detailHero small {
-  color: var(--ifm-color-primary);
-  font-size: 0.75rem;
-  font-weight: 750;
+  flex: 1;
+  gap: var(--space-2);
 }
 
 .detailHero h2 {
-  overflow: hidden;
-  margin: 0.1rem 0;
-  font-size: clamp(1.35rem, 3vw, 2rem);
-  letter-spacing: -0.035em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  text-wrap: balance;
 }
 
 .detailHero code,
 .providerList code,
 .recipeSummary code {
+  width: fit-content;
   overflow: hidden;
-  padding: 0;
-  background: transparent;
-  color: var(--hub-muted);
-  font-size: 0.75rem;
+  max-width: 100%;
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+  background: var(--site-code-bg);
+  color: var(--site-text-strong);
+  font-size: var(--text-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .description {
-  margin: 1rem 0;
-  color: var(--hub-muted);
-  font-size: 0.76rem;
-  line-height: 1.55;
+  margin: var(--space-4) 0;
+  color: var(--site-muted);
+  font-size: var(--text-base);
+  line-height: 1.6;
 }
 
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.45rem;
-  margin: 1rem 0 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-5) 0 0;
 }
 
 .facts > div,
 .recipeSummary > span {
   display: grid;
   min-width: 0;
-  gap: 0.12rem;
-  padding: 0.55rem;
-  border: 1px solid var(--hub-border-soft);
-  border-radius: 0.58rem;
-  background: var(--hub-surface);
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-md);
+  background: var(--site-surface);
 }
 
 .facts dt,
 .recipeSummary small {
-  color: var(--hub-muted);
-  font-size: 0.75rem;
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-medium);
 }
 
 .facts dd,
 .recipeSummary strong {
   overflow: hidden;
   margin: 0;
-  font-size: 0.75rem;
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .detailSection {
   display: grid;
-  gap: 0.65rem;
-  margin-top: 1.25rem;
-  padding-top: 1.15rem;
-  border-top: 1px solid var(--hub-border-soft);
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--site-border);
 }
 
 .detailSection h3 {
   margin: 0;
-  font-size: 0.8rem;
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .detailSection p {
   margin: 0;
-  color: var(--hub-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .detailSection code {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .recipeSummary {
   display: grid;
-  grid-template-columns: 1.5fr 0.7fr 0.45fr;
-  gap: 0.45rem;
-}
-
-.poolEntrypoint {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.62rem;
-  border: 1px solid color-mix(in srgb, var(--ifm-color-primary) 24%, transparent);
-  border-radius: 0.65rem;
-  background: color-mix(in srgb, var(--ifm-color-primary) 6%, transparent);
-}
-
-.poolEntrypoint > span:last-child,
-.roleCard li > span:last-child {
-  display: grid;
-  min-width: 0;
-}
-
-.poolEntrypoint small,
-.roleCard small {
-  color: var(--hub-muted);
-  font-size: 0.75rem;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.6fr);
+  gap: var(--space-3);
 }
 
 .roleGrid,
 .providerList,
 .evaluationList {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-3);
 }
 
 .roleGrid {
@@ -188,10 +195,10 @@
 .roleCard,
 .providerList article,
 .evaluationList article {
-  padding: 0.7rem;
-  border: 1px solid var(--hub-border-soft);
-  border-radius: 0.65rem;
-  background: var(--hub-surface);
+  padding: var(--space-4);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
 }
 
 .roleCard > header,
@@ -199,13 +206,13 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: var(--space-3);
 }
 
 .roleCard ul {
   display: grid;
-  gap: 0.24rem;
-  margin: 0.55rem 0;
+  gap: var(--space-1);
+  margin: var(--space-3) 0;
   padding: 0;
   list-style: none;
 }
@@ -214,17 +221,28 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.4rem;
-  border-radius: 0.38rem;
-  background: var(--ifm-color-emphasis-100);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--site-surface-alt);
+}
+
+.roleCard li > span:last-child {
+  display: grid;
+  min-width: 0;
 }
 
 .roleCard li strong {
   overflow: hidden;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.roleCard small {
+  color: var(--site-muted);
+  font-size: var(--text-xs);
 }
 
 .customMark {
@@ -233,25 +251,25 @@
   width: 2.35rem;
   height: 2.35rem;
   place-items: center;
-  border-radius: 0.68rem;
-  background: var(--ifm-color-emphasis-200);
-  color: var(--hub-muted);
-  font-size: 0.75rem;
-  font-weight: 800;
+  border-radius: var(--radius-md);
+  background: var(--site-surface-alt);
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-bold);
 }
 
 .providerList article {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: var(--space-3);
 }
 
 .providerList article > span {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .providerList article > span:first-child > span:last-child {
@@ -264,7 +282,8 @@
 }
 
 .providerList strong {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
 }
 
 .evaluationList article > header > span {
@@ -276,54 +295,48 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .evaluationList article > header > span:last-child > span {
   display: grid;
   gap: 0.06rem;
   padding: 0.22rem 0.4rem;
-  border-radius: 0.38rem;
-  background: color-mix(in srgb, var(--ifm-color-primary) 9%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--site-accent-soft);
 }
 
 .evaluationList strong,
 .evaluationList b {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
 }
 
 .evaluationList small {
-  color: var(--hub-muted);
-  font-size: 0.75rem;
+  color: var(--site-muted);
+  font-size: var(--text-xs);
 }
 
 .evaluationList footer {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: 0.4rem;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .evaluationList footer a {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
 }
 
 .sourceLink {
-  display: inline-flex;
-  margin-top: 1.25rem;
-  padding: 0.62rem 0.8rem;
-  border-radius: 0.58rem;
-  background: var(--ifm-color-primary);
-  color: var(--ifm-color-primary-contrast-background);
-  font-size: 0.75rem;
-  font-weight: 750;
-  text-decoration: none;
+  margin-top: var(--space-6);
+  width: fit-content;
 }
 
-@media (max-width: 620px) {
+@media (max-width: 640px) {
   .detail {
     width: 100%;
+    padding: var(--space-4);
   }
 
   .facts,
@@ -347,5 +360,11 @@
   .roleGrid,
   .recipeSummary {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail {
+    animation: none;
   }
 }
