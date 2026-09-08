@@ -2,7 +2,7 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: qwen14b-free
+    model: qwen14b-free
   models:
     - name: qwen14b-admin
       external_model_ids:
@@ -11,7 +11,7 @@ providers:
         - name: vllm-14b-admin
           endpoint: 127.0.0.1:8100
           weight: 1
-          type: vllm
+          provider: vllm
     - name: qwen14b-free
       external_model_ids:
         vllm: Qwen/Qwen2.5-14B-Instruct
@@ -19,7 +19,7 @@ providers:
         - name: vllm-14b-free
           endpoint: 127.0.0.1:8200
           weight: 1
-          type: vllm
+          provider: vllm
 routing:
   decisions:
     - name: admin_to_admin_tier
@@ -81,14 +81,20 @@ routing:
         - code
         - reasoning
         - math
-      quality_score: 0.9
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.9
     - name: qwen14b-free
       param_size: 14b
       description: Qwen2.5 14B — free tier (port 8200)
       capabilities:
         - chat
         - code
-      quality_score: 0.7
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.7
 global:
   router:
     strategy: priority
