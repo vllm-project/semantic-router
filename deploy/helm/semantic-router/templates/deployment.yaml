@@ -130,8 +130,16 @@ spec:
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+        {{- $hasModelsMount := false }}
+        {{- range .Values.extraVolumeMounts }}
+          {{- if eq .mountPath "/app/models" }}
+            {{- $hasModelsMount = true }}
+          {{- end }}
+        {{- end }}
+        {{- if not $hasModelsMount }}
         - name: models-volume
           mountPath: /app/models
+        {{- end }}
         {{- if .Values.startupProbe.enabled }}
         # Startup and readiness require an activated serving generation.
         startupProbe:
@@ -172,6 +180,13 @@ spec:
         configMap:
           name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
       {{- end }}
+      {{- $hasModelsMount := false }}
+      {{- range .Values.extraVolumeMounts }}
+        {{- if eq .mountPath "/app/models" }}
+          {{- $hasModelsMount = true }}
+        {{- end }}
+      {{- end }}
+      {{- if not $hasModelsMount }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
@@ -179,6 +194,7 @@ spec:
       {{- else }}
       - name: models-volume
         emptyDir: {}
+      {{- end }}
       {{- end }}
       {{- with .Values.extraVolumes }}
       {{- toYaml . | nindent 6 }}
