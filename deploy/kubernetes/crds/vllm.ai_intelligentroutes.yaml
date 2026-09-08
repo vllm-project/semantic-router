@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.21.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: intelligentroutes.vllm.ai
 spec:
   group: vllm.ai
@@ -99,12 +99,16 @@ spec:
                             maxLength: 500
                             type: string
                           reasoningEffort:
-                            description: ReasoningEffort defines the reasoning effort
-                              level (low/medium/high)
+                            description: ReasoningEffort selects an effort value supported
+                              by the model family.
+                            type: string
+                          reasoningMode:
+                            description: ReasoningMode selects an activation mode
+                              supported by the model family.
                             enum:
-                            - low
-                            - medium
-                            - high
+                            - enabled
+                            - disabled
+                            - adaptive
                             type: string
                           useReasoning:
                             default: false

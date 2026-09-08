@@ -360,9 +360,13 @@ type ModelRef struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 
@@ -411,9 +415,13 @@ type ModelScore struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 

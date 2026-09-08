@@ -11,7 +11,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: mistral-7b
+      model: mistral-7b
     models:
       - name: llama-3.2-1b
         external_model_ids:
@@ -20,7 +20,7 @@ config:
           - name: mock-llm
             endpoint: mock-llm-service.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
       - name: llama-3.2-3b
         external_model_ids:
           mock-llm: llama-3.2-3b
@@ -28,7 +28,7 @@ config:
           - name: mock-llm
             endpoint: mock-llm-service.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
       - name: codellama-7b
         external_model_ids:
           mock-llm: codellama-7b
@@ -36,7 +36,7 @@ config:
           - name: mock-llm
             endpoint: mock-llm-service.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
       - name: mistral-7b
         external_model_ids:
           mock-llm: mistral-7b
@@ -44,7 +44,7 @@ config:
           - name: mock-llm
             endpoint: mock-llm-service.default.svc.cluster.local:8000
             weight: 1
-            type: vllm
+            provider: vllm
   routing:
     decisions:
       - name: math_decision
