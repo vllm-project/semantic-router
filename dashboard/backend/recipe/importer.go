@@ -337,7 +337,8 @@ func normalizeExpectedArchiveDigest(raw string) (string, error) {
 func normalizeRemotePackageURL(raw string) (*url.URL, error) {
 	parsed, err := packagePolicy(nil).ValidateURL(raw)
 	if err != nil {
-		return nil, classifyFetchPolicyError(err)
+		mapped, _ := classifyFetchPolicyError(err)
+		return nil, mapped
 	}
 	return parsed, nil
 }
@@ -359,7 +360,7 @@ func classifyDownloadError(err error) error {
 	if errors.As(err, &packageErr) {
 		return err
 	}
-	if mapped := classifyFetchPolicyError(err); mapped != err {
+	if mapped, ok := classifyFetchPolicyError(err); ok {
 		return mapped
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -388,19 +389,19 @@ func newPackageHTTPClient(resolver IPResolver) *http.Client {
 
 // classifyFetchPolicyError maps a shared-policy refusal onto this package's
 // error codes, so the importer's API contract is unchanged by the move.
-func classifyFetchPolicyError(err error) error {
+func classifyFetchPolicyError(err error) (error, bool) {
 	switch {
 	case err == nil:
-		return nil
+		return nil, false
 	case errors.Is(err, safefetch.ErrDestinationForbidden):
-		return wrapPackageError(ErrorSourceForbidden, http.StatusBadRequest, "Recipe package URL resolves to a non-public address.", nil)
+		return wrapPackageError(ErrorSourceForbidden, http.StatusBadRequest, "Recipe package URL resolves to a non-public address.", nil), true
 	case errors.Is(err, safefetch.ErrSchemeNotAllowed):
-		return wrapPackageError(ErrorInsecureURL, http.StatusBadRequest, "Recipe package URL must use HTTPS.", nil)
+		return wrapPackageError(ErrorInsecureURL, http.StatusBadRequest, "Recipe package URL must use HTTPS.", nil), true
 	case errors.Is(err, safefetch.ErrInvalidURL):
-		return wrapPackageError(ErrorInvalidURL, http.StatusBadRequest, "Recipe package URL is invalid.", nil)
+		return wrapPackageError(ErrorInvalidURL, http.StatusBadRequest, "Recipe package URL is invalid.", nil), true
 	case errors.Is(err, safefetch.ErrTooManyRedirects):
-		return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download used too many redirects.", nil)
+		return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download used too many redirects.", nil), true
 	default:
-		return err
+		return err, false
 	}
 }

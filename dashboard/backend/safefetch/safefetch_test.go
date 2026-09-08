@@ -92,7 +92,8 @@ func TestClientRefusesHostResolvingToNonPublicAddress(t *testing.T) {
 				WithResolver(staticResolver{addresses: []netip.Addr{netip.MustParseAddr(raw)}}).
 				NewClient()
 
-			_, err := client.Get("https://public-looking-name.invalid/")
+			resp, err := client.Get("https://public-looking-name.invalid/")
+			closeResponse(resp)
 			if !errors.Is(err, ErrDestinationForbidden) {
 				t.Fatalf("resolving to %s was not refused: %v", raw, err)
 			}
@@ -110,14 +111,18 @@ func TestClientRefusesMixedPublicAndPrivateAnswers(t *testing.T) {
 		}}).
 		NewClient()
 
-	if _, err := client.Get("https://mixed.invalid/"); !errors.Is(err, ErrDestinationForbidden) {
+	resp, err := client.Get("https://mixed.invalid/")
+	closeResponse(resp)
+	if !errors.Is(err, ErrDestinationForbidden) {
 		t.Fatalf("mixed answer was not refused: %v", err)
 	}
 }
 
 func TestClientRefusesUnresolvableHost(t *testing.T) {
 	client := DefaultPolicy().WithResolver(failingResolver{}).NewClient()
-	if _, err := client.Get("https://nowhere.invalid/"); !errors.Is(err, ErrDestinationForbidden) {
+	resp, err := client.Get("https://nowhere.invalid/")
+	closeResponse(resp)
+	if !errors.Is(err, ErrDestinationForbidden) {
 		t.Fatalf("unresolvable host was not refused: %v", err)
 	}
 }
@@ -132,9 +137,7 @@ func TestClientPinsTheValidatedAddressAgainstRebinding(t *testing.T) {
 	// private answer.
 	for i := 0; i < 3; i++ {
 		resp, err := client.Get("https://rebind.invalid/")
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
+		closeResponse(resp)
 		// 8.8.8.8:443 is not reachable from a test runner, so the connection
 		// fails. What must never happen is a successful fetch from loopback.
 		if err == nil {
@@ -182,8 +185,7 @@ func TestClientEnforcesTheRedirectLimit(t *testing.T) {
 // A redirect to a name that resolves inward is refused at the second dial, not
 // merely at the syntactic check.
 func TestClientRefusesRedirectResolvingToNonPublicAddress(t *testing.T) {
-	var upstream *httptest.Server
-	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/start" {
 			http.Redirect(w, r, "http://internal.invalid/admin", http.StatusFound)
 			return
@@ -200,7 +202,8 @@ func TestClientRefusesRedirectResolvingToNonPublicAddress(t *testing.T) {
 		}).
 		NewClient()
 
-	_, err := client.Get(fmt.Sprintf("http://%s:%s/start", host, port))
+	resp, err := client.Get(fmt.Sprintf("http://%s:%s/start", host, port))
+	closeResponse(resp)
 	if !errors.Is(err, ErrDestinationForbidden) {
 		t.Fatalf("redirect to an inward-resolving host was not refused: %v", err)
 	}
@@ -300,9 +303,7 @@ func TestClientTimesOutOnASlowPeer(t *testing.T) {
 
 	started := time.Now()
 	resp, err := policy.NewClient().Get(fmt.Sprintf("http://%s:%s/", host, port))
-	if resp != nil {
-		_ = resp.Body.Close()
-	}
+	closeResponse(resp)
 	if err == nil {
 		t.Fatal("a stalled peer was not cut off")
 	}
@@ -344,4 +345,12 @@ func mustRequest(t *testing.T, raw string) *http.Request {
 		t.Fatalf("NewRequest(%q) = %v", raw, err)
 	}
 	return request
+}
+
+// closeResponse drains nothing and just releases the body when a response
+// exists, which is most of these cases: the request was refused.
+func closeResponse(resp *http.Response) {
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 }

@@ -55,6 +55,11 @@ type Policy struct {
 	ResponseHeaderTimeout time.Duration
 	// Resolver looks up destination addresses. Nil means net.DefaultResolver.
 	Resolver IPResolver
+	// AllowedPrivatePrefixes are the only destinations exempt from the
+	// public-address requirement. Empty by default: a private target is a
+	// deliberate operator decision, declared as a narrow prefix, never a
+	// blanket "skip the check" switch.
+	AllowedPrivatePrefixes []netip.Prefix
 }
 
 // DefaultPolicy is the public-web baseline: HTTPS and HTTP, bounded redirects,
@@ -89,6 +94,29 @@ func (p Policy) WithResolver(resolver IPResolver) Policy {
 	return p
 }
 
+// AllowingPrivate returns a copy of p that additionally permits destinations
+// inside the given prefixes. Use it for a declared internal target, not to
+// widen the default policy.
+func (p Policy) AllowingPrivate(prefixes ...netip.Prefix) Policy {
+	p.AllowedPrivatePrefixes = prefixes
+	return p
+}
+
+// destinationAllowed reports whether one resolved address may be dialled:
+// public, or inside an explicitly declared private prefix.
+func (p Policy) destinationAllowed(address netip.Addr) bool {
+	if IsPublicAddr(address) {
+		return true
+	}
+	unmapped := address.Unmap()
+	for _, prefix := range p.AllowedPrivatePrefixes {
+		if prefix.Contains(unmapped) {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateURL parses raw and checks everything decidable before DNS: the URL
 // is absolute and hierarchical, the scheme is allowed, and it carries no
 // credentials or fragment.
@@ -98,7 +126,7 @@ func (p Policy) WithResolver(resolver IPResolver) Policy {
 func (p Policy) ValidateURL(raw string) (*url.URL, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidURL, err)
 	}
 	if !parsed.IsAbs() || parsed.Opaque != "" {
 		return nil, ErrInvalidURL
@@ -189,7 +217,7 @@ func (p Policy) dial(
 
 	addresses, err := resolver.LookupNetIP(ctx, "ip", host)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrDestinationForbidden, err)
+		return nil, fmt.Errorf("%w: %w", ErrDestinationForbidden, err)
 	}
 	if len(addresses) == 0 {
 		return nil, ErrDestinationForbidden
@@ -199,7 +227,7 @@ func (p Policy) dial(
 	// mixed answer means the name is at least partly under someone else's
 	// control, and which record is used is not this code's decision to retry.
 	for _, candidate := range addresses {
-		if !IsPublicAddr(candidate) {
+		if !p.destinationAllowed(candidate) {
 			return nil, ErrDestinationForbidden
 		}
 	}

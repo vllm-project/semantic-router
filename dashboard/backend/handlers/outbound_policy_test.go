@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 // inwardResolver answers every name with an internal address, standing in for
@@ -104,7 +108,7 @@ func TestOpenWebDoesNotFallBackAfterAPolicyRefusal(t *testing.T) {
 	if err == nil {
 		t.Fatalf("a refused destination succeeded: %+v", result)
 	}
-	if err != errOpenWebForbiddenTarget {
+	if !errors.Is(err, errOpenWebForbiddenTarget) {
 		t.Errorf("error = %v, want the terminal policy refusal", err)
 	}
 }
@@ -151,5 +155,107 @@ func assertNoNetworkDisclosure(t *testing.T, message string, address string) {
 		if strings.Contains(strings.ToLower(message), leak) {
 			t.Errorf("error leaks network detail %q: %s", leak, message)
 		}
+	}
+}
+
+// The setup import endpoint takes a caller-supplied URL too, and was the one
+// path still building its own client (review on #3617).
+func TestSetupImportRemoteRefusesInwardDestinations(t *testing.T) {
+	for name, address := range inwardTargets {
+		t.Run(name, func(t *testing.T) {
+			withInwardResolver(t, address)
+
+			directory := t.TempDir()
+			configPath := filepath.Join(directory, "config.yaml")
+			if err := os.WriteFile(configPath, []byte(setupBootstrapConfig), 0o600); err != nil {
+				t.Fatalf("write bootstrap config: %v", err)
+			}
+
+			body, _ := json.Marshal(SetupImportRemoteRequest{URL: "https://public-looking-name.invalid/config.yaml"})
+			recorder := httptest.NewRecorder()
+			SetupImportRemoteHandler(configPath, setupmode.New(configPath, true))(
+				recorder,
+				httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body)),
+			)
+
+			if recorder.Code == http.StatusOK {
+				t.Fatalf("a refused destination returned 200: %s", recorder.Body.String())
+			}
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+			}
+			assertNoNetworkDisclosure(t, recorder.Body.String(), address)
+		})
+	}
+}
+
+// normalizeRemoteConfigURL keeps its existing messages while delegating the
+// syntactic checks, so the setup UI's error text is unchanged.
+func TestNormalizeRemoteConfigURLRejectsUnsafeInput(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"", "remote config URL is required"},
+		{"file:///etc/passwd", "remote config URL must use http or https"},
+		{"gopher://example.com/", "remote config URL must use http or https"},
+		{"https://", "invalid remote config URL"},
+		{"/relative/path", "invalid remote config URL"},
+		{"https://user:pass@example.com/c.yaml", "invalid remote config URL"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			got, err := normalizeRemoteConfigURL(tt.raw)
+			if err == nil {
+				t.Fatalf("normalizeRemoteConfigURL(%q) = %q, want an error", tt.raw, got)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeRemoteConfigURLAcceptsPublicURLs(t *testing.T) {
+	for _, raw := range []string{"https://example.com/config.yaml", "http://example.com/c.yaml"} {
+		if _, err := normalizeRemoteConfigURL(raw); err != nil {
+			t.Errorf("normalizeRemoteConfigURL(%q) = %v, want accepted", raw, err)
+		}
+	}
+}
+
+const setupBootstrapConfig = `version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+`
+
+// allowLoopbackForTest declares the loopback fixture server as a permitted
+// destination, the same way an operator would declare a real internal target.
+// It does not disable the check: everything outside the prefix stays refused.
+func allowLoopbackForTest(t *testing.T) {
+	t.Helper()
+	previous := outboundAllowedPrivatePrefixes
+	outboundAllowedPrivatePrefixes = []netip.Prefix{
+		netip.MustParsePrefix("127.0.0.0/8"),
+		netip.MustParsePrefix("::1/128"),
+	}
+	t.Cleanup(func() { outboundAllowedPrivatePrefixes = previous })
+}
+
+// The allowlist is narrow: declaring loopback does not admit other private
+// ranges.
+func TestAllowlistDoesNotWidenBeyondItsPrefixes(t *testing.T) {
+	allowLoopbackForTest(t)
+	withInwardResolver(t, "10.0.0.1")
+
+	body, _ := json.Marshal(FetchRawRequest{URL: "https://public-looking-name.invalid/c.yaml"})
+	recorder := httptest.NewRecorder()
+	FetchRawHandler()(recorder, httptest.NewRequest(http.MethodPost, "/api/fetch-raw", bytes.NewReader(body)))
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("a private address outside the allowlist was accepted: %d %s", recorder.Code, recorder.Body.String())
 	}
 }
