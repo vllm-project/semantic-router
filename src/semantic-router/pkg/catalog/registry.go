@@ -10,17 +10,16 @@ import (
 // Registry is an immutable lookup view over one validated catalog snapshot.
 // Lookup methods return values or defensive copies, never internal maps.
 type Registry struct {
-	header             CatalogHeader
-	protocols          map[string]ProtocolDefinition
-	providers          map[string]ProviderDefinition
-	reasoningFamilies  map[string]ReasoningFamilyDefinition
-	models             map[string]ModelCard
-	benchmarks         map[string]BenchmarkDefinition
-	indices            map[string]IndexDefinition
-	evaluations        []EvaluationRecord
-	evaluationCoverage []EvaluationCoverage
-	indexResults       map[string]map[string]map[string]IndexResult
-	digest             string
+	header            CatalogHeader
+	protocols         map[string]ProtocolDefinition
+	providers         map[string]ProviderDefinition
+	reasoningFamilies map[string]ReasoningFamilyDefinition
+	models            map[string]ModelCard
+	benchmarks        map[string]BenchmarkDefinition
+	indices           map[string]IndexDefinition
+	evaluations       []EvaluationRecord
+	indexResults      map[string]map[string]map[string]IndexResult
+	digest            string
 }
 
 var (
@@ -50,17 +49,16 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		return nil, fmt.Errorf("model catalog must contain exactly one active header")
 	}
 	registry := &Registry{
-		header:             document.Catalogs[0],
-		protocols:          make(map[string]ProtocolDefinition, len(document.Protocols)),
-		providers:          make(map[string]ProviderDefinition, len(document.Providers)),
-		reasoningFamilies:  make(map[string]ReasoningFamilyDefinition, len(document.ReasoningFamilies)),
-		models:             make(map[string]ModelCard, len(document.Models)),
-		benchmarks:         make(map[string]BenchmarkDefinition, len(document.Benchmarks)),
-		indices:            make(map[string]IndexDefinition, len(document.Indices)),
-		evaluations:        append([]EvaluationRecord(nil), document.Evaluations...),
-		evaluationCoverage: append([]EvaluationCoverage(nil), document.EvaluationCoverage...),
-		indexResults:       make(map[string]map[string]map[string]IndexResult),
-		digest:             digest,
+		header:            document.Catalogs[0],
+		protocols:         make(map[string]ProtocolDefinition, len(document.Protocols)),
+		providers:         make(map[string]ProviderDefinition, len(document.Providers)),
+		reasoningFamilies: make(map[string]ReasoningFamilyDefinition, len(document.ReasoningFamilies)),
+		models:            make(map[string]ModelCard, len(document.Models)),
+		benchmarks:        make(map[string]BenchmarkDefinition, len(document.Benchmarks)),
+		indices:           make(map[string]IndexDefinition, len(document.Indices)),
+		evaluations:       append([]EvaluationRecord(nil), document.Evaluations...),
+		indexResults:      make(map[string]map[string]map[string]IndexResult),
+		digest:            digest,
 	}
 	for _, definition := range document.Protocols {
 		registry.protocols[definition.ID] = definition
@@ -81,6 +79,9 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		registry.indices[definition.ID] = definition
 	}
 	for _, result := range document.IndexResults {
+		if result.Status != "available" || result.Score == nil {
+			return nil, fmt.Errorf("generated model catalog contains a placeholder index result")
+		}
 		if registry.indexResults[result.Model] == nil {
 			registry.indexResults[result.Model] = map[string]map[string]IndexResult{}
 		}
@@ -210,15 +211,6 @@ func (registry *Registry) Evaluations() []EvaluationRecord {
 	result := make([]EvaluationRecord, len(registry.evaluations))
 	for index, value := range registry.evaluations {
 		result[index] = cloneEvaluation(value)
-	}
-	return result
-}
-
-func (registry *Registry) EvaluationCoverage() []EvaluationCoverage {
-	result := make([]EvaluationCoverage, len(registry.evaluationCoverage))
-	for index, value := range registry.evaluationCoverage {
-		result[index] = value
-		result[index].Value = cloneFloatPointer(value.Value)
 	}
 	return result
 }

@@ -1,5 +1,5 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
   normalizeEndpoint,
