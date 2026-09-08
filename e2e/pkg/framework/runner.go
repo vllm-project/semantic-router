@@ -350,9 +350,10 @@ func resolveWorkspaceModelsDir() (string, error) {
 	}
 
 	modelsDir := filepath.Join(workingDir, "models")
-	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
+	if err := os.MkdirAll(modelsDir, 0o777); err != nil {
 		return "", fmt.Errorf("create workspace models directory %s: %w", modelsDir, err)
 	}
+	_ = os.Chmod(modelsDir, 0o777)
 
 	return modelsDir, nil
 }

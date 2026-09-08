@@ -392,6 +392,13 @@ extraVolumeMounts:
     mountPath: /app/models
 `, cluster.WorkspaceModelsNodeMountPath)
 
+	if hfEndpoint := strings.TrimSpace(os.Getenv("HF_ENDPOINT")); hfEndpoint != "" {
+		content += fmt.Sprintf(`extraEnv:
+  - name: HF_ENDPOINT
+    value: %q
+`, hfEndpoint)
+	}
+
 	if _, err := tmpFile.WriteString(content); err != nil {
 		_ = tmpFile.Close()
 		_ = os.Remove(tmpFile.Name())
