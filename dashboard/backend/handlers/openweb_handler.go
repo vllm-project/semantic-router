@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 type openWebFetchPlan struct {
@@ -84,8 +86,7 @@ func validateOpenWebRequest(req OpenWebRequest) (OpenWebResponse, bool) {
 		return OpenWebResponse{Error: "URL cannot be empty"}, true
 	}
 
-	parsedURL, err := url.Parse(req.URL)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+	if _, err := outboundPolicy(openWebDefaultTimeout).ValidateURL(req.URL); err != nil {
 		return OpenWebResponse{
 			URL:   req.URL,
 			Error: "Invalid URL format",
@@ -133,6 +134,13 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 			log.Printf("[OpenWeb] Direct fetch succeeded")
 			return result, nil
 		}
+		// A refused destination fails closed. Only a transport or upstream
+		// failure earns the reader fallback; retrying a blocked URL through a
+		// second path would make the policy advisory.
+		if isForbiddenFetchTarget(err) {
+			log.Printf("[OpenWeb] Direct fetch refused by outbound policy")
+			return nil, errOpenWebForbiddenTarget
+		}
 		log.Printf("[OpenWeb] Direct fetch failed: %v", redactURLsForLog(err.Error()))
 		log.Printf("[OpenWeb] Strategy 2: Falling back to Jina Reader...")
 	} else {
@@ -152,6 +160,20 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 
 	log.Printf("[OpenWeb] Jina Reader fetch succeeded")
 	return result, nil
+}
+
+// errOpenWebForbiddenTarget is what the caller sees when the outbound policy
+// refuses a destination. It names no address and no reason, so the endpoint
+// cannot be used to map the dashboard's network by reading error text.
+var errOpenWebForbiddenTarget = errors.New("destination is not permitted")
+
+// isForbiddenFetchTarget reports whether err is the outbound policy refusing
+// the destination, as opposed to the upstream being unreachable or slow.
+func isForbiddenFetchTarget(err error) bool {
+	return errors.Is(err, safefetch.ErrDestinationForbidden) ||
+		errors.Is(err, safefetch.ErrSchemeNotAllowed) ||
+		errors.Is(err, safefetch.ErrInvalidURL) ||
+		errors.Is(err, safefetch.ErrTooManyRedirects)
 }
 
 func writeOpenWebJSON(w http.ResponseWriter, status int, response OpenWebResponse) {
