@@ -46,16 +46,16 @@ func EmbeddingCapabilitiesFor(modelType string) (EmbeddingCapabilities, error) {
 		defer C.free(cModelType)
 	}
 
-	var result C.EmbeddingCapabilitiesV1
-	defer C.candle_free_embedding_capabilities_v1(&result)
+	result := new(C.EmbeddingCapabilitiesV1)
+	defer C.candle_free_embedding_capabilities_v1(result)
 	status := int(C.candle_embedding_capabilities_v1(
 		(*C.uint8_t)(cModelType),
 		C.size_t(len(modelTypeBytes)),
-		&result,
+		result,
 	))
 	switch status {
 	case 0:
-		return marshalEmbeddingCapabilities(result, BackendCandle)
+		return marshalEmbeddingCapabilities(*result, BackendCandle)
 	case 1:
 		return EmbeddingCapabilities{}, fmt.Errorf("%w: %q", ErrUnsupportedModelType, modelType)
 	case 2:
