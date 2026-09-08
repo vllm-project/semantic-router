@@ -128,7 +128,7 @@ def wait_for_health(container: str, timeout_seconds: float = 90) -> None:
             with urllib.request.urlopen(url, timeout=5) as response:
                 validate_health_response(response.status, response.read())
             return
-        except (VerificationError, OSError) as error:
+        except OSError as error:
             last_error = str(error)
             time.sleep(2)
 
