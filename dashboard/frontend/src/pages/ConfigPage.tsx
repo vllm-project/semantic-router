@@ -25,9 +25,9 @@ import {
   SignalType,
   Tool,
   getDefaultModelName,
-  getNormalizedModels,
   getReasoningFamiliesMap,
 } from './configPageSupport'
+import { getNormalizedModels } from './configPageModelNormalization'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 
 interface ConfigPageProps {

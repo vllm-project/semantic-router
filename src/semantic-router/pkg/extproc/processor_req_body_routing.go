@@ -3,7 +3,6 @@ package extproc
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -14,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -225,12 +225,14 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
+	// Provider metadata is applied before credentials so an operator-supplied
+	// extra header can never replace the credential selected for this request.
+	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	if errorResponse := r.appendProviderCredential(
 		state, dispatch.logicalModel, dispatch.backendName, ctx,
 	); errorResponse != nil {
 		return errorResponse
 	}
-	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
@@ -316,19 +318,21 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	return result
 }
 
-func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, string, string, error) {
+func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, modelcatalog.ProviderAuth, error) {
 	if profile == nil {
-		return authz.ProviderOpenAI, "Authorization", "Bearer", nil
+		return authz.ProviderOpenAI, modelcatalog.ProviderAuth{
+			Strategy: "bearer", Header: "Authorization", Prefix: "Bearer",
+		}, nil
 	}
 	providerType, err := profile.ProviderType()
 	if err != nil {
-		return "", "", "", fmt.Errorf("resolve provider auth: %w", err)
+		return "", modelcatalog.ProviderAuth{}, fmt.Errorf("resolve provider auth: %w", err)
 	}
-	header, prefix, err := profile.ResolveAuthHeader()
+	providerAuth, err := profile.ResolveAuth()
 	if err != nil {
-		return "", "", "", fmt.Errorf("resolve provider auth header: %w", err)
+		return "", modelcatalog.ProviderAuth{}, fmt.Errorf("resolve provider auth header: %w", err)
 	}
-	return authz.LLMProvider(providerType), header, prefix, nil
+	return authz.LLMProvider(providerType), providerAuth, nil
 }
 
 func (r *OpenAIRouter) appendProviderCredential(
@@ -337,13 +341,20 @@ func (r *OpenAIRouter) appendProviderCredential(
 	backendName string,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	provider, authHeader, authPrefix, err := resolveProviderAuth(state.profile)
+	provider, providerAuth, err := resolveProviderAuth(state.profile)
 	if err != nil {
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	if providerAuth.Strategy == "none" {
+		if r.CredentialResolver != nil {
+			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+		}
+		return nil
 	}
 	if r.CredentialResolver == nil {
 		return r.createErrorResponse(500, "Provider credentials are unavailable.")
 	}
+	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	accessKey, err := r.CredentialResolver.KeyForProvider(provider, model, ctx.Headers)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "credential_resolution_failed", map[string]interface{}{
@@ -351,17 +362,14 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
-	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	if accessKey == "" {
 		return nil
 	}
 	value := accessKey
-	if authPrefix != "" {
-		value = authPrefix + " " + accessKey
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + accessKey
 	}
-	state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: authHeader, RawValue: []byte(value),
-	}})
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil
 }
 
@@ -370,9 +378,14 @@ func appendProfileHeaders(headersOut *[]*core.HeaderValueOption, profile *config
 		return
 	}
 	for key, value := range profile.ExtraHeaders {
-		*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-			Key: key, RawValue: []byte(value),
-		}})
+		*headersOut = append(*headersOut, overwriteRequestHeader(key, value))
+	}
+}
+
+func overwriteRequestHeader(key, value string) *core.HeaderValueOption {
+	return &core.HeaderValueOption{
+		Header:       &core.HeaderValue{Key: key, RawValue: []byte(value)},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 	}
 }
 
@@ -382,35 +395,14 @@ func setProviderRequestPath(
 	format llmprotocol.WireFormat,
 ) {
 	requestPath := requestWirePath(format)
-	if profile != nil && format == llmprotocol.OpenAIChatV1 {
-		if configured, err := profile.ResolveChatPath(); err == nil && configured != "" {
+	if profile != nil {
+		if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
 			requestPath = configured
 		}
-	} else if profile != nil {
-		requestPath = providerProtocolPath(profile.BaseURL, requestPath)
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: ":path", RawValue: []byte(requestPath),
 	}})
-}
-
-// providerProtocolPath preserves a provider's base path while allowing the
-// selected model protocol to own the endpoint suffix. ChatPath remains a
-// chat-completions override and must not redirect Responses or Messages
-// dispatches back to the chat endpoint.
-func providerProtocolPath(baseURL, protocolPath string) string {
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return protocolPath
-	}
-	basePath := strings.TrimRight(parsed.Path, "/")
-	if basePath == "" || basePath == "/" || strings.HasPrefix(protocolPath, basePath+"/") {
-		return protocolPath
-	}
-	if strings.HasSuffix(basePath, "/v1") && strings.HasPrefix(protocolPath, "/v1/") {
-		return basePath + strings.TrimPrefix(protocolPath, "/v1")
-	}
-	return basePath + protocolPath
 }
 
 func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {

@@ -698,10 +698,6 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
-	if modelName == cfg.PlannerModel {
-		applyWorkflowChatTemplateKwargs(callReq, workflowPlannerChatTemplateKwargs(modelName))
-	}
-	applyWorkflowModelReasoningControl(callReq, modelName, baseReq)
 	if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
