@@ -209,9 +209,14 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi
 
-# The full Rust image includes the native toolchain and OpenSSL development
-# files. Verify them directly so this stage needs no additional apt metadata.
-RUN command -v cc && command -v c++ && command -v make && \
+# The official Rust bullseye image is buildpack-based and already supplies the
+# native compiler, pkg-config, and OpenSSL headers required by ort. Validate
+# that immutable builder contract instead of making the build depend on live
+# Debian repository metadata.
+RUN command -v gcc >/dev/null && \
+    command -v g++ >/dev/null && \
+    command -v make >/dev/null && \
+    command -v pkg-config >/dev/null && \
     pkg-config --exists openssl
 
 COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
@@ -347,6 +352,7 @@ RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/cli/ /app/cli/
+COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 

@@ -88,7 +88,7 @@ class _CatalogHeader:
 
 
 def available_catalog_versions() -> tuple[str, ...]:
-    root = resources.files("cli.model_assets")
+    root = _model_assets_root()
     versions = {
         item.name
         for item in root.iterdir()
@@ -148,9 +148,7 @@ def _load_catalog_document(version: str) -> tuple[str, dict[str, Any]]:
     version = version.strip()
     if not _CATALOG_RESOURCE_VERSION.fullmatch(version):
         raise ModelCatalogError("catalog version is invalid")
-    catalog_resource = resources.files("cli.model_assets").joinpath(
-        version, "catalog.yaml"
-    )
+    catalog_resource = _model_assets_root().joinpath(version, "catalog.yaml")
     if not catalog_resource.is_file():
         raise ModelCatalogError(f"built-in catalog version is not installed: {version}")
     try:
@@ -393,7 +391,7 @@ def catalog_model_to_dict(model: CatalogModel) -> dict[str, Any]:
 
 
 def _load_asset_yaml(version: str, asset: dict[str, str]) -> dict[str, Any]:
-    bundle = resources.files("cli.model_assets").joinpath(version, asset["bundle"])
+    bundle = _model_assets_root().joinpath(version, asset["bundle"])
     try:
         digest = model_bundle_digest(bundle)
     except ValueError as error:
@@ -421,7 +419,7 @@ def _parse_assets(value: Any, version: str) -> dict[str, dict[str, str]]:
             raise ModelCatalogError("catalog asset identity is invalid")
         if Path(bundle).name != bundle:
             raise ModelCatalogError("catalog asset path is invalid")
-        resource = resources.files("cli.model_assets").joinpath(version, bundle)
+        resource = _model_assets_root().joinpath(version, bundle)
         try:
             actual = model_bundle_digest(resource)
         except ValueError as error:
@@ -430,3 +428,31 @@ def _parse_assets(value: Any, version: str) -> dict[str, dict[str, str]]:
             raise ModelCatalogError(f"catalog asset digest drifted: {bundle}")
         assets[asset_id] = {"bundle": bundle, "sha256": digest}
     return assets
+
+
+def _model_assets_root():
+    """Resolve installed package data, or the canonical source tree in development."""
+
+    packaged = resources.files("cli.model_assets")
+    repository_root = Path(__file__).resolve().parents[3]
+    repository_assets = repository_root / "config" / "recipes" / "built-in"
+    try:
+        packaged_path = Path(str(packaged)).resolve()
+    except (OSError, TypeError, ValueError):
+        packaged_path = None
+    if (
+        packaged_path is not None
+        and repository_root in packaged_path.parents
+        and repository_assets.is_dir()
+    ):
+        return repository_assets
+    if any(
+        item.is_dir()
+        and _CATALOG_RESOURCE_VERSION.fullmatch(item.name)
+        and item.joinpath("catalog.yaml").is_file()
+        for item in packaged.iterdir()
+    ):
+        return packaged
+    if repository_assets.is_dir():
+        return repository_assets
+    return packaged

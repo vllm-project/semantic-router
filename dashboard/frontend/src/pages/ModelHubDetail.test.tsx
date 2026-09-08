@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { EvaluationCard, ModelAccess, ModelDetail, VirtualPool } from './ModelHubDetail'
 import { providerProtocolOperations } from './modelHubProviderOperations'
