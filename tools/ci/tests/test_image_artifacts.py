@@ -132,7 +132,7 @@ class ImageArtifactTests(unittest.TestCase):
         ):
             images.main()
             self.assertEqual(run.call_count, 2)
-            for call, tag in zip(run.call_args_list, ["v1.2.3", "latest"]):
+            for call, tag in zip(run.call_args_list, ["v1.2.3", "latest"], strict=True):
                 self.assertEqual(
                     call.args[0],
                     [

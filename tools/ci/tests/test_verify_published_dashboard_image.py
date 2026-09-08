@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
@@ -63,6 +64,49 @@ class PublishedDashboardImageTests(unittest.TestCase):
     def test_health_response_requires_dashboard_identity(self) -> None:
         with self.assertRaisesRegex(verifier.VerificationError, "service"):
             verifier.validate_health_response(200, b'{"status":"healthy"}')
+
+    def test_wait_for_health_retries_not_ready_errors(self) -> None:
+        for error in (
+            urllib.error.URLError("connection refused"),
+            urllib.error.HTTPError(
+                "http://localhost/healthz", 503, "Not ready", {}, None
+            ),
+        ):
+            with (
+                self.subTest(error=error),
+                mock.patch.object(verifier, "published_port", return_value=49152),
+                mock.patch.object(verifier, "container_is_running", return_value=True),
+                mock.patch.object(
+                    verifier.urllib.request, "urlopen", side_effect=[error, Response()]
+                ) as request,
+                mock.patch.object(verifier.time, "sleep") as sleep,
+                mock.patch.object(verifier.time, "monotonic", side_effect=[0, 1, 2]),
+            ):
+                verifier.wait_for_health("dashboard")
+                self.assertEqual(request.call_count, 2)
+                sleep.assert_called_once_with(2)
+
+    def test_wait_for_health_fails_immediately_on_contract_errors(self) -> None:
+        for body in (
+            b'{"status":"healthy","service":"wrong-service"}',
+            b'{"status":"unhealthy","service":"semantic-router-dashboard"}',
+            b"not JSON",
+        ):
+            with (
+                self.subTest(body=body),
+                mock.patch.object(verifier, "published_port", return_value=49152),
+                mock.patch.object(verifier, "container_is_running", return_value=True),
+                mock.patch.object(
+                    verifier.urllib.request, "urlopen", return_value=Response()
+                ) as request,
+                mock.patch.object(Response, "read", return_value=body),
+                mock.patch.object(verifier.time, "sleep") as sleep,
+                mock.patch.object(verifier.time, "monotonic", side_effect=[0, 1, 91]),
+            ):
+                with self.assertRaises(verifier.VerificationError):
+                    verifier.wait_for_health("dashboard")
+                request.assert_called_once()
+                sleep.assert_not_called()
 
     def test_arm64_runtime_uses_platform_and_always_removes_container(self) -> None:
         calls: list[list[str]] = []
