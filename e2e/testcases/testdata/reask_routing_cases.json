@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Repeated invoice complaint across 3 turns",
+    "description": "repeated_billing_question matches when the current turn closely repeats the last two turns' billing complaint",
+    "messages": [
+      {"role": "user", "content": "My invoice this month is wrong, can you help me fix it?"},
+      {"role": "assistant", "content": "I'm sorry to hear that. Could you tell me which charge looks incorrect?"},
+      {"role": "user", "content": "The invoice you sent me is still incorrect. Please correct the billing amount."},
+      {"role": "assistant", "content": "I've flagged this for review. Is there anything else incorrect on the invoice?"},
+      {"role": "user", "content": "This bill is still wrong and hasn't been fixed. I need this corrected now."}
+    ],
+    "expected_decision": "reask_escalation",
+    "expected_matched_signal": "repeated_billing_question",
+    "should_match": true
+  },
+  {
+    "name": "Repeated duplicate-charge complaint across 3 turns",
+    "description": "repeated_billing_question matches a second, unrelated repeated billing complaint",
+    "messages": [
+      {"role": "user", "content": "I was charged twice for my subscription this month, can you refund the duplicate charge?"},
+      {"role": "assistant", "content": "Let me look into that duplicate charge for you."},
+      {"role": "user", "content": "You still haven't refunded the duplicate charge on my subscription."},
+      {"role": "assistant", "content": "I apologize for the delay, checking the status now."},
+      {"role": "user", "content": "The duplicate subscription charge is still not refunded, please fix this."}
+    ],
+    "expected_decision": "reask_escalation",
+    "expected_matched_signal": "repeated_billing_question",
+    "should_match": true
+  },
+  {
+    "name": "Unrelated topics across turns",
+    "description": "repeated_billing_question should not trigger when each turn is about a different, unrelated topic. expected_decision is left empty because the test only checks that the actual decision is not reask_escalation, not what it actually is",
+    "messages": [
+      {"role": "user", "content": "What's the weather like in Tokyo in April?"},
+      {"role": "assistant", "content": "Tokyo in April is generally mild with cherry blossoms in bloom."},
+      {"role": "user", "content": "Can you recommend a good beginner recipe for sourdough bread?"},
+      {"role": "assistant", "content": "Sure, a simple sourdough starter involves flour and water fermented over several days."},
+      {"role": "user", "content": "What are some tips for improving my golf swing?"}
+    ],
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]
