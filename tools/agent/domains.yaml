@@ -127,6 +127,10 @@ domains:
     paths:
       - src/vllm-sr/**
       - pyproject.toml
+      # Escalation paths only add jobs for an already-selected domain, so the
+      # CLI E2E assets are listed here as well; otherwise a change confined to
+      # them can never select this domain or reach the cli job that runs them.
+      - e2e/testing/vllm-sr-cli/**
     checks: [make vllm-sr-test]
     verify: [make vllm-sr-test-integration]
     ci_jobs: [core-tests]
