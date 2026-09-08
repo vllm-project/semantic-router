@@ -136,6 +136,11 @@ func buildMaskedPIIText(text string, detections []classification.PIIDetection, p
 	type span struct {
 		start, end  int
 		placeholder string
+		// sourceLen is the length of the original detection whose placeholder
+		// the merged range currently carries. The merged range grows as spans
+		// chain, so comparing against its width would let a later, longer
+		// detection lose to a union it is not part of.
+		sourceLen int
 	}
 	spans := make([]span, 0, len(detections))
 	for _, detection := range detections {
@@ -146,6 +151,7 @@ func buildMaskedPIIText(text string, detections []classification.PIIDetection, p
 			start:       detection.Start,
 			end:         detection.End,
 			placeholder: placeholders[detection.EntityType+"\x00"+detection.Text],
+			sourceLen:   detection.End - detection.Start,
 		})
 	}
 	if len(spans) == 0 {
@@ -163,10 +169,11 @@ func buildMaskedPIIText(text string, detections []classification.PIIDetection, p
 	for _, s := range spans[1:] {
 		last := &merged[len(merged)-1]
 		if s.start < last.end {
+			if s.sourceLen > last.sourceLen {
+				last.placeholder = s.placeholder
+				last.sourceLen = s.sourceLen
+			}
 			if s.end > last.end {
-				if s.end-s.start > last.end-last.start {
-					last.placeholder = s.placeholder
-				}
 				last.end = s.end
 			}
 			continue

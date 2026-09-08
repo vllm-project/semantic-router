@@ -107,6 +107,17 @@ func buildJailbreakDependencies(cfg *config.RouterConfig, jailbreakMapping *Jail
 
 func buildPIIDependencies(cfg *config.RouterConfig, piiMapping *PIIMapping) (PIIInitializer, PIIInference, error) {
 	if cfg.PIIModel.Backend != nil {
+		if piiMapping == nil {
+			// The mapping loader is skipped on purpose when no reachable routing
+			// decision consumes the PII signal. With no consumer there is nothing
+			// to build: IsPIIEnabled stays false and a dormant remote backend must
+			// not fail startup on the missing mapping.
+			logging.ComponentEvent("classifier", "pii_detector_backend_dormant", map[string]interface{}{
+				"backend": "token_spans_http",
+				"reason":  "no_reachable_pii_signal",
+			})
+			return nil, nil, nil
+		}
 		// Remote inference is fully constructed here and has no local model
 		// lifecycle, so the initializer is nil, as it is for a remote category
 		// backend.

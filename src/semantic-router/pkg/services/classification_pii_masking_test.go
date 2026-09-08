@@ -156,3 +156,27 @@ func TestBuildPIIResponse_MaskEntitiesOverlappingAndNested(t *testing.T) {
 		assertNoPIISurvives(t, resp.MaskedText, detections)
 	})
 }
+
+// Three spans that chain, A overlapping B overlapping C, with C the longest
+// original detection. The merged range must carry C's placeholder even though
+// C is shorter than the union A∪B it is compared against when it arrives
+// (Xunzhuo's review on #3498).
+func TestBuildMaskedPIITextChainedOverlapKeepsLongestSourcePlaceholder(t *testing.T) {
+	text := "0123456789abcdefghijklmnopqrs tail"
+	detections := []classification.PIIDetection{
+		{EntityType: "PERSON", Text: text[0:10], Start: 0, End: 10, Confidence: 0.9},
+		{EntityType: "EMAIL_ADDRESS", Text: text[9:18], Start: 9, End: 18, Confidence: 0.9},
+		{EntityType: "ADDRESS", Text: text[17:29], Start: 17, End: 29, Confidence: 0.9},
+	}
+	got := maskedFor(t, text, detections)
+	if want := "[ADDRESS_0] tail"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	assertNoPIISurvives(t, got, detections)
+
+	// Same spans reported in reverse: the result must not depend on order.
+	reversed := []classification.PIIDetection{detections[2], detections[1], detections[0]}
+	if got := maskedFor(t, text, reversed); got != "[ADDRESS_0] tail" {
+		t.Fatalf("reverse order got %q", got)
+	}
+}
