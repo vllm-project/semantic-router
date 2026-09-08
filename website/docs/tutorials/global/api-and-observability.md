@@ -116,7 +116,7 @@ Common Prometheus metric families:
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
-| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
 
 ### Profiling
 

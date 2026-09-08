@@ -2,7 +2,6 @@ package cache
 
 import (
 	"container/heap"
-	"sort"
 	"sync"
 	"time"
 )
@@ -287,40 +286,6 @@ func (p *LRUPolicy) UpdateIndex(requestID string, oldIdx, newIdx int) {
 		delete(p.indexMap, node.entryIndex)
 		node.entryIndex = newIdx
 		p.indexMap[newIdx] = node
-	}
-}
-
-func (p *LRUPolicy) RebuildFromEntries(entries []CacheEntry) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.list = newDLList()
-	p.nodeMap = make(map[string]*dlNode)
-	p.indexMap = make(map[int]*dlNode)
-
-	if len(entries) == 0 {
-		return
-	}
-
-	type entryWithIdx struct {
-		idx          int
-		lastAccessAt time.Time
-		requestID    string
-	}
-	sortedEntries := make([]entryWithIdx, len(entries))
-	for i, e := range entries {
-		sortedEntries[i] = entryWithIdx{idx: i, lastAccessAt: e.LastAccessAt, requestID: e.RequestID}
-	}
-
-	sort.Slice(sortedEntries, func(i, j int) bool {
-		return sortedEntries[i].lastAccessAt.Before(sortedEntries[j].lastAccessAt)
-	})
-
-	for _, e := range sortedEntries {
-		node := &dlNode{entryIndex: e.idx, requestID: e.requestID}
-		p.list.addToFront(node)
-		p.nodeMap[e.requestID] = node
-		p.indexMap[e.idx] = node
 	}
 }
 
