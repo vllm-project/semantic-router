@@ -127,6 +127,79 @@ func TestDynamoBackendBoundaryPrecedesCacheHit(t *testing.T) {
 	}
 }
 
+func TestDynamoRequestExtensionsBypassResponseCacheReadsAndWrites(t *testing.T) {
+	decision := config.Decision{
+		Name:      "dynamo-cache-route",
+		ModelRefs: []config.ModelRef{{Model: "model-a"}},
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    "exact_then_semantic",
+			}),
+		}},
+	}
+	salt := "tenant-a"
+	for _, test := range []struct {
+		name     string
+		envelope llmprotocol.Envelope
+		headers  map[string]string
+	}{
+		{
+			name: "nvext token data",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{TokenData: []uint32{10, 11}},
+			}},
+		},
+		{
+			name: "top-level cache salt",
+			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
+				RequestTopLevelCacheSalt: &salt,
+			}},
+		},
+		{
+			name:    "routing header",
+			headers: map[string]string{headers.DynamoDPRank: "1"},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cache := &mockStreamingCache{exactHit: true}
+			router := &OpenAIRouter{
+				Cache: cache,
+				Config: &config.RouterConfig{
+					SemanticCache: config.SemanticCache{Enabled: true},
+					IntelligentRouting: config.IntelligentRouting{
+						Decisions: []config.Decision{decision},
+					},
+				},
+			}
+			ctx := &RequestContext{
+				Headers:             test.headers,
+				RequestID:           "dynamo-cache-request",
+				SemanticRequest:     testNeutralRequest("model-a", "same request"),
+				ProtocolEnvelope:    test.envelope,
+				VSRSelectedDecision: &router.Config.IntelligentRouting.Decisions[0],
+			}
+
+			response, hit := router.handleCaching(ctx, decision.Name, "model-a")
+			if response != nil || hit {
+				t.Fatalf("handleCaching() = (%v, %v), want no cached response", response, hit)
+			}
+			if cache.exactFindCalled || cache.findSimilarCalled {
+				t.Fatal("Dynamo request reached response-cache lookup")
+			}
+			if !ctx.CacheReadBypass || !ctx.CacheWriteBypass {
+				t.Fatalf("cache bypass = read:%v write:%v, want both true", ctx.CacheReadBypass, ctx.CacheWriteBypass)
+			}
+
+			router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+			if cache.addEntryCalled || cache.updateCalled || cache.exactAdded {
+				t.Fatal("Dynamo response was written to response cache")
+			}
+		})
+	}
+}
+
 func TestValidateDynamoBackendPoolIncludesHeaderOnlyExtensions(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{headers.DynamoDPRank: "1"}}
 	for _, test := range []struct {
