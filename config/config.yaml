@@ -8,21 +8,12 @@ listeners:
 
 providers:
   defaults:
-    default_model: qwen3-8b
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning.effort
-      mistral:
-        type: top_level_reasoning_effort
-        parameter: reasoning_effort
+    model: qwen3-8b
+    reasoning_effort: medium
   models:
     - name: qwen3-8b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
       reliability:
@@ -49,9 +40,21 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80
-          type: chat
+          provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-secondary
+        - name: local-secondary
+          endpoint: 127.0.0.1:8004
+          protocol: http
+          provider: vllm
+          api_key_env: VLLM_SR_PRIMARY_API_KEY
+          weight: 20
+    # Keep remote-provider access fields visible without mixing incompatible
+    # request semantics into the weighted qwen3-8b replica pool above.
+    - name: remote-openai-reference
+      provider_model_id: remote-openai-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-primary
           base_url: https://api.example.com/v1
           provider: openai
           auth_header: Authorization
@@ -61,9 +64,20 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           api_key: static-demo-key
-          weight: 20
+          weight: 100
     - name: qwen3-32b
-      reasoning_family: gpt
+      reasoning:
+        type: reasoning_effort
+        parameter: reasoning.effort
+        activation_parameter: enable_thinking
+        effort_flags:
+          low: low_effort
+          medium: medium_effort
+        levels: [none, low, medium, high]
+        default: medium
+        disabled: none
+        modes: [enabled, disabled]
+        default_mode: enabled
       provider_model_id: qwen3-32b-instruct
       api_format: anthropic
       pricing:
@@ -75,6 +89,7 @@ providers:
         internal: qwen3-32b
       backend_refs:
         - name: large-primary
+          provider: anthropic-compatible
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
@@ -90,6 +105,7 @@ providers:
         openai: llava-omni-preview
       backend_refs:
         - name: omni-primary
+          provider: vllm
           endpoint: 127.0.0.1:8002
           protocol: http
           weight: 100
@@ -104,19 +120,45 @@ providers:
         openai: gpt-image-1
       backend_refs:
         - name: image-primary
+          provider: vllm
           endpoint: 127.0.0.1:8003
           protocol: http
           weight: 100
+    # Catalog-backed models do not need a handwritten routing.modelCards entry.
+    - name: built-in-catalog-example
+      catalog: vllm-sr/mom-v1-lite
 
 routing:
   strategy: priority
   modelCards:
     - name: qwen3-8b
+      display_name: Qwen3 8B reference model
+      publisher: Alibaba Cloud
+      presentation:
+        logo: package:qwen
+        monogram: Q
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://huggingface.co/Qwen/Qwen3-8B
+        license: Apache-2.0
+      family: qwen3
+      revision: reference-v1
+      released_at: 2025-04-29
+      knowledge_cutoff: 2024-12
+      lifecycle: active
       param_size: 8B
       context_window_size: 131072
+      max_output_tokens: 32768
       description: General-purpose text model for the default routing tier.
       capabilities: [chat, reasoning, tools]
-      quality_score: 0.83
+      modalities:
+        input: [text]
+        output: [text]
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.83
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
@@ -127,7 +169,10 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
-      quality_score: 0.96
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.96
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -135,7 +180,10 @@ routing:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      quality_score: 0.88
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.88
       modality: omni
       tags: [multimodal, omni]
     - name: sdxl-image
@@ -143,7 +191,10 @@ routing:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      quality_score: 0.79
+      evaluations:
+        - benchmark: vllm-sr/operator-rating@1.0.0
+          metrics:
+            score: 0.79
       modality: diffusion
       tags: [image, diffusion]
 
@@ -363,7 +414,7 @@ routing:
 
     complexity:
       - name: needs_reasoning
-        threshold: 0.75
+        threshold: 0.10
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
         hard:
           candidates:
@@ -411,7 +462,7 @@ routing:
 
     jailbreak:
       - name: prompt_injection
-        method: hybrid
+        method: contrastive
         threshold: 0.8
         include_history: true
         description: Detect common prompt-injection or jailbreak attempts.
@@ -422,6 +473,13 @@ routing:
         benign_patterns:
           - explain the policy
           - summarize the safety rules
+      # direction: response scores the model's output instead of the prompt, so
+      # this rule only exists once the model has answered; the selected
+      # decision's response_jailbreak plugin enforces on it.
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
 
     pii:
       - name: restricted_pii
@@ -543,6 +601,14 @@ routing:
         predicate:
           equals: denied
 
+    input_modality:
+      - name: image_input
+        description: Request contains at least one image content part.
+        modality: image
+      - name: audio_input
+        description: Request contains at least one audio content part.
+        modality: audio
+
     classifiers:
       - name: generic-safety-score
         description: Generic binary safety classification head.
@@ -645,10 +711,11 @@ routing:
         - variable: candidate
           source: models
           models:
-            - model: qwen3-8b
+            - model: qwen3-32b
               lora_name: business-adapter
               weight: 1.0
-              use_reasoning: false
+              use_reasoning: true
+              reasoning_mode: enabled
               reasoning_description: Candidate iteration reference model for DSL authoring coverage.
               reasoning_effort: low
           outputs:
@@ -768,7 +835,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.4
         - model: qwen3-32b
           use_reasoning: true
@@ -821,7 +888,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
         - model: qwen3-32b
           use_reasoning: true
           reasoning_effort: high
@@ -879,7 +946,7 @@ routing:
           weight: 0.5
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.2
         - model: llava-omni
           use_reasoning: true
@@ -936,7 +1003,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.5
         - model: qwen3-32b
           use_reasoning: true
@@ -999,7 +1066,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.5
         - model: qwen3-32b
           use_reasoning: true
@@ -1190,7 +1257,6 @@ routing:
               collection: docs
               reuse_cache_connection: true
               content_field: content
-              metadata_field: metadata
               filter_expression: locale == "es"
 
     - name: admin_adaptive_route
@@ -1297,13 +1363,13 @@ routing:
       priority: 125
       rules:
         operator: AND
+        on_unknown: no_match
         conditions:
           - type: classifier
             name: generic-safety-score
             label: JAILBREAK
             predicate:
               gte: 0.5
-            on_error: no_match
       modelRefs:
         - model: qwen3-8b
           use_reasoning: false
@@ -1425,6 +1491,25 @@ routing:
               - name: x-escalation-reason
                 value: repeated-question
 
+    # A route action sends every request matching this decision to
+    # action.destination, overriding a caller-pinned model, so a detected
+    # prompt attack cannot bypass the guard by naming a model. The action
+    # requires an explicit jailbreak condition in rules, and destination must
+    # be defined in model_config. If the destination cannot satisfy the
+    # request context window, the decision falls back to its normal candidate
+    # policy (modelRefs/default selection).
+    - name: prompt_attack_guard_route
+      description: Route detected prompt attacks to a safe fallback model.
+      priority: 120
+      rules:
+        type: jailbreak
+        name: prompt_injection
+      action:
+        type: route
+        destination: qwen3-8b
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
       priority: 110
@@ -1577,11 +1662,6 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
-      momentum:
-        enabled: false
-        attack: 0.7
-        release: 0.3
-        threshold: 0.6
       ml:
         models_path: models/model-selection
         model_type: mmbert
@@ -1692,7 +1772,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          model_metrics: true
           queue_depth_estimation: true
           max_models: 50
       profiling:
@@ -1926,7 +2005,6 @@ global:
         key_prefix: "memory_cache:"
         password: ""
       embedding_model: bert
-      extraction_batch_size: 16
       default_retrieval_limit: 10
       default_similarity_threshold: 0.74
       hybrid_search: true
@@ -1953,7 +2031,7 @@ global:
       embedding_model: multimodal
       embedding_dimension: 384
       ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
+      ingestion_drain_timeout_seconds: 25
       supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
       milvus:
         connection:
@@ -2085,7 +2163,6 @@ global:
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120
-      retry_count: 2
       headers:
         X-Trace-Source: looper
       remom:
@@ -2153,6 +2230,25 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+    # admission bounds concurrent inference per system model deployment.
+    # Keys must match global.model_catalog.system entries (prompt_guard,
+    # domain_classifier, pii_classifier, fact_check_classifier,
+    # hallucination_detector, hallucination_explainer, feedback_detector).
+    # max_concurrency: inference slots running at once (>= 1).
+    # max_queue: bounded wait queue beyond the slots (0 = no queue).
+    # queue_timeout_ms: longest a request may wait for a slot; on expiry the
+    # request is shed (0 = wait until the request context is done).
+    # on_overflow selects what happens when every slot is busy and the queue
+    # is full: shed (default) rejects the request, wait blocks for a queue
+    # slot and requires max_queue >= 1, fail_open admits without a slot.
+    # The gate is validated here but not yet wired into the request path;
+    # omitting admission means no gate and preserves current behavior.
+    admission:
+      prompt_guard:
+        max_concurrency: 4
+        max_queue: 64
+        queue_timeout_ms: 250
+        on_overflow: shed
     external:
       - name: external-guardrail
         llm_provider: openai
@@ -2328,8 +2424,6 @@ global:
           model_id: models/mmbert32k-intent-classifier-merged
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           fallback_category: other
         mcp:
@@ -2374,7 +2468,6 @@ global:
           margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
-        on_hallucination_detected: annotate
         fact_check:
           model_ref: fact_check_classifier
           model_id: models/mmbert32k-factcheck-classifier-merged
@@ -2407,13 +2500,9 @@ global:
         use_cpu: true
         use_modernbert: false
         use_mmbert_32k: true
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
+        feedback_mapping_path: ''
       modality_detector:
         enabled: true
-        prompt_prefixes:
-          - generate an image of
-          - draw
-          - create a picture of
         method: hybrid
         classifier:
           model_path: models/mmbert32k-modality-router-merged

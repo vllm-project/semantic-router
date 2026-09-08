@@ -3,6 +3,52 @@ import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
+const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'method',
+    label: 'Method',
+    type: 'select',
+    options: ['classifier', 'contrastive'],
+    description: 'Detection algorithm',
+  },
+  {
+    key: 'direction',
+    label: 'Direction',
+    type: 'select',
+    options: ['request', 'response'],
+    description: 'request (default) scores the prompt; response scores the model output',
+  },
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.9',
+    description: 'Minimum score to trigger (0.0-1.0)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+  {
+    key: 'jailbreak_patterns',
+    label: 'Jailbreak Patterns',
+    type: 'string[]',
+    placeholder: 'Add jailbreak example...',
+    description: 'Contrastive mode: example jailbreak prompts',
+  },
+  {
+    key: 'benign_patterns',
+    label: 'Benign Patterns',
+    type: 'string[]',
+    placeholder: 'Add benign example...',
+    description: 'Contrastive mode: example benign prompts',
+  },
+]
+
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
   if (policyFields) return policyFields
@@ -108,15 +154,15 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'min_tokens',
           label: 'Min Tokens',
           type: 'string',
-          required: true,
-          placeholder: '4K',
+          placeholder: '4K (defaults to 0)',
+          description: 'Inclusive lower bound. Defaults to 0 when empty.',
         },
         {
           key: 'max_tokens',
           label: 'Max Tokens',
           type: 'string',
-          required: true,
-          placeholder: '32K',
+          placeholder: '32K (leave empty for no upper bound)',
+          description: 'Inclusive upper bound. Leave empty for an open-ended band.',
         },
         { key: 'description', label: 'Description', type: 'string' },
       ]
@@ -263,44 +309,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'jailbreak':
-      return [
-        {
-          key: 'method',
-          label: 'Method',
-          type: 'select',
-          options: ['classifier', 'contrastive'],
-          description: 'Detection algorithm',
-        },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.9',
-          description: 'Minimum score to trigger (0.0-1.0)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'jailbreak_patterns',
-          label: 'Jailbreak Patterns',
-          type: 'string[]',
-          placeholder: 'Add jailbreak example...',
-          description: 'Contrastive mode: example jailbreak prompts',
-        },
-        {
-          key: 'benign_patterns',
-          label: 'Benign Patterns',
-          type: 'string[]',
-          placeholder: 'Add benign example...',
-          description: 'Contrastive mode: example benign prompts',
-        },
-      ]
+      return JAILBREAK_SIGNAL_FIELDS
     case 'pii':
       return [
         {

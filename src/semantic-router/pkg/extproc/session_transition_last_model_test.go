@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -66,6 +67,38 @@ func TestRecordSessionTurnUsesAuthoritativeCacheBreakdown(t *testing.T) {
 	if !ok || snapshot.CumulativePromptTokens != 1000 || snapshot.CumulativeCachedTokens != 400 ||
 		snapshot.CumulativeCompletionTokens != 100 || snapshot.LastCacheAccountingSource != "backend_reported" {
 		t.Fatalf("snapshot=%+v found=%v", snapshot, ok)
+	}
+}
+
+// TestRecordSessionTurnRecordsResponseAPILineageOnlyTurn is the end-to-end
+// regression for the conversation/session decoupling: a Response API turn
+// continued via previous_response_id only (no explicit conversation_id, so
+// ResponseObjectState.ConversationID is empty) must still flow through to
+// session telemetry via the separate, always-populated SessionTrackingID:
+// both the ctx.SessionID derivation (session_transition.go) and the
+// sessiontelemetry.RecordTurn gate (telemetry.go) must not key off the now
+// commonly-empty ConversationID.
+func TestRecordSessionTurnRecordsResponseAPILineageOnlyTurn(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+
+	ctx := &RequestContext{
+		RequestModel: "frontier",
+		ResponseObjectState: &ResponseObjectState{
+			ConversationID:      "",
+			SessionTrackingID:   "respapi:lineage:resp_root",
+			PreviousResponseID:  "resp_root",
+			ConversationHistory: []*responseapi.StoredResponse{{Model: "frontier"}},
+		},
+	}
+	populateSessionTransitionFields(ctx)
+	if ctx.SessionID != "respapi:lineage:resp_root" {
+		t.Fatalf("ctx.SessionID = %q", ctx.SessionID)
+	}
+	recordSessionTurn(ctx, responseUsageMetrics{promptTokens: 50, completionTokens: 10}, sessiontelemetry.TurnPricing{})
+
+	if _, ok := sessiontelemetry.GetRouterSessionSnapshot("respapi:lineage:resp_root", time.Now()); !ok {
+		t.Fatal("lineage-only Response API turn (empty ConversationID) must still be recorded under its internal tracking id")
 	}
 }
 

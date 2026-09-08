@@ -45,7 +45,7 @@ MODEL "math-small" {
     { name: "math-adapter", description: "Improves symbolic math responses" },
   ]
   tags: ["local", "fast"]
-  quality_score: 0.91
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.91 } }]
   modality: "ar"
 }
 
@@ -165,18 +165,16 @@ listeners:
     port: 8080
 providers:
   defaults:
-    default_model: math-small
-    reasoning_families:
-      openai:
-        type: reasoning_effort
-        parameter: reasoning.effort
-    default_reasoning_effort: medium
+    model: math-small
+    reasoning_effort: medium
   models:
     - name: math-small
-      reasoning_family: openai
+      reasoning:
+        family: gpt
       provider_model_id: qwen/qwen3
       backend_refs:
         - name: local
+          provider: vllm
           endpoint: http://localhost:8000/v1
           protocol: http
           api_key_env: OPENAI_API_KEY

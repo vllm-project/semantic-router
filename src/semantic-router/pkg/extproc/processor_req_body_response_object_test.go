@@ -126,6 +126,67 @@ func TestPrepareObjectStateRejectsUnavailableAndMissingPreviousResponse(t *testi
 	assertResponseObjectStateError(t, err, llmprotocol.ErrorNotFound, "previous_response_not_found")
 }
 
+// TestPrepareObjectStateConversationMembershipIsStrictlyExplicit covers the
+// three ConversationID/SessionTrackingID sources: explicit conversation_id
+// (external membership + a namespaced tracking id), previous_response_id
+// only (lineage: no membership, but tracking continuity is preserved via a
+// separate internal key), and neither field (standalone: no membership, a
+// fresh tracking id). Conversation and lineage must never blend: a
+// previous_response_id-only continuation of a conversation-tagged response
+// must not inherit that conversation's ID (see issue #2999 discussion on
+// why chain-only forks must not silently join a Conversation's history).
+func TestPrepareObjectStateConversationMembershipIsStrictlyExplicit(t *testing.T) {
+	t.Run("explicit conversation_id is external membership and namespaces the tracking id", func(t *testing.T) {
+		filter := NewResponseAPIFilter(NewMockResponseStore())
+		state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{ConversationID: "conv_y"}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.ConversationID != "conv_y" {
+			t.Fatalf("ConversationID = %q, want explicit value", state.ConversationID)
+		}
+		if state.SessionTrackingID != "respapi:conversation:conv_y" {
+			t.Fatalf("SessionTrackingID = %q", state.SessionTrackingID)
+		}
+	})
+
+	t.Run("previous_response_id only does not inherit the parent's conversation", func(t *testing.T) {
+		store := NewMockResponseStore()
+		parent := &responseapi.StoredResponse{ID: "resp_parent", ConversationID: "conv_x"}
+		if err := store.StoreResponse(t.Context(), parent); err != nil {
+			t.Fatal(err)
+		}
+		filter := NewResponseAPIFilter(store)
+
+		state, err := filter.PrepareObjectState(
+			t.Context(), llmprotocol.Request{PreviousResponseID: "resp_parent"}, nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.ConversationID != "" {
+			t.Fatalf("ConversationID = %q, want empty: lineage must not imply conversation membership", state.ConversationID)
+		}
+		if state.SessionTrackingID != "respapi:lineage:resp_parent" {
+			t.Fatalf("SessionTrackingID = %q", state.SessionTrackingID)
+		}
+	})
+
+	t.Run("neither field is a standalone turn with no membership but a fresh tracking id", func(t *testing.T) {
+		filter := NewResponseAPIFilter(NewMockResponseStore())
+		state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if state.ConversationID != "" {
+			t.Fatalf("ConversationID = %q, want empty for a standalone turn", state.ConversationID)
+		}
+		if state.SessionTrackingID != sessionTrackingStandalonePrefix+state.GeneratedResponseID {
+			t.Fatalf("SessionTrackingID = %q, want standalone prefix over the generated response id", state.SessionTrackingID)
+		}
+	})
+}
+
 func TestPrepareProtocolRequestReturnsTypedPreviousResponseFailures(t *testing.T) {
 	body := []byte(`{"model":"model-a","input":"continue","previous_response_id":"resp_missing"}`)
 	tests := []struct {

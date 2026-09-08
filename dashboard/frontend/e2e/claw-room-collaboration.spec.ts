@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedAppShell } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedAppShell } from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const openClawTeam = {
@@ -70,7 +70,7 @@ async function mockCollaborationBootstrap(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ readonlyMode: false, setupMode: false }),
+      body: JSON.stringify(dashboardSettingsResponse()),
     })
   })
 

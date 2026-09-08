@@ -10,12 +10,10 @@ Release intent, architecture debt, and changing GitHub state have different
 lifecycles. The local board gives maintainers one current view without copying
 daily issue and pull-request state into versioned plans.
 
-The canonical state split is:
-
-- release intent lives in `tools/agent/docs/plans/`
-- architecture gaps live in `tools/agent/docs/tech-debt/`
-- durable operating rules live in the relevant governance docs
-- daily issue and PR state lives in `.agent-harness/maintainer/`
+Release intent may use a focused file under `tools/agent/docs/plans/` when the
+work genuinely spans sessions. Owned work and debt belong in GitHub issues;
+the compact repository-only fallback is `architecture-risks.md`. Daily issue
+and PR state lives only in `.agent-harness/maintainer/`.
 
 ## Local Board
 
@@ -35,7 +33,12 @@ must not be committed.
 
 ## Maintainer Label View
 
-Maintainers do not need to scan every area label. The daily operating view is:
+The issue tree uses one structural path: one `wg/*` owner, then an `epic`
+parent where the work belongs to a bounded outcome. `[Epic]` titles and the
+`epic` label are synchronized automatically. The retired `area/*` and
+`track/*` taxonomies must not be recreated.
+
+The daily operating view is:
 
 - `needs-acceptance`: decide whether the issue fits the roadmap, which one
   Workgroup owns it, and whether to accept, request information, backlog, or
@@ -83,7 +86,7 @@ Maintainer ops owns two release-management actions that should not appear as
 active release-plan tasks:
 
 - Sync GitHub milestone, issue, PR, label, review, and CI state into the local
-  board and classify the result by release track.
+  board and classify the result by lifecycle and milestone state.
 - Propose missing release seed issues from the active release plan, review the
   dry-run payload, and apply only after explicit maintainer approval.
 
@@ -147,7 +150,7 @@ release-plan tasks that do not already match an open milestone issue unless
 
 ```text
 Run semantic-router maintainer ops for MILESTONE_NAME. Use
-tools/agent/docs/maintainer-ops.md and the maintainer release skill. Sync GitHub
+tools/agent/docs/maintainer-ops.md and the maintainer-ops skill. Sync GitHub
 issues, PRs, milestones, labels, review state, and CI state. Regenerate
 .agent-harness/maintainer/current.json, today.md, milestone notes,
 release-readiness.md, and proposed-actions.json. Compare the active release
@@ -179,7 +182,10 @@ local `apply` command after maintainer review when mutations are intended.
 perform only deterministic intake-state normalization. They enforce this
 contract without making roadmap, priority, or close decisions:
 
-- issue forms start at `needs-acceptance` and propose one Workgroup;
+- issue forms start at `needs-acceptance` and use the proposed Workgroup only
+  to seed an otherwise unowned issue; once any recognized owner exists (a
+  Workgroup or `owner/maintainers`) it is the triage source of truth, so
+  Maintainer reclassification is not reverted from stale form text;
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
   project work or `owner/maintainers` for repository governance;

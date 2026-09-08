@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -11,25 +12,26 @@ import (
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
 	return map[string]bool{
-		config.SignalTypeKeyword:      c.keywordClassifier != nil,
-		config.SignalTypeEmbedding:    c.keywordEmbeddingClassifier != nil,
-		config.SignalTypeDomain:       c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
-		config.SignalTypeFactCheck:    len(c.Config.FactCheckRules) > 0 && c.factCheckClassifier != nil && c.factCheckClassifier.IsInitialized(),
-		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.feedbackDetector != nil && c.feedbackDetector.IsInitialized(),
-		config.SignalTypeReask:        c.reaskClassifier != nil,
-		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
-		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
-		config.SignalTypeContext:      c.contextClassifier != nil,
-		config.SignalTypeStructure:    c.structureClassifier != nil,
-		config.SignalTypeComplexity:   c.complexityClassifier != nil,
-		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
-		config.SignalTypeJailbreak:    c.isJailbreakSignalReady(),
-		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
-		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
-		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
-		config.SignalTypeEvent:        c.eventClassifier != nil,
-		config.SignalTypeMetadata:     len(c.Config.MetadataRules) > 0,
-		config.SignalTypeClassifier:   len(c.genericClassifiers) > 0,
+		config.SignalTypeKeyword:       c.keywordClassifier != nil,
+		config.SignalTypeEmbedding:     c.keywordEmbeddingClassifier != nil,
+		config.SignalTypeDomain:        c.IsCategoryEnabled() && c.categoryInference != nil && c.CategoryMapping != nil,
+		config.SignalTypeFactCheck:     len(c.Config.FactCheckRules) > 0 && c.factCheckClassifier != nil && c.factCheckClassifier.IsInitialized(),
+		config.SignalTypeUserFeedback:  len(c.Config.UserFeedbackRules) > 0 && c.feedbackDetector != nil && c.feedbackDetector.IsInitialized(),
+		config.SignalTypeReask:         c.reaskClassifier != nil,
+		config.SignalTypePreference:    len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
+		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
+		config.SignalTypeContext:       c.contextClassifier != nil,
+		config.SignalTypeStructure:     c.structureClassifier != nil,
+		config.SignalTypeComplexity:    c.complexityClassifier != nil,
+		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
+		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
+		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
+		config.SignalTypeKB:            len(c.kbClassifiers) > 0,
+		config.SignalTypeConversation:  len(c.Config.ConversationRules) > 0,
+		config.SignalTypeEvent:         c.eventClassifier != nil,
+		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
+		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
+		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
 	}
 }
 
@@ -39,7 +41,9 @@ func (c *Classifier) signalReadiness() map[string]bool {
 // IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
 // the optional Prompt Guard model was disabled.
 func (c *Classifier) isJailbreakSignalReady() bool {
-	if len(c.Config.JailbreakRules) == 0 {
+	// Response-direction rules are scored from the model's output, so they do
+	// not make the request-stage signal ready on their own.
+	if len(c.Config.RequestJailbreakRules()) == 0 {
 		return false
 	}
 
@@ -202,6 +206,12 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		SignalErrors:       make(map[string]string),
 		SignalErrorMatches: make(map[string]bool),
 	}
+	if requestFacts.Context == nil {
+		// The legacy, context-free classifier APIs do not have a caller context.
+		// Keep those APIs working while ensuring every request-aware path passes
+		// its supplied context all the way to remote category HTTP calls.
+		requestFacts.Context = context.Background()
+	}
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -230,6 +240,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		imgArg,
 		imgCache,
 		convFacts,
+		requestFacts.Context,
 		requestFacts,
 		usedSignals,
 	)

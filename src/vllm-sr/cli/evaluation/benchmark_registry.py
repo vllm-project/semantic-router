@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from cli.evaluation.contracts import StrictModel
+from cli.evaluation.contract_primitives import StrictModel
 from cli.evaluation.reporting import EvidenceLevel, TrackID
 
 ADAPTER_CONTRACT_VERSION = "benchmark-adapter.v1"
@@ -229,7 +229,7 @@ _ADAPTERS = (
             "no-information convex hull",
         ),
         limitations=(
-            "Legacy model matrices and prices require a new snapshot before release use.",
+            "Published model matrices and prices require a current snapshot before release use.",
             "It does not cover agentic, multimodal, or online preference behavior.",
         ),
     ),
@@ -370,7 +370,7 @@ _ADAPTERS = (
             "latency_p50",
             "latency_p95",
         ),
-        evidence_levels=("E5",),
+        evidence_levels=("E4",),
         required_capabilities=(
             "session grouping",
             "exact-step fault manifest",

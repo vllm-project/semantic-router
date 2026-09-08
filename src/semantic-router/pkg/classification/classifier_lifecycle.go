@@ -2,7 +2,9 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -18,6 +20,9 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
+	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
+		return nil, err
+	}
 	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg, jailbreakMapping)
 	if err != nil {
 		return nil, err
@@ -128,10 +133,31 @@ func (c *Classifier) defaultAPIRuntimeTasks() []modelruntime.Task {
 
 // Close releases the classifier's runtime resources.
 func (c *Classifier) Close() error {
-	if c == nil || c.mcpCategoryInitializer == nil {
+	if c == nil {
 		return nil
 	}
-	return c.mcpCategoryInitializer.Close()
+	var closeErrors []error
+	closeResource := func(name string, resource interface{}) {
+		closer, ok := resource.(interface{ Close() error })
+		if !ok || closer == nil {
+			return
+		}
+		if err := closer.Close(); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("close %s: %w", name, err))
+		}
+	}
+
+	closeResource("MCP category classifier", c.mcpCategoryInitializer)
+	closeResource("jailbreak classifier", c.jailbreakInference)
+	genericNames := make([]string, 0, len(c.genericClassifiers))
+	for name := range c.genericClassifiers {
+		genericNames = append(genericNames, name)
+	}
+	sort.Strings(genericNames)
+	for _, name := range genericNames {
+		closeResource("generic classifier "+name, c.genericClassifiers[name])
+	}
+	return errors.Join(closeErrors...)
 }
 
 func (c *Classifier) runtimeTasks() []modelruntime.Task {
@@ -150,7 +176,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	}
 
 	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
-	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
+	appendTask("classifier.jailbreak", false, c.usesJailbreakClassifier() && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
 	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", true, c.needsFactCheckModelForRuntime(), c.initializeFactCheckClassifier)
@@ -167,6 +193,13 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 
 func (c *Classifier) usesRoutingSignalType(signalType string) bool {
 	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
+}
+
+// usesJailbreakClassifier also counts the response-stage consumers, which
+// usesRoutingSignalType cannot see: decision rules never name a
+// response-direction rule, and the response_jailbreak plugin is not a rule.
+func (c *Classifier) usesJailbreakClassifier() bool {
+	return c != nil && c.Config != nil && c.Config.UsesJailbreakClassifierInReachableRouting()
 }
 
 func (c *Classifier) ownsDefaultAPIConsumer() bool {

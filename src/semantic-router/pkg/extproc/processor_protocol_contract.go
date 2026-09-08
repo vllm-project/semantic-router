@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -182,12 +183,17 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
-	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream {
+	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
+		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
 		// The Router always asks Chat backends for the final usage chunk so
 		// accounting observes authoritative tokens. Public stream rendering uses
 		// the original client preference retained in ctx.SemanticRequest.
 		includeUsage := true
 		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+		// Source bytes no longer describe the dispatch request, so retire the
+		// replay claim on them. Without this the encoder forwards the original
+		// client bytes and the forced flag never reaches the backend.
+		dispatchRequest.Generation++
 	}
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
@@ -195,6 +201,10 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	return encoded.Body, nil
+}
+
+func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
+	return options.IncludeUsage != nil && *options.IncludeUsage
 }
 
 func clientStreamOptions(ctx *RequestContext) llmprotocol.StreamOptions {
@@ -291,13 +301,25 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
+	registry, err := modelcatalog.BuiltIn()
+	if err != nil {
+		return "/v1/chat/completions"
+	}
+	path, err := registry.ResolveProtocolOperationPath(requestWireProtocol(format), "create")
+	if err == nil {
+		return path
+	}
+	return "/v1/chat/completions"
+}
+
+func requestWireProtocol(format llmprotocol.WireFormat) string {
 	switch format {
 	case llmprotocol.OpenAIResponsesV1:
-		return "/v1/responses"
+		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
-		return "/v1/messages"
+		return "anthropic/messages@1"
 	default:
-		return "/v1/chat/completions"
+		return "openai/chat-completions@1"
 	}
 }
 

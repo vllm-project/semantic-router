@@ -26,6 +26,7 @@ memory, and tools around a routed request.
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
 | [Router Flow Workflows](./router-flow-workflows) | 2026-06-30 | Implemented | Bounded static and dynamic multi-model workflows. |
+| [Agent-Aware Router Contracts](./agent-based-routing) | 2026-08-29 | Proposal | Bounded agentic facts and external-runtime handoff at Router seams ([Epic #2994](https://github.com/vllm-project/semantic-router/issues/2994)). |
 | [Deliberation Algorithms](./deliberation-algorithms) | 2026-06-17 | Proposal | Grounding-aware multi-model synthesis. |
 | [Agentic Memory](./agentic-memory) | 2026-02-09 | Proof of concept | Cross-session memory retrieval and persistence. |
 | [OpenAI RAG Integration](./agentic-rag) | 2026-01-23 | Implemented | Retrieval through OpenAI Files and Vector Stores. |
@@ -49,6 +50,7 @@ different client and transport protocols.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
+| [Unified Model Catalog and Evaluation Index](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | Implemented | Unifies provider, protocol, model, reasoning, presentation, Day-0, and benchmark-comparison metadata. |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
 

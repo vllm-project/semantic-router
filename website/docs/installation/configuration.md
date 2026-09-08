@@ -50,12 +50,32 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
+Use [Protocol Compatibility](protocol-compatibility) to choose the model's
+backend `api_format`. Then see
+[Backend Target Compatibility](backend-target-compatibility) before moving its
+bindings between Docker, Helm, the Operator, and Dashboard workflows. The
+target matrix distinguishes canonical pass-through from Kubernetes discovery
+and records which URL, path, weight, and provider fields each surface
+preserves.
+
 Router-wide debugging surfaces stay closed by default.
 `global.services.observability.profiling` serves Go `pprof` endpoints, and only
 when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never
 reach a routable interface without an explicit `bind` change. The switch is read
 once at startup, so changing it requires a Router restart. See
 [API and Observability](../tutorials/global/api-and-observability).
+
+Built-in category/domain classification uses the local `variant` selector when
+no remote backend is configured. To call a named external classifier, attach a
+`backend` under `global.model_catalog.modules.classifier.domain` and resolve
+its `model` from `global.model_catalog.external[]` with
+`model_role: classification`. The shared backend fields are `protocol`,
+`contract`, `model`, and optional `deadline_ms`; category
+currently supports `http_classify` with the full `label_distribution.v1`
+response contract. Omit `backend` to retain local behavior. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
+canonical configuration uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -84,6 +104,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
 | `keyword` — heuristic signal | `keyword` matches explicit words and phrases in the request. | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [Guide](../tutorials/signal/heuristic/keyword) |
@@ -156,7 +177,7 @@ listeners:
 
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: my-served-model
@@ -164,6 +185,7 @@ providers:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
+          provider: vllm
 
 routing:
   strategy: priority
@@ -194,6 +216,57 @@ global:
       metrics:
         enabled: true
 ```
+
+### Catalog-backed models
+
+Built-in support is additive to the same `version: v0.3` hierarchy. Set the
+optional canonical `catalog` identity and use a stable Provider ID on the
+backend; the Router and CLI then materialize the Model Card, reasoning family,
+native model mapping, protocol, request path, and provider defaults:
+
+```yaml
+providers:
+  defaults:
+    model: production
+    reasoning_effort: medium
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
+      backend_refs:
+        - provider: openai
+          api_key_env: OPENAI_API_KEY
+```
+
+The `name` remains the request-facing alias. A handwritten override targets
+the canonical card with `routing.modelCards[].name: openai/gpt-5.6-sol`.
+Private or newly released vLLM/SGLang models simply omit `catalog` and may keep
+using a handwritten card under their alias. `api_format: openai|responses|anthropic`
+is unchanged and remains an explicit protocol override; it never chooses a
+Provider. If this config declares a listener, every physical model must define
+`backend_refs` with an explicit Provider ID. A metadata-only external-gateway
+config with `listeners: []`, and a built-in virtual model whose recipe resolves
+its pool, may remain backendless.
+The local `vllm-sr serve` workflow owns Envoy transport and therefore rejects a
+backendless physical model even when it supplies its legacy default listener
+for an empty listener list. Use the external-gateway deployment profile for
+state-only protocol metadata.
+If `providers.defaults.reasoning_effort` is omitted, each model uses its
+reasoning-family default; saved canonical YAML does not add an unconfigured
+global effort.
+
+Multiple `backend_refs` on one alias are homogeneous replicas. HTTP replicas
+may use different hosts, ports, and weights. HTTPS replicas may vary by port
+and weight but must keep one DNS hostname. Provider, wire protocol, native
+model ID, credential, headers, effective request path, and TLS semantics must
+also match. Use separate aliases for heterogeneous providers so request
+metadata always follows the upstream Envoy selects. See the
+[Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
+for the complete contribution and evaluation workflow.
+
+Classifier backend failures remain `Unknown` while the complete boolean tree
+is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
+to resolve an undetermined terminal result. Omitting it preserves the existing
+classifier-family error behavior.
 
 Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
@@ -250,7 +323,7 @@ In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
+If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
 
 See

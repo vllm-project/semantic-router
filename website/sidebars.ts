@@ -33,7 +33,22 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
-        'installation/deployment-options',
+        {
+          type: 'category',
+          label: 'Plan a Deployment',
+          items: [
+            'installation/deployment-options',
+            'installation/support-matrix',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Compatibility',
+          items: [
+            'installation/protocol-compatibility',
+            'installation/backend-target-compatibility',
+          ],
+        },
       ],
     },
     {
@@ -66,6 +81,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
+                'tutorials/signal/heuristic/input-modality',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/event',
@@ -344,7 +360,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'fleet-sim/overview',
         'fleet-sim/getting-started',
-        'fleet-sim/dashboard-integration',
         'fleet-sim/use-cases',
         'fleet-sim/sim-algorithms',
         'fleet-sim/power-model',
@@ -374,6 +389,7 @@ const sidebars: SidebarsConfig = {
           label: 'Workflows, Memory & Tools',
           items: [
             'proposals/router-flow-workflows',
+            'proposals/agent-based-routing',
             'proposals/deliberation-algorithms',
             'proposals/agentic-memory',
             'proposals/agentic-rag',
@@ -393,6 +409,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -412,9 +429,39 @@ const sidebars: SidebarsConfig = {
       label: 'Model Training',
       collapsed: false,
       items: [
-        'training/training-overview',
-        'training/model-performance-eval',
-        'training/ml-model-selection',
+        {
+          type: 'category',
+          label: 'Start Here',
+          collapsed: false,
+          items: [
+            'training/training-overview',
+            'training/model-catalog',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Embedding Models',
+          items: [
+            'training/mmbert-32k-models',
+            'training/multimodal-embeddings',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Classifier Models',
+          items: [
+            'training/classifier-models',
+            'training/mmbert-safety-classifier',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluate and Select',
+          items: [
+            'training/model-performance-eval',
+            'training/ml-model-selection',
+          ],
+        },
       ],
     },
     {
@@ -455,6 +502,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'community/overview',
+        'community/model-provider-day-0-support',
         'community/development',
         'community/documentation',
         'community/translation-guide',

@@ -205,6 +205,7 @@ func appendLooperSignalHeaders(
 	appendJoinedHeader(setHeaders, headers.VSRMatchedKB, reqCtx.VSRMatchedKB)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedConversation, reqCtx.VSRMatchedConversation)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedEvent, reqCtx.VSRMatchedEvent)
+	appendJoinedHeader(setHeaders, headers.VSRMatchedInputModality, reqCtx.VSRMatchedInputModality)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedProjection, reqCtx.VSRMatchedProjection)
 
 	if reqCtx.VSRContextTokenCount > 0 {

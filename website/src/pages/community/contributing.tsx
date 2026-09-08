@@ -3,6 +3,7 @@ import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import CommunityLayout from '@site/src/components/community/CommunityLayout'
+import { workGroups } from '@site/src/data/workGroups'
 import styles from './community-page.module.css'
 
 const Contributing: React.FC = () => {
@@ -316,23 +317,20 @@ pre-commit install && pre-commit run --all-files`}
 
           <section className={styles.section}>
             <h2>
-              <Translate id="contributing.workGroups.title">Working Group Areas</Translate>
+              <Translate id="contributing.workGroups.title">Workgroup ownership</Translate>
             </h2>
             <p>
               <Translate id="contributing.workGroups.desc.prefix">Consider joining one of our</Translate>
               {' '}
               <Link to="/community/work-groups"><Translate id="contributing.workGroups.link">Working Groups</Translate></Link>
               {' '}
-              <Translate id="contributing.workGroups.desc.suffix">to focus your contributions:</Translate>
+              <Translate id="contributing.workGroups.desc.suffix">to find the owning direction and its current Epics:</Translate>
             </p>
             <div className={styles.tagGrid}>
-              <span className={styles.tag}>area/docs</span>
-              <span className={styles.tag}>area/environment</span>
-              <span className={styles.tag}>area/core</span>
-              <span className={styles.tag}>area/networking</span>
-              <span className={styles.tag}>area/bench</span>
-              <span className={styles.tag}>area/test-and-release</span>
-              <span className={styles.tag}>area/user-experience</span>
+              {workGroups.map(group => (
+                <span key={group.label} className={styles.tag}>{group.label}</span>
+              ))}
+              <span className={styles.tag}>epic</span>
             </div>
           </section>
 

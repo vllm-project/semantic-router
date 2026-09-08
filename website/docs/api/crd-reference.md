@@ -172,8 +172,7 @@ _Appears in:_
 | `complexity_rules` _[ComplexityRulesConfig](#complexityrulesconfig) array_ | Complexity rules for complexity-aware routing |  | Optional: \{\} <br /> |
 | `strategy` _string_ | Decision routing strategy ("priority" for priority-based matching) |  | Enum: [priority] <br />Optional: \{\} <br /> |
 | `decisions` _[DecisionConfig](#decisionconfig) array_ | Routing decisions based on signals (domain, complexity, etc.) |  | Optional: \{\} <br /> |
-| `reasoning_families` _object (keys:string, values:[ReasoningFamily](#reasoningfamily))_ | Reasoning families |  | Optional: \{\} <br /> |
-| `default_reasoning_effort` _string_ | Default reasoning effort |  | Enum: [low medium high] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
 
@@ -211,6 +210,7 @@ _Appears in:_
 | `api_key_env` _string_ | APIKeyEnv names the environment variable containing the provider API key. |  | Optional: \{\} <br /> |
 | `timeout_seconds` _integer_ | TimeoutSeconds is the request timeout for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `max_retries` _integer_ | MaxRetries is the maximum number of retry attempts for embedding calls. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_response_bytes` _integer_ | MaxResponseBytes caps the size of each embedding response body. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 | `dimensions` _integer_ | Dimensions requests a provider-side output dimension when supported. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingModelsConfig
@@ -416,19 +416,6 @@ _Appears in:_
 | `password` _string_ | Password for Milvus authentication (plaintext - consider using PasswordSecretRef instead) |  | Optional: \{\} <br /> |
 | `password_secret_ref` _[SecretKeySelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#secretkeyselector-v1-core)_ | PasswordSecretRef references a Secret containing the Milvus password<br />Preferred over plaintext Password field for security |  | Optional: \{\} <br /> |
 
-#### MilvusCacheBatch
-
-MilvusCacheBatch defines batch operation settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `insert_batch_size` _integer_ | InsertBatchSize for bulk inserts | 100 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `timeout` _integer_ | Timeout for batch operations in seconds | 60 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheCollection
 
 MilvusCacheCollection defines Milvus collection configuration.
@@ -457,19 +444,6 @@ _Appears in:_
 | `type` _string_ | Type of index algorithm | HNSW | Enum: [HNSW IVF_FLAT IVF_SQ8 IVF_PQ] <br />Optional: \{\} <br /> |
 | `params` _[MilvusCacheIndexParams](#milvuscacheindexparams)_ | Params for the index |  | Optional: \{\} <br /> |
 
-#### MilvusCacheCompaction
-
-MilvusCacheCompaction defines compaction settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether auto-compaction is active | false | Optional: \{\} <br /> |
-| `interval` _integer_ | Interval in seconds between compaction runs | 86400 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheConfig
 
 MilvusCacheConfig defines Milvus cache backend configuration.
@@ -484,8 +458,6 @@ _Appears in:_
 | `connection` _[MilvusCacheConnection](#milvuscacheconnection)_ | Connection settings for Milvus server |  | Optional: \{\} <br /> |
 | `collection` _[MilvusCacheCollection](#milvuscachecollection)_ | Collection settings for Milvus |  | Optional: \{\} <br /> |
 | `search` _[MilvusCacheSearch](#milvuscachesearch)_ | Search settings for Milvus queries |  | Optional: \{\} <br /> |
-| `performance` _[MilvusCachePerformance](#milvuscacheperformance)_ | Performance tuning for Milvus |  | Optional: \{\} <br /> |
-| `data_management` _[MilvusCacheDataManagement](#milvuscachedatamanagement)_ | DataManagement settings for TTL and compaction |  | Optional: \{\} <br /> |
 | `development` _[MilvusCacheDevelopment](#milvuscachedevelopment)_ | Development settings for Milvus cache |  | Optional: \{\} <br /> |
 
 #### MilvusCacheConnection
@@ -505,33 +477,6 @@ _Appears in:_
 | `auth` _[MilvusCacheAuth](#milvuscacheauth)_ | Auth configuration for Milvus authentication |  | Optional: \{\} <br /> |
 | `tls` _[MilvusCacheTLS](#milvuscachetls)_ | TLS configuration for secure Milvus connections |  | Optional: \{\} <br /> |
 
-#### MilvusCacheConnectionPool
-
-MilvusCacheConnectionPool defines connection pool settings.
-
-_Appears in:_
-
-- [MilvusCachePerformance](#milvuscacheperformance)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `max_connections` _integer_ | MaxConnections in the pool | 10 | Minimum: 1 <br />Optional: \{\} <br /> |
-| `max_idle_connections` _integer_ | MaxIdleConnections to keep | 5 | Minimum: 0 <br />Optional: \{\} <br /> |
-| `acquire_timeout` _integer_ | AcquireTimeout in seconds | 30 | Minimum: 0 <br />Optional: \{\} <br /> |
-
-#### MilvusCacheDataManagement
-
-MilvusCacheDataManagement defines data lifecycle settings.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `ttl` _[MilvusCacheTTL](#milvuscachettl)_ | TTL settings for automatic expiration |  | Optional: \{\} <br /> |
-| `compaction` _[MilvusCacheCompaction](#milvuscachecompaction)_ | Compaction settings |  | Optional: \{\} <br /> |
-
 #### MilvusCacheDevelopment
 
 MilvusCacheDevelopment defines development-mode settings.
@@ -544,7 +489,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_collection_on_startup` _boolean_ | DropCollectionOnStartup clears the collection when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_collection` _boolean_ | AutoCreateCollection automatically creates the collection if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### MilvusCacheIndexParams
 
@@ -558,19 +502,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `M` _integer_ | M is the number of bi-directional links for HNSW | 16 | Minimum: 2 <br />Optional: \{\} <br /> |
 | `efConstruction` _integer_ | EfConstruction for HNSW index building | 64 | Minimum: 1 <br />Optional: \{\} <br /> |
-
-#### MilvusCachePerformance
-
-MilvusCachePerformance defines performance tuning.
-
-_Appears in:_
-
-- [MilvusCacheConfig](#milvuscacheconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `connection_pool` _[MilvusCacheConnectionPool](#milvuscacheconnectionpool)_ | ConnectionPool settings |  | Optional: \{\} <br /> |
-| `batch` _[MilvusCacheBatch](#milvuscachebatch)_ | Batch settings for operations |  | Optional: \{\} <br /> |
 
 #### MilvusCacheSearch
 
@@ -613,20 +544,6 @@ _Appears in:_
 | `key_file` _string_ | KeyFile is the path to client key file |  | Optional: \{\} <br /> |
 | `ca_file` _string_ | CAFile is the path to CA certificate file |  | Optional: \{\} <br /> |
 
-#### MilvusCacheTTL
-
-MilvusCacheTTL defines time-to-live settings.
-
-_Appears in:_
-
-- [MilvusCacheDataManagement](#milvuscachedatamanagement)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `enabled` _boolean_ | Enabled controls whether TTL is active | false | Optional: \{\} <br /> |
-| `timestamp_field` _string_ | TimestampField is the field used for TTL calculation | created_at | Optional: \{\} <br /> |
-| `cleanup_interval` _integer_ | CleanupInterval in seconds between cleanup runs | 3600 | Minimum: 0 <br />Optional: \{\} <br /> |
-
 #### MilvusCacheVectorField
 
 MilvusCacheVectorField defines vector field configuration.
@@ -641,6 +558,29 @@ _Appears in:_
 | `dimension` _integer_ | Dimension of the embedding vectors |  | Minimum: 1 <br />Optional: \{\} <br /> |
 | `metric_type` _string_ | MetricType for vector similarity<br />Options: "IP" (inner product), "L2", "COSINE" | IP | Enum: [IP L2 COSINE] <br />Optional: \{\} <br /> |
 
+#### ModelReasoningSpec
+
+ModelReasoningSpec selects a catalog reasoning family or defines the request
+projection for a custom self-hosted model. Family and inline fields are
+mutually exclusive and are validated by the Router's canonical compiler.
+
+_Appears in:_
+
+- [VLLMEndpointSpec](#vllmendpointspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `family` _string_ |  |  | Optional: \{\} <br /> |
+| `type` _string_ |  |  | Enum: [chat_template_kwargs reasoning_effort reasoning_mode top_level_reasoning_effort] <br />Optional: \{\} <br /> |
+| `parameter` _string_ |  |  | Optional: \{\} <br /> |
+| `activationParameter` _string_ |  |  | Optional: \{\} <br /> |
+| `effortFlags` _object (keys:string, values:string)_ | EffortFlags maps a logical effort to a boolean chat-template parameter. |  | Optional: \{\} <br /> |
+| `levels` _string array_ |  |  | Optional: \{\} <br /> |
+| `default` _string_ |  |  | Optional: \{\} <br /> |
+| `modes` _string array_ |  |  | items:Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `defaultMode` _string_ |  |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `disabled` _string_ |  |  | Optional: \{\} <br /> |
+
 #### ModelRefConfig
 
 ModelRefConfig defines a model reference for routing
@@ -654,7 +594,8 @@ _Appears in:_
 | `model` _string_ | Model name to route to |  |  |
 | `lora_name` _string_ | LoRAName is the optional LoRA adapter name |  | Optional: \{\} <br /> |
 | `use_reasoning` _boolean_ | UseReasoning enables reasoning mode for this model |  | Optional: \{\} <br /> |
-| `reasoning_effort` _string_ | ReasoningEffort specifies the reasoning effort level (low, medium, high) |  | Optional: \{\} <br /> |
+| `reasoning_mode` _string_ | ReasoningMode selects the model's reasoning activation mode when the<br />family supports more than a boolean switch. |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
+| `reasoning_effort` _string_ | ReasoningEffort selects one of the model family's declared effort levels. |  | Optional: \{\} <br /> |
 
 #### ObservabilityConfig
 
@@ -795,19 +736,6 @@ _Appears in:_
 | `collection_name` _string_ | CollectionName is the Qdrant collection to use for semantic cache | semantic_cache | Optional: \{\} <br /> |
 | `connect_timeout` _integer_ | ConnectTimeout is the timeout in seconds for Qdrant connection | 10 | Optional: \{\} <br /> |
 
-#### ReasoningFamily
-
-ReasoningFamily defines reasoning family configuration
-
-_Appears in:_
-
-- [ConfigSpec](#configspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `type` _string_ |  |  | Optional: \{\} <br /> |
-| `parameter` _string_ |  |  | Optional: \{\} <br /> |
-
 #### RedisCacheConfig
 
 RedisCacheConfig defines Redis cache backend configuration.
@@ -854,7 +782,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### RedisCacheIndex
 
@@ -978,6 +905,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `operator` _string_ | Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes<br />exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND. |  | Enum: [AND OR NOT] <br /> |
+| `on_unknown` _string_ | OnUnknown resolves a terminal unknown result after the rule tree is evaluated. |  | Enum: [no_match match fail_request] <br />Optional: \{\} <br /> |
 | `conditions` _[RuleConditionConfig](#ruleconditionconfig) array_ | Conditions is the list of rule references to evaluate |  |  |
 
 #### RuleComposition
@@ -1281,7 +1209,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | Name of the backend ref generated under config.providers.models[].backend_refs |  | MinLength: 1 <br /> |
 | `model` _string_ | Model name as reported by vLLM (e.g., "Model-A", "llama3-8b") |  | MinLength: 1 <br /> |
-| `reasoningFamily` _string_ | Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt") |  | Optional: \{\} <br /> |
+| `catalog` _string_ | Catalog optionally selects a repository built-in Model Card. Model remains<br />the request-facing alias. |  | Optional: \{\} <br /> |
+| `reasoning` _[ModelReasoningSpec](#modelreasoningspec)_ | Reasoning optionally selects a built-in family or defines inline wire<br />behavior for this self-hosted model. Catalog-backed models normally omit it. |  | Optional: \{\} <br /> |
 | `loras` _[LoRAAdapterSpec](#loraadapterspec) array_ | LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards. |  | MaxItems: 50 <br />Optional: \{\} <br /> |
 | `backend` _[VLLMBackend](#vllmbackend)_ | Backend configuration |  |  |
 | `weight` _integer_ | Weight for load balancing (default: 1) | 1 | Optional: \{\} <br /> |
@@ -1332,7 +1261,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `drop_index_on_startup` _boolean_ | DropIndexOnStartup clears the index when router starts (for testing) | false | Optional: \{\} <br /> |
 | `auto_create_index` _boolean_ | AutoCreateIndex automatically creates the index if it doesn't exist | true | Optional: \{\} <br /> |
-| `verbose_errors` _boolean_ | VerboseErrors includes detailed error messages in logs | true | Optional: \{\} <br /> |
 
 #### ValkeyCacheIndex
 

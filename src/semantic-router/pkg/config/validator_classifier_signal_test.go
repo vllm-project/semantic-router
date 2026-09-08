@@ -89,6 +89,41 @@ func TestValidateClassifierSignalContractsRejectsInvalidEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateClassifierSignalContractsRejectsNonJSONParser(t *testing.T) {
+	for _, tc := range []struct {
+		parserType string
+		wantErr    bool
+	}{
+		{parserType: "", wantErr: false},
+		{parserType: "json", wantErr: false},
+		{parserType: "simple", wantErr: true},
+		{parserType: "qwen3guard", wantErr: true},
+	} {
+		cfg := &RouterConfig{
+			ExternalModels: []ExternalModelConfig{{
+				Name:          "judge",
+				ModelRole:     ModelRoleClassification,
+				ModelName:     "judge-model",
+				ParserType:    tc.parserType,
+				ModelEndpoint: ClassifierVLLMEndpoint{Address: "judge", Port: 8000},
+			}},
+			IntelligentRouting: IntelligentRouting{
+				Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+					Name:         "risk",
+					Type:         "llm",
+					Model:        "judge",
+					Labels:       []string{"SAFE", "RISKY"},
+					Instructions: "Classify.",
+				}}},
+			},
+		}
+		err := validateClassifierSignalContracts(cfg)
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("parser_type %q: error = %v, wantErr %v", tc.parserType, err, tc.wantErr)
+		}
+	}
+}
+
 func TestValidateClassifierSignalContractsRejectsCaseCollidingNames(t *testing.T) {
 	cfg := &RouterConfig{IntelligentRouting: IntelligentRouting{
 		Signals: Signals{ClassifierRules: []ClassifierSignalRule{

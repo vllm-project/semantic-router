@@ -1,82 +1,42 @@
-# Agent Harness
+# Development harness
 
-This directory is the human-readable entry for the repository harness.
+The harness supplies deterministic repository facts and checks. It does not
+classify developer intent, choose a skill, manage a work loop, or define when
+an agent is finished.
 
-The harness has three audiences:
-
-- maintainers planning releases and managing GitHub work
-- contributors trying to make a correct change
-- coding agents resolving context and validation from changed files
-
-## Maintainer
-
-Start here when managing release scope, milestones, issue flow, PR review, or
-architecture debt:
-
-- [maintainer-ops.md](maintainer-ops.md)
-- [plans/README.md](plans/README.md)
-- [tech-debt/README.md](tech-debt/README.md)
-- [tech-debt-register.md](tech-debt-register.md)
-- [architecture-scorecard.md](architecture-scorecard.md)
-
-Current maintainer rule:
-
-- one active release plan per release
-- one active debt plan for non-release debt
-- generated issue/PR board under `.agent-harness/maintainer/`
-
-## Contributor
-
-Start here when changing code or docs:
-
-- [repo-map.md](repo-map.md)
-- [change-surfaces.md](change-surfaces.md)
-- [module-boundaries.md](module-boundaries.md)
-- [testing-strategy.md](testing-strategy.md)
-- [feature-complete-checklist.md](feature-complete-checklist.md)
-- nearest local `AGENTS.md`
-
-Contributor-facing wrappers also live in:
-
-- [../../CONTRIBUTING.md](../../../CONTRIBUTING.md)
-- [../../.github/PULL_REQUEST_TEMPLATE.md](../../../.github/PULL_REQUEST_TEMPLATE.md)
-- [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
-- [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
-- [../../.prowlabels.yaml](../../../.prowlabels.yaml)
-
-## Coding Agent
-
-Start here when resolving task context mechanically:
-
-- [context-management.md](context-management.md)
-- [environments.md](environments.md)
-- [local-rules.md](local-rules.md)
-- [skill-catalog.md](skill-catalog.md)
-
-The default loop is:
+## Daily flow
 
 ```bash
-make agent-report ENV=cpu CHANGED_FILES="..."
-make agent-ci-gate CHANGED_FILES="..."
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
+make verify DOMAIN=<domain>       # only when integration evidence is needed
+make verify PROFILE=<profile>     # explicit E2E
+make ci-full                      # complete local PR baseline
 ```
 
-## Governance
+`impact` reports changed paths, matching ownership domains, minimum checks,
+candidate CI jobs/images/profiles, and available host tools. The single source
+for those mappings is [domains.yaml](../domains.yaml).
 
-- [governance.md](governance.md)
-- [architecture-guardrails.md](architecture-guardrails.md)
-- [architecture/state-taxonomy-and-inventory.md](architecture/state-taxonomy-and-inventory.md)
-- [openai-api-contracts.md](openai-api-contracts.md)
-- [glossary.md](glossary.md)
-- [amd-local.md](amd-local.md)
-- [nvidia-local.md](nvidia-local.md)
+`check` runs changed-file formatting/lint, real dependency and generated
+contract checks, then the owning domains' smallest unit/contract commands.
+Numeric structure metrics are advisory. `verify` never guesses: callers name
+the integration domain or E2E profile. `ci-full` is the explicit expensive
+safety net.
 
-## Executable Contract
+Use `make harness-check` for changes to harness code, workflows, the domain
+registry, or agent instructions.
 
-- [../../tools/agent/repo-manifest.yaml](../../../tools/agent/repo-manifest.yaml)
-- [../../tools/agent/context-map.yaml](../../../tools/agent/context-map.yaml)
-- [../../tools/agent/skill-registry.yaml](../../../tools/agent/skill-registry.yaml)
-- [../../tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)
-- [../../tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
-- [../../tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
-- [../../tools/agent/maintainer-policy.yaml](../../../tools/agent/maintainer-policy.yaml)
-- [../../tools/make/agent.mk](../../../tools/make/agent.mk)
+## Durable references
+
+- [change-surfaces.md](change-surfaces.md): cross-layer product contracts
+- [environments.md](environments.md): supported local and CI environments
+- [architecture-guardrails.md](architecture-guardrails.md): enforced versus advisory architecture checks
+- [architecture-risks.md](architecture-risks.md): compact repository-only risk index
+- [maintainer-ops.md](maintainer-ops.md): reviewed GitHub and release operations
+- [openai-api-contracts.md](openai-api-contracts.md): protocol translation contracts
+- nearest local `AGENTS.md`: non-obvious subtree constraints
+
+The executable pieces are `domains.yaml`, `structure-rules.yaml`,
+`maintainer-policy.yaml`, `tools/agent/scripts/`, `tools/ci/`, and
+`tools/make/agent.mk`.

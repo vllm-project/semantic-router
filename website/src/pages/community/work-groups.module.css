@@ -68,11 +68,11 @@
 }
 
 .sectionHeading p {
-  max-width: 42rem;
   margin: 0.55rem 0 0;
   color: var(--site-muted-bright);
   font-size: 0.86rem;
   line-height: 1.6;
+  text-wrap: balance;
 }
 
 .groupList {
@@ -193,6 +193,12 @@
   white-space: nowrap;
 }
 
+.groupLinks {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: end;
+}
+
 .person {
   display: inline-flex;
   gap: 0.4rem;
@@ -302,6 +308,10 @@
 
   .groupFooter {
     grid-template-columns: 1fr;
+  }
+
+  .groupLinks {
+    justify-items: start;
   }
 
   .rules {

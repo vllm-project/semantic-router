@@ -33,7 +33,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v03ToNow',
       label: translate({
         id: 'community.contributors.range.v03ToNow.label',
-        message: 'v0.3 -> Now',
+        message: 'v0.3 → Now',
       }),
       caption: translate({
         id: 'community.contributors.range.v03ToNow.caption',
@@ -44,7 +44,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v02ToV03',
       label: translate({
         id: 'community.contributors.range.v02ToV03.label',
-        message: 'v0.2 -> v0.3',
+        message: 'v0.2 → v0.3',
       }),
       caption: translate({
         id: 'community.contributors.range.v02ToV03.caption',
@@ -55,7 +55,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v01ToV02',
       label: translate({
         id: 'community.contributors.range.v01ToV02.label',
-        message: 'v0.1 -> v0.2',
+        message: 'v0.1 → v0.2',
       }),
       caption: translate({
         id: 'community.contributors.range.v01ToV02.caption',
@@ -66,7 +66,7 @@ const ContributorsPage: React.FC = () => {
       id: 'v0ToV01',
       label: translate({
         id: 'community.contributors.range.v0ToV01.label',
-        message: 'v0 -> v0.1',
+        message: 'v0 → v0.1',
       }),
       caption: translate({
         id: 'community.contributors.range.v0ToV01.caption',

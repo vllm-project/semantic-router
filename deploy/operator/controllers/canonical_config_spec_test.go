@@ -10,16 +10,13 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
+func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 	r := &SemanticRouterReconciler{}
 	sr := &vllmv1alpha1.SemanticRouter{
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			Config: vllmv1alpha1.ConfigSpec{
-				Strategy:               "priority",
-				DefaultReasoningEffort: "high",
-				ReasoningFamilies: map[string]vllmv1alpha1.ReasoningFamily{
-					"qwen3": {Type: "reasoning_effort", Parameter: "think"},
-				},
+				Strategy:        "priority",
+				ReasoningEffort: "high",
 				Tools: &vllmv1alpha1.ToolsConfig{
 					Enabled:             true,
 					TopK:                7,
@@ -222,7 +219,8 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 					{
 						Name: "hybrid-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
-							Operator: "AND",
+							Operator:  "AND",
+							OnUnknown: "fail_request",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
 								{Type: "event", Name: "critical_payment_event"},
 							},
@@ -264,6 +262,9 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
 		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
 	}
+	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	}
 }
 
 func rawCanonicalRoutingJSON(t *testing.T, raw string) *apiextensionsv1.JSON {
@@ -280,10 +281,6 @@ func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.Ca
 	}
 	if canonical.Providers.Defaults.DefaultReasoningEffort != "high" {
 		t.Fatalf("unexpected default reasoning effort: %q", canonical.Providers.Defaults.DefaultReasoningEffort)
-	}
-	family := canonical.Providers.Defaults.ReasoningFamilies["qwen3"]
-	if family.Type != "reasoning_effort" || family.Parameter != "think" {
-		t.Fatalf("unexpected reasoning family: %#v", family)
 	}
 }
 

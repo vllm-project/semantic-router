@@ -58,7 +58,7 @@ by the Gateway API route. The exact value must agree across all three objects:
 # Router config fragment
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: served-general
@@ -67,6 +67,7 @@ providers:
         - name: general-pool
           endpoint: general-pool.inference.svc.cluster.local:8000
           protocol: http
+          provider: vllm
           weight: 100
 ```
 

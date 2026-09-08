@@ -51,10 +51,7 @@ func NewVLLMJailbreakInference(cfg *config.ExternalModelConfig, defaultThreshold
 	client := newVLLMClientFromConfig(cfg)
 
 	// Use timeout from config, default to 30 seconds
-	timeout := 30 * time.Second
-	if cfg.TimeoutSeconds > 0 {
-		timeout = time.Duration(cfg.TimeoutSeconds) * time.Second
-	}
+	timeout := cfg.GetTimeout()
 
 	// Use threshold from config, fallback to default
 	threshold := defaultThreshold

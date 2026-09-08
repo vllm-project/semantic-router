@@ -22,6 +22,8 @@ permissions:
 
 env:
   GO_VERSION: '1.25'
+  # Pipe falls back to direct on any proxy error; comma only on 404 and 410
+  GOPROXY: 'https://proxy.golang.org|direct'
 
 jobs:
   lint:
@@ -255,11 +257,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Install kind
-        run: |
-          curl --retry 5 --retry-delay 5 --retry-all-errors -Lo ./kind https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+      - name: Set up Kind
+        uses: ./.github/actions/setup-kind
 
       - name: Install kubectl
         run: |
@@ -269,7 +268,7 @@ jobs:
 
       - name: Create kind cluster
         run: |
-          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image kindest/node:v1.33.7@sha256:d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040 --config=-
+          cat <<EOF | kind create cluster --name operator-test-${{ matrix.cache-backend }} --image "${KIND_NODE_IMAGE}" --config=-
           kind: Cluster
           apiVersion: kind.x-k8s.io/v1alpha4
           nodes:
@@ -655,8 +654,7 @@ jobs:
                     topk: 1
                   development:
                     drop_index_on_startup: false
-                    auto_create_index: true
-                    verbose_errors: true'
+                    auto_create_index: true'
               ;;
             milvus)
               CACHE_CONFIG='
@@ -697,26 +695,9 @@ jobs:
                       ef: 64
                     topk: 10
                     consistency_level: Session
-                  performance:
-                    connection_pool:
-                      max_connections: 10
-                      max_idle_connections: 5
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 100
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 3600
-                    compaction:
-                      enabled: false
-                      interval: 86400
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: true'
+                    auto_create_collection: true'
               ;;
             qdrant)
               CACHE_CONFIG='
@@ -780,26 +761,9 @@ jobs:
                       ef: 128
                     topk: 20
                     consistency_level: Eventually
-                  performance:
-                    connection_pool:
-                      max_connections: 20
-                      max_idle_connections: 10
-                      acquire_timeout: 30
-                    batch:
-                      insert_batch_size: 200
-                      timeout: 60
-                  data_management:
-                    ttl:
-                      enabled: true
-                      timestamp_field: created_at
-                      cleanup_interval: 1800
-                    compaction:
-                      enabled: true
-                      interval: 43200
                   development:
                     drop_collection_on_startup: false
-                    auto_create_collection: true
-                    verbose_errors: false'
+                    auto_create_collection: true'
               ;;
             mmbert)
               CACHE_CONFIG='

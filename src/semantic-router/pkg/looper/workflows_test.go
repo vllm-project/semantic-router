@@ -536,9 +536,9 @@ func TestParseWorkflowPlanRepairsInvalidStringEscapes(t *testing.T) {
 	}
 }
 
-func TestConfigureWorkflowPlannerRequestDisablesQwenThinking(t *testing.T) {
+func TestConfigureWorkflowPlannerRequestOnlySetsProtocolContract(t *testing.T) {
 	req := workflowTestRequest()
-	configureWorkflowPlannerRequest(req, "qwen/qwen3.6-rocm")
+	configureWorkflowPlannerRequest(req)
 	body, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("marshal planner request: %v", err)
@@ -546,44 +546,21 @@ func TestConfigureWorkflowPlannerRequestDisablesQwenThinking(t *testing.T) {
 	if !strings.Contains(string(body), `"response_format":{"type":"json_object"}`) {
 		t.Fatalf("planner request missing JSON response format: %s", string(body))
 	}
-	if !strings.Contains(string(body), `"chat_template_kwargs":{"enable_thinking":false}`) {
-		t.Fatalf("planner request missing Qwen thinking control: %s", string(body))
+	if strings.Contains(string(body), `chat_template_kwargs`) {
+		t.Fatalf("planner request must not guess a provider reasoning dialect: %s", string(body))
 	}
 }
 
 func TestStripFusionToolUsePreservesPlannerExtraFields(t *testing.T) {
 	req := workflowTestRequest()
-	configureWorkflowPlannerRequest(req, "qwen/qwen3.6-rocm")
+	req.SetExtraFields(map[string]any{"provider_hint": "keep"})
 	stripped := stripFusionToolUse(req)
 	body, err := json.Marshal(stripped)
 	if err != nil {
 		t.Fatalf("marshal stripped request: %v", err)
 	}
-	if !strings.Contains(string(body), `"chat_template_kwargs":{"enable_thinking":false}`) {
+	if !strings.Contains(string(body), `"provider_hint":"keep"`) {
 		t.Fatalf("planner extra fields were not preserved: %s", string(body))
-	}
-}
-
-func TestApplyWorkflowModelReasoningControlUsesModelParamsFamily(t *testing.T) {
-	useReasoning := false
-	req := workflowTestRequest()
-	applyWorkflowModelReasoningControl(req, "worker-alias", &Request{
-		ModelRefs: []config.ModelRef{{
-			Model: "worker-alias",
-			ModelReasoningControl: config.ModelReasoningControl{
-				UseReasoning: &useReasoning,
-			},
-		}},
-		ModelParams: map[string]config.ModelParams{
-			"worker-alias": {ReasoningFamily: "qwen3"},
-		},
-	})
-	body, err := json.Marshal(req)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	if !strings.Contains(string(body), `"chat_template_kwargs":{"enable_thinking":false}`) {
-		t.Fatalf("model reasoning control was not applied: %s", string(body))
 	}
 }
 

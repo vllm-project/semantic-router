@@ -45,6 +45,13 @@ silently translated at runtime.
 
 `providers.defaults` owns the default provider behavior and default model.
 `providers.models[].backend_refs[]` owns physical backend bindings.
+`providers.models[].api_format` owns only the upstream wire format and never
+selects a Provider. A physical model in a Router-owned listener configuration
+must declare an explicit backend Provider; metadata-only external-gateway
+configuration and built-in virtual models may remain backendless.
+The local CLI serve path owns Envoy transport and rejects backendless physical
+models; external-gateway metadata-only configurations are deployed through the
+gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
 
@@ -80,6 +87,12 @@ credentials, listeners, stores, or global runtime services. Import and export mu
 preserve the same canonical routing document rather than invent another steady-state
 schema.
 
+Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
+that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
+resolves a terminal `Unknown` with root-level
+`rules.on_unknown: no_match|match|fail_request`; omission preserves the existing
+per-family compatibility behavior.
+
 ## Entrypoints and multi-recipe routing
 
 `entrypoints[]` map request model names to either top-level routing or one named
@@ -95,9 +108,16 @@ Built-in defaults live in the router. `global.router.config_source` selects file
 configuration or Kubernetes CRD reconciliation. External templates must not apply
 hidden defaults after validation.
 
+Built-in category/domain inference keeps its runtime policy in
+`global.model_catalog.modules.classifier.domain`. The local model uses the
+canonical `variant` field; a remote classifier uses the shared `backend` block
+(`protocol`, `contract`, `model`, and `deadline_ms`) and resolves `model` by
+exact external-catalog name. The category consumer currently accepts
+`http_classify` plus `label_distribution.v1`, preserving the full label-score
+distribution. Prompt guard remains on its existing configuration surface until
+its separately scoped migration.
 Connector byte ceilings belong to the connector configuration. External LLM
 classifier entries and the MCP classifier module use `max_response_bytes`.
-
 The dashboard, Helm chart, and operator may help users author or transport config, but
 the resulting document still uses the same contract.
 
@@ -112,7 +132,7 @@ live under:
 - `config/fragments/plugin/`.
 
 Runtime deployment examples remain separate from routing fragments. Contract tests
-and `make agent-lint` keep the reference config, schema, examples, and public docs
+and `make check` keep the reference config, schema, examples, and public docs
 aligned.
 
 ## Migration

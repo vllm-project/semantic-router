@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -125,6 +126,7 @@ type RequestContext struct {
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
@@ -183,13 +185,24 @@ type RequestContext struct {
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
-	VSRProjectionTrace        *projectiontrace.Trace
+	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
+	// matched. Populated after the model answers, unlike every VSRMatched*
+	// above it.
+	VSRMatchedResponseJailbreak []string
+	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
+	// response-stage signal was computed from, kept so the plugin does not have
+	// to re-derive them from the per-rule confidences.
+	VSRResponseJailbreakType string
+	VSRResponseJailbreakRisk float32
+	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
+	VSRProjectionTrace       *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification

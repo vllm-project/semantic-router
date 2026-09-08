@@ -1,0 +1,24 @@
+# The route-action profile runs prompt_guard with protocol: http_classify
+# against a deliberately unreachable endpoint - it never runs local (candle)
+# jailbreak inference, so it doesn't need the real
+# mmbert32k-jailbreak-detector-merged model weights. It still needs *a*
+# jailbreak_type_mapping.json on disk (see the jailbreak-onerror profile);
+# this ConfigMap supplies a minimal stand-in mapping via
+# extraVolumes/extraVolumeMounts, applied as a prerequisite so it exists
+# before the semantic-router Helm install.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm-semantic-router-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: route-action-mapping
+  namespace: vllm-semantic-router-system
+data:
+  jailbreak_type_mapping.json: |
+    {
+      "label_to_idx": {"jailbreak": 0, "benign": 1},
+      "idx_to_label": {"0": "jailbreak", "1": "benign"}
+    }

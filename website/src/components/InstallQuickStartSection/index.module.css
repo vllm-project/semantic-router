@@ -19,7 +19,7 @@
   line-height: 1.2;
   letter-spacing: -0.028em;
   color: var(--site-text-strong);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 /* Carries the surface the install card used to have, so the command reads as a

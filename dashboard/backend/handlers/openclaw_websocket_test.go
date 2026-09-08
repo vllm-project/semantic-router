@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -71,6 +72,58 @@ func collectWSOutboundUntil(
 		}
 	}
 	return collected
+}
+
+func TestWSClientTrySendReportsQueuedFullAndClosed(t *testing.T) {
+	client := &WSClient{send: make(chan WSOutboundMessage, 1)}
+	first := WSOutboundMessage{Type: WSTypeConnected}
+
+	if sent, open := client.trySend(first); !sent || !open {
+		t.Fatalf("first send = sent %t, open %t; want true, true", sent, open)
+	}
+	if sent, open := client.trySend(WSOutboundMessage{Type: WSTypePong}); sent || !open {
+		t.Fatalf("full send = sent %t, open %t; want false, true", sent, open)
+	}
+	if got := <-client.send; got.Type != first.Type {
+		t.Fatalf("queued type = %q; want %q", got.Type, first.Type)
+	}
+
+	client.closeMu.Lock()
+	client.closed = true
+	close(client.send)
+	client.closeMu.Unlock()
+
+	if sent, open := client.trySend(WSOutboundMessage{Type: WSTypeError}); sent || open {
+		t.Fatalf("closed send = sent %t, open %t; want false, false", sent, open)
+	}
+}
+
+func TestWSClientTrySendSerializesWithClose(t *testing.T) {
+	const attempts = 1000
+	for range attempts {
+		client := &WSClient{send: make(chan WSOutboundMessage, 1)}
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			<-start
+			client.trySend(WSOutboundMessage{Type: WSTypePong})
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			client.closeSend()
+		}()
+
+		close(start)
+		wg.Wait()
+
+		if sent, open := client.trySend(WSOutboundMessage{Type: WSTypeError}); sent || open {
+			t.Fatalf("post-close send = sent %t, open %t; want false, false", sent, open)
+		}
+	}
 }
 
 func TestWorkerStreamChunkCollaborationEvent_WSOutboundShape(t *testing.T) {
