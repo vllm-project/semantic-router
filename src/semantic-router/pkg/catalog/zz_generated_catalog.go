@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:bf927273d18c0c3e7a504e29328358255d6ddfd5116eaeb8d2edee895cec8ded"
+const builtInCatalogDigest = "sha256:5523aef4afdf9d518ca48f3778911f25bc0cc1d0df88366e36f2d7da49383d1b"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94389,6 +94389,38 @@ const builtInCatalogJSON = `{
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "",
+        "prefix": "",
+        "strategy": "none"
+      },
+      "category": "private_runtime",
+      "conformance": {
+        "status": "fixture_verified",
+        "verified_at": "2026-09-07"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Connect a private NVIDIA Dynamo endpoint.",
+      "display_name": "NVIDIA Dynamo",
+      "id": "dynamo",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "openai/responses@1"
+      ],
+      "support_tier": "runtime",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models",
+        "openai/responses@1#create",
+        "openai/responses@1#list_models"
       ]
     },
     {
