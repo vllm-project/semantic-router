@@ -33,8 +33,7 @@ type ProgressGateConfig struct {
 	MaxSwitchesPerWindow      int
 }
 
-// DefaultProgressGateConfig returns the calibration placeholders. Defaults stay
-// in observe mode until PL-0041 TASK-10 calibrates them.
+// DefaultProgressGateConfig returns the calibration placeholders.
 func DefaultProgressGateConfig() ProgressGateConfig {
 	return ProgressGateConfig{
 		Enabled:                   false,
@@ -167,6 +166,32 @@ func switchOrigin(downgrade bool) string {
 // Suppressed reports whether the caller must hold the current model.
 func (d SwitchGateDecision) Suppressed() bool {
 	return d.Enforced && d.Decision == GateDecisionSuppress
+}
+
+// IsDowngrade reports whether proposed is weaker than current by configured
+// quality score. Unknown models report false, so the stricter escalation
+// threshold applies when quality is not declared.
+func (s *SessionAwareSelector) IsDowngrade(current, proposed string) bool {
+	if s == nil {
+		return false
+	}
+	currentQuality, currentOK := s.modelQualityScore(current)
+	proposedQuality, proposedOK := s.modelQualityScore(proposed)
+	if !currentOK || !proposedOK {
+		return false
+	}
+	return proposedQuality < currentQuality
+}
+
+func (s *SessionAwareSelector) modelQualityScore(model string) (float64, bool) {
+	if s == nil || model == "" {
+		return 0, false
+	}
+	params, ok := s.modelParams[model]
+	if !ok || params.QualityScore <= 0 {
+		return 0, false
+	}
+	return params.QualityScore, true
 }
 
 // SecondsSince is a helper for callers holding timestamps rather than deltas.

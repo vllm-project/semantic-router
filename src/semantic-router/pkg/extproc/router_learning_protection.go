@@ -147,7 +147,7 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
 	}
 
-	result, err := r.selectProtectionResult(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx)
+	result, err := r.selectProtectionResultForContext(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx, input.ctx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return routerLearningDecision{}, err
@@ -208,6 +208,25 @@ func (r *OpenAIRouter) protectionRescueDecision(
 		current,
 		proposalModel,
 	)
+	// The rescue path proposes a switch from the same evidence stream, so it
+	// goes through the same gate: cooldown and the oscillation guard apply to
+	// learning-driven rescues too.
+	gateDecision, gateTrace, gateRan := r.switchGateVerdict(
+		preflight.config,
+		input.ctx,
+		learningCtx,
+		current,
+		proposalModel,
+		selection.SwitchOriginEscalation,
+		false,
+	)
+	if gateRan {
+		attachSwitchGateTrace(&result, gateTrace)
+		if gateDecision.Suppressed() {
+			logSwitchGateSuppression(input.ctx, current, proposalModel, gateDecision)
+			return routerLearningDecision{}, false
+		}
+	}
 	policy := protectionRescuePolicyFromSelectionResult(
 		&result,
 		preflight.identity,
@@ -355,11 +374,15 @@ func protectionMode(ctx *RequestContext) string {
 	return config.DecisionAdaptationModeApply
 }
 
-func (r *OpenAIRouter) selectProtectionResult(
+// selectProtectionResultForContext runs the session-aware selector and then
+// gates any proposed switch on recent-outcome evidence. The gate can only
+// suppress: a suppressed switch holds the current model and records why.
+func (r *OpenAIRouter) selectProtectionResultForContext(
 	ctx context.Context,
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
 	learningCtx *selection.SelectionContext,
+	requestCtx *RequestContext,
 ) (*selection.SelectionResult, error) {
 	selector := selection.NewSessionAwareSelector(protectionSelectionConfig(cfg))
 	selector.SetBaseSelector(learningSelectionResult{result: baseResult})
@@ -377,7 +400,65 @@ func (r *OpenAIRouter) selectProtectionResult(
 	if err := selection.ValidateSelectionResult(learningCtx, result); err != nil {
 		return nil, err
 	}
+	r.applySwitchGateToResult(cfg, requestCtx, learningCtx, selector, result, selection.SwitchOriginEscalation)
 	return result, nil
+}
+
+// applySwitchGateToResult gates a proposed switch and rewrites the result to
+// hold the current model when the gate enforces a suppression. The trace is
+// attached in both modes so replay explains allowed and suppressed switches
+// alike.
+func (r *OpenAIRouter) applySwitchGateToResult(
+	cfg config.RouterLearningProtectionConfig,
+	ctx *RequestContext,
+	learningCtx *selection.SelectionContext,
+	selector *selection.SessionAwareSelector,
+	result *selection.SelectionResult,
+	origin string,
+) {
+	if result == nil {
+		return
+	}
+	currentModel := currentLearningModel(learningCtx)
+	proposedModel := selectedModelName(result)
+	downgrade := selector.IsDowngrade(currentModel, proposedModel)
+
+	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, origin, downgrade)
+	if !ran {
+		return
+	}
+	attachSwitchGateTrace(result, trace)
+	if !decision.Suppressed() {
+		return
+	}
+	// Re-check eligibility by holding the model the session already owns:
+	// suppression never invents a target, it only declines the proposal.
+	if !holdCurrentModelInResult(learningCtx, result, currentModel) {
+		return
+	}
+	logSwitchGateSuppression(ctx, currentModel, proposedModel, decision)
+}
+
+// holdCurrentModelInResult rewrites result to keep currentModel, but only when
+// that model is still a valid candidate for this request.
+func holdCurrentModelInResult(
+	learningCtx *selection.SelectionContext,
+	result *selection.SelectionResult,
+	currentModel string,
+) bool {
+	if result == nil || currentModel == "" {
+		return false
+	}
+	if selectedModelRefFromResult(learningCtx, &selection.SelectionResult{SelectedModel: currentModel}) == nil {
+		return false
+	}
+	result.SelectedModel = currentModel
+	result.Reasoning = "router_learning protection: progress gate suppressed switch"
+	if result.SessionPolicy != nil {
+		result.SessionPolicy.SelectedModel = currentModel
+		result.SessionPolicy.DecisionReason = "progress_gate_suppressed"
+	}
+	return true
 }
 
 func (r *OpenAIRouter) protectionIdentity(
