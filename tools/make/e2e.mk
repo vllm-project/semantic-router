@@ -20,6 +20,8 @@ E2E_USE_WORKSPACE_MODELS ?= false
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
+	@echo "Checking E2E registry and coverage contracts..."
+	@cd e2e && go test ./pkg/testcases -count=1
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
 
