@@ -239,6 +239,10 @@ type Request struct {
 	Store              *bool
 	AutoStore          *bool
 	Trusted            TrustedMetadata
+	// ChatTemplateKwargs carries provider-specific chat template arguments
+	// (e.g. vLLM enable_thinking) opaquely from decode to encode. It is not
+	// interpreted by the router.
+	ChatTemplateKwargs json.RawMessage
 }
 
 type StopReason string
