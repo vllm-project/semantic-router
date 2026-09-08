@@ -295,7 +295,6 @@ export default function ModelsPage() {
   const creators = new Set(
     catalog.models.filter(model => model.kind === 'physical').map(model => model.publisher),
   ).size
-  const mappedProviders = catalog.providers.filter(provider => provider.models?.length).length
   const evaluations = modelHubPublicEvaluations(catalog.evaluations).length
 
   return (
@@ -328,8 +327,8 @@ export default function ModelsPage() {
                 <dt>creators</dt>
               </div>
               <div>
-                <dd>{mappedProviders}</dd>
-                <dt>mapped providers</dt>
+                <dd>{catalog.providers.length}</dd>
+                <dt>providers</dt>
               </div>
               <div>
                 <dd>{evaluations}</dd>
@@ -370,13 +369,9 @@ export default function ModelsPage() {
             <header className={styles.sectionHeading}>
               <h2 id="providers-heading">Providers</h2>
               <span>
-                {mappedProviders}
-                {' '}
-                mapped ·
-                {' '}
                 {catalog.providers.length}
                 {' '}
-                runtime contracts
+                available providers
               </span>
             </header>
             <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />
