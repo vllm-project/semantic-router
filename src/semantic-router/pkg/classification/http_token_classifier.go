@@ -34,8 +34,12 @@ type HTTPTokenClassifierInference struct {
 	connector *connector.Client
 	timeout   time.Duration
 	// known is the mapping's label set with BIO prefixes stripped, built once
-	// so each response is checked against a ready map.
-	known map[string]struct{}
+	// so each response is checked against a ready map. outside holds the
+	// no-entity labels (class zero and "O"), which a provider must never send
+	// as spans: the native path drops class zero before it becomes an entity,
+	// and a remote O span reaching PIIEntities or masking would break parity.
+	known   map[string]struct{}
+	outside map[string]struct{}
 }
 
 func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
@@ -72,7 +76,8 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *P
 	if err != nil {
 		return nil, fmt.Errorf("create token_spans connector: %w", err)
 	}
-	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: knownPIILabels(mapping)}, nil
+	known, outside := knownPIILabels(mapping)
+	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside}, nil
 }
 
 // tokenSpanWire is one span as the provider sends it. entity_group and word
@@ -130,7 +135,7 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 	if err != nil {
 		return nil, err
 	}
-	return alignTokenSpans(h.known, text, spans, truncatedAt)
+	return alignTokenSpans(h.known, h.outside, text, spans, truncatedAt)
 }
 
 // decodeTokenSpansResponse accepts either a bare JSON list of spans, which is
@@ -187,7 +192,7 @@ func isPresentJSON(raw json.RawMessage) bool {
 // code-point offsets to the byte offsets TokenEntity carries internally. Any
 // violation rejects the whole response: a provider whose offsets are off by
 // one is redacting the wrong characters, and that must not be a warning.
-func alignTokenSpans(known map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
+func alignTokenSpans(known, outside map[string]struct{}, text string, spans []tokenSpanWire, truncatedAt *int) ([]candle_binding.TokenEntity, error) {
 	input := newSpanInput(text)
 	if err := input.checkTruncatedAt(truncatedAt); err != nil {
 		return nil, err
@@ -196,7 +201,7 @@ func alignTokenSpans(known map[string]struct{}, text string, spans []tokenSpanWi
 	seen := make(map[spanKey]struct{}, len(spans))
 	entities := make([]candle_binding.TokenEntity, 0, len(spans))
 	for i, sp := range spans {
-		entity, err := alignTokenSpan(i, sp, input, known, truncatedAt)
+		entity, err := alignTokenSpan(i, sp, input, known, outside, truncatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -244,8 +249,8 @@ func (in spanInput) checkTruncatedAt(truncatedAt *int) error {
 }
 
 // alignTokenSpan validates one span and converts it to a TokenEntity.
-func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known map[string]struct{}, truncatedAt *int) (candle_binding.TokenEntity, error) {
-	label, err := spanLabel(i, sp, known)
+func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map[string]struct{}, truncatedAt *int) (candle_binding.TokenEntity, error) {
+	label, err := spanLabel(i, sp, known, outside)
 	if err != nil {
 		return candle_binding.TokenEntity{}, err
 	}
@@ -275,8 +280,10 @@ func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known map[string]s
 }
 
 // spanLabel resolves label / entity_group, strips any BIO prefix and checks the
-// result against the configured mapping.
-func spanLabel(i int, sp tokenSpanWire, known map[string]struct{}) (string, error) {
+// result against the configured mapping. The outside label is rejected before
+// the known-label check: it is in the mapping, but it names the absence of an
+// entity, and the native backend never emits it as a span.
+func spanLabel(i int, sp tokenSpanWire, known, outside map[string]struct{}) (string, error) {
 	label := sp.Label
 	if label == "" {
 		label = sp.EntityGroup
@@ -284,6 +291,9 @@ func spanLabel(i int, sp tokenSpanWire, known map[string]struct{}) (string, erro
 	label = stripBIOPrefix(label)
 	if label == "" {
 		return "", fmt.Errorf("token_spans span %d has no label", i)
+	}
+	if _, isOutside := outside[label]; isOutside {
+		return "", fmt.Errorf("token_spans span %d carries the outside label %q; providers send entity spans only", i, label)
 	}
 	if _, ok := known[label]; !ok {
 		return "", fmt.Errorf("token_spans span %d label %q is not in the configured PII mapping", i, label)
@@ -345,21 +355,38 @@ func spanBytes(i int, label string, sp tokenSpanWire, input spanInput, start, en
 	return bStart, bEnd, nil
 }
 
-// knownPIILabels collects the mapping's label names with any BIO prefix
+// knownPIILabels collects the mapping's entity label names with any BIO prefix
 // removed, so a provider may say PERSON whether the mapping file was written
-// as PERSON or B-PERSON.
-func knownPIILabels(mapping *PIIMapping) map[string]struct{} {
-	known := make(map[string]struct{})
+// as PERSON or B-PERSON. The outside labels are returned separately and are
+// not part of the entity set: class zero of the mapping (the native
+// classifier's no-entity class) and the literal "O".
+func knownPIILabels(mapping *PIIMapping) (known, outside map[string]struct{}) {
+	known = make(map[string]struct{})
+	outside = map[string]struct{}{"O": {}}
 	if mapping == nil {
-		return known
+		return known, outside
+	}
+	if zero, ok := mapping.IdxToLabel["0"]; ok && stripBIOPrefix(zero) != "" {
+		outside[stripBIOPrefix(zero)] = struct{}{}
+	}
+	for label, idx := range mapping.LabelToIdx {
+		if idx == 0 {
+			outside[stripBIOPrefix(label)] = struct{}{}
+		}
+	}
+	add := func(label string) {
+		label = stripBIOPrefix(label)
+		if _, isOutside := outside[label]; !isOutside && label != "" {
+			known[label] = struct{}{}
+		}
 	}
 	for label := range mapping.LabelToIdx {
-		known[stripBIOPrefix(label)] = struct{}{}
+		add(label)
 	}
 	for _, label := range mapping.IdxToLabel {
-		known[stripBIOPrefix(label)] = struct{}{}
+		add(label)
 	}
-	return known
+	return known, outside
 }
 
 // Close releases idle connections owned by the remote connector.
