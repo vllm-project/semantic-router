@@ -250,7 +250,8 @@ func ValidateDynamoResponseNVExt(extension *DynamoResponseNVExt, limits Limits) 
 		raw  json.RawMessage
 	}{
 		{"routed_experts", extension.RoutedExperts},
-		{"engine_data", extension.EngineData}, {"stop_reason", extension.StopReason},
+		{"engine_data", extension.EngineData},
+		{"stop_reason", extension.StopReason},
 	}
 	for _, field := range fields {
 		if len(field.raw) == 0 {

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"fmt"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -138,12 +139,13 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	ctx.SemanticRequest.Generation++
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
-	if err := validateDynamoBackendPool(r.Config, modelName, ctx, ctx.ProtocolEnvelope); err != nil {
-		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+	if validationErr := validateDynamoBackendPool(r.Config, modelName, ctx, ctx.ProtocolEnvelope); validationErr != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(validationErr, &protocolError) {
 			copy := *protocolError
 			ctx.ImmediateProtocolError = &copy
 		}
-		return r.createErrorResponse(400, err.Error()), nil
+		return r.createErrorResponse(400, validationErr.Error()), nil
 	}
 	return r.buildLooperBackendDispatchResponse(modelName, ctx)
 }
@@ -169,17 +171,18 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
 
-	if err := validateDynamoBackendPool(
+	if validationErr := validateDynamoBackendPool(
 		r.Config,
 		modelName,
 		ctx,
 		ctx.ProtocolEnvelope,
-	); err != nil {
-		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+	); validationErr != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(validationErr, &protocolError) {
 			copy := *protocolError
 			ctx.ImmediateProtocolError = &copy
 		}
-		return r.createErrorResponse(400, err.Error()), nil
+		return r.createErrorResponse(400, validationErr.Error()), nil
 	}
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil

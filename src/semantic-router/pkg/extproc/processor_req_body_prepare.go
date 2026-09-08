@@ -102,7 +102,8 @@ func (r *OpenAIRouter) runPostDecisionImmediateStages(
 		targetModel = originalModel
 	}
 	if err := validateDynamoBackendPool(r.Config, targetModel, ctx, ctx.ProtocolEnvelope); err != nil {
-		if protocolError, ok := err.(*llmprotocol.ProtocolError); ok {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) {
 			copy := *protocolError
 			ctx.ImmediateProtocolError = &copy
 		}
