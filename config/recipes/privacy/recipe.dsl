@@ -201,7 +201,7 @@ MODEL cloud/frontier-reasoning {
   description: "High-cost cloud frontier lane reserved for non-sensitive deep reasoning and synthesis."
   capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context"]
   tags: ["deployment:cloud", "policy:non_sensitive_only", "tier:frontier", "cost:high"]
-  quality_score: 0.92
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.92 } }]
   modality: "text"
 }
 
@@ -215,7 +215,7 @@ MODEL local/private-qwen {
   description: "Low-cost self-hosted lane for privacy-sensitive, suspicious, and standard local traffic."
   capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs"]
   tags: ["deployment:self_hosted", "policy:local_first", "policy:privacy_first", "cost:free"]
-  quality_score: 0.74
+  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.74 } }]
   modality: "text"
 }
 
@@ -269,7 +269,7 @@ ROUTE local_privacy_policy (description = "Route PII, private code, and internal
   PRIORITY 250
   TIER 2
   WHEN (projection("policy_privacy_local_only") OR projection("privacy_override_active")) AND NOT projection("policy_security_local_only")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "filtered"
@@ -302,7 +302,7 @@ ROUTE local_standard (description = "Default local route for non-sensitive tasks
   PRIORITY 100
   TIER 4
   WHEN projection("policy_local_reasoning") AND projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard")
-  MODEL "local/private-qwen" (reasoning = true, effort = "medium")
+  MODEL "local/private-qwen" (reasoning = true, mode = "enabled")
   PLUGIN tools {
     enabled: true
     mode: "passthrough"

@@ -12,12 +12,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
@@ -66,7 +67,6 @@ global:
       embedding_model: bert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.60
-      extraction_batch_size: 1
       redis_cache:
         enabled: true
         address: semantic-router-redis:6379

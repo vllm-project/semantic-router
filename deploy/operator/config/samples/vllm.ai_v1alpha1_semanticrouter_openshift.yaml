@@ -32,7 +32,8 @@ spec:
     # Example 1: KServe InferenceService (RHOAI 3)
     - name: kserve-llama3-8b
       model: llama3-8b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b  # InferenceService in same namespace
@@ -41,7 +42,8 @@ spec:
     # Example 2: KServe InferenceService with reasoning disabled
     - name: kserve-qwen-2-5-7b
       model: qwen2.5-7b
-      reasoningFamily: qwen3
+      reasoning:
+        family: qwen3
       backend:
         type: kserve
         inferenceServiceName: qwen-2-5-7b
@@ -49,7 +51,8 @@ spec:
     # Example 3: Llama Stack service discovery
     - name: llamastack-llama-405b
       model: llama-3.3-70b-instruct
-      reasoningFamily: gpt
+      reasoning:
+        family: gpt
       backend:
         type: llamastack
         discoveryLabels:
@@ -59,7 +62,8 @@ spec:
     # Example 4: Direct Kubernetes service
     - name: vllm-custom-model
       model: deepseek-r1-distill-qwen-7b
-      reasoningFamily: deepseek
+      reasoning:
+        family: deepseek
       backend:
         type: service
         service:
@@ -180,18 +184,7 @@ spec:
         pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
 
     # Reasoning families configuration
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-
-    default_reasoning_effort: medium  # low, medium, high
+    reasoning_effort: medium  # low, medium, high
 
     # API configuration
     api:
@@ -331,10 +324,10 @@ spec:
       operator: "Exists"
       effect: "NoExecute"
       tolerationSeconds: 300
-    # Example: GPU taints
-    # - key: "nvidia.com/gpu"
-    #   operator: "Exists"
-    #   effect: "NoSchedule"
+  # Example: GPU taints
+  # - key: "nvidia.com/gpu"
+  #   operator: "Exists"
+  #   effect: "NoSchedule"
 
   affinity:
     podAntiAffinity:
@@ -365,12 +358,12 @@ spec:
       value: info
     - name: RUST_BACKTRACE
       value: "1"
-    # Example: External service credentials
-    # - name: API_KEY
-    #   valueFrom:
-    #     secretKeyRef:
-    #       name: api-credentials
-    #       key: api-key
+  # Example: External service credentials
+  # - name: API_KEY
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: api-credentials
+  #       key: api-key
 
   # ====================
   # Service Account
@@ -379,5 +372,5 @@ spec:
     create: true
     name: semantic-router
     annotations:
-      # Example: AWS IAM role for service account
-      # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/semantic-router-role
+    # Example: AWS IAM role for service account
+    # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/semantic-router-role

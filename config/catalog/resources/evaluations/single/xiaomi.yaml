@@ -1,0 +1,810 @@
+- id: independent/mimo-v2-5-pro-non-reasoning-critpt@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2.5-Pro (Non-reasoning)
+    source_model_slug: mimo-v2-5-pro-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0114285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mimo-v2-5-pro-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2.5-Pro (Non-reasoning)
+    source_model_slug: mimo-v2-5-pro-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.416666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mimo-v2-5-pro-non-reasoning-omniscience@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2.5-Pro (Non-reasoning)
+    source_model_slug: mimo-v2-5-pro-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -37.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mimo-v2-5-pro-non-reasoning-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2.5-Pro (Non-reasoning)
+    source_model_slug: mimo-v2-5-pro-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.147822057460612
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mimo-v2-5-pro-non-reasoning-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2.5-Pro (Non-reasoning)
+    source_model_slug: mimo-v2-5-pro-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.761616161616162
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mimo-v2-5-pro-critpt@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    score: 0.04
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mimo-v2-5-pro-gdpval-aa@2.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    elo: 1190.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mimo-v2-5-pro-artificial-analysis-long-context-reasoning@1.1.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    score: 0.796666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mimo-v2-5-pro-omniscience@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    index: 3.25
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mimo-v2-5-pro-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    accuracy: 0.356811862835959
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: xiaomi/mimo-v2.5-pro-model-card-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5-Pro
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.34
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+    redistributable: true
+- id: xiaomi/mimo-v2.5-pro-model-card-terminal-bench-2.0@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5-Pro
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.684
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+    redistributable: true
+- id: independent/mimo-v2-5-pro-terminalbench-v2-1@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    resolved: 0.651685393258427
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mimo-v2-5-pro-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    accuracy: 0.865656565656566
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mimo-v2-5-pro-scicode@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    score: 0.505787037037037
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: xiaomi/mimo-v2.5-pro-model-card-swe-bench-pro@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5-Pro
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.572
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+    redistributable: true
+- id: xiaomi/mimo-v2.5-pro-model-card-swe-bench-verified@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5-Pro
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.789
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro
+    redistributable: true
+- id: independent/mimo-v2-5-pro-tau3-banking@1.0.0
+  model: xiaomi/mimo-v2.5-pro
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5-Pro
+    source_model_slug: mimo-v2-5-pro
+    run_kind: independent
+  metrics:
+    score: 0.0989690721649484
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/mimo-v2-5-0424-critpt@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    score: 0.0371428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mimo-v2-5-0424-gdpval-aa@2.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    elo: 1083.38
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mimo-v2-5-0424-artificial-analysis-long-context-reasoning@1.1.0
+  model: xiaomi/mimo-v2.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    score: 0.73
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mimo-v2-5-0424-omniscience@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    index: -9.83333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mimo-v2-5-0424-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    accuracy: 0.272011121408712
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: xiaomi/mimo-v2.5-model-card-terminal-bench-2.0@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.658
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5
+    redistributable: true
+- id: independent/mimo-v2-5-0424-terminalbench-v2-1@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    resolved: 0.636704119850187
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mimo-v2-5-0424-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    accuracy: 0.84949494949495
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: xiaomi/mimo-v2.5-model-card-swe-bench-pro@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2.5
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.561
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.5
+    redistributable: true
+- id: independent/mimo-v2-5-0424-tau3-banking@1.0.0
+  model: xiaomi/mimo-v2.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2.5
+    source_model_slug: mimo-v2-5-0424
+    run_kind: independent
+  metrics:
+    score: 0.0865979381443299
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/mimo-v2-flash-critpt@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mimo-v2-flash-gdpval-aa@2.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    elo: 791.03
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/mimo-v2-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    score: 0.363333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mimo-v2-flash-omniscience@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    index: -48.45
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mimo-v2-flash-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.0857275254865616
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/mimo-v2-flash-terminalbench-v2-1@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.617977528089888
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/mimo-v2-flash-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: MiMo-V2-Flash (Non-reasoning)
+    source_model_slug: mimo-v2-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.655555555555556
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/mimo-v2-flash-reasoning-critpt@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2-Flash (Reasoning)
+    source_model_slug: mimo-v2-flash-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0428571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/mimo-v2-flash-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2-Flash (Reasoning)
+    source_model_slug: mimo-v2-flash-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.706666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/mimo-v2-flash-reasoning-omniscience@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2-Flash (Reasoning)
+    source_model_slug: mimo-v2-flash-reasoning
+    run_kind: independent
+  metrics:
+    index: -45.35
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/mimo-v2-flash-reasoning-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2-Flash (Reasoning)
+    source_model_slug: mimo-v2-flash-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.228452270620945
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: xiaomi/mimo-v2-flash-model-card-humanitys-last-exam@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2-Flash
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.221
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    redistributable: true
+- id: xiaomi/mimo-v2-flash-model-card-terminal-bench-2.0@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2-Flash
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.385
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    redistributable: true
+- id: independent/mimo-v2-flash-reasoning-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: MiMo-V2-Flash (Reasoning)
+    source_model_slug: mimo-v2-flash-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.846464646464647
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: xiaomi/mimo-v2-flash-model-card-gpqa-diamond@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2-Flash
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.837
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    redistributable: true
+- id: xiaomi/mimo-v2-flash-model-card-swe-bench-verified@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2-Flash
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.734
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    redistributable: true
+- id: xiaomi/mimo-v2-flash-model-card-mmlu-pro@1.0.0
+  model: xiaomi/mimo-v2-flash
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: MiMo-V2-Flash
+    mode: thinking
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.849
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2-Flash
+    redistributable: true

@@ -1,5 +1,7 @@
 package config
 
+import modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+
 // ConfigSource defines where to load dynamic configuration from.
 type ConfigSource string
 
@@ -85,6 +87,10 @@ const (
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
+	// APIFormatImages selects the DALL-E-compatible image-generation dialect
+	// (/v1/images/generations), used to sink responses hosted image_generation
+	// requests to diffusion backends.
+	APIFormatImages = "images"
 )
 
 // ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).
@@ -139,6 +145,9 @@ type RouterConfig struct {
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
 	DocumentHash string `yaml:"-"`
+	// EffectiveModelRegistry is the immutable catalog/config join used to
+	// materialize this runtime snapshot.
+	EffectiveModelRegistry *modelcatalog.EffectiveRegistry `yaml:"-" json:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.
@@ -265,10 +274,11 @@ type IntelligentRouting struct {
 
 // BackendModels captures configured backend endpoints and model metadata.
 type BackendModels struct {
-	ModelConfig      map[string]ModelParams     `yaml:"model_config"`
-	DefaultModel     string                     `yaml:"default_model"`
-	VLLMEndpoints    []VLLMEndpoint             `yaml:"vllm_endpoints"`
-	ProviderProfiles map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	ModelConfig         map[string]ModelParams     `yaml:"model_config"`
+	DefaultModel        string                     `yaml:"default_model"`
+	DefaultQualityIndex string                     `yaml:"-"`
+	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
+	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
 }
 
 type ReasoningConfig struct {
