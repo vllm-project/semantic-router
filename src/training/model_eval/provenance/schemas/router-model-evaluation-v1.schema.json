@@ -11,6 +11,7 @@
     "task",
     "artifact_ref",
     "dataset_ref",
+    "split_rule",
     "harness",
     "label_mapping",
     "metrics",
@@ -26,6 +27,11 @@
     "description": {"type": "string", "maxLength": 2000},
     "artifact_ref": {"$ref": "router-model-common-v1.schema.json#/$defs/artifactRef"},
     "dataset_ref": {"$ref": "router-model-common-v1.schema.json#/$defs/datasetRef"},
+    "split_rule": {
+      "description": "Unit the evaluated split was separated by. by_source holds a whole upstream out, so a translated or near-duplicate row cannot sit on both sides. by_row splits shuffled rows, which lets one leak and inflate the score. predefined uses the split the upstream ships.",
+      "type": "string",
+      "enum": ["by_source", "by_row", "predefined"]
+    },
     "harness": {
       "type": "object",
       "additionalProperties": false,

@@ -8,7 +8,7 @@ passes through.
 | `dataset` | which rows, at which revision, under which license, preprocessed how |
 | `run` | which base model, code revision, dependencies, seed, and hyperparameters produced the artifact |
 | `artifact` | which bytes exist, under which immutable identity, with which class order and runtime requirements |
-| `evaluation` | which artifact was measured on which split, with which harness settings, and what it scored |
+| `evaluation` | which artifact was measured on which split, separated by which rule, with which harness settings, and what it scored |
 
 Each manifest is a YAML mapping validated against a JSON Schema in `schemas/`.
 
@@ -31,6 +31,10 @@ Schema level:
   recorded as if it were immutable
 - a label mapping that does not cover `0..n-1` exactly once
 - a composite dataset that does not pin the upstreams it samples from
+- an evaluation with no `split_rule`, which is the field that separates a
+  source-level split from a row-level one; on a multilingual mixture a row-level
+  split can put a translation of a training row in the test set, and the inflated
+  number is only catchable from the manifest
 - YAML anchors, aliases, tags, or merge keys, which can hide or duplicate
   provenance
 - a credential, an absolute host path, or an over-long string that reads as

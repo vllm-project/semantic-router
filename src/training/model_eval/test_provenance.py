@@ -114,6 +114,7 @@ def evaluation_manifest(**overrides):
             "revision": DATASET_REVISION,
             "splits": ["test"],
         },
+        "split_rule": "by_source",
         "harness": {
             "code": {
                 "repo": "vllm-project/semantic-router",
@@ -333,6 +334,24 @@ def test_per_label_metrics_must_cover_every_declared_label(tmp_path):
 def test_bundle_without_an_evaluation_fails(tmp_path):
     with pytest.raises(ManifestError, match="no evaluation manifest"):
         validate_bundle(write_bundle(tmp_path, evaluation=None))
+
+
+def test_evaluation_without_a_split_rule_fails(tmp_path):
+    unstated = evaluation_manifest()
+    unstated.pop("split_rule")
+    with pytest.raises(ManifestError, match="split_rule"):
+        load_manifest(write_one(tmp_path, unstated))
+
+
+def test_row_level_split_is_recorded_rather_than_rejected(tmp_path):
+    leaky = evaluation_manifest(split_rule="by_row")
+    assert load_manifest(write_one(tmp_path, leaky))["split_rule"] == "by_row"
+
+
+def test_an_invented_split_rule_is_rejected(tmp_path):
+    manifest = evaluation_manifest(split_rule="by_prompt")
+    with pytest.raises(ManifestError, match="split_rule"):
+        load_manifest(write_one(tmp_path, manifest))
 
 
 def test_composite_dataset_must_pin_its_upstreams(tmp_path):
