@@ -936,6 +936,191 @@
     verification: imported
     source: https://artificialanalysis.ai/evaluations/tau3-banking
     redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-deep-swe@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+    swe_harness: mini-SWE-agent
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    context_window_size: 262144
+    reported_selection: highest_across_claude_code_and_mini_swe_agent
+  metrics:
+    resolved: 0.587
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+    swe_harness: Claude Code
+    dataset_variant: refined
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    context_window_size: 262144
+  metrics:
+    resolved: 0.625
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-agents-last-exam@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: berkeley-rdi/agents-last-exam@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+  metrics:
+    pass_rate: 0.243
+    score: 0.512
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-ifbench@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.813
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.917
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+    hle_judge: GPT-4o
+  metrics:
+    accuracy: 0.359
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-livecodebench-v6@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: code-generation-pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.919
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-charxiv-no-tools@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+    tool_policy: without_code_interpreter
+  metrics:
+    score: 0.846
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-charxiv-with-tools@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.8-Flash-Next
+    model_revision: de4b8e4d43b917e7706784d8bb445c9af86a3540
+    reasoning_effort: unspecified
+    source_kind: official_model_card
+    tool_policy: with_code_interpreter
+  metrics:
+    score: 0.906
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
 - id: independent/qwen3-8-27b-low-critpt@1.0.0
   model: qwen/qwen3.8-27b
   benchmark: artificial-analysis/critpt@1.0.0

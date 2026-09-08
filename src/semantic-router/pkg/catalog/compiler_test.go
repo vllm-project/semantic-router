@@ -164,6 +164,17 @@ func TestDeepSeekV4HasEffortIsolatedEvaluationAndProviderBindings(t *testing.T) 
 	if !ok || !containsString(provider.Protocols, "openai/responses@1") {
 		t.Fatalf("deepseek provider is missing Responses support: %+v", provider)
 	}
+	card, ok := registry.Model("deepseek/deepseek-v4-flash")
+	if !ok || card.Revision != "DeepSeek-V4-Flash-0731" ||
+		card.Distribution.Source != "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731" {
+		t.Fatalf("deepseek flash card does not identify the 0731 checkpoint: %+v", card)
+	}
+	vllm, ok := registry.Provider("vllm")
+	binding, bound := providerBindingForModel(vllm, "deepseek/deepseek-v4-flash")
+	if !ok || !bound || binding.ID != "deepseek-ai/DeepSeek-V4-Flash-0731" ||
+		binding.Verification.Source != "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731" {
+		t.Fatalf("vLLM DeepSeek Flash binding does not use the 0731 checkpoint: %+v", binding)
+	}
 }
 
 func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string) {
@@ -185,12 +196,17 @@ func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string
 }
 
 func providerBindsModel(provider ProviderDefinition, modelID string) bool {
+	_, ok := providerBindingForModel(provider, modelID)
+	return ok
+}
+
+func providerBindingForModel(provider ProviderDefinition, modelID string) (CatalogModelBinding, bool) {
 	for _, binding := range provider.Models {
 		if binding.Catalog == modelID {
-			return true
+			return binding, true
 		}
 	}
-	return false
+	return CatalogModelBinding{}, false
 }
 
 func TestBuiltInProviderBindingsDeclareRelationships(t *testing.T) {

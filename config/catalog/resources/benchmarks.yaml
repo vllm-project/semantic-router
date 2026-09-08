@@ -245,6 +245,10 @@
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
 - id: zapier/automation-bench@1.0.6
   display_name: AutomationBench 1.0.6
   domain: agentic_systems

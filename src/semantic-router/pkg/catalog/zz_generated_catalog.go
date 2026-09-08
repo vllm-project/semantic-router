@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:023210b43682c690f9285426614e45140e3064cbee521d9bf5650a654edd3e16"
+const builtInCatalogDigest = "sha256:d471331e99da2407e6277debf0f6e5e817993d16e3315388eb8ef0315531dc82"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -452,6 +452,15 @@ const builtInCatalogJSON = `{
         {
           "direction": "higher_is_better",
           "id": "pass_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        },
+        {
+          "direction": "higher_is_better",
+          "id": "score",
           "range": [
             0,
             1
@@ -9744,7 +9753,7 @@ const builtInCatalogJSON = `{
       "evidence": {
         "provenance": "vendor_claimed",
         "redistributable": true,
-        "source": "https://api-docs.deepseek.com/updates/",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
         "verification": "claimed"
       },
       "id": "deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0",
@@ -9752,14 +9761,15 @@ const builtInCatalogJSON = `{
         "resolved": 0.827
       },
       "model": "deepseek/deepseek-v4-flash",
-      "observed_at": "2026-09-06",
+      "observed_at": "2026-09-08",
       "reasoning_effort": "max",
       "status": "available",
       "subject": {
+        "model_revision": "DeepSeek-V4-Flash-0731",
         "reasoning_effort": "max",
         "source_kind": "official_release_evaluation",
         "terminal_harness": "DeepSeek API evaluation harness",
-        "variant": "deepseek-v4-flash"
+        "variant": "DeepSeek-V4-Flash-0731"
       }
     },
     {
@@ -26886,6 +26896,236 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.587
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "context_window_size": 262144,
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "reported_selection": "highest_across_claude_code_and_mini_swe_agent",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "swe_harness": "mini-SWE-agent",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.625
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "context_window_size": 262144,
+        "dataset_variant": "refined",
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "swe_harness": "Claude Code",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "berkeley-rdi/agents-last-exam@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-agents-last-exam@1.0.0",
+      "metrics": {
+        "pass_rate": 0.243,
+        "score": 0.512
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "prompt-loose",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.813
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.917
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.359
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "hle_judge": "GPT-4o",
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "code-generation-pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.919
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-charxiv-no-tools@1.0.0",
+      "metrics": {
+        "score": 0.846
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "tool_policy": "without_code_interpreter",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "verification": "claimed"
+      },
+      "id": "qwen/qwen3.8-flash-next-model-card-charxiv-with-tools@1.0.0",
+      "metrics": {
+        "score": 0.906
+      },
+      "model": "qwen/qwen3.8-flash-next",
+      "observed_at": "2026-09-08",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "model_revision": "de4b8e4d43b917e7706784d8bb445c9af86a3540",
+        "reasoning_effort": "unspecified",
+        "source_kind": "official_model_card",
+        "tool_policy": "with_code_interpreter",
+        "variant": "Qwen3.8-Flash-Next"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -37150,7 +37390,7 @@ const builtInCatalogJSON = `{
       "display_name": "DeepSeek V4 Flash",
       "distribution": {
         "license": "MIT",
-        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
         "type": "open_weights"
       },
       "family": "deepseek-v4",
@@ -37187,9 +37427,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "DeepSeek",
-        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-08"
       }
     },
     {
@@ -39213,6 +39453,62 @@ const builtInCatalogJSON = `{
         "source": "https://www.alibabacloud.com/help/en/model-studio/text-generation-model",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Experimental open-weight Qwen4 architecture preview for efficient multimodal reasoning and agents.",
+      "display_name": "Qwen3.8 Flash Next",
+      "distribution": {
+        "license": "Qwen Community License 1.0",
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "type": "open_weights"
+      },
+      "family": "qwen3.8",
+      "id": "qwen/qwen3.8-flash-next",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "176B + 4B MTP (6B active)",
+      "presentation": {
+        "logo": "package:qwen",
+        "monochrome": false,
+        "monogram": "Q"
+      },
+      "publisher": "Alibaba / Qwen",
+      "reasoning_family": "qwen3.8",
+      "released_at": "2026-08-24",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe",
+        "agentic",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Qwen Team",
+        "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+        "status": "claimed",
+        "verified_at": "2026-09-08"
       }
     },
     {
@@ -44096,6 +44392,22 @@ const builtInCatalogJSON = `{
       "id": "sglang",
       "models": [
         {
+          "catalog": "qwen/qwen3.8-flash-next",
+          "id": "Qwen/Qwen3.8-Flash-Next",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://docs.sglang.io/cookbook/autoregressive/Qwen/Qwen3.8-Flash-Next",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
+          }
+        },
+        {
           "catalog": "qwen/qwen3.8-27b",
           "id": "Qwen/Qwen3.8-27B",
           "lifecycle": "experimental",
@@ -44662,7 +44974,7 @@ const builtInCatalogJSON = `{
         },
         {
           "catalog": "deepseek/deepseek-v4-flash",
-          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
           "lifecycle": "active",
           "protocols": [
             "openai/chat-completions@1",
@@ -44671,9 +44983,9 @@ const builtInCatalogJSON = `{
           "reasoning_transport": "top_level_effort",
           "relationship": "self_hosted",
           "verification": {
-            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash",
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-08"
           }
         },
         {
@@ -44976,6 +45288,22 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/Qwen/Qwen3.8-27B",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-flash-next",
+          "id": "Qwen/Qwen3.8-Flash-Next",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort_template_switch",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
           }
         },
         {

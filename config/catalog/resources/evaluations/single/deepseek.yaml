@@ -911,18 +911,19 @@
   benchmark_profile: published-agent
   reasoning_effort: max
   subject:
-    variant: deepseek-v4-flash
+    variant: DeepSeek-V4-Flash-0731
+    model_revision: DeepSeek-V4-Flash-0731
     reasoning_effort: max
     terminal_harness: DeepSeek API evaluation harness
     source_kind: official_release_evaluation
   metrics:
     resolved: 0.827
   status: available
-  observed_at: 2026-09-06
+  observed_at: 2026-09-08
   evidence:
     provenance: vendor_claimed
     verification: claimed
-    source: https://api-docs.deepseek.com/updates/
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731
     redistributable: true
 - id: independent/deepseek-v4-flash-terminalbench-v2-1@1.0.0
   model: deepseek/deepseek-v4-flash
