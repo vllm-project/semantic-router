@@ -161,5 +161,3 @@ export interface BenchmarkRow {
   model: CatalogModel
   value: number
 }
-
-export type ProviderScope = 'mapped' | 'contract_only' | 'all'
