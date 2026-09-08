@@ -1211,8 +1211,17 @@ spec:
                                 description: Model name to route to
                                 type: string
                               reasoning_effort:
-                                description: ReasoningEffort specifies the reasoning
-                                  effort level (low, medium, high)
+                                description: ReasoningEffort selects one of the model
+                                  family's declared effort levels.
+                                type: string
+                              reasoning_mode:
+                                description: |-
+                                  ReasoningMode selects the model's reasoning activation mode when the
+                                  family supports more than a boolean switch.
+                                enum:
+                                - enabled
+                                - disabled
+                                - adaptive
                                 type: string
                               use_reasoning:
                                 description: UseReasoning enables reasoning mode for
@@ -1311,13 +1320,6 @@ spec:
                       - rules
                       type: object
                     type: array
-                  default_reasoning_effort:
-                    description: Default reasoning effort
-                    enum:
-                    - low
-                    - medium
-                    - high
-                    type: string
                   embedding_models:
                     description: Embedding models configuration (qwen3, gemma, mmbert)
                     properties:
@@ -1549,17 +1551,12 @@ spec:
                         - mmbert32k
                         type: string
                     type: object
-                  reasoning_families:
-                    additionalProperties:
-                      description: ReasoningFamily defines reasoning family configuration
-                      properties:
-                        parameter:
-                          type: string
-                        type:
-                          type: string
-                      type: object
-                    description: Reasoning families
-                    type: object
+                  reasoning_effort:
+                    description: |-
+                      ReasoningEffort is the default reasoning effort for model bindings that do
+                      not select a different effort. The selected model family validates the
+                      value because built-in and custom families may expose different ladders.
+                    type: string
                   response_cache:
                     description: Response cache configuration.
                     properties:
@@ -1785,44 +1782,6 @@ spec:
                                     type: string
                                 type: object
                             type: object
-                          data_management:
-                            description: DataManagement settings for TTL and compaction
-                            properties:
-                              compaction:
-                                description: Compaction settings
-                                properties:
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether auto-compaction
-                                      is active
-                                    type: boolean
-                                  interval:
-                                    default: 86400
-                                    description: Interval in seconds between compaction
-                                      runs
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              ttl:
-                                description: TTL settings for automatic expiration
-                                properties:
-                                  cleanup_interval:
-                                    default: 3600
-                                    description: CleanupInterval in seconds between
-                                      cleanup runs
-                                    minimum: 0
-                                    type: integer
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether TTL is active
-                                    type: boolean
-                                  timestamp_field:
-                                    default: created_at
-                                    description: TimestampField is the field used
-                                      for TTL calculation
-                                    type: string
-                                type: object
-                            type: object
                           development:
                             description: Development settings for Milvus cache
                             properties:
@@ -1836,48 +1795,6 @@ spec:
                                 description: DropCollectionOnStartup clears the collection
                                   when router starts (for testing)
                                 type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
-                                type: boolean
-                            type: object
-                          performance:
-                            description: Performance tuning for Milvus
-                            properties:
-                              batch:
-                                description: Batch settings for operations
-                                properties:
-                                  insert_batch_size:
-                                    default: 100
-                                    description: InsertBatchSize for bulk inserts
-                                    minimum: 1
-                                    type: integer
-                                  timeout:
-                                    default: 60
-                                    description: Timeout for batch operations in seconds
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              connection_pool:
-                                description: ConnectionPool settings
-                                properties:
-                                  acquire_timeout:
-                                    default: 30
-                                    description: AcquireTimeout in seconds
-                                    minimum: 0
-                                    type: integer
-                                  max_connections:
-                                    default: 10
-                                    description: MaxConnections in the pool
-                                    minimum: 1
-                                    type: integer
-                                  max_idle_connections:
-                                    default: 5
-                                    description: MaxIdleConnections to keep
-                                    minimum: 0
-                                    type: integer
-                                type: object
                             type: object
                           search:
                             description: Search settings for Milvus queries
@@ -2034,11 +1951,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2219,11 +2131,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2534,44 +2441,6 @@ spec:
                                     type: string
                                 type: object
                             type: object
-                          data_management:
-                            description: DataManagement settings for TTL and compaction
-                            properties:
-                              compaction:
-                                description: Compaction settings
-                                properties:
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether auto-compaction
-                                      is active
-                                    type: boolean
-                                  interval:
-                                    default: 86400
-                                    description: Interval in seconds between compaction
-                                      runs
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              ttl:
-                                description: TTL settings for automatic expiration
-                                properties:
-                                  cleanup_interval:
-                                    default: 3600
-                                    description: CleanupInterval in seconds between
-                                      cleanup runs
-                                    minimum: 0
-                                    type: integer
-                                  enabled:
-                                    default: false
-                                    description: Enabled controls whether TTL is active
-                                    type: boolean
-                                  timestamp_field:
-                                    default: created_at
-                                    description: TimestampField is the field used
-                                      for TTL calculation
-                                    type: string
-                                type: object
-                            type: object
                           development:
                             description: Development settings for Milvus cache
                             properties:
@@ -2585,48 +2454,6 @@ spec:
                                 description: DropCollectionOnStartup clears the collection
                                   when router starts (for testing)
                                 type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
-                                type: boolean
-                            type: object
-                          performance:
-                            description: Performance tuning for Milvus
-                            properties:
-                              batch:
-                                description: Batch settings for operations
-                                properties:
-                                  insert_batch_size:
-                                    default: 100
-                                    description: InsertBatchSize for bulk inserts
-                                    minimum: 1
-                                    type: integer
-                                  timeout:
-                                    default: 60
-                                    description: Timeout for batch operations in seconds
-                                    minimum: 0
-                                    type: integer
-                                type: object
-                              connection_pool:
-                                description: ConnectionPool settings
-                                properties:
-                                  acquire_timeout:
-                                    default: 30
-                                    description: AcquireTimeout in seconds
-                                    minimum: 0
-                                    type: integer
-                                  max_connections:
-                                    default: 10
-                                    description: MaxConnections in the pool
-                                    minimum: 1
-                                    type: integer
-                                  max_idle_connections:
-                                    default: 5
-                                    description: MaxIdleConnections to keep
-                                    minimum: 0
-                                    type: integer
-                                type: object
                             type: object
                           search:
                             description: Search settings for Milvus queries
@@ -2783,11 +2610,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -2968,11 +2790,6 @@ spec:
                                 default: false
                                 description: DropIndexOnStartup clears the index when
                                   router starts (for testing)
-                                type: boolean
-                              verbose_errors:
-                                default: true
-                                description: VerboseErrors includes detailed error
-                                  messages in logs
                                 type: boolean
                             type: object
                           index:
@@ -4206,6 +4023,11 @@ spec:
                       required:
                       - type
                       type: object
+                    catalog:
+                      description: |-
+                        Catalog optionally selects a repository built-in Model Card. Model remains
+                        the request-facing alias.
+                      type: string
                     loras:
                       description: LoRAs declares the LoRA adapters exposed for this
                         logical model in routing.modelCards.
@@ -4238,10 +4060,53 @@ spec:
                       description: Name of the backend ref generated under config.providers.models[].backend_refs
                       minLength: 1
                       type: string
-                    reasoningFamily:
-                      description: Reasoning family for the model (e.g., "qwen3",
-                        "deepseek", "gpt")
-                      type: string
+                    reasoning:
+                      description: |-
+                        Reasoning optionally selects a built-in family or defines inline wire
+                        behavior for this self-hosted model. Catalog-backed models normally omit it.
+                      properties:
+                        activationParameter:
+                          type: string
+                        default:
+                          type: string
+                        defaultMode:
+                          enum:
+                          - enabled
+                          - disabled
+                          - adaptive
+                          type: string
+                        disabled:
+                          type: string
+                        effortFlags:
+                          additionalProperties:
+                            type: string
+                          description: EffortFlags maps a logical effort to a boolean
+                            chat-template parameter.
+                          type: object
+                        family:
+                          type: string
+                        levels:
+                          items:
+                            type: string
+                          type: array
+                        modes:
+                          items:
+                            enum:
+                            - enabled
+                            - disabled
+                            - adaptive
+                            type: string
+                          type: array
+                        parameter:
+                          type: string
+                        type:
+                          enum:
+                          - chat_template_kwargs
+                          - reasoning_effort
+                          - reasoning_mode
+                          - top_level_reasoning_effort
+                          type: string
+                      type: object
                     weight:
                       default: 1
                       description: 'Weight for load balancing (default: 1)'

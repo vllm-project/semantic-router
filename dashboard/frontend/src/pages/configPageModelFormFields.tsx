@@ -3,6 +3,7 @@ import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
+  ModelEvaluationsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
   ModelReliabilityEditor,
@@ -28,13 +29,14 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       customRender: (value, onChange) => <ModelTagsEditor value={value} onChange={onChange} />,
     },
     {
-      name: 'quality_score',
-      label: 'Quality Score',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.85',
+      name: 'evaluations',
+      label: 'Evaluations',
+      type: 'custom',
+      description:
+        'Optional measurements for a custom model. Built-in models receive repository evidence automatically.',
+      customRender: (value, onChange) => (
+        <ModelEvaluationsEditor value={value} onChange={onChange} />
+      ),
     },
     {
       name: 'loras',

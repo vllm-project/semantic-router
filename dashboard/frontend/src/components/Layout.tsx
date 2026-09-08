@@ -82,7 +82,6 @@ const Layout: React.FC<LayoutProps> = ({
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
-
   const isConfigPage = location.pathname === '/config' || location.pathname.startsWith('/config/')
   const isBuildActive = hasActiveLayoutMenuCategory(
     buildMenuCategories,
@@ -96,7 +95,6 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection,
   )
-
   const activeBuildCategory = findActiveLayoutMenuCategory(
     buildMenuCategories,
     location.pathname,
@@ -109,14 +107,12 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection,
   )
-
   const closeMenus = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
     setOpenMobileSection(null)
     setIsAccountDialogOpen(false)
   }
-
   const toggleDropdown = (dropdown: LayoutDropdownKey) => {
     setIsAccountDialogOpen(false)
     setOpenDropdown((currentDropdown) => {
@@ -125,7 +121,6 @@ const Layout: React.FC<LayoutProps> = ({
       return nextDropdown
     })
   }
-
   const openDropdownFromKeyboard = (
     dropdown: LayoutDropdownKey,
     focusTarget: 'active-tab' | 'last-link',
@@ -147,13 +142,11 @@ const Layout: React.FC<LayoutProps> = ({
 
     setOpenDropdown(dropdown)
   }
-
   const toggleAccountDialog = () => {
     setOpenDropdown(null)
     setMobileMenuOpen(false)
     setIsAccountDialogOpen((prev) => !prev)
   }
-
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
     if (item.kind === 'config') {
       onConfigSectionChange?.(item.configSection)
@@ -163,13 +156,11 @@ const Layout: React.FC<LayoutProps> = ({
     }
     closeMenus()
   }
-
   const handleLogout = () => {
     logout()
     closeMenus()
     navigate('/login', { replace: true })
   }
-
   const renderTopNavLink = (link: LayoutNavLink) => (
     <NavLink
       key={link.to}
@@ -180,12 +171,12 @@ const Layout: React.FC<LayoutProps> = ({
       }
       onFocus={() => void preloadDashboardRoute(link.to)}
       onPointerEnter={() => void preloadDashboardRoute(link.to)}
+      onClick={closeMenus}
     >
       <ProductIcon name={link.icon} className={styles.navIcon} />
       {link.label}
     </NavLink>
   )
-
   const renderDesktopDropdown = (
     dropdown: LayoutDropdownKey,
     label: string,
@@ -305,6 +296,13 @@ const Layout: React.FC<LayoutProps> = ({
     document.addEventListener('click', handleClickOutside)
     return () => document.removeEventListener('click', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    setOpenDropdown(null)
+    setMobileMenuOpen(false)
+    setOpenMobileSection(null)
+    setIsAccountDialogOpen(false)
+  }, [location.pathname])
 
   return (
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
