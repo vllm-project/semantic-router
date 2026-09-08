@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { getNormalizedModels } from './configPageModelNormalization'
 import type { ConfigData } from './configPageSupport'

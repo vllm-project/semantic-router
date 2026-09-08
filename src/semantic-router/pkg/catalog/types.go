@@ -449,17 +449,6 @@ type EvaluationRecord struct {
 	Evidence         EvaluationEvidence `json:"evidence" yaml:"evidence"`
 }
 
-type EvaluationCoverage struct {
-	Model            string   `json:"model"`
-	ReasoningEffort  string   `json:"reasoning_effort"`
-	Benchmark        string   `json:"benchmark"`
-	BenchmarkProfile string   `json:"benchmark_profile"`
-	Metric           string   `json:"metric"`
-	Status           string   `json:"status"`
-	Value            *float64 `json:"value,omitempty"`
-	Evaluation       string   `json:"evaluation,omitempty"`
-}
-
 type NormalizationPoint struct {
 	Input  float64 `json:"input" yaml:"input"`
 	Output float64 `json:"output" yaml:"output"`
@@ -570,15 +559,14 @@ type CompileInput struct {
 }
 
 type snapshot struct {
-	SchemaVersion      string                      `json:"schema_version"`
-	Catalogs           []CatalogHeader             `json:"catalogs"`
-	Protocols          []ProtocolDefinition        `json:"protocols"`
-	Providers          []ProviderDefinition        `json:"providers"`
-	ReasoningFamilies  []ReasoningFamilyDefinition `json:"reasoning_families"`
-	Models             []ModelCard                 `json:"models"`
-	Benchmarks         []BenchmarkDefinition       `json:"benchmarks"`
-	Evaluations        []EvaluationRecord          `json:"evaluations"`
-	EvaluationCoverage []EvaluationCoverage        `json:"evaluation_coverage"`
-	Indices            []IndexDefinition           `json:"indices"`
-	IndexResults       []IndexResult               `json:"index_results"`
+	SchemaVersion     string                      `json:"schema_version"`
+	Catalogs          []CatalogHeader             `json:"catalogs"`
+	Protocols         []ProtocolDefinition        `json:"protocols"`
+	Providers         []ProviderDefinition        `json:"providers"`
+	ReasoningFamilies []ReasoningFamilyDefinition `json:"reasoning_families"`
+	Models            []ModelCard                 `json:"models"`
+	Benchmarks        []BenchmarkDefinition       `json:"benchmarks"`
+	Evaluations       []EvaluationRecord          `json:"evaluations"`
+	Indices           []IndexDefinition           `json:"indices"`
+	IndexResults      []IndexResult               `json:"index_results"`
 }

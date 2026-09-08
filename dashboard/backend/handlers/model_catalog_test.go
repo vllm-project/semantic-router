@@ -175,13 +175,14 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 
 	for name, payload := range map[string]string{
 		"invalid json":              `{`,
-		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"evaluation_coverage":[],"indices":[],"index_results":[]}`,
+		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
 		"missing protocols":         validModelCatalogPayload(","),
 		"missing default base path": validModelCatalogPayload(","),
 		"missing roles":             validModelCatalogPayload(","),
 		"missing authority":         validModelCatalogPayload(","),
 		"invalid asset digest":      validModelCatalogPayload(","),
 		"orphan physical model":     validModelCatalogPayload(","),
+		"placeholder index result":  validModelCatalogPayload(","),
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -216,6 +217,16 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
     "modalities":{"input":["text"],"output":["text"]},
     "verification":{"status":"claimed","authority":"Example","verified_at":"2026-09-05","source":"https://models.example/model"}
   },{`, 1)
+			}
+			if name == "placeholder index result" {
+				payload = strings.Replace(
+					payload,
+					`"status":"available",
+    "score":50`,
+					`"status":"missing",
+    "score":null`,
+					1,
+				)
 			}
 			response := httptest.NewRecorder()
 			ModelCatalogHandler(&fakeModelCatalogSource{payload: []byte(payload)}).ServeHTTP(
@@ -518,7 +529,6 @@ func validModelCatalogPayload(extra string) string {
     "roles":[{"name":"balanced","required":true,"minimum_candidates":1,"traits":["chat"],"recommended_pool":["local/example"]}],
     "verification":{"status":"reproduced","authority":"vllm-sr-maintainers","verified_at":"2026-09-04","asset_sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
   }],
-  "evaluation_coverage":[],
   "benchmarks":[{
     "id":"example/benchmark@1.0.0",
     "display_name":"Example Benchmark",
@@ -542,9 +552,9 @@ func validModelCatalogPayload(extra string) string {
     "model":"vllm-sr/mom-v1-blend",
     "reasoning_effort":"default",
     "index":"example/index@1.0.0",
-    "status":"not_applicable",
-    "score":null,
-    "coverage":0,
+    "status":"available",
+    "score":50,
+    "coverage":1,
     "components":[],
     "provenance":[]
   }]` + extra + `}`

@@ -16,6 +16,8 @@ catalog = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = catalog
 SPEC.loader.exec_module(catalog)
 
+from catalog_evaluations import evaluation_coverage  # noqa: E402
+
 DEFAULT_INDEX_COMPONENT_COUNT = 5
 OPENAI_LONG_CONTEXT_TOKENS = 1_050_000
 
@@ -37,24 +39,36 @@ def _evaluation_benchmarks_by_bucket(
 
 
 class ModelCatalogCompilerTests(unittest.TestCase):
+    def test_dashboard_image_context_includes_the_shared_public_snapshot(self) -> None:
+        dockerignore = (catalog.REPO_ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn(
+            "!website/static/model-catalog/catalog.json",
+            dockerignore,
+        )
+
     def test_repository_catalog_validates_and_renders_every_projection(self) -> None:
         outputs = catalog.render_outputs()
         self.assertEqual(
             set(outputs),
             {
                 catalog.RECIPE_MANIFEST,
-                catalog.CLI_MANIFEST,
                 catalog.GO_OUTPUT,
-                catalog.DASHBOARD_OUTPUT,
                 catalog.WEBSITE_OUTPUT,
             },
         )
         self.assertEqual(catalog.check(outputs), 0)
-        public_snapshot = json.loads(outputs[catalog.DASHBOARD_OUTPUT])
+        public_snapshot = json.loads(outputs[catalog.WEBSITE_OUTPUT])
         self.assertNotIn("inventory", public_snapshot)
-        for output_path in (catalog.RECIPE_MANIFEST, catalog.CLI_MANIFEST):
-            runtime_manifest = yaml.safe_load(outputs[output_path])
-            self.assertNotIn("inventory", runtime_manifest)
+        self.assertNotIn("evaluation_coverage", public_snapshot)
+        self.assertTrue(
+            all(
+                result["status"] == "available"
+                for result in public_snapshot["index_results"]
+            )
+        )
+        runtime_manifest = yaml.safe_load(outputs[catalog.RECIPE_MANIFEST])
+        self.assertNotIn("inventory", runtime_manifest)
+        self.assertNotIn("evaluation_coverage", runtime_manifest)
 
     def test_default_intelligence_index_is_public_and_coverage_aware(self) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -658,7 +672,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self,
     ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
-        coverage = catalog._evaluation_coverage(
+        coverage = evaluation_coverage(
             resources, manifest["defaults"]["intelligence_index"]
         )
         slots: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -698,7 +712,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self,
     ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
-        coverage = catalog._evaluation_coverage(
+        coverage = evaluation_coverage(
             resources, manifest["defaults"]["intelligence_index"]
         )
         available: dict[tuple[str, str], set[str]] = {}
