@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import { getBuiltInModelCatalog, ModelCatalogApiError } from './modelCatalogApi'
 
 afterEach(() => {
@@ -40,6 +40,22 @@ describe('built-in model catalog API snapshot identity', () => {
     const models = malformed.models as Array<Record<string, unknown>>
     const verification = models[0].verification as Record<string, unknown>
     verification.asset_sha256 = 'sha256:not-a-digest'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
+      name: 'ModelCatalogApiError',
+      status: 502,
+    })
+  })
+
+  it('rejects placeholder index rows instead of treating absence as a score', async () => {
+    const malformed = structuredClone(validCatalog)
+    const results = malformed.index_results as Array<Record<string, unknown>>
+    results[0].status = 'missing'
+    results[0].score = null
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),

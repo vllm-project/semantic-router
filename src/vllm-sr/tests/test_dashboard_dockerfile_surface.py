@@ -621,6 +621,7 @@ def test_router_images_ship_the_management_api_runtime_sync_module() -> None:
 
 def test_runtime_images_bind_the_generated_model_catalog() -> None:
     expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
+    expected_catalog_copy = "COPY config/recipes/built-in/ /app/cli/model_assets/"
     for dockerfile in (
         VLLM_SR_DOCKERFILE,
         VLLM_SR_ROCM_DOCKERFILE,
@@ -629,29 +630,25 @@ def test_runtime_images_bind_the_generated_model_catalog() -> None:
     ):
         content = dockerfile.read_text(encoding="utf-8")
         assert expected_copy in content, f"{dockerfile} omits built-in model assets"
+        assert (
+            expected_catalog_copy in content
+        ), f"{dockerfile} omits the canonical built-in catalog distribution"
 
     source_root = REPO_ROOT / "config" / "recipes" / "built-in"
-    image_root = REPO_ROOT / "src" / "vllm-sr" / "cli" / "model_assets"
     source_assets = {
         path.relative_to(source_root)
         for path in (source_root / "latest").rglob("*")
         if path.is_file()
     }
-    image_assets = {
-        path.relative_to(image_root)
-        for path in image_root.rglob("*")
-        if path.is_file()
-        and path.name != "__init__.py"
-        and "__pycache__" not in path.parts
-    }
     assert set(BUILT_IN_MODEL_ASSETS) <= source_assets
-    assert image_assets == source_assets
-    for relative in source_assets:
-        source = source_root / relative
-        image_asset = image_root / relative
-        assert (
-            image_asset.read_bytes() == source.read_bytes()
-        ), f"image model asset drifted: {relative}"
+    tracked_package_assets = subprocess.run(
+        ["git", "ls-files", "src/vllm-sr/cli/model_assets"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.splitlines()
+    assert tracked_package_assets == ["src/vllm-sr/cli/model_assets/__init__.py"]
 
 
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:

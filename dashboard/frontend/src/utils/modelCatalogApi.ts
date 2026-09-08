@@ -401,22 +401,6 @@ function isEvaluation(value: unknown): value is CatalogEvaluation {
   )
 }
 
-function isEvaluationCoverage(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    isNonEmptyString(value.model) &&
-    isNonEmptyString(value.reasoning_effort) &&
-    isNonEmptyString(value.benchmark) &&
-    isNonEmptyString(value.benchmark_profile) &&
-    isNonEmptyString(value.metric) &&
-    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-      String(value.status),
-    ) &&
-    (value.value === undefined || typeof value.value === 'number') &&
-    (value.evaluation === undefined || isNonEmptyString(value.evaluation))
-  )
-}
-
 function isNormalization(value: unknown): boolean {
   if (!isRecord(value)) return false
   const type = String(value.type)
@@ -482,10 +466,8 @@ function isIndexResult(value: unknown): value is CatalogIndexResult {
     isNonEmptyString(value.model) &&
     isNonEmptyString(value.reasoning_effort) &&
     isNonEmptyString(value.index) &&
-    ['available', 'missing', 'failed', 'not_applicable', 'withheld'].includes(
-      String(value.status),
-    ) &&
-    (value.score === null || typeof value.score === 'number') &&
+    value.status === 'available' &&
+    typeof value.score === 'number' &&
     typeof value.coverage === 'number' &&
     value.coverage >= 0 &&
     value.coverage <= 1 &&
@@ -543,8 +525,6 @@ function isBuiltInModelCatalog(value: unknown): value is BuiltInModelCatalog {
     value.benchmarks.every(isBenchmark) &&
     Array.isArray(value.evaluations) &&
     value.evaluations.every(isEvaluation) &&
-    Array.isArray(value.evaluation_coverage) &&
-    value.evaluation_coverage.every(isEvaluationCoverage) &&
     Array.isArray(value.indices) &&
     value.indices.length > 0 &&
     value.indices.every(isIndex) &&
