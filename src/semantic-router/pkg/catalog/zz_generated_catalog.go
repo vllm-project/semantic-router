@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:023210b43682c690f9285426614e45140e3064cbee521d9bf5650a654edd3e16"
+const builtInCatalogDigest = "sha256:14c4e1585df59f163d0a8b619c6c68c6e657121cd0c02c2f08c8bb12d063d348"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -44256,6 +44256,39 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "fixture_verified",
+        "verified_at": "2026-09-09"
+      },
+      "default_headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Frontier models hosted and governed inside your Snowflake perimeter.",
+      "display_name": "Snowflake Cortex AI",
+      "id": "snowflake-cortex",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "SF"
+      },
+      "protocols": [
+        "openai/chat-completions@1",
+        "anthropic/messages@1"
+      ],
+      "support_tier": "native",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "anthropic/messages@1#create"
       ]
     },
     {
