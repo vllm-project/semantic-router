@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -100,10 +101,100 @@ func TestFusionAnalysisModeCachedPanelExecution(t *testing.T) {
 			publicTrace, hasPublicTrace := body["fusion"].(map[string]interface{})
 			assert.Equal(t, tc.wantAnalysis, hasPublicTrace)
 			if hasPublicTrace {
-				assert.Equal(t, tc.mode, publicTrace["analysis_mode"])
+				assert.NotContains(t, publicTrace, "analysis_mode")
 			}
 		})
 	}
+}
+
+func TestFusionAnalysisModeStaysInternalAcrossPublicResponsePaths(t *testing.T) {
+	tests := []struct {
+		name      string
+		streaming bool
+		toolCall  bool
+	}{
+		{name: "ordinary JSON text"},
+		{name: "non-streaming JSON tool call", toolCall: true},
+		{name: "text SSE", streaming: true},
+		{name: "tool-call SSE", streaming: true, toolCall: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var server *httptest.Server
+			if tc.toolCall {
+				server = newFusionToolCallServer(t, nil)
+			} else {
+				server = newFusionStubServer(t, func(model, prompt string) (string, int) {
+					require.Equal(t, "judge", model)
+					return "final answer", http.StatusOK
+				})
+			}
+			defer server.Close()
+
+			includeAnalysis := false
+			includeResponses := true
+			req := newFusionTestRequest()
+			req.IsStreaming = tc.streaming
+			req.CachedPanel = cachedTestPanel()
+			req.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{
+				Model:                        "judge",
+				AnalysisModels:               []string{"panel-a", "panel-b"},
+				AnalysisMode:                 config.FusionAnalysisModeOneCall,
+				IncludeAnalysis:              &includeAnalysis,
+				IncludeIntermediateResponses: &includeResponses,
+			}}
+
+			resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+			require.NoError(t, err)
+			if tc.streaming {
+				assert.Equal(t, "text/event-stream", resp.ContentType)
+			} else {
+				assert.Equal(t, "application/json", resp.ContentType)
+			}
+			if tc.toolCall {
+				assert.Contains(t, string(resp.Body), `"tool_calls"`)
+			} else {
+				assert.Contains(t, string(resp.Body), "final answer")
+			}
+
+			publicTrace := fusionPublicTraceFromResponse(t, resp)
+			responses, ok := publicTrace["responses"].([]interface{})
+			require.True(t, ok, "public responses type = %T", publicTrace["responses"])
+			assert.Len(t, responses, 2)
+			assert.NotContains(t, publicTrace, "analysis_mode")
+
+			internalTrace, ok := resp.IntermediateResponses.(*FusionTrace)
+			require.True(t, ok, "internal trace type = %T", resp.IntermediateResponses)
+			assert.Equal(t, config.FusionAnalysisModeOneCall, internalTrace.AnalysisMode)
+		})
+	}
+}
+
+func fusionPublicTraceFromResponse(t *testing.T, resp *Response) map[string]interface{} {
+	t.Helper()
+	if resp.ContentType == "application/json" {
+		var body map[string]interface{}
+		require.NoError(t, json.Unmarshal(resp.Body, &body))
+		trace, ok := body["fusion"].(map[string]interface{})
+		require.True(t, ok, "public fusion type = %T", body["fusion"])
+		return trace
+	}
+
+	for _, line := range strings.Split(string(resp.Body), "\n") {
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok || data == "[DONE]" {
+			continue
+		}
+		var chunk map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(data), &chunk))
+		if trace, ok := chunk["fusion"].(map[string]interface{}); ok {
+			return trace
+		}
+	}
+
+	require.FailNow(t, "public fusion trace was not emitted")
+	return nil
 }
 
 func TestFusionAnalysisModeIncludeAnalysisIsTraceOnly(t *testing.T) {

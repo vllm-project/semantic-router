@@ -81,6 +81,31 @@ type FusionTrace struct {
 	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
 }
 
+type fusionPublicTrace struct {
+	Analysis       *FusionAnalysis       `json:"analysis,omitempty"`
+	Responses      []FusionPanelResponse `json:"responses,omitempty"`
+	FailedModels   []FusionFailedModel   `json:"failed_models,omitempty"`
+	JudgeModel     string                `json:"judge_model,omitempty"`
+	AnalysisModels []string              `json:"analysis_models,omitempty"`
+	PromptVersion  string                `json:"prompt_version,omitempty"`
+	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
+}
+
+func projectFusionPublicTrace(trace *FusionTrace) *fusionPublicTrace {
+	if trace == nil {
+		return nil
+	}
+	return &fusionPublicTrace{
+		Analysis:       trace.Analysis,
+		Responses:      trace.Responses,
+		FailedModels:   trace.FailedModels,
+		JudgeModel:     trace.JudgeModel,
+		AnalysisModels: trace.AnalysisModels,
+		PromptVersion:  trace.PromptVersion,
+		Grounding:      trace.Grounding,
+	}
+}
+
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	l.client.SetDecisionName(req.DecisionName)
 	ctx = contextWithFusionDepth(ctx, 1)
@@ -444,7 +469,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		"usage": usage.Map(),
 	}
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
+		completion["fusion"] = projectFusionPublicTrace(trace)
 	}
 	body, err := json.Marshal(completion)
 	if err != nil {
@@ -479,7 +504,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["usage"] = usage.Map()
 	normalizeCompletionToolFinishReason(completion)
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
+		completion["fusion"] = projectFusionPublicTrace(trace)
 	}
 	body, err := json.Marshal(completion)
 	if err != nil {
@@ -541,7 +566,7 @@ func buildFusionStreamingSSE(
 	}
 	var extra map[string]interface{}
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		extra = map[string]interface{}{"fusion": trace}
+		extra = map[string]interface{}{"fusion": projectFusionPublicTrace(trace)}
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
 	for _, chunk := range splitIntoChunks(content, 50) {
