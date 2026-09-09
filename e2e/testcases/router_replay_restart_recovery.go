@@ -84,7 +84,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	}
 	time.Sleep(3 * time.Second)
 
-	recordID, err := fetchFirstReplayRecordID(apiSession, opts.Verbose)
+	recordID, err := fetchFirstReplayRecordID(apiSession, "/v1/router_replay?limit=1", opts.Verbose)
 	if err != nil {
 		return "", err
 	}
@@ -112,10 +112,10 @@ type replayRecordSummary struct {
 	TurnIndex int    `json:"turn_index"`
 }
 
-// fetchFirstReplayRecordID calls GET /v1/router_replay?limit=1 and returns the
-// first record's ID. When verbose is true, prints the full JSON response.
-func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, verbose bool) (string, error) {
-	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay?limit=1")
+// fetchFirstReplayRecordID returns the first record ID from a Replay list target.
+// When verbose is true, it prints the full JSON response.
+func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, requestTarget string, verbose bool) (string, error) {
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, requestTarget)
 	if err != nil {
 		return "", fmt.Errorf("GET /v1/router_replay failed: %w", err)
 	}

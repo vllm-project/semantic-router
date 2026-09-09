@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -199,6 +200,15 @@ func assertPartialConfidenceTrace(t *testing.T, record store.Record) {
 	}
 	if strings.Contains(record.ResponseBody, "candidate private answer") {
 		t.Fatalf("replay response body leaked candidate answer: %q", record.ResponseBody)
+	}
+	looperTrace := record.RouteDiagnostics.Looper
+	if looperTrace == nil || len(looperTrace.Attempts) != 1 {
+		t.Fatalf("replay Looper trace = %+v, want one completed attempt", looperTrace)
+	}
+	attempt := looperTrace.Attempts[0]
+	if attempt.Ordinal != 1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
+		attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
+		t.Fatalf("replay Looper attempt = %+v", attempt)
 	}
 }
 
