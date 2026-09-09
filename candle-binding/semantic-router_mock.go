@@ -162,6 +162,10 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeResult{}, ErrBackendUnavailable
 }
 
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	return false, ErrBackendUnavailable
+}
+
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	return nil, ErrBackendUnavailable
