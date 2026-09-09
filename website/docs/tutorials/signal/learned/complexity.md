@@ -171,11 +171,35 @@ each with its own boundaries. The verdict vocabulary stays `hard|easy|medium`
 because decisions match `<rule>:<verdict>`, and rules remain distinguishable
 through their own `composer` conditions.
 
+The two rules above are not alternatives: the scorer is called once, and each
+rule reads the same score through its own boundaries, so one request yields
+one verdict per rule.
+
+| Score | `needs_reasoning` (0.85 / 0.60) | `extreme` (0.95 / 0.30) |
+| ----- | ------------------------------- | ----------------------- |
+| 0.20  | easy                            | easy                    |
+| 0.50  | easy                            | medium                  |
+| 0.70  | medium                          | medium                  |
+| 0.90  | **hard**                        | medium                  |
+| 0.99  | hard                            | **hard**                |
+
+That gives decisions a ladder to match on - `extreme:hard` for the very top,
+`needs_reasoning:hard` for anything past 0.85, `needs_reasoning:easy` for the
+bottom. A score of 0.99 satisfies both `hard` conditions at once, so the
+decision for `extreme:hard` needs the higher `priority`, or the looser rule
+takes the request.
+
 `score.v1` reports no confidence. A score just short of `hard_above` is the
 least certain position rather than a strong one, so no confidence is derived
 from it, and any decision gated on such a rule ranks on the engine's structural
 default instead of a reported score. The router warns at startup when this
 applies.
+
+The endpoint may answer in either shape: the HuggingFace text-classification
+array with exactly one entry, `[{"label": "difficulty", "score": 0.73}]`, or a
+bare object, `{"score": 0.73}`. A missing or null score, more than one entry,
+or a non-finite value is an error, never a zero - zero is a real score at the
+easy end of a `[0,1]` range, and a fault must not route as one.
 
 #### A model that returns the verdict: `label_distribution.v1`
 
@@ -197,6 +221,37 @@ fixed verdict vocabulary and are not configured:
 Either way, the `hard` and `easy` candidate lists are never read once a backend
 supplies the score, and the router says so at startup rather than leaving you
 to edit examples that have no effect.
+
+#### Watching a remote scorer
+
+A network dependency fails in ways a local model does not, so the remote paths
+report what they do:
+
+- `llm_remote_connector_requests_total{operation, outcome}` and
+  `llm_remote_connector_request_duration_seconds{operation}` count and time
+  every call through the shared connector. `outcome` is `success` or the error
+  kind (`transport`, `status`, `authorization`, `request`, `response`), and
+  `llm_remote_connector_retries_total` counts retried attempts.
+- `llm_complexity_verdict_total{rule, verdict, source}` counts verdicts. Its
+  shape is the check for a mismatched scale: a `[1,10]` scorer behind
+  `hard_above: 0.85` shows up as `hard` taking every request for that rule,
+  which no single log line would reveal.
+- `llm_complexity_evaluation_failures_total{source}` counts evaluations that
+  produced no verdict.
+
+When the scorer cannot be reached, the request still routes. The complexity
+signal is absent, every complexity rule carries `complexity_evaluation_failed`
+in the request's signal errors, and `llm_complexity_evaluation_failures_total`
+counts it - so the decision engine sees a failure rather than a quiet
+non-match, and so does whoever watches the dashboard. A decision rule over a
+complexity signal
+evaluates as not matched by default; set `on_error: match` on that rule to
+treat a scorer failure as a match instead, when routing a request you could
+not grade to the stronger model is the safer default.
+
+The published value keeps its meaning: a `score.v1` result appears as
+`complexity:<rule>:score`, in the model's own units, while local scoring keeps
+publishing `complexity:<rule>:margin` and its text/image components.
 
 ## Dependencies and Limitations
 

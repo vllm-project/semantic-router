@@ -86,7 +86,10 @@ verdict through its own `hard_above`/`easy_below` boundaries (or
 `label_distribution.v1` for a model that returns `hard`/`easy`/`medium`
 directly. `threshold` remains the symmetric shorthand for the local signed
 margin. `score.v1` reports no confidence, so decisions gated on those rules
-rank on the engine's structural default; the Router warns at startup.
+rank on the engine's structural default; the Router warns at startup. The
+remote call is visible through `llm_remote_connector_*` and
+`llm_complexity_*` metrics, and a scorer failure is recorded on every
+complexity rule's signal errors rather than dropped.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
