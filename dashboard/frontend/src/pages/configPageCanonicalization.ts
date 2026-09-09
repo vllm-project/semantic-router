@@ -21,6 +21,7 @@ const LEGACY_SIGNAL_SECTIONS = [
   ['structure_rules', 'structure'],
   ['complexity_rules', 'complexity'],
   ['jailbreak', 'jailbreak'],
+  ['hallucination', 'hallucination'],
   ['pii', 'pii'],
 ] as const satisfies ReadonlyArray<readonly [keyof ConfigData, keyof CanonicalSignalSections]>
 

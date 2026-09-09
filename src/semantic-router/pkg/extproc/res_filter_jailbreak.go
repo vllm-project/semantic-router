@@ -268,16 +268,23 @@ func (r *OpenAIRouter) publishResponseJailbreakSignal(ctx *RequestContext, rules
 		return
 	}
 	ctx.VSRMatchedResponseJailbreak = append(ctx.VSRMatchedResponseJailbreak, signal.MatchedRules...)
-	if len(signal.Confidences) > 0 && ctx.VSRSignalConfidences == nil {
-		ctx.VSRSignalConfidences = make(map[string]float64, len(signal.Confidences))
+	recordResponseSignal(ctx, signal.Confidences, signal.Errors)
+}
+
+// recordResponseSignal merges a response-stage observation's per-rule scores
+// and failures into the request's signal maps, where request-stage signals
+// already live.
+func recordResponseSignal(ctx *RequestContext, confidences map[string]float64, errors map[string]string) {
+	if len(confidences) > 0 && ctx.VSRSignalConfidences == nil {
+		ctx.VSRSignalConfidences = make(map[string]float64, len(confidences))
 	}
-	for key, value := range signal.Confidences {
+	for key, value := range confidences {
 		ctx.VSRSignalConfidences[key] = value
 	}
-	if len(signal.Errors) > 0 && ctx.VSRSignalErrors == nil {
-		ctx.VSRSignalErrors = make(map[string]string, len(signal.Errors))
+	if len(errors) > 0 && ctx.VSRSignalErrors == nil {
+		ctx.VSRSignalErrors = make(map[string]string, len(errors))
 	}
-	for key, value := range signal.Errors {
+	for key, value := range errors {
 		ctx.VSRSignalErrors[key] = value
 	}
 }

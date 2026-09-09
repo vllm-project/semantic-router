@@ -248,6 +248,11 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedHallucination contains comma-separated list of matched
+	// hallucination rule names. Written in the response body phase, once the
+	// model's answer has been checked against its grounding context.
+	VSRMatchedHallucination = "x-vsr-matched-hallucination"
+
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"
 	VSRMatchedPII = "x-vsr-matched-pii"
