@@ -851,6 +851,7 @@ export interface ConfigSignals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
@@ -1171,6 +1172,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -1330,6 +1337,7 @@ export interface ConfigData {
   structure_rules?: StructureSignal[]
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
 }
 
@@ -1348,6 +1356,7 @@ export type SignalType =
   | 'Modality'
   | 'Authz'
   | 'Jailbreak'
+  | 'Hallucination'
   | 'PII'
   | 'KB'
   | 'Metadata'
@@ -1431,6 +1440,7 @@ export interface AddSignalFormState {
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
+  hallucination_use_nli?: boolean
   pii_threshold?: number
   pii_types_allowed?: string[]
   pii_include_history?: boolean

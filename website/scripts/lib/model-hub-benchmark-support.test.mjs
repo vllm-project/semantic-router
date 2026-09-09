@@ -262,6 +262,8 @@ test('website benchmark renders every filtered result in one comparison surface'
   assert.match(component, /charts\.map\(\(?chart\)? =>/)
   assert.doesNotMatch(component, /<Pagination/)
   assert.doesNotMatch(component, /pageRows/)
+  assert.doesNotMatch(component, /Source ↗/)
+  assert.doesNotMatch(component, /chart\.benchmark\.source/)
 })
 
 test('website benchmark bar height follows metric direction', () => {

@@ -105,13 +105,6 @@ function BenchmarkPanel({
           <strong>{chart.benchmark.display_name}</strong>
           <small>{profile?.description ?? readable(chart.profile)}</small>
         </span>
-        {chart.benchmark.source
-          ? (
-              <a href={chart.benchmark.source} target="_blank" rel="noreferrer">
-                Source ↗
-              </a>
-            )
-          : null}
       </header>
       <div className={styles.chartMeta}>
         <span>

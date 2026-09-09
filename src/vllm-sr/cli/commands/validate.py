@@ -28,6 +28,7 @@ _SIGNAL_SUMMARY_FIELDS = (
     ("Modality signals", "modality"),
     ("Authz signals", "role_bindings"),
     ("Jailbreak signals", "jailbreak"),
+    ("Hallucination signals", "hallucination"),
     ("PII signals", "pii"),
     ("Knowledge-base signals", "kb"),
     ("Conversation signals", "conversation"),
