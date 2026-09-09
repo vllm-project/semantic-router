@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -16,7 +17,8 @@ func TestNeutralSessionRestoresPreviousModel(t *testing.T) {
 	sessionID := deriveSessionIDFromSemanticMessages(messages, "user-prev")
 	sessiontelemetry.RecordLastModel(sessionID, "model-a")
 	ctx := &RequestContext{
-		Headers:         map[string]string{"x-authz-user-id": "user-prev"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-prev"},
 		SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: messages},
 	}
 	populateSessionTransitionFields(ctx)
@@ -30,7 +32,8 @@ func TestNeutralSessionModelContinuityAcrossTurns(t *testing.T) {
 	t.Cleanup(sessiontelemetry.ResetLastModelForTesting)
 	turn1 := &RequestContext{
 		RequestID: "req-1", RequestModel: "model-a",
-		Headers: map[string]string{"x-authz-user-id": "user-7"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-7"},
 		SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{
 			neutralTextMessage(llmprotocol.RoleUser, "hello there"),
 		}},
@@ -40,7 +43,8 @@ func TestNeutralSessionModelContinuityAcrossTurns(t *testing.T) {
 
 	turn2 := &RequestContext{
 		RequestID: "req-2", RequestModel: "model-b",
-		Headers: map[string]string{"x-authz-user-id": "user-7"},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user-7"},
 		SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{
 			neutralTextMessage(llmprotocol.RoleUser, "hello there"),
 			neutralTextMessage(llmprotocol.RoleAssistant, "hi"),

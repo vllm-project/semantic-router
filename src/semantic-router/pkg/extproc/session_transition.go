@@ -35,14 +35,8 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
+	if sid := strings.TrimSpace(ctx.TrustedIdentity.SessionID); sid != "" {
 		ctx.SessionID = sid
-	}
-
-	if ctx.SessionID == "" {
-		if sid := deriveSessionIDFromAnthropicSignals(ctx); sid != "" {
-			ctx.SessionID = sid
-		}
 	}
 
 	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
@@ -65,15 +59,15 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	populateLastSessionObservation(ctx)
 }
 
-// populatePinnedSessionFromHeaders makes client-supplied Chat Completions
-// session IDs available before full request parsing. Decision evaluation runs
-// on the fast-extract path, so session-aware selection cannot wait for
-// populateSessionTransitionFields.
-func populatePinnedSessionFromHeaders(ctx *RequestContext) {
+// populatePinnedSessionFromIdentity makes the ingress-derived Chat
+// Completions session ID available before full request parsing. Decision
+// evaluation runs on the fast-extract path, so session-aware selection cannot
+// wait for populateSessionTransitionFields.
+func populatePinnedSessionFromIdentity(ctx *RequestContext) {
 	if ctx == nil {
 		return
 	}
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
+	if sid := strings.TrimSpace(ctx.TrustedIdentity.SessionID); sid != "" {
 		ctx.SessionID = sid
 	}
 	if ctx.SessionID == "" {
@@ -104,38 +98,8 @@ func populateLastSessionObservation(ctx *RequestContext) {
 	ctx.SessionIdleKnown = true
 }
 
-// deriveSessionIDFromAnthropicSignals returns a session-ID candidate
-// from Anthropic-shape transport and body signals. Two sources, evaluated
-// in order:
-//
-//  1. x-claude-code-session-id — per-conversation UUID emitted by the
-//     Claude Code CLI on every /v1/messages request in a thread. Returned
-//     verbatim so plugins can map sessions back to the client-declared
-//     conversation; operators wanting privacy should run a hashing plugin
-//     in front.
-//  2. metadata.user_id — populated by the PR2 Anthropic inbound parser
-//     into neutral request metadata. Returned with an "ant-md-" prefix
-//     so the namespace is distinguishable from other derivation sources.
-//
-// Returns empty string when neither signal is present, leaving the caller
-// to fall through to the chat-message fingerprint fallbacks.
-func deriveSessionIDFromAnthropicSignals(ctx *RequestContext) string {
-	if ctx == nil {
-		return ""
-	}
-	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID)); sid != "" {
-		return sid
-	}
-	if ctx.SemanticRequest != nil {
-		if uid := strings.TrimSpace(ctx.SemanticRequest.Metadata["user_id"]); uid != "" {
-			return "ant-md-" + uid
-		}
-	}
-	return ""
-}
-
-// populateSemanticSessionIDIfNeeded sets ctx.SessionID when not already pinned
-// (for example by x-session-id). Kept separate to avoid deep nesting in
+// populateSemanticSessionIDIfNeeded sets ctx.SessionID when no ingress-derived
+// session identity is already pinned. Kept separate to avoid deep nesting in
 // populateSessionTransitionFields (nestif).
 func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	if ctx.SessionID != "" {

@@ -5,110 +5,38 @@ package extproc
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// =============================================================================
-// extractUserID Tests (Dev build only - tests metadata fallback)
-// =============================================================================
-
-func TestExtractUserID_AuthHeaderTakesPrecedence(t *testing.T) {
-	// Auth header (x-authz-user-id) takes precedence over metadata["user_id"]
+func TestDevBuildUsesIngressIdentity(t *testing.T) {
 	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "user_from_auth",
-		},
-		SemanticRequest: &llmprotocol.Request{
-			Metadata: map[string]string{"user_id": "user_from_metadata"},
-		},
+		Headers:         map[string]string{"x-authz-user-id": "spoofed"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user_from_ingress"},
+		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
+			"user_id": "user_from_metadata",
+		}},
 	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_from_auth", result, "auth header should take precedence over metadata")
+	if got := extractUserID(ctx); got != "user_from_ingress" {
+		t.Fatalf("extractUserID() = %q, want ingress identity", got)
+	}
 }
 
-func TestExtractUserID_FallbackToMetadataWhenNoAuthHeader(t *testing.T) {
-	// No auth header, falls back to metadata["user_id"]
-	ctx := &RequestContext{
-		Headers: map[string]string{},
-		SemanticRequest: &llmprotocol.Request{
-			Metadata: map[string]string{"user_id": "user_from_metadata"},
-		},
-	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_from_metadata", result, "should fall back to metadata when auth header absent")
-}
-
-func TestExtractUserID_EmptyAuthHeaderFallsBackToMetadata(t *testing.T) {
-	// Auth header present but empty, falls back to metadata
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "",
-		},
-		SemanticRequest: &llmprotocol.Request{
-			Metadata: map[string]string{"user_id": "user_from_metadata"},
-		},
-	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_from_metadata", result, "empty auth header should fall back to metadata")
-}
-
-// =============================================================================
-// extractMemoryInfo Tests (Dev build only - tests metadata fallback path)
-// =============================================================================
-
-func TestExtractMemoryInfo_FallbackToMetadata(t *testing.T) {
-	// No auth header, falls back to metadata["user_id"] (dev-only behavior)
+func TestDevBuildDoesNotUseBodyMetadataForMemory(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID: "req_123",
-		Headers:   map[string]string{},
-		SessionID: "conv_from_translate",
-		SemanticRequest: &llmprotocol.Request{
-			Metadata: map[string]string{"user_id": "user_from_metadata"},
-			Messages: []llmprotocol.Message{{
-				Role: llmprotocol.RoleUser,
-				Content: []llmprotocol.Content{{
-					Kind: llmprotocol.ContentText, Text: "hello",
-				}},
-			}},
-		},
+		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
+			"user_id": "user_from_metadata",
+		}, Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}},
+		}}},
 	}
 
-	sessionID, userID, history, err := extractMemoryInfo(ctx)
-
-	require.NoError(t, err, "should not return error when falling back to metadata")
-	assert.Equal(t, "conv_from_translate", sessionID)
-	assert.Equal(t, "user_from_metadata", userID, "should fall back to metadata when no auth header")
-	assert.Len(t, history, 1)
-}
-
-func TestExtractMemoryInfo_UserIDFromMetadataOnly(t *testing.T) {
-	// Tests that metadata["user_id"] works as a source in dev builds
-	ctx := &RequestContext{
-		RequestID: "req_123",
-		Headers:   map[string]string{},
-		SessionID: "conv_from_translate",
-		SemanticRequest: &llmprotocol.Request{
-			Metadata: map[string]string{"user_id": "user_from_metadata"},
-			Messages: []llmprotocol.Message{{
-				Role: llmprotocol.RoleUser,
-				Content: []llmprotocol.Content{{
-					Kind: llmprotocol.ContentText, Text: "hello",
-				}},
-			}},
-		},
-	}
-
-	sessionID, userID, history, err := extractMemoryInfo(ctx)
-
-	require.NoError(t, err, "should not return error when userID is provided via metadata")
-	assert.Equal(t, "conv_from_translate", sessionID)
-	assert.Equal(t, "user_from_metadata", userID)
-	assert.Len(t, history, 1)
+	_, userID, history, err := extractMemoryInfo(ctx)
+	require.Error(t, err)
+	require.Empty(t, userID)
+	require.Len(t, history, 1)
 }

@@ -142,8 +142,9 @@ func withSelectedDecision(ctx *RequestContext, decision *config.Decision) *Reque
 	ctx.VSRSelectedDecision = decision
 	ctx.VSRSelectedDecisionName = decision.Name
 	if ctx.Headers == nil {
-		ctx.Headers = map[string]string{"x-authz-user-id": "cache-test-user"}
+		ctx.Headers = map[string]string{"x-authz-user-id": "spoofed-cache-user"}
 	}
+	ctx.TrustedIdentity.UserID = "cache-test-user"
 	return ctx
 }
 

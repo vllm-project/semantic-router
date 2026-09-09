@@ -42,7 +42,7 @@ func extractAutoStore(ctx *RequestContext) bool {
 // (unretrievable) without a valid userID. Memory retrieval filters by userID first,
 // so memories stored without userID cannot be retrieved later.
 //
-// userID is read only from the Router-authenticated TenantContext. Request
+// userID is read only from the ingress-derived TrustedIdentity. Request
 // headers, metadata, and protocol-level user fields are never identity sources.
 func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []llmprotocol.Message, err error) {
 	if ctx == nil || ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 {
@@ -60,7 +60,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 		}
 		history = append(history, cloneSemanticMessages(ctx.SemanticRequest.Messages)...)
 		return "", "", history, fmt.Errorf(
-			"userID is required for memory extraction but the authenticated tenant has no user identity",
+			"userID is required for memory extraction but the ingress identity has no user identity",
 		)
 	}
 

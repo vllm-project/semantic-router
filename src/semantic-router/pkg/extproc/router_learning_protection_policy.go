@@ -65,12 +65,26 @@ func newProtectionPolicy(
 			scope,
 			cfg.HeaderName("session"),
 			cfg.HeaderName("conversation"),
-			strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
-			strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
+			trustedIdentitySessionID(ctx),
+			trustedIdentityConversationID(ctx),
 			"",
 		),
 	)
 	return policy
+}
+
+func trustedIdentitySessionID(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.TrustedIdentity.SessionID)
+}
+
+func trustedIdentityConversationID(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	return strings.TrimSpace(ctx.TrustedIdentity.ConversationID)
 }
 
 func protectionPolicyFromSelectionResult(

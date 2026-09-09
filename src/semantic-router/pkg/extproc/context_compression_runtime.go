@@ -14,7 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -272,11 +271,7 @@ func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}
-	userHeader := headers.AuthzUserID
-	if r != nil && r.Config != nil {
-		userHeader = r.Config.Authz.Identity.GetUserIDHeader()
-	}
-	user := headerValueCI(ctx, userHeader)
+	user := ctx.TrustedIdentity.UserID
 	namespace := cache.UserScopeNamespace(user)
 	if namespace == "" || ctx.RequestID == "" {
 		return ""

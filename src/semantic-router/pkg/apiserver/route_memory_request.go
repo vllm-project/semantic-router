@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
@@ -34,20 +35,15 @@ func (s *ClassificationAPIServer) requireMemoryStore(w http.ResponseWriter) bool
 	return true
 }
 
-// extractUserID extracts the user_id with priority: auth header > query param fallback.
-//
-// Priority 1: x-authz-user-id header injected by the external auth service.
-// Priority 2: user_id query parameter for development/testing without a full auth stack.
+// extractUserID extracts the ingress identity used to scope management memory
+// operations. Query parameters and request-body fields are never identity
+// sources because callers can author them directly.
 func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var userID string
-	if h := r.Header.Get(headers.AuthzUserID); h != "" {
-		userID = h
-	} else if q := r.URL.Query().Get("user_id"); q != "" {
-		userID = q
-	} else {
+	identity := s.extractTrustedIdentity(r)
+	userID := strings.TrimSpace(identity.UserID)
+	if userID == "" {
 		s.writeErrorResponse(w, http.StatusUnauthorized, "MISSING_USER_ID",
-			"User identity required. Set the auth header (x-authz-user-id) via your auth layer, "+
-				"or user_id query parameter for development")
+			"User identity required. Set the configured auth identity header via your auth layer")
 		return "", false
 	}
 
@@ -58,6 +54,37 @@ func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.R
 	}
 
 	return userID, true
+}
+
+func (s *ClassificationAPIServer) extractTrustedIdentity(r *http.Request) authz.TrustedIdentity {
+	if r == nil {
+		return authz.TrustedIdentity{}
+	}
+	headerName := headers.AuthzUserID
+	if cfg := s.currentConfig(); cfg != nil {
+		headerName = cfg.Authz.Identity.GetUserIDHeader()
+	}
+	return authz.TrustedIdentity{UserID: requestHeaderValueCI(r.Header, headerName)}
+}
+
+func requestHeaderValueCI(header http.Header, name string) string {
+	if name == "" {
+		return ""
+	}
+	if value := header.Get(name); strings.TrimSpace(value) != "" {
+		return value
+	}
+	for key, values := range header {
+		if !strings.EqualFold(key, name) {
+			continue
+		}
+		for _, value := range values {
+			if strings.TrimSpace(value) != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }
 
 // extractMemoryID extracts and validates the memory ID from the URL path.

@@ -44,7 +44,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	if !ctx.Routing.IsResolved() {
 		r.resolveEntrypointForRequest(originalModel, ctx)
 	}
-	populatePinnedSessionFromHeaders(ctx)
+	populatePinnedSessionFromIdentity(ctx)
 	history := signalConversationHistoryFromSnapshot(snapshot)
 	applyRequestContextEstimate(snapshot, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(

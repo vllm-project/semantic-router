@@ -1,79 +1,43 @@
 package extproc
 
 import (
-	"os"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// headerValueCI returns the first non-empty value for a header name using
-// case-insensitive name matching.
-func headerValueCI(ctx *RequestContext, canonical string) string {
-	if ctx == nil || len(ctx.Headers) == 0 || canonical == "" {
+func trustedIdentityUserID(ctx *RequestContext) string {
+	if ctx == nil {
 		return ""
 	}
-	if v, ok := ctx.Headers[canonical]; ok && v != "" {
-		return v
+	userID := strings.TrimSpace(ctx.TrustedIdentity.UserID)
+	if userID == "" {
+		return ""
 	}
-	for k, v := range ctx.Headers {
-		if strings.EqualFold(k, canonical) && v != "" {
-			return v
-		}
-	}
-	return ""
+	logging.ComponentDebugEvent("extproc", "memory_user_id_resolved", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"source":     "trusted_identity",
+	})
+	return userID
 }
 
-// authHeaderUserID returns the authenticated user id from the authz header.
-// Matching is case-insensitive on the header name: Envoy/HTTP2 may normalize
-// keys differently than our canonical constant, and direct map lookup would miss.
-func authHeaderUserID(ctx *RequestContext) string {
-	return headerValueCI(ctx, headers.AuthzUserID)
-}
-
-// cacheScopeUserID resolves the user id used only for semantic-cache key scoping.
-// It prefers the trusted auth header, then optionally a fallback header name from
-// SEMANTIC_CACHE_FALLBACK_USER_HEADER (intended for E2E when the gateway strips
-// x-authz-user-id before extproc). When SEMANTIC_CACHE_E2E_USER_FROM_BODY is "true",
-// the OpenAI Chat Completions "user" field is used as a last resort (kubernetes E2E only).
-// Do not set these env vars in production.
+// cacheScopeUserID resolves the user id used for semantic-cache key scoping.
+// Identity is ingress-derived once and is never reconstructed from request
+// headers, body metadata, or environment-controlled fallback headers.
 func cacheScopeUserID(ctx *RequestContext) string {
-	if u := authHeaderUserID(ctx); u != "" {
-		logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"source":     "auth_header",
-		})
-		return u
-	}
-	fallback := strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER"))
-	if fallback != "" {
-		if u := headerValueCI(ctx, fallback); u != "" {
-			logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
-				"request_id":      ctx.RequestID,
-				"source":          "fallback_header",
-				"fallback_header": fallback,
-			})
-			return u
-		}
-	}
-	if strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true" {
-		u := ""
-		if ctx.SemanticRequest != nil {
-			u = strings.TrimSpace(ctx.SemanticRequest.Metadata["user_id"])
-		}
-		if u != "" {
+	requestID := ""
+	if ctx != nil {
+		requestID = ctx.RequestID
+		if u := strings.TrimSpace(ctx.TrustedIdentity.UserID); u != "" {
 			logging.ComponentDebugEvent("extproc", "cache_scope_user_resolved", map[string]interface{}{
 				"request_id": ctx.RequestID,
-				"source":     "body_user_field",
+				"source":     "trusted_identity",
 			})
 			return u
 		}
 	}
 	logging.ComponentDebugEvent("extproc", "cache_scope_user_missing", map[string]interface{}{
-		"request_id":            ctx.RequestID,
-		"fallback_header":       fallback,
-		"body_fallback_enabled": strings.TrimSpace(os.Getenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY")) == "true",
+		"request_id": requestID,
 	})
 	return ""
 }
@@ -98,14 +62,19 @@ func responseCacheScopeIdentity(ctx *RequestContext) string {
 	case "global":
 		return ""
 	case "tenant":
-		return headerValueCI(ctx, headers.AuthzTenantID)
+		if ctx == nil {
+			return ""
+		}
+		return strings.TrimSpace(ctx.TrustedIdentity.TenantID)
 	case "team":
-		if team := headerValueCI(ctx, headers.AuthzTeamID); team != "" {
+		if ctx == nil {
+			return ""
+		}
+		if team := strings.TrimSpace(ctx.TrustedIdentity.TeamID); team != "" {
 			return team
 		}
-		groups := strings.Split(headerValueCI(ctx, headers.AuthzUserGroups), ",")
-		if len(groups) > 0 {
-			return strings.TrimSpace(groups[0])
+		if len(ctx.TrustedIdentity.Groups) > 0 {
+			return strings.TrimSpace(ctx.TrustedIdentity.Groups[0])
 		}
 		return ""
 	default:

@@ -7,6 +7,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -109,6 +110,9 @@ func TestHandleRequestHeadersStripsIdentityHeadersWithoutExternalAuth(t *testing
 	if got := ctx.Headers["x-application"]; got != "kept" {
 		t.Fatalf("unrelated application header = %q, want kept", got)
 	}
+	if ctx.TrustedIdentity.UserID != "" || len(ctx.TrustedIdentity.Groups) != 0 {
+		t.Fatalf("untrusted identity was accepted: %+v", ctx.TrustedIdentity)
+	}
 
 	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
 	for _, name := range []string{headers.AuthzUserID, headers.AuthzUserGroups, "x-user-id", "x-user-groups"} {
@@ -152,6 +156,9 @@ func TestHandleRequestHeadersPreservesTrustedIdentityHeadersForExternalAuth(t *t
 			t.Fatalf("trusted identity header %q = %q, want %q", name, got, want)
 		}
 	}
+	if got := ctx.TrustedIdentity; got.UserID != "alice" || len(got.Groups) != 1 || got.Groups[0] != "premium" {
+		t.Fatalf("trusted identity = %+v", got)
+	}
 
 	mutation := response.GetRequestHeaders().Response.GetHeaderMutation()
 	for _, name := range []string{"x-user-id", "x-user-groups"} {
@@ -181,11 +188,77 @@ func TestHandleRequestHeadersSkipProcessingStillRemovesIdentityHeaders(t *testin
 	if _, found := ctx.Headers[headers.AuthzUserGroups]; found {
 		t.Fatal("identity groups header remained after skip-processing capture")
 	}
+	if ctx.TrustedIdentity.UserID != "" || len(ctx.TrustedIdentity.Groups) != 0 {
+		t.Fatalf("skip-processing accepted untrusted identity: %+v", ctx.TrustedIdentity)
+	}
 	removed := response.GetRequestHeaders().Response.GetHeaderMutation().GetRemoveHeaders()
 	for _, name := range []string{headers.AuthzUserID, headers.AuthzUserGroups} {
 		if !containsStringForTest(removed, name) {
 			t.Fatalf("skip-processing mutation did not remove identity header %q: %#v", name, removed)
 		}
+	}
+}
+
+func TestHandleRequestHeadersDerivesConfiguredMixedCaseIdentity(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		Authz: config.AuthzConfig{
+			Identity: config.IdentityConfig{
+				UserIDHeader:     "X-JWT-Sub",
+				UserGroupsHeader: "X-JWT-Groups",
+			},
+			Providers: []config.AuthzProviderConfig{{Type: "header-injection"}},
+		},
+	}}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newRequestHeaders("POST", "/v1/chat/completions")
+	request.RequestHeaders.Headers.Headers = append(request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "x-jwt-sub", Value: "alice"},
+		&core.HeaderValue{Key: "X-JWT-GROUPS", Value: "team-a, team-b"},
+		&core.HeaderValue{Key: "X-AUTHZ-TENANT-ID", Value: "tenant-a"},
+		&core.HeaderValue{Key: "x-authz-team-id", Value: "team-a"},
+	)
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	want := authz.TrustedIdentity{
+		UserID: "alice", Groups: []string{"team-a", "team-b"},
+		TenantID: "tenant-a", TeamID: "team-a",
+	}
+	if ctx.TrustedIdentity.UserID != want.UserID ||
+		len(ctx.TrustedIdentity.Groups) != len(want.Groups) ||
+		ctx.TrustedIdentity.Groups[0] != want.Groups[0] || ctx.TrustedIdentity.Groups[1] != want.Groups[1] ||
+		ctx.TrustedIdentity.TenantID != want.TenantID || ctx.TrustedIdentity.TeamID != want.TeamID {
+		t.Fatalf("trusted identity = %+v, want %+v", ctx.TrustedIdentity, want)
+	}
+	removed := response.GetRequestHeaders().Response.GetHeaderMutation().GetRemoveHeaders()
+	for _, name := range []string{
+		"X-JWT-Sub", "X-JWT-Groups", headers.AuthzTenantID, headers.AuthzTeamID,
+	} {
+		if !containsStringForTest(removed, name) {
+			t.Fatalf("identity header %q was not scheduled for upstream removal: %#v", name, removed)
+		}
+	}
+}
+
+func TestDeriveTrustedIdentityKeepsSessionOverridePriority(t *testing.T) {
+	configuredSession := "x-learning-session"
+	router := &OpenAIRouter{Config: &config.RouterConfig{
+		RouterLearning: config.RouterLearningConfig{Protection: config.RouterLearningProtectionConfig{
+			Identity: config.RouterLearningIdentityConfig{Headers: config.RouterLearningIdentityHeadersConfig{
+				Session: &configuredSession,
+			}},
+		}},
+	}}
+	ctx := &RequestContext{Headers: map[string]string{
+		"X-SESSION-ID":       "operator-session",
+		"x-learning-session": "configured-session",
+		"X-CLAUDE-CODE-SESSION-ID": "anthropic-session",
+	}}
+
+	router.deriveTrustedIdentity(ctx)
+	if got := ctx.TrustedIdentity.SessionID; got != "operator-session" {
+		t.Fatalf("session identity = %q, want x-session-id override", got)
 	}
 }
 

@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -23,7 +24,7 @@ func TestHandleListMemories_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=invalid_type", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=invalid_type", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -38,11 +39,47 @@ func TestHandleListMemories_InvalidType(t *testing.T) {
 	}
 }
 
+func TestHandleListMemories_DoesNotAcceptUserIDQueryParameter(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+
+	req := newMemoryRequest(http.MethodGet, "/v1/memory", nil)
+	req.URL.RawQuery = "user_id=user-alice"
+	w := httptest.NewRecorder()
+
+	server.handleListMemories(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("query-only identity status = %d, want 401", w.Code)
+	}
+	if code := parseErrorResponse(t, w.Body.Bytes()); code != "MISSING_USER_ID" {
+		t.Fatalf("error code = %q, want MISSING_USER_ID", code)
+	}
+}
+
+func TestHandleListMemories_UsesConfiguredCaseInsensitiveIdentityHeader(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+	server.config = &config.RouterConfig{
+		Authz: config.AuthzConfig{Identity: config.IdentityConfig{UserIDHeader: "X-JWT-Sub"}},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+	req.Header.Set("x-jwt-sub", "user-alice")
+	w := httptest.NewRecorder()
+
+	server.handleListMemories(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("configured mixed-case identity status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestHandleListMemories_InvalidTypeInMultiple(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic,bogus", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic,bogus", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -61,7 +98,7 @@ func TestHandleDeleteMemoriesByScope_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory?user_id=user-alice&type=fake", nil)
+	req := newMemoryRequest(http.MethodDelete, "/v1/memory?user_id=user-alice&type=fake", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)
@@ -93,7 +130,7 @@ func TestHandleListMemories_UserIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, payload := range injectionPayloads {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+		req := newMemoryRequest(http.MethodGet, "/v1/memory", nil)
 		req.Header.Set("x-authz-user-id", payload)
 		w := httptest.NewRecorder()
 
@@ -123,7 +160,7 @@ func TestHandleListMemories_ValidUserIDFormats(t *testing.T) {
 	}
 
 	for _, userID := range validIDs {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id="+userID, nil)
+		req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id="+userID, nil)
 		w := httptest.NewRecorder()
 
 		server.handleListMemories(w, req)
@@ -148,7 +185,7 @@ func TestHandleGetMemory_MemoryIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, id := range injectionIDs {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory/"+id+"?user_id=user-alice", nil)
+		req := newMemoryRequest(http.MethodGet, "/v1/memory/"+id+"?user_id=user-alice", nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
@@ -167,7 +204,7 @@ func TestHandleDeleteMemoriesByScope_UserIDInjection(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory", nil)
+	req := newMemoryRequest(http.MethodDelete, "/v1/memory", nil)
 	req.Header.Set("x-authz-user-id", `alice" || user_id != "`)
 	w := httptest.NewRecorder()
 

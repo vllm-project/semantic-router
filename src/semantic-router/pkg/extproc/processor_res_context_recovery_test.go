@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -102,7 +103,8 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 		VSRSelectedDecisionName:        decision.Name,
 		VSRSelectedDecision:            decision,
 		ContextCompressionRecoveryKeys: []string{"key-1"},
-		Headers:                        map[string]string{"x-authz-user-id": "user-1"},
+		Headers:                        map[string]string{"x-authz-user-id": "spoofed-user-1"},
+		TrustedIdentity:                authz.TrustedIdentity{UserID: "user-1"},
 		SourceFormat:                   llmprotocol.OpenAIChatV1,
 		SemanticRequest:                testNeutralRequest("model", "question"),
 	}
@@ -181,7 +183,8 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 		RequestID:                      "request",
 		VSRSelectedDecision:            decision,
 		ContextCompressionRecoveryKeys: []string{"issued-key"},
-		Headers:                        map[string]string{"x-authz-user-id": "user"},
+		Headers:                        map[string]string{"x-authz-user-id": "spoofed-user"},
+		TrustedIdentity:                authz.TrustedIdentity{UserID: "user"},
 		SourceFormat:                   llmprotocol.OpenAIChatV1,
 		SemanticRequest:                testNeutralRequest("model", "question"),
 	}

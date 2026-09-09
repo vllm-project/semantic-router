@@ -23,7 +23,7 @@ func TestHandleListMemories_Success(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -55,7 +55,7 @@ func TestHandleListMemories_FilterByType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -81,7 +81,7 @@ func TestHandleListMemories_FilterByMultipleTypes(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic,episodic", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic,episodic", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -104,7 +104,7 @@ func TestHandleListMemories_Limit(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit=2", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit=2", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -134,7 +134,7 @@ func TestHandleListMemories_LimitValidation(t *testing.T) {
 	seedTestMemories(store)
 
 	for _, limit := range []string{"abc", "0", "-1"} {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit="+limit, nil)
+		req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit="+limit, nil)
 		w := httptest.NewRecorder()
 
 		server.handleListMemories(w, req)
@@ -152,7 +152,7 @@ func TestHandleListMemories_LimitCapsAtMax(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit=1000", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-alice&limit=1000", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -174,7 +174,7 @@ func TestHandleListMemories_EmptyResult(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-nobody", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-nobody", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -199,7 +199,7 @@ func TestHandleListMemories_EmptyResult(t *testing.T) {
 func TestHandleListMemories_MissingUserID(t *testing.T) {
 	server, _ := newTestServer()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -218,7 +218,7 @@ func TestHandleListMemories_UserIsolation(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-bob", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-bob", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -242,7 +242,7 @@ func TestHandleListMemories_AuthHeaderPriority(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-bob", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-bob", nil)
 	req.Header.Set("x-authz-user-id", "user-alice")
 	w := httptest.NewRecorder()
 
@@ -271,7 +271,7 @@ func TestHandleListMemories_AuthHeaderOnly(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory", nil)
 	req.Header.Set("x-authz-user-id", "user-alice")
 	w := httptest.NewRecorder()
 

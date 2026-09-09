@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -26,6 +28,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	detectSourceFormat(path, ctx)
+	r.deriveTrustedIdentity(ctx)
 	r.applyIdentityHeaderPolicy(ctx)
 	applyHeaderPassThroughPolicy(ctx)
 
@@ -176,6 +179,24 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
+// headerValueCI is intentionally kept in the ingress header phase. It is the
+// only helper allowed to translate captured request headers into typed request
+// identity; downstream consumers use RequestContext.TrustedIdentity instead.
+func headerValueCI(ctx *RequestContext, canonical string) string {
+	if ctx == nil || len(ctx.Headers) == 0 || canonical == "" {
+		return ""
+	}
+	if v, ok := ctx.Headers[canonical]; ok && v != "" {
+		return v
+	}
+	for k, v := range ctx.Headers {
+		if strings.EqualFold(k, canonical) && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 func (r *OpenAIRouter) buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
@@ -195,12 +216,16 @@ func (r *OpenAIRouter) requestHeadersToRemove() []string {
 	)
 }
 
-// identityHeaderNames returns every identity header name understood by the
-// router. The built-in names remain included because a few compatibility
-// paths still consume them directly even when custom authz header names are
-// configured.
+// identityHeaderNames returns every authenticated identity header name
+// understood by the router. The built-in names remain included so a client
+// cannot bypass a configured custom name by supplying the default header.
 func (r *OpenAIRouter) identityHeaderNames() []string {
-	names := []string{headers.AuthzUserID, headers.AuthzUserGroups}
+	names := []string{
+		headers.AuthzUserID,
+		headers.AuthzUserGroups,
+		headers.AuthzTenantID,
+		headers.AuthzTeamID,
+	}
 	if r != nil && r.Config != nil {
 		names = append(names,
 			r.Config.Authz.Identity.GetUserIDHeader(),
@@ -208,6 +233,58 @@ func (r *OpenAIRouter) identityHeaderNames() []string {
 		)
 	}
 	return appendUniqueHeaderNames(nil, names...)
+}
+
+// deriveTrustedIdentity is the single request identity extraction point. It
+// runs immediately after header capture, before routing or plugin code can
+// observe the request. Authenticated claims are accepted only when the
+// deployment explicitly declares an external header-injection boundary;
+// Router Learning continuity IDs are typed ingress values but are not auth
+// claims.
+func (r *OpenAIRouter) deriveTrustedIdentity(ctx *RequestContext) {
+	if ctx == nil {
+		return
+	}
+
+	identity := authz.TrustedIdentity{}
+	learningCfg := config.RouterLearningProtectionConfig{}
+	if r != nil && r.Config != nil {
+		learningCfg = r.Config.RouterLearning.Protection
+	}
+	// x-session-id remains the explicit application/gateway override. A
+	// configured learning header supplies the alternate ingress identity when
+	// that override is absent; both are captured once into the typed snapshot.
+	identity.SessionID = strings.TrimSpace(headerValueCI(ctx, headers.XSessionID))
+	if identity.SessionID == "" {
+		identity.SessionID = strings.TrimSpace(headerValueCI(ctx, learningCfg.HeaderName("session")))
+	}
+	identity.ConversationID = strings.TrimSpace(headerValueCI(ctx, learningCfg.HeaderName("conversation")))
+	if identity.SessionID == "" {
+		identity.SessionID = strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID))
+	}
+
+	if r == nil || r.Config == nil || !r.Config.Authz.HasExternalAuthProvider() {
+		ctx.TrustedIdentity = identity
+		return
+	}
+
+	identity.UserID = strings.TrimSpace(headerValueCI(ctx, r.Config.Authz.Identity.GetUserIDHeader()))
+	identity.Groups = parseTrustedIdentityGroups(
+		headerValueCI(ctx, r.Config.Authz.Identity.GetUserGroupsHeader()),
+	)
+	identity.TenantID = strings.TrimSpace(headerValueCI(ctx, headers.AuthzTenantID))
+	identity.TeamID = strings.TrimSpace(headerValueCI(ctx, headers.AuthzTeamID))
+	ctx.TrustedIdentity = identity
+}
+
+func parseTrustedIdentityGroups(value string) []string {
+	var groups []string
+	for _, group := range strings.Split(value, ",") {
+		if group = strings.TrimSpace(group); group != "" {
+			groups = append(groups, group)
+		}
+	}
+	return groups
 }
 
 // applyIdentityHeaderPolicy removes identity headers from the Router's

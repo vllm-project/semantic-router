@@ -56,8 +56,21 @@ The Router also enforces this boundary for its semantic request view. If
 authz signals, rate limits, memory, or other user-scoped behavior can use them.
 Configure `header-injection` only when a trusted external authorization layer
 validates the caller and injects the headers; the provider declaration alone is
-not an authentication mechanism. Identity headers are removed before the
-request is forwarded to model providers as well.
+not an authentication mechanism. The ingress creates one typed trusted
+identity snapshot, and authz, rate limits, cache, memory, replay, Responses,
+and learning consume that snapshot rather than re-reading raw headers or
+request metadata. Identity headers are removed before the request is forwarded
+to model providers as well.
+
+### Identity consumer contract
+
+All request-time authentication and user-scoped behavior must consume
+`RequestContext.TrustedIdentity`. New code must not derive identity by reading
+`ctx.Headers`, request metadata, query parameters, or environment fallbacks.
+`ctx.Headers` is a transport/control-header view and may contain
+client-controlled values; it is not an authentication API. Provider credential
+resolution is the only separate header-based path, and those credential
+headers must still be stripped before forwarding to model providers.
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted

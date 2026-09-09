@@ -35,7 +35,7 @@ func TestHandleMemory_StoreNotAvailable(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req := newMemoryRequest(tc.method, tc.path, nil)
 			w := httptest.NewRecorder()
 			tc.handler(w, req)
 
@@ -65,7 +65,7 @@ func TestHandleMemory_StoreNotAvailable(t *testing.T) {
 
 	for _, tc := range pathTests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req := newMemoryRequest(tc.method, tc.path, nil)
 			w := httptest.NewRecorder()
 			mux.ServeHTTP(w, req)
 
@@ -88,7 +88,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
+	req := newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -100,7 +100,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 2: Expected 1 memory, got %d", listResp.Total)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = newMemoryRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -116,7 +116,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 3: Unexpected content: %s", getResp.Content)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = newMemoryRequest(http.MethodDelete, "/v1/memory/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -124,7 +124,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 4: Expected 200, got %d", w.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = newMemoryRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -132,7 +132,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 5: Expected 404 after delete, got %d", w.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
+	req = newMemoryRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
