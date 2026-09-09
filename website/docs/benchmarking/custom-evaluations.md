@@ -68,6 +68,10 @@ For an alias backed by a built-in card, set `model` to the canonical
 `providers.models[].catalog` ID, not the request-facing alias. Several aliases
 for the same checkpoint therefore share the same model evidence.
 
+The Evaluation Plane freezes the effective card behind each provider alias,
+including built-in metadata and operator overrides. A catalog-backed live
+target therefore does not require a duplicate `routing.modelCards` entry.
+
 ## Define a benchmark and index
 
 Built-in benchmark IDs need no redeclaration. Define semantics only for an
