@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,9 +34,10 @@ var scoreOperation = connector.Operation{
 }
 
 // scoreEntry is the HuggingFace text-classification response shape. score.v1
-// reuses it because it shares the http_classify protocol, so a regression head
-// deployed behind the usual endpoint needs no shim. The label is meaningless
-// on this contract and is read only to keep the decoder honest about the shape.
+// reads it because it shares the http_classify protocol, so a regression head
+// deployed behind the usual endpoint needs no shim; a bare {"score": x} object
+// decodes into the same struct. The label is meaningless on this contract and
+// is read only to keep the decoder honest about the shape.
 type scoreEntry struct {
 	Label string `json:"label"`
 	// A pointer, so an absent field and an explicit null are distinguishable
@@ -99,19 +101,44 @@ func (s *scoringHTTPBackend) Score(ctx context.Context, text string) (float64, e
 		return 0, formatHTTPClassifyConnectorError(err)
 	}
 
-	var entries []scoreEntry
-	if err := json.Unmarshal(responseBody, &entries); err != nil {
-		return 0, fmt.Errorf("failed to parse score.v1 response: %w", err)
+	return decodeScoreResponse(responseBody)
+}
+
+// decodeScoreResponse reads the score out of either shape a score.v1 endpoint
+// may return: the HuggingFace text-classification array with exactly one
+// entry, or a bare {"score": x} object. The first byte tells them apart, so
+// accepting both adds no ambiguity - and it spares a regression endpoint that
+// was never a classifier from wrapping its one number in a one-element list
+// under a label it has no use for.
+func decodeScoreResponse(body []byte) (float64, error) {
+	trimmed := bytes.TrimLeft(body, " \t\r\n")
+	if len(trimmed) == 0 {
+		return 0, fmt.Errorf("score.v1 response is empty")
 	}
-	// Anything other than exactly one entry leaves "which is the score"
-	// undefined, so it fails rather than picking one.
-	if len(entries) != 1 {
-		return 0, fmt.Errorf("score.v1 response must carry exactly one entry, got %d", len(entries))
+	var entry scoreEntry
+	switch trimmed[0] {
+	case '[':
+		var entries []scoreEntry
+		if err := json.Unmarshal(trimmed, &entries); err != nil {
+			return 0, fmt.Errorf("failed to parse score.v1 response: %w", err)
+		}
+		// Anything other than exactly one entry leaves "which is the score"
+		// undefined, so it fails rather than picking one.
+		if len(entries) != 1 {
+			return 0, fmt.Errorf("score.v1 response must carry exactly one entry, got %d", len(entries))
+		}
+		entry = entries[0]
+	case '{':
+		if err := json.Unmarshal(trimmed, &entry); err != nil {
+			return 0, fmt.Errorf("failed to parse score.v1 response: %w", err)
+		}
+	default:
+		return 0, fmt.Errorf("score.v1 response must be a JSON object or a one-entry array, got %q", string(trimmed[:1]))
 	}
-	if entries[0].Score == nil {
+	if entry.Score == nil {
 		return 0, fmt.Errorf("score.v1 response entry carries no score")
 	}
-	score := *entries[0].Score
+	score := *entry.Score
 	// Every comparison against NaN is false, so a rule would answer medium for
 	// it regardless of its boundaries; an infinity makes one verdict
 	// unreachable. Neither can be compared meaningfully.

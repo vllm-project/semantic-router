@@ -94,13 +94,15 @@ func TestScoringHTTPBackend_PreservesCallerCancellation(t *testing.T) {
 	}
 }
 
-// More than one entry leaves no defined answer to "which is the score", and
-// an empty array carries no score at all. Both fail rather than guess.
+// More than one entry leaves no defined answer to "which is the score", an
+// empty array carries no score at all, and a bare number says nothing about
+// which number it is. All fail rather than guess; the accepted shapes are
+// covered in complexity_remote_backend_shape_test.go.
 func TestScoringHTTPBackend_RejectsAmbiguousResponses(t *testing.T) {
 	cases := map[string]string{
 		"empty array":    `[]`,
 		"two entries":    `[{"label":"a","score":0.1},{"label":"b","score":0.9}]`,
-		"not an array":   `{"score":0.5}`,
+		"bare scalar":    `0.5`,
 		"malformed json": `{`,
 	}
 
