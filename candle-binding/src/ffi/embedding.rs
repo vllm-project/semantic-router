@@ -2859,6 +2859,88 @@ pub extern "C" fn shutdown_embedding_batched() {
     println!("INFO: Shutting down batched embedding model");
 }
 
+const BERT_EMBEDDING_WINDOW: usize = 512;
+const QWEN3_EMBEDDING_WINDOW: usize = 32768;
+
+fn embedding_window(model_type: &str) -> Option<(&'static MmTokenizer, usize)> {
+    let factory = GLOBAL_MODEL_FACTORY.get();
+    match model_type {
+        "bert" => crate::ffi::init::BERT_SIMILARITY
+            .get()
+            .map(|bert| (bert.tokenizer(), BERT_EMBEDDING_WINDOW)),
+        "gemma" => factory.and_then(|f| {
+            Some((
+                f.get_gemma_tokenizer()?,
+                f.get_gemma_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "mmbert" => factory.and_then(|f| {
+            Some((
+                f.get_mmbert_tokenizer()?,
+                f.get_mmbert_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "qwen3" => factory.and_then(|f| Some((f.get_qwen3_tokenizer()?, QWEN3_EMBEDDING_WINDOW))),
+        "multimodal" => get_multimodal_refs()
+            .map(|(model, tokenizer)| (tokenizer, model.config().text_max_position_embeddings)),
+        _ => None,
+    }
+}
+
+fn tokens_exceed_window(
+    tokenizer: &MmTokenizer,
+    text: &str,
+    window: usize,
+) -> Result<bool, String> {
+    use tokenizers::{TruncationDirection, TruncationParams, TruncationStrategy};
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: window + 1,
+            strategy: TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: TruncationDirection::Right,
+        }))
+        .map_err(|e| e.to_string())?;
+    let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+    Ok(encoding.get_ids().len() > window)
+}
+
+/// Report whether `text` tokenizes past the context window of the loaded
+/// embedding model named by `model_type`, so a truncated embedding would alias
+/// every text sharing its prefix.
+///
+/// # Returns
+/// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
+/// loaded or the input is invalid
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn embedding_text_exceeds_window(
+    text: *const c_char,
+    model_type: *const c_char,
+) -> i32 {
+    if text.is_null() || model_type.is_null() {
+        return -1;
+    }
+    let (text, model_type) = unsafe {
+        match (
+            CStr::from_ptr(text).to_str(),
+            CStr::from_ptr(model_type).to_str(),
+        ) {
+            (Ok(t), Ok(m)) => (t, m),
+            _ => return -1,
+        }
+    };
+    let Some((tokenizer, window)) = embedding_window(model_type) else {
+        return -1;
+    };
+    match tokens_exceed_window(tokenizer, text, window) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
