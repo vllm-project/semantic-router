@@ -188,30 +188,47 @@ ROUTE "x" (on_unknown = "allow") {
 	t.Fatalf("no diagnostic mentions on_unknown: %#v", diagnostics)
 }
 
-func TestValidateFlagsOnUnknownOnErrorConflict(t *testing.T) {
-	input := `
+func TestValidateOnUnknownOnErrorConflict(t *testing.T) {
+	const signals = `
 SIGNAL classifier "risk" {
   type: "local"
   model_path: "models/risk"
   labels: ["SAFE", "RISKY"]
   use_cpu: true
 }
-
-ROUTE "guarded" (on_unknown = "no_match") {
-  PRIORITY 100
-  WHEN classifier("risk", label: "RISKY", predicate: { gte: 0.5 }, on_error: "no_match")
-  MODEL "m"
-}`
-	diagnostics, errs := Validate(input)
-	if len(errs) != 0 {
-		t.Fatalf("parse errors: %v", errs)
+SIGNAL keyword "hack" {
+  operator: "contains"
+  values: ["hack"]
+}
+`
+	cases := map[string]struct {
+		route string
+		want  bool
+	}{
+		"flat":             {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested and":       {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested or not":    {`ROUTE "r" (on_unknown = "match") { PRIORITY 1 WHEN keyword("hack") OR NOT classifier("risk", label: "RISKY", on_error: "match") MODEL "m" }`, true},
+		"empty on_error":   {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "") MODEL "m" }`, false},
+		"on_error alone":   {`ROUTE "r" { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, false},
+		"on_unknown alone": {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY") MODEL "m" }`, false},
 	}
-	for _, diagnostic := range diagnostics {
-		if strings.Contains(diagnostic.Message, "on_error has no effect") {
-			return
-		}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			diagnostics, errs := Validate(signals + tc.route)
+			if len(errs) != 0 {
+				t.Fatalf("parse errors: %v", errs)
+			}
+			got := false
+			for _, diagnostic := range diagnostics {
+				if strings.Contains(diagnostic.Message, "on_error has no effect") {
+					got = true
+				}
+			}
+			if got != tc.want {
+				t.Fatalf("conflict flagged = %v, want %v: %#v", got, tc.want, diagnostics)
+			}
+		})
 	}
-	t.Fatalf("no diagnostic flags the on_unknown + on_error conflict: %#v", diagnostics)
 }
 
 func assertPolicyDSLSource(t *testing.T, source string) {

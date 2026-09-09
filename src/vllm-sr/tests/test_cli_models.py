@@ -236,5 +236,17 @@ def test_rules_reject_on_unknown_with_condition_on_error():
     with pytest.raises(ValueError, match="on_error has no effect"):
         Rules(**nested)
 
+    root = {
+        "operator": "AND",
+        "on_unknown": "no_match",
+        "on_error": "no_match",
+        "conditions": [{"type": "keyword", "name": "x"}],
+    }
+    with pytest.raises(ValueError, match="on_error has no effect"):
+        Rules(**root)
+    del root["on_unknown"]
+    with pytest.raises(ValueError, match="only applies to leaf"):
+        Rules(**root)
+
     del conflicting["on_unknown"]
     assert Rules(**conflicting).conditions[0].on_error == "no_match"
