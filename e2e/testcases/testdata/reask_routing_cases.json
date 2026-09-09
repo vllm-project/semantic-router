@@ -3,11 +3,11 @@
     "name": "Repeated invoice complaint across 3 turns",
     "description": "repeated_billing_question matches when the current turn closely repeats the last two turns' billing complaint",
     "messages": [
-      {"role": "user", "content": "My invoice this month is wrong, can you help me fix it?"},
-      {"role": "assistant", "content": "I'm sorry to hear that. Could you tell me which charge looks incorrect?"},
-      {"role": "user", "content": "The invoice you sent me is still incorrect. Please correct the billing amount."},
-      {"role": "assistant", "content": "I've flagged this for review. Is there anything else incorrect on the invoice?"},
-      {"role": "user", "content": "This bill is still wrong and hasn't been fixed. I need this corrected now."}
+      {"role": "user", "content": "My invoice this month is wrong, can you help me fix the invoice?"},
+      {"role": "assistant", "content": "I'm sorry to hear that. Could you tell me which charge on the invoice looks incorrect?"},
+      {"role": "user", "content": "The invoice is still wrong. Please fix the invoice amount."},
+      {"role": "assistant", "content": "I've flagged the invoice for review. Is there anything else wrong with the invoice?"},
+      {"role": "user", "content": "The invoice is still wrong and hasn't been fixed. I need the invoice corrected now."}
     ],
     "expected_decision": "reask_escalation",
     "expected_matched_signal": "repeated_billing_question",
