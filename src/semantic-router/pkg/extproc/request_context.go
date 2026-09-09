@@ -29,6 +29,16 @@ type EnhancedHallucinationSpan struct {
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
+// ResponseHallucinationEvidence is the detector output behind the
+// hallucination signal: the verdict, its confidence, and the spans it rests
+// on, with NLI explanations when the rule asked for them.
+type ResponseHallucinationEvidence struct {
+	Detected   bool
+	Confidence float32
+	Spans      []string
+	Enhanced   *EnhancedHallucinationInfo
+}
+
 // EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
 type EnhancedHallucinationInfo struct {
 	Confidence float32                     `json:"confidence"`
@@ -201,6 +211,12 @@ type RequestContext struct {
 	// to re-derive them from the per-rule confidences.
 	VSRResponseJailbreakType string
 	VSRResponseJailbreakRisk float32
+	// VSRMatchedHallucination holds hallucination rules that matched once the
+	// model answered. VSRHallucinationEvidence is what the observation was
+	// computed from, kept for the plugin that consumes it and for Router
+	// Replay; it is nil when the rule was not evaluated for this request.
+	VSRMatchedHallucination  []string
+	VSRHallucinationEvidence *ResponseHallucinationEvidence
 	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
 	VSRProjectionTrace       *projectiontrace.Trace
 
