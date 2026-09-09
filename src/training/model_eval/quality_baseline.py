@@ -23,13 +23,11 @@ import argparse
 import json
 import logging
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
-from huggingface_hub import snapshot_download
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -39,6 +37,11 @@ from artifact_inventory import (
     registry_drift,
     served_artifacts,
     uncovered_artifacts,
+)
+from baseline_artifact import (
+    BaselineError,
+    MeasuredArtifact,
+    resolve_measured_artifact,
 )
 from baseline_manifests import emit_baseline_manifests
 from baseline_metrics import (
@@ -50,12 +53,10 @@ from baseline_metrics import (
 )
 from baseline_tasks import (
     TASK_SPECS,
-    BaselineError,
     artifact_config,
     check_registry_label_order,
     load_artifact,
     load_rows,
-    referenced_artifact,
     resolve_label_mapping,
     tokenizer_class,
 )
@@ -65,23 +66,9 @@ from provenance.emit import resolve_hf_revision
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MAX_LENGTH = 512
 DEFAULT_SEED = 42
-ARTIFACT_PATTERNS = ["*.json", "*.safetensors", "*.txt", "*.model"]
 SHORT_REVISION = 12
 
 logger = logging.getLogger("QualityBaseline")
-
-
-@dataclass(frozen=True)
-class MeasuredArtifact:
-    """The artifact this run will score, and how its identity was established."""
-
-    model_dir: Path
-    repo: str
-    revision: str
-    referenced: dict[str, Any] | None
-
-    def is_served_by(self, served: ServedArtifact) -> bool:
-        return self.repo == served.hf_repo
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -142,7 +129,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Reference this existing artifact manifest rather than rebuilding one; "
-            "required when the artifact was emitted by a training run"
+            "required when the artifact was emitted by a training run. The bytes "
+            "measured are the ones it names, and are re-hashed against it"
         ),
     )
     parser.add_argument(
@@ -163,49 +151,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Compute metrics without writing provenance manifests",
     )
     return parser.parse_args(argv)
-
-
-def resolve_measured_artifact(
-    args: argparse.Namespace, served: ServedArtifact
-) -> MeasuredArtifact:
-    """Decide which bytes this run scores, and warn when they are not the served ones."""
-    referenced = referenced_artifact(args.artifact_manifest)
-
-    if args.artifact_dir is not None:
-        if referenced is None:
-            raise BaselineError(
-                "--artifact-dir requires --artifact-manifest so the evaluation can "
-                "reference the identity the run already published"
-            )
-        measured = MeasuredArtifact(
-            model_dir=args.artifact_dir,
-            repo=referenced["identity"]["repo"],
-            revision=referenced["identity"]["revision"],
-            referenced=referenced,
-        )
-        logger.warning(
-            "measuring local artifact %s, which is NOT the artifact %s serves (%s)",
-            measured.model_dir,
-            args.config,
-            served.hf_repo,
-        )
-        return measured
-
-    repo = args.artifact_repo or served.hf_repo
-    if repo != served.hf_repo:
-        logger.warning(
-            "measuring %s, which is NOT the artifact %s serves (%s)",
-            repo,
-            args.config,
-            served.hf_repo,
-        )
-    revision = resolve_hf_revision(repo)
-    model_dir = Path(
-        snapshot_download(repo, revision=revision, allow_patterns=ARTIFACT_PATTERNS)
-    )
-    return MeasuredArtifact(
-        model_dir=model_dir, repo=repo, revision=revision, referenced=referenced
-    )
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:

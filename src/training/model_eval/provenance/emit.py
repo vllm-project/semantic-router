@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 
-from .crossref import artifact_identity_digest
+from .crossref import artifact_identity_digest, file_digest
 from .manifest import load_manifest
 
 __all__ = [
@@ -37,7 +37,6 @@ __all__ = [
 ]
 
 CODE_REPO = "vllm-project/semantic-router"
-DIGEST_CHUNK_BYTES = 1024 * 1024
 # Length of a full git commit sha. Anything shorter is a prefix or a branch name.
 REVISION_LENGTH = 40
 TRACKED_PACKAGES = (
@@ -75,14 +74,6 @@ def resolve_hf_revision(repo_id: str, repo_type: str = "model") -> str:
             f"{repo_id} did not resolve to a 40-character commit sha (got {sha!r})"
         )
     return sha
-
-
-def file_digest(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(DIGEST_CHUNK_BYTES), b""):
-            hasher.update(chunk)
-    return f"sha256:{hasher.hexdigest()}"
 
 
 def split_digest(rows: Iterable[tuple[str, int]]) -> str:

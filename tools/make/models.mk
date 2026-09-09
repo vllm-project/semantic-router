@@ -15,6 +15,7 @@ test-training-contracts: ## Run dependency-light model training contract tests
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		src/training/model_eval/test_provenance.py \
 		src/training/model_eval/test_artifact_inventory.py \
+		src/training/model_eval/test_baseline_artifact.py \
 		src/training/model_classifier/prompt_guard_fine_tuning_lora/test_jailbreak_provenance.py
 
 # Models are automatically downloaded by the router at startup in production.

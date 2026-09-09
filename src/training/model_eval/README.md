@@ -93,6 +93,12 @@ python src/training/model_eval/gap_report.py \
 before anything is published. Both are recorded in the result, so a candidate
 number is never mistaken for the baseline.
 
+A referenced manifest supplies the identity every number is published under, so
+it also selects the bytes: the run downloads the repository and revision the
+manifest names, and re-hashes the files it lists, whether they came from the Hub
+or from `--artifact-dir`. A directory that does not hash to the manifest, or an
+`--artifact-repo` the manifest does not describe, fails before scoring starts.
+
 The inventory covers every task a maintained configuration loads a classifier
 artifact for. Complexity is not one of them: the signal scores embedding
 prototypes against candidate phrases rather than loading a classifier, so there

@@ -16,10 +16,10 @@ from typing import Any
 import numpy as np
 import transformers
 from artifact_inventory import REGISTRY_ALIASES, ServedArtifact
+from baseline_artifact import BaselineError
 from constants import MODEL_REGISTRY
 from datasets import load_dataset
 from peft import PeftModel
-from provenance.manifest import load_manifest
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 logger = logging.getLogger("QualityBaseline")
@@ -77,10 +77,6 @@ TASK_SPECS: dict[str, TaskSpec] = {
         label_field="category",
     ),
 }
-
-
-class BaselineError(RuntimeError):
-    """Raised when the run cannot produce a trustworthy baseline."""
 
 
 def resolve_label_mapping(model_dir: Path, artifact: ServedArtifact) -> dict[str, int]:
@@ -223,13 +219,6 @@ def tokenizer_class(model_dir: Path) -> str | None:
         "tokenizer_class"
     )
     return str(declared) if declared else None
-
-
-def referenced_artifact(path: Path | None) -> dict[str, Any] | None:
-    """Load an artifact manifest a training run already published."""
-    if path is None:
-        return None
-    return load_manifest(path, expected_kind="artifact")
 
 
 def artifact_config(model_dir: Path, model) -> dict[str, Any]:

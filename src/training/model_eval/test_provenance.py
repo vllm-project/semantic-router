@@ -9,7 +9,12 @@ import yaml
 TEST_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(TEST_DIR))
 
-from provenance.crossref import artifact_identity_digest, validate_bundle  # noqa: E402
+from provenance.crossref import (  # noqa: E402
+    artifact_identity_digest,
+    file_digest,
+    validate_bundle,
+    verify_artifact_bytes,
+)
 from provenance.manifest import ManifestError, load_manifest  # noqa: E402
 from provenance.metrics import (  # noqa: E402
     abstention_curve,
@@ -295,6 +300,26 @@ def test_artifact_digest_must_match_the_file_list(tmp_path):
     ]
     with pytest.raises(ManifestError, match="file list hashes to"):
         validate_bundle(write_bundle(tmp_path, artifact=tampered))
+
+
+def test_verify_artifact_bytes_rejects_a_directory_holding_other_bytes(tmp_path):
+    (tmp_path / "config.json").write_bytes(b"{}")
+    hashed = artifact_manifest(
+        files=[
+            {
+                "path": "config.json",
+                "size_bytes": 2,
+                "digest": file_digest(tmp_path / "config.json"),
+            }
+        ]
+    )
+    assert verify_artifact_bytes(hashed, tmp_path) == []
+
+    (tmp_path / "config.json").write_bytes(b"{ }")
+    assert "config.json hashes to" in verify_artifact_bytes(hashed, tmp_path)[0]
+
+    (tmp_path / "config.json").unlink()
+    assert "config.json is missing" in verify_artifact_bytes(hashed, tmp_path)[0]
 
 
 def test_evaluation_referencing_a_different_artifact_revision_fails(tmp_path):
