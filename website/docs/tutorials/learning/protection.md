@@ -87,6 +87,80 @@ Protection can also allow a deterministic `rescue_switch` when the current
 model appears underpowered because of repeated failures, retries, failed
 verification, or explicit outcome evidence.
 
+## Progress Gate
+
+The switch rule above is a one-shot cost comparison. The progress gate adds a
+second, evidence-based approval stage: a proposed switch is only committed when
+the session's recent trajectory justifies it. This prevents thrashing from
+single noisy turns (one empty reply, one provider hiccup).
+
+### Configuration
+
+```yaml
+global:
+  router:
+    learning:
+      protection:
+        tuning:
+          progress_gate:
+            enabled: true        # default false — zero behavior change
+            mode: observe        # observe | enforce
+            window_size: 8               # recent turns kept as evidence
+            window_ttl_seconds: 900      # evidence older than this expires
+            min_window_outcomes: 3       # attributable turns required
+            min_consecutive_regressions: 2  # escalation threshold
+            min_consecutive_recoveries: 2   # downgrade threshold
+            cooldown_seconds: 120        # min quiet period between switches
+            max_switches_per_window: 2   # oscillation guard
+```
+
+Omitting the whole `progress_gate` section keeps the gate disabled. Any tuning
+field can be set alone; the rest inherit their packaged defaults.
+
+### How it decides
+
+Every turn's outcome is classified into a typed, content-minimal fact:
+`progress`, `no_progress`, `regression` (model-attributable), or
+`provider_error` / `tool_error` / `missing` (environment noise, never counted
+against the model). The gate keeps a bounded window of these facts per session
+and derives regression/recovery streaks, a progress trend, and evidence
+coverage.
+
+A switch proposal is suppressed, in priority order, when:
+
+| Reason | Condition |
+| --- | --- |
+| `hard_constraint_conflict` | Tool loop or non-portable context — hard locks win over evidence |
+| `cold_start` | No observable outcomes yet |
+| `insufficient_evidence` | Fewer attributable outcomes than `min_window_outcomes`, or the streak/trend thresholds are not met |
+| `cooldown` | Last switch was less than `cooldown_seconds` ago |
+| `oscillation_guard` | Already switched `max_switches_per_window` times in the window |
+
+Escalation (proposing a stronger model) requires the regression streak plus a
+non-positive trend; downgrading uses consecutive recoveries instead. Hard
+constraints stay authoritative in both modes: the gate can only suppress a
+switch, never force one.
+
+### Modes
+
+`observe` evaluates the gate and records the full verdict in Router Replay but
+never changes the outcome — use it to measure the would-suppress rate before
+trusting `enforce`. `enforce` holds the current model when the verdict says
+suppress, but only after re-checking that the current model is still a valid
+candidate for the request; a suppression never invents a routing target.
+
+Both directions are gated: after switching to a stronger model, dropping back
+to a cheaper one also needs consecutive recovery evidence.
+
+### Replay
+
+Every gated switch or suppression records a `switch_gate` section in Router
+Replay: evidence version, mode, decision, suppression reason, switch origin
+(escalation/downgrade), regression/recovery streaks, trend, window size,
+attributable and missing counts, cooldown timers, and the oscillation counter.
+Replay therefore explains every model change without access to the router's
+memory.
+
 ## Decision Boundaries
 
 Most decisions do not need local configuration. Use `bypass` for hard policy
