@@ -18,7 +18,7 @@ type Registry struct {
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService
-	classificationBorrow  ClassificationBorrow
+	acquireClassification AcquireClassification
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
@@ -33,15 +33,15 @@ type Registry struct {
 // one generation. Keeping these dependencies in one atomic snapshot prevents
 // API handlers from observing a new config with an old cache or learning
 // runtime during hot reload.
-// ClassificationBorrow registers a reference on the runtime generation that
-// owns ClassificationService, so retirement waits for the borrow to finish. It
-// reports false once that generation is retired.
-type ClassificationBorrow func() (release func(), ok bool)
+// AcquireClassification registers a reference on the runtime generation that
+// owns ClassificationService, so retirement waits for that reference to be
+// released. It reports false once that generation is retired.
+type AcquireClassification func() (release func(), ok bool)
 
 type RouterRuntimeSnapshot struct {
 	Config                *config.RouterConfig
 	ClassificationService *services.ClassificationService
-	ClassificationBorrow  ClassificationBorrow
+	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
 	ModelSelector         *selection.Registry
 	LearningRuntime       LearningRuntime
@@ -166,26 +166,26 @@ func (r *Registry) ClassificationService() *services.ClassificationService {
 	return r.classificationService
 }
 
-// BorrowClassificationService returns the live classification service together
+// AcquireClassificationService returns the live classification service together
 // with a release function that must be called when the caller is done with it.
-// Holding the borrow keeps the owning runtime generation from closing the
+// Holding the reference keeps the owning runtime generation from closing the
 // service mid-call. It reports false when no live service is available.
-func (r *Registry) BorrowClassificationService() (*services.ClassificationService, func(), bool) {
+func (r *Registry) AcquireClassificationService() (*services.ClassificationService, func(), bool) {
 	if r == nil {
 		return nil, nil, false
 	}
 	r.mu.RLock()
 	service := r.classificationService
-	borrow := r.classificationBorrow
+	acquire := r.acquireClassification
 	r.mu.RUnlock()
 	if service == nil {
 		return nil, nil, false
 	}
-	if borrow == nil {
+	if acquire == nil {
 		// No generation owns this service, so nothing can close it underneath us.
 		return service, func() {}, true
 	}
-	release, ok := borrow()
+	release, ok := acquire()
 	if !ok {
 		return nil, nil, false
 	}
@@ -363,7 +363,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 		r.config = snapshot.Config
 	}
 	r.classificationService = snapshot.ClassificationService
-	r.classificationBorrow = snapshot.ClassificationBorrow
+	r.acquireClassification = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime

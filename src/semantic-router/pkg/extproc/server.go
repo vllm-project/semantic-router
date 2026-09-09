@@ -266,10 +266,10 @@ type routerGeneration struct {
 	retired atomic.Bool
 }
 
-// BorrowFunc registers a reference on the live generation for the duration of
-// one borrow. It reports false once the generation is retired, so a caller that
+// AcquireFunc registers a reference on the live generation for the duration of
+// one acquire. It reports false once the generation is retired, so a caller that
 // loses the race against a reload falls back instead of using a closing router.
-type BorrowFunc func() (release func(), ok bool)
+type AcquireFunc func() (release func(), ok bool)
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
@@ -282,7 +282,7 @@ func NewRouterService(r *OpenAIRouter) *RouterService {
 // pointer is swapped before publish, but Process must take rs.mu and therefore
 // cannot observe the new generation until the management snapshot is also
 // published and this critical section ends.
-func (rs *RouterService) Swap(r *OpenAIRouter, publish func(borrow BorrowFunc)) error {
+func (rs *RouterService) Swap(r *OpenAIRouter, publish func(acquire AcquireFunc)) error {
 	rs.mu.Lock()
 	if rs.closed {
 		rs.mu.Unlock()
@@ -294,7 +294,7 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func(borrow BorrowFunc)) 
 	generation := &routerGeneration{router: r}
 	old := rs.current.Swap(generation)
 	if publish != nil {
-		publish(rs.borrowFor(generation))
+		publish(rs.acquireFor(generation))
 	}
 	if old != nil {
 		old.retired.Store(true)
@@ -307,11 +307,11 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func(borrow BorrowFunc)) 
 	return nil
 }
 
-// borrowFor returns a BorrowFunc for one generation. It takes the same lock
-// Swap uses to retire a generation, so a borrow either registers before
+// acquireFor returns a AcquireFunc for one generation. It takes the same lock
+// Swap uses to retire a generation, so a acquire either registers before
 // retirement and makes closeRouterGeneration wait, or observes the retirement
 // and declines.
-func (rs *RouterService) borrowFor(generation *routerGeneration) BorrowFunc {
+func (rs *RouterService) acquireFor(generation *routerGeneration) AcquireFunc {
 	return func() (func(), bool) {
 		if generation == nil {
 			return nil, false
@@ -435,8 +435,8 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
-	if err := s.service.Swap(newRouter, func(borrow BorrowFunc) {
-		publishRouterState(candidateCfg, newRouter, s.runtime, borrow)
+	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
+		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
 	}); err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func publishRouterState(
 	cfg *config.RouterConfig,
 	router *OpenAIRouter,
 	runtimeRegistry *routerruntime.Registry,
-	borrow BorrowFunc,
+	acquire AcquireFunc,
 ) {
 	if router == nil {
 		return
@@ -512,7 +512,7 @@ func publishRouterState(
 		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 			Config:                cfg,
 			ClassificationService: router.ClassificationService,
-			ClassificationBorrow:  routerruntime.ClassificationBorrow(borrow),
+			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),

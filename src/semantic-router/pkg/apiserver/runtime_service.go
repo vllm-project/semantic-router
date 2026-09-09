@@ -59,27 +59,27 @@ type classificationService interface {
 type liveClassificationService struct {
 	fallback classificationService
 	resolver func() classificationService
-	borrower func() (classificationService, func(), bool)
+	acquirer func() (classificationService, func(), bool)
 }
 
 func newLiveClassificationService(
 	fallback classificationService,
 	resolver func() classificationService,
-	borrower func() (classificationService, func(), bool),
+	acquirer func() (classificationService, func(), bool),
 ) classificationService {
 	return &liveClassificationService{
 		fallback: fallback,
 		resolver: resolver,
-		borrower: borrower,
+		acquirer: acquirer,
 	}
 }
 
-// borrow resolves the live service and holds a reference on the generation that
+// acquire resolves the live service and holds a reference on the generation that
 // owns it until release runs. Reload retirement waits on that reference, so the
 // classifier cannot be closed underneath an in-flight API call.
-func (s *liveClassificationService) borrow() (classificationService, func()) {
-	if s != nil && s.borrower != nil {
-		if svc, release, ok := s.borrower(); ok && svc != nil {
+func (s *liveClassificationService) acquire() (classificationService, func()) {
+	if s != nil && s.acquirer != nil {
+		if svc, release, ok := s.acquirer(); ok && svc != nil {
 			return svc, release
 		}
 	}
@@ -99,25 +99,25 @@ func (s *liveClassificationService) current() classificationService {
 }
 
 func (s *liveClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyIntent(req)
 }
 
 func (s *liveClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyIntentForEval(req)
 }
 
 func (s *liveClassificationService) DetectPII(req services.PIIRequest) (*services.PIIResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.DetectPII(req)
 }
 
 func (s *liveClassificationService) CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.CheckSecurity(ctx, req)
 }
@@ -126,13 +126,13 @@ func (s *liveClassificationService) ClassifyBatchUnifiedWithOptions(
 	texts []string,
 	options interface{},
 ) (*services.UnifiedBatchResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyBatchUnifiedWithOptions(texts, options)
 }
 
 func (s *liveClassificationService) ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyFactCheck(req)
 }
@@ -140,61 +140,61 @@ func (s *liveClassificationService) ClassifyFactCheck(req services.FactCheckRequ
 func (s *liveClassificationService) ClassifyUserFeedback(
 	req services.UserFeedbackRequest,
 ) (*services.UserFeedbackResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyUserFeedback(req)
 }
 
 func (s *liveClassificationService) ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.ClassifyNLI(req)
 }
 
 func (s *liveClassificationService) IsNLIReady() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.IsNLIReady()
 }
 
 func (s *liveClassificationService) HasUnifiedClassifier() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasUnifiedClassifier()
 }
 
 func (s *liveClassificationService) HasClassifier() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasClassifier()
 }
 
 func (s *liveClassificationService) HasFactCheckClassifier() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasFactCheckClassifier()
 }
 
 func (s *liveClassificationService) HasHallucinationDetector() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasHallucinationDetector()
 }
 
 func (s *liveClassificationService) HasHallucinationExplainer() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasHallucinationExplainer()
 }
 
 func (s *liveClassificationService) HasFeedbackDetector() bool {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	return svc.HasFeedbackDetector()
 }
 
 func (s *liveClassificationService) HasAnyFactCheckClassifier() bool {
-	current, release := s.borrow()
+	current, release := s.acquire()
 	defer release()
 	if inventory, ok := current.(classificationInventoryReadinessService); ok {
 		return inventory.HasAnyFactCheckClassifier()
@@ -203,7 +203,7 @@ func (s *liveClassificationService) HasAnyFactCheckClassifier() bool {
 }
 
 func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
-	current, release := s.borrow()
+	current, release := s.acquire()
 	defer release()
 	if inventory, ok := current.(classificationInventoryReadinessService); ok {
 		return inventory.HasAnyHallucinationDetector()
@@ -212,7 +212,7 @@ func (s *liveClassificationService) HasAnyHallucinationDetector() bool {
 }
 
 func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
-	current, release := s.borrow()
+	current, release := s.acquire()
 	defer release()
 	if inventory, ok := current.(classificationInventoryReadinessService); ok {
 		return inventory.HasAnyHallucinationExplainer()
@@ -221,7 +221,7 @@ func (s *liveClassificationService) HasAnyHallucinationExplainer() bool {
 }
 
 func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
-	current, release := s.borrow()
+	current, release := s.acquire()
 	defer release()
 	if inventory, ok := current.(classificationInventoryReadinessService); ok {
 		return inventory.HasAnyFeedbackDetector()
@@ -230,13 +230,13 @@ func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
 }
 
 func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	svc.UpdateConfig(newConfig)
 }
 
 func (s *liveClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
-	svc, release := s.borrow()
+	svc, release := s.acquire()
 	defer release()
 	svc.RefreshRuntimeConfig(newConfig)
 }
