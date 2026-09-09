@@ -5,6 +5,7 @@ package connector
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // Operation describes one static operation in a remote model protocol.
@@ -83,7 +86,33 @@ func validateOptions(options Options) error {
 }
 
 // Do invokes an operation and returns its bounded successful response body.
+//
+// Every call is recorded once, however it ended, with the wall time the
+// caller actually waited - retries included - so a remote classifier's health
+// is visible to whoever operates it rather than only to the signal that
+// failed.
 func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
+	start := time.Now()
+	responseBody, err := c.do(ctx, operation, body)
+	metrics.RecordRemoteConnectorRequest(operation.Name, connectorOutcome(err), time.Since(start).Seconds())
+	return responseBody, err
+}
+
+// connectorOutcome maps a call's result onto the metrics outcome label: the
+// success constant, or the connector's own error kind, so a dashboard can tell
+// a down remote from an overloaded or misconfigured one.
+func connectorOutcome(err error) string {
+	if err == nil {
+		return metrics.RemoteConnectorOutcomeSuccess
+	}
+	var connectorErr *Error
+	if errors.As(err, &connectorErr) && connectorErr != nil {
+		return string(connectorErr.Kind)
+	}
+	return "error"
+}
+
+func (c *Client) do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
 	if err := validateOperation(operation); err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
 	}
@@ -106,6 +135,7 @@ func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]by
 		if !connectorErr.Retryable || attempt > c.options.MaxRetries {
 			return nil, connectorErr
 		}
+		metrics.RecordRemoteConnectorRetry(operation.Name)
 		if err := waitBeforeRetry(ctx, attempt); err != nil {
 			return nil, &Error{
 				Kind:      KindTransport,

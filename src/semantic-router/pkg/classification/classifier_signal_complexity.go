@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
@@ -22,6 +23,7 @@ func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *Sign
 	logging.Debugf("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("complexity rule evaluation failed: %v", err)
+		c.recordComplexityFailure(results, mu)
 		return
 	}
 
@@ -31,6 +33,7 @@ func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *Sign
 		matchName := fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty)
 		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
 		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
+		metrics.RecordComplexityVerdict(result.RuleName, result.Difficulty, result.SignalSource)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
 		// A signal that reports no confidence leaves the key absent, which the
 		// decision engine reads as its structural default while marking the
@@ -39,13 +42,7 @@ func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *Sign
 		if result.ConfidenceReported {
 			results.SignalConfidences["complexity:"+matchName] = result.Confidence
 		}
-		results.SignalValues["complexity:"+result.RuleName+":text_hard_score"] = result.TextHardScore
-		results.SignalValues["complexity:"+result.RuleName+":text_easy_score"] = result.TextEasyScore
-		results.SignalValues["complexity:"+result.RuleName+":text_margin"] = result.TextMargin
-		results.SignalValues["complexity:"+result.RuleName+":image_hard_score"] = result.ImageHardScore
-		results.SignalValues["complexity:"+result.RuleName+":image_easy_score"] = result.ImageEasyScore
-		results.SignalValues["complexity:"+result.RuleName+":image_margin"] = result.ImageMargin
-		results.SignalValues["complexity:"+result.RuleName+":margin"] = result.FusedMargin
+		publishComplexityValues(results.SignalValues, result)
 		if result.ConfidenceReported && result.Confidence > bestConfidence {
 			bestConfidence = result.Confidence
 		}
