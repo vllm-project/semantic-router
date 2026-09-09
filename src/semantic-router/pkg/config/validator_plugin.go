@@ -6,19 +6,20 @@ import (
 )
 
 var decisionPluginPayloadFactories = map[string]func() interface{}{
-	DecisionPluginResponseCache:      func() interface{} { return &ResponseCachePluginConfig{} },
-	DecisionPluginSystemPrompt:       func() interface{} { return &SystemPromptPluginConfig{} },
-	DecisionPluginHeaderMutation:     func() interface{} { return &HeaderMutationPluginConfig{} },
-	DecisionPluginHallucination:      func() interface{} { return &HallucinationPluginConfig{} },
-	DecisionPluginResponseJailbreak:  func() interface{} { return &ResponseJailbreakPluginConfig{} },
-	DecisionPluginRouterReplay:       func() interface{} { return &RouterReplayPluginConfig{} },
-	DecisionPluginMemory:             func() interface{} { return &MemoryPluginConfig{} },
-	DecisionPluginRAG:                func() interface{} { return &RAGPluginConfig{} },
-	DecisionPluginFastResponse:       func() interface{} { return &FastResponsePluginConfig{} },
-	DecisionPluginRequestParams:      func() interface{} { return &RequestParamsPluginConfig{} },
-	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
-	DecisionPluginToolSelection:      func() interface{} { return &ToolSelectionPluginConfig{} },
-	DecisionPluginContextCompression: func() interface{} { return &ContextCompressionPluginConfig{} },
+	DecisionPluginDecisionDiagnostics: func() interface{} { return &DecisionDiagnosticsPluginConfig{} },
+	DecisionPluginResponseCache:       func() interface{} { return &ResponseCachePluginConfig{} },
+	DecisionPluginSystemPrompt:        func() interface{} { return &SystemPromptPluginConfig{} },
+	DecisionPluginHeaderMutation:      func() interface{} { return &HeaderMutationPluginConfig{} },
+	DecisionPluginHallucination:       func() interface{} { return &HallucinationPluginConfig{} },
+	DecisionPluginResponseJailbreak:   func() interface{} { return &ResponseJailbreakPluginConfig{} },
+	DecisionPluginRouterReplay:        func() interface{} { return &RouterReplayPluginConfig{} },
+	DecisionPluginMemory:              func() interface{} { return &MemoryPluginConfig{} },
+	DecisionPluginRAG:                 func() interface{} { return &RAGPluginConfig{} },
+	DecisionPluginFastResponse:        func() interface{} { return &FastResponsePluginConfig{} },
+	DecisionPluginRequestParams:       func() interface{} { return &RequestParamsPluginConfig{} },
+	DecisionPluginTools:               func() interface{} { return &ToolsPluginConfig{} },
+	DecisionPluginToolSelection:       func() interface{} { return &ToolSelectionPluginConfig{} },
+	DecisionPluginContextCompression:  func() interface{} { return &ContextCompressionPluginConfig{} },
 }
 
 func validateDecisionPluginPayload(

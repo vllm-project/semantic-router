@@ -129,6 +129,8 @@ runtime dependency; they do not define routing behavior by themselves.
   reduce the eligible pool below that contract.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
+- Route-local `decision_diagnostics` emits bounded, content-free ExtProc dynamic
+  metadata for following filters. It is opt-in and independent of Router Replay.
 - Router replay is disabled by default and can capture request or response
   bodies. Review its access controls and retention settings before enabling it.
 - `global.router.skip_processing.enabled` should be enabled only when an

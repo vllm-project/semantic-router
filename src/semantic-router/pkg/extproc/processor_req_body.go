@@ -28,7 +28,11 @@ type requestDecisionState struct {
 func (r *OpenAIRouter) handleRequestBody(
 	v *ext_proc.ProcessingRequest_RequestBody,
 	ctx *RequestContext,
-) (*ext_proc.ProcessingResponse, error) {
+) (response *ext_proc.ProcessingResponse, err error) {
+	defer func() {
+		attachDecisionDiagnosticsOnSuccess(response, err, ctx)
+	}()
+
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)

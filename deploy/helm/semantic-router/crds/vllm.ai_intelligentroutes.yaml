@@ -142,6 +142,7 @@ spec:
                               semantic_cache, and response-cache are deprecated aliases.
                             enum:
                             - context_compression
+                            - decision_diagnostics
                             - fast_response
                             - hallucination
                             - header_mutation

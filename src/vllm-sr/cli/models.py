@@ -740,6 +740,7 @@ class PluginType(str, Enum):
     HEADER_MUTATION = "header_mutation"
     HALLUCINATION = "hallucination"
     ROUTER_REPLAY = "router_replay"
+    DECISION_DIAGNOSTICS = "decision_diagnostics"
     MEMORY = "memory"
     RAG = "rag"
     FAST_RESPONSE = "fast_response"

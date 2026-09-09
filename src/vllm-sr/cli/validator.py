@@ -18,6 +18,7 @@ from cli.models import (
     RAGPluginConfig,
 )
 from cli.terminal import echo, error as terminal_error
+from cli.plugin_decision_diagnostics import DecisionDiagnosticsPluginConfig
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
@@ -312,6 +313,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.DECISION_DIAGNOSTICS.value: DecisionDiagnosticsPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
