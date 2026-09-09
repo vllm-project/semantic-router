@@ -11,6 +11,9 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+MIN_BIN_COUNT = 2
+MAX_BIN_COUNT = 100
+
 __all__ = [
     "abstention_curve",
     "calibration_metrics",
@@ -33,7 +36,9 @@ def classification_metrics(
     per_label: dict[str, dict[str, Any]] = {}
     for name, index in label_mapping.items():
         true_positive = sum(
-            1 for true, pred in zip(y_true, y_pred) if true == index and pred == index
+            1
+            for true, pred in zip(y_true, y_pred, strict=True)
+            if true == index and pred == index
         )
         predicted = sum(1 for pred in y_pred if pred == index)
         support = sum(1 for true in y_true if true == index)
@@ -49,10 +54,10 @@ def classification_metrics(
         }
 
     rows = len(y_true)
-    correct = sum(1 for true, pred in zip(y_true, y_pred) if true == pred)
+    correct = sum(1 for true, pred in zip(y_true, y_pred, strict=True) if true == pred)
     scores = [entry["f1"] for entry in per_label.values()]
     weights = [entry["support"] for entry in per_label.values()]
-    weighted = sum(f1 * support for f1, support in zip(scores, weights))
+    weighted = sum(f1 * support for f1, support in zip(scores, weights, strict=True))
     return {
         "rows": rows,
         "accuracy": correct / rows,
@@ -73,14 +78,16 @@ def calibration_metrics(
     Confidence is the probability the model gave the label it predicted, so a
     bin's accuracy is how often that prediction was right.
     """
-    if not 2 <= bin_count <= 100:
-        raise ValueError("bin_count must be between 2 and 100")
+    if not MIN_BIN_COUNT <= bin_count <= MAX_BIN_COUNT:
+        raise ValueError(
+            f"bin_count must be between {MIN_BIN_COUNT} and {MAX_BIN_COUNT}"
+        )
     if not (len(y_true) == len(y_pred) == len(confidences)):
         raise ValueError("labels, predictions and confidences must align")
     if not y_true:
         raise ValueError("an evaluation needs at least one row")
 
-    hits = [1 if true == pred else 0 for true, pred in zip(y_true, y_pred)]
+    hits = [1 if true == pred else 0 for true, pred in zip(y_true, y_pred, strict=True)]
     bins: list[dict[str, Any]] = []
     expected = 0.0
     maximum = 0.0
@@ -122,7 +129,8 @@ def calibration_metrics(
         )
 
     brier = sum(
-        (confidence - hit) ** 2 for confidence, hit in zip(confidences, hits)
+        (confidence - hit) ** 2
+        for confidence, hit in zip(confidences, hits, strict=True)
     ) / len(y_true)
     return {
         "bin_count": bin_count,

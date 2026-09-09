@@ -3,10 +3,17 @@ config:
   listeners: []
   providers:
     defaults:
-      model: base-model
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy and
+      # logs a correctly selected backend - which is what made this look like a
+      # router bug rather than a routing one.
+      model: general-expert
     models:
-      - name: base-model
-        provider_model_id: base-model
+      - name: general-expert
+        provider_model_id: general-expert
         backend_refs:
           - name: local-vllm
             provider: vllm
@@ -14,7 +21,7 @@ config:
             weight: 1
   routing:
     modelCards:
-      - name: base-model
+      - name: general-expert
     signals:
       domains:
         - name: math
@@ -29,7 +36,7 @@ config:
             - type: domain
               name: math
         modelRefs:
-          - model: base-model
+          - model: general-expert
             use_reasoning: false
       - name: default-route
         description: Fallback route for non-math requests
@@ -38,7 +45,7 @@ config:
           operator: AND
           conditions: []
         modelRefs:
-          - model: base-model
+          - model: general-expert
             use_reasoning: false
   global:
     router:
@@ -71,9 +78,16 @@ config:
         max_responses: 1000
 
 resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout - which is the 1h23m job, not
+  # a slow test. The router still loads the local mmbert embedding model the
+  # response cache is configured with; taking the classifier off-box does not
+  # avoid that, because the embedding models are gated separately from the
+  # classifier backend. A roomier machine survives 2Gi and fails later at the
+  # gateway instead, which is how this looked like two different bugs.
   limits:
-    memory: 2Gi
+    memory: 6Gi
     cpu: "2"
   requests:
-    memory: 512Mi
+    memory: 2Gi
     cpu: 250m

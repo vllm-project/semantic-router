@@ -104,6 +104,9 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("modality", "modality", "modality", "modality_rules"),
     SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
+    SignalFamilySpec(
+        "hallucination", "hallucination", "hallucination", "hallucination"
+    ),
     SignalFamilySpec("pii", "pii", "pii", "pii"),
     SignalFamilySpec("kb", "kb", "kb", "kb"),
     SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),

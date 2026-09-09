@@ -92,12 +92,12 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
+from jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
 from jailbreak_training_assets import (
     DATASET_CONFIGS,
     LONG_JAILBREAK_PATTERNS,
     SHORT_JAILBREAK_PATTERNS,
 )
-from jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
 from jailbreak_training_helpers import (
     compute_security_metrics,
     create_security_training_args,
@@ -653,9 +653,9 @@ def main(
         batch_size=training_args.per_device_eval_batch_size,
         max_length=MAX_SEQUENCE_LENGTH,
         device=device.type,
-        device_name=torch.cuda.get_device_name(device)
-        if device.type == "cuda"
-        else None,
+        device_name=(
+            torch.cuda.get_device_name(device) if device.type == "cuda" else None
+        ),
         sample_limit=max_samples,
         y_true=y_true,
         y_pred=y_pred,

@@ -23,6 +23,7 @@ from provenance.crossref import artifact_identity_digest, validate_bundle  # noq
 from provenance.manifest import load_manifest  # noqa: E402
 
 FAKE_REVISION = "a" * 40
+EVALUATED_ACCURACY = 0.75
 DATASET_REVISION = "b" * 40
 BASE_MODEL_REVISION = "c" * 40
 SEED = 42
@@ -64,9 +65,9 @@ def pins():
             "repo": "jhu-clsp/mmBERT-base",
             "revision": BASE_MODEL_REVISION,
         },
-        "datasets": {
-            key: DATASET_REVISION for key in jailbreak_provenance.DATASET_CONFIGS
-        },
+        "datasets": dict.fromkeys(
+            jailbreak_provenance.DATASET_CONFIGS, DATASET_REVISION
+        ),
     }
 
 
@@ -241,7 +242,8 @@ def test_evaluation_manifest_describes_the_artifact_it_measured(emitted):
     """The bundle a run leaves behind includes what the adapter scored."""
     path = jailbreak_provenance.emit_evaluation_manifest(
         manifest_dir=emitted,
-        artifact_manifest_path=emitted / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
+        artifact_manifest_path=emitted
+        / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
         dataset_manifest_path=emitted / "prompt-guard-mixture-max200.manifest.yaml",
         label_to_id={"benign": 0, "jailbreak": 1},
         seed=SEED,
@@ -262,15 +264,16 @@ def test_evaluation_manifest_describes_the_artifact_it_measured(emitted):
     artifact = read(emitted, "prompt-guard-mmbert-base-r8-lora.manifest.yaml")
     assert evaluation["artifact_ref"]["digest"] == artifact["identity"]["digest"]
     assert evaluation["dataset_ref"]["splits"] == ["validation"]
-    assert evaluation["metrics"]["rows"] == 4
-    assert evaluation["metrics"]["accuracy"] == 0.75
+    assert evaluation["metrics"]["rows"] == len(VAL_ROWS)
+    assert evaluation["metrics"]["accuracy"] == EVALUATED_ACCURACY
 
 
 def test_evaluation_manifest_states_the_split_it_was_measured_on(emitted):
     """This workflow splits its own mixture by row, and the manifest says so."""
     path = jailbreak_provenance.emit_evaluation_manifest(
         manifest_dir=emitted,
-        artifact_manifest_path=emitted / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
+        artifact_manifest_path=emitted
+        / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
         dataset_manifest_path=emitted / "prompt-guard-mixture-max200.manifest.yaml",
         label_to_id={"benign": 0, "jailbreak": 1},
         seed=SEED,
@@ -293,7 +296,8 @@ def test_the_run_leaves_a_bundle_that_cross_references(emitted):
     """Dataset, run, artifact and evaluation have to hold together as a set."""
     jailbreak_provenance.emit_evaluation_manifest(
         manifest_dir=emitted,
-        artifact_manifest_path=emitted / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
+        artifact_manifest_path=emitted
+        / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
         dataset_manifest_path=emitted / "prompt-guard-mixture-max200.manifest.yaml",
         label_to_id={"benign": 0, "jailbreak": 1},
         seed=SEED,
