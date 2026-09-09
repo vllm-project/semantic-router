@@ -13,6 +13,7 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 		IncludeAnalysis:              true,
 		IncludeIntermediateResponses: true,
 	}
+	recipeOwnsExecution := req.Algorithm != nil && req.Algorithm.Type == config.DecisionAlgorithmFusion
 
 	algorithmHasAnalysisModels := req.Algorithm != nil &&
 		req.Algorithm.Fusion != nil &&
@@ -27,7 +28,17 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 		cfg.AnalysisModels = modelRefsToNames(req.ModelRefs)
 	}
 	if req.Fusion != nil && fusionRequestEnabled(req.Fusion) {
-		mergeFusionRequestConfig(&cfg, req.Fusion)
+		if recipeOwnsExecution {
+			// The selected decision owns every execution control. Requests may
+			// carry only call-level choices for exposing existing trace data.
+			mergeFusionTraceVisibility(
+				&cfg,
+				req.Fusion.IncludeAnalysis,
+				req.Fusion.IncludeIntermediateResponses,
+			)
+		} else {
+			mergeFusionRequestConfig(&cfg, req.Fusion)
+		}
 	}
 	return normalizeFusionExecutionConfig(cfg)
 }
@@ -161,14 +172,22 @@ func mergeFusionControls(
 	if temperature != nil {
 		dst.Temperature = temperature
 	}
+	mergeFusionTraceVisibility(dst, includeAnalysis, includeIntermediateResponses)
+	if onError != "" {
+		dst.OnError = onError
+	}
+}
+
+func mergeFusionTraceVisibility(
+	dst *fusionExecutionConfig,
+	includeAnalysis *bool,
+	includeIntermediateResponses *bool,
+) {
 	if includeAnalysis != nil {
 		dst.IncludeAnalysis = *includeAnalysis
 	}
 	if includeIntermediateResponses != nil {
 		dst.IncludeIntermediateResponses = *includeIntermediateResponses
-	}
-	if onError != "" {
-		dst.OnError = onError
 	}
 }
 
@@ -241,9 +260,9 @@ func normalizeModelNames(names []string) []string {
 	return result
 }
 
-// mergeFusionAnalysisOverrides layers per-model overrides field-wise, so a
-// request that sets only one sampling field keeps the decision-level value for
-// every other field of the same model.
+// mergeFusionAnalysisOverrides accumulates sparse per-model overrides
+// field-wise, preserving an existing sampling field when an incoming entry
+// omits it.
 func mergeFusionAnalysisOverrides(dst *fusionExecutionConfig, overrides []config.FusionModelOverride) {
 	if len(overrides) == 0 {
 		return
