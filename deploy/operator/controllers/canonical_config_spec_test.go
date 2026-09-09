@@ -44,6 +44,13 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 						ModelID:        "pii-classifier",
 						Threshold:      "0.7",
 						PIIMappingPath: "/config/pii.yaml",
+						Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
+							Protocol:   "http_classify",
+							Contract:   "token_spans.v1",
+							Model:      "pii-spans",
+							DeadlineMs: ptr.To(3000),
+						},
+						OnError: "block",
 					},
 				},
 				ComplexityRules: []vllmv1alpha1.ComplexityRulesConfig{
@@ -391,6 +398,22 @@ func assertOperatorClassifierConfig(t *testing.T, classifier routerconfig.Canoni
 	}
 	if classifier.PII.ModelID != "pii-classifier" || classifier.PII.PIIMappingPath != "/config/pii.yaml" {
 		t.Fatalf("unexpected PII classifier: %#v", classifier.PII)
+	}
+	// The remote PII backend and its failure policy must reach the runtime
+	// config with the router's own field names (#2922); the router's
+	// ValidatePIIModelBackend, not the operator, then decides whether it resolves.
+	piiBackend := classifier.PII.Backend
+	if piiBackend == nil {
+		t.Fatalf("PII backend was not carried onto the canonical config: %#v", classifier.PII)
+	}
+	if piiBackend.Protocol != "http_classify" || piiBackend.Contract != "token_spans.v1" || piiBackend.Model != "pii-spans" {
+		t.Fatalf("unexpected PII backend: %#v", piiBackend)
+	}
+	if piiBackend.DeadlineMs == nil || *piiBackend.DeadlineMs != 3000 {
+		t.Fatalf("PII backend deadline_ms did not survive conversion: %#v", piiBackend.DeadlineMs)
+	}
+	if !classifier.PII.IsBlock() {
+		t.Fatalf("PII on_error did not survive conversion: %q", classifier.PII.OnError)
 	}
 }
 

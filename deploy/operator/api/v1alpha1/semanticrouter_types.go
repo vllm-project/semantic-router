@@ -1225,8 +1225,9 @@ type RemoteClassifierBackendConfig struct {
 	// Contract is the response shape the signal reads. Complexity reads two -
 	// score.v1, one regression number interpreted through each rule's
 	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-	// so the router requires it there rather than guessing per request.
-	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1
+	// so the router requires it there rather than guessing per request. PII
+	// reads token_spans.v1, entity spans with code-point offsets.
+	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1
 	// +optional
 	Contract string `json:"contract,omitempty"`
 
@@ -1451,6 +1452,17 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
+	// Backend names a remote token classifier speaking token_spans.v1. Its
+	// absence keeps local PII inference. The router refuses a backend combined
+	// with use_mmbert_32k at load, the same rule domain.backend follows.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// OnError selects what a PII backend failure, or a provider-declared
+	// truncation, does to the rule that consumed it: allow (default) treats the
+	// content as not matching, block matches it as classification_error.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // APIConfig defines API configuration
