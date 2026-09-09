@@ -35,6 +35,12 @@ Dataset:
       * Format: Question-answer pairs with category labels
       * Source: Downloaded from Hugging Face with automatic caching
       * Quality: High-quality academic questions with verified category labels
+      * Splits: MMLU-Pro ships only 'validation' (70 rows) and 'test' (12032 rows),
+        so the training pool has to come out of 'test'. HELDOUT_FRACTION of 'test'
+        is reserved before any sampling and never used for gradients, and the
+        reserved row indices are written to heldout_eval.json next to the model.
+        Accuracy over the whole 'test' split is therefore NOT held-out evidence;
+        quote the held-out number instead.
 
 Key Features:
     - LoRA (Low-Rank Adaptation) for multi-class intent classification
@@ -45,7 +51,7 @@ Key Features:
     - Configurable LoRA hyperparameters (rank, alpha, dropout)
     - Real-time MMLU-Pro dataset loading and preprocessing
     - Comprehensive evaluation metrics (accuracy, F1, precision, recall)
-    - Automatic train/validation/test split with stratification
+    - Stratified held-out slice reserved before sampling, never used for gradients
     - Model checkpointing and best model selection
     - Built-in inference testing with sample questions
     - Auto-merge functionality: Generates both LoRA adapters and Rust-compatible models
@@ -55,19 +61,17 @@ Key Features:
 """
 
 import json
-import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from torch import nn
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -75,18 +79,25 @@ from transformers import (
     TrainingArguments,
 )
 
-# Import common LoRA utilities
+# Import the dependency-light held-out split helpers (kept importable by the
+# stdlib-only contract tests) and the common LoRA utilities.
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_lora_utils import (
     clear_gpu_memory,
     create_lora_config,
-    find_free_gpu,
     get_all_gpu_info,
     log_memory_usage,
     resolve_model_path,
     set_gpu_device,
     setup_logging,
-    validate_lora_config,
+)
+from heldout_split import (
+    MANIFEST_NAME,
+    SPLIT_SEED,
+    build_manifest,
+    drop_reserved_questions,
+    reserve_heldout,
 )
 
 # Setup logging
@@ -111,7 +122,7 @@ REQUIRED_CATEGORIES = [
 ]
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
+def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
     Create tokenizer with model-specific configuration.
 
@@ -133,7 +144,7 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
 DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
 
 
-class MMLU_Dataset:
+class MMLUDataset:
     """Dataset class for MMLU-Pro category classification fine-tuning with supplement data."""
 
     def __init__(
@@ -152,6 +163,11 @@ class MMLU_Dataset:
         self.supplement_dataset = supplement_dataset
         self.label2id = {}
         self.id2label = {}
+        # Rows reserved out of MMLU-Pro 'test' before sampling, populated by
+        # load_huggingface_dataset. Never reaches the training pool.
+        self.heldout_indices = []
+        self.heldout_texts = []
+        self.heldout_labels = []
 
     def _load_supplement_data(self) -> list:
         """
@@ -172,7 +188,7 @@ class MMLU_Dataset:
             data = (
                 supplement["train"]
                 if "train" in supplement
-                else supplement[list(supplement.keys())[0]]
+                else supplement[next(iter(supplement.keys()))]
             )
 
             samples = [(item["text"], item["label"]) for item in data]
@@ -191,18 +207,43 @@ class MMLU_Dataset:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            # Extract questions and categories from the test split
-            # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = list(dataset["test"]["question"])
-            all_labels = list(dataset["test"]["category"])
+            # MMLU-Pro ships only 'validation' (70 rows) and 'test' (12032 rows),
+            # so the training pool has to be carved out of 'test'.
+            test_texts = list(dataset["test"]["question"])
+            test_labels = list(dataset["test"]["category"])
+            logger.info(f"MMLU-Pro 'test' rows: {len(test_texts)}")
 
-            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+            # Reserve the evaluation rows before any sampling, so nothing that is
+            # scored later can reach the gradient path.
+            pool_indices, heldout_indices = reserve_heldout(test_texts, test_labels)
+            self.heldout_indices = heldout_indices
+            self.heldout_texts = [test_texts[i] for i in heldout_indices]
+            self.heldout_labels = [test_labels[i] for i in heldout_indices]
+            logger.info(f"Reserved {len(heldout_indices)} rows as held-out")
+
+            repeats = len(test_texts) - len(heldout_indices) - len(pool_indices)
+            if repeats:
+                logger.info(
+                    f"Dropped {repeats} pool rows that repeat a held-out question"
+                )
+
+            all_texts = [test_texts[i] for i in pool_indices]
+            all_labels = [test_labels[i] for i in pool_indices]
+            logger.info(f"MMLU-Pro training pool: {len(all_texts)}")
 
             # Load and merge supplementary training data
             # This includes casual "other" examples for better fallback detection
-            supplement_samples = self._load_supplement_data()
+            raw_supplement = self._load_supplement_data()
+            supplement_samples = drop_reserved_questions(
+                raw_supplement, self.heldout_texts
+            )
+            if len(supplement_samples) != len(raw_supplement):
+                logger.warning(
+                    f"Dropped {len(raw_supplement) - len(supplement_samples)} "
+                    "supplement samples that repeat a held-out question"
+                )
             if supplement_samples:
-                supp_texts, supp_labels = zip(*supplement_samples)
+                supp_texts, supp_labels = zip(*supplement_samples, strict=True)
                 all_texts.extend(supp_texts)
                 all_labels.extend(supp_labels)
                 logger.info(f"Added {len(supplement_samples)} supplement samples")
@@ -211,7 +252,7 @@ class MMLU_Dataset:
 
             # Group samples by category
             category_samples = {}
-            for text, label in zip(all_texts, all_labels):
+            for text, label in zip(all_texts, all_labels, strict=True):
                 if label not in category_samples:
                     category_samples[label] = []
                 category_samples[label].append(text)
@@ -313,7 +354,7 @@ class MMLU_Dataset:
         texts, labels = self.load_huggingface_dataset(max_samples)
 
         # Create label mapping using required categories order for consistency
-        unique_labels = sorted(list(set(labels)))
+        unique_labels = sorted(set(labels))
 
         # Ensure we use the same order as legacy model for consistency
         ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
@@ -330,48 +371,69 @@ class MMLU_Dataset:
         # Convert labels to IDs
         label_ids = [self.label2id[label] for label in labels]
 
-        # Split the data
-        train_texts, temp_texts, train_labels, temp_labels = train_test_split(
-            texts, label_ids, test_size=0.4, random_state=42, stratify=label_ids
+        # Split the sampled pool into train and validation. Both sides of this
+        # split are training data; the evaluation set is the slice reserved in
+        # load_huggingface_dataset, not a cut of this pool.
+        train_texts, val_texts, train_labels, val_labels = train_test_split(
+            texts,
+            label_ids,
+            test_size=0.2,
+            random_state=SPLIT_SEED,
+            stratify=label_ids,
         )
 
-        val_texts, test_texts, val_labels, test_labels = train_test_split(
-            temp_texts,
-            temp_labels,
-            test_size=0.5,
-            random_state=42,
-            stratify=temp_labels,
-        )
+        # Reserved rows carry MMLU-Pro categories, which are all required
+        # categories, but guard against a category the pool never produced.
+        heldout_pairs = [
+            (text, self.label2id[label])
+            for text, label in zip(self.heldout_texts, self.heldout_labels, strict=True)
+            if label in self.label2id
+        ]
+        heldout_texts = [text for text, _ in heldout_pairs]
+        heldout_labels = [label for _, label in heldout_pairs]
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
-        logger.info(f"  Test: {len(test_texts)}")
+        logger.info(f"  Held-out: {len(heldout_texts)}")
 
         return {
             "train": (train_texts, train_labels),
             "validation": (val_texts, val_labels),
-            "test": (test_texts, test_labels),
+            "heldout": (heldout_texts, heldout_labels),
         }
 
 
 def create_mmlu_dataset(max_samples=1000):
     """Create MMLU-Pro dataset using real data."""
-    dataset_loader = MMLU_Dataset()
+    dataset_loader = MMLUDataset()
     datasets = dataset_loader.prepare_datasets(max_samples)
 
     train_texts, train_labels = datasets["train"]
     val_texts, val_labels = datasets["validation"]
+    heldout_texts, heldout_labels = datasets["heldout"]
 
     # Convert to the format expected by our training
     sample_data = []
-    for text, label in zip(train_texts + val_texts, train_labels + val_labels):
+    for text, label in zip(
+        train_texts + val_texts, train_labels + val_labels, strict=True
+    ):
         sample_data.append({"text": text, "label": label})
 
+    heldout = {
+        "data": [
+            {"text": text, "label": label}
+            for text, label in zip(heldout_texts, heldout_labels, strict=True)
+        ],
+        "row_indices": dataset_loader.heldout_indices,
+        "dataset": dataset_loader.dataset_name,
+    }
+
     logger.info(f"Created dataset with {len(sample_data)} samples")
+    logger.info(f"Held-out evaluation samples: {len(heldout['data'])}")
     logger.info(f"Label mapping: {dataset_loader.label2id}")
 
-    return sample_data, dataset_loader.label2id, dataset_loader.id2label
+    return sample_data, heldout, dataset_loader.label2id, dataset_loader.id2label
 
 
 class EnhancedLoRATrainer(Trainer):
@@ -487,10 +549,10 @@ def main(
     batch_size: int = 8,
     learning_rate: float = 3e-5,  # Reduced from 1e-4 to prevent gradient explosion
     max_samples: int = 1000,
-    output_dir: str = None,
+    output_dir: str | None = None,
     enable_feature_alignment: bool = False,
     alignment_weight: float = 0.1,
-    gpu_id: int = None,
+    gpu_id: int | None = None,
 ):
     """Main training function for LoRA intent classification."""
     logger.info("Starting Enhanced LoRA Intent Classification Training")
@@ -498,10 +560,10 @@ def main(
     # GPU selection and device configuration
     if gpu_id is not None:
         logger.info(f"Using specified GPU: {gpu_id}")
-        device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
+        _device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
     else:
         logger.info("Auto-selecting best available GPU...")
-        device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
+        _device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
 
     # Log all GPU info
     all_gpus = get_all_gpu_info()
@@ -532,11 +594,16 @@ def main(
         raise
 
     # Load real MMLU-Pro dataset
-    all_data, category_to_idx, idx_to_category = create_mmlu_dataset(max_samples)
-    train_data, val_data = train_test_split(all_data, test_size=0.2, random_state=42)
+    all_data, heldout, category_to_idx, idx_to_category = create_mmlu_dataset(
+        max_samples
+    )
+    train_data, val_data = train_test_split(
+        all_data, test_size=0.2, random_state=SPLIT_SEED
+    )
 
     logger.info(f"Training samples: {len(train_data)}")
     logger.info(f"Validation samples: {len(val_data)}")
+    logger.info(f"Held-out evaluation samples: {len(heldout['data'])}")
     logger.info(f"Categories: {len(category_to_idx)}")
 
     # Create LoRA model
@@ -545,6 +612,7 @@ def main(
     # Prepare datasets
     train_dataset = tokenize_data(train_data, tokenizer)
     val_dataset = tokenize_data(val_data, tokenizer)
+    heldout_dataset = tokenize_data(heldout["data"], tokenizer)
 
     # Setup output directory
     if output_dir is None:
@@ -617,12 +685,28 @@ def main(
     logger.info(f"LoRA adapter saved to: {output_dir}")
     logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
 
-    # Final evaluation
+    # Final evaluation. The validation set comes out of the training pool, so it
+    # only measures fit; the reserved rows are the ones the model never saw.
     logger.info("Final evaluation on validation set...")
     val_results = trainer.evaluate()
-    logger.info("Validation Results:")
+    logger.info("Validation Results (drawn from the training pool, not held out):")
     logger.info(f"  Accuracy: {val_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {val_results['eval_f1']:.4f}")
+
+    logger.info("Evaluating on the reserved MMLU-Pro rows...")
+    heldout_results = trainer.evaluate(eval_dataset=heldout_dataset)
+    logger.info("Held-out Results:")
+    logger.info(f"  Accuracy: {heldout_results['eval_accuracy']:.4f}")
+    logger.info(f"  F1: {heldout_results['eval_f1']:.4f}")
+
+    # Record which rows were reserved, so the number above can be reproduced and
+    # the trained rows excluded from any later scoring of the public split.
+    heldout_manifest = build_manifest(
+        heldout["row_indices"], heldout_results, dataset=heldout["dataset"]
+    )
+    with open(os.path.join(output_dir, MANIFEST_NAME), "w") as f:
+        json.dump(heldout_manifest, f, indent=2)
+    logger.info(f"Saved held-out row indices and metrics to {MANIFEST_NAME}")
 
 
 def merge_lora_adapter_to_full_model(
@@ -636,7 +720,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
     num_labels = len(mapping_data["idx_to_category"])
 
@@ -670,7 +754,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping for Rust compatibility
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Update id2label mapping with actual intent classification labels
@@ -684,8 +768,9 @@ def merge_lora_adapter_to_full_model(
             "Updated config.json with correct intent classification label mappings"
         )
 
-    # Copy important files from LoRA adapter
-    for file_name in ["label_mapping.json"]:
+    # Copy important files from LoRA adapter. heldout_eval.json rides along so the
+    # merged artifact carries the evidence for the accuracy quoted against it.
+    for file_name in ["label_mapping.json", MANIFEST_NAME]:
         src_file = Path(lora_adapter_path) / file_name
         if src_file.exists():
             shutil.copy(src_file, Path(output_path) / file_name)
@@ -730,7 +815,7 @@ def demo_inference(model_path: str, model_name: str = "modernbert-base"):
 
     try:
         # Load label mapping first to get the correct number of labels
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         idx_to_category = {
             int(k): v for k, v in mapping_data["idx_to_category"].items()

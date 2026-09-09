@@ -59,10 +59,22 @@ Each rule is an inclusive token band: it matches when
   are allowed and both names appear in `x-vsr-matched-context`.
 - Gaps and overlaps between bands are logged as warnings when the config
   loads. Requests inside a gap match no context rule.
-- Validation rejects a rule with neither limit, unparsable or negative
-  values, and `min_tokens` above `max_tokens`.
+- Validation rejects a rule with neither limit, unparsable, negative, or
+  oversized values, and `min_tokens` above `max_tokens`. The Router, the `vllm-sr`
+  CLI, and the Dashboard apply the same rules, so a band that passes
+  `vllm-sr validate` also loads in the Router.
 
 Values accept `K` and `M` suffixes (`1.5K`, `0.5M`).
+
+An unquoted limit is typed by the Router's YAML decoder before it is parsed,
+following YAML 1.1 rules: `0123` is octal 83, `0x10` is 16, `1_000` is 1000,
+and `1:30` is not a number. Quote a value to keep it literal, so `'0123'` is
+123. The `vllm-sr` CLI applies the same typing, so its validation matches what
+the Router loads from the forwarded file.
+
+A limit may reference an environment variable, such as `${CTX_MIN}`. The
+Router expands it when the config loads, so the CLI accepts that band with a
+warning instead of checking it.
 
 ```yaml
 routing:
