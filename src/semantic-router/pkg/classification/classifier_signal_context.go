@@ -128,6 +128,7 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFacts(
 		imageURL,
 		requestFacts,
 		nil,
+		false,
 		nil,
 		false,
 	)
@@ -164,6 +165,7 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
 		imageURL,
 		requestFacts,
 		nil,
+		false,
 		decisions,
 		true,
 	)
@@ -183,6 +185,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 	imageURL string,
 	requestFacts RequestFacts,
 	toolResultTexts []string,
+	toolResultScanIncomplete bool,
 	signalScope []config.Decision,
 	signalScopeSet bool,
 ) *SignalResults {
@@ -240,6 +243,7 @@ func (c *Classifier) evaluateAllSignalsWithContext(
 		priorUserMessages,
 		nonUserMessages,
 		toolResultTexts,
+		toolResultScanIncomplete,
 		hasPriorAssistantReply,
 		imgArg,
 		imgCache,

@@ -12,27 +12,29 @@ import (
 )
 
 type signalEvaluationInput struct {
-	evaluationText         string
-	allMessagesText        string
-	compressedText         string
-	skipCompressionSignals map[string]bool
-	currentUserText        string
-	priorUserMessages      []string
-	toolResultTexts        []string
-	hasAssistantReply      bool
-	conversationFacts      classification.ConversationFacts
-	requestFacts           classification.RequestFacts
+	evaluationText           string
+	allMessagesText          string
+	compressedText           string
+	skipCompressionSignals   map[string]bool
+	currentUserText          string
+	priorUserMessages        []string
+	toolResultTexts          []string
+	toolResultScanIncomplete bool
+	hasAssistantReply        bool
+	conversationFacts        classification.ConversationFacts
+	requestFacts             classification.RequestFacts
 }
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
 	input := signalEvaluationInput{
-		evaluationText:    history.currentUserMessage,
-		compressedText:    history.currentUserMessage,
-		allMessagesText:   strings.Join(history.nonUserMessages, " "),
-		currentUserText:   history.currentUserMessage,
-		priorUserMessages: append([]string(nil), history.priorUserMessages...),
-		toolResultTexts:   append([]string(nil), history.toolResultTexts...),
-		hasAssistantReply: history.hasAssistantReply,
+		evaluationText:           history.currentUserMessage,
+		compressedText:           history.currentUserMessage,
+		allMessagesText:          strings.Join(history.nonUserMessages, " "),
+		currentUserText:          history.currentUserMessage,
+		priorUserMessages:        append([]string(nil), history.priorUserMessages...),
+		toolResultTexts:          append([]string(nil), history.toolResultTexts...),
+		toolResultScanIncomplete: history.toolResultScanIncomplete,
+		hasAssistantReply:        history.hasAssistantReply,
 		conversationFacts: classification.ConversationFacts{
 			HasDeveloperMessage:       history.hasDeveloperMessage,
 			UserMessageCount:          history.userMessageCount,

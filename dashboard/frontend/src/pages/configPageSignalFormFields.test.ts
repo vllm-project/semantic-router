@@ -42,4 +42,10 @@ describe('signal form fields', () => {
       shouldHide(baseForm({ type: 'Keywords', conversation_feature: { type: 'count', source: { type: 'message' } } })),
     ).toBe(true)
   })
+
+  it('offers the constrained tool-result source for PII rules', () => {
+    const sourceField = buildSignalFormFields().find((field) => field.name === 'pii_source')
+
+    expect((sourceField as { options?: string[] }).options).toEqual(['default', 'tool_result'])
+  })
 })

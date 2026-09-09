@@ -1274,6 +1274,7 @@ export interface JailbreakSignal {
 export interface PIISignal {
   name: string
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string
@@ -1432,6 +1433,7 @@ export interface AddSignalFormState {
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
   pii_threshold?: number
+  pii_source?: 'default' | 'tool_result'
   pii_types_allowed?: string[]
   pii_include_history?: boolean
   kb_name?: string

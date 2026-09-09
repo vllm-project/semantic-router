@@ -7,16 +7,17 @@ import (
 )
 
 type signalConversationHistory struct {
-	currentUserMessage     string
-	priorUserMessages      []string
-	nonUserMessages        []string
-	toolResultTexts        []string
-	hasAssistantReply      bool
-	metadata               map[string]string
-	contextTokenFloor      int
-	contextTextBytes       int
-	contextEquivalentBytes int
-	contextHasNonText      bool
+	currentUserMessage       string
+	priorUserMessages        []string
+	nonUserMessages          []string
+	toolResultTexts          []string
+	toolResultScanIncomplete bool
+	hasAssistantReply        bool
+	metadata                 map[string]string
+	contextTokenFloor        int
+	contextTextBytes         int
+	contextEquivalentBytes   int
+	contextHasNonText        bool
 
 	// Conversation-shape facts for the conversation signal family.
 	hasDeveloperMessage       bool
@@ -77,7 +78,9 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 func signalConversationHistoryFromRequest(req *llmprotocol.Request, snapshot *requestSignalSnapshot) signalConversationHistory {
 	history := signalConversationHistoryFromSnapshot(snapshot)
 	if req != nil {
-		history.toolResultTexts = extractToolResultTexts(req)
+		extraction := extractToolResultTexts(req)
+		history.toolResultTexts = extraction.texts
+		history.toolResultScanIncomplete = extraction.incomplete
 	}
 	return history
 }

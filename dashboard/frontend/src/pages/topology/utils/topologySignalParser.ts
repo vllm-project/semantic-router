@@ -315,6 +315,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     latency: SIGNAL_LATENCY.pii,
     config: {
       threshold: rule.threshold,
+      source: rule.source,
       pii_types_allowed: rule.pii_types_allowed,
       include_history: rule.include_history,
     },
@@ -326,6 +327,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     latency: SIGNAL_LATENCY.pii,
     config: {
       threshold: rule.threshold,
+      source: rule.source,
       pii_types_allowed: rule.pii_types_allowed,
       include_history: rule.include_history,
     },

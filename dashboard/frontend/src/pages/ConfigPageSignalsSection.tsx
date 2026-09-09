@@ -395,7 +395,7 @@ export default function ConfigPageSignalsSection({
     allSignals.push({
       name: p.name,
       type: 'PII',
-      summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
+      summary: `Source: ${p.source || 'default'}, Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
       rawData: p,
     })
   })
@@ -824,6 +824,11 @@ export default function ConfigPageSignalsSection({
         title: 'PII Signal',
         fields: [
           {
+            label: 'Source',
+            value: signal.rawData.source || 'default (prompt/history)',
+            fullWidth: true,
+          },
+          {
             label: 'Threshold',
             value: signal.rawData.threshold?.toString() || 'N/A',
             fullWidth: true,
@@ -929,6 +934,7 @@ export default function ConfigPageSignalsSection({
       composer_conditions: [],
       ...jailbreakFormDefaults(),
       pii_threshold: 0.5,
+      pii_source: 'default',
       pii_types_allowed: [],
       pii_include_history: false,
       kb_name: '',
@@ -989,6 +995,7 @@ export default function ConfigPageSignalsSection({
             composer_conditions: [...(signal.rawData.composer?.conditions || [])],
             ...jailbreakFormStateFrom(signal.rawData),
             pii_threshold: signal.rawData.threshold ?? 0.5,
+            pii_source: signal.rawData.source === 'tool_result' ? 'tool_result' : 'default',
             pii_types_allowed: [...(signal.rawData.pii_types_allowed || [])],
             pii_include_history: !!signal.rawData.include_history,
             kb_name: signal.type === 'KB' ? signal.rawData.kb || '' : '',
@@ -1291,11 +1298,13 @@ export default function ConfigPageSignalsSection({
             'Allowed PII types',
           )
           const allowedList = normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined
+          const source = formData.pii_source === 'tool_result' ? 'tool_result' : undefined
           newConfig.signals.pii = [
             ...(newConfig.signals.pii || []),
             {
               name,
               threshold: pii_threshold,
+              ...(source ? { source } : {}),
               pii_types_allowed: allowedList,
               include_history: formData.pii_include_history || false,
               description: formData.description || undefined,

@@ -35,7 +35,7 @@ func TestEvaluatePIISignalUsesToolResultSourceOnly(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, userText, []string{"history payload"}, []string{toolText})
+	classifier.evaluatePIISignal(results, &mu, userText, []string{"history payload"}, []string{toolText}, false)
 
 	if !results.PIIDetected {
 		t.Fatal("expected PII in the tool result to be detected")
@@ -57,7 +57,7 @@ func TestEvaluateAllSignalsWithHeadersRoutesToolResultPIIToDecisionEngine(t *tes
 		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
 	}
 	classifier.Config.IntelligentRouting.Decisions = []config.Decision{{
-		Name: "safe-route",
+		Name:  "safe-route",
 		Rules: config.RuleCombination{Type: config.SignalTypePII, Name: "tool_pii"},
 	}}
 
@@ -93,7 +93,7 @@ func TestEvaluateAllSignalsWithHeadersPreservesLegacyPIISourceScope(t *testing.T
 		{Name: "legacy_pii", Threshold: 0.7},
 	}
 	classifier.Config.IntelligentRouting.Decisions = []config.Decision{{
-		Name: "legacy-route",
+		Name:  "legacy-route",
 		Rules: config.RuleCombination{Type: config.SignalTypePII, Name: "legacy_pii"},
 	}}
 
@@ -185,7 +185,7 @@ func TestEvaluatePIISignalSharesToolResultCacheAcrossRules(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText, toolText})
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText, toolText}, false)
 
 	if got := mockModel.callCount[toolText]; got != 1 {
 		t.Fatalf("shared tool result was classified %d times, want 1", got)
@@ -204,7 +204,7 @@ func TestEvaluatePIISignalReportsFailedToolResultScan(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool"})
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool"}, false)
 
 	if results.PIIDetected {
 		t.Fatal("failed PII inference must not report a PII match")
@@ -224,8 +224,49 @@ func TestEvaluatePIISignalReportsIncompleteToolResultScan(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool", "clean tool"})
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool", "clean tool"}, false)
 
+	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
+		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
+	}
+}
+
+func TestEvaluatePIISignalReportsIncompleteToolResultExtractionWithoutText(t *testing.T) {
+	classifier, _, _ := newTestPIIClassifier()
+	classifier.Config.PIIRules = []config.PIIRule{
+		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
+	}
+
+	results := newPIISignalTestResults()
+	var mu sync.Mutex
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, nil, true)
+
+	if results.PIIDetected {
+		t.Fatal("incomplete tool-result extraction must not report a PII match")
+	}
+	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
+		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
+	}
+}
+
+func TestEvaluatePIISignalPreservesPositiveMatchWhenToolResultExtractionIsIncomplete(t *testing.T) {
+	classifier, _, mockModel := newTestPIIClassifier()
+	classifier.Config.PIIRules = []config.PIIRule{
+		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
+	}
+
+	toolText := "tool payload"
+	mockModel.setMockResponse(toolText, []candle_binding.TokenEntity{
+		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
+	}, nil)
+
+	results := newPIISignalTestResults()
+	var mu sync.Mutex
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText}, true)
+
+	if !results.PIIDetected {
+		t.Fatal("positive PII match must be preserved when another tool-result block is skipped")
+	}
 	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
 		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
 	}

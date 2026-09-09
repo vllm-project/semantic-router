@@ -63,6 +63,11 @@ describe('DSL structured field schemas', () => {
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
+    expect(requireField(getSignalFieldSchema('pii'), 'source')).toMatchObject({
+      type: 'select',
+      options: ['tool_result'],
+    })
+
     const domainScores = requireField(getSignalFieldSchema('domain'), 'model_scores')
     expect(domainScores.type).toBe('object[]')
     expect(domainScores.fields?.map((field) => field.key)).toEqual([

@@ -23,6 +23,7 @@ func (c *Classifier) buildSignalDispatchers(
 	priorUserMessages []string,
 	nonUserMessages []string,
 	toolResultTexts []string,
+	toolResultScanIncomplete bool,
 	hasPriorAssistantReply bool,
 	imgArg string,
 	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
@@ -61,6 +62,7 @@ func (c *Classifier) buildSignalDispatchers(
 			priorUserMessages,
 			nonUserMessages,
 			toolResultTexts,
+			toolResultScanIncomplete,
 			convFacts,
 			requestFacts,
 			usedSignals,

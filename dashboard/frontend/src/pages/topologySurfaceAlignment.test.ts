@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constants'
 import { parseConfigToTopology } from './topology/utils/topologyParser'
+import { extractSignals } from './topology/utils/topologySignalParser'
 import type { ConfigData } from './topology/types'
 
 describe('topology v0.3 surface alignment', () => {
@@ -66,5 +67,21 @@ describe('topology v0.3 surface alignment', () => {
     expect(PLUGIN_ICONS).toMatchObject({
       tool_selection: 'TS',
     })
+  })
+
+  it('preserves the PII source in topology signal config', () => {
+    const signals = extractSignals({
+      signals: {
+        pii: [{ name: 'tool-data', threshold: 0.8, source: 'tool_result' }],
+      },
+    })
+
+    expect(signals).toContainEqual(
+      expect.objectContaining({
+        type: 'pii',
+        name: 'tool-data',
+        config: expect.objectContaining({ source: 'tool_result' }),
+      }),
+    )
   })
 })

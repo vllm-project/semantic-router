@@ -450,6 +450,13 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
     },
     ...jailbreakFormFields(),
     {
+      name: 'pii_source',
+      label: 'Source (PII only)',
+      type: 'select',
+      options: ['default', 'tool_result'],
+      shouldHide: hideUnless('PII'),
+    },
+    {
       name: 'pii_threshold',
       label: 'Threshold (PII only)',
       type: 'number',

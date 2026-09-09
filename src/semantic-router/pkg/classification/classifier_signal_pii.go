@@ -21,7 +21,7 @@ const (
 	piiEvaluationFailedCode     = "pii_evaluation_failed"
 )
 
-func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string) {
+func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	start := time.Now()
 
 	// Step 1: Collect the union of unique content pieces selected by all PII
@@ -59,7 +59,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 		ruleWg.Add(1)
 		go func() {
 			defer ruleWg.Done()
-			c.evaluatePIIRule(rule, piiText, nonUserMessages, toolResultTexts, piiCache, start, results, mu)
+			c.evaluatePIIRule(rule, piiText, nonUserMessages, toolResultTexts, toolResultScanIncomplete, piiCache, start, results, mu)
 		}()
 	}
 	ruleWg.Wait()
@@ -75,13 +75,19 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[string][]cachedPIIResult, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	ruleContents := collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts)
 	if len(ruleContents) == 0 {
+		if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete {
+			c.recordPIIRuleError(rule, piiScanIncomplete, results, mu)
+		}
 		return
 	}
 
 	entityTypes, status := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
+	if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete && status == piiScanClean {
+		status = piiScanIncomplete
+	}
 	if status != piiScanClean {
 		c.recordPIIRuleError(rule, status, results, mu)
 	}
@@ -108,9 +114,9 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 type piiScanStatus string
 
 const (
-	piiScanClean       piiScanStatus = "clean"
-	piiScanIncomplete  piiScanStatus = "incomplete"
-	piiScanFailed      piiScanStatus = "error"
+	piiScanClean      piiScanStatus = "clean"
+	piiScanIncomplete piiScanStatus = "incomplete"
+	piiScanFailed     piiScanStatus = "error"
 )
 
 func (c *Classifier) recordPIIRuleError(rule config.PIIRule, status piiScanStatus, results *SignalResults, mu *sync.Mutex) {
