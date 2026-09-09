@@ -20,6 +20,9 @@
 //! - TEI Implementation: backends/candle/src/models/qwen3.rs
 
 use crate::core::{config_errors, from_candle_error, UnifiedError, UnifiedResult};
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
 use crate::model_architectures::traits::{
     EmbeddingPathSpecialization, LongContextEmbeddingCapable, ModelType, PoolingMethod,
 };
@@ -240,26 +243,19 @@ pub struct Qwen3TokenizerConfig {
     pub max_length: usize,
 }
 
-impl Qwen3TokenizerConfig {
-    /// Create default tokenizer configuration
-    ///
-    /// Returns a configuration with:
-    /// - `padding_side`: `PaddingSide::Left` (required for Qwen3)
-    /// - `max_length`: 32768 (matches model's max_position_embeddings)
-    ///
-    /// # Example
-    /// ```ignore
-    /// let config = Qwen3TokenizerConfig::default();
-    /// assert_eq!(config.padding_side, PaddingSide::Left);
-    /// assert_eq!(config.max_length, 32768);
-    /// ```
-    pub fn default() -> Self {
+impl Default for Qwen3TokenizerConfig {
+    /// Default tokenizer configuration: `padding_side` `Left` (required for
+    /// Qwen3 last-token pooling) and `max_length` 32768 (the model's
+    /// `max_position_embeddings`).
+    fn default() -> Self {
         Self {
             padding_side: PaddingSide::Left,
             max_length: 32768,
         }
     }
+}
 
+impl Qwen3TokenizerConfig {
     /// Validate tokenizer configuration
     ///
     /// This method ensures that the tokenizer is configured correctly for Qwen3-Embedding.
@@ -587,67 +583,6 @@ impl RotaryEmbeddingCache {
 // Helper Functions
 // ========================================================================================
 
-/// Numerically stable softmax implementation (last dimension)
-///
-/// Standard softmax can suffer from numerical instability when input values are large:
-/// - `exp(x)` can overflow for large x
-/// - `exp(x)` can underflow for very negative x
-///
-/// This implementation uses the "max subtraction trick":
-/// ```text
-/// softmax(x) = exp(x - max(x)) / sum(exp(x - max(x)))
-/// ```
-///
-/// By subtracting the max before exponentiation, we ensure:
-/// 1. The largest value becomes 0, preventing overflow
-/// 2. All other values become negative, preventing exp() from exploding
-/// 3. The result is mathematically equivalent to standard softmax
-///
-/// # Performance Impact
-/// - Additional `max` operation: ~5-10% overhead
-/// - Benefit: Prevents NaN/Inf in attention scores for long sequences
-///
-/// # References
-/// - PyTorch/Transformers: Always uses stable softmax
-/// - JAX: Uses stable softmax by default
-/// - Paper: [Numerical Stability in Deep Learning](https://arxiv.org/abs/1702.04289)
-///
-/// # Example
-/// ```ignore
-/// let attn_scores = Tensor::randn((batch, num_heads, seq_len, seq_len), DType::F32, &device)?;
-/// let attn_weights = stable_softmax_last_dim(&attn_scores)?;
-/// ```
-fn stable_softmax_last_dim(x: &Tensor) -> UnifiedResult<Tensor> {
-    // Get the shape to determine the last dimension
-    let dims = x.dims();
-    let last_dim = dims.len() - 1;
-
-    // Step 1: Find maximum value along the last dimension and keep dimensions
-    let max_val = x
-        .max_keepdim(last_dim)
-        .map_err(|e| from_candle_error(e, "stable_softmax_last_dim: max_keepdim", None))?;
-
-    // Step 2: Subtract max to prevent overflow: x_shifted = x - max(x)
-    let x_shifted = x
-        .broadcast_sub(&max_val)
-        .map_err(|e| from_candle_error(e, "stable_softmax_last_dim: subtract max", None))?;
-
-    // Step 3: Compute exp(x_shifted)
-    let exp_x = x_shifted
-        .exp()
-        .map_err(|e| from_candle_error(e, "stable_softmax_last_dim: exp", None))?;
-
-    // Step 4: Sum exp values along the last dimension and keep dimensions
-    let sum_exp = exp_x
-        .sum_keepdim(last_dim)
-        .map_err(|e| from_candle_error(e, "stable_softmax_last_dim: sum_keepdim", None))?;
-
-    // Step 5: Normalize: softmax = exp(x_shifted) / sum(exp(x_shifted))
-    exp_x
-        .broadcast_div(&sum_exp)
-        .map_err(|e| from_candle_error(e, "stable_softmax_last_dim: division", None))
-}
-
 // ========================================================================================
 // Neural Network Components
 // ========================================================================================
@@ -924,7 +859,7 @@ impl Qwen3Attention {
         let head_dim = config.head_dim();
 
         // Validate GQA configuration
-        if num_heads % num_key_value_heads != 0 {
+        if !num_heads.is_multiple_of(num_key_value_heads) {
             return Err(UnifiedError::Validation {
                 field: "num_attention_heads / num_key_value_heads".to_string(),
                 expected: format!(
@@ -966,13 +901,13 @@ impl Qwen3Attention {
             .pp("q_norm")
             .get((head_dim,), "weight")
             .map_err(|e| from_candle_error(e, "Qwen3Attention: load q_norm weight", None))?;
-        let q_norm = RmsNorm::new(q_norm_weight, config.rms_norm_eps as f64);
+        let q_norm = RmsNorm::new(q_norm_weight, config.rms_norm_eps);
 
         let k_norm_weight = vb
             .pp("k_norm")
             .get((head_dim,), "weight")
             .map_err(|e| from_candle_error(e, "Qwen3Attention: load k_norm weight", None))?;
-        let k_norm = RmsNorm::new(k_norm_weight, config.rms_norm_eps as f64);
+        let k_norm = RmsNorm::new(k_norm_weight, config.rms_norm_eps);
 
         Ok(Self {
             q_proj,
@@ -995,7 +930,7 @@ impl Qwen3Attention {
     ///
     /// # Arguments
     /// - `hidden_states`: Input tensor, shape [batch, seq_len, hidden_size]
-    /// - `attention_mask`: Optional attention mask, shape [batch, 1, seq_len, seq_len]
+    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask
     ///
     /// # Returns
     /// Attention output tensor, shape [batch, seq_len, hidden_size]
@@ -1160,66 +1095,28 @@ impl Qwen3Attention {
         tensor.reshape((batch, num_kv_heads * n_rep, seq_len, head_dim))
     }
 
-    /// Compute scaled dot-product attention scores
+    /// Compute attention with the shared memory-bounded kernel.
     ///
-    /// # Arguments
-    /// - `q`: Query tensor, shape [batch, num_heads, seq_len, head_dim]
-    /// - `k`: Key tensor, shape [batch, num_heads, seq_len, head_dim]
+    /// The scores are still formed and normalized in f64, as before, so this is the
+    /// same arithmetic the reference comparison was validated against; only the
+    /// `(b, heads, seq, seq)` score matrix is no longer materialized. Masking is
+    /// causal plus padding, which is what `embedding_forward` used to encode in a
+    /// `(b, 1, seq, seq)` mask.
     ///
-    /// # Returns
-    /// Attention scores, shape [batch, num_heads, seq_len, seq_len]
-    ///
-    /// # Formula
-    /// ```text
-    /// attn_scores = (Q @ K^T) / sqrt(head_dim)
-    /// ```
-    fn compute_attention_scores(&self, q: &Tensor, k: &Tensor) -> UnifiedResult<Tensor> {
-        // K^T: [batch, num_heads, head_dim, seq_len]
-        let k_t = k
-            .transpose(2, 3)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: transpose K", None))?;
-
-        // Q @ K^T: [batch, num_heads, seq_len, seq_len]
-        let attn_scores = q
-            .matmul(&k_t)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: Q @ K^T", None))?;
-
-        // Scale by 1/sqrt(head_dim)
-        attn_scores
-            .affine(self.scaling, 0.0)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: scale scores", None))
-    }
-
-    /// Compute attention using standard scaled dot-product attention
-    ///
-    /// This is the standard attention implementation:
-    /// 1. Compute attention scores: (Q @ K^T) * scaling
-    /// 2. Apply attention mask (if provided)
-    /// 3. Apply softmax to get attention weights
-    /// 4. Multiply weights with V to get context
+    /// A padding query row now spreads its attention evenly over the padding keys
+    /// before it, where the old mask let it attend only to itself. Nothing reads
+    /// that row: real queries mask padding keys out, and last-token pooling (with
+    /// the left padding it requires) reads a real position, so the pooled
+    /// embedding is unchanged.
     ///
     /// # Arguments
     /// - `q`: Query tensor, shape [batch, num_heads, seq_len, head_dim]
     /// - `k`: Key tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
     /// - `v`: Value tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `attention_mask`: Optional mask, shape [batch, 1, seq_len, seq_len]
+    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask
     ///
     /// # Returns
     /// Attention output tensor, shape [batch, num_heads, seq_len, head_dim]
-    ///
-    /// # Performance
-    /// - Time complexity: O(seq_len^2 * hidden_size)
-    /// - Memory complexity: O(batch * num_heads * seq_len^2) for attention scores
-    /// - For long sequences (>8K), consider using Flash Attention 2 (`flash-attn` feature)
-    ///
-    /// # Example
-    /// ```ignore
-    /// let q = Tensor::randn((2, 16, 128, 128), DType::F32, &device)?;
-    /// let k = Tensor::randn((2, 16, 128, 128), DType::F32, &device)?;
-    /// let v = Tensor::randn((2, 16, 128, 128), DType::F32, &device)?;
-    /// let output = attention.compute_attention_standard(&q, &k, &v, None)?;
-    /// assert_eq!(output.dims(), &[2, 16, 128, 128]);
-    /// ```
     fn compute_attention_standard(
         &self,
         q: &Tensor,
@@ -1227,55 +1124,32 @@ impl Qwen3Attention {
         v: &Tensor,
         attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
-        // Step 1.1: Convert Q and K to f64 for high-precision matmul
-        let q_f64 = q
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: Q to f64", None))?;
-        let k_f64 = k
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: K to f64", None))?;
-
-        // Step 1.2: Compute attention scores in f64: (Q @ K^T) * scaling
-        // Shape: [batch, num_heads, seq_len, seq_len]
-        let k_t_f64 = k_f64
-            .t()
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: K transpose", None))?;
-        let attn_scores_f64 = q_f64
-            .matmul(&k_t_f64)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: Q @ K^T", None))?;
-
-        // Step 1.3: Apply scaling in f64
-        let attn_scores_f64 = attn_scores_f64
-            .affine(self.scaling as f64, 0.0)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: scale scores", None))?;
-
-        // Step 2: Apply attention mask (if provided, convert mask to f64)
-        let attn_scores_f64 = if let Some(mask) = attention_mask {
-            let mask_f64 = mask
-                .to_dtype(candle_core::DType::F64)
-                .map_err(|e| from_candle_error(e, "Qwen3Attention: mask to f64", None))?;
-            attn_scores_f64
-                .broadcast_add(&mask_f64)
-                .map_err(|e| from_candle_error(e, "Qwen3Attention: apply mask", None))?
-        } else {
-            attn_scores_f64
+        let to_f64 = |t: &Tensor, what: &str| {
+            t.to_dtype(candle_core::DType::F64)
+                .map_err(|e| from_candle_error(e, &format!("Qwen3Attention: {what} to f64"), None))
         };
+        let q_f64 = to_f64(q, "Q")?;
+        let k_f64 = to_f64(k, "K")?;
+        let v_f64 = to_f64(v, "V")?;
 
-        // Step 3: Softmax in f64 (stable_softmax_last_dim will work with f64)
-        let attn_weights_f64 = stable_softmax_last_dim(&attn_scores_f64)?;
+        let pad_mask = match attention_mask {
+            Some(mask) => Some(
+                prepare_padding_mask(mask, candle_core::DType::F64)
+                    .map_err(|e| from_candle_error(e, "Qwen3Attention: padding mask", None))?,
+            ),
+            None => None,
+        };
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: true,
+            scale: self.scaling,
+            q_offset: 0,
+        };
+        let attn_output_f64 = chunked_sdpa(&q_f64, &k_f64, &v_f64, pad_mask.as_ref(), &cfg)
+            .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))?;
 
-        // Step 4.1: Convert V to f64
-        let v_f64 = v
-            .to_dtype(candle_core::DType::F64)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: V to f64", None))?;
-
-        // Step 4.2: Attention output in f64: attn_weights @ V
-        // Shape: [batch, num_heads, seq_len, head_dim]
-        let attn_output_f64 = attn_weights_f64
-            .matmul(&v_f64)
-            .map_err(|e| from_candle_error(e, "Qwen3Attention: attention matmul", None))?;
-
-        // Step 5: Convert back to f32 for subsequent layers
+        // Convert back to f32 for subsequent layers
         attn_output_f64
             .to_dtype(candle_core::DType::F32)
             .map_err(|e| from_candle_error(e, "Qwen3Attention: output to f32", None))
@@ -1296,7 +1170,7 @@ impl Qwen3Attention {
     /// - `q`: Query tensor, shape [batch, num_heads, seq_len, head_dim]
     /// - `k`: Key tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
     /// - `v`: Value tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `attention_mask`: Optional mask, shape [batch, 1, seq_len, seq_len]
+    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask (ignored here)
     ///
     /// # Returns
     /// Attention output tensor, shape [batch, num_heads, seq_len, head_dim]
@@ -1717,7 +1591,7 @@ impl Qwen3Layer {
     ///
     /// # Arguments
     /// - `hidden_states`: Input tensor, shape [batch, seq_len, hidden_size]
-    /// - `attention_mask`: Optional attention mask, shape [batch, 1, seq_len, seq_len]
+    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask
     ///
     /// # Returns
     /// Layer output tensor, shape [batch, seq_len, hidden_size]
@@ -1902,7 +1776,7 @@ impl Qwen3EmbeddingModel {
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
             VarBuilder::from_mmaped_safetensors(
-                &[safetensors_path.clone()],
+                std::slice::from_ref(&safetensors_path),
                 candle_core::DType::F32,
                 device,
             )
@@ -2006,7 +1880,7 @@ impl Qwen3EmbeddingModel {
         attention_mask: &Tensor,
     ) -> UnifiedResult<Tensor> {
         // Step 1: Input validation
-        let (batch_size, seq_len) = input_ids.dims2().map_err(|_| UnifiedError::Validation {
+        let (_batch_size, seq_len) = input_ids.dims2().map_err(|_| UnifiedError::Validation {
             field: "input_ids".to_string(),
             expected: "2D tensor [batch_size, seq_len]".to_string(),
             actual: format!("{:?}", input_ids.dims()),
@@ -2031,11 +1905,9 @@ impl Qwen3EmbeddingModel {
             .forward(input_ids)
             .map_err(|e| from_candle_error(e, "embedding layer forward", None))?;
 
-        // Step 3: Convert attention_mask to proper format
-        // For embedding models (bidirectional), we don't need causal masking
-        // Just convert 0/1 mask to 0/-inf mask for attention
-        let attention_mask_expanded =
-            self.prepare_attention_mask(batch_size, seq_len, attention_mask)?;
+        // Step 3: The attention layers take the `(batch, seq_len)` 0/1 padding mask
+        // as is and apply it, with causal masking, per query block inside the
+        // shared kernel; no `(batch, 1, seq_len, seq_len)` mask is built here.
 
         // Step 4: Pass through all Transformer layers
         // DEBUG: Commented out for performance
@@ -2044,7 +1916,7 @@ impl Qwen3EmbeddingModel {
 
         for (layer_idx, layer) in self.layers.iter().enumerate() {
             hidden_states = layer
-                .forward(&hidden_states, Some(&attention_mask_expanded))
+                .forward(&hidden_states, Some(attention_mask))
                 .map_err(|e| UnifiedError::Processing {
                     operation: format!("Qwen3Layer[{}] forward", layer_idx),
                     source: e.to_string(),
@@ -2074,107 +1946,6 @@ impl Qwen3EmbeddingModel {
         let embeddings_normalized = self.l2_normalize(&embeddings)?;
 
         Ok(embeddings_normalized)
-    }
-
-    /// Prepare attention mask for Transformer layers
-    ///
-    /// ⚠️ CRITICAL: Qwen3-Embedding uses CAUSAL mask despite being an encoder!
-    ///
-    /// Combines causal mask (lower triangular) with padding mask.
-    /// This is unusual for an embedding model but verified by output comparison.
-    fn prepare_attention_mask(
-        &self,
-        batch_size: usize,
-        seq_len: usize,
-        attention_mask: &Tensor,
-    ) -> UnifiedResult<Tensor> {
-        let neg_inf = f32::NEG_INFINITY;
-        let device = attention_mask.device();
-
-        // Step 1: Create causal mask (lower triangular matrix)
-        // causal_mask[i, j] = 0 if j <= i else -inf
-        let mut causal_data = vec![0.0_f32; seq_len * seq_len];
-        for i in 0..seq_len {
-            for j in 0..seq_len {
-                if j > i {
-                    // Upper triangle: -inf (cannot attend to future)
-                    causal_data[i * seq_len + j] = neg_inf;
-                }
-                // Lower triangle and diagonal: 0 (can attend)
-            }
-        }
-
-        let causal_mask_inf = Tensor::from_vec(causal_data, (seq_len, seq_len), device)
-            .map_err(|e| from_candle_error(e, "create causal mask", None))?;
-
-        // Expand to [batch, 1, seq_len, seq_len]
-        let causal_mask_expanded = causal_mask_inf
-            .unsqueeze(0)
-            .map_err(|e| from_candle_error(e, "unsqueeze(0) causal", None))?
-            .unsqueeze(1)
-            .map_err(|e| from_candle_error(e, "unsqueeze(1) causal", None))?
-            .repeat(&[batch_size, 1, 1, 1])
-            .map_err(|e| from_candle_error(e, "repeat causal", None))?;
-
-        // Step 2: Create padding mask
-        let padding_mask = attention_mask
-            .unsqueeze(1)
-            .map_err(|e| from_candle_error(e, "unsqueeze(1) padding", None))?
-            .unsqueeze(2)
-            .map_err(|e| from_candle_error(e, "unsqueeze(2) padding", None))?
-            .to_dtype(candle_core::DType::F32)
-            .map_err(|e| from_candle_error(e, "to_dtype F32", None))?
-            .repeat(&[1, 1, seq_len, 1])
-            .map_err(|e| from_candle_error(e, "repeat padding", None))?;
-
-        // Convert 0/1 to 0/-inf
-        let ones = Tensor::ones_like(&padding_mask)
-            .map_err(|e| from_candle_error(e, "ones_like", None))?;
-        let inverted = ones
-            .sub(&padding_mask)
-            .map_err(|e| from_candle_error(e, "sub", None))?;
-        let padding_mask_inf = inverted
-            .affine(neg_inf as f64, 0.0)
-            .map_err(|e| from_candle_error(e, "affine", None))?;
-
-        // Step 3: Combine (both use -inf for masked, so use minimum)
-        let combined_mask = causal_mask_expanded
-            .minimum(&padding_mask_inf)
-            .map_err(|e| from_candle_error(e, "combine masks", None))?;
-
-        // Step 4: Fix padding positions to avoid all -inf attention scores
-        // For padding tokens, ensure they can attend to themselves (diagonal = 0)
-        // This prevents softmax([-inf, -inf, ...]) = NaN
-        //
-        // Create a diagonal correction mask
-        // For each padding position i, we set mask[batch, head, i, i] = 0
-
-        // Get attention_mask as Vec for inspection
-        let attention_mask_vec = attention_mask
-            .to_vec2::<u32>()
-            .map_err(|e| from_candle_error(e, "attention_mask to_vec2", None))?;
-
-        // Create correction mask: [batch, 1, seq, seq] where diagonal is 0 for padding positions
-        let mut correction_data = vec![neg_inf; batch_size * seq_len * seq_len];
-        for batch_idx in 0..batch_size {
-            for pos in 0..seq_len {
-                if attention_mask_vec[batch_idx][pos] == 0 {
-                    // For padding position, set diagonal to 0 (will be used with maximum operation)
-                    correction_data[batch_idx * seq_len * seq_len + pos * seq_len + pos] = 0.0;
-                }
-            }
-        }
-
-        let correction_mask =
-            Tensor::from_vec(correction_data, (batch_size, 1, seq_len, seq_len), device)
-                .map_err(|e| from_candle_error(e, "create correction mask", None))?;
-
-        // Use maximum to apply correction (0 > -inf, so diagonal becomes 0 for padding)
-        let fixed_mask = combined_mask
-            .maximum(&correction_mask)
-            .map_err(|e| from_candle_error(e, "apply correction mask", None))?;
-
-        Ok(fixed_mask)
     }
 
     /// L2 normalize embeddings (PyTorch: F.normalize(embeddings, p=2, dim=1))
@@ -2343,5 +2114,181 @@ impl EmbeddingPathSpecialization for Qwen3EmbeddingModel {
     fn optimal_batch_size(&self) -> usize {
         // Delegate to LongContextEmbeddingCapable implementation
         self.optimal_embedding_batch_size()
+    }
+}
+
+#[cfg(test)]
+mod chunked_attention_tests {
+    //! The kernel must reproduce the dense f64 attention it replaced (issue #3382):
+    //! `(Q @ K^T) * scaling` in f64, plus the `(b, 1, seq, seq)` mask that
+    //! `prepare_attention_mask` used to build — causal, padding keys masked, and a
+    //! padding query allowed to attend to itself — softmax, `@ V`, back to f32.
+    //! Padding rows are excluded from the comparison; see
+    //! `compute_attention_standard` for why they may differ and why it does not
+    //! matter.
+    use super::*;
+    use candle_core::{DType, IndexOp};
+
+    const HEADS: usize = 4;
+    const KV_HEADS: usize = 2;
+    const HEAD_DIM: usize = 8;
+    const HIDDEN: usize = 16;
+
+    fn make_attention(device: &Device) -> Qwen3Attention {
+        let lin = |out: usize, inp: usize| {
+            Linear::new(
+                Tensor::randn(0f32, 0.2f32, (out, inp), device).unwrap(),
+                None,
+            )
+        };
+        let norm = || RmsNorm::new(Tensor::randn(1f32, 0.1f32, HEAD_DIM, device).unwrap(), 1e-6);
+        Qwen3Attention {
+            q_proj: lin(HEADS * HEAD_DIM, HIDDEN),
+            k_proj: lin(KV_HEADS * HEAD_DIM, HIDDEN),
+            v_proj: lin(KV_HEADS * HEAD_DIM, HIDDEN),
+            o_proj: lin(HIDDEN, HEADS * HEAD_DIM),
+            num_heads: HEADS,
+            num_key_value_heads: KV_HEADS,
+            num_key_value_groups: HEADS / KV_HEADS,
+            head_dim: HEAD_DIM,
+            scaling: 1.0 / (HEAD_DIM as f64).sqrt(),
+            attention_dropout: 0.0,
+            rope_cache: Arc::new(
+                RotaryEmbeddingCache::new(1024, HEAD_DIM, 10_000.0, device).unwrap(),
+            ),
+            q_norm: norm(),
+            k_norm: norm(),
+        }
+    }
+
+    /// The pre-migration forward: same projections, norms, RoPE and GQA repeat as
+    /// `Qwen3Attention::forward`, dense f64 attention with the old 4-D mask.
+    fn dense_reference(attn: &Qwen3Attention, xs: &Tensor, mask: &[Vec<u32>]) -> Tensor {
+        let (b, seq, _) = xs.dims3().unwrap();
+        let device = xs.device();
+        let q = attn
+            .q_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, seq, HEADS, HEAD_DIM))
+            .unwrap();
+        let k = attn
+            .k_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, seq, KV_HEADS, HEAD_DIM))
+            .unwrap();
+        let v = attn
+            .v_proj
+            .forward(xs)
+            .unwrap()
+            .reshape((b, seq, KV_HEADS, HEAD_DIM))
+            .unwrap();
+        let q = attn.q_norm.forward(&q).unwrap().transpose(1, 2).unwrap();
+        let k = attn.k_norm.forward(&k).unwrap().transpose(1, 2).unwrap();
+        let v = v.transpose(1, 2).unwrap();
+        let positions = Tensor::from_vec((0..seq as u32).collect::<Vec<_>>(), (seq,), device)
+            .unwrap()
+            .unsqueeze(0)
+            .unwrap()
+            .repeat(&[b, 1])
+            .unwrap();
+        let q = attn.rope_cache.apply_rotary_emb(&q, &positions).unwrap();
+        let k = attn.rope_cache.apply_rotary_emb(&k, &positions).unwrap();
+        let k = attn.repeat_kv(&k, HEADS / KV_HEADS).unwrap();
+        let v = attn.repeat_kv(&v, HEADS / KV_HEADS).unwrap();
+
+        // The old combined mask: causal ∩ padding, diagonal reopened for padding rows.
+        let mut m = vec![0f32; b * seq * seq];
+        for bi in 0..b {
+            for i in 0..seq {
+                for j in 0..seq {
+                    let blocked = j > i || mask[bi][j] == 0;
+                    if blocked && !(i == j && mask[bi][i] == 0) {
+                        m[bi * seq * seq + i * seq + j] = f32::NEG_INFINITY;
+                    }
+                }
+            }
+        }
+        let m = Tensor::from_vec(m, (b, 1, seq, seq), device)
+            .unwrap()
+            .to_dtype(DType::F64)
+            .unwrap();
+
+        let q64 = q.to_dtype(DType::F64).unwrap();
+        let k64 = k.to_dtype(DType::F64).unwrap();
+        let v64 = v.to_dtype(DType::F64).unwrap();
+        let scores = q64
+            .matmul(&k64.t().unwrap())
+            .unwrap()
+            .affine(attn.scaling, 0.0)
+            .unwrap()
+            .broadcast_add(&m)
+            .unwrap();
+        let probs = candle_nn::ops::softmax_last_dim(&scores).unwrap();
+        let ctx = probs
+            .matmul(&v64)
+            .unwrap()
+            .to_dtype(DType::F32)
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap()
+            .reshape((b, seq, HEADS * HEAD_DIM))
+            .unwrap();
+        attn.o_proj.forward(&ctx).unwrap()
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        (a - b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense() {
+        let device = Device::Cpu;
+        let attn = make_attention(&device);
+        // Below and above the kernel's query block.
+        for &seq in &[3usize, 40, ATTN_QUERY_BLOCK + 88] {
+            let xs = Tensor::randn(0f32, 1f32, (1, seq, HIDDEN), &device).unwrap();
+            let mask = vec![vec![1u32; seq]];
+            let got = attn.forward(&xs, None).unwrap();
+            let want = dense_reference(&attn, &xs, &mask);
+            let diff = max_abs_diff(&got, &want);
+            assert!(diff < 1e-4, "seq={}: max|Δ|={}", seq, diff);
+        }
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense_on_real_rows_with_left_padding() {
+        let device = Device::Cpu;
+        let attn = make_attention(&device);
+        let seq = 40;
+        let pad = 7;
+        let xs = Tensor::randn(0f32, 1f32, (2, seq, HIDDEN), &device).unwrap();
+        // Row 0 unpadded, row 1 left-padded by `pad` positions (last-token pooling
+        // requires left padding).
+        let mut mask = vec![vec![1u32; seq], vec![1u32; seq]];
+        mask[1][..pad].fill(0);
+        let mask_t = Tensor::from_vec(mask.concat(), (2, seq), &device).unwrap();
+        let got = attn.forward(&xs, Some(&mask_t)).unwrap();
+        let want = dense_reference(&attn, &xs, &mask);
+
+        let diff_row0 = max_abs_diff(&got.i(0).unwrap(), &want.i(0).unwrap());
+        assert!(diff_row0 < 1e-4, "unpadded row: max|Δ|={}", diff_row0);
+        let real = |t: &Tensor| t.i((1, pad..)).unwrap();
+        let diff_real = max_abs_diff(&real(&got), &real(&want));
+        assert!(
+            diff_real < 1e-4,
+            "real positions of padded row: max|Δ|={}",
+            diff_real
+        );
     }
 }
