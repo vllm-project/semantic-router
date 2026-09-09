@@ -88,7 +88,7 @@ func TestPIIToolResultMatchReachesDecisionEngine(t *testing.T) {
 		IntelligentRouting: config.IntelligentRouting{
 			Strategy: "priority",
 			Decisions: []config.Decision{{
-				Name: "safe-route",
+				Name:  "safe-route",
 				Rules: config.RuleNode{Type: config.SignalTypePII, Name: "tool_data"},
 			}},
 		},

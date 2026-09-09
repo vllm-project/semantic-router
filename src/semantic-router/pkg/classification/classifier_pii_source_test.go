@@ -9,12 +9,12 @@ import (
 
 func TestCollectPIIRuleContentsForSource(t *testing.T) {
 	tests := []struct {
-		name             string
-		rule             config.PIIRule
-		piiText          string
-		nonUserMessages  []string
-		toolResultTexts  []string
-		want             []string
+		name            string
+		rule            config.PIIRule
+		piiText         string
+		nonUserMessages []string
+		toolResultTexts []string
+		want            []string
 	}{
 		{
 			name:            "legacy source uses current text only",
