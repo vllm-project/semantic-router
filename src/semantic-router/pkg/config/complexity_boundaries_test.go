@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -134,4 +135,28 @@ func closeEnough(got, want float64) bool {
 		diff = -diff
 	}
 	return diff < tolerance
+}
+
+// A non-finite boundary cannot separate anything: every comparison against
+// NaN is false, so a rule carrying one silently answers medium for every
+// score, and an infinite cut point makes one verdict unreachable.
+func TestComplexityBoundaries_RejectsNonFiniteValues(t *testing.T) {
+	nan := math.NaN()
+	posInf := math.Inf(1)
+	negInf := math.Inf(-1)
+
+	cases := map[string]ComplexityRule{
+		"NaN hard_above":  {Name: "r", HardAbove: &nan, EasyBelow: floatPtr(0.1)},
+		"NaN easy_below":  {Name: "r", HardAbove: floatPtr(0.9), EasyBelow: &nan},
+		"+Inf hard_above": {Name: "r", HardAbove: &posInf, EasyBelow: floatPtr(0.1)},
+		"-Inf easy_below": {Name: "r", HardAbove: floatPtr(0.9), EasyBelow: &negInf},
+		"NaN hard_below":  {Name: "r", HardBelow: &nan, EasyAbove: floatPtr(0.9)},
+		"+Inf easy_above": {Name: "r", HardBelow: floatPtr(0.1), EasyAbove: &posInf},
+	}
+
+	for name, rule := range cases {
+		if _, err := rule.EffectiveBoundaries(); err == nil {
+			t.Errorf("%s: expected a non-finite boundary to be rejected", name)
+		}
+	}
 }

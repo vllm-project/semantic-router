@@ -1,6 +1,9 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // The three verdicts a complexity rule can reach. They are matched downstream
 // as "<rule>:<verdict>", so the vocabulary is part of the routing contract and
@@ -58,6 +61,22 @@ func (b ComplexityBoundaries) Verdict(score float64) string {
 // names keeps a separate `direction` setting out of the schema and makes an
 // overlapping band impossible to write by accident.
 func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
+	for name, value := range map[string]*float64{
+		"hard_above": r.HardAbove,
+		"easy_below": r.EasyBelow,
+		"hard_below": r.HardBelow,
+		"easy_above": r.EasyAbove,
+	} {
+		// A non-finite cut point cannot separate anything: every comparison
+		// against NaN is false, so the rule would answer medium for every
+		// score, and an infinity makes one verdict unreachable.
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
+			return ComplexityBoundaries{}, fmt.Errorf(
+				"complexity rule %q has a non-finite %s (%v); a boundary must be a finite number",
+				r.Name, name, *value)
+		}
+	}
+
 	higher := r.HardAbove != nil || r.EasyBelow != nil
 	lower := r.HardBelow != nil || r.EasyAbove != nil
 

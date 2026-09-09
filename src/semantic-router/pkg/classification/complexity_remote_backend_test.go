@@ -159,3 +159,82 @@ func TestScoringHTTPBackend_RequiresAnEndpoint(t *testing.T) {
 		t.Error("expected a missing endpoint address to be rejected")
 	}
 }
+
+// A response with no score field, or an explicit null, must not read as a
+// legitimate 0. Zero is a meaningful score - for a [0,1] scorer it is the
+// easiest possible request - so silently substituting it turns a malformed
+// response into a confident verdict.
+func TestScoringHTTPBackend_RejectsAMissingScore(t *testing.T) {
+	cases := map[string]string{
+		"field absent":  `[{"label":"LABEL_0"}]`,
+		"explicit null": `[{"label":"LABEL_0","score":null}]`,
+	}
+
+	for name, body := range cases {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+
+		backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+			ModelEndpoint: endpointForTestServer(t, server),
+			ModelName:     "difficulty-scorer-svc",
+		}, time.Second)
+		if err != nil {
+			server.Close()
+			t.Fatalf("%s: newScoringHTTPBackend: %v", name, err)
+		}
+		if _, err := backend.Score(context.Background(), "text"); err == nil {
+			t.Errorf("%s: expected a missing score to be rejected, not read as 0", name)
+		}
+		server.Close()
+	}
+}
+
+// A genuine zero must still be accepted - it is the easiest end of a [0,1]
+// scorer's range, not an error.
+func TestScoringHTTPBackend_AcceptsAGenuineZero(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"label":"LABEL_0","score":0}]`))
+	}))
+	defer server.Close()
+
+	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+		ModelEndpoint: endpointForTestServer(t, server),
+		ModelName:     "difficulty-scorer-svc",
+	}, time.Second)
+	if err != nil {
+		t.Fatalf("newScoringHTTPBackend: %v", err)
+	}
+
+	score, err := backend.Score(context.Background(), "text")
+	if err != nil {
+		t.Fatalf("a reported zero is a valid score: %v", err)
+	}
+	if score != 0 {
+		t.Fatalf("score = %v, want 0", score)
+	}
+}
+
+// A non-finite score cannot be compared against any boundary.
+func TestScoringHTTPBackend_RejectsNonFiniteScores(t *testing.T) {
+	for name, body := range map[string]string{
+		"NaN string": `[{"label":"LABEL_0","score":"NaN"}]`,
+		"inf string": `[{"label":"LABEL_0","score":"Infinity"}]`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(body))
+		}))
+		backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+			ModelEndpoint: endpointForTestServer(t, server),
+			ModelName:     "difficulty-scorer-svc",
+		}, time.Second)
+		if err != nil {
+			server.Close()
+			t.Fatalf("%s: newScoringHTTPBackend: %v", name, err)
+		}
+		if _, err := backend.Score(context.Background(), "text"); err == nil {
+			t.Errorf("%s: expected a non-finite score to be rejected", name)
+		}
+		server.Close()
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -36,8 +37,12 @@ var scoreOperation = connector.Operation{
 // deployed behind the usual endpoint needs no shim. The label is meaningless
 // on this contract and is read only to keep the decoder honest about the shape.
 type scoreEntry struct {
-	Label string  `json:"label"`
-	Score float64 `json:"score"`
+	Label string `json:"label"`
+	// A pointer, so an absent field and an explicit null are distinguishable
+	// from a reported 0. Zero is a meaningful score - the easiest end of a
+	// [0,1] scorer's range - so decoding a malformed response into it would
+	// turn a backend fault into a confident verdict.
+	Score *float64 `json:"score"`
 }
 
 func newScoringHTTPBackend(cfg *config.ExternalModelConfig, deadline time.Duration) (ScoringBackend, error) {
@@ -103,7 +108,17 @@ func (s *scoringHTTPBackend) Score(ctx context.Context, text string) (float64, e
 	if len(entries) != 1 {
 		return 0, fmt.Errorf("score.v1 response must carry exactly one entry, got %d", len(entries))
 	}
-	return entries[0].Score, nil
+	if entries[0].Score == nil {
+		return 0, fmt.Errorf("score.v1 response entry carries no score")
+	}
+	score := *entries[0].Score
+	// Every comparison against NaN is false, so a rule would answer medium for
+	// it regardless of its boundaries; an infinity makes one verdict
+	// unreachable. Neither can be compared meaningfully.
+	if math.IsNaN(score) || math.IsInf(score, 0) {
+		return 0, fmt.Errorf("score.v1 response carries a non-finite score: %v", score)
+	}
+	return score, nil
 }
 
 // Close releases idle connections owned by the remote connector. A classifier
