@@ -33,6 +33,17 @@ type catalogReasoningWireCase struct {
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
 		{
+			name: "OpenAI Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "openai",
+			enabled: true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "OpenAI Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "openai",
+			apiFormat: config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
+		{
 			name: "OpenAI Chat effort", catalog: "openai/gpt-5.6-sol", provider: "openai",
 			enabled: true, effort: "high", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
 			wantControls: map[string]interface{}{"reasoning_effort": "high"},

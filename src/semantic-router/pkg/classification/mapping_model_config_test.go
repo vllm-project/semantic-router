@@ -167,4 +167,3 @@ func TestFeedbackDetectorAcceptsModelConfigMapping(t *testing.T) {
 		t.Fatalf("index 0 resolved to %q, want %q", got, FeedbackLabelSatisfied)
 	}
 }
-

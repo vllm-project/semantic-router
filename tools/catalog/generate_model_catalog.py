@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile the authored model catalog into every committed product projection."""
+"""Compile the authored model catalog into its distributable projections."""
 
 from __future__ import annotations
 
@@ -28,9 +28,6 @@ from catalog_common import nonempty_string as _nonempty_string  # noqa: E402
 from catalog_common import reject_unknown as _reject_unknown  # noqa: E402
 from catalog_common import sequence as _sequence  # noqa: E402
 from catalog_common import validate_https_url as _validate_https_url  # noqa: E402
-from catalog_evaluations import (  # noqa: E402
-    evaluation_coverage as _evaluation_coverage,
-)
 from catalog_evaluations import index_results as _index_results  # noqa: E402
 from catalog_evaluations import metric_catalog as _metric_catalog  # noqa: E402
 from catalog_evaluations import (  # noqa: E402, F401 - tested compatibility seam
@@ -65,15 +62,12 @@ from catalog_validation import validate_security as _validate_security  # noqa: 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = REPO_ROOT / "config" / "catalog"
-SOURCE_MANIFEST = SOURCE_ROOT / "catalog.yaml"
+SOURCE_MANIFEST = SOURCE_ROOT / "manifest.yaml"
 SOURCE_SCHEMA_PATH = SOURCE_ROOT / "schemas" / "catalog-source-v1.schema.json"
 RESOURCE_SCHEMA_PATH = SOURCE_ROOT / "schemas" / "catalog-resources-v1.schema.json"
 SNAPSHOT_SCHEMA_PATH = SOURCE_ROOT / "schemas" / "catalog-snapshot-v2.schema.json"
 RECIPE_MANIFEST = (
     REPO_ROOT / "config" / "recipes" / "built-in" / "latest" / "catalog.yaml"
-)
-CLI_MANIFEST = (
-    REPO_ROOT / "src" / "vllm-sr" / "cli" / "model_assets" / "latest" / "catalog.yaml"
 )
 GO_OUTPUT = (
     REPO_ROOT
@@ -82,9 +76,6 @@ GO_OUTPUT = (
     / "pkg"
     / "catalog"
     / "zz_generated_catalog.go"
-)
-DASHBOARD_OUTPUT = (
-    REPO_ROOT / "dashboard" / "frontend" / "src" / "generated" / "modelCatalog.json"
 )
 WEBSITE_OUTPUT = REPO_ROOT / "website" / "static" / "model-catalog" / "catalog.json"
 
@@ -601,9 +592,12 @@ def render_outputs() -> dict[Path, bytes]:
     manifest, resources, assets = load_and_validate()
     models = _generated_models(resources, assets)
     results = _index_results(resources)
-    coverage = _evaluation_coverage(
-        resources, manifest["defaults"]["intelligence_index"], results
-    )
+    # Absence is the canonical representation of insufficient evidence. The
+    # complete model/effort/benchmark matrix remains available through the
+    # catalog audit, but it is not persisted into every runtime projection.
+    available_results = [
+        result for result in results if result["status"] == "available"
+    ]
     generated_manifest = {
         "schema_version": OUTPUT_SCHEMA,
         "catalog_version": manifest["catalog_version"],
@@ -618,9 +612,8 @@ def render_outputs() -> dict[Path, bytes]:
         "models": models,
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
-        "evaluation_coverage": coverage,
         "indices": resources["indices"],
-        "index_results": results,
+        "index_results": available_results,
     }
     public = {
         "schema_version": OUTPUT_SCHEMA,
@@ -641,9 +634,8 @@ def render_outputs() -> dict[Path, bytes]:
         "models": models,
         "benchmarks": resources["benchmarks"],
         "evaluations": resources["evaluations"],
-        "evaluation_coverage": coverage,
         "indices": resources["indices"],
-        "index_results": results,
+        "index_results": available_results,
     }
     _validate_schema(public, _load_json(SNAPSHOT_SCHEMA_PATH), "generated snapshot")
     public_json = (
@@ -661,9 +653,7 @@ def render_outputs() -> dict[Path, bytes]:
     ).encode("utf-8")
     return {
         RECIPE_MANIFEST: manifest_bytes,
-        CLI_MANIFEST: manifest_bytes,
         GO_OUTPUT: go_source.encode("utf-8"),
-        DASHBOARD_OUTPUT: public_json.encode("utf-8"),
         WEBSITE_OUTPUT: public_json.encode("utf-8"),
     }
 

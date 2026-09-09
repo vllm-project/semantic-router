@@ -196,6 +196,9 @@ FactCHD_dataset/
 .codex-go-cache/
 .copilot-tmp/
 
+# Build-only mirror staged from config/recipes/built-in for Python packages.
+src/vllm-sr/cli/model_assets/*/
+
 # Dashboard Grafana configuration
 grafana/
 grafana-data/
