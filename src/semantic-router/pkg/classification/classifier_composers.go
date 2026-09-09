@@ -103,22 +103,25 @@ func (c *Classifier) evalComposerNode(
 		return c.evalComposerLeaf(node.Type, node.Name, signals)
 	}
 
+	// config.NormalizeRuleOperator guarantees a validated tree only carries
+	// AND, OR, or NOT here; the default branch is unreachable for loaded
+	// config and only covers trees built programmatically.
 	switch strings.ToUpper(node.Operator) {
-	case "OR":
+	case config.RuleOperatorOr:
 		for _, child := range node.Conditions {
 			if c.evalComposerNode(child, signals) {
 				return true
 			}
 		}
 		return false
-	case "NOT":
+	case config.RuleOperatorNot:
 		// Strictly unary: negate the single child's result.
 		if len(node.Conditions) != 1 {
 			logging.Warnf("Composer NOT operator requires exactly 1 child, got %d — treating as false", len(node.Conditions))
 			return false
 		}
 		return !c.evalComposerNode(node.Conditions[0], signals)
-	default: // AND
+	default: // config.RuleOperatorAnd
 		for _, child := range node.Conditions {
 			if !c.evalComposerNode(child, signals) {
 				return false

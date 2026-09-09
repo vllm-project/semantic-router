@@ -106,6 +106,7 @@ each page's data-handling notes before choosing a remote provider.
 | [Embedding](./learned/embedding) | match semantic intent from representative examples |
 | [Modality](./learned/modality) | classify text, image-generation, or mixed output intent |
 | [Fact Check](./learned/fact-check) | detect prompts that may need evidence verification |
+| [Hallucination](./learned/hallucination) | check the model's answer against the grounding context it was given |
 | [Jailbreak](./learned/jailbreak) | detect prompt-injection or jailbreak attempts |
 | [PII](./learned/pii) | detect sensitive personal data |
 | [Preference](./learned/preference) | infer response-style preferences |

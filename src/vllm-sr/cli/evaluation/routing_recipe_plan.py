@@ -32,6 +32,7 @@ _SUPPORTED_SIGNAL_TYPES = frozenset(
         "embedding",
         "event",
         "fact_check",
+        "hallucination",
         "jailbreak",
         "kb",
         "keyword",

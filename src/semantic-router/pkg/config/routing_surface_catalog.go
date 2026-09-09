@@ -35,6 +35,7 @@ const (
 	DecisionPluginRequestParams      = "request_params"
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
+	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
 var supportedSignalTypes = []string{
@@ -46,6 +47,7 @@ var supportedSignalTypes = []string{
 	SignalTypeEmbedding,
 	SignalTypeFactCheck,
 	SignalTypeJailbreak,
+	SignalTypeHallucination,
 	SignalTypeKeyword,
 	SignalTypeLanguage,
 	SignalTypeModality,
@@ -71,6 +73,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
+	DecisionPluginShadowDispatch,
 	DecisionPluginResponseCache,
 	DecisionPluginSystemPrompt,
 	DecisionPluginToolSelection,

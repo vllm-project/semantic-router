@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -480,4 +481,53 @@ func resolveSinglePositiveIndex(mapping *JailbreakMapping, positiveLabels []stri
 		return 0, fmt.Errorf("none of the configured positive_labels %v were found in jailbreak_mapping", positiveLabels)
 	}
 	return resolvedIdx, nil
+}
+
+// ValidateLabelMappingAgainstModelConfig rejects a configured label mapping that
+// disagrees with the model's own config.json. An artifact can ship both a
+// sidecar mapping and config.json, and when the two disagree the one that is
+// loaded decides what class every index means, so picking the wrong file
+// relabels every prediction with no error.
+//
+// The check is skipped when mappingPath already is the model's config.json,
+// when the model directory is unknown, when the model ships no config.json, and
+// when that config declares no id2label: none of those is a disagreement.
+func ValidateLabelMappingAgainstModelConfig(mappingPath, modelDir string, idxToLabel map[string]string) error {
+	if modelDir == "" {
+		return nil
+	}
+	modelConfigPath := filepath.Join(modelDir, "config.json")
+	if filepath.Clean(mappingPath) == filepath.Clean(modelConfigPath) {
+		return nil
+	}
+	data, err := os.ReadFile(modelConfigPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	var modelConfig struct {
+		ID2Label map[string]string `json:"id2label"`
+	}
+	if err := json.Unmarshal(data, &modelConfig); err != nil {
+		return fmt.Errorf("failed to parse %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	if len(modelConfig.ID2Label) == 0 {
+		return nil
+	}
+	for idx, modelLabel := range modelConfig.ID2Label {
+		mappedLabel, ok := idxToLabel[idx]
+		if !ok {
+			return fmt.Errorf("label mapping %s has no entry for index %s, which %s labels %q",
+				mappingPath, idx, modelConfigPath, modelLabel)
+		}
+		// Canonical labels, because the detector resolves supported aliases
+		// such as SAT and SATISFIED to one label before it uses the mapping.
+		if normalizeFeedbackLabel(mappedLabel) != normalizeFeedbackLabel(modelLabel) {
+			return fmt.Errorf("label mapping %s disagrees with %s at index %s: %q against %q",
+				mappingPath, modelConfigPath, idx, mappedLabel, modelLabel)
+		}
+	}
+	return nil
 }
