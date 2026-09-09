@@ -3,8 +3,6 @@ package metrics
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 var (
@@ -44,11 +42,4 @@ func RecordComplexityVerdict(rule, verdict, source string) {
 // verdict for any rule.
 func RecordComplexityEvaluationFailure(source string) {
 	ComplexityEvaluationFailuresTotal.WithLabelValues(labelOrUnknown(source)).Inc()
-}
-
-func labelOrUnknown(value string) string {
-	if value == "" {
-		return consts.UnknownLabel
-	}
-	return value
 }

@@ -61,20 +61,20 @@ func (b ComplexityBoundaries) Verdict(score float64) string {
 // names keeps a separate `direction` setting out of the schema and makes an
 // overlapping band impossible to write by accident.
 func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
-	for name, value := range map[string]*float64{
-		"hard_above": r.HardAbove,
-		"easy_below": r.EasyBelow,
-		"hard_below": r.HardBelow,
-		"easy_above": r.EasyAbove,
-	} {
-		// A non-finite cut point cannot separate anything: every comparison
-		// against NaN is false, so the rule would answer medium for every
-		// score, and an infinity makes one verdict unreachable.
-		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0)) {
-			return ComplexityBoundaries{}, fmt.Errorf(
-				"complexity rule %q has a non-finite %s (%v); a boundary must be a finite number",
-				r.Name, name, *value)
-		}
+	// Checked in a fixed order, field by field: this runs once per rule before
+	// every remote scoring request, so it must not allocate, and a rule with
+	// two bad cut points has to name the same one every time it is loaded.
+	if err := r.rejectNonFiniteBoundary("hard_above", r.HardAbove); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("easy_below", r.EasyBelow); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("hard_below", r.HardBelow); err != nil {
+		return ComplexityBoundaries{}, err
+	}
+	if err := r.rejectNonFiniteBoundary("easy_above", r.EasyAbove); err != nil {
+		return ComplexityBoundaries{}, err
 	}
 
 	higher := r.HardAbove != nil || r.EasyBelow != nil
@@ -121,6 +121,18 @@ func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
 
 	threshold := float64(r.Threshold)
 	return ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}, nil
+}
+
+// rejectNonFiniteBoundary refuses a cut point that cannot separate anything:
+// every comparison against NaN is false, so the rule would answer medium for
+// every score, and an infinity makes one verdict unreachable.
+func (r ComplexityRule) rejectNonFiniteBoundary(name string, value *float64) error {
+	if value == nil || (!math.IsNaN(*value) && !math.IsInf(*value, 0)) {
+		return nil
+	}
+	return fmt.Errorf(
+		"complexity rule %q has a non-finite %s (%v); a boundary must be a finite number",
+		r.Name, name, *value)
 }
 
 // declaresBoundaryPair reports whether a rule states its cut points

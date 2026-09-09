@@ -101,15 +101,20 @@ func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]by
 // connectorOutcome maps a call's result onto the metrics outcome label: the
 // success constant, or the connector's own error kind, so a dashboard can tell
 // a down remote from an overloaded or misconfigured one.
+//
+// Every failure path in do returns an *Error, so the fallback is unreachable
+// today; it stays because a metrics label must never be the reason a call
+// panics, and it is named in the metric's help so an operator who does see it
+// knows it means "an error this code did not classify".
 func connectorOutcome(err error) string {
 	if err == nil {
 		return metrics.RemoteConnectorOutcomeSuccess
 	}
 	var connectorErr *Error
-	if errors.As(err, &connectorErr) && connectorErr != nil {
+	if errors.As(err, &connectorErr) {
 		return string(connectorErr.Kind)
 	}
-	return "error"
+	return metrics.RemoteConnectorOutcomeUnclassified
 }
 
 func (c *Client) do(ctx context.Context, operation Operation, body []byte) ([]byte, error) {
@@ -135,7 +140,6 @@ func (c *Client) do(ctx context.Context, operation Operation, body []byte) ([]by
 		if !connectorErr.Retryable || attempt > c.options.MaxRetries {
 			return nil, connectorErr
 		}
-		metrics.RecordRemoteConnectorRetry(operation.Name)
 		if err := waitBeforeRetry(ctx, attempt); err != nil {
 			return nil, &Error{
 				Kind:      KindTransport,
@@ -144,6 +148,11 @@ func (c *Client) do(ctx context.Context, operation Operation, body []byte) ([]by
 				Cause:     err,
 			}
 		}
+		// Counted only once the wait completed: a context cancelled during the
+		// backoff means the retry never happens, and counting it would put the
+		// retry rate above the real attempt count - the very ratio a dashboard
+		// reads as "flapping under the retry budget".
+		metrics.RecordRemoteConnectorRetry(operation.Name)
 	}
 }
 

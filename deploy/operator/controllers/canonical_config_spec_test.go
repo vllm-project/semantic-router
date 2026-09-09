@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/utils/ptr"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -72,7 +73,7 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 						Protocol:   "http_classify",
 						Contract:   "score.v1",
 						Model:      "difficulty-scorer",
-						DeadlineMs: intPtr(2500),
+						DeadlineMs: ptr.To(2500),
 					},
 				},
 			},

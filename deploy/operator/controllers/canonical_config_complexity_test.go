@@ -6,10 +6,6 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func intPtr(value int) *int {
-	return &value
-}
-
 // The CRD's complexity_model block must land on
 // global.model_catalog.modules.complexity with the router's own field names,
 // so the router's validator - not the operator - decides what is valid.

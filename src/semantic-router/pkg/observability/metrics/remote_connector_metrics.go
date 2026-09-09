@@ -9,6 +9,11 @@ import (
 // a response. Failures carry the connector's error kind instead.
 const RemoteConnectorOutcomeSuccess = "success"
 
+// RemoteConnectorOutcomeUnclassified is the fallback for an error the
+// connector did not tag with a kind. It should never appear; it exists so a
+// metrics label can never be the reason a call fails.
+const RemoteConnectorOutcomeUnclassified = "unclassified"
+
 var (
 	// RemoteConnectorRequestDuration is the wall time of one call through the
 	// shared remote-classifier connector, retries included, so it reflects
@@ -29,7 +34,7 @@ var (
 	RemoteConnectorRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "llm_remote_connector_requests_total",
-			Help: "Remote classifier calls through the shared connector by operation and outcome (success, request, authorization, transport, status, response)",
+			Help: "Remote classifier calls through the shared connector by operation and outcome (success, request, authorization, transport, status, response, unclassified)",
 		},
 		[]string{"operation", "outcome"},
 	)
