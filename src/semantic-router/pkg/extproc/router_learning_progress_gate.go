@@ -74,7 +74,6 @@ func (r *OpenAIRouter) switchGateVerdict(
 	learningCtx *selection.SelectionContext,
 	currentModel string,
 	proposedModel string,
-	origin string,
 	downgrade bool,
 ) (selection.SwitchGateDecision, *selection.SessionSwitchGateTrace, bool) {
 	gateCfg := progressGateConfig(cfg.Tuning)
@@ -111,9 +110,6 @@ func (r *OpenAIRouter) switchGateVerdict(
 	}
 
 	decision := selection.EvaluateSwitchGate(gateCfg, in)
-	if origin != "" {
-		decision.Origin = origin
-	}
 	return decision, switchGateTrace(decision, evidence, in, len(window)), true
 }
 

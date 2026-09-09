@@ -102,7 +102,7 @@ func TestProgressGateVerdictReachesReplayThroughLearningPolicy(t *testing.T) {
 	selector := selection.NewSessionAwareSelector(selection.DefaultSessionAwareConfig())
 	result := proposedSwitchResult()
 
-	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 
 	gate := gateSectionFromReplayMap(t, replayPolicyForResult(ctx, result, cfg))
 	if gate["decision"] != selection.GateDecisionSuppress {
@@ -125,7 +125,7 @@ func TestProgressGateReplayOmittedWhenGateDisabled(t *testing.T) {
 	selector := selection.NewSessionAwareSelector(selection.DefaultSessionAwareConfig())
 	result := proposedSwitchResult()
 
-	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 
 	if _, exists := replayPolicyForResult(ctx, result, cfg)["switch_gate"]; exists {
 		t.Fatalf("a disabled gate must not emit a replay section")
@@ -171,11 +171,14 @@ func TestProgressGateMultiTurnReplayRecordsEveryVerdict(t *testing.T) {
 		}
 
 		result := proposedSwitchResult()
-		router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+		router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 
 		gate := gateSectionFromReplayMap(t, replayPolicyForResult(ctx, result, cfg))
 		if gate["decision"] != turn.wantDecision {
 			t.Fatalf("turn %d decision = %v, want %v", i, gate["decision"], turn.wantDecision)
+		}
+		if gate["switch_origin"] != selection.SwitchOriginEscalation {
+			t.Fatalf("turn %d switch_origin = %v, want escalation", i, gate["switch_origin"])
 		}
 		if gate["suppression_reason"] != turn.wantReason {
 			t.Fatalf("turn %d suppression_reason = %v, want %q", i, gate["suppression_reason"], turn.wantReason)
@@ -207,7 +210,7 @@ func TestProgressGateObserveModeReplayRecordsWithoutHolding(t *testing.T) {
 	selector := selection.NewSessionAwareSelector(selection.DefaultSessionAwareConfig())
 	result := proposedSwitchResult()
 
-	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 
 	gate := gateSectionFromReplayMap(t, replayPolicyForResult(ctx, result, cfg))
 	if gate["mode"] != selection.GateModeObserve || gate["enforced"] != false {
@@ -235,7 +238,7 @@ func TestProgressGateSuppressionRequiresEligibleCurrentModel(t *testing.T) {
 	selector := selection.NewSessionAwareSelector(selection.DefaultSessionAwareConfig())
 	result := proposedSwitchResult()
 
-	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	router.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 
 	gate := gateSectionFromReplayMap(t, replayPolicyForResult(ctx, result, cfg))
 	if gate["decision"] != selection.GateDecisionSuppress {
