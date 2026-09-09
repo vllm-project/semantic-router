@@ -2,12 +2,11 @@
 
 ## Goal
 
-Gate session-level model switches on calibrated, bounded recent-window
-trajectory evidence so that multi-turn conversations do not thrash between
+Session-level model switches are gated on calibrated, bounded recent-window
+progress evidence so that multi-turn conversations do not thrash between
 models on single noisy turns. Implements
-[issue #3377](https://github.com/vllm-project/semantic-router/issues/3377) and
-closes the evidence-calibrated session switch gate gap tracked in
-[issue #3377](https://github.com/vllm-project/semantic-router/issues/3377).
+[issue #3377](https://github.com/vllm-project/semantic-router/issues/3377),
+closing the evidence-calibrated session switch gate gap.
 
 ## Approach
 
@@ -26,8 +25,13 @@ closes the evidence-calibrated session switch gate gap tracked in
 
 ## Status
 
-M1-M5 implemented (TASK-01..TASK-09). The gate ships disabled and defaults to
-`observe` mode, so uncalibrated thresholds cannot change behavior.
+Core implementation and replay coverage are in place. The configured window
+bounds (`window_size`, `window_ttl_seconds`) drive the evidence window, cooldown
+measures the last real model change (`last_switch_at`), the oscillation guard
+counts switches inside the evidence window (`switch_timestamps`), and the
+response capture plus outcome ingest views of one turn merge into a single
+fact keyed by request ID. The gate ships disabled and defaults to `observe`
+mode; threshold calibration (TASK-10) still gates any `enforce` default.
 
 ## Tasks
 
@@ -36,13 +40,16 @@ M1-M5 implemented (TASK-01..TASK-09). The gate ships disabled and defaults to
 - [x] TASK-02/03: response-side capture + outcome-ingest mirroring into the
       same window.
 - [x] TASK-04: `EvaluateProgressEvidence` pure function (`pkg/selection`).
-- [x] TASK-05: `EvaluateSwitchGate` pure function (`pkg/selection`).
-- [x] TASK-06: gate wiring into the protection flow (main + rescue paths) with
-      replay traces (`pkg/extproc`).
-- [x] TASK-07: `progress_gate` tuning config + validator + reference config.
+- [x] TASK-05: `EvaluateSwitchGate` pure function with window-scoped cooldown
+      (`last_switch_at`) and oscillation inputs (`switch_timestamps`).
+- [x] TASK-06: main and rescue paths are wired with replay traces; runtime
+      state aligned (`last_switch_at`, `switch_timestamps`, window policy).
+- [x] TASK-07: config, validator, and reference config; `window_size` and
+      `window_ttl_seconds` drive the storage/read policy.
 - [x] TASK-08: documentation (this plan, protection tutorial).
-- [ ] TASK-09: live-traffic verification — done informally on an internal
-      GPU host (observe and enforce arcs); upstream E2E testcase pending.
+- [x] TASK-09: replay regression coverage plus internal live-traffic verification
+      of observe and enforce suppression arcs; upstream cluster E2E is optional
+      follow-up.
 - [ ] TASK-10: calibrate threshold defaults on a held-out multi-turn
       evaluation set before `mode: enforce` can become a default. Calibration
       data is an external, versioned input.

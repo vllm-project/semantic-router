@@ -31,6 +31,10 @@ type RouterSessionSnapshot struct {
 	// LastSwitchAt is the time of the most recent model change; zero when the
 	// session has never switched.
 	LastSwitchAt time.Time `json:"last_switch_at,omitempty"`
+	// SwitchTimestamps are the recent model-change times in unix millis,
+	// pruned by the session's evidence-window TTL. The gate counts switches
+	// inside its configured window from these.
+	SwitchTimestamps []int64 `json:"switch_timestamps,omitempty"`
 
 	TurnCount   int
 	SwitchCount int
@@ -90,6 +94,9 @@ type routerSessionState struct {
 	currentModel string
 	lastSeen     time.Time
 	lastSwitchAt time.Time
+	// switchTimestamps mirrors LastSwitchAt as a bounded series for the
+	// oscillation guard's window-scoped count.
+	switchTimestamps []int64
 
 	turnCount   int
 	switchCount int
@@ -156,6 +163,8 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	if previous != "" && previous != p.SelectedModel {
 		st.switchCount++
 		st.lastSwitchAt = now
+		_, ttl := st.windowPolicy()
+		st.switchTimestamps = pruneSwitchTimestamps(append(st.switchTimestamps, now.UnixMilli()), ttl, now)
 	}
 	st.currentModel = p.SelectedModel
 	st.lastSeen = now
@@ -242,6 +251,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		CurrentModel:                    st.currentModel,
 		LastSeen:                        st.lastSeen,
 		LastSwitchAt:                    st.lastSwitchAt,
+		SwitchTimestamps:                cloneInt64Slice(st.switchTimestamps),
 		IdleFor:                         idleFor,
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
@@ -318,6 +328,47 @@ func cloneIntMap(in map[string]int) map[string]int {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneInt64Slice(in []int64) []int64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]int64, len(in))
+	copy(out, in)
+	return out
+}
+
+// pruneSwitchTimestamps keeps the model-change times newer than ttl. Callers
+// pass the append time so the series stays bounded without reads mutating it.
+func pruneSwitchTimestamps(timestamps []int64, ttl time.Duration, now time.Time) []int64 {
+	if len(timestamps) == 0 || ttl <= 0 || now.IsZero() {
+		return timestamps
+	}
+	cutoff := now.Add(-ttl).UnixMilli()
+	kept := timestamps[:0]
+	for _, ts := range timestamps {
+		if ts >= cutoff {
+			kept = append(kept, ts)
+		}
+	}
+	return kept
+}
+
+// CountRecentSwitches returns how many recorded model changes fall inside the
+// window ending at now. The gate feeds its configured window TTL.
+func CountRecentSwitches(timestamps []int64, window time.Duration, now time.Time) int {
+	if len(timestamps) == 0 || window <= 0 || now.IsZero() {
+		return 0
+	}
+	cutoff := now.Add(-window).UnixMilli()
+	count := 0
+	for _, ts := range timestamps {
+		if ts >= cutoff {
+			count++
+		}
+	}
+	return count
 }
 
 func clonePolicyMap(in map[string]interface{}) map[string]interface{} {

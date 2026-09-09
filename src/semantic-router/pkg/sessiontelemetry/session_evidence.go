@@ -41,8 +41,11 @@ func categoryAttributable(category TurnOutcomeCategory) bool {
 
 // TurnOutcome is a content-minimal typed fact about one session turn: enums
 // and scalars only, never prompt or response text. ModelAttributable is
-// derived from Category, not caller-supplied.
+// derived from Category, not caller-supplied. RequestID ties the response
+// capture and the outcome ingest of the same turn together so the window can
+// hold one fact per turn.
 type TurnOutcome struct {
+	RequestID         string              `json:"request_id,omitempty"`
 	TurnIndex         int                 `json:"turn_index"`
 	Timestamp         int64               `json:"timestamp_unix_ms"` // unix milliseconds
 	Model             string              `json:"model"`
@@ -203,11 +206,21 @@ func trimTurnOutcomes(outcomes []TurnOutcome, size int) []TurnOutcome {
 	return outcomes[len(outcomes)-size:]
 }
 
-// appendTurnOutcome prunes by TTL, inserts by event time (capture and ingest
-// are independent writers, so arrival order cannot be assumed), then trims to
-// capacity. Callers must hold the store lock.
+// appendTurnOutcome prunes by TTL, merges a second writer's view of the same
+// turn, inserts by event time (capture and ingest are independent writers, so
+// arrival order cannot be assumed), then trims to capacity. Callers must hold
+// the store lock.
 func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time, size int, ttl time.Duration) []TurnOutcome {
 	outcomes = pruneTurnOutcomes(outcomes, ttl, now)
+	for i := range outcomes {
+		// Only the two writers' views of one turn merge: response capture and
+		// outcome ingest. Two captures are always distinct turns.
+		if (outcome.Source == TurnSourceOutcomeIngest || outcomes[i].Source == TurnSourceOutcomeIngest) &&
+			sameTurn(outcomes[i], outcome) {
+			outcomes[i] = mergeTurnOutcome(outcomes[i], outcome)
+			return outcomes
+		}
+	}
 	// A full window cannot accept an outcome older than everything in it.
 	if len(outcomes) >= size && outcome.Timestamp < outcomes[0].Timestamp {
 		return outcomes
@@ -220,6 +233,41 @@ func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Tim
 	copy(outcomes[i+1:], outcomes[i:])
 	outcomes[i] = outcome
 	return trimTurnOutcomes(outcomes, size)
+}
+
+// sameTurn reports whether two facts describe one turn: the same request when
+// both carry a request ID, the same turn index and model when neither does.
+// A mixed pair cannot be proven identical and stays separate.
+func sameTurn(a, b TurnOutcome) bool {
+	if a.RequestID != "" || b.RequestID != "" {
+		return a.RequestID != "" && b.RequestID != "" && a.RequestID == b.RequestID
+	}
+	return a.TurnIndex == b.TurnIndex && a.Model == b.Model
+}
+
+// mergeTurnOutcome combines the two writers' views of one turn: the ingest
+// verdict owns the semantic category, response capture owns the usage
+// measurements, and the first writer's event time keeps the window ordered.
+func mergeTurnOutcome(existing, incoming TurnOutcome) TurnOutcome {
+	merged := existing
+	switch incoming.Source {
+	case TurnSourceOutcomeIngest:
+		merged.Category = incoming.Category
+		merged.Confidence = incoming.Confidence
+		merged.Source = TurnSourceOutcomeIngest
+	case TurnSourceRouterObserved:
+		merged.OutputTokens = incoming.OutputTokens
+		merged.LatencyMs = incoming.LatencyMs
+		if existing.Source != TurnSourceOutcomeIngest {
+			merged.Category = incoming.Category
+			merged.Source = TurnSourceRouterObserved
+		}
+	}
+	if merged.RequestID == "" {
+		merged.RequestID = incoming.RequestID
+	}
+	merged.ModelAttributable = categoryAttributable(merged.Category)
+	return merged
 }
 
 // pruneTurnOutcomes returns the entries newer than ttl, without assuming
