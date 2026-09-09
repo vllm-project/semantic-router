@@ -80,3 +80,74 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 		t.Fatalf("idle = %s, want 10s", snapshot.IdleFor)
 	}
 }
+
+func TestRouterSessionSnapshotSwitchState(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	base := time.Now().Truncate(time.Second)
+	setRouterSessionMemoryNowForTesting(func() time.Time { return base.Add(6 * time.Minute) })
+	defer setRouterSessionMemoryNowForTesting(nil)
+
+	const sessionID = "switch-state"
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID:     sessionID,
+		SelectedModel: "model-a",
+		Timestamp:     base,
+	})
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID:     sessionID,
+		PreviousModel: "model-a",
+		SelectedModel: "model-b",
+		Timestamp:     base.Add(10 * time.Second),
+	})
+	// Regular activity after the switch must refresh LastSeen but not
+	// LastSwitchAt: cooldown measures the switch, not the conversation.
+	RecordSessionUsage(SessionUsageParams{
+		SessionID:        sessionID,
+		Model:            "model-b",
+		CompletionTokens: 1,
+		Timestamp:        base.Add(5 * time.Minute),
+	})
+
+	snapshot, ok := GetRouterSessionSnapshot(sessionID, base.Add(5*time.Minute+time.Second))
+	if !ok {
+		t.Fatal("snapshot missing")
+	}
+	if !snapshot.LastSwitchAt.Equal(base.Add(10 * time.Second)) {
+		t.Fatalf("last switch = %v, want the t+10s switch, not the t+5m activity", snapshot.LastSwitchAt)
+	}
+	if !snapshot.LastSeen.Equal(base.Add(5 * time.Minute)) {
+		t.Fatalf("last seen = %v, want t+5m", snapshot.LastSeen)
+	}
+
+	// A session that never switched reports a zero switch time.
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID:     "no-switch",
+		SelectedModel: "model-a",
+		Timestamp:     base,
+	})
+	fresh, _ := GetRouterSessionSnapshot("no-switch", base.Add(time.Minute))
+	if !fresh.LastSwitchAt.IsZero() {
+		t.Fatalf("never-switched session has LastSwitchAt = %v", fresh.LastSwitchAt)
+	}
+
+	// Persistence round-trip must keep the switch time.
+	store := newFakeSessionStateStore()
+	SetRouterSessionStateStore(store)
+	defer SetRouterSessionStateStore(nil)
+	ResetRouterSessionMemoryForTesting()
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID: sessionID, SelectedModel: "model-a", Timestamp: base,
+	})
+	RecordSessionDecision(SessionDecisionParams{
+		SessionID: sessionID, PreviousModel: "model-a", SelectedModel: "model-b",
+		Timestamp: base.Add(10 * time.Second),
+	})
+	ResetRouterSessionMemoryForTesting()
+	recovered, ok := GetRouterSessionSnapshot(sessionID, base.Add(20*time.Second))
+	if !ok {
+		t.Fatal("snapshot did not recover from the shared store")
+	}
+	if !recovered.LastSwitchAt.Equal(base.Add(10 * time.Second)) {
+		t.Fatalf("last switch lost across restart: %v", recovered.LastSwitchAt)
+	}
+}
