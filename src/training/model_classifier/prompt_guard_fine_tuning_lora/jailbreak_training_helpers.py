@@ -75,9 +75,14 @@ def save_training_artifacts(
     max_samples: int,
     train_data: list[dict],
     val_data: list[dict],
+    pins: dict,
     manifest_dir: str | None = None,
-) -> None:
-    """Persist LoRA adapters, label metadata, and the run's provenance manifests."""
+) -> dict:
+    """Persist LoRA adapters, label metadata, and the run's provenance manifests.
+
+    Returns the manifest paths so the caller can reference the artifact it just
+    described from the evaluation manifest.
+    """
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
 
@@ -95,7 +100,8 @@ def save_training_artifacts(
     with open(os.path.join(output_dir, "lora_config.json"), "w") as f:
         json.dump(lora_config, f)
 
-    emit_training_manifests(
+    return emit_training_manifests(
+        pins=pins,
         output_dir=output_dir,
         manifest_dir=manifest_dir,
         model_name=model_name,

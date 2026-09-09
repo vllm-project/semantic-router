@@ -23,11 +23,19 @@ from provenance.emit import (  # noqa: E402
     ProvenanceError,
     build_artifact_manifest,
     build_dataset_manifest,
+    build_evaluation_manifest,
     build_run_manifest,
     code_revision,
     resolve_hf_revision,
     split_digest,
     write_manifest,
+)
+from provenance.manifest import load_manifest  # noqa: E402
+from provenance.metrics import (  # noqa: E402
+    abstention_curve,
+    calibration_metrics,
+    classification_metrics,
+    latency_percentiles,
 )
 
 TASK = "jailbreak"
@@ -45,8 +53,29 @@ PATTERN_ASSETS = (
 )
 
 
+def resolve_training_pins(*, base_model_repo: str) -> dict[str, Any]:
+    """Resolve every upstream revision once, before anything is loaded.
+
+    The manifests have to describe the bytes the run actually read. Resolving
+    after training records whatever the ref points at by then, so a moving ref
+    or a stale cache would produce provenance that looks valid and is not. The
+    caller passes these revisions into the loads and back into the manifests.
+    """
+    return {
+        "base_model": {
+            "repo": base_model_repo,
+            "revision": resolve_hf_revision(base_model_repo),
+        },
+        "datasets": {
+            key: resolve_hf_revision(entry["name"], repo_type="dataset")
+            for key, entry in DATASET_CONFIGS.items()
+        },
+    }
+
+
 def emit_training_manifests(
     *,
+    pins: dict[str, Any],
     output_dir: str | Path,
     manifest_dir: str | Path | None,
     model_name: str,
@@ -80,12 +109,13 @@ def emit_training_manifests(
         label_mapping=label_mapping,
         train_rows=_rows(train_data),
         validation_rows=_rows(val_data),
+        dataset_pins=pins["datasets"],
     )
     run = build_run_manifest(
         manifest_id=run_id,
         task=TASK,
         base_model_repo=base_model_repo,
-        base_model_revision=resolve_hf_revision(base_model_repo),
+        base_model_revision=pins["base_model"]["revision"],
         entrypoint=TRAINING_ENTRYPOINT,
         repo_root=REPO_ROOT,
         dataset_refs=[
@@ -126,12 +156,84 @@ def emit_training_manifests(
     return written
 
 
+def emit_evaluation_manifest(
+    *,
+    manifest_dir: str | Path,
+    artifact_manifest_path: str | Path,
+    dataset_manifest_path: str | Path,
+    label_to_id: dict[str, int],
+    seed: int,
+    batch_size: int,
+    max_length: int,
+    device: str,
+    device_name: str | None,
+    sample_limit: int | None,
+    y_true: list[int],
+    y_pred: list[int],
+    confidences: list[float],
+    latencies_ms: list[float],
+    peak_memory_mb: float,
+    logger,
+) -> Path:
+    """Write the evaluation manifest for the run that just finished.
+
+    The adapter is measured on the validation split the same run held out, so
+    the manifest records ``by_row``: this workflow splits its own mixture
+    positionally rather than holding out whole sources, which is the leak a
+    reader has to be able to see from the manifest alone.
+    """
+    manifest_dir = Path(manifest_dir)
+    artifact = load_manifest(Path(artifact_manifest_path), expected_kind="artifact")
+    dataset = load_manifest(Path(dataset_manifest_path), expected_kind="dataset")
+    label_mapping = dict(label_to_id)
+    evaluation_id = f"{artifact['id']}-validation"
+
+    evaluation = build_evaluation_manifest(
+        manifest_id=evaluation_id,
+        task=TASK,
+        artifact_ref={
+            "id": artifact["id"],
+            "revision": artifact["identity"]["revision"],
+            "digest": artifact["identity"]["digest"],
+        },
+        dataset_ref={
+            "id": dataset["id"],
+            "revision": dataset["source"]["revision"],
+            "splits": ["validation"],
+        },
+        split_rule="by_row",
+        entrypoint=TRAINING_ENTRYPOINT,
+        repo_root=REPO_ROOT,
+        device=device,
+        device_name=device_name,
+        batch_size=batch_size,
+        max_length=max_length,
+        sample_limit=sample_limit,
+        seed=seed,
+        label_mapping=label_mapping,
+        metrics=classification_metrics(y_true, y_pred, label_mapping),
+        calibration=calibration_metrics(y_true, y_pred, confidences),
+        abstention=abstention_curve(y_true, y_pred, confidences),
+        performance={
+            "latency_ms": latency_percentiles(latencies_ms),
+            "peak_memory_mb": peak_memory_mb,
+        },
+        description=(
+            "Validation of the adapter this run produced, on the split it held out."
+        ),
+    )
+    path = write_manifest(evaluation, manifest_dir / f"{evaluation_id}.manifest.yaml")
+    logger.info(f"Wrote evaluation manifest: {path}")
+    return path
+
+
 def _build_dataset(
     *,
     dataset_id: str,
     label_mapping: dict[str, int],
     train_rows: list[tuple[str, int]],
     validation_rows: list[tuple[str, int]],
+    dataset_pins: dict[str, str],
 ) -> dict[str, Any]:
     """Describe the mixture the workflow built, with every upstream pinned."""
     code_sha = _code_sha()
@@ -159,17 +261,17 @@ def _build_dataset(
             "Composite prompt-guard training mixture built by the LoRA workflow."
         ),
     )
-    dataset["source"]["components"] = _components(code_sha)
+    dataset["source"]["components"] = _components(code_sha, dataset_pins)
     return dataset
 
 
-def _components(code_sha: str) -> list[dict[str, str]]:
+def _components(code_sha: str, dataset_pins: dict[str, str]) -> list[dict[str, str]]:
     components = []
-    for entry in DATASET_CONFIGS.values():
+    for key, entry in DATASET_CONFIGS.items():
         component = {
             "type": "huggingface",
             "locator": entry["name"],
-            "revision": resolve_hf_revision(entry["name"], repo_type="dataset"),
+            "revision": dataset_pins[key],
         }
         if entry.get("config"):
             component["config"] = entry["config"]
@@ -231,4 +333,9 @@ def _code_sha() -> str:
     return code_revision(TRAINING_ENTRYPOINT, REPO_ROOT)["revision"]
 
 
-__all__ = ["ProvenanceError", "emit_training_manifests"]
+__all__ = [
+    "ProvenanceError",
+    "emit_evaluation_manifest",
+    "emit_training_manifests",
+    "resolve_training_pins",
+]

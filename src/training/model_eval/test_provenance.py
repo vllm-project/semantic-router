@@ -10,6 +10,12 @@ TEST_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(TEST_DIR))
 
 from provenance.crossref import artifact_identity_digest, validate_bundle  # noqa: E402
+from provenance.metrics import (  # noqa: E402
+    abstention_curve,
+    calibration_metrics,
+    classification_metrics,
+    latency_percentiles,
+)
 from provenance.manifest import ManifestError, load_manifest  # noqa: E402
 from provenance.redaction import RedactionError  # noqa: E402
 
@@ -363,3 +369,74 @@ def test_composite_dataset_must_pin_its_upstreams(tmp_path):
     }
     with pytest.raises(ManifestError, match="components"):
         load_manifest(write_one(tmp_path, manifest))
+
+
+def test_classification_metrics_count_each_label():
+    """Per label support and F1 come from the rows, not from a rounded average."""
+    metrics = classification_metrics(
+        [1, 1, 0, 0], [1, 0, 0, 0], {"benign": 0, "jailbreak": 1}
+    )
+    assert metrics["rows"] == 4
+    assert metrics["accuracy"] == 0.75
+    assert metrics["per_label"]["jailbreak"] == {
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": pytest.approx(2 / 3),
+        "support": 2,
+    }
+    assert metrics["macro_f1"] == pytest.approx((2 / 3 + 0.8) / 2)
+
+
+def test_calibration_bins_cover_the_unit_interval():
+    """Every row lands in exactly one bin, and empty bins report no numbers."""
+    calibration = calibration_metrics(
+        [1, 1, 0], [1, 0, 0], [0.95, 0.55, 0.85], bin_count=4
+    )
+    assert calibration["bin_count"] == 4
+    assert sum(entry["count"] for entry in calibration["bins"]) == 3
+    empty = [entry for entry in calibration["bins"] if entry["count"] == 0]
+    assert all(entry["confidence"] is None for entry in empty)
+    assert 0.0 <= calibration["ece"] <= 1.0
+    assert calibration["mce"] >= calibration["ece"]
+
+
+def test_abstention_curve_reports_coverage_and_selective_accuracy():
+    """A threshold that drops the wrong answer raises accuracy on what is left."""
+    curve = abstention_curve(
+        [1, 0], [1, 1], [0.9, 0.6], thresholds=(0.5, 0.8)
+    )["curve"]
+    assert curve[0] == {
+        "threshold": 0.5,
+        "coverage": 1.0,
+        "selective_accuracy": 0.5,
+        "abstained": 0,
+    }
+    assert curve[1] == {
+        "threshold": 0.8,
+        "coverage": 0.5,
+        "selective_accuracy": 1.0,
+        "abstained": 1,
+    }
+
+
+def test_abstention_curve_reports_no_accuracy_when_everything_abstains():
+    """Selective accuracy over an empty selection is unknown, not perfect."""
+    curve = abstention_curve([1], [1], [0.4], thresholds=(0.9,))["curve"]
+    assert curve[0]["coverage"] == 0.0
+    assert curve[0]["selective_accuracy"] is None
+
+
+def test_latency_percentiles_use_nearest_rank():
+    percentiles = latency_percentiles([5.0, 1.0, 3.0, 2.0, 4.0])
+    assert percentiles["mean"] == 3.0
+    assert percentiles["p50"] == 3.0
+    assert percentiles["p95"] == 5.0
+
+
+def test_metrics_reject_misaligned_inputs():
+    with pytest.raises(ValueError):
+        classification_metrics([1, 0], [1], {"benign": 0, "jailbreak": 1})
+    with pytest.raises(ValueError):
+        calibration_metrics([1], [1], [0.9], bin_count=1)
+    with pytest.raises(ValueError):
+        latency_percentiles([])
