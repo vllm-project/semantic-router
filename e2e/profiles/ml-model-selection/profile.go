@@ -36,7 +36,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -136,7 +135,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 
 	// Step 6: Deploy Mock LLM (to receive routed requests)
 	p.log("Step 6/7: Deploying Mock LLM service")
-	if err := p.deployMockLLM(ctx, deployer, opts); err != nil {
+	if err := p.deployMockLLM(ctx, opts); err != nil {
 		return fmt.Errorf("failed to deploy mock LLM: %w", err)
 	}
 
@@ -170,97 +169,43 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	p.log("Cleaning up Gateway API resources")
 	p.cleanupGatewayResources(ctx, opts)
 
-	p.log("Uninstalling Mock LLM")
-	deployer.Uninstall(ctx, "mock-llm", "default")
+	p.log("Deleting Mock LLM resources")
+	p.kubectlDelete(ctx, opts.KubeConfig, mockLLMManifest)
 
 	p.log("Uninstalling Envoy AI Gateway")
-	deployer.Uninstall(ctx, "aieg-crd", "envoy-ai-gateway-system")
-	deployer.Uninstall(ctx, "aieg", "envoy-ai-gateway-system")
+	_ = deployer.Uninstall(ctx, "aieg-crd", "envoy-ai-gateway-system")
+	_ = deployer.Uninstall(ctx, "aieg", "envoy-ai-gateway-system")
 
 	p.log("Uninstalling Envoy Gateway")
-	deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
+	_ = deployer.Uninstall(ctx, "eg", "envoy-gateway-system")
 
 	p.log("Uninstalling Semantic Router")
-	deployer.Uninstall(ctx, "semantic-router", "vllm-semantic-router-system")
+	_ = deployer.Uninstall(ctx, "semantic-router", "vllm-semantic-router-system")
 
 	p.log("ML Model Selection teardown complete")
 	return nil
 }
 
-func (p *Profile) deployMockLLM(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	// Deploy mock-vllm for testing
-	mockOpts := helm.InstallOptions{
-		ReleaseName: "mock-llm",
-		Chart:       "deploy/helm/mock-vllm",
-		Namespace:   "default",
-		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/mock-vllm",
-			"image.tag":        "latest",
-			"image.pullPolicy": "Never",
-			"service.port":     "8000",
-		},
-		Wait:    true,
-		Timeout: "5m",
+const (
+	mockLLMManifest = "e2e/profiles/ml-model-selection/gateway-resources/mock-llm.yaml"
+	mockLLMImage    = "ghcr.io/vllm-project/semantic-router/mock-vllm:latest"
+)
+
+func (p *Profile) deployMockLLM(ctx context.Context, opts *framework.SetupOptions) error {
+	if strings.TrimSpace(opts.LocalImages[mockLLMImage]) == "" {
+		return fmt.Errorf("missing run image for mock LLM %q", mockLLMImage)
+	}
+	if err := framework.WithLocalImages(mockLLMManifest, opts.LocalImages, func(path string) error {
+		return p.kubectlApply(ctx, opts.KubeConfig, path)
+	}); err != nil {
+		return fmt.Errorf("failed to apply mock LLM: %w", err)
 	}
 
-	if err := deployer.Install(ctx, mockOpts); err != nil {
-		// If mock-vllm chart doesn't exist, create a simple deployment
-		p.log("Mock LLM chart not found, creating simple deployment...")
-		return p.deploySimpleMockLLM(ctx, opts)
-	}
-
-	return deployer.WaitForDeployment(ctx, "default", "mock-llm", 5*time.Minute)
-}
-
-func (p *Profile) deploySimpleMockLLM(ctx context.Context, opts *framework.SetupOptions) error {
-	// Create a simple mock LLM deployment using kubectl
-	manifest := `
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mock-llm
-  namespace: default
-  labels:
-    app: mock-llm
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mock-llm
-  template:
-    metadata:
-      labels:
-        app: mock-llm
-    spec:
-      containers:
-      - name: mock-llm
-        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
-        imagePullPolicy: Never
-        ports:
-        - containerPort: 8000
-        resources:
-          limits:
-            memory: "256Mi"
-            cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mock-llm-service
-  namespace: default
-spec:
-  selector:
-    app: mock-llm
-  ports:
-  - port: 8000
-    targetPort: 8000
-`
-	// Apply using kubectl
-	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", opts.KubeConfig, "apply", "-f", "-")
-	cmd.Stdin = strings.NewReader(manifest)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("kubectl apply failed: %w\nOutput: %s", err, string(output))
+	cmd := exec.CommandContext(ctx, "kubectl", "rollout", "status", "deployment/mock-llm",
+		"--namespace", "default", "--timeout=5m")
+	cmd.Env = append(os.Environ(), fmt.Sprintf("KUBECONFIG=%s", opts.KubeConfig))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("mock LLM deployment not ready: %w\nOutput: %s", err, output)
 	}
 	return nil
 }
@@ -327,9 +272,9 @@ func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error
 	trainingDir := "src/training/model_selection/ml_model_selection"
 
 	// Get absolute path for the source directory (needed for Kind mount)
-	absSourceDir, err := filepath.Abs(sourceDir)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+	absSourceDir, pathErr := filepath.Abs(sourceDir)
+	if pathErr != nil {
+		return fmt.Errorf("failed to get absolute path: %w", pathErr)
 	}
 	p.log("ML models directory: %s", absSourceDir)
 
@@ -364,7 +309,9 @@ func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error
 
 		// Download pretrained models from HuggingFace
 		p.log("Downloading pretrained ML models from HuggingFace...")
-		os.MkdirAll(sourceDir, 0755)
+		if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create ML models directory: %w", err)
+		}
 
 		downloadCmd := exec.CommandContext(ctx, "python3", "download_model.py",
 			"--output-dir", "../../../../.cache/ml-models",
@@ -396,7 +343,7 @@ func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error
 	// This is the standard approach that works on native Linux
 	hostDir := cluster.NewKindCluster(clusterName, p.verbose).ModelsDir()
 	p.log("Copying models to host directory %s...", hostDir)
-	if err := os.MkdirAll(hostDir, 0755); err != nil {
+	if err := os.MkdirAll(hostDir, 0o755); err != nil {
 		p.log("  Warning: could not create host directory: %v (may need sudo on some systems)", err)
 	} else {
 		for _, f := range modelFiles {
@@ -406,7 +353,7 @@ func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", src, err)
 			}
-			if err := os.WriteFile(dst, data, 0644); err != nil {
+			if err := os.WriteFile(dst, data, 0o644); err != nil {
 				p.log("  Warning: could not write %s: %v", dst, err)
 			} else {
 				p.log("  ✓ Copied %s to host", f)
