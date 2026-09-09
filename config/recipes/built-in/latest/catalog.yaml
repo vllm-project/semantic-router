@@ -1563,6 +1563,58 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
+  - catalog: openai/gpt-6-astra
+    relationship: first_party
+    id: gpt-6-astra
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    reasoning_efforts_by_protocol:
+      openai/chat-completions@1:
+      - low
+      - medium
+      - high
+      - xhigh
+    pricing:
+      currency: USD
+      prompt_per_1m: 10.0
+      cached_input_per_1m: 1.0
+      cache_write_per_1m: 12.5
+      completion_per_1m: 50.0
+    restrictions:
+      tools_protocols:
+      - openai/responses@1
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - temperature
+        - top_p
+        - top_logprobs
+        - logprobs
+        openai/responses@1:
+        - temperature
+        - top_p
+        - top_logprobs
+      unsupported_include_values:
+      - message.output_text.logprobs
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-07'
+      source: https://developers.openai.com/api/docs/models/gpt-6-astra
   - catalog: openai/gpt-5.4
     relationship: first_party
     id: gpt-5.4
@@ -2167,6 +2219,35 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/api/v1/models
+  - catalog: openai/gpt-6-astra
+    relationship: gateway
+    id: openai/gpt-6-astra
+    protocols:
+    - openai/chat-completions@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    reasoning_efforts_by_protocol:
+      openai/chat-completions@1:
+      - low
+      - medium
+      - high
+      - xhigh
+    pricing:
+      currency: USD
+      prompt_per_1m: 10.0
+      cached_input_per_1m: 1.0
+      cache_write_per_1m: 12.5
+      completion_per_1m: 50.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-08'
+      source: https://openrouter.ai/openai/gpt-6-astra
 - id: perplexity
   display_name: Perplexity
   description: Search-grounded models and online answers.
@@ -3601,6 +3682,18 @@ reasoning_families:
   modes:
   - enabled
   - disabled
+  default_mode: enabled
+- id: gpt-6-astra
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
+  modes:
+  - enabled
   default_mode: enabled
 - id: gpt-5.6
   type: reasoning_effort
@@ -6069,6 +6162,48 @@ models:
   - moe
   - efficient
   released_at: '2026-03-19'
+- id: openai/gpt-6-astra
+  display_name: GPT-6 Astra
+  description: OpenAI flagship model for complex reasoning, coding, computer use, research, and document creation.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-6-astra
+  family: gpt-6
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-6-astra
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-09-07'
+    source: https://developers.openai.com/api/docs/models/gpt-6-astra
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-09-03'
+  knowledge_cutoff: '2026-04-30'
 - id: openai/gpt-5.6-sol
   display_name: GPT-5.6 Sol
   description: OpenAI high-capability GPT-5.6 model for demanding reasoning and agentic work.
@@ -27216,6 +27351,507 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.492122335495829
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-low-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.931313131313131
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-low-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.540509259259259
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.527340129749768
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.895131086142322
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.939393939393939
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-medium-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.541666666666667
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.530583873957368
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.898876404494382
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-high-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.94949494949495
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-high-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.554398148148148
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.545875810936052
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.891385767790262
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.962626262626263
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.556712962962963
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.546802594995366
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-max-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.883895131086142
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-max-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.960606060606061
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-max-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.564814814814815
+  status: available
+  observed_at: '2026-09-08'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: openai/gpt-6-astra-launch-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.96
+  status: available
+  observed_at: '2026-09-07'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-humanitys-last-exam-tools@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    tool_policy: tools_enabled
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.572
+  status: available
+  observed_at: '2026-09-07'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-deep-swe-1.1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.741
+  status: available
+  observed_at: '2026-09-07'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-2@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.95
+  status: available
+  observed_at: '2026-09-07'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: '2026-09-07'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
     redistributable: true
 - id: independent/qwen3-7-max-critpt@1.0.0
   model: qwen/qwen3.7-max

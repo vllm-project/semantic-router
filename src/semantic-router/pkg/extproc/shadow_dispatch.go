@@ -2,198 +2,628 @@ package extproc
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
+	mathrand "math/rand"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/openai/openai-go"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadow"
 )
 
-// dispatchShadowArms replays the normalized request to every configured shadow
-// arm inside a bounded, fire-and-forget goroutine. It never blocks or fails the
-// primary response: the primary route has already decided its destination when
-// this runs, and every arm outcome is observed then discarded on error.
-func (r *OpenAIRouter) dispatchShadowArms(reqCtx *RequestContext) {
-	if r == nil || reqCtx == nil || reqCtx.SemanticRequest == nil {
-		return
-	}
-	cfg := r.Config.ShadowComparison
-	if !cfg.IsEnabled() {
-		return
-	}
+// Shadow dispatch sends a bounded, sampled copy of the approved request to a
+// secondary configured model. It runs strictly after the primary dispatch
+// response has been built, never blocks the request path beyond a
+// non-blocking slot check, and records a deterministic outcome for replay.
+// This file owns the request-path hook, the bounded lanes, and outcome
+// recording; shadow_dispatch_call.go owns the HTTP call itself.
 
-	go func() {
-		// A panic in the shadow path must never take down the primary
-		// request or the router process.
-		defer func() {
-			if rec := recover(); rec != nil {
-				logging.ComponentErrorEvent("extproc", "shadow_dispatch_panic", map[string]interface{}{
-					"request_id": reqCtx.RequestID,
-					"panic":      rec,
-				})
-			}
-		}()
+const (
+	shadowDispatchOutcomeSource = "shadow_dispatch"
+	shadowDispatchOutcomeTarget = "model"
 
-		parent := reqCtx.TraceContext
-		if parent == nil {
-			parent = context.Background()
-		}
-		// The aggregate shadow window bounds total shadow work; cancelling the
-		// stream context (client disconnect, request deadline) also cancels
-		// every in-flight arm.
-		ctx, cancel := context.WithTimeout(parent, cfg.GetMaxWait())
-		defer cancel()
+	shadowVerdictCompleted = "completed"
+	shadowVerdictFailed    = "failed"
+	shadowVerdictDropped   = "dropped"
 
-		params, ok := r.shadowRequestParams(reqCtx)
-		if !ok {
-			return
-		}
-		// C1/C2: arms evaluate the same normalized request under the budget.
-		// C3: a blinded judge compares the surviving arms (disabled by default).
-		// C4: the comparison evidence lands in Replay via the outcome channel.
-		results := shadow.Dispatch(ctx, cfg, params, nil)
-		r.observeShadowArms(reqCtx, results)
-		decision := r.judgeShadowArms(ctx, cfg, params, results, reqCtx)
-		r.recordShadowEvidence(reqCtx, cfg, results, decision)
-	}()
+	shadowReasonCompleted            = "completed"
+	shadowReasonSampledOut           = "sampled_out"
+	shadowReasonSameAsPrimary        = "same_as_primary"
+	shadowReasonInternalRequest      = "internal_request"
+	shadowReasonRequestUnavailable   = "request_unavailable"
+	shadowReasonQueueFull            = "queue_full"
+	shadowReasonQueueTimeout         = "queue_timeout"
+	shadowReasonRouterClosing        = "router_closing"
+	shadowReasonBackendUnresolved    = "backend_unresolved"
+	shadowReasonCredentialUnresolved = "credential_unresolved" //nolint:gosec // outcome reason code, not a secret
+	shadowReasonEncodeFailed         = "encode_failed"
+	shadowReasonTimeout              = "timeout"
+	shadowReasonTransportError       = "transport_error"
+	shadowReasonUpstreamStatus       = "upstream_status"
+	shadowReasonRedirectRejected     = "redirect_rejected"
+	shadowReasonResponseTooLarge     = "response_too_large"
+	shadowReasonMalformedResponse    = "malformed_response"
+
+	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
+	// finish before cancelling them. Their primary requests already completed
+	// and their upstream compute is already spent, so finishing is cheaper
+	// than aborting; the per-job deadline bounds the wait regardless.
+	shadowDispatchDrainTimeout   = 5 * time.Second
+	shadowDispatchCancelGrace    = 2 * time.Second
+	shadowDispatchErrorTextLimit = 200
+)
+
+// shadowDispatcher owns the bounded execution lanes for shadow calls. One
+// lane exists per routing decision so a slow shadow backend on one route
+// cannot starve another route's observations.
+type shadowDispatcher struct {
+	sampler func() float64
+	now     func() time.Time
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
+	mu      sync.Mutex
+	lanes   map[string]*shadowLane
+	clients map[string]*connector.Client
+	closed  bool
 }
 
-// observeShadowArms logs one observability event per arm; the primary response
-// was already decided and is never touched here.
-func (r *OpenAIRouter) observeShadowArms(reqCtx *RequestContext, results []shadow.ArmResult) {
-	for _, res := range results {
-		fields := map[string]interface{}{
-			"request_id":        reqCtx.RequestID,
-			"arm":               res.Arm,
-			"model":             res.Model,
-			"ok":                res.Outcome == shadow.OutcomeCompleted,
-			"outcome":           string(res.Outcome),
-			"latency_ms":        res.LatencyMS,
-			"prompt_tokens":     res.PromptTokens,
-			"completion_tokens": res.CompletionTokens,
-		}
-		if res.Outcome == shadow.OutcomeCompleted {
-			logging.ComponentEvent("extproc", "shadow_arm_result", fields)
-		} else {
-			fields["error"] = res.Err
-			logging.ComponentEvent("extproc", "shadow_arm_failed", fields)
-		}
+type shadowLane struct {
+	slots    chan struct{}
+	maxQueue int
+	waiting  atomic.Int32
+}
+
+// shadowRequestEncoder renders the approved neutral request for one shadow
+// target exactly as a primary dispatch to that model would.
+type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget) ([]byte, error)
+
+// shadowJob is everything a shadow call needs, captured synchronously so the
+// worker never reads mutable request state after the primary path moves on.
+type shadowJob struct {
+	cfg             config.ShadowDispatchPluginConfig
+	routerConfig    *config.RouterConfig
+	engine          *protocolcodec.Engine
+	encode          shadowRequestEncoder
+	request         llmprotocol.Request
+	extraHeaders    map[string]string
+	decision        string
+	recipe          string
+	primaryRequest  string
+	primaryModel    string
+	primaryBackend  string
+	shadowRequestID string
+	replayID        string
+	recorder        *routerreplay.Recorder
+	enqueuedAt      time.Time
+	deadline        time.Time
+}
+
+type shadowResult struct {
+	verdict       string
+	reason        string
+	shadowBackend string
+	startedAt     time.Time
+	finishedAt    time.Time
+	attempts      int
+	statusCode    int
+	responseBytes int
+	stopReason    string
+	inputTokens   int64
+	outputTokens  int64
+	text          string
+	err           string
+}
+
+func newShadowDispatcher() *shadowDispatcher {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &shadowDispatcher{
+		sampler: mathrand.Float64, //nolint:gosec // sampling only, not security sensitive
+		now:     time.Now,
+		ctx:     ctx,
+		cancel:  cancel,
+		lanes:   make(map[string]*shadowLane),
+		clients: make(map[string]*connector.Client),
 	}
 }
 
-// judgeShadowArms runs the blinded comparison when a judge is configured.
-// All judge failures map to an explicit judge outcome and stay in
-// observability/Replay; they never affect the primary response. A zero-value
-// decision (empty outcome) means no judge is configured.
-func (r *OpenAIRouter) judgeShadowArms(
-	ctx context.Context,
-	cfg config.ShadowComparisonConfig,
-	params *openai.ChatCompletionNewParams,
-	results []shadow.ArmResult,
-	reqCtx *RequestContext,
-) shadow.JudgeDecision {
-	if !cfg.Judge.Enabled || cfg.Judge.Model == "" || cfg.Judge.Endpoint == "" {
-		return shadow.JudgeDecision{}
-	}
-	judge := shadow.NewJudge(cfg.Judge, cfg.Arms)
-	question, _ := extractUserAndNonUserContent(params)
-	decision := judge.Decide(ctx, question, results)
-	fields := map[string]interface{}{
-		"request_id":     reqCtx.RequestID,
-		"judge_outcome":  string(decision.Outcome),
-		"winner_arm_id":  decision.WinnerArmID,
-		"judge_model":    decision.JudgeModel,
-		"rubric_version": decision.JudgeRubricVersion,
-		"latency_ms":     decision.LatencyMS,
-	}
-	if len(decision.TieArmIDs) > 0 {
-		fields["tie_arm_ids"] = decision.TieArmIDs
-	}
-	if decision.Reason != "" {
-		fields["reason"] = decision.Reason
-	}
-	logging.ComponentEvent("extproc", "shadow_judge_result", fields)
-	return decision
+// insecureShadowTLSConfig is the explicit operator opt-in matching Envoy's
+// upstream posture for a backend without a verifiable certificate.
+func insecureShadowTLSConfig() *tls.Config {
+	return &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit per-decision operator opt-in
 }
 
-// recordShadowEvidence attaches the comparison evidence to the replay record
-// via the outcome channel. Only opaque arm ids and compact features (outcome,
-// latency, usage) are stored — no response content and no model identity, per
-// the issue's non-goals and D7. The opaque->model mapping stays in the
-// deployment config; arm identity lives in observability. Judge disabled
-// still records the arms with a "observed" verdict.
-func (r *OpenAIRouter) recordShadowEvidence(
-	reqCtx *RequestContext,
-	cfg config.ShadowComparisonConfig,
-	results []shadow.ArmResult,
-	decision shadow.JudgeDecision,
-) {
-	if r.ReplayRecorder == nil || reqCtx.RouterReplayID == "" {
-		return
+// Close stops accepting new shadow calls, drains in-flight ones for a bounded
+// time, and only then cancels whatever is still running.
+func (d *shadowDispatcher) Close() error {
+	if d == nil {
+		return nil
 	}
-	judge := shadow.NewJudge(cfg.Judge, cfg.Arms)
-	outcome := buildShadowEvidence(judge, results, decision)
-	// Reuse the same guard the learning runtime applies: only attach to a
-	// record that still exists.
-	if _, found := r.ReplayRecorder.GetRecord(reqCtx.RouterReplayID); !found {
-		return
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		return nil
 	}
-	if err := r.ReplayRecorder.AppendOutcome(reqCtx.RouterReplayID, outcome); err != nil {
-		logging.ComponentEvent("extproc", "shadow_evidence_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"replay_id":  reqCtx.RouterReplayID,
-			"error":      err.Error(),
+	d.closed = true
+	d.mu.Unlock()
+	if !d.waitIdle(shadowDispatchDrainTimeout) {
+		logging.ComponentWarnEvent("extproc", "shadow_dispatch_drain_timeout", map[string]interface{}{
+			"timeout": shadowDispatchDrainTimeout.String(),
 		})
+		d.cancel()
+		d.waitIdle(shadowDispatchCancelGrace)
+	} else {
+		d.cancel()
+	}
+	d.closeConnectors()
+	return nil
+}
+
+// closeConnectors releases idle connections held by every shadow connector.
+func (d *shadowDispatcher) closeConnectors() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for key, client := range d.clients {
+		_ = client.Close()
+		delete(d.clients, key)
 	}
 }
 
-// buildShadowEvidence packs arm results and the (optional) judge decision into
-// a replay Outcome. The reusable evidence logic (blind ids, compact features,
-// verdict mapping) lives in shadow.Judge.Evidence; this layer only wraps it
-// into the replay outcome shape.
-func buildShadowEvidence(judge *shadow.Judge, results []shadow.ArmResult, decision shadow.JudgeDecision) routerreplay.Outcome {
-	verdict, metadata := judge.Evidence(results, decision)
-	return routerreplay.Outcome{
-		Timestamp: time.Now().UTC(),
-		Source:    "shadow_comparison",
-		Verdict:   verdict,
-		Reason:    decision.Reason,
-		Metadata:  metadata,
+// waitIdle blocks until every shadow worker has exited or the timeout passes.
+func (d *shadowDispatcher) waitIdle(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		d.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
 	}
 }
 
-// shadowRequestParams serializes the single normalized semantic request into
-// the OpenAI-compatible params shared by every arm, so normalized inputs stay
-// byte-identical across arms and aligned with the primary route (same codec
-// encode + parse path as looper execution).
-func (r *OpenAIRouter) shadowRequestParams(reqCtx *RequestContext) (*openai.ChatCompletionNewParams, bool) {
+// dispatchShadowIfConfigured is the single request-path hook. It runs after
+// finalizeProviderDispatchResponse so the shadow starts from the same approved
+// neutral request the primary was rendered from. Nothing here can fail the
+// request.
+func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch *providerDispatch) {
+	if r == nil || r.ShadowDispatcher == nil || ctx == nil || dispatch == nil {
+		return
+	}
+	pluginCfg := ctx.ShadowDispatchPluginConfig
+	if pluginCfg == nil || !pluginCfg.Enabled {
+		return
+	}
 	engine, err := r.protocolEngine()
 	if err != nil {
-		logging.ComponentWarnEvent("extproc", "shadow_encode_engine_unavailable", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"error":      err.Error(),
-		})
-		return nil, false
+		engine = nil
 	}
-	encoded, err := engine.EncodeRequest(llmprotocol.OpenAIChatV1, *reqCtx.SemanticRequest, llmprotocol.Envelope{})
+	cfg := pluginCfg.WithDefaults()
+	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
+		routerConfig: r.Config,
+		engine:       engine,
+		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+	})
+}
+
+type shadowSubmitDeps struct {
+	routerConfig *config.RouterConfig
+	engine       *protocolcodec.Engine
+	encode       shadowRequestEncoder
+	extraHeaders map[string]string
+}
+
+// shadowRequestEncoder mirrors the primary pipeline for the shadow model:
+// semantic reasoning mode for non-chat targets before encoding, then the
+// provider-dialect reasoning rewrite for chat targets after encoding.
+func (r *OpenAIRouter) shadowRequestEncoder(
+	ctx *RequestContext,
+	dispatch *providerDispatch,
+	engine *protocolcodec.Engine,
+) shadowRequestEncoder {
+	decision := ctx.VSRSelectedDecision
+	decisionName := dispatch.decisionName
+	useReasoning := dispatch.useReasoning
+	envelope := ctx.ProtocolEnvelope
+	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
+		request.Model = target.upstreamModel
+		request.Stream = false
+		request.StreamOptions = llmprotocol.StreamOptions{}
+		// The neutral request now differs from the client bytes, so the codec
+		// must render it instead of replaying the envelope's original body.
+		request.Generation++
+		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
+			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
+		}
+		encoded, err := engine.EncodeRequest(target.format, request, envelope)
+		if err != nil {
+			return nil, err
+		}
+		if decisionName == "" || target.format != llmprotocol.OpenAIChatV1 {
+			return encoded.Body, nil
+		}
+		return r.setReasoningModeToRequestBodyForModelAndProvider(
+			encoded.Body, target.logicalModel, useReasoning, decision, target.profile,
+		)
+	}
+}
+
+// shadowHeaderIsSensitive reports whether a header name may carry a
+// credential: a known credential carrier, or the resolved auth header of one
+// of the provider profiles involved, so a custom auth_header is covered too.
+func shadowHeaderIsSensitive(name string, authHeaders ...string) bool {
+	if config.IsShadowCredentialHeader(name) {
+		return true
+	}
+	trimmed := strings.TrimSpace(name)
+	for _, authHeader := range authHeaders {
+		if authHeader != "" && strings.EqualFold(trimmed, authHeader) {
+			return true
+		}
+	}
+	return false
+}
+
+// shadowProfileAuthHeader returns the auth header name a provider profile
+// resolves to, or "" when it cannot be resolved. A nil profile means the
+// OpenAI default, which the credential set already covers.
+func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
+	if profile == nil {
+		return ""
+	}
+	_, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
-		logging.ComponentWarnEvent("extproc", "shadow_encode_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"error":      err.Error(),
-		})
-		return nil, false
+		return ""
 	}
-	params, err := parseOpenAIRequest(encoded.Body)
-	if err != nil {
-		logging.ComponentWarnEvent("extproc", "shadow_parse_failed", map[string]interface{}{
-			"request_id": reqCtx.RequestID,
-			"error":      err.Error(),
-		})
-		return nil, false
+	return providerAuth.Header
+}
+
+// shadowExtraHeaders carries the span context to the shadow backend, the W3C
+// traceparent and tracestate headers only, plus the decision header mutations
+// the plugin explicitly allowlists in forward_headers. Baggage is never
+// propagated: with tracing enabled the request phase extracts client baggage
+// into the trace context, so injecting through the global propagator would
+// hand a client-supplied member such as token=... to the shadow ahead of the
+// forward_headers filter. Everything else a decision sets for the primary
+// backend stays on the primary path, so a custom credential such as
+// X-Internal-Token can never cross into the shadow backend, which is a less
+// trusted candidate. Known credential carriers and either profile's auth
+// header are dropped even when listed. Client headers are never included.
+func (r *OpenAIRouter) shadowExtraHeaders(
+	ctx *RequestContext,
+	dispatch *providerDispatch,
+	cfg *config.ShadowDispatchPluginConfig,
+) map[string]string {
+	extra := make(map[string]string)
+	if ctx.TraceContext != nil {
+		for _, pair := range tracing.InjectSpanContextToSlice(ctx.TraceContext) {
+			extra[pair[0]] = pair[1]
+		}
 	}
-	return params, true
+	if ctx.VSRSelectedDecision == nil {
+		return extra
+	}
+	var primaryAuthHeader string
+	if dispatch != nil {
+		primaryAuthHeader = shadowProfileAuthHeader(dispatch.profile)
+	}
+	setHeaders, _ := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	for _, option := range setHeaders {
+		header := option.GetHeader()
+		if header == nil || strings.HasPrefix(header.GetKey(), ":") {
+			continue
+		}
+		name := header.GetKey()
+		if reason := shadowMutationDropReason(name, primaryAuthHeader, cfg); reason != "" {
+			logging.ComponentDebugEvent("extproc", "shadow_header_mutation_dropped", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"decision":   ctx.VSRSelectedDecision.Name,
+				"header":     name,
+				"reason":     reason,
+			})
+			continue
+		}
+		extra[name] = string(header.GetRawValue())
+	}
+	return extra
+}
+
+// shadowMutationDropReason explains why a decision header mutation stays on
+// the primary path, or returns "" when the shadow copy may carry it.
+func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.ShadowDispatchPluginConfig) string {
+	if shadowHeaderIsSensitive(name, primaryAuthHeader) {
+		return "credential"
+	}
+	if !cfg.ForwardsHeader(name) {
+		return "not_in_forward_headers"
+	}
+	return ""
+}
+
+func (d *shadowDispatcher) submit(
+	ctx *RequestContext,
+	dispatch *providerDispatch,
+	cfg config.ShadowDispatchPluginConfig,
+	deps shadowSubmitDeps,
+) {
+	decision := dispatch.decisionName
+	if decision == "" {
+		decision = ctx.VSRSelectedDecisionName
+	}
+	recipe := string(ctx.Routing.RecipeName())
+	if recipe == "" {
+		recipe = string(config.DefaultRecipeName)
+	}
+	dropEarly := func(reason string) {
+		metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultDropped, reason)
+		logging.ComponentDebugEvent("extproc", "shadow_dispatch_skipped", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decision,
+			"reason":     reason,
+		})
+	}
+	switch {
+	case ctx.LooperRequest:
+		dropEarly(shadowReasonInternalRequest)
+		return
+	case cfg.Model == "" || cfg.Model == dispatch.logicalModel:
+		dropEarly(shadowReasonSameAsPrimary)
+		return
+	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
+		dropEarly(shadowReasonRequestUnavailable)
+		return
+	}
+	rate := cfg.EffectiveSampleRate()
+	if rate <= 0 || d.sampler() >= rate {
+		metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultSampledOut, shadowReasonSampledOut)
+		return
+	}
+
+	now := d.now()
+	job := &shadowJob{
+		cfg:             cfg,
+		routerConfig:    deps.routerConfig,
+		engine:          deps.engine,
+		encode:          deps.encode,
+		request:         *ctx.SemanticRequest,
+		extraHeaders:    deps.extraHeaders,
+		decision:        decision,
+		recipe:          recipe,
+		primaryRequest:  ctx.RequestID,
+		primaryModel:    dispatch.logicalModel,
+		primaryBackend:  dispatch.backendName,
+		shadowRequestID: shadowRequestID(ctx.RequestID),
+		replayID:        ctx.RouterReplayID,
+		recorder:        ctx.RouterReplayRecorder,
+		enqueuedAt:      now,
+		deadline:        now.Add(time.Duration(cfg.TimeoutSeconds) * time.Second),
+	}
+	d.enqueue(config.RoutingDecisionKey(config.RecipeName(recipe), decision), job)
+}
+
+func shadowRequestID(primary string) string {
+	var buf [4]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return primary + "-shadow"
+	}
+	return primary + "-shadow-" + hex.EncodeToString(buf[:])
+}
+
+func (d *shadowDispatcher) laneFor(key string, cfg config.ShadowDispatchPluginConfig) *shadowLane {
+	lane := d.lanes[key]
+	if lane == nil || cap(lane.slots) != cfg.MaxConcurrency || lane.maxQueue != cfg.MaxQueueDepth {
+		lane = &shadowLane{
+			slots:    make(chan struct{}, cfg.MaxConcurrency),
+			maxQueue: cfg.MaxQueueDepth,
+		}
+		d.lanes[key] = lane
+	}
+	return lane
+}
+
+// enqueue applies the concurrency and queue bounds. The only synchronous work
+// is a non-blocking channel send and a counter check.
+func (d *shadowDispatcher) enqueue(key string, job *shadowJob) {
+	d.mu.Lock()
+	if d.closed {
+		d.mu.Unlock()
+		d.recordDrop(job, shadowReasonRouterClosing)
+		return
+	}
+	lane := d.laneFor(key, job.cfg)
+	queued := false
+	select {
+	case lane.slots <- struct{}{}:
+	default:
+		if int(lane.waiting.Load()) >= lane.maxQueue {
+			d.mu.Unlock()
+			d.recordDrop(job, shadowReasonQueueFull)
+			return
+		}
+		lane.waiting.Add(1)
+		metrics.ShadowDispatchQueued.WithLabelValues(job.decision).Inc()
+		queued = true
+	}
+	d.wg.Add(1)
+	d.mu.Unlock()
+
+	goSafely("shadow_dispatch", func() {
+		defer d.wg.Done()
+		if queued {
+			acquired, reason := d.waitForSlot(lane, job)
+			lane.waiting.Add(-1)
+			metrics.ShadowDispatchQueued.WithLabelValues(job.decision).Dec()
+			if !acquired {
+				d.recordDrop(job, reason)
+				return
+			}
+		}
+		defer func() { <-lane.slots }()
+		d.execute(job)
+	})
+}
+
+func (d *shadowDispatcher) waitForSlot(lane *shadowLane, job *shadowJob) (bool, string) {
+	timer := time.NewTimer(time.Until(job.deadline))
+	defer timer.Stop()
+	select {
+	case lane.slots <- struct{}{}:
+		return true, ""
+	case <-timer.C:
+		return false, shadowReasonQueueTimeout
+	case <-d.ctx.Done():
+		return false, shadowReasonRouterClosing
+	}
+}
+
+// recordDrop reports a shadow call that never reached a worker. Drops are
+// bounded-resource signals, so they are observable through metrics and logs
+// rather than replay-store writes that could amplify an overload.
+func (d *shadowDispatcher) recordDrop(job *shadowJob, reason string) {
+	metrics.RecordShadowDispatch(job.decision, metrics.ShadowDispatchResultDropped, reason)
+	logging.ComponentWarnEvent("extproc", "shadow_dispatch_dropped", map[string]interface{}{
+		"request_id":        job.primaryRequest,
+		"shadow_request_id": job.shadowRequestID,
+		"decision":          job.decision,
+		"recipe":            job.recipe,
+		"shadow_model":      job.cfg.Model,
+		"reason":            reason,
+	})
+}
+
+func (d *shadowDispatcher) execute(job *shadowJob) {
+	metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Inc()
+	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
+
+	callCtx, cancel := context.WithDeadline(d.ctx, job.deadline)
+	defer cancel()
+	result := d.call(callCtx, job)
+	d.record(job, result)
+}
+
+// record persists the observation. Metrics always fire; the replay outcome
+// is appended when the primary request has a replay record, and a structured
+// event covers routes without replay so the observation is never silent.
+func (d *shadowDispatcher) record(job *shadowJob, result shadowResult) {
+	metricResult := metrics.ShadowDispatchResultFailed
+	if result.verdict == shadowVerdictCompleted {
+		metricResult = metrics.ShadowDispatchResultCompleted
+	}
+	metrics.RecordShadowDispatch(job.decision, metricResult, result.reason)
+	latency := result.finishedAt.Sub(result.startedAt)
+	if latency > 0 {
+		metrics.RecordShadowDispatchLatency(job.decision, latency.Seconds())
+	}
+
+	metadata := shadowOutcomeMetadata(job, result, latency)
+	if job.recorder != nil && job.replayID != "" {
+		outcome := routerreplay.Outcome{
+			Timestamp: result.finishedAt.UTC(),
+			Source:    shadowDispatchOutcomeSource,
+			Target:    shadowDispatchOutcomeTarget,
+			TargetRef: job.cfg.Model,
+			Verdict:   result.verdict,
+			Reason:    result.reason,
+			Metadata:  metadata,
+		}
+		if err := job.recorder.AppendOutcome(job.replayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "shadow_dispatch_outcome_persist_failed", map[string]interface{}{
+				"request_id": job.primaryRequest,
+				"replay_id":  job.replayID,
+				"error":      err.Error(),
+			})
+		}
+	}
+
+	fields := make(map[string]interface{}, len(metadata)+3)
+	for key, value := range metadata {
+		if key == "response_excerpt" || key == "response_excerpt_truncated" {
+			continue
+		}
+		fields[key] = value
+	}
+	fields["request_id"] = job.primaryRequest
+	fields["replay_id"] = job.replayID
+	fields["verdict"] = result.verdict
+	if result.verdict == shadowVerdictCompleted {
+		logging.ComponentDebugEvent("extproc", "shadow_dispatch_outcome", fields)
+	} else {
+		logging.ComponentWarnEvent("extproc", "shadow_dispatch_outcome", fields)
+	}
+}
+
+// shadowOutcomeMetadata is the bounded provenance stored with the outcome.
+// It carries identities, timing, sizes, and a content hash. Response text is
+// included only when the operator enabled capture, and then truncated.
+func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Duration) map[string]string {
+	metadata := map[string]string{
+		"primary_request_id": job.primaryRequest,
+		"shadow_request_id":  job.shadowRequestID,
+		"primary_model":      job.primaryModel,
+		"primary_backend":    job.primaryBackend,
+		"shadow_model":       job.cfg.Model,
+		"shadow_backend":     result.shadowBackend,
+		"decision":           job.decision,
+		"recipe":             job.recipe,
+		"sample_rate":        strconv.FormatFloat(job.cfg.EffectiveSampleRate(), 'f', -1, 64),
+		"enqueued_at":        job.enqueuedAt.UTC().Format(time.RFC3339Nano),
+		"started_at":         result.startedAt.UTC().Format(time.RFC3339Nano),
+		"finished_at":        result.finishedAt.UTC().Format(time.RFC3339Nano),
+		"queue_wait_ms":      strconv.FormatInt(result.startedAt.Sub(job.enqueuedAt).Milliseconds(), 10),
+		"latency_ms":         strconv.FormatInt(latency.Milliseconds(), 10),
+		"attempts":           strconv.Itoa(result.attempts),
+	}
+	if result.statusCode != 0 {
+		metadata["status_code"] = strconv.Itoa(result.statusCode)
+	}
+	if result.err != "" {
+		metadata["error"] = result.err
+	}
+	if result.verdict != shadowVerdictCompleted {
+		return metadata
+	}
+	metadata["response_bytes"] = strconv.Itoa(result.responseBytes)
+	metadata["stop_reason"] = result.stopReason
+	metadata["input_tokens"] = strconv.FormatInt(result.inputTokens, 10)
+	metadata["output_tokens"] = strconv.FormatInt(result.outputTokens, 10)
+	metadata["response_chars"] = strconv.Itoa(utf8.RuneCountInString(result.text))
+	sum := sha256.Sum256([]byte(result.text))
+	metadata["response_sha256"] = hex.EncodeToString(sum[:])
+	if job.cfg.CaptureResponseBody {
+		if len(result.text) > job.cfg.MaxCaptureBytes {
+			metadata["response_excerpt_truncated"] = "true"
+		}
+		metadata["response_excerpt"] = truncateShadowText(result.text, job.cfg.MaxCaptureBytes)
+	}
+	return metadata
+}
+
+// truncateShadowText cuts on a rune boundary so stored text stays valid UTF-8.
+func truncateShadowText(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	cut := value[:limit]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return cut
 }

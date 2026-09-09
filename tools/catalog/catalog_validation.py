@@ -155,6 +155,7 @@ def _validate_provider_binding(
             "reasoning_transport",
             "reasoning_modes",
             "reasoning_efforts",
+            "reasoning_efforts_by_protocol",
             "pricing",
             "restrictions",
             "lifecycle",
@@ -174,6 +175,8 @@ def _validate_provider_binding(
         raise CatalogBuildError(f"{path}.reasoning_transport is unsupported")
     if model_id not in models:
         raise CatalogBuildError(f"{path}.catalog references an unknown model")
+    protocols = _sequence(item.get("protocols"), f"{path}.protocols")
+    _validate_binding_protocols(protocols, path, provider, protocol_ids)
     _validate_reasoning_transport_family(
         item,
         path,
@@ -181,7 +184,13 @@ def _validate_provider_binding(
         models[model_id],
         reasoning_families,
     )
-    _validate_reasoning_binding_values(item, path, models[model_id], reasoning_families)
+    _validate_reasoning_binding_values(
+        item,
+        path,
+        models[model_id],
+        reasoning_families,
+        protocols,
+    )
     if native_id in native_ids:
         raise CatalogBuildError(
             f"{path}.id duplicates a provider-native model identifier"
@@ -192,8 +201,7 @@ def _validate_provider_binding(
         if verification.get("source") is not None:
             _validate_https_url(verification["source"], f"{path}.verification.source")
     _validate_provider_model_id_policy(item, path)
-    protocols = _sequence(item.get("protocols"), f"{path}.protocols")
-    _validate_binding_protocols(protocols, path, provider, protocol_ids)
+    _validate_provider_model_api_restrictions(item, path, protocols)
     for protocol in protocols:
         pair = (model_id, str(protocol))
         if pair in pairs:
@@ -265,15 +273,21 @@ def _validated_reasoning_modes(item: dict[str, Any], path: str) -> list[Any] | N
     return values
 
 
-def _validated_reasoning_efforts(item: dict[str, Any], path: str) -> list[Any] | None:
+def _validated_reasoning_efforts(item: dict[str, Any], path: str) -> list[str] | None:
     efforts = item.get("reasoning_efforts")
     if efforts is None:
         return None
-    values = _sequence(efforts, f"{path}.reasoning_efforts")
+    return _validated_reasoning_effort_values(efforts, f"{path}.reasoning_efforts")
+
+
+def _validated_reasoning_effort_values(value: Any, path: str) -> list[str]:
+    raw_values = _sequence(value, path)
+    values = [
+        _nonempty_string(raw_value, f"{path}[{index}]")
+        for index, raw_value in enumerate(raw_values)
+    ]
     if not values or len(values) != len(set(values)):
-        raise CatalogBuildError(f"{path}.reasoning_efforts is invalid")
-    for index, value in enumerate(values):
-        _nonempty_string(value, f"{path}.reasoning_efforts[{index}]")
+        raise CatalogBuildError(f"{path} is invalid")
     return values
 
 
@@ -296,7 +310,7 @@ def _validate_reasoning_mode_subset(
 
 
 def _validate_reasoning_effort_subset(
-    efforts: list[Any] | None,
+    efforts: list[str] | None,
     family: dict[str, Any],
     path: str,
 ) -> None:
@@ -319,10 +333,12 @@ def _validate_reasoning_binding_values(
     path: str,
     model: dict[str, Any],
     reasoning_families: dict[str, dict[str, Any]],
+    protocols: list[Any],
 ) -> None:
     modes = _validated_reasoning_modes(item, path)
     efforts = _validated_reasoning_efforts(item, path)
-    if modes is None and efforts is None:
+    efforts_by_protocol = item.get("reasoning_efforts_by_protocol")
+    if modes is None and efforts is None and efforts_by_protocol is None:
         return
     family_id = model.get("reasoning_family")
     family = reasoning_families.get(str(family_id))
@@ -332,6 +348,31 @@ def _validate_reasoning_binding_values(
         )
     _validate_reasoning_mode_subset(modes, family, path)
     _validate_reasoning_effort_subset(efforts, family, path)
+    if efforts_by_protocol is None:
+        return
+    if efforts is None:
+        raise CatalogBuildError(
+            f"{path}.reasoning_efforts_by_protocol requires reasoning_efforts"
+        )
+    overrides = _mapping(
+        efforts_by_protocol,
+        f"{path}.reasoning_efforts_by_protocol",
+    )
+    if not overrides:
+        raise CatalogBuildError(
+            f"{path}.reasoning_efforts_by_protocol must not be empty"
+        )
+    supported_protocols = {str(protocol) for protocol in protocols}
+    for protocol, raw_values in overrides.items():
+        override_path = f"{path}.reasoning_efforts_by_protocol.{protocol}"
+        if protocol not in supported_protocols:
+            raise CatalogBuildError(f"{override_path} references an unbound protocol")
+        values = _validated_reasoning_effort_values(raw_values, override_path)
+        if not set(values).issubset(efforts):
+            raise CatalogBuildError(
+                f"{override_path} must narrow the provider reasoning_efforts"
+            )
+        _validate_reasoning_effort_subset(values, family, override_path)
 
 
 def _validate_provider_model_id_policy(item: dict[str, Any], path: str) -> None:
@@ -349,6 +390,113 @@ def _validate_provider_model_id_policy(item: dict[str, Any], path: str) -> None:
         restrictions.get("catalog_model_name"),
         f"{path}.restrictions.catalog_model_name",
     )
+
+
+def _validate_provider_model_api_restrictions(
+    item: dict[str, Any], path: str, protocols: list[Any]
+) -> None:
+    """Validate protocol-scoped model constraints without closing extensions."""
+
+    if "restrictions" not in item:
+        return
+    restrictions = _mapping(item["restrictions"], f"{path}.restrictions")
+    supported_protocols = {str(protocol) for protocol in protocols}
+
+    tools_protocols = restrictions.get("tools_protocols")
+    if tools_protocols is not None:
+        values = _sequence(tools_protocols, f"{path}.restrictions.tools_protocols")
+        normalized_values = [
+            _nonempty_string(value, f"{path}.restrictions.tools_protocols[{index}]")
+            for index, value in enumerate(values)
+        ]
+        if not normalized_values or len(normalized_values) != len(
+            set(normalized_values)
+        ):
+            raise CatalogBuildError(
+                f"{path}.restrictions.tools_protocols must be a non-empty unique list"
+            )
+        unknown = sorted(
+            value for value in normalized_values if value not in supported_protocols
+        )
+        if unknown:
+            raise CatalogBuildError(
+                f"{path}.restrictions.tools_protocols references an unbound protocol: "
+                + ", ".join(unknown)
+            )
+
+    long_context_pricing = restrictions.get("long_context_pricing")
+    if long_context_pricing is not None:
+        pricing_path = f"{path}.restrictions.long_context_pricing"
+        pricing = _mapping(long_context_pricing, pricing_path)
+        multiplier_fields = {
+            "prompt_multiplier",
+            "cached_input_multiplier",
+            "cache_write_multiplier",
+            "completion_multiplier",
+        }
+        _reject_unknown(
+            pricing,
+            {"input_threshold_tokens", *multiplier_fields},
+            pricing_path,
+        )
+        threshold = pricing.get("input_threshold_tokens")
+        if (
+            not isinstance(threshold, int)
+            or isinstance(threshold, bool)
+            or threshold <= 0
+        ):
+            raise CatalogBuildError(
+                f"{pricing_path}.input_threshold_tokens must be a positive integer"
+            )
+        present_multipliers = multiplier_fields & pricing.keys()
+        if not present_multipliers:
+            raise CatalogBuildError(
+                f"{pricing_path} must declare at least one price multiplier"
+            )
+        for field in sorted(present_multipliers):
+            value = pricing[field]
+            if not _is_finite_number(value) or value <= 0:
+                raise CatalogBuildError(f"{pricing_path}.{field} must be positive")
+
+    unsupported_include_values = restrictions.get("unsupported_include_values")
+    if unsupported_include_values is not None:
+        include_path = f"{path}.restrictions.unsupported_include_values"
+        raw_values = _sequence(unsupported_include_values, include_path)
+        values = [
+            _nonempty_string(value, f"{include_path}[{index}]")
+            for index, value in enumerate(raw_values)
+        ]
+        if not values or len(values) != len(set(values)):
+            raise CatalogBuildError(f"{include_path} must be a non-empty unique list")
+        for index, value in enumerate(values):
+            if not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*", value):
+                raise CatalogBuildError(
+                    f"{include_path}[{index}] must be a dotted JSON field path"
+                )
+
+    unsupported_fields = restrictions.get("unsupported_request_fields")
+    if unsupported_fields is None:
+        return
+    fields_by_protocol = _mapping(
+        unsupported_fields,
+        f"{path}.restrictions.unsupported_request_fields",
+    )
+    for protocol, raw_fields in fields_by_protocol.items():
+        protocol_path = f"{path}.restrictions.unsupported_request_fields.{protocol}"
+        if protocol not in supported_protocols:
+            raise CatalogBuildError(f"{protocol_path} references an unbound protocol")
+        raw_field_values = _sequence(raw_fields, protocol_path)
+        fields = [
+            _nonempty_string(field, f"{protocol_path}[{index}]")
+            for index, field in enumerate(raw_field_values)
+        ]
+        if not fields or len(fields) != len(set(fields)):
+            raise CatalogBuildError(f"{protocol_path} must be a non-empty unique list")
+        for index, name in enumerate(fields):
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+                raise CatalogBuildError(
+                    f"{protocol_path}[{index}] must be a JSON field name"
+                )
 
 
 def _validate_binding_protocols(

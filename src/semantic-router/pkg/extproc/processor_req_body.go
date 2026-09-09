@@ -128,10 +128,6 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 		},
 	}
 
-	// The primary destination is decided; shadow arms observe the same
-	// normalized request without blocking or altering this response.
-	r.dispatchShadowArms(ctx)
-
 	if !isEntrypoint {
 		return r.handleSpecifiedModelRouting(request, originalModel, decisionName, ctx)
 	}
@@ -205,7 +201,12 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
-		return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		if err != nil {
+			return nil, err
+		}
+		r.dispatchShadowIfConfigured(ctx, dispatch)
+		return finalized, nil
 	}
 
 	// Record routing decision with tracing
@@ -235,9 +236,6 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		r.setClearRouteCache(response)
 	}
 
-	// Save the actual model for token tracking
-	ctx.RequestModel = matchedModel
-
 	// Capture router replay information if enabled
 	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
@@ -247,6 +245,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
+	r.dispatchShadowIfConfigured(ctx, dispatch)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -290,9 +289,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
-
-	// Save the actual model for token tracking
-	ctx.RequestModel = originalModel
 
 	// Capture router replay information if enabled even when the client pins a model.
 	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)

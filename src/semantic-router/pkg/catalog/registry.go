@@ -252,6 +252,7 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 		value.Models[index].Protocols = append([]string(nil), value.Models[index].Protocols...)
 		value.Models[index].ReasoningModes = append([]string(nil), value.Models[index].ReasoningModes...)
 		value.Models[index].ReasoningEfforts = append([]string(nil), value.Models[index].ReasoningEfforts...)
+		value.Models[index].ReasoningEffortsByProtocol = cloneStringSliceMap(value.Models[index].ReasoningEffortsByProtocol)
 		value.Models[index].Restrictions = cloneArbitraryMap(value.Models[index].Restrictions)
 		value.Models[index].Pricing.CacheWritePer1M = cloneFloatPointer(value.Models[index].Pricing.CacheWritePer1M)
 	}
@@ -375,6 +376,17 @@ func cloneMap[Value any](source map[string]Value) map[string]Value {
 	result := make(map[string]Value, len(source))
 	for key, value := range source {
 		result[key] = value
+	}
+	return result
+}
+
+func cloneStringSliceMap(source map[string][]string) map[string][]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string][]string, len(source))
+	for key, value := range source {
+		result[key] = append([]string(nil), value...)
 	}
 	return result
 }

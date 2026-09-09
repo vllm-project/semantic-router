@@ -317,6 +317,17 @@ func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
 	c.config.JailbreakRules = append(c.config.JailbreakRules, rule)
 }
 
+func (c *Compiler) compileHallucinationSignal(s *SignalDecl) {
+	rule := config.HallucinationRule{Name: s.Name}
+	if v, ok := getBoolField(s.Fields, "use_nli"); ok {
+		rule.UseNLI = v
+	}
+	if v, ok := getStringField(s.Fields, "description"); ok {
+		rule.Description = v
+	}
+	c.config.HallucinationRules = append(c.config.HallucinationRules, rule)
+}
+
 func (c *Compiler) compilePIISignal(s *SignalDecl) {
 	rule := config.PIIRule{Name: s.Name}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {

@@ -76,6 +76,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		Hallucination: append([]HallucinationRule(nil), signals.HallucinationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),

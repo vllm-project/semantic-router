@@ -61,6 +61,7 @@ describe('model hub views', () => {
     expect(markup).toContain('aria-label="Filter benchmarks"')
     expect(markup).toContain('aria-pressed="true"')
     expect(markup).not.toContain('<select')
+    expect(markup).not.toContain('Source ↗')
     expect(markup.indexOf('Core <span>6</span>')).toBeGreaterThan(markup.indexOf('All <span>'))
     expect(markup).toMatch(/\d+\.\d%/)
     const modelIDs = new Set(rows.map((row) => row.model.id))
