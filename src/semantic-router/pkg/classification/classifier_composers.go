@@ -13,17 +13,60 @@ import (
 // This is executed after all signals are computed in parallel
 func (c *Classifier) applySignalComposers(results *SignalResults) *SignalResults {
 	// Filter complexity signals by composer conditions
-	if len(results.MatchedComplexityRules) > 0 && len(c.Config.ComplexityRules) > 0 {
-		results.MatchedComplexityRules = c.filterComplexityByComposer(
-			results.MatchedComplexityRules,
-			results,
-		)
+	if len(c.Config.ComplexityRules) > 0 {
+		if len(results.MatchedComplexityRules) > 0 {
+			results.MatchedComplexityRules = c.filterComplexityByComposer(
+				results.MatchedComplexityRules,
+				results,
+			)
+		}
+		// A failed evaluation is recorded per rule before any composer has
+		// been evaluated - the signals a composer reads are computed in
+		// parallel with this one, so eligibility is only knowable here. Left
+		// unfiltered, a rule that a composer would have excluded still carries
+		// its failure into the decision engine, and a decision with
+		// rules.on_unknown: match would then match a request the rule was
+		// never eligible for.
+		c.filterComplexitySignalErrorsByComposer(results)
 	}
 
 	// Future: Add other signals' composer filtering here
 	// if len(results.MatchedXxxRules) > 0 { ... }
 
 	return results
+}
+
+// filterComplexitySignalErrorsByComposer drops recorded complexity failures
+// for rules whose composer conditions do not hold for this request, so a
+// failure is only visible to decisions that could have used the rule.
+//
+// It reuses filterComplexityByComposer rather than repeating the evaluation:
+// the error keys carry the same "<rule>:<verdict>" shape as a matched rule, so
+// the same filter answers both questions.
+func (c *Classifier) filterComplexitySignalErrorsByComposer(results *SignalResults) {
+	if results == nil || len(results.SignalErrors) == 0 {
+		return
+	}
+	prefix := config.SignalTypeComplexity + ":"
+	keyed := make([]string, 0, len(results.SignalErrors))
+	for key := range results.SignalErrors {
+		if strings.HasPrefix(key, prefix) {
+			keyed = append(keyed, strings.TrimPrefix(key, prefix))
+		}
+	}
+	if len(keyed) == 0 {
+		return
+	}
+
+	eligible := make(map[string]struct{}, len(keyed))
+	for _, name := range c.filterComplexityByComposer(keyed, results) {
+		eligible[name] = struct{}{}
+	}
+	for _, name := range keyed {
+		if _, ok := eligible[name]; !ok {
+			delete(results.SignalErrors, prefix+name)
+		}
+	}
 }
 
 // filterComplexityByComposer filters complexity rules based on their composer conditions
@@ -103,22 +146,25 @@ func (c *Classifier) evalComposerNode(
 		return c.evalComposerLeaf(node.Type, node.Name, signals)
 	}
 
+	// config.NormalizeRuleOperator guarantees a validated tree only carries
+	// AND, OR, or NOT here; the default branch is unreachable for loaded
+	// config and only covers trees built programmatically.
 	switch strings.ToUpper(node.Operator) {
-	case "OR":
+	case config.RuleOperatorOr:
 		for _, child := range node.Conditions {
 			if c.evalComposerNode(child, signals) {
 				return true
 			}
 		}
 		return false
-	case "NOT":
+	case config.RuleOperatorNot:
 		// Strictly unary: negate the single child's result.
 		if len(node.Conditions) != 1 {
 			logging.Warnf("Composer NOT operator requires exactly 1 child, got %d — treating as false", len(node.Conditions))
 			return false
 		}
 		return !c.evalComposerNode(node.Conditions[0], signals)
-	default: // AND
+	default: // config.RuleOperatorAnd
 		for _, child := range node.Conditions {
 			if !c.evalComposerNode(child, signals) {
 				return false

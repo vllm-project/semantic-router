@@ -336,6 +336,8 @@
 }
 
 .tableFrame {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
 }
 
@@ -346,6 +348,22 @@
   border-collapse: collapse;
   border: 0;
   font-size: var(--text-sm);
+  table-layout: fixed;
+}
+
+.tableFrame th:first-child {
+  width: 34%;
+}
+
+.tableFrame th:nth-child(2) {
+  width: 16%;
+}
+
+.tableFrame th:nth-child(3),
+.tableFrame th:nth-child(4),
+.tableFrame th:nth-child(5),
+.tableFrame th:nth-child(6) {
+  width: 12.5%;
 }
 
 .tableFrame th,
@@ -380,7 +398,8 @@
 
 .tableModel {
   display: flex;
-  min-width: 18rem;
+  min-width: 0;
+  width: 100%;
   align-items: center;
   gap: var(--space-3);
   padding: 0;
@@ -401,6 +420,13 @@
   overflow: hidden;
   color: var(--site-muted);
   font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tableModel strong {
+  overflow: hidden;
+  color: var(--site-text-strong);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

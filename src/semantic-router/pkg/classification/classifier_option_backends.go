@@ -114,3 +114,65 @@ func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInferenc
 	}
 	return createPIIInitializer(), createPIIInference()
 }
+
+// addComplexityBackend attaches the complexity signal's remote scorer, if one
+// is configured. A nil backend leaves the local prototype path in place, so
+// this is a no-op for every existing config.
+//
+// The contract decides which reader is built: score.v1 needs no label mapping
+// and turns its number into a verdict through each rule's boundaries, while
+// label_distribution.v1 reuses the shared sequence backend with the verdict
+// vocabulary declared inline, exactly as the generic classifier signal does.
+func (b *classifierOptionBuilder) addComplexityBackend() error {
+	// The same validator globalConfigContractValidators runs at config load, so
+	// a directly-built classifier cannot bypass the backend and boundary
+	// checks either.
+	if err := config.ValidateComplexityModelBackend(b.cfg); err != nil {
+		return err
+	}
+	backendCfg := b.cfg.ComplexityModel.Backend
+	if backendCfg == nil {
+		return nil
+	}
+
+	external, err := config.ResolveRemoteClassifierBackend(
+		b.cfg,
+		backendCfg,
+		config.ModelRoleClassification,
+		config.ComplexityBackendContracts...,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to resolve complexity backend: %w", err)
+	}
+	deadline := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
+
+	switch backendCfg.Contract {
+	case config.RemoteClassifierContractScore:
+		scorer, err := newScoringHTTPBackend(external, deadline)
+		if err != nil {
+			return err
+		}
+		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
+			"contract": config.RemoteClassifierContractScore,
+		})
+		b.options = append(b.options, withComplexityScoreBackend(scorer))
+	case config.RemoteClassifierContractLabelDistribution:
+		labels, err := newHTTPClassifierInference(
+			external,
+			newDeclaredLabelMapping(ComplexityVerdictLabels),
+			deadline,
+		)
+		if err != nil {
+			return err
+		}
+		logging.ComponentEvent("classifier", "complexity_backend_selected", map[string]interface{}{
+			"contract": config.RemoteClassifierContractLabelDistribution,
+		})
+		b.options = append(b.options, withComplexityLabelBackend(labels))
+	default:
+		// Unreachable: the validator above rejects anything else. Kept so a
+		// future contract cannot be silently ignored here.
+		return fmt.Errorf("complexity backend contract %q has no reader", backendCfg.Contract)
+	}
+	return nil
+}
