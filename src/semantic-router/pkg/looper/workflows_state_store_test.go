@@ -815,8 +815,8 @@ func TestWorkflowRedisToolStateStore_CommitAfterLeaseExpiryDeletesState(t *testi
 	}
 
 	mr.FastForward(120 * time.Millisecond)
-	if err := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); err != nil {
-		t.Fatalf("Commit after lease expiry: %v", err)
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); commitErr != nil {
+		t.Fatalf("Commit after lease expiry: %v", commitErr)
 	}
 	got, ok, err := consumeWorkflowState(s, id)
 	if err != nil {
@@ -849,11 +849,11 @@ func TestWorkflowRedisToolStateStore_CommitKeepsReplacementPause(t *testing.T) {
 
 	replacement := makeTestState(id)
 	replacement.DecisionName = "second"
-	if _, err := s.Put(ctx, replacement); err != nil {
-		t.Fatalf("Put replacement: %v", err)
+	if _, putErr := s.Put(ctx, replacement); putErr != nil {
+		t.Fatalf("Put replacement: %v", putErr)
 	}
-	if err := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); err != nil {
-		t.Fatalf("Commit after replacement Put: %v", err)
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); commitErr != nil {
+		t.Fatalf("Commit after replacement Put: %v", commitErr)
 	}
 
 	got, ok, err := consumeWorkflowState(s, id)
