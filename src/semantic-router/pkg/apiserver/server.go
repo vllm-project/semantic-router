@@ -109,6 +109,7 @@ func InitWithOptions(opts InitOptions) error {
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
 		buildClassificationResolver(opts.RuntimeRegistry),
+		buildClassificationBorrower(opts.RuntimeRegistry),
 	)
 
 	// Create server instance
@@ -206,6 +207,24 @@ func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime
 // liveClassificationService.current(), and panic with a nil receiver on the
 // first request. Return an untyped nil instead so current() falls back to
 // the placeholder service.
+// buildClassificationBorrower resolves the live classification service while
+// holding a reference on the runtime generation that owns it, so a reload
+// cannot close it while an API call is still using it.
+func buildClassificationBorrower(
+	runtimeRegistry *routerruntime.Registry,
+) func() (classificationService, func(), bool) {
+	if runtimeRegistry == nil {
+		return nil
+	}
+	return func() (classificationService, func(), bool) {
+		svc, release, ok := runtimeRegistry.BorrowClassificationService()
+		if !ok || svc == nil {
+			return nil, nil, false
+		}
+		return svc, release, true
+	}
+}
+
 func buildClassificationResolver(runtimeRegistry *routerruntime.Registry) func() classificationService {
 	return func() classificationService {
 		if runtimeRegistry != nil {
