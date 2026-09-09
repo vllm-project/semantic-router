@@ -128,6 +128,13 @@ ComplexityModelConfig configures how the complexity signal produces its
 score. It mirrors global.model_catalog.modules.complexity in the router
 config and is passed through field for field.
 
+The contract requirement sits here rather than on
+RemoteClassifierBackendConfig because it is a property of this consumer, not
+of the block: complexity reads two response shapes, so guessing wrong would
+surface per request instead of at admission. A consumer that reads one shape
+
+- categories does - keeps the field optional and defaults it.
+
 _Appears in:_
 
 - [ConfigSpec](#configspec)

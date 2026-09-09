@@ -1118,6 +1118,8 @@ type EmbeddingEndpointConfig struct {
 // +kubebuilder:validation:XValidation:rule="!((has(self.hard_above) || has(self.easy_below)) && (has(self.hard_below) || has(self.easy_above)))",message="a rule states one direction: use hard_above with easy_below, or hard_below with easy_above"
 // +kubebuilder:validation:XValidation:rule="has(self.hard_above) == has(self.easy_below)",message="hard_above and easy_below are required together"
 // +kubebuilder:validation:XValidation:rule="has(self.hard_below) == has(self.easy_above)",message="hard_below and easy_above are required together"
+// +kubebuilder:validation:XValidation:rule="!(has(self.hard_above) && has(self.easy_below)) || double(self.easy_below) < double(self.hard_above)",message="easy_below must be below hard_above; the band between them is medium"
+// +kubebuilder:validation:XValidation:rule="!(has(self.hard_below) && has(self.easy_above)) || double(self.hard_below) < double(self.easy_above)",message="hard_below must be below easy_above; the band between them is medium"
 type ComplexityRulesConfig struct {
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
@@ -1192,6 +1194,14 @@ type ComplexityCandidates struct {
 // ComplexityModelConfig configures how the complexity signal produces its
 // score. It mirrors global.model_catalog.modules.complexity in the router
 // config and is passed through field for field.
+//
+// The contract requirement sits here rather than on
+// RemoteClassifierBackendConfig because it is a property of this consumer, not
+// of the block: complexity reads two response shapes, so guessing wrong would
+// surface per request instead of at admission. A consumer that reads one shape
+// - categories does - keeps the field optional and defaults it.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
 type ComplexityModelConfig struct {
 	// Backend names a remote scoring model. Its absence keeps local prototype
 	// scoring; when set, the signal never reads the rules' hard/easy

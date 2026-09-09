@@ -1145,6 +1145,10 @@ spec:
                         - protocol
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: 'complexity reads two response shapes, so backend.contract
+                        must be stated: score.v1 or label_distribution.v1'
+                      rule: '!has(self.backend) || has(self.backend.contract)'
                   complexity_rules:
                     description: Complexity rules for complexity-aware routing
                     items:
@@ -1285,6 +1289,14 @@ spec:
                         rule: has(self.hard_above) == has(self.easy_below)
                       - message: hard_below and easy_above are required together
                         rule: has(self.hard_below) == has(self.easy_above)
+                      - message: easy_below must be below hard_above; the band between
+                          them is medium
+                        rule: '!(has(self.hard_above) && has(self.easy_below)) ||
+                          double(self.easy_below) < double(self.hard_above)'
+                      - message: hard_below must be below easy_above; the band between
+                          them is medium
+                        rule: '!(has(self.hard_below) && has(self.easy_above)) ||
+                          double(self.hard_below) < double(self.easy_above)'
                     type: array
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,
