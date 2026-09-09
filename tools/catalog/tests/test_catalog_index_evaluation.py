@@ -72,9 +72,8 @@ class CatalogIndexEvaluationTests(unittest.TestCase):
             ],
         }
 
-        results = {
-            result["index"]: result for result in catalog._index_results(resources)
-        }
+        materialized = catalog._index_results(resources)
+        results = {result["index"]: result for result in materialized}
         self.assertEqual(results["example/domain@1.0.0"]["score"], 80.0)
         self.assertEqual(
             results["example/domain@1.0.0"]["domains"], {"reasoning": 80.0}
@@ -82,6 +81,32 @@ class CatalogIndexEvaluationTests(unittest.TestCase):
         self.assertEqual(
             results["example/composite@1.0.0"]["provenance"],
             ["example/run@1.0.0"],
+        )
+        self.assertEqual(
+            evaluations.index_leaf_components(
+                resources["indices"], "example/composite@1.0.0"
+            ),
+            resources["indices"][0]["components"],
+        )
+        self.assertEqual(
+            evaluations.evaluation_coverage(
+                resources,
+                "example/composite@1.0.0",
+                materialized,
+            ),
+            [
+                {
+                    "model": "example/model",
+                    "reasoning_effort": "default",
+                    "benchmark": "example/bench@1.0.0",
+                    "benchmark_profiles": ["standard"],
+                    "benchmark_profile": "standard",
+                    "metric": "score",
+                    "status": "available",
+                    "value": 0.8,
+                    "evaluation": "example/run@1.0.0",
+                }
+            ],
         )
 
     def test_extended_normalizations_are_supported(self) -> None:

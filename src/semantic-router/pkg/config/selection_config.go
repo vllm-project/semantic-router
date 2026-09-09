@@ -211,6 +211,7 @@ type SessionAwareSelectionConfig struct {
 type MultiFactorSelectionConfig struct {
 	Weights *MultiFactorWeightsConfig `yaml:"weights,omitempty"`
 	SLO     *MultiFactorSLOConfig     `yaml:"slo,omitempty"`
+	Quality *QualityEvidenceConfig    `yaml:"quality,omitempty"`
 
 	// LatencyPercentile selects which percentile (e.g. 95) is read from
 	// pkg/latency when computing the latency signal. Defaults to 95.
@@ -220,6 +221,20 @@ type MultiFactorSelectionConfig struct {
 	// candidate. Valid values: "cheapest" (default), "first", "fail".
 	OnNoCandidates string `yaml:"on_no_candidates,omitempty"`
 }
+
+// QualityEvidenceConfig selects the versioned catalog index used as the
+// multi_factor quality signal. Capability indices and the overall index share
+// this contract, so a decision can be capability-aware without inventing a
+// partial overall score.
+type QualityEvidenceConfig struct {
+	Index     string `yaml:"index"`
+	OnMissing string `yaml:"on_missing,omitempty"`
+}
+
+const (
+	QualityEvidenceOnMissingExclude = "exclude"
+	QualityEvidenceOnMissingDisable = "disable_quality"
+)
 
 // MultiFactorWeightsConfig holds per-signal weights for the multi_factor
 // scoring formula score = w_q*quality + w_l*latency + w_c*cost + w_L*load.

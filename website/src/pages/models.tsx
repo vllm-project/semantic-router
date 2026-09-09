@@ -405,6 +405,20 @@ export default function ModelsPage() {
               catalog={catalog}
               scope={urlState.arenaScope}
               setScope={arenaScope => updateUrlState(current => ({ ...current, arenaScope }))}
+              layer={urlState.arenaLayer}
+              setLayer={arenaLayer => updateUrlState(current => ({ ...current, arenaLayer }))}
+              capability={urlState.arenaCapability}
+              setCapability={arenaCapability => updateUrlState(current => ({
+                ...current,
+                arenaCapability,
+                arenaLayer: 'capabilities',
+              }))}
+              benchmark={urlState.arenaBenchmark}
+              setBenchmark={arenaBenchmark => updateUrlState(current => ({
+                ...current,
+                arenaBenchmark,
+                arenaLayer: 'benchmarks',
+              }))}
               selectModel={selectModel}
             />
           </section>

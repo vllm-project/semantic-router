@@ -583,6 +583,26 @@
     verification: imported
     source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
     redistributable: true
+- id: nvidia-comparative/minimax-m2.7-livecodebench-v6@1.0.0
+  model: minimax/minimax-m2.7
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: MiniMax M2.7 230B-A10B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.772
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
 - id: nvidia-comparative/minimax-m2.7-scicode@1.0.0
   model: minimax/minimax-m2.7
   benchmark: scicode-bench/scicode@1.0.0

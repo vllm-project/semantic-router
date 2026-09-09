@@ -5470,3 +5470,42 @@
     verification: imported
     source: https://artificialanalysis.ai/models/gpt-oss-20b
     redistributable: true
+- id: independent/gpt-oss-120b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b high
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.878306878306878
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/livecodebench
+    redistributable: true
+- id: nvidia-comparative/gpt-oss-20b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: GPT-OSS-20B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.610
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md
+    redistributable: true

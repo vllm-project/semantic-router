@@ -18,7 +18,7 @@ SPEC.loader.exec_module(catalog)
 
 from catalog_evaluations import evaluation_coverage  # noqa: E402
 
-DEFAULT_INDEX_COMPONENT_COUNT = 5
+DEFAULT_INDEX_COMPONENT_COUNT = 6
 DEFAULT_INDEX_ID = "vllm-sr/intelligence@1.0.0"
 MINIMUM_RANKABLE_MODEL_COUNT = 21
 OPENAI_LONG_CONTEXT_TOKENS = 1_050_000
@@ -86,37 +86,64 @@ class ModelCatalogCompilerTests(unittest.TestCase):
 
     def test_default_intelligence_index_is_public_and_complete_case(self) -> None:
         _, resources, _ = catalog.load_and_validate()
-        index = next(
-            item for item in resources["indices"] if item["id"] == DEFAULT_INDEX_ID
-        )
+        indices = {item["id"]: item for item in resources["indices"]}
+        index = indices[DEFAULT_INDEX_ID]
         self.assertEqual(index["missing"], {"policy": "require_all"})
         self.assertEqual(
             index["domains"],
             {
-                "general_reasoning": 0.20,
-                "scientific_reasoning": 0.20,
-                "frontier_reasoning": 0.20,
-                "scientific_coding": 0.20,
-                "agentic_systems": 0.20,
+                "general": 0.20,
+                "reasoning": 0.40,
+                "coding": 0.20,
+                "agentic": 0.20,
             },
         )
         self.assertEqual(
             {
-                f"{component['benchmark']}#{component['metric']}": component["weight"]
+                component["index"]: component["weight"]
                 for component in index["components"]
             },
             {
-                "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.20,
-                "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.20,
-                "cais/humanitys-last-exam@1.0.0#accuracy": 0.20,
-                "scicode-bench/scicode@1.0.0#score": 0.20,
-                "harbor/terminal-bench@2.1.0#resolved": 0.20,
+                "vllm-sr/general@1.0.0": 0.20,
+                "vllm-sr/reasoning@1.0.0": 0.40,
+                "vllm-sr/coding@1.0.0": 0.20,
+                "vllm-sr/agentic@1.0.0": 0.20,
             },
         )
+        expected_capabilities = {
+            "vllm-sr/general@1.0.0": {
+                "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 1.0,
+            },
+            "vllm-sr/reasoning@1.0.0": {
+                "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.5,
+                "cais/humanitys-last-exam@1.0.0#accuracy": 0.5,
+            },
+            "vllm-sr/coding@1.0.0": {
+                "livecodebench/livecodebench@6.0.0#pass_at_1": 0.5,
+                "scicode-bench/scicode@1.0.0#score": 0.5,
+            },
+            "vllm-sr/agentic@1.0.0": {
+                "harbor/terminal-bench@2.1.0#resolved": 1.0,
+            },
+        }
+        for index_id, expected_components in expected_capabilities.items():
+            capability = indices[index_id]
+            self.assertEqual(capability["missing"], {"policy": "require_all"})
+            self.assertEqual(
+                {
+                    f"{component['benchmark']}#{component['metric']}": component[
+                        "weight"
+                    ]
+                    for component in capability["components"]
+                },
+                expected_components,
+            )
         self.assertTrue(
             all(
                 component["normalization"] == {"type": "identity"}
-                for component in index["components"]
+                for definition in [index]
+                + [indices[index_id] for index_id in expected_capabilities]
+                for component in definition["components"]
             )
         )
 
@@ -165,6 +192,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "idavidrein/gpqa-diamond@1.0.0",
                 "cais/humanitys-last-exam@1.0.0",
                 "harbor/terminal-bench@2.1.0",
+                "livecodebench/livecodebench@6.0.0",
                 "scicode-bench/scicode@1.0.0",
             },
         )
@@ -941,13 +969,13 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 ).add(row["benchmark"])
 
         expected_counts = {
-            ("deepseek/deepseek-v4-flash", "max"): 5,
-            ("deepseek/deepseek-v4-pro", "max"): 5,
+            ("deepseek/deepseek-v4-flash", "max"): 6,
+            ("deepseek/deepseek-v4-pro", "max"): 6,
             ("zai/glm-5.3-flash", "max"): 4,
-            ("qwen/qwen3.8-27b", "xhigh"): 4,
+            ("qwen/qwen3.8-27b", "xhigh"): 5,
             ("tencent/hy3", "high"): 3,
             ("thinking-machines/inkling", "max"): 4,
-            ("microsoft/mai-thinking-1", "unspecified"): 2,
+            ("microsoft/mai-thinking-1", "unspecified"): 3,
             ("cohere/tiny-aya-global", "unspecified"): 1,
         }
         self.assertEqual(

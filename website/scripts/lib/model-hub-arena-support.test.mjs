@@ -15,25 +15,44 @@ const support = await import(
   `data:text/javascript;base64,${Buffer.from(helperJavaScript).toString('base64')}`,
 )
 
-const component = (benchmark, status) => ({
-  benchmark,
-  metric: 'accuracy',
-  benchmark_profile: 'standard',
-  weight: 0.5,
+const indexResult = (model, index, effort, status, score) => ({
+  model,
+  reasoning_effort: effort,
+  index,
   status,
+  score,
+  coverage: status === 'available' ? 1 : 0.5,
+  components: [],
 })
 
 const catalog = {
-  catalogs: [{ default_intelligence_index: 'test/index@1.0.0' }],
-  indices: [{
-    id: 'test/index@1.0.0',
-    display_name: 'Test Index',
-    components: [],
-  }],
-  benchmarks: [
-    { id: 'test/a@1.0.0', display_name: 'A' },
-    { id: 'test/b@1.0.0', display_name: 'B' },
+  catalogs: [{ default_intelligence_index: 'test/intelligence@1.0.0' }],
+  indices: [
+    {
+      id: 'test/intelligence@1.0.0',
+      display_name: 'Test Intelligence',
+      description: 'Overall',
+      components: [{ index: 'test/general@1.0.0', weight: 1 }],
+    },
+    {
+      id: 'test/general@1.0.0',
+      display_name: 'General',
+      description: 'General capability',
+      components: [{
+        benchmark: 'test/a@1.0.0',
+        metric: 'accuracy',
+        benchmark_profiles: ['independent', 'published'],
+        weight: 1,
+        normalization: { type: 'identity' },
+      }],
+    },
   ],
+  benchmarks: [{
+    id: 'test/a@1.0.0',
+    display_name: 'A',
+    default_profile: 'published',
+    metrics: [{ id: 'accuracy', unit: 'proportion', range: [0, 1] }],
+  }],
   reasoning_families: [{
     id: 'reasoning/test@1.0.0',
     levels: ['low', 'high'],
@@ -48,8 +67,8 @@ const catalog = {
       reasoning_family: 'reasoning/test@1.0.0',
     },
     {
-      id: 'creator/closed',
-      display_name: 'Closed',
+      id: 'creator/partial',
+      display_name: 'Partial',
       kind: 'physical',
       publisher: 'Creator',
       distribution: { type: 'proprietary_api' },
@@ -62,67 +81,66 @@ const catalog = {
       distribution: { type: 'router_recipe' },
     },
   ],
+  evaluations: [
+    {
+      id: 'eval/open-low', model: 'creator/open', benchmark: 'test/a@1.0.0',
+      benchmark_profile: 'published', reasoning_effort: 'low', status: 'available',
+      metrics: { accuracy: 0.7 },
+    },
+    {
+      id: 'eval/open-high', model: 'creator/open', benchmark: 'test/a@1.0.0',
+      benchmark_profile: 'independent', reasoning_effort: 'high', status: 'available',
+      metrics: { accuracy: 0.8 },
+    },
+    {
+      id: 'eval/partial', model: 'creator/partial', benchmark: 'test/a@1.0.0',
+      benchmark_profile: 'published', reasoning_effort: 'default', status: 'available',
+      metrics: { accuracy: 0.95 },
+    },
+    {
+      id: 'eval/router', model: 'virtual/router', benchmark: 'test/a@1.0.0',
+      benchmark_profile: 'published', reasoning_effort: 'default', status: 'available',
+      metrics: { accuracy: 0.9 },
+    },
+  ],
   index_results: [
-    {
-      model: 'creator/open',
-      reasoning_effort: 'low',
-      index: 'test/index@1.0.0',
-      status: 'available',
-      score: 80,
-      coverage: 1,
-      components: [component('test/a@1.0.0', 'available')],
-    },
-    {
-      model: 'creator/open',
-      reasoning_effort: 'high',
-      index: 'test/index@1.0.0',
-      status: 'available',
-      score: 75,
-      coverage: 1,
-      components: [component('test/a@1.0.0', 'available')],
-    },
-    {
-      model: 'creator/closed',
-      reasoning_effort: 'default',
-      index: 'test/index@1.0.0',
-      status: 'partial',
-      score: null,
-      coverage: 0.5,
-      components: [
-        component('test/a@1.0.0', 'available'),
-        component('test/b@1.0.0', 'missing'),
-      ],
-    },
-    {
-      model: 'virtual/router',
-      reasoning_effort: 'default',
-      index: 'test/index@1.0.0',
-      status: 'available',
-      score: 90,
-      coverage: 1,
-      components: [component('test/a@1.0.0', 'available')],
-    },
+    indexResult('creator/open', 'test/intelligence@1.0.0', 'low', 'available', 80),
+    indexResult('creator/open', 'test/intelligence@1.0.0', 'high', 'available', 75),
+    indexResult('creator/partial', 'test/intelligence@1.0.0', 'default', 'partial', null),
+    indexResult('virtual/router', 'test/intelligence@1.0.0', 'default', 'available', 90),
+    indexResult('creator/open', 'test/general@1.0.0', 'high', 'available', 80),
+    indexResult('creator/partial', 'test/general@1.0.0', 'default', 'available', 95),
+    indexResult('virtual/router', 'test/general@1.0.0', 'default', 'available', 90),
   ],
 }
 
-test('arena ranks physical and virtual models with the same complete-case rule', () => {
+test('arena builds overall, capability, and benchmark ranks from one hierarchy', () => {
   const arena = support.modelHubArenaData(catalog, 'all')
 
   assert.deepEqual(
-    arena.ranked.map(row => [row.rank, row.model.id, row.result.reasoning_effort]),
+    arena.overall.rows.map(row => [row.rank, row.model.id, row.reasoningEffort]),
     [[1, 'virtual/router', 'default'], [2, 'creator/open', 'high']],
   )
-  assert.deepEqual(arena.awaitingEvidence.map(row => row.model.id), ['creator/closed'])
-  assert.deepEqual(arena.awaitingEvidence[0].missingBenchmarks, ['B'])
+  assert.deepEqual(
+    arena.capabilities[0].rows.map(row => row.model.id),
+    ['creator/partial', 'virtual/router', 'creator/open'],
+  )
+  assert.deepEqual(
+    arena.benchmarks[0].rows.map(row => [row.model.id, row.score, row.reasoningEffort]),
+    [
+      ['creator/partial', 95, 'default'],
+      ['virtual/router', 90, 'default'],
+      ['creator/open', 80, 'high'],
+    ],
+  )
 })
 
-test('arena scopes are shareable projections over the same index results', () => {
-  assert.deepEqual(
-    support.modelHubArenaData(catalog, 'open').ranked.map(row => row.model.id),
-    ['creator/open'],
-  )
-  assert.deepEqual(
-    support.modelHubArenaData(catalog, 'virtual').ranked.map(row => row.model.id),
-    ['virtual/router'],
-  )
+test('arena scopes physical and virtual models identically at every layer', () => {
+  const open = support.modelHubArenaData(catalog, 'open')
+  const virtual = support.modelHubArenaData(catalog, 'virtual')
+
+  assert.deepEqual(open.overall.rows.map(row => row.model.id), ['creator/open'])
+  assert.deepEqual(open.benchmarks[0].rows.map(row => row.model.id), ['creator/open'])
+  assert.deepEqual(virtual.overall.rows.map(row => row.model.id), ['virtual/router'])
+  assert.deepEqual(virtual.capabilities[0].rows.map(row => row.model.id), ['virtual/router'])
 })

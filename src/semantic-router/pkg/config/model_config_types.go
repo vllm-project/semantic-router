@@ -379,22 +379,23 @@ type ModelParams struct {
 	// AuthoredModel preserves the typed user declaration across materialization.
 	// Effective catalog defaults must not leak into exported user YAML, and an
 	// api_key_env reference must not be replaced by its expanded secret value.
-	AuthoredModel     *CanonicalProviderModel             `yaml:"-" json:"-"`
-	LoRAs             []LoRAAdapter                       `yaml:"loras,omitempty"`
-	AccessKey         string                              `yaml:"access_key,omitempty" json:"-"`
-	AccessKeys        map[string]string                   `yaml:"-" json:"-"`
-	Catalog           string                              `yaml:"catalog,omitempty"`
-	ParamSize         string                              `yaml:"param_size,omitempty"`
-	ContextWindowSize int                                 `yaml:"context_window_size,omitempty"`
-	APIFormat         string                              `yaml:"api_format,omitempty"`
-	Description       string                              `yaml:"description,omitempty"`
-	Capabilities      []string                            `yaml:"capabilities,omitempty"`
-	Tags              []string                            `yaml:"tags,omitempty"`
-	Evaluations       []modelcatalog.UserEvaluation       `yaml:"-" json:"-"`
-	IndexResults      map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
-	QualityIndex      string                              `yaml:"-" json:"-"`
-	ExternalModelIDs  map[string]string                   `yaml:"external_model_ids,omitempty"`
-	Modality          string                              `yaml:"modality,omitempty"`
+	AuthoredModel        *CanonicalProviderModel                        `yaml:"-" json:"-"`
+	LoRAs                []LoRAAdapter                                  `yaml:"loras,omitempty"`
+	AccessKey            string                                         `yaml:"access_key,omitempty" json:"-"`
+	AccessKeys           map[string]string                              `yaml:"-" json:"-"`
+	Catalog              string                                         `yaml:"catalog,omitempty"`
+	ParamSize            string                                         `yaml:"param_size,omitempty"`
+	ContextWindowSize    int                                            `yaml:"context_window_size,omitempty"`
+	APIFormat            string                                         `yaml:"api_format,omitempty"`
+	Description          string                                         `yaml:"description,omitempty"`
+	Capabilities         []string                                       `yaml:"capabilities,omitempty"`
+	Tags                 []string                                       `yaml:"tags,omitempty"`
+	Evaluations          []modelcatalog.UserEvaluation                  `yaml:"-" json:"-"`
+	IndexResults         map[string]modelcatalog.IndexResult            `yaml:"-" json:"-"`
+	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
+	QualityIndex         string                                         `yaml:"-" json:"-"`
+	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
+	Modality             string                                         `yaml:"modality,omitempty"`
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and
@@ -404,6 +405,27 @@ func (params ModelParams) EvidenceScore(index string) (float64, bool) {
 		index = params.QualityIndex
 	}
 	result, ok := params.IndexResults[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceScoreAt resolves evidence for the exact configured reasoning effort
+// when one is present on the candidate. An empty effort uses the model's
+// catalog-preferred result. Scores are never borrowed across efforts.
+func (params ModelParams) EvidenceScoreAt(index, reasoningEffort string) (float64, bool) {
+	if reasoningEffort == "" {
+		return params.EvidenceScore(index)
+	}
+	if index == "" {
+		index = params.QualityIndex
+	}
+	results, ok := params.IndexResultsByEffort[reasoningEffort]
+	if !ok {
+		return 0, false
+	}
+	result, ok := results[index]
 	if !ok || result.Status != "available" || result.Score == nil {
 		return 0, false
 	}

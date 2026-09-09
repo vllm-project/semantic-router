@@ -405,6 +405,13 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 			MaxInflight:  decisionCfg.SLO.MaxInflight,
 		}
 	}
+	if decisionCfg.Quality != nil {
+		result.QualityIndex = decisionCfg.Quality.Index
+		result.QualityOnMissing = decisionCfg.Quality.OnMissing
+		if result.QualityOnMissing == "" {
+			result.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+		}
+	}
 	if decisionCfg.LatencyPercentile != 0 {
 		result.LatencyPercentile = decisionCfg.LatencyPercentile
 	}

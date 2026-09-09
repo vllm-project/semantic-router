@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -67,6 +68,103 @@ func TestMultiFactor_PicksHighestQualityWhenQualityDominant(t *testing.T) {
 	}
 	if res.SelectedModel != "b" {
 		t.Errorf("expected b (highest quality), got %s; scores=%v", res.SelectedModel, res.AllScores)
+	}
+}
+
+func TestMultiFactor_UsesConfiguredCapabilityIndexAtExactEffort(t *testing.T) {
+	const codingIndex = "vllm-sr/coding@1.0.0"
+	const overallIndex = "vllm-sr/intelligence@1.0.0"
+	percent := func(value float64) *float64 { return &value }
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1}
+	cfg.QualityIndex = codingIndex
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+	params := map[string]config.ModelParams{
+		"generalist": {
+			QualityIndex: overallIndex,
+			IndexResultsByEffort: map[string]map[string]modelcatalog.IndexResult{
+				"high": {
+					overallIndex: {Index: overallIndex, Status: "available", Score: percent(90)},
+					codingIndex:  {Index: codingIndex, Status: "available", Score: percent(40)},
+				},
+			},
+		},
+		"coder": {
+			QualityIndex: overallIndex,
+			IndexResultsByEffort: map[string]map[string]modelcatalog.IndexResult{
+				"high": {
+					overallIndex: {Index: overallIndex, Status: "available", Score: percent(70)},
+					codingIndex:  {Index: codingIndex, Status: "available", Score: percent(95)},
+				},
+			},
+		},
+	}
+	s := buildMFSelector(cfg, params,
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	result, err := s.Select(context.Background(), &SelectionContext{CandidateModels: []config.ModelRef{
+		{Model: "generalist", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+		{Model: "coder", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "coder" {
+		t.Fatalf("configured coding index selected %q, want coder", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, `quality_index="`+codingIndex+`"`) {
+		t.Fatalf("reasoning does not expose selected quality index: %q", result.Reasoning)
+	}
+}
+
+func TestMultiFactor_ExcludeDropsCandidatesMissingQualityEvidence(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1}
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+	s := buildMFSelector(cfg, map[string]config.ModelParams{
+		"measured": modelParamsWithTestQuality(0.4),
+	},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	result, err := s.Select(context.Background(), &SelectionContext{CandidateModels: candidates("missing", "measured")})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "measured" {
+		t.Fatalf("exclude policy selected %q, want measured", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, "quality_excluded=1") {
+		t.Fatalf("reasoning does not report excluded evidence: %q", result.Reasoning)
+	}
+}
+
+func TestMultiFactor_DisableQualityKeepsPoolWithoutCandidateLocalReweighting(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 0.9, Cost: 0.1}
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingDisable
+	s := buildMFSelector(cfg, map[string]config.ModelParams{
+		"measured-expensive": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 20},
+		}, 1),
+		"missing-cheap": {Pricing: config.ModelPricing{PromptPer1M: 1}},
+	},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+	result, err := s.Select(context.Background(), &SelectionContext{CandidateModels: candidates("measured-expensive", "missing-cheap")})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "missing-cheap" {
+		t.Fatalf("disable_quality selected %q, want missing-cheap from the remaining cost signal", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, "quality_disabled=true") {
+		t.Fatalf("reasoning does not report pool-wide quality disablement: %q", result.Reasoning)
 	}
 }
 

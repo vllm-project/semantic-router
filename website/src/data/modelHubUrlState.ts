@@ -11,6 +11,7 @@ export interface ModelHubBenchmarkUrlState {
 }
 
 export type ModelHubArenaScope = 'all' | 'open' | 'virtual'
+export type ModelHubArenaLayer = 'overall' | 'capabilities' | 'benchmarks'
 
 export interface ModelHubUrlState {
   filters: ModelHubDirectoryFilters
@@ -18,6 +19,9 @@ export interface ModelHubUrlState {
   page: number
   benchmark: ModelHubBenchmarkUrlState
   arenaScope: ModelHubArenaScope
+  arenaLayer: ModelHubArenaLayer
+  arenaCapability: string
+  arenaBenchmark: string
   selectedModelID: string | null
 }
 
@@ -48,6 +52,9 @@ const knownParameters = [
   'benchmark_q',
   'benchmark_creator',
   'arena',
+  'arena_layer',
+  'arena_capability',
+  'arena_benchmark',
   'model',
 ]
 
@@ -104,6 +111,13 @@ export function parseModelHubUrlState(search: string): ModelHubUrlState {
       ['all', 'open', 'virtual'] as const,
       'all',
     ),
+    arenaLayer: oneOf(
+      parameters.get('arena_layer'),
+      ['overall', 'capabilities', 'benchmarks'] as const,
+      'overall',
+    ),
+    arenaCapability: parameters.get('arena_capability') || '',
+    arenaBenchmark: parameters.get('arena_benchmark') || '',
     selectedModelID: parameters.get('model') || null,
   }
 }
@@ -140,6 +154,9 @@ export function serializeModelHubUrlState(
     DEFAULT_BENCHMARK.filter,
   )
   setWhenDifferent(parameters, 'arena', state.arenaScope, 'all')
+  setWhenDifferent(parameters, 'arena_layer', state.arenaLayer, 'overall')
+  setWhenDifferent(parameters, 'arena_capability', state.arenaCapability, '')
+  setWhenDifferent(parameters, 'arena_benchmark', state.arenaBenchmark, '')
   setWhenDifferent(parameters, 'benchmark_q', state.benchmark.query, DEFAULT_BENCHMARK.query)
   setWhenDifferent(
     parameters,

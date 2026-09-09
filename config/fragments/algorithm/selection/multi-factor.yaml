@@ -2,6 +2,9 @@ algorithm:
   type: multi_factor
   minimum_candidates: 2
   multi_factor:
+    quality:
+      index: vllm-sr/coding@1.0.0
+      on_missing: exclude
     weights:
       quality: 0.4
       latency: 0.2

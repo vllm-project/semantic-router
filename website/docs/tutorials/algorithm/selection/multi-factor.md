@@ -12,8 +12,8 @@ decision uses its own weights, limits, percentile, and no-candidate policy.
 
 - Single-decision SLO-aware routing without orchestrating multiple selectors.
 - Each factor has an explicit source: quality from the release's versioned
-  intelligence index, latency from observed percentiles, cost from pricing,
-  and load from in-flight requests.
+  Overall or capability index, latency from observed percentiles, cost from
+  pricing, and load from in-flight requests.
 - Min-max normalization makes the configured weights comparable across the
   candidate set.
 - No model state to train. No external service required.
@@ -77,6 +77,9 @@ If all candidates are filtered out, behavior is controlled by `on_no_candidates`
 algorithm:
   type: multi_factor
   multi_factor:
+    quality:
+      index: vllm-sr/coding@1.0.0
+      on_missing: exclude
     weights:
       quality: 0.4
       latency: 0.2
@@ -95,6 +98,8 @@ algorithm:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `quality.index` | string | Catalog default | Versioned Overall or capability index used by the quality signal |
+| `quality.on_missing` | string | `exclude` when `quality` is explicit | `exclude` missing candidates, or `disable_quality` for the whole candidate pool |
 | `weights.quality` | float | `0.25` | Weight for an available computed model-intelligence index result |
 | `weights.latency` | float | `0.25` | Weight for percentile latency (lower-is-better, inverted) |
 | `weights.cost` | float | `0.25` | Weight for prompt pricing (lower-is-better, inverted) |
@@ -108,16 +113,18 @@ algorithm:
 
 ## Known Limitations
 
-- Quality scoring requires a comparable `available` index result. For a model
-  without one, that factor is omitted and the remaining available weights are
-  renormalized for that candidate.
+- Quality scoring requires an `available` result for the selected index at the
+  candidate's exact reasoning effort. Results are not borrowed across efforts.
+- With `quality.on_missing: exclude`, candidates without that evidence are
+  removed. With `disable_quality`, one missing candidate disables quality for
+  the entire surviving pool. Quality is never reweighted independently for one
+  candidate.
 - Min-max normalization is **per-request across the candidate set**, so absolute scale of any signal does not matter — but if all candidates have the same value on a dimension, that dimension contributes 0.5 (neutral).
 - Load and latency are observed per Router process, not across the whole
   cluster. Replicas can therefore choose different candidates.
-- A missing quality, latency, or cost observation omits that factor for the
-  candidate and renormalizes its remaining active weights. It does not trigger
-  an SLO exclusion, because absence is not evidence that the configured ceiling
-  was exceeded.
+- A missing latency or cost observation still omits that operational factor for
+  the candidate. It does not trigger an SLO exclusion, because absence is not
+  evidence that the configured ceiling was exceeded.
 
 See a complete example:
 [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml).

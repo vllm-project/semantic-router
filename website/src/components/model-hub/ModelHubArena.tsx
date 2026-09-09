@@ -1,8 +1,14 @@
 import React from 'react'
 
 import type { CatalogSnapshot } from '../../data/modelHubCatalogTypes'
-import { modelHubArenaData } from '../../data/modelHubArenaSupport'
-import type { ModelHubArenaScope } from '../../data/modelHubUrlState'
+import {
+  modelHubArenaData,
+  type ModelHubArenaSurface,
+} from '../../data/modelHubArenaSupport'
+import type {
+  ModelHubArenaLayer,
+  ModelHubArenaScope,
+} from '../../data/modelHubUrlState'
 import { CatalogMark } from './ModelHubMark'
 import styles from './modelHubArena.module.css'
 
@@ -12,46 +18,230 @@ const scopeOptions: Array<[ModelHubArenaScope, string]> = [
   ['virtual', 'Virtual models'],
 ]
 
+const layerOptions: Array<[ModelHubArenaLayer, string, string]> = [
+  ['overall', 'Overall', 'Complete Intelligence 1.0'],
+  ['capabilities', 'Capabilities', 'General, reasoning, coding, and agentic'],
+  ['benchmarks', 'Benchmarks', 'The six versioned core evaluations'],
+]
+
+function selectedSurface(
+  layer: ModelHubArenaLayer,
+  overall: ModelHubArenaSurface,
+  capabilities: ModelHubArenaSurface[],
+  benchmarks: ModelHubArenaSurface[],
+  capability: string,
+  benchmark: string,
+): ModelHubArenaSurface {
+  if (layer === 'capabilities') {
+    return capabilities.find(surface => surface.id === capability) ?? capabilities[0] ?? overall
+  }
+  if (layer === 'benchmarks') {
+    return benchmarks.find(surface => surface.id === benchmark) ?? benchmarks[0] ?? overall
+  }
+  return overall
+}
+
+function SurfaceSelector({
+  label,
+  surfaces,
+  selected,
+  select,
+}: {
+  label: string
+  surfaces: ModelHubArenaSurface[]
+  selected: string
+  select: (id: string) => void
+}) {
+  return (
+    <div className={styles.surfaceSelector} role="group" aria-label={label}>
+      {surfaces.map(surface => (
+        <button
+          key={surface.id}
+          type="button"
+          aria-pressed={selected === surface.id}
+          onClick={() => select(surface.id)}
+        >
+          <span>{surface.displayName}</span>
+          <small>{surface.rows.length}</small>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function RankChart({
+  surface,
+  selectModel,
+}: {
+  surface: ModelHubArenaSurface
+  selectModel: (id: string) => void
+}) {
+  const rows = surface.rows.slice(0, 12)
+  const maximum = Math.max(...rows.map(row => row.score), 1)
+  return (
+    <div className={styles.chart} aria-label={`${surface.displayName} top model scores`}>
+      {rows.map(row => (
+        <button
+          key={row.model.id}
+          type="button"
+          className={styles.chartRow}
+          onClick={() => selectModel(row.model.id)}
+        >
+          <span className={styles.chartRank}>{row.rank}</span>
+          <span className={styles.chartModel} title={row.model.display_name}>
+            <CatalogMark presentation={row.model.presentation} />
+            <strong>{row.model.display_name}</strong>
+          </span>
+          <i aria-hidden="true">
+            <b style={{ width: `${(row.score / maximum) * 100}%` }} />
+          </i>
+          <span className={styles.chartScore}>{row.score.toFixed(1)}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function RankTable({
+  surface,
+  selectModel,
+}: {
+  surface: ModelHubArenaSurface
+  selectModel: (id: string) => void
+}) {
+  return (
+    <div className={styles.tableFrame}>
+      <table>
+        <colgroup>
+          <col className={styles.rankColumn} />
+          <col className={styles.modelColumn} />
+          <col className={styles.creatorColumn} />
+          <col className={styles.scoreColumn} />
+          <col className={styles.effortColumn} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Model</th>
+            <th>Creator</th>
+            <th>Score</th>
+            <th>Effort</th>
+          </tr>
+        </thead>
+        <tbody>
+          {surface.rows.map(row => (
+            <tr key={row.model.id}>
+              <td className={styles.rank}>{`#${row.rank}`}</td>
+              <td>
+                <button
+                  type="button"
+                  className={styles.modelButton}
+                  onClick={() => selectModel(row.model.id)}
+                >
+                  <CatalogMark presentation={row.model.presentation} />
+                  <span>
+                    <strong>{row.model.display_name}</strong>
+                    <small>{row.model.id}</small>
+                  </span>
+                </button>
+              </td>
+              <td>{row.model.publisher}</td>
+              <td>
+                <span className={styles.score}>
+                  <strong>{row.score.toFixed(1)}</strong>
+                  <i aria-hidden="true"><b style={{ width: `${row.score}%` }} /></i>
+                </span>
+              </td>
+              <td><span className={styles.effort}>{row.reasoningEffort}</span></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function ModelHubArena({
   catalog,
   scope,
   setScope,
+  layer,
+  setLayer,
+  capability,
+  setCapability,
+  benchmark,
+  setBenchmark,
   selectModel,
 }: {
   catalog: CatalogSnapshot
   scope: ModelHubArenaScope
   setScope: (scope: ModelHubArenaScope) => void
+  layer: ModelHubArenaLayer
+  setLayer: (layer: ModelHubArenaLayer) => void
+  capability: string
+  setCapability: (id: string) => void
+  benchmark: string
+  setBenchmark: (id: string) => void
   selectModel: (id: string) => void
 }) {
   const arena = modelHubArenaData(catalog, scope)
   if (!arena) return null
-  const benchmarkNames = new Map(
-    catalog.benchmarks.map(benchmark => [benchmark.id, benchmark.display_name]),
+  const surface = selectedSurface(
+    layer,
+    arena.overall,
+    arena.capabilities,
+    arena.benchmarks,
+    capability,
+    benchmark,
   )
-  const pendingPreview = arena.awaitingEvidence.slice(0, 12)
 
   return (
     <div className={styles.arena}>
       <div className={styles.intro}>
         <div>
-          <strong>{arena.index.display_name}</strong>
-          <p>{arena.index.description}</p>
+          <small>Open Intelligence · 1.0</small>
+          <h3>{arena.index.display_name}</h3>
+          <p>One evidence graph for standalone models, virtual models, and routing.</p>
         </div>
-        {arena.index.methodology
-          ? <a href={arena.index.methodology}>Methodology</a>
-          : null}
+        {arena.index.methodology ? <a href={arena.index.methodology}>Methodology</a> : null}
       </div>
 
-      <div className={styles.components} aria-label="Index components">
-        {arena.index.components.map(component => (
-          <span key={`${component.benchmark}:${component.metric}`}>
-            {benchmarkNames.get(component.benchmark ?? '') ?? component.benchmark}
-            <b>{`${Math.round(component.weight * 100)}%`}</b>
-          </span>
+      <div className={styles.layerTabs} role="tablist" aria-label="Arena ranking layer">
+        {layerOptions.map(([value, label, description]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={layer === value}
+            onClick={() => setLayer(value)}
+          >
+            <strong>{label}</strong>
+            <small>{description}</small>
+          </button>
         ))}
       </div>
 
-      <div className={styles.toolbar}>
+      <div className={styles.controls}>
+        {layer === 'capabilities'
+          ? (
+              <SurfaceSelector
+                label="Capability ranking"
+                surfaces={arena.capabilities}
+                selected={surface.id}
+                select={setCapability}
+              />
+            )
+          : null}
+        {layer === 'benchmarks'
+          ? (
+              <SurfaceSelector
+                label="Benchmark ranking"
+                surfaces={arena.benchmarks}
+                selected={surface.id}
+                select={setBenchmark}
+              />
+            )
+          : null}
         <div className={styles.scopeTabs} role="group" aria-label="Arena model scope">
           {scopeOptions.map(([value, label]) => (
             <button
@@ -64,108 +254,36 @@ export function ModelHubArena({
             </button>
           ))}
         </div>
+      </div>
+
+      <div className={styles.surfaceHeading}>
+        <div>
+          <small>{layer === 'overall' ? 'Overall rank' : layer === 'capabilities' ? 'Capability rank' : 'Benchmark rank'}</small>
+          <h3>{surface.displayName}</h3>
+          <p>{surface.description}</p>
+        </div>
         <span>
-          <strong>{arena.ranked.length}</strong>
+          <strong>{surface.rows.length}</strong>
           {' '}
-          ranked ·
-          {' '}
-          <strong>{arena.awaitingEvidence.length}</strong>
-          {' '}
-          awaiting complete evidence
+          ranked models
         </span>
       </div>
 
-      {arena.ranked.length
+      {surface.rows.length
         ? (
-            <div className={styles.tableFrame}>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th>
-                    <th>Model</th>
-                    <th>Creator</th>
-                    <th>Score</th>
-                    <th>Coverage</th>
-                    <th>Effort</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {arena.ranked.map(row => (
-                    <tr key={row.model.id}>
-                      <td className={styles.rank}>{`#${row.rank}`}</td>
-                      <td>
-                        <button
-                          type="button"
-                          className={styles.modelButton}
-                          onClick={() => selectModel(row.model.id)}
-                        >
-                          <CatalogMark presentation={row.model.presentation} />
-                          <span>
-                            <strong>{row.model.display_name}</strong>
-                            <small>{row.model.id}</small>
-                          </span>
-                        </button>
-                      </td>
-                      <td>{row.model.publisher}</td>
-                      <td className={styles.score}>{row.result.score?.toFixed(1)}</td>
-                      <td>{`${Math.round(row.result.coverage * 100)}%`}</td>
-                      <td>{row.result.reasoning_effort}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <RankChart surface={surface} selectModel={selectModel} />
+              <RankTable surface={surface} selectModel={selectModel} />
+            </>
           )
         : (
-            <div className={styles.emptyRank}>No model in this view has all five core results yet.</div>
-          )}
-
-      {pendingPreview.length
-        ? (
-            <div className={styles.coverageQueue}>
-              <header>
-                <h3>Coverage queue</h3>
-                <span>Partial evidence is visible but never converted into a score.</span>
-              </header>
-              <div className={styles.coverageRows}>
-                {pendingPreview.map(row => (
-                  <button
-                    key={row.model.id}
-                    type="button"
-                    onClick={() => selectModel(row.model.id)}
-                  >
-                    <span className={styles.pendingIdentity}>
-                      <CatalogMark presentation={row.model.presentation} />
-                      <span>
-                        <strong>{row.model.display_name}</strong>
-                        <small>{row.model.publisher}</small>
-                      </span>
-                    </span>
-                    <span className={styles.coverageMeter}>
-                      <i><b style={{ width: `${row.result.coverage * 100}%` }} /></i>
-                      <strong>{`${Math.round(row.result.coverage * 100)}%`}</strong>
-                    </span>
-                    <small className={styles.missing}>
-                      {row.missingBenchmarks.length
-                        ? `Missing ${row.missingBenchmarks.join(', ')}`
-                        : 'No core evidence yet'}
-                    </small>
-                  </button>
-                ))}
-              </div>
-              {arena.awaitingEvidence.length > pendingPreview.length
-                ? (
-                    <p className={styles.remaining}>
-                      +
-                      {arena.awaitingEvidence.length - pendingPreview.length}
-                      {' '}
-                      more models in the catalog
-                    </p>
-                  )
-                : null}
+            <div className={styles.emptyRank}>
+              No model in this scope has an available result for
+              {' '}
+              {surface.displayName}
+              .
             </div>
-          )
-        : null}
+          )}
     </div>
   )
 }

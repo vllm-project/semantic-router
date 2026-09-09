@@ -366,6 +366,21 @@ class MultiFactorSLOConfig(BaseModel):
     max_inflight: int | None = Field(default=None, ge=0)
 
 
+class QualityEvidenceConfig(BaseModel):
+    """Versioned catalog evidence used as the multi-factor quality signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    index: str = Field(min_length=1)
+    on_missing: Literal["exclude", "disable_quality"] = "exclude"
+
+    @model_validator(mode="after")
+    def validate_index(self):
+        if self.index != self.index.strip():
+            raise ValueError("index cannot have surrounding whitespace")
+        return self
+
+
 class MultiFactorSelectionConfig(BaseModel):
     """Configuration for the canonical multi_factor selector."""
 
@@ -373,6 +388,7 @@ class MultiFactorSelectionConfig(BaseModel):
 
     weights: MultiFactorWeightsConfig | None = None
     slo: MultiFactorSLOConfig | None = None
+    quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
     on_no_candidates: str | None = "cheapest"
 

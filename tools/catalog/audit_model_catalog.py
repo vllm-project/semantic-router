@@ -15,6 +15,7 @@ CATALOG_TOOL_ROOT = Path(__file__).resolve().parent
 if str(CATALOG_TOOL_ROOT) not in sys.path:
     sys.path.insert(0, str(CATALOG_TOOL_ROOT))
 
+from catalog_evaluations import index_leaf_components  # noqa: E402
 from generate_model_catalog import (  # noqa: E402
     CatalogBuildError,
     load_and_validate,
@@ -60,7 +61,6 @@ def _default_slots(
     manifest: dict[str, Any], resources: dict[str, list[dict[str, Any]]]
 ) -> list[dict[str, Any]]:
     index_id = str(manifest["defaults"]["intelligence_index"])
-    definition = next(item for item in resources["indices"] if item["id"] == index_id)
     return [
         {
             "benchmark": str(component["benchmark"]),
@@ -71,8 +71,7 @@ def _default_slots(
             ],
             "metric": str(component["metric"]),
         }
-        for component in definition["components"]
-        if component.get("benchmark")
+        for component in index_leaf_components(resources["indices"], index_id)
     ]
 
 

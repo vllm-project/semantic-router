@@ -727,8 +727,31 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case "multi_factor":
+		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}
 	return nil
+}
+
+func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorSelectionConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("decision '%s': algorithm.type=multi_factor requires algorithm.multi_factor configuration", decisionName)
+	}
+	if cfg.Quality == nil {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Quality.Index) == "" {
+		return fmt.Errorf("decision '%s', algorithm.multi_factor.quality: index is required", decisionName)
+	}
+	if cfg.Quality.Index != strings.TrimSpace(cfg.Quality.Index) {
+		return fmt.Errorf("decision '%s', algorithm.multi_factor.quality: index must not contain surrounding whitespace", decisionName)
+	}
+	switch cfg.Quality.OnMissing {
+	case "", QualityEvidenceOnMissingExclude, QualityEvidenceOnMissingDisable:
+		return nil
+	default:
+		return fmt.Errorf("decision '%s', algorithm.multi_factor.quality: on_missing must be %q or %q", decisionName, QualityEvidenceOnMissingExclude, QualityEvidenceOnMissingDisable)
+	}
 }
 
 func wrapAlgorithmValidationError(decisionName, algorithmType string, err error) error {

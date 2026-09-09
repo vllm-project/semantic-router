@@ -1479,3 +1479,22 @@
     verification: imported
     source: https://artificialanalysis.ai/models/llama-4-scout
     redistributable: true
+- id: exaone-comparative/llama-4-maverick-livecodebench-v6@1.0.0
+  model: meta/llama-4-maverick-17b-128e-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: Llama 4 Maverick 17B-128E Instruct
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.327
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true

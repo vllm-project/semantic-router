@@ -490,6 +490,27 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           ],
         },
         {
+          key: 'quality',
+          label: 'Quality Evidence',
+          type: 'object',
+          description: 'Versioned catalog index used as the quality signal',
+          fields: [
+            {
+              key: 'index',
+              label: 'Index',
+              type: 'string',
+              required: true,
+              placeholder: 'vllm-sr/intelligence@1.0.0',
+            },
+            {
+              key: 'on_missing',
+              label: 'Missing Evidence',
+              type: 'select',
+              options: ['exclude', 'disable_quality'],
+            },
+          ],
+        },
+        {
           key: 'latency_percentile',
           label: 'Latency Percentile',
           type: 'number',

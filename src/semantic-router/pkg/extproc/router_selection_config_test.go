@@ -151,6 +151,22 @@ func TestBuildHybridSelectionConfigMergesDecisionOverrides(t *testing.T) {
 	}
 }
 
+func TestBuildMultiFactorSelectionConfigCopiesQualityEvidencePolicy(t *testing.T) {
+	got := buildMultiFactorSelectionConfig(&config.MultiFactorSelectionConfig{
+		Quality: &config.QualityEvidenceConfig{
+			Index:     "vllm-sr/agentic@1.0.0",
+			OnMissing: "disable_quality",
+		},
+	})
+	assertString(t, got.QualityIndex, "vllm-sr/agentic@1.0.0", "multi_factor.quality.index")
+	assertString(t, got.QualityOnMissing, "disable_quality", "multi_factor.quality.on_missing")
+
+	strict := buildMultiFactorSelectionConfig(&config.MultiFactorSelectionConfig{
+		Quality: &config.QualityEvidenceConfig{Index: "vllm-sr/intelligence@1.0.0"},
+	})
+	assertString(t, strict.QualityOnMissing, "exclude", "multi_factor.quality.on_missing default")
+}
+
 func TestBuildModelSelectionConfigDoesNotPromoteDecisionMultiFactorConfig(t *testing.T) {
 	got := buildModelSelectionConfig(&config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{

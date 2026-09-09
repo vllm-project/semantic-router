@@ -1331,6 +1331,108 @@
     verification: imported
     source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
     redistributable: true
+- id: nvidia-comparative/deepseek-v4-pro-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 1.6T-A49B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.925
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/deepseek-v4-flash-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 284B-A13B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.909
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: livecodebench/deepseek-v3-2024-08-2025-05@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3
+    source_model_slug: deepseek-v3
+    source_kind: official_benchmark_leaderboard
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08-01_to_2025-05-01
+    task_count: 454
+  metrics:
+    pass_at_1: 0.272026431718062
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://livecodebench.github.io/performances_generation.json
+    redistributable: true
+- id: exaone-comparative/deepseek-v3-0324-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3-0324
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.440
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
+- id: ring-1t-comparative/deepseek-v3.1-terminus-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus Thinking
+    source_model_slug: deepseek-v3-1-terminus-thinking
+    source_kind: published_cross-vendor_evaluation
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.7533
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arxiv.org/abs/2510.18855
+    redistributable: true
 - id: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
   model: deepseek/deepseek-v3.1-terminus
   benchmark: cais/humanitys-last-exam@1.0.0

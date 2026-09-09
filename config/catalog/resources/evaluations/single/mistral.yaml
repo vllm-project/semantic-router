@@ -635,6 +635,25 @@
     verification: imported
     source: https://artificialanalysis.ai/models/mistral-small-3-2
     redistributable: true
+- id: exaone-comparative/mistral-small-3.2-livecodebench-v6@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2 24B Instruct
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.269
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
 - id: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
   model: mistral/mistral-small-3.2-24b-instruct
   benchmark: cais/humanitys-last-exam@1.0.0

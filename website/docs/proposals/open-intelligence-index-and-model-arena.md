@@ -1,158 +1,222 @@
 ---
-title: Open Intelligence Index 1.0 and Unified Model Arena
-description: A versioned five-benchmark intelligence contract and one public ranking surface for physical and virtual models.
+title: Open Intelligence Architecture
+description: A versioned capability hierarchy connecting reproducible evaluation, a unified Model Arena, and evidence-aware routing.
 created: 2026-09-09
 status: Implemented
 ---
 
-> **Status:** Implemented · **Created:** 2026-09-09 · **Tracks:**
-> [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
+> **Status:** Implemented in [PR #3634](https://github.com/vllm-project/semantic-router/pull/3634) · **Tracks:** [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
 
 ## Decision
 
-vLLM Semantic Router defines one minimal, reproducible text-intelligence index
-for both physical models and frozen Mixture-of-Models. The public Model Hub
-Arena ranks only complete results produced by this exact contract. Benchmark
-evidence that is valid but incomplete remains visible as coverage; it is never
-turned into a synthetic score.
+vLLM Semantic Router uses one versioned evaluation graph for three consumers:
 
-Version 1.0 intentionally measures five axes: broad reasoning, graduate-level
-science, frontier knowledge, scientific programming, and agentic terminal
-execution. Instruction following, long-context retrieval, competitive coding,
-and repository repair remain useful additional evidence, but are not silently
-folded into this index.
+1. the Model Hub preserves every valid benchmark result and its provenance;
+2. the Arena renders Overall, capability, and benchmark rankings from that graph;
+3. routing selects an Overall or capability index explicitly and consumes only an
+   `available` result for the candidate's exact model and reasoning effort.
 
-## Core benchmark pool
+Physical and virtual models follow the same contract. Missing data remains visible
+but is never estimated, silently reweighted, or copied across model variants.
 
-All five projects publish their evaluation implementation and benchmark data.
-The repository pins the benchmark identity, metric, and eligible run profiles;
-an evaluation record additionally preserves the exact model, reasoning effort,
-harness, tools, run conditions, date, and source.
+## Capability roadmap
 
-| Axis | Benchmark and metric | Weight | Open source |
-| --- | --- | ---: | --- |
-| Broad reasoning | [MMLU-Pro](https://github.com/TIGER-AI-Lab/MMLU-Pro) accuracy ([paper](https://arxiv.org/abs/2406.01574), [dataset](https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro)) | 20% | Apache-2.0 |
-| Scientific reasoning | [GPQA Diamond](https://github.com/idavidrein/gpqa) accuracy ([paper](https://arxiv.org/abs/2311.12022), [dataset](https://huggingface.co/datasets/idavidrein/gpqa)) | 20% | MIT |
-| Frontier reasoning | [Humanity's Last Exam](https://github.com/centerforaisafety/HLE) accuracy ([paper](https://arxiv.org/abs/2501.14249), [dataset](https://huggingface.co/datasets/cais/hle)) | 20% | MIT |
-| Scientific programming | [SciCode](https://github.com/scicode-bench/SciCode) executable subproblem score ([paper](https://arxiv.org/abs/2407.13168), [dataset](https://huggingface.co/datasets/SciCode1/SciCode)) | 20% | Apache-2.0 |
-| Agentic execution | [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1) resolved rate ([dataset](https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1), [runner](https://github.com/harbor-framework/harbor)) | 20% | Apache-2.0 |
-
-Terminal-Bench is an agent-and-model measurement. Comparisons therefore pin
-the agent, tool contract, resource limits, task revision, and retry policy; the
-model name alone is not enough to identify a result.
-
-## Index contract
-
-For model `m` at one named reasoning effort `e`, let each admitted raw metric
-`x_i(m,e)` be in `[0, 1]`. Version 1.0 uses identity normalization and equal
-weights:
+Version 1.0 is the active text-intelligence contract. Versions 1.5 and 2.0 are
+design locks, not active catalog indices; each activates only after its benchmark
+revisions, runners, scorers, and comparison cohort are frozen.
 
 ```text
-OpenIntelligenceIndex_1.0(m, e) = 100 * sum(0.20 * x_i(m, e))
+Intelligence 1.0
+├── General                 20%
+│   └── MMLU-Pro           100%
+├── Reasoning               40%
+│   ├── GPQA Diamond        50%
+│   └── Humanity's Last Exam 50%
+├── Coding                  20%
+│   ├── LiveCodeBench v6    50%
+│   └── SciCode             50%
+└── Agentic                 20%
+    └── Terminal-Bench 2.1 100%
 ```
 
-Each component declares an ordered set of compatible evidence profiles. A
-repository-run or independent profile is preferred where available; a
-documented source-published standard profile is the fallback. The first exact
-match is selected, and its record ID remains in the result provenance. Values
-are never copied across models, checkpoints, quantizations, reasoning efforts,
-benchmark revisions, tool modes, or agent harnesses.
+```text
+Intelligence 1.5
+├── General                 20%
+│   └── MMLU-Pro           100%
+├── Reasoning               40%
+│   ├── GPQA Diamond        50%
+│   └── Humanity's Last Exam 50%
+├── Coding                  20%
+│   ├── LiveCodeBench v6    50%
+│   └── SciCode             50%
+└── Agentic                 20%
+    ├── Terminal-Bench 4.0  50%
+    └── SWE-bench Live      50%  (immutable snapshot)
+```
 
-The missing-data policy is `require_all`:
+```text
+Intelligence 2.0
+├── General                 15%
+│   └── MMLU-Pro           100%
+├── Reasoning               30%
+│   ├── GPQA Diamond        50%
+│   └── Humanity's Last Exam 50%
+├── Coding                  15%
+│   ├── LiveCodeBench v6    50%
+│   └── SciCode             50%
+├── Agentic                 15%
+│   ├── Terminal-Bench 4.0  40%
+│   ├── SWE-bench Live      40%  (immutable snapshot)
+│   └── CyberGym Level 1    20%
+├── Multimodal              15%
+│   ├── MMMU-Pro            50%
+│   ├── MathVista           25%
+│   └── OCRBench v1         25%
+└── Safety                  10%  + eligibility gate
+    ├── HarmBench Robustness 50%
+    └── XSTest Safe Helpfulness 50%
+```
 
-- five present components produce `status: available`, coverage `1.0`, and a
-  score;
-- one to four present components produce `status: partial`, a null score, and
-  exact coverage plus the missing component list;
-- zero present components produce `status: missing` and a null score.
+CyberGym belongs to **Agentic / Security Engineering**: it measures autonomous
+vulnerability reproduction in executable environments. It does not measure
+whether a model behaves safely, so it is not part of Safety.
 
-There is no mean imputation, zero imputation, parameter-count proxy, partial
-renormalization, or cross-effort fallback. This keeps two displayed scores
-comparable and prevents a model from improving its index by omitting a weak
-benchmark.
+## Benchmark contract
 
-## Physical models and Mixture-of-Models
+### Active in 1.0
 
-Physical and virtual models use the same benchmark definitions, component
-weights, missing-data rule, and Arena ranking code. A virtual model is evaluated
-through its frozen public endpoint on the full benchmark. Its score is never
-estimated from member-model scores, routing ratios, or an oracle choice.
+| Capability | Benchmark | What it measures | Public sources |
+| --- | --- | --- | --- |
+| General | MMLU-Pro | Broad multi-domain knowledge and reasoning | [repository](https://github.com/TIGER-AI-Lab/MMLU-Pro), [paper](https://arxiv.org/abs/2406.01574), [data](https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro) |
+| Reasoning | GPQA Diamond | Graduate-level scientific reasoning | [repository](https://github.com/idavidrein/gpqa), [paper](https://arxiv.org/abs/2311.12022), [data](https://huggingface.co/datasets/idavidrein/gpqa) |
+| Reasoning | Humanity's Last Exam | Frontier, cross-domain closed-answer reasoning | [repository](https://github.com/centerforaisafety/HLE), [paper](https://arxiv.org/abs/2501.14249), [data](https://huggingface.co/datasets/cais/hle) |
+| Coding | LiveCodeBench v6 | Recent competitive code generation | [repository](https://github.com/LiveCodeBench/LiveCodeBench), [paper](https://arxiv.org/abs/2403.07974), [data](https://huggingface.co/datasets/livecodebench/code_generation_lite) |
+| Coding | SciCode | Executable scientific-programming problems | [repository](https://github.com/scicode-bench/SciCode), [paper](https://arxiv.org/abs/2407.13168), [data](https://huggingface.co/datasets/SciCode1/SciCode) |
+| Agentic | Terminal-Bench 2.1 | Long-horizon work in a terminal environment | [tasks](https://github.com/harbor-framework/terminal-bench-2), [dataset](https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1), [runner](https://github.com/harbor-framework/harbor) |
 
-For paired analysis, the run manifest freezes the virtual recipe and records
-per-task route choice, failures, tokens, latency, and cost. These measurements
-explain a score and quantify savings; they are not ingredients of the
-intelligence index itself.
+All six have public inputs, executable evaluation code, and a public scoring
+path. Each catalog record still pins the exact benchmark revision, profile,
+checkpoint, reasoning effort, harness, tools, run conditions, date, and source.
+Terminal and agent benchmarks are joint measurements of a model and a frozen
+agent harness; a model name alone never identifies such a result.
 
-## Arena and routing semantics
+### Reserved for 1.5 and 2.0
 
-The Model Hub Arena is the first Hub section. It provides shareable scopes for
-all models, open-weight models, and virtual models. Model details and every Hub
-filter are also represented in the URL.
+| Version | Benchmark | Activation requirement | Public sources |
+| --- | --- | --- | --- |
+| 1.5 | Terminal-Bench 4.0 | Pin the `v4.0.0` tasks, Harbor version, agent, limits, retries, and environment | [repository](https://github.com/harbor-framework/terminal-bench), [release](https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0), [dataset](https://huggingface.co/datasets/harborframework/terminal-bench) |
+| 1.5 | SWE-bench Live | Pin one immutable verified snapshot, task IDs, images, scorer, agent, and retry policy | [repository](https://github.com/microsoft/SWE-bench-Live), [paper](https://arxiv.org/abs/2505.23419), [data](https://huggingface.co/SWE-bench-Live) |
+| 2.0 | CyberGym Level 1 | Pin all Level-1 tasks, environment assets, agent, budget, and binary verifier | [repository](https://github.com/sunblaze-ucb/cybergym), [paper](https://arxiv.org/abs/2506.02548), [data](https://huggingface.co/datasets/sunblaze-ucb/cybergym) |
+| 2.0 | MMMU-Pro | Pin the standard multimodal split and evaluator | [repository](https://github.com/MMMU-Benchmark/MMMU), [paper](https://arxiv.org/abs/2409.02813), [data](https://huggingface.co/datasets/MMMU/MMMU_Pro) |
+| 2.0 | MathVista | Pin the public `testmini` split, prompt, extraction, and scorer | [repository](https://github.com/lupantech/MathVista), [paper](https://arxiv.org/abs/2310.02255), [data](https://huggingface.co/datasets/AI4Math/MathVista) |
+| 2.0 | OCRBench v1 | Pin the 1,000 public items and deterministic v1 scorer; do not substitute private-test v2 | [repository](https://github.com/qywh2023/OCRbench), [paper](https://arxiv.org/abs/2305.07895), [data](https://huggingface.co/datasets/echo840/OCRBench) |
+| 2.0 | HarmBench | Pin behaviors, attacks, generation budget, and an open classifier | [repository](https://github.com/centerforaisafety/HarmBench), [paper](https://arxiv.org/abs/2402.04249), [data](https://huggingface.co/datasets/walledai/HarmBench) |
+| 2.0 | XSTest | Pin the public prompt set and open safe-compliance scorer | [repository](https://github.com/paul-rottger/xstest), [paper](https://arxiv.org/abs/2308.01263) |
 
-The Arena selects each model's highest complete effort result, displays that
-effort, sorts by score, and assigns competition ranks. Models without a
-complete result appear in a separate coverage queue ordered by coverage. This
-queue exposes useful historical evidence without presenting unlike partial
-means as a leaderboard.
+“Open” here means an independent contributor can access the inputs, run the
+evaluation, and reproduce the score with the pinned version. Before activation,
+licenses and redistribution boundaries are recorded per artifact; a public
+leaderboard without runnable inputs or scorer is not sufficient.
 
-At the current catalog snapshot, the Hub contains 100 Model Cards: 95 physical
-and five virtual. Sixty-five are open-weight cards from 19 creators, covering
-current and recent representative model lines. The catalog carries 1,471
-versioned evaluation records, and the index compiler emits 285 model-effort
-rows. Twenty-six unique models have all five components and are rankable; all
-26 are open-weight models. The other 74 cards stay visible with their exact
-gaps. These counts are generated facts, not hard-coded UI copy.
+## Hierarchical score
 
-The complete cohort spans DeepSeek R1/V3/V3.1/V4, Gemma 3/4, Llama 4,
-MiniMax M2.7, Kimi K2.5/K2.6, Mistral Small 3.2, Nemotron 3/3.5, GPT-OSS,
-Qwen3/Qwen3.5, and GLM-5.1. Expansion uses immutable benchmark-owner
-leaderboards, version-pinned official model cards, exact-checkpoint independent
-runs, and a named-harness cross-vendor technical report. Every imported value
-retains its model variant, reasoning mode, profile, source, and provenance.
+Every raw metric is normalized to `[0, 1]`. A leaf capability is a weighted
+mean of its benchmarks; Overall is a weighted mean of capability scores. For
+1.0:
 
-Routing consumes only an `available` result as its evidence-backed quality
-prior. The existing multi-factor selector keeps price, latency, availability,
-and load as independent objectives or constraints. A partial index can inform
-coverage work and model inspection, but it cannot become route quality.
+```text
+General   = MMLU-Pro
+Reasoning = 0.50 × GPQA Diamond + 0.50 × HLE
+Coding    = 0.50 × LiveCodeBench + 0.50 × SciCode
+Agentic   = Terminal-Bench 2.1
 
-## Additional evidence and SWE-bench
+Intelligence 1.0 = 100 × (
+    0.20 × General
+  + 0.40 × Reasoning
+  + 0.20 × Coding
+  + 0.20 × Agentic
+)
+```
 
-The catalog keeps valid non-index measurements instead of deleting them.
-SWE-bench Verified, IFEval, LiveCodeBench, LongBench v2, and other versioned
-benchmarks remain individually filterable and source-linked in the benchmark
-gallery.
+`require_all` applies at every node. A capability is available only when all
+of its leaves are available for the same model and reasoning effort; Overall
+is available only when all four capabilities are available. Otherwise the
+result is `partial` or `missing`, its score is null, and coverage plus missing
+components remain explicit. There is no zero/mean imputation, proxy score,
+partial renormalization, or cross-effort borrowing.
 
-SWE-bench Verified covers repository-level issue resolution, a capability not
-directly measured by the five core components. It is retained as additional
-evidence rather than a version 1.0 component because the reported result is a
-joint property of the model and software agent, the 500-task Python suite is
-substantially heavier to reproduce, and task validity has required continuing
-audit. SWE-bench Live is the preferred successor candidate because it adds
-newer and broader software tasks, but only an immutable, fully runnable
-snapshot can enter a future index. A moving leaderboard cannot be an index
-component.
+This does not make incomplete evidence useless. A model missing General may
+still have an available Coding score and participate in a Coding rank or a
+coding-specific route. It simply cannot claim a comparable Overall score.
 
-## Benchmark evolution
+## Physical and virtual models
 
-Benchmark revisions are immutable identities. Terminal-Bench 2.1 remains the
-only terminal component of index 1.0. A future Terminal-Bench major revision or
-a frozen SWE-bench Live cohort creates a new index major version; it does not
-replace a component in place and does not coexist with its predecessor inside
-one score.
+A virtual model is evaluated through a frozen endpoint over every task in the
+same suite. The receipt additionally records recipe revision, per-task route,
+failures, tokens, latency, and cost. Its intelligence score is never assembled
+from member-model scores, routing shares, or an oracle choice.
 
-During migration, old benchmark records remain visible and both index versions
-may be computed. One catalog release designates the new default only after the
-new cohort has enough complete physical and virtual results. This preserves
-historical auditability without comparing scores whose tasks changed.
+## Arena
 
-## Implemented surfaces
+Both Hub surfaces render three independent views from the same catalog:
 
-- `config/catalog/resources/indices.yaml` owns the formula, profiles, weights,
-  and missing-data rule.
-- catalog generation computes one result matrix; the public snapshot retains
-  available, partial, and missing rows, while the runtime projection admits
-  only available routing priors.
-- Go and Python evaluators use the same ordered-profile and missingness
-  semantics; schemas and tests reject ambiguous profile definitions.
-- the public Model Hub renders the unified Arena and its shareable URL state;
-  selecting any physical or virtual model opens the same evidence detail flow.
+- **Overall** — one complete-case Intelligence leaderboard;
+- **Capabilities** — General, Reasoning, Coding, and Agentic leaderboards;
+- **Benchmarks** — the six raw 1.0 benchmark leaderboards.
+
+Each view uses competition rank, exposes the selected reasoning effort, treats
+physical and virtual models identically, and supports shareable scope and layer
+state. Model details remain shareable. Incomplete models appear wherever their
+evidence is valid instead of appearing in a fabricated Overall rank.
+
+The generated snapshot currently contains 101 model cards and 1,509 evaluation
+records. Unique models with available 1.0 results are: General 35, Reasoning 86,
+Coding 23, Agentic 77, and Overall 21. Overall therefore clears the initial
+20-model target while keeping strict completeness. New GLM-5.3 and Qwen3.8
+cards remain visible in their supported capability and benchmark views even
+when a missing leaf prevents Overall eligibility.
+
+## Routing
+
+`multi_factor` can select any versioned Overall or capability index:
+
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    quality:
+      index: vllm-sr/coding@1.0.0
+      on_missing: exclude
+    weights:
+      quality: 0.4
+      latency: 0.2
+      cost: 0.2
+      load: 0.2
+```
+
+The quality lookup uses the candidate's exact reasoning effort and accepts only
+`status: available`:
+
+- `exclude` removes candidates missing that index. The existing
+  `on_no_candidates` policy applies if none remain.
+- `disable_quality` keeps every candidate; if any candidate lacks the selected
+  index, the selector disables quality for the entire candidate pool and uses
+  only latency, cost, load, and configured SLOs. It never reweights one model
+  differently from another.
+
+A general decision can select `vllm-sr/intelligence@1.0.0`; a classified coding
+decision can select `vllm-sr/coding@1.0.0`. A future benchmark is added as a
+versioned leaf and composed into a new capability/index version, without adding
+benchmark-specific branches to the router.
+
+## Versioning and migration
+
+Benchmark identity, profile, and index definition are immutable. Terminal-Bench
+4.0 replaces 2.1 in Intelligence 1.5; their scores never coexist in one Agentic
+node. Old evaluations and index versions remain queryable while the new version
+builds a complete physical-and-virtual cohort. The catalog default changes only
+after the replacement contract is reproducible and sufficiently covered.
+
+The machine-readable 1.0 graph lives in
+`config/catalog/resources/indices.yaml`; catalog generation is the sole scoring
+implementation used by runtime and UI projections.

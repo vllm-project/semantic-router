@@ -60,7 +60,7 @@ class ModelCatalogAuditTests(unittest.TestCase):
             ],
             "indices": [
                 {
-                    "id": "test/index@1.0.0",
+                    "id": "test/capability@1.0.0",
                     "components": [
                         {
                             "benchmark": "bench/a@1.0.0",
@@ -73,7 +73,11 @@ class ModelCatalogAuditTests(unittest.TestCase):
                             "metric": "resolved",
                         },
                     ],
-                }
+                },
+                {
+                    "id": "test/index@1.0.0",
+                    "components": [{"index": "test/capability@1.0.0"}],
+                },
             ],
             "evaluations": [
                 {

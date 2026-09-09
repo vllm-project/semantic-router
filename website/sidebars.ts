@@ -486,6 +486,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'benchmarking/overview',
+        'benchmarking/open-intelligence-index',
         'benchmarking/evaluation-plane',
       ],
     },

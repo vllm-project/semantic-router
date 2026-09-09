@@ -85,6 +85,51 @@
   - dense
   - agentic
   released_at: '2026-08-19'
+- id: qwen/qwen3.8-flash-next
+  display_name: Qwen3.8 Flash-Next
+  description: Efficient open-weight multimodal Qwen preview with six billion active language parameters.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    license: Qwen-Community-1.0
+  family: qwen3.8
+  parameter_size: 180B (6B active)
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen3.8
+  verification:
+    authority: Qwen Team
+    status: claimed
+    verified_at: 2026-09-09
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - efficient
+  - agentic
+  released_at: '2026-08-26'
 - id: qwen/qwen3.8-2.4t-a95b
   display_name: Qwen3.8 2.4T A95B
   description: Qwen's largest open-weight text model for coding, research, and long-horizon agents.

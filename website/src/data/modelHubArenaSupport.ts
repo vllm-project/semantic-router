@@ -1,22 +1,38 @@
 import type {
+  CatalogEvaluation,
   CatalogIndex,
+  CatalogIndexComponent,
   CatalogIndexResult,
   CatalogModel,
   CatalogSnapshot,
+  MetricNormalization,
 } from './modelHubCatalogTypes'
 import type { ModelHubArenaScope } from './modelHubUrlState'
 
+export type ModelHubArenaSurfaceKind = 'overall' | 'capability' | 'benchmark'
+
 export interface ModelHubArenaRow {
   model: CatalogModel
-  result: CatalogIndexResult
-  rank: number | null
-  missingBenchmarks: string[]
+  score: number
+  reasoningEffort: string
+  evidence: string
+  rank: number
+}
+
+export interface ModelHubArenaSurface {
+  id: string
+  displayName: string
+  description: string
+  kind: ModelHubArenaSurfaceKind
+  weight: number
+  rows: ModelHubArenaRow[]
 }
 
 export interface ModelHubArenaData {
   index: CatalogIndex
-  ranked: ModelHubArenaRow[]
-  awaitingEvidence: ModelHubArenaRow[]
+  overall: ModelHubArenaSurface
+  capabilities: ModelHubArenaSurface[]
+  benchmarks: ModelHubArenaSurface[]
 }
 
 const matchesScope = (model: CatalogModel, scope: ModelHubArenaScope): boolean => {
@@ -25,9 +41,6 @@ const matchesScope = (model: CatalogModel, scope: ModelHubArenaScope): boolean =
   return true
 }
 
-const availableComponentCount = (result: CatalogIndexResult): number =>
-  result.components.filter(component => component.status === 'available').length
-
 const effortPosition = (catalog: CatalogSnapshot, model: CatalogModel, effort: string): number => {
   const family = catalog.reasoning_families.find(candidate => candidate.id === model.reasoning_family)
   const efforts = family?.levels ?? family?.modes ?? ['default']
@@ -35,32 +48,173 @@ const effortPosition = (catalog: CatalogSnapshot, model: CatalogModel, effort: s
   return position === -1 ? -1 : position
 }
 
-function preferredArenaResult(
+function preferredIndexResult(
   catalog: CatalogSnapshot,
   model: CatalogModel,
   results: CatalogIndexResult[],
 ): CatalogIndexResult | undefined {
-  return [...results].sort((left, right) => {
-    const leftAvailable = left.status === 'available' && left.score !== null
-    const rightAvailable = right.status === 'available' && right.score !== null
-    if (leftAvailable !== rightAvailable) return leftAvailable ? -1 : 1
-    const effortDifference
-      = effortPosition(catalog, model, right.reasoning_effort)
-        - effortPosition(catalog, model, left.reasoning_effort)
-    if (leftAvailable && rightAvailable) {
+  return results
+    .filter(result => result.status === 'available' && result.score !== null)
+    .sort((left, right) => {
+      const effortDifference
+        = effortPosition(catalog, model, right.reasoning_effort)
+          - effortPosition(catalog, model, left.reasoning_effort)
       return (
         effortDifference
         || (right.score ?? 0) - (left.score ?? 0)
         || left.reasoning_effort.localeCompare(right.reasoning_effort)
       )
-    }
-    return (
-      right.coverage - left.coverage
-      || availableComponentCount(right) - availableComponentCount(left)
-      || effortDifference
-      || left.reasoning_effort.localeCompare(right.reasoning_effort)
+    })[0]
+}
+
+function preferredEvaluation(
+  catalog: CatalogSnapshot,
+  model: CatalogModel,
+  evaluations: CatalogEvaluation[],
+  profiles: string[],
+  metric: string,
+): CatalogEvaluation | undefined {
+  return evaluations
+    .filter(evaluation =>
+      evaluation.status === 'available'
+      && profiles.includes(evaluation.benchmark_profile)
+      && typeof evaluation.metrics?.[metric] === 'number',
     )
-  })[0]
+    .sort((left, right) =>
+      effortPosition(catalog, model, right.reasoning_effort)
+      - effortPosition(catalog, model, left.reasoning_effort)
+      || profiles.indexOf(left.benchmark_profile) - profiles.indexOf(right.benchmark_profile)
+      || (right.measured_at ?? right.observed_at ?? '').localeCompare(
+        left.measured_at ?? left.observed_at ?? '',
+      )
+      || left.id.localeCompare(right.id),
+    )[0]
+}
+
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value))
+
+function normalizeMetric(value: number, normalization: MetricNormalization): number {
+  switch (normalization.type) {
+    case 'one_minus':
+      return clamp01(1 - value)
+    case 'linear_clamp': {
+      const minimum = normalization.min ?? 0
+      const maximum = normalization.max ?? 1
+      return maximum === minimum ? 0 : clamp01((value - minimum) / (maximum - minimum))
+    }
+    case 'piecewise_linear': {
+      const points = [...(normalization.points ?? [])].sort((left, right) => left.input - right.input)
+      if (!points.length) return clamp01(value)
+      if (value <= points[0].input) return clamp01(points[0].output)
+      if (value >= points[points.length - 1].input) return clamp01(points[points.length - 1].output)
+      const upperIndex = points.findIndex(point => point.input >= value)
+      const lower = points[upperIndex - 1]
+      const upper = points[upperIndex]
+      const position = (value - lower.input) / (upper.input - lower.input)
+      return clamp01(lower.output + position * (upper.output - lower.output))
+    }
+    case 'logistic':
+      return clamp01(1 / (1 + Math.exp(-(normalization.k ?? 1) * (value - (normalization.x0 ?? 0)))))
+    case 'lookup':
+      return clamp01(normalization.values?.[String(value)] ?? value)
+    case 'identity':
+    default:
+      return clamp01(value)
+  }
+}
+
+function rankedRows(rows: Omit<ModelHubArenaRow, 'rank'>[]): ModelHubArenaRow[] {
+  const ranked = rows.sort((left, right) =>
+    right.score - left.score
+    || left.model.display_name.localeCompare(right.model.display_name),
+  )
+  let previousScore: number | null = null
+  let previousRank = 0
+  return ranked.map((row, position) => {
+    if (previousScore === null || row.score !== previousScore) previousRank = position + 1
+    previousScore = row.score
+    return { ...row, rank: previousRank }
+  })
+}
+
+function indexSurface(
+  catalog: CatalogSnapshot,
+  models: CatalogModel[],
+  index: CatalogIndex,
+  kind: 'overall' | 'capability',
+  weight: number,
+): ModelHubArenaSurface {
+  const resultsByModel = new Map<string, CatalogIndexResult[]>()
+  catalog.index_results
+    .filter(result => result.index === index.id)
+    .forEach((result) => {
+      resultsByModel.set(result.model, [...(resultsByModel.get(result.model) ?? []), result])
+    })
+  const rows = models.flatMap<Omit<ModelHubArenaRow, 'rank'>>((model) => {
+    const result = preferredIndexResult(catalog, model, resultsByModel.get(model.id) ?? [])
+    if (!result || result.score === null) return []
+    return [{
+      model,
+      score: result.score,
+      reasoningEffort: result.reasoning_effort,
+      evidence: `${result.index}:${result.reasoning_effort}`,
+    }]
+  })
+  return {
+    id: index.id,
+    displayName: index.display_name,
+    description: index.description,
+    kind,
+    weight,
+    rows: rankedRows(rows),
+  }
+}
+
+function benchmarkSurface(
+  catalog: CatalogSnapshot,
+  models: CatalogModel[],
+  component: CatalogIndexComponent,
+  capabilityName: string,
+  weight: number,
+): ModelHubArenaSurface | null {
+  const benchmark = catalog.benchmarks.find(candidate => candidate.id === component.benchmark)
+  if (!benchmark || !component.metric) return null
+  const profiles = component.benchmark_profiles
+    ?? (component.benchmark_profile ? [component.benchmark_profile] : [benchmark.default_profile])
+  const evaluationsByModel = new Map<string, CatalogEvaluation[]>()
+  catalog.evaluations
+    .filter(evaluation => evaluation.benchmark === benchmark.id)
+    .forEach((evaluation) => {
+      evaluationsByModel.set(
+        evaluation.model,
+        [...(evaluationsByModel.get(evaluation.model) ?? []), evaluation],
+      )
+    })
+  const rows = models.flatMap<Omit<ModelHubArenaRow, 'rank'>>((model) => {
+    const evaluation = preferredEvaluation(
+      catalog,
+      model,
+      evaluationsByModel.get(model.id) ?? [],
+      profiles,
+      component.metric ?? '',
+    )
+    const value = evaluation?.metrics?.[component.metric ?? '']
+    if (!evaluation || typeof value !== 'number') return []
+    return [{
+      model,
+      score: normalizeMetric(value, component.normalization) * 100,
+      reasoningEffort: evaluation.reasoning_effort,
+      evidence: evaluation.id,
+    }]
+  })
+  return {
+    id: benchmark.id,
+    displayName: benchmark.display_name,
+    description: `${capabilityName} · ${component.metric.replace(/_/g, ' ')}`,
+    kind: 'benchmark',
+    weight,
+    rows: rankedRows(rows),
+  }
 }
 
 export function modelHubArenaData(
@@ -70,49 +224,33 @@ export function modelHubArenaData(
   const indexID = catalog.catalogs?.[0]?.default_intelligence_index
   const index = catalog.indices.find(candidate => candidate.id === indexID)
   if (!index) return null
-  const benchmarkNames = new Map(
-    catalog.benchmarks.map(benchmark => [benchmark.id, benchmark.display_name]),
-  )
-  const resultsByModel = new Map<string, CatalogIndexResult[]>()
-  catalog.index_results
-    .filter(result => result.index === index.id)
-    .forEach((result) => {
-      resultsByModel.set(result.model, [...(resultsByModel.get(result.model) ?? []), result])
-    })
-  const rows = catalog.models
-    .filter(model => matchesScope(model, scope))
-    .flatMap<ModelHubArenaRow>((model) => {
-      const result = preferredArenaResult(catalog, model, resultsByModel.get(model.id) ?? [])
-      if (!result) return []
-      return [{
-        model,
-        result,
-        rank: null,
-        missingBenchmarks: result.components
-          .filter(component => component.status !== 'available' && component.benchmark)
-          .map(component => benchmarkNames.get(component.benchmark ?? '') ?? component.benchmark ?? '')
-          .filter(Boolean),
-      }]
-    })
-  const ranked = rows
-    .filter(row => row.result.status === 'available' && row.result.score !== null)
-    .sort((left, right) =>
-      (right.result.score ?? 0) - (left.result.score ?? 0)
-      || left.model.display_name.localeCompare(right.model.display_name),
-    )
-  let previousScore: number | null = null
-  let previousRank = 0
-  ranked.forEach((row, indexPosition) => {
-    const score = row.result.score ?? 0
-    if (previousScore === null || score !== previousScore) previousRank = indexPosition + 1
-    row.rank = previousRank
-    previousScore = score
+  const scopedModels = catalog.models.filter(model => matchesScope(model, scope))
+  const capabilityIndices = index.components.flatMap((component) => {
+    const capability = catalog.indices.find(candidate => candidate.id === component.index)
+    return capability ? [{ index: capability, weight: component.weight }] : []
   })
-  const awaitingEvidence = rows
-    .filter(row => row.result.status !== 'available')
-    .sort((left, right) =>
-      right.result.coverage - left.result.coverage
-      || left.model.display_name.localeCompare(right.model.display_name),
-    )
-  return { index, ranked, awaitingEvidence }
+  const capabilities = capabilityIndices.map(capability =>
+    indexSurface(catalog, scopedModels, capability.index, 'capability', capability.weight),
+  )
+  const benchmarkIDs = new Set<string>()
+  const benchmarks = capabilityIndices.flatMap(({ index: capability, weight: capabilityWeight }) =>
+    capability.components.flatMap((component) => {
+      if (!component.benchmark || benchmarkIDs.has(component.benchmark)) return []
+      benchmarkIDs.add(component.benchmark)
+      const surface = benchmarkSurface(
+        catalog,
+        scopedModels,
+        component,
+        capability.display_name,
+        capabilityWeight * component.weight,
+      )
+      return surface ? [surface] : []
+    }),
+  )
+  return {
+    index,
+    overall: indexSurface(catalog, scopedModels, index, 'overall', 1),
+    capabilities,
+    benchmarks,
+  }
 }

@@ -874,6 +874,44 @@
     verification: imported
     source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
     redistributable: true
+- id: nvidia/nemotron-3-ultra-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: NVIDIA Nemotron 3 Ultra 550B-A55B
+    source_kind: official_technical_report
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.890
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia/nemotron-3-nano-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B-A3B
+    source_kind: official_model_card
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.683
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md
+    redistributable: true
 - id: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-nano-30b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0

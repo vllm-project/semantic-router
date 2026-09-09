@@ -605,12 +605,19 @@
 - id: livecodebench/livecodebench@6.0.0
   display_name: LiveCodeBench v6
   domain: competitive_programming
+  tags: [core]
   source: https://github.com/LiveCodeBench/LiveCodeBench
   default_profile: code-generation-pass-at-1
   profiles:
     - id: code-generation-pass-at-1
       display_name: Code generation pass@1
       description: Pass@1 on the LiveCodeBench v6 code-generation split with the inference budget retained on the record.
+    - id: published-code-generation
+      display_name: Published code generation
+      description: Source-published LiveCodeBench v6 code-generation pass@1 with the inference budget retained on the evaluation record.
+    - id: independent-code-generation
+      display_name: Independent code generation
+      description: Independently measured LiveCodeBench v6 code-generation pass@1 for the exact model and reasoning effort.
   metrics:
     - id: pass_at_1
       unit: proportion

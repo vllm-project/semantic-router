@@ -745,6 +745,32 @@ def _model_reasoning_efforts(
     return efforts
 
 
+def index_leaf_components(
+    indices: list[dict[str, Any]], index_id: str
+) -> list[dict[str, Any]]:
+    """Return benchmark leaves in deterministic dependency order."""
+
+    definitions = {str(definition["id"]): definition for definition in indices}
+
+    def visit(identity: str, visiting: set[str]) -> list[dict[str, Any]]:
+        if identity in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {identity}")
+        definition = definitions.get(identity)
+        if definition is None:
+            raise CatalogBuildError(f"unknown index dependency: {identity}")
+        visiting.add(identity)
+        leaves: list[dict[str, Any]] = []
+        for component in definition["components"]:
+            if component.get("benchmark"):
+                leaves.append(component)
+            else:
+                leaves.extend(visit(str(component["index"]), visiting))
+        visiting.remove(identity)
+        return leaves
+
+    return visit(index_id, set())
+
+
 def index_results(resources: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
     measurements = _available_evaluations(resources["evaluations"])
     definitions = {definition["id"]: definition for definition in resources["indices"]}
@@ -781,13 +807,45 @@ def evaluation_coverage(
 ) -> list[dict[str, Any]]:
     """Materialize required benchmark slots without inventing missing scores."""
 
+    materialized = results if results is not None else index_results(resources)
+    by_identity = {
+        (result["model"], result["reasoning_effort"], result["index"]): result
+        for result in materialized
+    }
+
+    def leaf_components(
+        result: dict[str, Any], visiting: set[str]
+    ) -> list[dict[str, Any]]:
+        index_id = str(result["index"])
+        if index_id in visiting:
+            raise CatalogBuildError(f"index dependency cycle includes {index_id}")
+        visiting.add(index_id)
+        leaves: list[dict[str, Any]] = []
+        for component in result["components"]:
+            if "benchmark" in component:
+                leaves.append(component)
+                continue
+            dependency_id = str(component["index"])
+            dependency_key = (
+                result["model"],
+                result["reasoning_effort"],
+                dependency_id,
+            )
+            dependency = by_identity.get(dependency_key)
+            if dependency is None:
+                raise CatalogBuildError(
+                    "missing materialized index dependency: "
+                    f"{result['model']}#{result['reasoning_effort']}#{dependency_id}"
+                )
+            leaves.extend(leaf_components(dependency, visiting))
+        visiting.remove(index_id)
+        return leaves
+
     rows: list[dict[str, Any]] = []
-    for result in results if results is not None else index_results(resources):
+    for result in materialized:
         if result["index"] != default_index:
             continue
-        for component in result["components"]:
-            if "benchmark" not in component:
-                continue
+        for component in leaf_components(result, set()):
             row: dict[str, Any] = {
                 "model": result["model"],
                 "reasoning_effort": result["reasoning_effort"],

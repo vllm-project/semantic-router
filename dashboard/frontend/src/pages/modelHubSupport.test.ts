@@ -211,12 +211,19 @@ describe('model hub benchmark presentation contract', () => {
     expect(metric.unit).toBe('elo')
   })
 
-  it('defines the five core comparisons in catalog data', () => {
+  it('defines the six Intelligence 1.0 core comparisons in catalog data', () => {
     expect(
       catalog.benchmarks
         .filter((benchmark) => benchmark.tags?.includes('core'))
         .map((benchmark) => benchmark.display_name),
-    ).toEqual(['MMLU-Pro', 'GPQA Diamond', "Humanity's Last Exam", 'Terminal-Bench 2.1', 'SciCode'])
+    ).toEqual([
+      'MMLU-Pro',
+      'GPQA Diamond',
+      "Humanity's Last Exam",
+      'Terminal-Bench 2.1',
+      'SciCode',
+      'LiveCodeBench v6',
+    ])
   })
 })
 

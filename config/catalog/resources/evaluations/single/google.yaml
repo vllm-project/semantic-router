@@ -1751,6 +1751,43 @@
     verification: imported
     source: https://artificialanalysis.ai/models/gemma-3-12b
     redistributable: true
+- id: google/gemma-4-31b-it-livecodebench-v6@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B IT
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.800
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it/blob/842da3794eaa0b77d5f08bae87a17459d91ff475/README.md
+    redistributable: true
+- id: exaone-comparative/gemma-3-27b-it-livecodebench-v6@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B IT
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.297
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
 - id: independent/gemma-3-12b-humanitys-last-exam@1.0.0
   model: google/gemma-3-12b-it
   benchmark: cais/humanitys-last-exam@1.0.0

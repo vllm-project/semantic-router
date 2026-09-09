@@ -36,6 +36,8 @@ import (
 type MultiFactorConfig struct {
 	Weights           MultiFactorWeights
 	SLO               MultiFactorSLO
+	QualityIndex      string
+	QualityOnMissing  string
 	LatencyPercentile int
 	OnNoCandidates    string
 }
@@ -78,6 +80,7 @@ func DefaultMultiFactorConfig() *MultiFactorConfig {
 		},
 		LatencyPercentile: defaultMFLatencyPercentile,
 		OnNoCandidates:    defaultMFOnNoCandidates,
+		QualityOnMissing:  config.QualityEvidenceOnMissingDisable,
 	}
 }
 
@@ -107,6 +110,9 @@ func NewMultiFactorSelector(cfg *MultiFactorConfig) *MultiFactorSelector {
 	}
 	if cfg.OnNoCandidates == "" {
 		cfg.OnNoCandidates = defaultMFOnNoCandidates
+	}
+	if cfg.QualityOnMissing == "" {
+		cfg.QualityOnMissing = config.QualityEvidenceOnMissingDisable
 	}
 	return &MultiFactorSelector{
 		config:      cfg,
@@ -148,10 +154,14 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 
 	kept, dropped := s.applySLOFilter(selCtx.CandidateModels)
 	if len(kept) == 0 {
-		return s.applyNoCandidatePolicy(selCtx, dropped)
+		return s.applyNoCandidatePolicy(selCtx, "slo", len(dropped))
 	}
 
 	signals := s.gatherSignals(kept)
+	kept, signals, qualityExcluded, qualityDisabled := s.applyQualityEvidencePolicy(kept, signals)
+	if len(kept) == 0 {
+		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
+	}
 	mins, maxs := signalExtrema(signals)
 	allScores := make(map[string]float64, len(kept))
 
@@ -183,10 +193,11 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	}
 
 	reasoning := fmt.Sprintf(
-		"multi_factor: weights{q=%.2f l=%.2f c=%.2f L=%.2f} latency_p%d, kept=%d, dropped=%d",
+		"multi_factor: weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_excluded=%d",
 		s.config.Weights.Quality, s.config.Weights.Latency,
 		s.config.Weights.Cost, s.config.Weights.Load,
-		s.config.LatencyPercentile, len(kept), len(dropped),
+		s.config.QualityIndex, s.config.QualityOnMissing, qualityDisabled,
+		s.config.LatencyPercentile, len(kept), len(dropped), qualityExcluded,
 	)
 
 	logging.Infof("[MultiFactor] candidates=%d -> %s (score=%.4f confidence=%.2f, dropped_by_slo=%d)",
@@ -220,7 +231,7 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []sign
 	for _, c := range candidates {
 		sig := signalSet{model: c.Model}
 		if params, ok := s.modelParams[c.Model]; ok {
-			if score, available := params.EvidenceScore(""); available {
+			if score, available := params.EvidenceScoreAt(s.config.QualityIndex, c.ReasoningEffort); available {
 				sig.quality = score
 				sig.hasQ = true
 			}
@@ -237,6 +248,40 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []sign
 		out = append(out, sig)
 	}
 	return out
+}
+
+func (s *MultiFactorSelector) applyQualityEvidencePolicy(
+	candidates []config.ModelRef,
+	signals []signalSet,
+) ([]config.ModelRef, []signalSet, int, bool) {
+	if s.config.Weights.Quality <= 0 {
+		return candidates, signals, 0, false
+	}
+	missing := 0
+	for _, signal := range signals {
+		if !signal.hasQ {
+			missing++
+		}
+	}
+	if missing == 0 {
+		return candidates, signals, 0, false
+	}
+	if s.config.QualityOnMissing == config.QualityEvidenceOnMissingExclude {
+		keptCandidates := make([]config.ModelRef, 0, len(candidates)-missing)
+		keptSignals := make([]signalSet, 0, len(signals)-missing)
+		for index, signal := range signals {
+			if !signal.hasQ {
+				continue
+			}
+			keptCandidates = append(keptCandidates, candidates[index])
+			keptSignals = append(keptSignals, signal)
+		}
+		return keptCandidates, keptSignals, missing, false
+	}
+	for index := range signals {
+		signals[index].hasQ = false
+	}
+	return candidates, signals, 0, true
 }
 
 // latencySignal returns a single representative latency (TPOT-prioritized) at
@@ -289,16 +334,16 @@ func (s *MultiFactorSelector) exceedsSLO(model string) (string, bool) {
 	return "", false
 }
 
-func (s *MultiFactorSelector) applyNoCandidatePolicy(selCtx *SelectionContext, dropped []config.ModelRef) (*SelectionResult, error) {
+func (s *MultiFactorSelector) applyNoCandidatePolicy(selCtx *SelectionContext, cause string, excluded int) (*SelectionResult, error) {
 	switch strings.ToLower(s.config.OnNoCandidates) {
 	case "fail":
-		return nil, fmt.Errorf("multi_factor: all %d candidates excluded by SLO", len(dropped))
+		return nil, fmt.Errorf("multi_factor: all %d candidates excluded by %s", excluded, cause)
 	case "first":
 		c := selCtx.CandidateModels[0]
-		return s.noCandidateResult(c, "all_candidates_excluded_by_slo:first"), nil
+		return s.noCandidateResult(c, "all_candidates_excluded_by_"+cause+":first"), nil
 	default:
 		c := s.cheapestCandidate(selCtx.CandidateModels)
-		return s.noCandidateResult(c, "all_candidates_excluded_by_slo:cheapest"), nil
+		return s.noCandidateResult(c, "all_candidates_excluded_by_"+cause+":cheapest"), nil
 	}
 }
 
