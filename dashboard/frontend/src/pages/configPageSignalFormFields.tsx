@@ -26,6 +26,7 @@ const signalTypes: SignalType[] = [
   'Modality',
   'Authz',
   'Jailbreak',
+  'Hallucination',
   'PII',
   'KB',
   'Metadata',
@@ -75,6 +76,93 @@ function stringListField({
     description,
     shouldHide: shouldHide ?? hideUnless(signalType),
   }
+}
+
+function piiFormFields(): FieldConfig<AddSignalFormState>[] {
+  return [
+    {
+      name: 'pii_threshold',
+      label: 'Threshold (PII only)',
+      type: 'number',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      placeholder: '0.5',
+      shouldHide: hideUnless('PII'),
+    },
+    stringListField({
+      name: 'pii_types_allowed',
+      label: 'Allowed PII Types (PII only)',
+      signalType: 'PII',
+      addLabel: 'Allow PII type',
+      emptyLabel: 'No allowed PII types; all detected types are denied.',
+      itemLabel: 'PII type',
+      placeholder: 'EMAIL_ADDRESS',
+    }),
+    {
+      name: 'pii_include_history',
+      label: 'Include History (PII only)',
+      type: 'boolean',
+      shouldHide: hideUnless('PII'),
+    },
+  ]
+}
+
+function jailbreakFormFields(): FieldConfig<AddSignalFormState>[] {
+  return [
+    {
+      name: 'jailbreak_method',
+      label: 'Method (jailbreak only)',
+      type: 'select',
+      options: ['classifier', 'contrastive'],
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'jailbreak_threshold',
+      label: 'Threshold (jailbreak only)',
+      type: 'number',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      placeholder: '0.65',
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'jailbreak_direction',
+      label: 'Direction (jailbreak only)',
+      type: 'select',
+      options: ['request', 'response'],
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    {
+      name: 'include_history',
+      label: 'Include History (jailbreak only)',
+      type: 'boolean',
+      shouldHide: hideUnless('Jailbreak'),
+    },
+    stringListField({
+      name: 'jailbreak_patterns',
+      label: 'Jailbreak Patterns (contrastive only)',
+      signalType: 'Jailbreak',
+      addLabel: 'Add jailbreak pattern',
+      emptyLabel: 'No jailbreak patterns configured.',
+      itemLabel: 'Jailbreak pattern',
+      placeholder: 'Ignore all previous instructions',
+      shouldHide: (formData) =>
+        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
+    }),
+    stringListField({
+      name: 'benign_patterns',
+      label: 'Benign Patterns (contrastive only)',
+      signalType: 'Jailbreak',
+      addLabel: 'Add benign pattern',
+      emptyLabel: 'No benign patterns configured.',
+      itemLabel: 'Benign pattern',
+      placeholder: 'Help me write an email',
+      shouldHide: (formData) =>
+        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
+    }),
+  ]
 }
 
 export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
@@ -391,76 +479,14 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
       customRender: (value, onChange) => <SignalSubjectsEditor value={value} onChange={onChange} />,
       shouldHide: hideUnless('Authz'),
     },
+    ...jailbreakFormFields(),
     {
-      name: 'jailbreak_method',
-      label: 'Method (jailbreak only)',
-      type: 'select',
-      options: ['classifier', 'contrastive'],
-      shouldHide: hideUnless('Jailbreak'),
-    },
-    {
-      name: 'jailbreak_threshold',
-      label: 'Threshold (jailbreak only)',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.65',
-      shouldHide: hideUnless('Jailbreak'),
-    },
-    {
-      name: 'include_history',
-      label: 'Include History (jailbreak only)',
+      name: 'hallucination_use_nli',
+      label: 'Use NLI explanations (hallucination only)',
       type: 'boolean',
-      shouldHide: hideUnless('Jailbreak'),
+      shouldHide: hideUnless('Hallucination'),
     },
-    stringListField({
-      name: 'jailbreak_patterns',
-      label: 'Jailbreak Patterns (contrastive only)',
-      signalType: 'Jailbreak',
-      addLabel: 'Add jailbreak pattern',
-      emptyLabel: 'No jailbreak patterns configured.',
-      itemLabel: 'Jailbreak pattern',
-      placeholder: 'Ignore all previous instructions',
-      shouldHide: (formData) =>
-        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
-    }),
-    stringListField({
-      name: 'benign_patterns',
-      label: 'Benign Patterns (contrastive only)',
-      signalType: 'Jailbreak',
-      addLabel: 'Add benign pattern',
-      emptyLabel: 'No benign patterns configured.',
-      itemLabel: 'Benign pattern',
-      placeholder: 'Help me write an email',
-      shouldHide: (formData) =>
-        formData.type !== 'Jailbreak' || formData.jailbreak_method !== 'contrastive',
-    }),
-    {
-      name: 'pii_threshold',
-      label: 'Threshold (PII only)',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.5',
-      shouldHide: hideUnless('PII'),
-    },
-    stringListField({
-      name: 'pii_types_allowed',
-      label: 'Allowed PII Types (PII only)',
-      signalType: 'PII',
-      addLabel: 'Allow PII type',
-      emptyLabel: 'No allowed PII types; all detected types are denied.',
-      itemLabel: 'PII type',
-      placeholder: 'EMAIL_ADDRESS',
-    }),
-    {
-      name: 'pii_include_history',
-      label: 'Include History (PII only)',
-      type: 'boolean',
-      shouldHide: hideUnless('PII'),
-    },
+    ...piiFormFields(),
     {
       name: 'kb_name',
       label: 'Knowledge Base (KB only)',

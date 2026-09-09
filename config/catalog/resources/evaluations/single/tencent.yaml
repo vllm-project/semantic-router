@@ -1,0 +1,451 @@
+- id: tencent/hunyuan-a13b-instruct-model-card-aime-2024@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: .873
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct#model-performance
+    redistributable: true
+- id: tencent/hunyuan-a13b-instruct-model-card-aime-2025@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: .768
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct#model-performance
+    redistributable: true
+- id: tencent/hunyuan-a13b-instruct-model-card-math@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: .943
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct#model-performance
+    redistributable: true
+- id: tencent/hunyuan-a13b-instruct-model-card-gpqa-diamond@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: .712
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct#model-performance
+    redistributable: true
+- id: tencent/hunyuan-a13b-instruct-model-card-olympiadbench@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: opencompass/olympiadbench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: .827
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct#model-performance
+    redistributable: true
+- id: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
+  model: tencent/hy4-preview
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject:
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.434
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-preview-model-card-deep-swe@1.0.0
+  model: tencent/hy4-preview
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: mini-swe-agent
+  metrics:
+    resolved: 0.643
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-preview-model-card-terminal-bench@1.0.0
+  model: tencent/hy4-preview
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: Terminus-2
+  metrics:
+    resolved: 0.854
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-preview-model-card-gpqa-diamond@1.0.0
+  model: tencent/hy4-preview
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.923
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-preview-model-card-swe-bench-pro@1.0.0
+  model: tencent/hy4-preview
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4 preview
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: SWE-agent
+  metrics:
+    resolved: 0.657
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: independent/hy3-critpt@1.0.0
+  model: tencent/hy3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    score: 0.0485714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/hy3-gdpval-aa@2.0.0
+  model: tencent/hy3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    elo: 1140.21
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/hy3-artificial-analysis-long-context-reasoning@1.1.0
+  model: tencent/hy3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    score: 0.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/hy3-omniscience@1.0.0
+  model: tencent/hy3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    index: -18.4666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/hy3-humanitys-last-exam@1.0.0
+  model: tencent/hy3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    accuracy: 0.334569045412419
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: tencent/hy3-model-card-humanitys-last-exam@1.0.0
+  model: tencent/hy3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.37
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: tencent/hy3-model-card-deep-swe@1.0.0
+  model: tencent/hy3
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: mini-swe-agent
+  metrics:
+    resolved: 0.28
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: independent/hy3-terminalbench-v2-1@1.0.0
+  model: tencent/hy3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    resolved: 0.644194756554307
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: tencent/hy3-model-card-terminal-bench@1.0.0
+  model: tencent/hy3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: Terminus-2
+  metrics:
+    resolved: 0.717
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: independent/hy3-gpqa-diamond@1.0.0
+  model: tencent/hy3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    accuracy: 0.896969696969697
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: tencent/hy3-model-card-gpqa-diamond@1.0.0
+  model: tencent/hy3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.904
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: tencent/hy3-model-card-swe-bench-pro@1.0.0
+  model: tencent/hy3
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: SWE-agent
+  metrics:
+    resolved: 0.579
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: tencent/hy3-model-card-swe-bench-verified@1.0.0
+  model: tencent/hy3
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy3
+    reasoning_effort: highest
+    source_kind: official_model_card
+    harness: SWE-agent
+  metrics:
+    resolved: 0.78
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy3
+    redistributable: true
+- id: independent/hy3-tau3-banking@1.0.0
+  model: tencent/hy3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Hy3
+    source_model_slug: hy3
+    run_kind: independent
+  metrics:
+    score: 0.228865979381443
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: tencent/hunyuan-a13b-instruct-model-card-mmlu-pro@1.0.0
+  model: tencent/hunyuan-a13b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-A13B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6723
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+    redistributable: true

@@ -11,8 +11,11 @@ import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
   ConfigData,
+  DomainSignal,
+  HallucinationSignal,
   JailbreakSignal,
   MetadataSignal,
+  PIISignal,
   SignalType,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
@@ -56,6 +59,181 @@ interface ConfigPageSignalsSectionProps {
   openViewModal: OpenViewModal
   listInputToArray: (input: string) => string[]
   removeSignalByName: (cfg: ConfigData, type: SignalType, targetName: string) => void
+}
+
+function jailbreakDetailFields(
+  rawData: UnifiedSignal['rawData'],
+): Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> {
+  const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
+    { label: 'Method', value: rawData.method || 'classifier', fullWidth: true },
+    {
+      label: 'Threshold',
+      value: rawData.threshold?.toString() || 'N/A',
+      fullWidth: true,
+    },
+    {
+      label: 'Direction',
+      value: rawData.direction || 'request',
+      fullWidth: true,
+    },
+    {
+      label: 'Include History',
+      value: rawData.include_history ? 'Yes' : 'No',
+      fullWidth: true,
+    },
+  ]
+  if (rawData.method === 'contrastive') {
+    fields.push(
+      {
+        label: 'Jailbreak Patterns',
+        value: (
+          <SignalStringListEditor
+            value={rawData.jailbreak_patterns}
+            onChange={() => undefined}
+            addLabel=""
+            emptyLabel="No jailbreak patterns."
+            itemLabel="Jailbreak pattern"
+            readOnly
+          />
+        ),
+        fullWidth: true,
+      },
+      {
+        label: 'Benign Patterns',
+        value: (
+          <SignalStringListEditor
+            value={rawData.benign_patterns}
+            onChange={() => undefined}
+            addLabel=""
+            emptyLabel="No benign patterns."
+            itemLabel="Benign pattern"
+            readOnly
+          />
+        ),
+        fullWidth: true,
+      },
+    )
+  }
+  fields.push({
+    label: 'Description',
+    value: rawData.description || 'N/A',
+    fullWidth: true,
+  })
+  return fields
+}
+
+type JailbreakFormState = Pick<
+  AddSignalFormState,
+  | 'jailbreak_threshold'
+  | 'jailbreak_method'
+  | 'jailbreak_direction'
+  | 'include_history'
+  | 'jailbreak_patterns'
+  | 'benign_patterns'
+>
+
+function jailbreakFormDefaults(): JailbreakFormState {
+  return {
+    jailbreak_threshold: 0.65,
+    jailbreak_method: 'classifier',
+    jailbreak_direction: 'request',
+    include_history: false,
+    jailbreak_patterns: [],
+    benign_patterns: [],
+  }
+}
+
+function jailbreakFormStateFrom(rawData: UnifiedSignal['rawData']): JailbreakFormState {
+  return {
+    jailbreak_threshold: rawData.threshold ?? 0.65,
+    jailbreak_method: rawData.method || 'classifier',
+    jailbreak_direction: rawData.direction || 'request',
+    include_history: !!rawData.include_history,
+    jailbreak_patterns: [...(rawData.jailbreak_patterns || [])],
+    benign_patterns: [...(rawData.benign_patterns || [])],
+  }
+}
+
+function hallucinationSummary(rule: HallucinationSignal): string {
+  const description = rule.description || 'No description'
+  return rule.use_nli ? `${description} (NLI explanations)` : description
+}
+
+function hallucinationDetailFields(rawData: UnifiedSignal['rawData']): ViewSection['fields'] {
+  return [
+    { label: 'Use NLI explanations', value: rawData.use_nli ? 'Yes' : 'No', fullWidth: true },
+    { label: 'Description', value: rawData.description || 'N/A', fullWidth: true },
+  ]
+}
+
+// responseStageDetailSection renders the rules that are scored from the
+// model's output, which share a view shape but not their fields.
+function responseStageDetailSection(signal: UnifiedSignal): ViewSection {
+  if (signal.type === 'Hallucination') {
+    return { title: 'Hallucination Signal', fields: hallucinationDetailFields(signal.rawData) }
+  }
+  return { title: 'Jailbreak Signal', fields: jailbreakDetailFields(signal.rawData) }
+}
+
+function buildDomainEntry(name: string, formData: AddSignalFormState): DomainSignal {
+  return {
+    name,
+    description: formData.description,
+    mmlu_categories: normalizeStringList(formData.mmlu_categories, 'MMLU categories'),
+  }
+}
+
+function buildHallucinationEntry(name: string, formData: AddSignalFormState): HallucinationSignal {
+  const entry: HallucinationSignal = { name, description: formData.description || undefined }
+  if (formData.hallucination_use_nli) {
+    entry.use_nli = true
+  }
+  return entry
+}
+
+function buildPIIEntry(name: string, formData: AddSignalFormState): PIISignal {
+  const pii_threshold = formData.pii_threshold ?? 0.5
+  if (pii_threshold < 0 || pii_threshold > 1) {
+    throw new Error('PII threshold must be between 0.0 and 1.0.')
+  }
+  const normalizedAllowedTypes = normalizeStringList(
+    formData.pii_types_allowed,
+    'Allowed PII types',
+  )
+  return {
+    name,
+    threshold: pii_threshold,
+    pii_types_allowed: normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined,
+    include_history: formData.pii_include_history || false,
+    description: formData.description || undefined,
+  }
+}
+
+function buildJailbreakEntry(name: string, formData: AddSignalFormState): JailbreakSignal {
+  const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
+  if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
+    throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
+  }
+  const method = formData.jailbreak_method || 'classifier'
+  const jailbreakEntry: JailbreakSignal = {
+    name,
+    threshold: jailbreak_threshold,
+    include_history: formData.include_history || false,
+    description: formData.description || undefined,
+  }
+  if (method !== 'classifier') {
+    jailbreakEntry.method = method
+  }
+  if (formData.jailbreak_direction === 'response') {
+    jailbreakEntry.direction = 'response'
+  }
+  if (method === 'contrastive') {
+    const jailbreakPatterns = normalizeStringList(formData.jailbreak_patterns, 'Jailbreak patterns')
+    const benignPatterns = normalizeStringList(formData.benign_patterns, 'Benign patterns')
+    if (jailbreakPatterns.length > 0) jailbreakEntry.jailbreak_patterns = jailbreakPatterns
+    if (benignPatterns.length > 0) jailbreakEntry.benign_patterns = benignPatterns
+  }
+  return jailbreakEntry
 }
 
 export default function ConfigPageSignalsSection({
@@ -109,6 +287,7 @@ export default function ConfigPageSignalsSection({
           modality: undefined,
           role_bindings: undefined,
           jailbreak: config?.jailbreak,
+          hallucination: config?.hallucination,
           pii: config?.pii,
         }
       : null
@@ -260,12 +439,21 @@ export default function ConfigPageSignalsSection({
     })
   })
 
+  effectiveSignals?.hallucination?.forEach((rule) => {
+    allSignals.push({
+      name: rule.name,
+      type: 'Hallucination',
+      summary: hallucinationSummary(rule),
+      rawData: rule,
+    })
+  })
+
   effectiveSignals?.jailbreak?.forEach((jb) => {
     const method = jb.method || 'classifier'
     allSignals.push({
       name: jb.name,
       type: 'Jailbreak',
-      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.include_history ? ', includes history' : ''}`,
+      summary: `Method: ${method}, Threshold: ${jb.threshold}${jb.direction === 'response' ? ', scores the response' : ''}${jb.include_history ? ', includes history' : ''}`,
       rawData: jb,
     })
   })
@@ -697,58 +885,8 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ],
       })
-    } else if (signal.type === 'Jailbreak') {
-      const fields: Array<{ label: string; value: React.ReactNode; fullWidth?: boolean }> = [
-        { label: 'Method', value: signal.rawData.method || 'classifier', fullWidth: true },
-        {
-          label: 'Threshold',
-          value: signal.rawData.threshold?.toString() || 'N/A',
-          fullWidth: true,
-        },
-        {
-          label: 'Include History',
-          value: signal.rawData.include_history ? 'Yes' : 'No',
-          fullWidth: true,
-        },
-      ]
-      if (signal.rawData.method === 'contrastive') {
-        fields.push(
-          {
-            label: 'Jailbreak Patterns',
-            value: (
-              <SignalStringListEditor
-                value={signal.rawData.jailbreak_patterns}
-                onChange={() => undefined}
-                addLabel=""
-                emptyLabel="No jailbreak patterns."
-                itemLabel="Jailbreak pattern"
-                readOnly
-              />
-            ),
-            fullWidth: true,
-          },
-          {
-            label: 'Benign Patterns',
-            value: (
-              <SignalStringListEditor
-                value={signal.rawData.benign_patterns}
-                onChange={() => undefined}
-                addLabel=""
-                emptyLabel="No benign patterns."
-                itemLabel="Benign pattern"
-                readOnly
-              />
-            ),
-            fullWidth: true,
-          },
-        )
-      }
-      fields.push({
-        label: 'Description',
-        value: signal.rawData.description || 'N/A',
-        fullWidth: true,
-      })
-      sections.push({ title: 'Jailbreak Signal', fields })
+    } else if (signal.type === 'Jailbreak' || signal.type === 'Hallucination') {
+      sections.push(responseStageDetailSection(signal))
     } else if (signal.type === 'PII') {
       sections.push({
         title: 'PII Signal',
@@ -857,11 +995,8 @@ export default function ConfigPageSignalsSection({
       easy_candidates: [],
       composer_operator: 'AND',
       composer_conditions: [],
-      jailbreak_threshold: 0.65,
-      jailbreak_method: 'classifier',
-      include_history: false,
-      jailbreak_patterns: [],
-      benign_patterns: [],
+      ...jailbreakFormDefaults(),
+      hallucination_use_nli: false,
       pii_threshold: 0.5,
       pii_types_allowed: [],
       pii_include_history: false,
@@ -921,11 +1056,9 @@ export default function ConfigPageSignalsSection({
             easy_candidates: [...(signal.rawData.easy?.candidates || [])],
             composer_operator: signal.rawData.composer?.operator || 'AND',
             composer_conditions: [...(signal.rawData.composer?.conditions || [])],
-            jailbreak_threshold: signal.rawData.threshold ?? 0.65,
-            jailbreak_method: signal.rawData.method || 'classifier',
-            include_history: !!signal.rawData.include_history,
-            jailbreak_patterns: [...(signal.rawData.jailbreak_patterns || [])],
-            benign_patterns: [...(signal.rawData.benign_patterns || [])],
+            ...jailbreakFormStateFrom(signal.rawData),
+            hallucination_use_nli:
+              signal.type === 'Hallucination' ? !!signal.rawData.use_nli : false,
             pii_threshold: signal.rawData.threshold ?? 0.5,
             pii_types_allowed: [...(signal.rawData.pii_types_allowed || [])],
             pii_include_history: !!signal.rawData.include_history,
@@ -1023,14 +1156,9 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Domain': {
-          const mmlu_categories = normalizeStringList(formData.mmlu_categories, 'MMLU categories')
           newConfig.signals.domains = [
             ...(newConfig.signals.domains || []),
-            {
-              name,
-              description: formData.description,
-              mmlu_categories,
-            },
+            buildDomainEntry(name, formData),
           ]
           break
         }
@@ -1213,52 +1341,21 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Jailbreak': {
-          const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
-          if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
-            throw new Error('Jailbreak threshold must be between 0.0 and 1.0.')
-          }
-          const method = formData.jailbreak_method || 'classifier'
-          const jailbreakEntry: JailbreakSignal = {
-            name,
-            threshold: jailbreak_threshold,
-            include_history: formData.include_history || false,
-            description: formData.description || undefined,
-          }
-          if (method !== 'classifier') {
-            jailbreakEntry.method = method
-          }
-          if (method === 'contrastive') {
-            const jailbreakPatterns = normalizeStringList(
-              formData.jailbreak_patterns,
-              'Jailbreak patterns',
-            )
-            const benignPatterns = normalizeStringList(formData.benign_patterns, 'Benign patterns')
-            if (jailbreakPatterns.length > 0) jailbreakEntry.jailbreak_patterns = jailbreakPatterns
-            if (benignPatterns.length > 0) jailbreakEntry.benign_patterns = benignPatterns
-          }
-          newConfig.signals.jailbreak = [...(newConfig.signals.jailbreak || []), jailbreakEntry]
+          newConfig.signals.jailbreak = [
+            ...(newConfig.signals.jailbreak || []),
+            buildJailbreakEntry(name, formData),
+          ]
+          break
+        }
+        case 'Hallucination': {
+          newConfig.signals.hallucination = [
+            ...(newConfig.signals.hallucination || []),
+            buildHallucinationEntry(name, formData),
+          ]
           break
         }
         case 'PII': {
-          const pii_threshold = formData.pii_threshold ?? 0.5
-          if (pii_threshold < 0 || pii_threshold > 1) {
-            throw new Error('PII threshold must be between 0.0 and 1.0.')
-          }
-          const normalizedAllowedTypes = normalizeStringList(
-            formData.pii_types_allowed,
-            'Allowed PII types',
-          )
-          const allowedList = normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined
-          newConfig.signals.pii = [
-            ...(newConfig.signals.pii || []),
-            {
-              name,
-              threshold: pii_threshold,
-              pii_types_allowed: allowedList,
-              include_history: formData.pii_include_history || false,
-              description: formData.description || undefined,
-            },
-          ]
+          newConfig.signals.pii = [...(newConfig.signals.pii || []), buildPIIEntry(name, formData)]
           break
         }
         case 'KB': {

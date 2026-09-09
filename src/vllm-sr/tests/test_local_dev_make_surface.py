@@ -4,6 +4,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKER_MK_PATH = REPO_ROOT / "tools" / "make" / "docker.mk"
 AGENT_MK_PATH = REPO_ROOT / "tools" / "make" / "agent.mk"
 ENVIRONMENTS_DOC_PATH = REPO_ROOT / "tools" / "agent" / "docs" / "environments.md"
+MEMORY_INTEGRATION_PATH = REPO_ROOT / "e2e" / "testing" / "run_memory_integration.sh"
 
 
 def test_split_topology_defaults_to_rebuilding_router_image() -> None:
@@ -43,6 +44,15 @@ def test_memory_integration_uses_installed_agent_venv_cli() -> None:
     assert "vllm-sr-install-cli" in target
     assert 'PATH="$(AGENT_VENV)/bin:$$PATH" \\' in target
     assert "run_memory_integration.sh" in target
+
+
+def test_memory_integration_offsets_all_router_host_endpoints() -> None:
+    content = MEMORY_INTEGRATION_PATH.read_text(encoding="utf-8")
+
+    assert 'VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"' in content
+    assert "8080 + VLLM_SR_PORT_OFFSET" in content
+    assert "8888 + VLLM_SR_PORT_OFFSET" in content
+    assert 'ROUTER_ENDPOINT="${ROUTER_ENDPOINT}"' in content
 
 
 def test_cli_integration_uses_an_isolated_runtime_stack() -> None:
