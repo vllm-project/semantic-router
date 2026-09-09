@@ -115,6 +115,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `hallucination` — learned signal | `hallucination` checks the model's answer against the grounding context the request carried, such as tool results or retrieved documents, and reports the claims that context does not support. | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [Guide](../tutorials/signal/learned/hallucination) |
 | `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
@@ -228,12 +229,12 @@ global:
         enabled: true
 ```
 
-### Catalog-backed models
+### Model configuration
 
-Built-in support is additive to the same `version: v0.3` hierarchy. Set the
-optional canonical `catalog` identity and use a stable Provider ID on the
-backend; the Router and CLI then materialize the Model Card, reasoning family,
-native model mapping, protocol, request path, and provider defaults:
+Models can inherit identity and reasoning from the built-in catalog or define a
+private model locally. This catalog-backed example lets the selected Provider
+mapping supply the native model ID, protocol, reasoning transport, and request
+path:
 
 ```yaml
 providers:
@@ -248,31 +249,13 @@ providers:
           api_key_env: OPENAI_API_KEY
 ```
 
-The `name` remains the request-facing alias. A handwritten override targets
-the canonical card with `routing.modelCards[].name: openai/gpt-5.6-sol`.
-Private or newly released vLLM/SGLang models simply omit `catalog` and may keep
-using a handwritten card under their alias. `api_format: openai|responses|anthropic`
-is unchanged and remains an explicit protocol override; it never chooses a
-Provider. If this config declares a listener, every physical model must define
-`backend_refs` with an explicit Provider ID. A metadata-only external-gateway
-config with `listeners: []`, and a built-in virtual model whose recipe resolves
-its pool, may remain backendless.
-The local `vllm-sr serve` workflow owns Envoy transport and therefore rejects a
-backendless physical model even when it supplies its legacy default listener
-for an empty listener list. Use the external-gateway deployment profile for
-state-only protocol metadata.
-If `providers.defaults.reasoning_effort` is omitted, each model uses its
-reasoning-family default; saved canonical YAML does not add an unconfigured
-global effort.
-
-Multiple `backend_refs` on one alias are homogeneous replicas. HTTP replicas
-may use different hosts, ports, and weights. HTTPS replicas may vary by port
-and weight but must keep one DNS hostname. Provider, wire protocol, native
-model ID, credential, headers, effective request path, and TLS semantics must
-also match. Use separate aliases for heterogeneous providers so request
-metadata always follows the upstream Envoy selects. See the
+The `name` remains the local Router alias. A private or newly released model
+omits `catalog` and can optionally define a Model Card and reasoning contract
+under that alias. Start with [Configure models](model-configuration), then use
+[Model configuration patterns](model-configuration-patterns) to compare the
+catalog, custom, reasoning, Provider, and replica combinations. The
 [Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
-for the complete contribution and evaluation workflow.
+is for contributors adding reusable support to the repository catalog.
 
 Classifier backend failures remain `Unknown` while the complete boolean tree
 is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`

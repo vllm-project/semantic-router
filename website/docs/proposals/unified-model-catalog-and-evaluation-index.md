@@ -48,15 +48,15 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
-serving providers, three protocol definitions, 83 physical Model Cards, five
-virtual Model Cards, 168 provider-owned model mappings, 64 benchmark
-definitions, and 1,360 exact evaluation records. The five default benchmark
-components produce 1,155 explicit slots over 231 model/effort rows; 124 slots
+serving providers, three protocol definitions, 84 physical Model Cards, five
+virtual Model Cards, 169 provider-owned model mappings, 64 benchmark
+definitions, and 1,365 exact evaluation records. The five default benchmark
+components produce 1,325 explicit slots over 265 model/effort rows; 125 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
 
-All 83 physical cards pass the hard admission rule: at least one exact
+All 84 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
@@ -74,8 +74,9 @@ first 20 individual models from any ranking or endpoint inventory. It focuses
 on roughly twenty mainstream creator companies (22 in this snapshot) and
 represents roughly their latest three generations or product lines. Closely
 related sizes or reasoning variants are included only when they are separately
-selectable and materially useful to operators. GPT-6 Astra remains
-intentionally absent for the separate Day-0 example change.
+selectable and materially useful to operators. GPT-6 Astra is added separately
+as the focused model-onboarding example rather than being folded into the
+baseline change.
 
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
@@ -140,8 +141,9 @@ and representative.
 1. Define one repository-owned catalog for protocols, providers, models,
    provider-owned model mappings, reasoning behavior, presentation metadata,
    benchmarks, and optional internal indices.
-2. Generate Router, CLI, Dashboard, website, schema, and documentation views
-   from the same validated source.
+2. Generate the built-in distribution, Router embed, and one public website /
+   Dashboard view from the same validated source; stage package-local copies
+   only while building an artifact.
 3. Keep ordinary user configuration short while preserving explicit,
    handwritten model cards for self-hosted and private models.
 4. Replace ambiguous `quality_score` values with versioned measurements,
@@ -163,8 +165,8 @@ and representative.
   model-and-reasoning-effort record.
 - It does not require every new model to have a composite score on release day;
   missing evidence remains explicitly unavailable.
-- GPT-6 Astra is intentionally excluded. It is the separate representative
-  Day-0 contribution after this architecture and baseline-catalog change.
+- GPT-6 Astra was intentionally excluded from the architecture baseline and is
+  added by the separate representative model-onboarding contribution.
 
 ## Design principles
 
@@ -212,11 +214,23 @@ flowchart LR
   Registry --> Website
 ```
 
-The build-time generator validates and joins repository resources into
-committed projections. At runtime, the Go materializer merges those embedded
+The build-time generator validates and joins repository resources into three
+committed deliverables: the built-in distribution snapshot, the Go embed, and
+one public JSON snapshot. The website publishes that public JSON and Dashboard
+imports the same file as its offline fallback. The CLI reads the built-in
+distribution directly from a source checkout; wheel/sdist builds stage an
+ignored copy under `cli.model_assets`, while container builds copy the same
+distribution into the image. At runtime, the Go materializer merges embedded
 facts with user bindings and overlays into an immutable `EffectiveRegistry`.
-CLI, Dashboard, and website projections are generated from the same snapshot;
-none owns an independent provider or model inventory.
+No product owns an independent provider or model inventory.
+
+Coverage is a query, not stored catalog data. Authored `evaluations` contain
+only evidence that exists; generated `index_results` contain only scores that
+satisfy the index's missing-data policy. The audit derives the complete
+model/effort/component matrix and reports gaps when maintainers need a coverage
+view. Consequently, absence means insufficient evidence, never zero, and
+thousands of repetitive `status: missing` rows are not copied into every
+runtime and UI artifact.
 
 ## Canonical catalog resources
 
@@ -551,7 +565,11 @@ A provider-model mapping may further declare `reasoning_modes` or
 new user configuration. They prevent an API-specific surface from accepting a
 mode that is valid for a self-hosted runtime but invalid on that provider; the
 materializer rejects a configured decision before startup when any selected
-backend cannot carry its requested control.
+backend cannot carry its requested control. When one provider exposes the same
+model through several protocols, `reasoning_efforts_by_protocol` can only
+narrow that common set for a named bound protocol. For example, an effort that
+is Responses-only is rejected during startup for a Chat binding instead of
+being sent upstream as a known-invalid request.
 
 The public decision contract remains only `use_reasoning`, optional
 `reasoning_mode`, and optional `reasoning_effort`. At the final dispatch
@@ -708,8 +726,8 @@ The initial population audit makes both coverage and gaps visible. The 64
 benchmark definitions retain all exact measurements as source records, while
 public Hub surfaces remove every exact benchmark/profile/metric tuple measured
 on fewer than ten distinct models. The default five-component matrix
-materializes 1,155 slots over 231
-model/effort rows. At this snapshot, 124 of those slots have an exact
+materializes 1,325 slots over 265
+model/effort rows. At this snapshot, 125 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
 
@@ -967,8 +985,10 @@ A model-only support change follows one bounded sequence:
 7. **Evaluation:** add exact raw measurements with complete subject and
    provenance. Missing benchmark tuples remain unavailable, and public
    comparison views include only exact measured tuples.
-8. **Generated surfaces:** regenerate the embedded Go registry, CLI bundles,
-   Dashboard snapshot, and website snapshot. No manual frontend row is added.
+8. **Generated surfaces:** regenerate the built-in distribution, embedded Go
+   registry, and shared public snapshot. Package assets are staged only for a
+   wheel/sdist build. No manual frontend row or duplicate Dashboard JSON is
+   added.
 9. **Examples and docs:** add a minimal provider/model config and update the
    generated support matrix.
 10. **Validation:** run schema/compiler, generated-diff, unit, protocol,
@@ -989,13 +1009,14 @@ Provider work is a superset of model work:
 3. add auth, URL construction, error, streaming, and protocol conformance
    fixtures;
 4. add verified provider-owned model mappings;
-5. regenerate Dashboard, website, CLI, and runtime registry projections;
+5. regenerate the built-in distribution, runtime registry, and shared public
+   UI projection;
 6. verify that provider removal or deprecation is visible and fails safely.
 
 This single schema replaces the current split among the provider endpoint
 support matrix, provider registry, Add Model creation fields, and public
 Provider API. The runtime materializer, Dashboard discovery endpoint, generated
-website tables, and CLI projection all consume the same provider identity and
+website tables, and CLI distribution all consume the same provider identity and
 protocol-operation graph.
 
 ## Post-land data-plane contribution queue
@@ -1070,7 +1091,7 @@ existing hotspots:
 
 ```text
 config/catalog/
-  catalog.yaml      # versioned source manifest and resource file list
+  manifest.yaml     # versioned source manifest and resource file list
   schemas/          # source, resource, and generated-snapshot schemas
   resources/
     models/single/  # physical Model Cards, one file per creator
@@ -1088,7 +1109,10 @@ src/semantic-router/pkg/catalog/
   zz_generated_catalog.go
 
 tools/catalog/
-  generate_model_catalog.py  # graph validation and all generated projections
+  generate_model_catalog.py  # graph validation and distributable projections
+
+src/vllm-sr/cli/model_assets/
+  __init__.py       # package boundary; version trees are ignored build staging
 
 dashboard/backend/handlers/
   model_catalog.go + model_catalog_contract.go
@@ -1096,7 +1120,8 @@ dashboard/backend/handlers/
 dashboard/frontend/src/pages/ModelHubPage.tsx
 
 website/
-  static/model-catalog/catalog.json + src/pages/models.tsx
+  static/model-catalog/catalog.json  # one public snapshot shared with Dashboard
+  src/pages/models.tsx
 ```
 
 `pkg/config` consumes the compiled result; it does not own the catalog.
@@ -1106,20 +1131,22 @@ Protocol and provider adapters remain in narrow runtime packages.
 
 | Phase | Implemented deliverable | Completion criterion |
 | --- | --- | --- |
-| 1 | Resource schemas, source layout, generator, embedded registry, provenance, and generated-diff gate | Invalid catalogs fail deterministically; one graph emits every projection |
+| 1 | Resource schemas, source layout, generator, embedded registry, sparse evidence projection, and generated-diff gate | Invalid catalogs fail deterministically; one graph emits every distribution view without a checked-in package/UI mirror |
 | 2 | v0.3 config materializer and targeted migration command | Built-in and handwritten cards produce one `EffectiveRegistry` |
 | 3 | Catalog-backed protocol/provider/auth/path resolution | Data-only providers require no config-helper switch or Dashboard row |
 | 4 | Evaluation records, default intelligence index, score resolver, and typed runtime primary metric | Bare static/runtime `quality_score` and parameter-size fallbacks are removed |
 | 5 | Dashboard catalog API/Add Model migration and website Models page | Logos, forms, Model Hub, and benchmark comparisons consume generated data |
-| 6 | Day-0 contributor guide and repository gates | A compatible model/provider change has one authored source path |
+| 6 | Model/provider contributor guide and repository gates | A compatible model/provider change has one authored source path |
 
-The architecture PR also establishes the initial physical-model baseline. A
-separate follow-up adds GPT-6 Astra as the focused, reviewable Day-0 example.
+The architecture change establishes the initial physical-model baseline. The
+focused GPT-6 Astra follow-up demonstrates the complete, reviewable
+model-onboarding path.
 
 ## Acceptance criteria
 
-- One canonical resource graph produces Router, CLI, Dashboard, and website
-  views.
+- One canonical resource graph produces the built-in distribution, Router
+  embed, and shared website/Dashboard public view; Python package copies are
+  build-only staging.
 - Single and virtual Model Cards, plus their evaluation records, remain in
   separate focused directories.
 - `providers.models[].catalog` resolves to a built-in Model Card; an optional
@@ -1142,7 +1169,7 @@ separate follow-up adds GPT-6 Astra as the focused, reviewable Day-0 example.
 - Missing evaluation data is never converted to zero.
 - Intelligence, cost, latency, throughput, load, and availability remain
   separately selectable routing objectives.
-- A model Day-0 PR updates one catalog source and generated views, adds the
+- A model support PR updates one catalog source and generated views, adds the
   evidence appropriate to its claims, and passes the affected gates.
 - The old provider registry, independent Dashboard preset list, static quality
   fallbacks, and duplicate reasoning-family configuration are removed without

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Stage built-in model catalog resources into the installable CLI package."""
+"""Stage built-in model catalog resources into the installable CLI package.
+
+The repository owns one distributable snapshot under ``config/recipes``. This
+tool creates an ignored packaging workspace only when a wheel or sdist needs
+the same bytes under ``cli.model_assets``.
+"""
 
 from __future__ import annotations
 
@@ -114,7 +119,7 @@ def check() -> int:
     return 0
 
 
-def sync() -> int:
+def stage() -> int:
     expected = _expected_files()
     for relative, source in expected.items():
         destination = DESTINATION / relative
@@ -131,10 +136,10 @@ def sync() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--check", action="store_true", help="reject package-resource drift"
+        "--check", action="store_true", help="reject staged package-resource drift"
     )
     args = parser.parse_args()
-    return check() if args.check else sync()
+    return check() if args.check else stage()
 
 
 if __name__ == "__main__":

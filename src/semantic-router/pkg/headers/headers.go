@@ -72,6 +72,11 @@ const (
 	// Example values: "math_decision", "business_decision", "thinking_decision"
 	VSRSelectedDecision = "x-vsr-selected-decision"
 
+	// VSRAppliedUnknownPolicy lists decisions whose terminal unknown result was
+	// resolved by rules.on_unknown, as comma-separated decision=policy pairs.
+	// Example value: "guarded=no_match,strict=fail_request"
+	VSRAppliedUnknownPolicy = "x-vsr-applied-unknown-policy"
+
 	// VSRSelectedConfidence indicates the confidence score of the selected decision.
 	// Value: decimal between 0.0 and 1.0 (e.g., "0.75")
 	VSRSelectedConfidence = "x-vsr-selected-confidence"
@@ -242,6 +247,11 @@ const (
 	// VSRMatchedJailbreak contains comma-separated list of matched jailbreak rule names.
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
+
+	// VSRMatchedHallucination contains comma-separated list of matched
+	// hallucination rule names. Written in the response body phase, once the
+	// model's answer has been checked against its grounding context.
+	VSRMatchedHallucination = "x-vsr-matched-hallucination"
 
 	// VSRMatchedPII contains comma-separated list of matched PII rule names.
 	// Example: "pii_strict,pii_moderate"
