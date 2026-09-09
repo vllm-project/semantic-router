@@ -726,9 +726,12 @@ class Rules(BaseModel):
     Formats 2 and 3 are auto-normalised to composite form.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
+    on_error: Optional[Literal["no_match", "match"]] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -752,13 +755,15 @@ class Rules(BaseModel):
 
     @model_validator(mode="after")
     def validate_on_unknown_conflict(self):
-        if self.on_unknown is not None and _any_condition_sets_on_error(
-            self.conditions
+        if self.on_unknown is not None and (
+            self.on_error is not None or _any_condition_sets_on_error(self.conditions)
         ):
             raise ValueError(
                 "condition on_error has no effect when rules.on_unknown is set; "
                 "remove one of them"
             )
+        if self.on_error is not None:
+            raise ValueError("on_error only applies to leaf conditions")
         return self
 
 
