@@ -124,7 +124,7 @@ jobs:
 
   report:
     name: Publish consolidated report
-    if: ${{ always() && needs.inventory.result == 'success' }}
+    if: ${{ !cancelled() && needs.inventory.result == 'success' }}
     needs:
       - inventory
       - live-cpu

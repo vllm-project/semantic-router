@@ -101,7 +101,7 @@ jobs:
 
   gate:
     name: Main validation gate
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - changes
       - quality

@@ -157,6 +157,35 @@ class SelectionTests(unittest.TestCase):
 
 
 class GateTests(unittest.TestCase):
+    def test_aggregate_jobs_keep_failure_evidence_but_stop_after_cancellation(self):
+        # A status function prevents GitHub from adding the implicit success()
+        # guard, so failed dependencies still reach the gate. Unlike always(),
+        # !cancelled() releases a superseded workflow's concurrency slot.
+        aggregates = (
+            ("pr.yml", "pr-gate"),
+            ("main.yml", "gate"),
+            ("nightly-build.yml", "qualification"),
+            ("recipe-conformance.yml", "report"),
+        )
+        for filename, job_name in aggregates:
+            with self.subTest(workflow=filename, job=job_name):
+                workflow = yaml.safe_load(
+                    (REPO_ROOT / ".github/workflows" / filename).read_text()
+                )
+                condition = workflow["jobs"][job_name]["if"]
+                self.assertIn("!cancelled()", condition)
+                self.assertNotIn("always()", condition)
+                self.assertNotIn("success()", condition)
+                if job_name == "pr-gate":
+                    self.assertIn("github.event.label.name == 'ci/full'", condition)
+                if job_name == "report":
+                    self.assertIn("needs.inventory.result == 'success'", condition)
+                    steps = workflow["jobs"]["live-cpu"]["steps"]
+                    cleanup = next(
+                        step for step in steps if step.get("name") == "Clean up"
+                    )
+                    self.assertEqual(cleanup["if"], "always()")
+
     def test_selected_jobs_must_succeed(self):
         for state in ("failure", "cancelled", "skipped", None):
             result = {

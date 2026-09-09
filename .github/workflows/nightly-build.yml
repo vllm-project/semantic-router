@@ -103,7 +103,7 @@ jobs:
 
   qualification:
     name: Nightly qualification
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [core, dashboard, e2e, cli, memory, operator, performance, router-learning, python-unit]
     runs-on: ubuntu-latest
     steps:

@@ -193,7 +193,7 @@ jobs:
   pr-gate:
     name: ${{ (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'ci/full') && 'PR Gate' || 'Metadata event' }}
     if: >-
-      always() && (github.event.action != 'labeled' && github.event.action != 'unlabeled'
+      !cancelled() && (github.event.action != 'labeled' && github.event.action != 'unlabeled'
       || github.event.label.name == 'ci/full')
     needs:
       - changes
