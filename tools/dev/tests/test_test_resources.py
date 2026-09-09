@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shlex
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -15,6 +17,7 @@ from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "tools/dev/with_test_resources.py"
+MILVUS_SCRIPT = REPO_ROOT / "tools/milvus/test-milvus-deployment.sh"
 SPEC = importlib.util.spec_from_file_location("test_resources", SCRIPT)
 assert SPEC and SPEC.loader
 resources = importlib.util.module_from_spec(SPEC)
@@ -56,23 +59,181 @@ class ResourceProcessTests(unittest.TestCase):
                 locks.close()
 
     def test_make_dry_run_does_not_allocate_a_stack(self):
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPT),
-                "--isolate-stack",
-                "--",
-                sys.executable,
-                "-c",
-                "print('dry-run')",
-            ],
-            env={**os.environ, "MAKEFLAGS": "n", "CONTAINER_RUNTIME": "/nonexistent"},
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "dry-run")
+        for flags in (
+            "n",
+            "-n",
+            "-nr",
+            "--dry-run",
+            "--just-print",
+            "--recon",
+            "--no-print-directory -n",
+        ):
+            with self.subTest(flags=flags), tempfile.TemporaryDirectory() as directory:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(SCRIPT),
+                        "--isolate-stack",
+                        "--",
+                        sys.executable,
+                        "-c",
+                        "print('dry-run')",
+                    ],
+                    env={
+                        **os.environ,
+                        "MAKEFLAGS": flags,
+                        "TMPDIR": directory,
+                        "CONTAINER_RUNTIME": "/nonexistent",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), "dry-run")
+                self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_recursive_make_dry_run_handles_exported_and_normalized_flags(self):
+        for flags in ("-n", "-nr", "--dry-run", "--no-print-directory -n"):
+            with self.subTest(flags=flags), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                scratch = root / "scratch"
+                scratch.mkdir()
+                makefile = root / "Makefile"
+                command = [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--isolate-stack",
+                    "--",
+                    sys.executable,
+                    "-c",
+                    "print('dry-run-child')",
+                ]
+                # Recursive recipes execute under -n, just like our make wrappers.
+                makefile.write_text("all:\n\t+@" + shlex.join(command) + "\n")
+                result = subprocess.run(
+                    [
+                        "make",
+                        "-f",
+                        str(makefile),
+                        "NOTE=don't",
+                        'QUOTED=one"two',
+                        "SPACED=prefix -n suffix",
+                    ],
+                    env={
+                        **os.environ,
+                        "MAKEFLAGS": flags,
+                        "TMPDIR": str(scratch),
+                        "CONTAINER_RUNTIME": "/nonexistent",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("dry-run-child", result.stdout)
+                self.assertEqual(list(scratch.iterdir()), [])
+
+    def test_make_non_dry_options_and_arguments_are_not_dry_runs(self):
+        for flags in (
+            "",
+            "--no-print-directory",
+            "r --no-print-directory",
+            "-Iinclude",
+            "-I -n",
+            "I include",
+            "--file -n",
+            "--eval=contains-n",
+            "-- NAME=run",
+            r"-- NAME=value\ -n",
+            "-- NOTE=don't",
+            '-- NOTE=one"two',
+            "-I directory'withquote",
+        ):
+            with self.subTest(flags=flags):
+                self.assertFalse(resources.make_dry_run(flags))
+
+    def test_reused_cluster_kubeconfig_is_private_before_credentials_are_written(self):
+        for existing in (False, True):
+            with self.subTest(
+                existing=existing
+            ), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                config = root / "kubeconfig"
+                if existing:
+                    config.write_text("old credentials")
+                    config.chmod(0o644)
+                runtime = root / "kind"
+                runtime.write_text(
+                    f"#!{sys.executable}\nimport os, stat, sys\n"
+                    "if sys.argv[1:] == ['get', 'clusters']:\n"
+                    "    print('isolated')\n"
+                    "else:\n"
+                    "    assert stat.S_IMODE(os.fstat(1).st_mode) == 0o600\n"
+                    "    print('private credentials')\n"
+                )
+                runtime.chmod(0o755)
+                result = subprocess.run(
+                    [
+                        "bash",
+                        "-c",
+                        'umask 022; source "$1"; section_create_cluster',
+                        "test",
+                        str(MILVUS_SCRIPT),
+                    ],
+                    env={
+                        **os.environ,
+                        "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                        "KIND_CLUSTER_NAME": "isolated",
+                        "KIND_KUBECONFIG": str(config),
+                        "RECREATE_CLUSTER": "false",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(config.read_text(), "private credentials\n")
+                self.assertEqual(stat.S_IMODE(config.stat().st_mode), 0o600)
+                self.assertEqual(
+                    sorted(path.name for path in root.iterdir()), ["kind", "kubeconfig"]
+                )
+
+    def test_failed_kubeconfig_refresh_preserves_previous_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = root / "kubeconfig"
+            config.write_text("previous credentials")
+            runtime = root / "kind"
+            runtime.write_text(
+                '#!/bin/sh\nif [ "$*" = "get clusters" ]; then echo isolated; '
+                "else echo incomplete; exit 7; fi\n"
+            )
+            runtime.chmod(0o755)
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; section_create_cluster',
+                    "test",
+                    str(MILVUS_SCRIPT),
+                ],
+                env={
+                    **os.environ,
+                    "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                    "KIND_CLUSTER_NAME": "isolated",
+                    "KIND_KUBECONFIG": str(config),
+                    "RECREATE_CLUSTER": "false",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 7, result.stderr)
+            self.assertEqual(config.read_text(), "previous credentials")
+            self.assertEqual(
+                sorted(path.name for path in root.iterdir()), ["kind", "kubeconfig"]
+            )
 
     def test_podman_only_host_preserves_cli_runtime_fallback(self):
         with (

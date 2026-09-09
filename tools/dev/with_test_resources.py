@@ -9,6 +9,7 @@ import json
 import os
 import random
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -181,6 +182,47 @@ def require_empty_stack(stack: str) -> None:
         )
 
 
+def make_dry_run(flags: str) -> bool:
+    """Accept exported options and make's normalized, dashless short options."""
+    lexer = shlex.shlex(flags, posix=True)
+    lexer.whitespace_split = True
+    lexer.quotes = ""  # MAKEFLAGS escapes spaces; quotes are literal characters.
+    lexer.commenters = ""
+    skip_argument = False
+    for index, option in enumerate(lexer):
+        if skip_argument:
+            skip_argument = False
+            continue
+        if option == "--":
+            break  # The remaining words are make variable assignments.
+        if option in {"--dry-run", "--just-print", "--recon"}:
+            return True
+        if option.startswith("--") or "=" in option:
+            skip_argument = option in {
+                "--directory",
+                "--file",
+                "--makefile",
+                "--include-dir",
+                "--old-file",
+                "--assume-old",
+                "--new-file",
+                "--assume-new",
+                "--what-if",
+                "--eval",
+            }
+            continue
+        if not option.startswith("-") and index != 0:
+            continue
+        short_options = option.removeprefix("-")
+        for position, flag in enumerate(short_options):
+            if flag == "n":
+                return True
+            if flag not in "bBdeikLmnpqrRsStvw":
+                skip_argument = flag in "CEfIoW" and position == len(short_options) - 1
+                break  # An option argument must not be interpreted as flags.
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--resource", action="append", default=[])
@@ -192,8 +234,7 @@ def main() -> int:
     if not command:
         parser.error("a command is required after --")
     # Recursive make recipes still execute under -n: preserve dry-run semantics.
-    make_short_flags = os.getenv("MAKEFLAGS", "").split(" ", 1)[0]
-    if not make_short_flags.startswith("-") and "n" in make_short_flags:
+    if make_dry_run(os.getenv("MAKEFLAGS", "")):
         return subprocess.run(command, check=False).returncode
     locks = ResourceLocks()
     log_path = None

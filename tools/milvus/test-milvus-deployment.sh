@@ -85,8 +85,14 @@ section_create_cluster() {
             make delete-cluster
         else
             log_info "Using existing cluster"
-            mkdir -p "$(dirname "${KUBECONFIG}")"
-            kind get kubeconfig --name "${CLUSTER_NAME}" > "${KUBECONFIG}"
+            (
+                umask 077
+                mkdir -p "$(dirname "${KUBECONFIG}")"
+                kubeconfig_tmp="$(mktemp "${KUBECONFIG}.XXXXXX")"
+                trap 'rm -f "${kubeconfig_tmp}"' EXIT
+                kind get kubeconfig --name "${CLUSTER_NAME}" > "${kubeconfig_tmp}"
+                mv -f "${kubeconfig_tmp}" "${KUBECONFIG}"
+            )
             return 0
         fi
     fi
@@ -465,4 +471,6 @@ main() {
 }
 
 # Run main function
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
