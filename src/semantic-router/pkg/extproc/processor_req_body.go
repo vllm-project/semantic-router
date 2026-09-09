@@ -236,9 +236,6 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		r.setClearRouteCache(response)
 	}
 
-	// Save the actual model for token tracking
-	ctx.RequestModel = matchedModel
-
 	// Capture router replay information if enabled
 	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
@@ -292,9 +289,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
-
-	// Save the actual model for token tracking
-	ctx.RequestModel = originalModel
 
 	// Capture router replay information if enabled even when the client pins a model.
 	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)

@@ -4,6 +4,14 @@
 
 ##@ Models
 
+test-training-contracts: ## Run dependency-light model training contract tests
+	@python3 -m unittest discover -s src/training/tests -p 'test_*.py'
+	@python3 -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
+	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
+	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+	@python3 -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+	@python3 -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+
 # Models are automatically downloaded by the router at startup in production.
 # For testing, we use the router's --download-only flag to download models and exit.
 

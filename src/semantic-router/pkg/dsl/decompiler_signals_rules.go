@@ -306,6 +306,9 @@ func (d *decompiler) decompileJailbreakSignals() {
 		if jb.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
+		if jb.Direction != "" {
+			d.write("  direction: %q\n", jb.Direction)
+		}
 		if jb.Description != "" {
 			d.write("  description: %q\n", jb.Description)
 		}
@@ -314,6 +317,19 @@ func (d *decompiler) decompileJailbreakSignals() {
 		}
 		if len(jb.BenignPatterns) > 0 {
 			d.write("  benign_patterns: %s\n", formatStringArray(jb.BenignPatterns))
+		}
+		d.write("}\n\n")
+	}
+}
+
+func (d *decompiler) decompileHallucinationSignals() {
+	for _, rule := range d.cfg.HallucinationRules {
+		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
+		if rule.UseNLI {
+			d.write("  use_nli: true\n")
+		}
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
 		}
 		d.write("}\n\n")
 	}

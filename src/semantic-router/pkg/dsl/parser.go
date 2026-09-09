@@ -498,6 +498,10 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 			if v.Str != nil {
 				m.Effort = unquote(*v.Str)
 			}
+		case "mode":
+			if v.Str != nil {
+				m.Mode = unquote(*v.Str)
+			}
 		case "lora":
 			if v.Str != nil {
 				m.LoRA = unquote(*v.Str)

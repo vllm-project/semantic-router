@@ -3,6 +3,77 @@ import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
+const PII_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.8',
+    description: 'Minimum confidence for PII detection (0.0-1.0)',
+  },
+  {
+    key: 'pii_types_allowed',
+    label: 'PII Types Allowed',
+    type: 'string[]',
+    placeholder: 'e.g. EMAIL_ADDRESS',
+    description: 'PII types to allow through (others trigger signal)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+]
+
+const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'method',
+    label: 'Method',
+    type: 'select',
+    options: ['classifier', 'contrastive'],
+    description: 'Detection algorithm',
+  },
+  {
+    key: 'direction',
+    label: 'Direction',
+    type: 'select',
+    options: ['request', 'response'],
+    description: 'request (default) scores the prompt; response scores the model output',
+  },
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.9',
+    description: 'Minimum score to trigger (0.0-1.0)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+  {
+    key: 'jailbreak_patterns',
+    label: 'Jailbreak Patterns',
+    type: 'string[]',
+    placeholder: 'Add jailbreak example...',
+    description: 'Contrastive mode: example jailbreak prompts',
+  },
+  {
+    key: 'benign_patterns',
+    label: 'Benign Patterns',
+    type: 'string[]',
+    placeholder: 'Add benign example...',
+    description: 'Contrastive mode: example benign prompts',
+  },
+]
+
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
   if (policyFields) return policyFields
@@ -263,69 +334,14 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'jailbreak':
+      return JAILBREAK_SIGNAL_FIELDS
+    case 'hallucination':
       return [
-        {
-          key: 'method',
-          label: 'Method',
-          type: 'select',
-          options: ['classifier', 'contrastive'],
-          description: 'Detection algorithm',
-        },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.9',
-          description: 'Minimum score to trigger (0.0-1.0)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
+        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
         { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'jailbreak_patterns',
-          label: 'Jailbreak Patterns',
-          type: 'string[]',
-          placeholder: 'Add jailbreak example...',
-          description: 'Contrastive mode: example jailbreak prompts',
-        },
-        {
-          key: 'benign_patterns',
-          label: 'Benign Patterns',
-          type: 'string[]',
-          placeholder: 'Add benign example...',
-          description: 'Contrastive mode: example benign prompts',
-        },
       ]
     case 'pii':
-      return [
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.8',
-          description: 'Minimum confidence for PII detection (0.0-1.0)',
-        },
-        {
-          key: 'pii_types_allowed',
-          label: 'PII Types Allowed',
-          type: 'string[]',
-          placeholder: 'e.g. EMAIL_ADDRESS',
-          description: 'PII types to allow through (others trigger signal)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
-        { key: 'description', label: 'Description', type: 'string' },
-      ]
+      return PII_SIGNAL_FIELDS
     case 'kb':
       return [
         {
