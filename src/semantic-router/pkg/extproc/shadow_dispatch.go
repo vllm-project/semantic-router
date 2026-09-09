@@ -289,11 +289,11 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 	if profile == nil {
 		return ""
 	}
-	_, authHeader, _, err := resolveProviderAuth(profile)
+	_, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return ""
 	}
-	return authHeader
+	return providerAuth.Header
 }
 
 // shadowExtraHeaders carries the span context to the shadow backend, the W3C

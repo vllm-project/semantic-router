@@ -595,7 +595,12 @@ func TestShadowDispatchAppliesShadowReasoningAndDecisionHeaders(t *testing.T) {
 	shadowParams.ReasoningFamily = "openai"
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 	router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
-		"openai": {Type: config.ReasoningFamilyTypeTopLevelReasoningEffort, Parameter: "reasoning_effort"},
+		"openai": {
+			Type:      config.ReasoningFamilyTypeTopLevelReasoningEffort,
+			Parameter: "reasoning_effort",
+			Levels:    []string{"low", "medium", "high"},
+			Default:   "medium",
+		},
 	}
 
 	pluginCfg := shadowTestPluginConfig()
@@ -631,7 +636,7 @@ func TestShadowDispatchUsesOnlyStaticCredentials(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
 	primaryParams := router.Config.ModelConfig[primaryModel]
-	primaryParams.AccessKey = "primary-key"
+	primaryParams.AccessKeys = map[string]string{"openai": "primary-key"}
 	router.Config.ModelConfig[primaryModel] = primaryParams
 	// A fail-closed chain, as configured when authz.providers is set.
 	resolver := authz.NewCredentialResolver(
@@ -651,7 +656,7 @@ func TestShadowDispatchUsesOnlyStaticCredentials(t *testing.T) {
 	}
 
 	shadowParams := router.Config.ModelConfig[shadowTestModel]
-	shadowParams.AccessKey = "shadow-key"
+	shadowParams.AccessKeys = map[string]string{"openai": "shadow-key"}
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 	runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
 	waitForShadow(t, router)
@@ -782,7 +787,7 @@ func TestShadowDispatchRejectsCrossOriginRedirect(t *testing.T) {
 	})
 	router, primaryModel := newShadowTestRouter(t, backend)
 	shadowParams := router.Config.ModelConfig[shadowTestModel]
-	shadowParams.AccessKey = "shadow-key"
+	shadowParams.AccessKeys = map[string]string{"openai": "shadow-key"}
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 	cfg := shadowTestPluginConfig()
 	cfg.MaxRetries = 2
@@ -842,7 +847,7 @@ func TestShadowDispatchPreservesAzureAPIVersion(t *testing.T) {
 		APIVersion: "2024-02-01",
 	}
 	shadowParams := router.Config.ModelConfig[shadowTestModel]
-	shadowParams.AccessKey = "shadow-key"
+	shadowParams.AccessKeys = map[string]string{"azure-openai": "shadow-key"}
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 
 	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)

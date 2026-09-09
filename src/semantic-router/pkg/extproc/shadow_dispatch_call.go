@@ -288,13 +288,10 @@ func shadowEndpointPath(profile *config.ProviderProfile, format llmprotocol.Wire
 	if profile == nil {
 		return path
 	}
-	if format == llmprotocol.OpenAIChatV1 {
-		if configured, err := profile.ResolveChatPath(); err == nil && configured != "" {
-			return configured
-		}
-		return path
+	if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
+		return configured
 	}
-	return providerProtocolPath(profile.BaseURL, path)
+	return path
 }
 
 // shadowAuthorizer consults only the static router configuration, read at
@@ -306,7 +303,7 @@ func shadowAuthorizer(
 	profile *config.ProviderProfile,
 	model string,
 ) (func(context.Context, *http.Request) error, error) {
-	provider, authHeader, authPrefix, err := resolveProviderAuth(profile)
+	provider, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
 	}
@@ -318,10 +315,10 @@ func shadowAuthorizer(
 		if accessKey == "" {
 			return nil
 		}
-		if authPrefix != "" {
-			accessKey = authPrefix + " " + accessKey
+		if providerAuth.Prefix != "" {
+			accessKey = providerAuth.Prefix + " " + accessKey
 		}
-		request.Header.Set(authHeader, accessKey)
+		request.Header.Set(providerAuth.Header, accessKey)
 		return nil
 	}, nil
 }

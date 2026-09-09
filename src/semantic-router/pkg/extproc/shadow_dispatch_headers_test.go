@@ -118,7 +118,7 @@ func TestShadowDispatchForwardsOnlyAllowlistedDecisionHeaders(t *testing.T) {
 func TestShadowDispatchNeverForwardsCredentialsEvenWhenListed(t *testing.T) {
 	backend, router, primaryModel := newShadowHeaderTestRouter(t)
 	shadowParams := router.Config.ModelConfig[shadowTestModel]
-	shadowParams.AccessKey = "shadow-key"
+	shadowParams.AccessKeys = map[string]string{"openai": "shadow-key"}
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 	// Config validation rejects these names; bypass it here to prove the
 	// runtime floor holds on its own.
@@ -248,6 +248,7 @@ func TestShadowHeaderIsSensitive(t *testing.T) {
 		"x-goog-api-key":       true,
 		headers.UserOpenAIKey:  true,
 		headers.UserBedrockKey: true,
+		//nolint:gocritic // mapKey: the surrounding whitespace is the case under test.
 		" x-api-key ":          true,
 		"x-tenant":             false,
 		"X-Internal-Token":     false,

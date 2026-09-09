@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 // Shadow dispatch contract: the primary response is served normally and the
@@ -24,6 +25,7 @@ const (
 	// routerReplayDetailToken carries the operator role from the profile
 	// values. The viewer role lacks replay.detail, and the API then redacts
 	// outcome reason, target_ref, and metadata, which these cases assert on.
+	//nolint:gosec // G101: fixed non-production credential for the e2e replay fixture.
 	routerReplayDetailToken = "router-replay-e2e-operator-token"
 )
 
