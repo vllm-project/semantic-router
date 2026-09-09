@@ -1099,6 +1099,25 @@ spec:
                             type: boolean
                         type: object
                     type: object
+                  complexity_classifier:
+                    description: 'Complexity classifier module (model mode) for complexity
+                      rules using method: model'
+                    properties:
+                      complexity_mapping_path:
+                        description: |-
+                          ComplexityMappingPath points at the class-index -> difficulty label mapping
+                          (JSON) required for model mode.
+                        type: string
+                      model_id:
+                        description: |-
+                          ModelID is a HuggingFace repo id or local path to the trained ModernBERT
+                          complexity classifier.
+                        type: string
+                      use_cpu:
+                        description: UseCPU forces CPU inference for the complexity
+                          classifier.
+                        type: boolean
+                    type: object
                   complexity_rules:
                     description: Complexity rules for complexity-aware routing
                     items:
@@ -1145,7 +1164,9 @@ spec:
                           description: Description of what this rule classifies
                           type: string
                         easy:
-                          description: Easy candidates represent simple/easy examples
+                          description: |-
+                            Easy candidates represent simple/easy examples. Required for embedding mode;
+                            omitted for method: model.
                           properties:
                             candidates:
                               description: List of candidate phrases or examples
@@ -1156,8 +1177,9 @@ spec:
                           - candidates
                           type: object
                         hard:
-                          description: Hard candidates represent complex/difficult
-                            examples
+                          description: |-
+                            Hard candidates represent complex/difficult examples. Required for embedding
+                            mode; omitted for method: model.
                           properties:
                             candidates:
                               description: List of candidate phrases or examples
@@ -1167,6 +1189,15 @@ spec:
                           required:
                           - candidates
                           type: object
+                        method:
+                          description: |-
+                            Method selects how the rule decides difficulty. "embedding" (default) uses the
+                            hard/easy prototype-bank similarity path; "model" uses the trained complexity
+                            classifier configured under complexity_classifier.
+                          enum:
+                          - embedding
+                          - model
+                          type: string
                         name:
                           description: Name of the complexity rule (e.g., "code-complexity",
                             "reasoning-complexity")
@@ -1178,10 +1209,14 @@ spec:
                           pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                           type: string
                       required:
-                      - easy
-                      - hard
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: 'embedding-mode complexity rules require both ''hard''
+                          and ''easy'' candidate banks; set method: model to use the
+                          trained classifier instead'
+                        rule: (has(self.method) && self.method == 'model') || (has(self.hard)
+                          && has(self.easy))
                     type: array
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,

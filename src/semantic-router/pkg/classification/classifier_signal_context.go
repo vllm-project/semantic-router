@@ -22,7 +22,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeLanguage:      len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:       c.contextClassifier != nil,
 		config.SignalTypeStructure:     c.structureClassifier != nil,
-		config.SignalTypeComplexity:    c.complexityClassifier != nil,
+		config.SignalTypeComplexity:    c.complexityClassifier != nil || c.complexityModelInference != nil,
 		config.SignalTypeModality:      len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
 		config.SignalTypeJailbreak:     c.isJailbreakSignalReady(),
 		config.SignalTypePII:           len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
