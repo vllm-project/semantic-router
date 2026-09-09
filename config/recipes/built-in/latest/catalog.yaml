@@ -295,7 +295,11 @@ providers:
   - openai/responses@1#create
   path_overrides:
     openai/chat-completions@1#create: /chat/completions
-    openai/responses@1#create: /responses
+  operation_overrides:
+    openai/responses@1#create:
+      path: /openai/v1/responses
+      absolute_path: true
+      suppress_api_version: true
   api_version_query: true
   reasoning_transport: top_level_effort
   auth:
