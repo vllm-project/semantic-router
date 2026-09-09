@@ -524,20 +524,6 @@ func appendAccountingOmission(diagnostics *llmprotocol.Diagnostics, policy llmpr
 	}}, policy.Limits.Diagnostics)
 }
 
-// The target keeps the content but not the exact source semantics. Unlike
-// appendLossy this is always recorded and never fails the translation.
-func appendApproximation(
-	diagnostics *llmprotocol.Diagnostics,
-	policy llmprotocol.Policy,
-	source, target llmprotocol.WireFormat,
-	field, reason string,
-) {
-	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
-		Source: source, Target: target, Field: field,
-		Action: llmprotocol.DiagnosticApproximated, Reason: reason,
-	}}, policy.Limits.Diagnostics)
-}
-
 func appendProviderFieldOmission(
 	diagnostics *llmprotocol.Diagnostics,
 	policy llmprotocol.Policy,

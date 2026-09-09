@@ -57,14 +57,14 @@ func TestDeveloperInstructionsReachAnthropic(t *testing.T) {
 			if !bytes.Contains(result.Body, []byte("be terse")) {
 				t.Fatalf("instruction text was dropped: %s", result.Body)
 			}
-			if !hasDiagnostic(result.Diagnostics, "instructions.role", llmprotocol.DiagnosticApproximated) {
-				t.Fatalf("no approximation diagnostic recorded: %+v", result.Diagnostics)
+			if hasDiagnostic(result.Diagnostics, "instructions.role", llmprotocol.DiagnosticApproximated) {
+				t.Fatalf("developer maps onto the same system channel, so it must not report a loss: %+v", result.Diagnostics)
 			}
 		})
 	}
 }
 
-// A system-role request must be unaffected, and must not gain the diagnostic.
+// system and developer must produce byte-identical Anthropic output.
 func TestSystemInstructionsUnchangedOnAnthropic(t *testing.T) {
 	engine := NewBuiltinEngine()
 	body := []byte(`{"model":"m","messages":[` +

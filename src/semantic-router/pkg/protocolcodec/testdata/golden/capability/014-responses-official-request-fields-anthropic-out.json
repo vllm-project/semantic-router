@@ -106,10 +106,6 @@
           {
             "field": "max_tokens",
             "action": "generated"
-          },
-          {
-            "field": "instructions.role",
-            "action": "approximated"
           }
         ]
       }
