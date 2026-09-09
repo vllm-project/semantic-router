@@ -6,6 +6,7 @@ pub mod memory;
 #[cfg(test)]
 mod memory_test;
 pub mod multimodal;
+pub mod text_windows;
 pub mod types;
 pub mod unified;
 

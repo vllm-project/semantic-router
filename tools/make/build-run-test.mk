@@ -60,6 +60,26 @@ build-router-onnx: build-onnx-binding build-ml-binding
 		go build -modfile=go.onnx.mod -tags=onnx,milvus -o ../../bin/router-onnx ./cmd
 	@echo "Router built with ONNX binding support"
 
+# Check the replacement binding and the router against it without downloading an
+# ONNX Runtime SDK or models. The core job builds ml-binding/nlp-binding first.
+# Dynamic loading is sufficient here because the compiled router is never run.
+check-router-onnx: ## Test ONNX binding contracts and compile the replacement router (requires ML/NLP libraries)
+	@$(LOG_TARGET)
+	@cd onnx-binding && ORT_SKIP_DOWNLOAD=1 cargo test --lib --features ort/load-dynamic ffi::text_windows
+	@cd onnx-binding && ORT_SKIP_DOWNLOAD=1 cargo build --lib --features ort/load-dynamic
+	@cd onnx-binding && \
+		CGO_ENABLED=1 CGO_LDFLAGS="-L$(CURDIR)/onnx-binding/target/debug" \
+		LD_LIBRARY_PATH="$(CURDIR)/onnx-binding/target/debug:$${LD_LIBRARY_PATH:-}" \
+		DYLD_LIBRARY_PATH="$(CURDIR)/onnx-binding/target/debug:$${DYLD_LIBRARY_PATH:-}" \
+		go test -count=1 ./...
+	@ONNX_ROUTER_BINARY=$$(mktemp "$${TMPDIR:-/tmp}/router-onnx-contract.XXXXXX"); \
+		trap 'rm -f "$$ONNX_ROUTER_BINARY"' EXIT INT TERM; \
+		cd src/semantic-router && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-L$(CURDIR)/onnx-binding/target/debug -L$(CURDIR)/ml-binding/target/release -L$(CURDIR)/nlp-binding/target/release" \
+		go build -modfile=go.onnx.mod -tags=onnx -o "$$ONNX_ROUTER_BINARY" ./cmd
+
+.PHONY: check-router-onnx
+
 # Run the router with ONNX binding (uses mmBERT 32K via ONNX Runtime)
 run-router-onnx: ## Run the router with ONNX binding (mmBERT embedding model)
 run-router-onnx: build-router-onnx

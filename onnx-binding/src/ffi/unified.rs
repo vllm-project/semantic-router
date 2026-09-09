@@ -161,8 +161,13 @@ pub extern "C" fn classify_batch_with_lora(
 }
 
 /// Free unified batch result
+///
+/// # Safety
+/// A non-null `result` must exclusively reference a value returned by
+/// `classify_unified_batch`. Its non-null allocations and lengths must be
+/// unchanged and must not have been freed.
 #[no_mangle]
-pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
+pub unsafe extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
     if result.is_null() {
         return;
     }
@@ -180,7 +185,7 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.results,
                 r.num_results as usize,
             ));
@@ -190,8 +195,13 @@ pub extern "C" fn free_unified_batch_result(result: *mut CUnifiedBatchResult) {
 }
 
 /// Free LoRA batch result
+///
+/// # Safety
+/// A non-null `result` must exclusively reference a value returned by
+/// `classify_batch_with_lora`. Its non-null allocations and lengths must be
+/// unchanged and must not have been freed.
 #[no_mangle]
-pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
+pub unsafe extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
     if result.is_null() {
         return;
     }
@@ -209,7 +219,7 @@ pub extern "C" fn free_lora_batch_result(result: *mut CLoRABatchResult) {
             for res in results.iter_mut() {
                 free_unified_result_inner(res);
             }
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.results,
                 r.num_results as usize,
             ));
@@ -226,7 +236,7 @@ unsafe fn free_unified_result_inner(result: &mut CUnifiedResult) {
         result.intent.category = ptr::null_mut();
     }
     if !result.intent.probabilities.is_null() && result.intent.num_probabilities > 0 {
-        let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
             result.intent.probabilities,
             result.intent.num_probabilities as usize,
         ));
@@ -353,13 +363,13 @@ mod tests {
     #[test]
     fn test_free_unified_batch_result_null_safe() {
         // Should not panic when called with null
-        free_unified_batch_result(ptr::null_mut());
+        unsafe { free_unified_batch_result(ptr::null_mut()) };
     }
 
     #[test]
     fn test_free_lora_batch_result_null_safe() {
         // Should not panic when called with null
-        free_lora_batch_result(ptr::null_mut());
+        unsafe { free_lora_batch_result(ptr::null_mut()) };
     }
 
     #[test]

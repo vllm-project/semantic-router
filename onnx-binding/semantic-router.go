@@ -61,6 +61,18 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
+typedef struct {
+    char* dimensions;
+    char* layers;
+    bool supports_2d;
+} MatryoshkaInfo;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -105,6 +117,10 @@ extern int calculate_embedding_similarity(const char* text1, const char* text2, 
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
+extern int get_matryoshka_info(MatryoshkaInfo* result);
+extern void free_matryoshka_info(MatryoshkaInfo* result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -378,6 +394,92 @@ func GetEmbedding(text string, maxLength int) ([]float32, error) {
 		return nil, err
 	}
 	return output.Embedding, nil
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows covers the complete input using the loaded model's tokenizer.
+// Consecutive windows overlap by half a window, matching the Candle API.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if bool(result.error) {
+		return nil, errors.New("failed to window text: embedding model unavailable or input invalid")
+	}
+	if result.window_count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := unsafe.Slice(result.offsets, int(result.window_count)*2)
+	windows := make([]TextWindow, int(result.window_count))
+	for i := range windows {
+		windows[i] = TextWindow{Start: int(offsets[i*2]), End: int(offsets[i*2+1])}
+	}
+	return windows, nil
+}
+
+// GetEmbeddingsBatch embeds texts together using the selected layer and dimension.
+func GetEmbeddingsBatch(texts []string, targetLayer, targetDim int) ([]EmbeddingOutput, error) {
+	if len(texts) == 0 {
+		return nil, errors.New("batch embedding requires at least one text")
+	}
+	cTexts := make([]*C.char, len(texts))
+	for i, text := range texts {
+		cTexts[i] = C.CString(text)
+		defer C.free(unsafe.Pointer(cTexts[i]))
+	}
+	results := make([]C.EmbeddingResult, len(texts))
+	defer func() {
+		for _, result := range results {
+			C.free_embedding(result.data, result.length)
+		}
+	}()
+	status := C.get_embeddings_batch(&cTexts[0], C.int(len(texts)), C.int(targetLayer), C.int(targetDim), &results[0])
+	if status != 0 {
+		return nil, errors.New("batch embedding generation failed")
+	}
+	outputs := make([]EmbeddingOutput, len(texts))
+	for i, result := range results {
+		if bool(result.error) {
+			return nil, fmt.Errorf("batch embedding generation failed at text %d", i)
+		}
+		embedding := make([]float32, int(result.length))
+		copy(embedding, unsafe.Slice((*float32)(unsafe.Pointer(result.data)), int(result.length)))
+		outputs[i] = EmbeddingOutput{
+			Embedding:        embedding,
+			ModelType:        modelTypeToString(int(result.model_type)),
+			SequenceLength:   int(result.sequence_length),
+			ProcessingTimeMs: float32(result.processing_time_ms),
+		}
+	}
+	return outputs, nil
+}
+
+// MatryoshkaConfig describes the dimensions and layers supported by the binding.
+type MatryoshkaConfig struct {
+	Dimensions string
+	Layers     string
+	Supports2D bool
+}
+
+// GetMatryoshkaConfig returns the configuration exposed by the native binding.
+func GetMatryoshkaConfig() (*MatryoshkaConfig, error) {
+	var result C.MatryoshkaInfo
+	resultPtr := &result
+	if C.get_matryoshka_info(resultPtr) != 0 {
+		return nil, errors.New("failed to get Matryoshka configuration")
+	}
+	defer C.free_matryoshka_info(resultPtr)
+	return &MatryoshkaConfig{
+		Dimensions: C.GoString(result.dimensions),
+		Layers:     C.GoString(result.layers),
+		Supports2D: bool(result.supports_2d),
+	}, nil
 }
 
 // GetEmbeddingDefault generates an embedding with default settings

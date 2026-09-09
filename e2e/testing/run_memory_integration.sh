@@ -52,7 +52,8 @@ MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
 if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
-MODEL_MOUNT_DIR="${TEST_DIR}/models"
+# The CLI mounts state_root/models when an explicit state root is supplied.
+MODEL_MOUNT_DIR="${VLLM_SR_STATE_ROOT_DIR}/models"
 USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
 
 VLLM_SR_PID=""
@@ -175,6 +176,7 @@ prepare_model_dir() {
         return 0
     fi
 
+    mkdir -p "$(dirname "${MODEL_MOUNT_DIR}")"
     rm -rf "${MODEL_MOUNT_DIR}"
     ln -s "${MODEL_DIR}" "${MODEL_MOUNT_DIR}"
 }
@@ -391,5 +393,5 @@ PYTHONUNBUFFERED=1 \
 ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS="localhost:${MILVUS_PORT}" \
-MILVUS_COLLECTION="memory_test_${VLLM_SR_RUN_ID//-/_}" \
+MILVUS_COLLECTION="memory_test_ci" \
 python3 09-memory-features-test.py

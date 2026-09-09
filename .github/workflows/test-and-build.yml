@@ -69,6 +69,7 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             candle-binding/target/
+            onnx-binding/target/debug/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
@@ -135,6 +136,9 @@ jobs:
 
       - name: Build Rust library (CPU-only, no CUDA)
         run: make rust-ci
+
+      - name: Check ONNX replacement binding and router compile
+        run: make check-router-onnx
 
       # Reuse the CPU bindings above and gate protection before external services
       # or model downloads. The report includes per-turn failures on regression.

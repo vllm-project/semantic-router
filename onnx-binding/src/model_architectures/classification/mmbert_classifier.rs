@@ -486,10 +486,7 @@ impl MmBertSequenceClassifier {
                                 return Ok(session);
                             }
                             Err(e) => {
-                                println!(
-                                    "WARNING: CUDA EP failed: {}, falling back to CPU",
-                                    e
-                                );
+                                println!("WARNING: CUDA EP failed: {}, falling back to CPU", e);
                             }
                         }
                     }

@@ -140,8 +140,11 @@ fn get_tok_classifiers() -> &'static Mutex<HashMap<String, MmBertTokenClassifier
 ///
 /// # Returns
 /// true on success, false on error
+///
+/// # Safety
+/// Non-null `name` and `model_path` must be valid null-terminated C strings.
 #[no_mangle]
-pub extern "C" fn init_sequence_classifier(
+pub unsafe extern "C" fn init_sequence_classifier(
     name: *const c_char,
     model_path: *const c_char,
     use_gpu: bool,
@@ -202,8 +205,11 @@ pub extern "C" fn init_sequence_classifier(
 ///
 /// # Returns
 /// true on success, false on error
+///
+/// # Safety
+/// Non-null `name` and `model_path` must be valid null-terminated C strings.
 #[no_mangle]
-pub extern "C" fn init_token_classifier(
+pub unsafe extern "C" fn init_token_classifier(
     name: *const c_char,
     model_path: *const c_char,
     use_gpu: bool,
@@ -256,8 +262,11 @@ pub extern "C" fn init_token_classifier(
 }
 
 /// Check if a classifier is loaded
+///
+/// # Safety
+/// A non-null `name` must be a valid null-terminated C string.
 #[no_mangle]
-pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
+pub unsafe extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
     if name.is_null() {
         return false;
     }
@@ -288,8 +297,14 @@ pub extern "C" fn is_classifier_loaded(name: *const c_char) -> bool {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// Non-null input strings must be valid null-terminated C strings. A non-null
+/// `result` must be aligned, writable, and exclusively borrowed for the call.
+/// Free any previous result contents before reuse, and release returned contents
+/// with `free_classification_result`.
 #[no_mangle]
-pub extern "C" fn classify_text(
+pub unsafe extern "C" fn classify_text(
     classifier_name: *const c_char,
     text: *const c_char,
     result: *mut ClassificationResultFFI,
@@ -373,8 +388,14 @@ pub extern "C" fn classify_text(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// Non-null input strings must be valid null-terminated C strings. A non-null
+/// `result` must be aligned, writable, and exclusively borrowed for the call.
+/// Free any previous result contents before reuse, and release returned contents
+/// with `free_pii_result`, including when this function reports an error.
 #[no_mangle]
-pub extern "C" fn detect_pii(
+pub unsafe extern "C" fn detect_pii(
     classifier_name: *const c_char,
     text: *const c_char,
     result: *mut PIIResultFFI,
@@ -477,8 +498,13 @@ pub extern "C" fn detect_pii(
 // ============================================================================
 
 /// Free classification result
+///
+/// # Safety
+/// A non-null `result` must exclusively reference a valid result returned by
+/// `classify_text` or an element returned by `classify_batch`. Its non-null
+/// allocations and lengths must be unchanged and must not have been freed.
 #[no_mangle]
-pub extern "C" fn free_classification_result(result: *mut ClassificationResultFFI) {
+pub unsafe extern "C" fn free_classification_result(result: *mut ClassificationResultFFI) {
     if result.is_null() {
         return;
     }
@@ -492,7 +518,7 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
         }
 
         if !r.probabilities.is_null() && r.num_classes > 0 {
-            let _ = Box::from_raw(std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 r.probabilities,
                 r.num_classes as usize,
             ));
@@ -502,8 +528,13 @@ pub extern "C" fn free_classification_result(result: *mut ClassificationResultFF
 }
 
 /// Free PII result
+///
+/// # Safety
+/// A non-null `result` must exclusively reference a valid result returned by
+/// `detect_pii`. Its non-null allocations and lengths must be unchanged and
+/// must not have been freed.
 #[no_mangle]
-pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
+pub unsafe extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
     if result.is_null() {
         return;
     }
@@ -548,8 +579,15 @@ pub extern "C" fn free_pii_result(result: *mut PIIResultFFI) {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+///
+/// # Safety
+/// Non-null `classifier_name` and text entries must be valid null-terminated C
+/// strings. For positive `num_texts`, non-null `texts` and `results` must address
+/// that many initialized input pointers and writable output elements,
+/// respectively. Outputs must be exclusively borrowed and have no live prior
+/// allocations; free each populated result with `free_classification_result`.
 #[no_mangle]
-pub extern "C" fn classify_batch(
+pub unsafe extern "C" fn classify_batch(
     classifier_name: *const c_char,
     texts: *const *const c_char,
     num_texts: i32,
@@ -605,7 +643,7 @@ pub extern "C" fn classify_batch(
                     Box::into_raw(classification.probabilities.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = ClassificationResultFFI {
+                    *results.add(i) = ClassificationResultFFI {
                         label: label_cstr.into_raw(),
                         class_id: classification.class_id,
                         confidence: classification.confidence,
@@ -623,7 +661,7 @@ pub extern "C" fn classify_batch(
             eprintln!("Error: batch classification failed: {:?}", e);
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = ClassificationResultFFI::default();
+                    *results.add(i) = ClassificationResultFFI::default();
                 }
             }
             -1

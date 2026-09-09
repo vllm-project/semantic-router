@@ -227,6 +227,101 @@ class GateTests(unittest.TestCase):
         self.assertTrue(validate_results({"changes": {"result": "failure"}}, {}))
 
 
+class OnnxBuildContractTests(unittest.TestCase):
+    def test_core_checks_onnx_replacement_before_runtime_services(self):
+        workflow = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text()
+        )
+        steps = workflow["jobs"]["test-and-build"]["steps"]
+        commands = [step.get("run", "") for step in steps]
+        self.assertLess(
+            commands.index("make rust-ci"), commands.index("make check-router-onnx")
+        )
+        service_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("name") == "Start Milvus service"
+        )
+        check_index = next(
+            index
+            for index, step in enumerate(steps)
+            if step.get("run") == "make check-router-onnx"
+        )
+        self.assertLess(check_index, service_index)
+        cache = next(
+            step for step in steps if step.get("name") == "Cache Rust dependencies"
+        )
+        self.assertIn("onnx-binding/target/debug/", cache["with"]["path"])
+
+    def test_onnx_target_checks_real_module_selection_and_propagates_errors(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            (directory / "onnx-binding").mkdir()
+            (directory / "src/semantic-router").mkdir(parents=True)
+            binaries = directory / "tools"
+            binaries.mkdir()
+            log = directory / "commands.jsonl"
+            for name in ("cargo", "go"):
+                executable = binaries / name
+                executable.write_text(
+                    "#!/usr/bin/env python3\n"
+                    "import json, os, sys\n"
+                    "from pathlib import Path\n"
+                    "tool = Path(sys.argv[0]).name\n"
+                    "with open(os.environ['COMMAND_LOG'], 'a') as log:\n"
+                    "    log.write(json.dumps({'tool':tool, 'args':sys.argv[1:], "
+                    "'skip_download':os.getenv('ORT_SKIP_DOWNLOAD'), "
+                    "'cgo':os.getenv('CGO_ENABLED')}) + '\\n')\n"
+                    "failure = os.getenv('FAIL_COMMAND', '')\n"
+                    "if failure == 'cargo' and tool == 'cargo': sys.exit(91)\n"
+                    "if failure == 'router' and tool == 'go' and 'build' in sys.argv: sys.exit(92)\n"
+                )
+                executable.chmod(0o755)
+            for failure in ("", "cargo", "router"):
+                with self.subTest(failure=failure):
+                    log.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        [
+                            "make",
+                            "-s",
+                            "-f",
+                            str(REPO_ROOT / "tools/make/build-run-test.mk"),
+                            "check-router-onnx",
+                            "LOG_TARGET=:",
+                        ],
+                        cwd=directory,
+                        env={
+                            **os.environ,
+                            "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+                            "COMMAND_LOG": str(log),
+                            "FAIL_COMMAND": failure,
+                            "TMPDIR": str(directory),
+                        },
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    calls = [json.loads(line) for line in log.read_text().splitlines()]
+                    if failure:
+                        self.assertNotEqual(result.returncode, 0)
+                        if failure == "cargo":
+                            self.assertEqual(len(calls), 1)
+                        continue
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(
+                        [call["tool"] for call in calls], ["cargo", "cargo", "go", "go"]
+                    )
+                    for call in calls[:2]:
+                        self.assertEqual(call["skip_download"], "1")
+                        self.assertIn("ort/load-dynamic", call["args"])
+                    self.assertEqual(calls[2]["args"], ["test", "-count=1", "./..."])
+                    self.assertEqual(calls[3]["cgo"], "1")
+                    self.assertIn("-modfile=go.onnx.mod", calls[3]["args"])
+                    self.assertIn("-tags=onnx", calls[3]["args"])
+                    self.assertEqual(calls[3]["args"][-1], "./cmd")
+                    self.assertEqual(list(directory.glob("router-onnx-contract.*")), [])
+
+
 class PublicationTests(unittest.TestCase):
     def test_release_qualification_uses_exact_sha_and_latest_attempt(self):
         run = {
