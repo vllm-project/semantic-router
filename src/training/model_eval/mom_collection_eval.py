@@ -419,6 +419,17 @@ def load_model_and_tokenizer(model_name: str, args):
         raise
 
 
+def batch_row_count(batch: dict) -> int:
+    """Return the number of rows in a slice of a HuggingFace ``Dataset``.
+
+    Slicing a ``Dataset`` gives back a dict of column name -> list of values,
+    not a list of rows, so ``len(batch)`` is the column count. Every column
+    carries one entry per row, so any column's length is the row count. This
+    also gives the right answer for a short final batch.
+    """
+    return len(next(iter(batch.values())))
+
+
 def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
     """Evaluate a single model with comprehensive error handling."""
     config = MODEL_REGISTRY[model_name]
@@ -493,7 +504,8 @@ def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
                         all_truths.append(true_labels[:min_len])
 
                 batch_time = (time.time() - start) * 1000
-                lats.extend([batch_time / len(batch)] * len(batch))
+                rows = batch_row_count(batch)
+                lats.extend([batch_time / rows] * rows)
 
             except torch.cuda.OutOfMemoryError:
                 logger.error(
