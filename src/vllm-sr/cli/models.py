@@ -385,6 +385,22 @@ class JailbreakRule(BaseModel):
     description: Optional[str] = None
 
 
+class HallucinationRule(BaseModel):
+    """Hallucination signal configuration.
+
+    Checks the model's answer against the grounding context the request
+    carried, so it is observed at the response stage and consumed by the
+    selected decision's hallucination plugin; decision rules cannot read it.
+    """
+
+    name: str
+    # Ask the detector for span-level NLI explanations. A detection setting,
+    # so it lives on the rule; the plugin's use_nli is ignored once a rule
+    # is declared.
+    use_nli: bool = False
+    description: Optional[str] = None
+
+
 class PIIRule(BaseModel):
     """PII detection signal configuration."""
 
@@ -591,6 +607,7 @@ class Signals(BaseModel):
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
+    hallucination: Optional[List[HallucinationRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []

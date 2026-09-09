@@ -61,25 +61,26 @@ const (
 
 // Signal type constants for rule conditions.
 const (
-	SignalTypeKeyword      = "keyword"
-	SignalTypeEmbedding    = "embedding"
-	SignalTypeDomain       = "domain"
-	SignalTypeFactCheck    = "fact_check"
-	SignalTypeUserFeedback = "user_feedback"
-	SignalTypeReask        = "reask"
-	SignalTypePreference   = "preference"
-	SignalTypeLanguage     = "language"
-	SignalTypeContext      = "context"
-	SignalTypeStructure    = "structure"
-	SignalTypeComplexity   = "complexity"
-	SignalTypeModality     = "modality"
-	SignalTypeAuthz        = "authz"
-	SignalTypeJailbreak    = "jailbreak"
-	SignalTypePII          = "pii"
-	SignalTypeKB           = "kb"
-	SignalTypeConversation = "conversation"
-	SignalTypeEvent        = "event"
-	SignalTypeProjection   = "projection"
+	SignalTypeKeyword       = "keyword"
+	SignalTypeEmbedding     = "embedding"
+	SignalTypeDomain        = "domain"
+	SignalTypeFactCheck     = "fact_check"
+	SignalTypeUserFeedback  = "user_feedback"
+	SignalTypeReask         = "reask"
+	SignalTypePreference    = "preference"
+	SignalTypeLanguage      = "language"
+	SignalTypeContext       = "context"
+	SignalTypeStructure     = "structure"
+	SignalTypeComplexity    = "complexity"
+	SignalTypeModality      = "modality"
+	SignalTypeAuthz         = "authz"
+	SignalTypeJailbreak     = "jailbreak"
+	SignalTypeHallucination = "hallucination"
+	SignalTypePII           = "pii"
+	SignalTypeKB            = "kb"
+	SignalTypeConversation  = "conversation"
+	SignalTypeEvent         = "event"
+	SignalTypeProjection    = "projection"
 )
 
 // API format constants for model backends.
@@ -87,6 +88,10 @@ const (
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
+	// APIFormatImages selects the DALL-E-compatible image-generation dialect
+	// (/v1/images/generations), used to sink responses hosted image_generation
+	// requests to diffusion backends.
+	APIFormatImages = "images"
 )
 
 // ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).

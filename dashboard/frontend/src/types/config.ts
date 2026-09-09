@@ -112,6 +112,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean // Ask the detector for span-level NLI explanations
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -285,6 +291,7 @@ export interface Signals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   conversation?: ConversationSignal[]
   metadata?: MetadataSignal[]
@@ -591,6 +598,7 @@ export function hasFlatSignals(config: unknown): boolean {
     (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
     (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
     (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
+    (Array.isArray(root?.hallucination) && root.hallucination.length > 0) ||
     (Array.isArray(root?.pii) && root.pii.length > 0)
   )
 }

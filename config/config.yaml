@@ -481,6 +481,16 @@ routing:
         threshold: 0.85
         description: Detect jailbreak content in the model's own output.
 
+    # Hallucination rules check the model's answer against the grounding
+    # context the request carried (tool results or retrieved context), so they
+    # only exist once the model has answered; the selected decision's
+    # hallucination plugin enforces on them. use_nli asks the detector for
+    # span-level NLI explanations.
+    hallucination:
+      - name: ungrounded_claims
+        use_nli: true
+        description: Detect claims the grounding context does not support.
+
     pii:
       - name: restricted_pii
         threshold: 0.85

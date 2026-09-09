@@ -253,6 +253,9 @@ func materializedProviderProfile(
 	if effective.CatalogBinding != nil {
 		reasoningModes = append([]string(nil), effective.CatalogBinding.ReasoningModes...)
 		reasoningEfforts = append([]string(nil), effective.CatalogBinding.ReasoningEfforts...)
+		if protocolEfforts, ok := effective.CatalogBinding.ReasoningEffortsByProtocol[effective.Binding.Protocol]; ok {
+			reasoningEfforts = append([]string(nil), protocolEfforts...)
+		}
 	}
 	return ProviderProfile{
 		Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,

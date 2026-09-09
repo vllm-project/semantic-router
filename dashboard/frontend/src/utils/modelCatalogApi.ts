@@ -259,6 +259,31 @@ function isValidReasoningEffortFlags(value: Record<string, unknown>): boolean {
   )
 }
 
+function isReasoningEffortsByProtocol(
+  value: unknown,
+  protocols: unknown,
+  reasoningEfforts: unknown,
+): value is Record<string, string[]> | undefined {
+  if (value === undefined) return true
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length === 0 ||
+    !isStringArray(protocols) ||
+    !isStringArray(reasoningEfforts)
+  ) {
+    return false
+  }
+  const boundProtocols = new Set(protocols)
+  const providerEfforts = new Set(reasoningEfforts)
+  return Object.entries(value).every(
+    ([protocol, efforts]) =>
+      boundProtocols.has(protocol) &&
+      isStringArray(efforts) &&
+      new Set(efforts).size === efforts.length &&
+      efforts.every((effort) => providerEfforts.has(effort)),
+  )
+}
+
 function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
   return (
     isRecord(value) &&
@@ -287,6 +312,11 @@ function isCatalogModelBinding(value: unknown): value is CatalogModelBinding {
           ['enabled', 'disabled', 'adaptive'].includes(mode),
         ))) &&
     (value.reasoning_efforts === undefined || isStringArray(value.reasoning_efforts)) &&
+    isReasoningEffortsByProtocol(
+      value.reasoning_efforts_by_protocol,
+      value.protocols,
+      value.reasoning_efforts,
+    ) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
     isRecord(value.verification) &&
     ['claimed', 'imported', 'reproduced'].includes(String(value.verification.status))

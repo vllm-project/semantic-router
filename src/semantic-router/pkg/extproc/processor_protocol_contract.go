@@ -304,6 +304,12 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
+	// The Images wire predates the protocol catalog and is not registered
+	// there; keep its canonical path stable instead of falling back to the
+	// chat-completions default.
+	if format == llmprotocol.OpenAIImagesV1 {
+		return "/v1/images/generations"
+	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"

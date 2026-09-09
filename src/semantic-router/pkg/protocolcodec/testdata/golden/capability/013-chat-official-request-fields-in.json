@@ -6,6 +6,7 @@
   },
   "cases": [
     {"name": "audio", "patch": {"audio": {"format": "wav", "voice": "alloy"}}},
+    {"name": "chat_template_kwargs", "patch": {"chat_template_kwargs": {"enable_thinking": false}}},
     {"name": "frequency_penalty", "patch": {"frequency_penalty": 0.25}},
     {"name": "function_call", "patch": {"function_call": "auto"}},
     {"name": "functions", "patch": {"functions": [{"name": "lookup", "parameters": {"type": "object"}}]}},

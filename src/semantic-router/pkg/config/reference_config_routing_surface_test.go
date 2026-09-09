@@ -10,6 +10,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypeEmbedding:     "embeddings",
 	SignalTypeFactCheck:     "fact_check",
 	SignalTypeJailbreak:     "jailbreak",
+	SignalTypeHallucination: "hallucination",
 	SignalTypeKeyword:       "keywords",
 	SignalTypeLanguage:      "language",
 	SignalTypeModality:      "modality",

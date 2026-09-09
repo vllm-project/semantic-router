@@ -19,6 +19,7 @@ export type SignalType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'hallucination'
   | 'pii'
   | 'kb'
   | 'conversation'
@@ -521,6 +522,11 @@ export interface ConfigData {
     direction?: 'request' | 'response'
     description?: string
   }>
+  hallucination?: Array<{
+    name: string
+    use_nli?: boolean
+    description?: string
+  }>
   pii?: Array<{
     name: string
     threshold?: number
@@ -674,6 +680,11 @@ export interface ConfigData {
       threshold?: number
       include_history?: boolean
       direction?: 'request' | 'response'
+      description?: string
+    }>
+    hallucination?: Array<{
+      name: string
+      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{

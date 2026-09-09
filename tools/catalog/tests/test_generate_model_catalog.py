@@ -192,7 +192,182 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 self.assertIn(
                     physical_models[model_id]["lifecycle"], {"active", "experimental"}
                 )
-        self.assertNotIn("openai/gpt-6-astra", physical_models)
+        self.assertIn("openai/gpt-6-astra", physical_models)
+
+    def test_gpt_6_astra_day_zero_contract_is_complete(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        models = {model["id"]: model for model in resources["models"]}
+        astra = models["openai/gpt-6-astra"]
+        self.assertEqual(
+            astra["limits"],
+            {
+                "context_window_size": 1_050_000,
+                "max_output_tokens": 128_000,
+            },
+        )
+        self.assertEqual(astra["knowledge_cutoff"], "2026-04-30")
+        self.assertEqual(astra["reasoning_family"], "gpt-6-astra")
+        self.assertTrue(
+            {"chat", "reasoning", "tools", "structured_output", "vision"}.issubset(
+                astra["capabilities"]
+            )
+        )
+
+        families = {family["id"]: family for family in resources["reasoning_families"]}
+        reasoning = families["gpt-6-astra"]
+        self.assertEqual(reasoning["levels"], ["low", "medium", "high", "xhigh", "max"])
+        self.assertEqual(reasoning["modes"], ["enabled"])
+        self.assertNotIn("disabled", reasoning)
+        self.assertNotIn(
+            "default",
+            reasoning,
+            "the official Astra model page does not publish a default effort",
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        binding = next(
+            item
+            for item in providers["openai"]["models"]
+            if item["catalog"] == "openai/gpt-6-astra"
+        )
+        self.assertEqual(binding["id"], "gpt-6-astra")
+        self.assertEqual(
+            binding["protocols"],
+            ["openai/chat-completions@1", "openai/responses@1"],
+        )
+        self.assertEqual(binding["reasoning_modes"], ["enabled"])
+        self.assertEqual(binding["reasoning_efforts"], reasoning["levels"])
+        self.assertEqual(
+            binding["reasoning_efforts_by_protocol"],
+            {
+                "openai/chat-completions@1": [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                ]
+            },
+        )
+        self.assertEqual(
+            binding["pricing"],
+            {
+                "currency": "USD",
+                "prompt_per_1m": 10.0,
+                "cached_input_per_1m": 1.0,
+                "cache_write_per_1m": 12.5,
+                "completion_per_1m": 50.0,
+            },
+        )
+        self.assertEqual(
+            binding["restrictions"],
+            {
+                "tools_protocols": ["openai/responses@1"],
+                "long_context_pricing": {
+                    "input_threshold_tokens": 272000,
+                    "prompt_multiplier": 2.0,
+                    "cached_input_multiplier": 2.0,
+                    "cache_write_multiplier": 2.0,
+                    "completion_multiplier": 1.5,
+                },
+                "unsupported_request_fields": {
+                    "openai/chat-completions@1": [
+                        "temperature",
+                        "top_p",
+                        "top_logprobs",
+                        "logprobs",
+                    ],
+                    "openai/responses@1": [
+                        "temperature",
+                        "top_p",
+                        "top_logprobs",
+                    ],
+                },
+                "unsupported_include_values": ["message.output_text.logprobs"],
+            },
+        )
+
+        evaluations = [
+            item
+            for item in resources["evaluations"]
+            if item["model"] == "openai/gpt-6-astra"
+        ]
+        launch_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("openai/gpt-6-astra-launch-")
+        ]
+        self.assertEqual(len(launch_evaluations), 5)
+        self.assertEqual(
+            {item["benchmark"] for item in launch_evaluations},
+            {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "cais/humanitys-last-exam@1.0.0",
+                "datacurve/deep-swe@1.1.0",
+                "arc-prize/arc-agi-1@1.0.0",
+                "arc-prize/arc-agi-2@1.0.0",
+            },
+        )
+        self.assertTrue(
+            all(
+                item["reasoning_effort"] == "unspecified" for item in launch_evaluations
+            )
+        )
+        self.assertTrue(
+            all(
+                item["subject"]["result_selection"]
+                == "maximum_across_supported_efforts"
+                for item in launch_evaluations
+            )
+        )
+        self.assertTrue(
+            all(
+                item["evidence"]["provenance"] == "vendor_claimed"
+                for item in launch_evaluations
+            )
+        )
+
+        independent_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("independent/gpt-6-astra-")
+        ]
+        independent_efforts = {"low", "medium", "high", "xhigh", "max"}
+        independent_benchmarks = {
+            "idavidrein/gpqa-diamond@1.0.0",
+            "cais/humanitys-last-exam@1.0.0",
+            "harbor/terminal-bench@2.1.0",
+            "scicode-bench/scicode@1.0.0",
+        }
+        self.assertEqual(len(independent_evaluations), 20)
+        self.assertEqual(
+            {
+                (item["reasoning_effort"], item["benchmark"])
+                for item in independent_evaluations
+            },
+            {
+                (effort, benchmark)
+                for effort in independent_efforts
+                for benchmark in independent_benchmarks
+            },
+        )
+        self.assertTrue(
+            all(
+                item["evidence"]["provenance"] == "third_party"
+                and item["evidence"]["verification"] == "imported"
+                and item["subject"]["run_kind"] == "independent"
+                for item in independent_evaluations
+            )
+        )
+
+        openai_inventory = next(
+            creator
+            for creator in manifest["inventory"]["physical"]["creators"]
+            if creator["publisher"] == "OpenAI"
+        )
+        self.assertEqual(
+            openai_inventory["representative_models"],
+            ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
+        )
 
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
@@ -632,6 +807,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {
                 "openai/gpt-5.4",
                 "openai/gpt-5.5",
+                "openai/gpt-6-astra",
                 "openai/gpt-5.6-luna",
                 "openai/gpt-5.6-sol",
                 "openai/gpt-5.6-terra",
