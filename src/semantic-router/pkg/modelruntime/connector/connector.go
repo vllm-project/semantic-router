@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // Operation describes one static operation in a remote model protocol. Path
@@ -147,9 +150,41 @@ func (c *Client) Do(ctx context.Context, operation Operation, body []byte) ([]by
 	return result.Body, nil
 }
 
+// connectorOutcome maps a call's result onto the metrics outcome label: the
+// success constant, or the connector's own error kind, so a dashboard can tell
+// a down remote from an overloaded or misconfigured one.
+//
+// Every failure path returns an *Error, so the fallback is unreachable today;
+// it stays because a metrics label must never be the reason a call panics, and
+// it is named in the metric's help so an operator who does see it knows it
+// means "an error this code did not classify".
+func connectorOutcome(err error) string {
+	if err == nil {
+		return metrics.RemoteConnectorOutcomeSuccess
+	}
+	var connectorErr *Error
+	if errors.As(err, &connectorErr) {
+		return string(connectorErr.Kind)
+	}
+	return metrics.RemoteConnectorOutcomeUnclassified
+}
+
 // DoRequest invokes an operation with per-call headers and returns the bounded
 // successful response together with its status code and attempt count.
+//
+// Every call is recorded once, however it ended, with the wall time the caller
+// actually waited - retries included - so a remote classifier's health is
+// visible to whoever operates it rather than only to the signal that failed.
+// The measurement sits here rather than on Do so a caller that needs
+// per-request headers is measured too.
 func (c *Client) DoRequest(ctx context.Context, operation Operation, request Request) (Result, error) {
+	start := time.Now()
+	result, err := c.doRequest(ctx, operation, request)
+	metrics.RecordRemoteConnectorRequest(operation.Name, connectorOutcome(err), time.Since(start).Seconds())
+	return result, err
+}
+
+func (c *Client) doRequest(ctx context.Context, operation Operation, request Request) (Result, error) {
 	if err := validateOperation(operation); err != nil {
 		return Result{}, &Error{Kind: KindRequest, Operation: operation.Name, Cause: err}
 	}
@@ -181,6 +216,11 @@ func (c *Client) DoRequest(ctx context.Context, operation Operation, request Req
 				Cause:     err,
 			}
 		}
+		// Counted only once the wait completed: a context cancelled during the
+		// backoff means the retry never happens, and counting it would put the
+		// retry rate above the real attempt count - the very ratio a dashboard
+		// reads as "flapping under the retry budget".
+		metrics.RecordRemoteConnectorRetry(operation.Name)
 	}
 }
 
