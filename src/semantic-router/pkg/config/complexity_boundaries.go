@@ -120,6 +120,29 @@ func (r ComplexityRule) EffectiveBoundaries() (ComplexityBoundaries, error) {
 	}
 
 	threshold := float64(r.Threshold)
+	// The same two guards the explicit pair gets, because threshold expands
+	// into a pair and a bad value fails just as quietly.
+	//
+	// Non-finite: every comparison against NaN is false, so the rule answers
+	// medium for every score.
+	//
+	// Negative: the pair becomes hard at a negative cut and easy at a positive
+	// one, so Verdict's hard test - score above HardAt - is true for nearly
+	// every score and the easy band is unreachable. The rule reads as
+	// "escalate a little" and behaves as "escalate everything".
+	if math.IsNaN(threshold) || math.IsInf(threshold, 0) {
+		return ComplexityBoundaries{}, fmt.Errorf(
+			"complexity rule %q has a non-finite threshold (%v); a threshold must be a finite number",
+			r.Name, threshold)
+	}
+	if threshold < 0 {
+		return ComplexityBoundaries{}, fmt.Errorf(
+			"complexity rule %q has a negative threshold (%v): threshold is a distance from zero, "+
+				"applied symmetrically as hard above +threshold and easy below -threshold, so a "+
+				"negative value overlaps the two bands and makes easy unreachable. Use a positive "+
+				"value, or state hard_below with easy_above if a lower score should mean harder",
+			r.Name, threshold)
+	}
 	return ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}, nil
 }
 

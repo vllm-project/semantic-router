@@ -160,3 +160,51 @@ func TestComplexityBoundaries_RejectsNonFiniteValues(t *testing.T) {
 		}
 	}
 }
+
+// threshold expands into the same pair the explicit fields declare, so it
+// needs the same two guards. A non-finite value makes every comparison false
+// and the rule answers medium for everything; a negative one puts hard at a
+// negative cut and easy at a positive one, so Verdict's hard test is true for
+// nearly every score and easy is unreachable - the rule reads as "escalate a
+// little" and behaves as "escalate everything".
+func TestComplexityBoundaries_RejectsUnusableThreshold(t *testing.T) {
+	cases := map[string]ComplexityRule{
+		"NaN threshold":      {Name: "r", Threshold: float32(math.NaN())},
+		"+Inf threshold":     {Name: "r", Threshold: float32(math.Inf(1))},
+		"-Inf threshold":     {Name: "r", Threshold: float32(math.Inf(-1))},
+		"negative threshold": {Name: "r", Threshold: -0.1},
+	}
+
+	for name, rule := range cases {
+		if _, err := rule.EffectiveBoundaries(); err == nil {
+			t.Errorf("%s: expected an unusable threshold to be rejected", name)
+		}
+	}
+}
+
+// The shapes that must keep working: a positive threshold, and an omitted one
+// (which collapses both cut points onto zero, the long-standing default for a
+// rule that states no threshold at all).
+func TestComplexityBoundaries_AcceptsUsableThreshold(t *testing.T) {
+	cases := map[string]ComplexityRule{
+		"positive": {Name: "r", Threshold: 0.1},
+		"omitted":  {Name: "r"},
+	}
+
+	for name, rule := range cases {
+		bounds, err := rule.EffectiveBoundaries()
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		// Widened through float64 exactly as EffectiveBoundaries does: a
+		// float32 0.1 is 0.10000000149011612 as a float64, so comparing
+		// against the literal would fail on precision rather than on
+		// behaviour.
+		want := float64(rule.Threshold)
+		if bounds.HardAt != want || bounds.EasyAt != -want || !bounds.HigherIsHarder {
+			t.Errorf("%s: boundaries = %+v, want hard %v / easy %v, higher-is-harder",
+				name, bounds, want, -want)
+		}
+	}
+}
