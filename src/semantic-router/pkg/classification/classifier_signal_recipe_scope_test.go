@@ -60,9 +60,9 @@ func TestRecipeClassifiersIsolateMetadataSignals(t *testing.T) {
 	if !ok {
 		t.Fatal("private recipe classifier is unavailable")
 	}
-	privateResults, err := privateClassifier.EvaluateAllSignals(input)
+	privateResults, err := privateClassifier.EvaluateAllSignalsWithIdentity(input)
 	if err != nil {
-		t.Fatalf("private EvaluateAllSignals() error = %v", err)
+		t.Fatalf("private EvaluateAllSignalsWithIdentity() error = %v", err)
 	}
 	if len(privateResults.MatchedMetadataRules) != 1 {
 		t.Fatalf("private metadata signal did not match: %v", privateResults.MatchedMetadataRules)
@@ -72,9 +72,9 @@ func TestRecipeClassifiersIsolateMetadataSignals(t *testing.T) {
 	if !ok {
 		t.Fatal("public recipe classifier is unavailable")
 	}
-	publicResults, err := publicClassifier.EvaluateAllSignals(input)
+	publicResults, err := publicClassifier.EvaluateAllSignalsWithIdentity(input)
 	if err != nil {
-		t.Fatalf("public EvaluateAllSignals() error = %v", err)
+		t.Fatalf("public EvaluateAllSignalsWithIdentity() error = %v", err)
 	}
 	if len(publicResults.MatchedMetadataRules) != 0 {
 		t.Fatalf(

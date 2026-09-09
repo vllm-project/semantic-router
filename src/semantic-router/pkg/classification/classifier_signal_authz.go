@@ -31,10 +31,11 @@ type SignalEvaluationInput struct {
 	RequestFacts           RequestFacts
 }
 
-// EvaluateAllSignals evaluates the selected recipe's signals, including authz
-// role bindings. Authz errors are returned to the caller so a missing identity
-// cannot silently bypass policy.
-func (c *Classifier) EvaluateAllSignals(input SignalEvaluationInput) (*SignalResults, error) {
+// EvaluateAllSignalsWithIdentity evaluates the selected recipe's signals,
+// including authz role bindings, using the ingress-derived identity. Authz
+// errors are returned to the caller so a missing identity cannot silently
+// bypass policy.
+func (c *Classifier) EvaluateAllSignalsWithIdentity(input SignalEvaluationInput) (*SignalResults, error) {
 	results := c.evaluateAllSignalsWithContext(
 		input.Text,
 		input.ContextText,
