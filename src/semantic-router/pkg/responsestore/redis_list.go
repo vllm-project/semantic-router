@@ -11,6 +11,25 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
+// readIndexWindowScript snapshots each ZSET member together with its
+// generation witness. The ZSET and HASH share a Redis Cluster hash tag, so a
+// later conditional prune can prove it is still removing the same generation
+// this window observed.
+var readIndexWindowScript = redis.NewScript(`
+local members
+if ARGV[3] == "1" then
+	members = redis.call("ZRANGE", KEYS[1], ARGV[1], ARGV[2])
+else
+	members = redis.call("ZREVRANGE", KEYS[1], ARGV[1], ARGV[2])
+end
+local result = {}
+for _, response_id in ipairs(members) do
+	table.insert(result, response_id)
+	table.insert(result, redis.call("HGET", KEYS[2], response_id) or "")
+end
+return result
+`)
+
 // ListResponsesByConversation lists a conversation's responses via the
 // secondary index, at a cost proportional to the requested page rather than
 // the keyspace or even the conversation's full history (see
@@ -97,43 +116,82 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // trade-off (blueprint §5 Phase 4): topping up short pages by re-reading
 // further windows would turn a bug fix into a pagination redesign.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
-	responseIDs, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
+	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
 	if err != nil {
 		return nil, err
 	}
-	if len(responseIDs) == 0 {
+	if len(witnesses) == 0 {
 		return nil, nil
 	}
 
-	fetched, missingIDs, err := s.fetchResponsesPipelined(ctx, responseIDs)
-	if err != nil {
-		return nil, err
+	responseIDs := make([]string, len(witnesses))
+	for i, witness := range witnesses {
+		responseIDs[i] = witness.responseID
 	}
+	results := fetchResponsePayloadsPipelined(ctx, s.client, responseKeys(s, responseIDs))
 
-	// Payloads expire on their own TTL; their index entries do not. Pruning keeps
-	// a long-lived conversation's index from growing without bound. Best-effort:
-	// a failure here just costs the same prune again on the next listing.
-	if err := s.unindexResponse(ctx, conversationID, missingIDs...); err != nil {
-		logging.Warnf("RedisStore: failed to prune %d stale index entr(y/ies) from conversation %s: %v",
-			len(missingIDs), conversationID, err)
-	}
-
-	// Guard against an entry left behind by a response that moved
-	// conversation: prune it from this conversation's index too, not just
-	// filter it from this page, since it will never legitimately belong here.
-	responses := make([]*responseapi.StoredResponse, 0, len(fetched))
-	for _, response := range fetched {
-		if response.ConversationID == conversationID {
+	responses := make([]*responseapi.StoredResponse, 0, len(results))
+	toPrune := make([]responseGenerationWitness, 0, len(results))
+	for i, result := range results {
+		witness := witnesses[i]
+		response, prune := evaluateIndexedResponse(conversationID, witness, result)
+		if prune {
+			toPrune = append(toPrune, witness)
+		}
+		if response != nil {
 			responses = append(responses, response)
-			continue
 		}
-		if err := s.unindexResponse(ctx, conversationID, response.ID); err != nil {
-			logging.Warnf("RedisStore: failed to prune response %s moved out of conversation %s: %v",
-				response.ID, conversationID, err)
-		}
+	}
+
+	if err := s.unindexResponseGenerations(ctx, conversationID, toPrune...); err != nil {
+		logging.Warnf("RedisStore: failed to prune %d stale index entr(y/ies) from conversation %s: %v",
+			len(toPrune), conversationID, err)
 	}
 
 	return responses, nil
+}
+
+// evaluateIndexedResponse classifies one generation-snapshotted membership.
+// Legacy payloads remain readable but can never authorize pruning.
+func evaluateIndexedResponse(
+	conversationID string,
+	witness responseGenerationWitness,
+	result responsePayloadResult,
+) (*responseapi.StoredResponse, bool) {
+	if errors.Is(result.err, redis.Nil) {
+		return nil, witness.generation != ""
+	}
+	if result.err != nil {
+		logging.Warnf("RedisStore: failed to get response %s: %v", witness.responseID, result.err)
+		return nil, false
+	}
+
+	record, err := decodeResponseRecord(result.raw)
+	if err != nil {
+		logging.Warnf("RedisStore: failed to parse response %s: %v", witness.responseID, err)
+		return nil, false
+	}
+	if record.generation == "" {
+		if record.response.ConversationID == conversationID {
+			return record.response, false
+		}
+		return nil, false
+	}
+	if witness.generation == "" {
+		return nil, false
+	}
+	if record.generation != witness.generation || record.response.ConversationID != conversationID {
+		return nil, true
+	}
+	return record.response, false
+}
+
+func responseKeys(store *RedisStore, responseIDs []string) []string {
+	keys := make([]string, len(responseIDs))
+	for i, responseID := range responseIDs {
+		keys[i] = store.buildKey(ResponseKeyPrefix + responseID)
+	}
+	return keys
 }
 
 // normalizedListOptions is ListOptions after validation and defaulting:
@@ -190,7 +248,7 @@ func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, erro
 // ID that is not currently a member of the index (evicted, wrong
 // conversation, typo'd by the caller) yields an empty page rather than an
 // error: the same behavior as an ordinary page with nothing left to return.
-func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, normalized normalizedListOptions) ([]string, error) {
+func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, normalized normalizedListOptions) ([]responseGenerationWitness, error) {
 	indexKey := s.conversationIndexKey(conversationID)
 	ascending := normalized.Order == "asc"
 
@@ -202,7 +260,7 @@ func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID 
 		return nil, nil
 	}
 
-	return s.readIndexRange(ctx, indexKey, ascending, start, end)
+	return s.readIndexRange(ctx, conversationID, ascending, start, end)
 }
 
 // rankInIndex resolves a cursor response ID's rank in the given order (asc:
@@ -261,18 +319,28 @@ func (s *RedisStore) resolveListWindow(ctx context.Context, indexKey string, asc
 
 // readIndexRange reads one inclusive rank window [start, end] in the given
 // order (asc: ZRANGE, desc: ZREVRANGE).
-func (s *RedisStore) readIndexRange(ctx context.Context, indexKey string, ascending bool, start, end int64) ([]string, error) {
-	var idsCmd *redis.StringSliceCmd
+func (s *RedisStore) readIndexRange(ctx context.Context, conversationID string, ascending bool, start, end int64) ([]responseGenerationWitness, error) {
+	direction := 0
 	if ascending {
-		idsCmd = s.client.ZRange(ctx, indexKey, start, end)
-	} else {
-		idsCmd = s.client.ZRevRange(ctx, indexKey, start, end)
+		direction = 1
 	}
-
-	ids, err := idsCmd.Result()
+	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
+	result, err := readIndexWindowScript.Run(ctx, s.client, keys, start, end, direction).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read conversation index window: %w", err)
 	}
-
-	return ids, nil
+	items, ok := result.([]interface{})
+	if !ok || len(items)%2 != 0 {
+		return nil, fmt.Errorf("unexpected conversation index window result: %#v", result)
+	}
+	witnesses := make([]responseGenerationWitness, 0, len(items)/2)
+	for i := 0; i < len(items); i += 2 {
+		responseID, idOK := items[i].(string)
+		generation, generationOK := items[i+1].(string)
+		if !idOK || !generationOK {
+			return nil, fmt.Errorf("unexpected conversation index window member types %T/%T", items[i], items[i+1])
+		}
+		witnesses = append(witnesses, responseGenerationWitness{responseID: responseID, generation: generation})
+	}
+	return witnesses, nil
 }

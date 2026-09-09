@@ -2,8 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -96,136 +94,6 @@ func TestUpdateResponseRollsBackAfterContextCancellation(t *testing.T) {
 		"a rolled-back update must leave the response discoverable, not stranded between two conversations")
 }
 
-// updateCleanupRaceInjectionPoint says where a competing update is made to
-// land relative to the cleanup it races.
-type updateCleanupRaceInjectionPoint int
-
-const (
-	// beforeCleanup lands it after the new conversation's index write and so
-	// before the cleanup starts — the reviewer's scenario, where the
-	// competing update had already run to completion. Anchored on a command
-	// every implementation issues, so this reproduces the bug against an
-	// unconditional removal as well as demonstrating the fix.
-	beforeCleanup updateCleanupRaceInjectionPoint = iota
-	// insideCleanup lands it between the cleanup's read of the payload and
-	// its removal — the window that stays open because Redis Cluster will not
-	// let the two be one atomic command.
-	insideCleanup
-)
-
-// updateCleanupRaceHook lands a complete, committed competing update — one
-// that moved the response back into the conversation an in-flight update is
-// about to prune it from — at one of those two points.
-//
-// The write goes through a genuinely separate client, as a real concurrent
-// writer's would: reusing the client the hook is installed on makes the
-// injected commands reentrant into that same hook chain, which go-redis does
-// not handle as a simple nested call.
-type updateCleanupRaceHook struct {
-	at            updateCleanupRaceInjectionPoint
-	payloadKey    string
-	previousIndex string
-	newIndex      string
-	response      *responseapi.StoredResponse
-	client        *redis.Client
-	fired         atomic.Bool
-}
-
-func (h *updateCleanupRaceHook) DialHook(next redis.DialHook) redis.DialHook { return next }
-
-// ProcessHook carries the beforeCleanup anchor: the index write that moves the
-// response into its new conversation, which is the last thing an update does
-// before cleaning up the old one, whatever that cleanup looks like.
-func (h *updateCleanupRaceHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
-	return func(ctx context.Context, cmd redis.Cmder) error {
-		err := next(ctx, cmd)
-		if h.at != beforeCleanup || err != nil || !isIndexWriteFor(cmd, h.newIndex) || !h.fired.CompareAndSwap(false, true) {
-			return err
-		}
-		h.inject()
-		return err
-	}
-}
-
-// ProcessPipelineHook carries the insideCleanup anchor: the cleanup's own read
-// of the payload, the only pipelined GET of that key an update issues.
-func (h *updateCleanupRaceHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(ctx context.Context, cmds []redis.Cmder) error {
-		err := next(ctx, cmds)
-		if h.at != insideCleanup || !readsKey(cmds, h.payloadKey) || !h.fired.CompareAndSwap(false, true) {
-			return err
-		}
-		h.inject()
-		return err
-	}
-}
-
-// isIndexWriteFor reports whether cmd is conversationIndexAddScript aimed at
-// indexKey. EVAL/EVALSHA lay the key out after the verb, the script (or its
-// SHA), and the key count.
-func isIndexWriteFor(cmd redis.Cmder, indexKey string) bool {
-	if cmd.Name() != "eval" && cmd.Name() != "evalsha" {
-		return false
-	}
-	args := cmd.Args()
-	if len(args) < 4 {
-		return false
-	}
-	key, ok := args[3].(string)
-	return ok && key == indexKey
-}
-
-func readsKey(cmds []redis.Cmder, key string) bool {
-	for _, cmd := range cmds {
-		args := cmd.Args()
-		if cmd.Name() != "get" || len(args) < 2 {
-			continue
-		}
-		if got, ok := args[1].(string); ok && got == key {
-			return true
-		}
-	}
-	return false
-}
-
-// inject writes the payload first and the membership second, exactly as
-// UpdateResponse orders them, so what lands is a competing update that has
-// genuinely committed rather than a half-applied one.
-func (h *updateCleanupRaceHook) inject() {
-	ctx := context.Background()
-
-	payload, err := json.Marshal(h.response)
-	if err != nil {
-		panic(err)
-	}
-	if setErr := h.client.Set(ctx, h.payloadKey, payload, time.Minute).Err(); setErr != nil {
-		panic(setErr)
-	}
-	if zaddErr := h.client.ZAdd(ctx, h.previousIndex,
-		redis.Z{Score: float64(h.response.CreatedAt), Member: h.response.ID}).Err(); zaddErr != nil {
-		panic(zaddErr)
-	}
-}
-
-func newUpdateCleanupRaceHook(t *testing.T, store *RedisStore, previousConversationID, newConversationID, responseID string, at updateCleanupRaceInjectionPoint) *updateCleanupRaceHook {
-	t.Helper()
-
-	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	t.Cleanup(func() { _ = writer.Close() })
-
-	return &updateCleanupRaceHook{
-		at:            at,
-		payloadKey:    store.buildKey(ResponseKeyPrefix + responseID),
-		previousIndex: store.conversationIndexKey(previousConversationID),
-		newIndex:      store.conversationIndexKey(newConversationID),
-		response: &responseapi.StoredResponse{
-			ID: responseID, ConversationID: previousConversationID,
-			Status: "moved-back", CreatedAt: time.Now().Unix() + 1,
-		},
-		client: writer,
-	}
-}
-
 // TestUpdateResponseKeepsMembershipRestoredByConcurrentUpdate is the ABA
 // regression the reviewer described. An A->B update pauses before cleaning up
 // A; a B->A update completes and legitimately re-adds A's entry; the first
@@ -236,6 +104,7 @@ func newUpdateCleanupRaceHook(t *testing.T, store *RedisStore, previousConversat
 // repairs once the store is finalized.
 func TestUpdateResponseKeepsMembershipRestoredByConcurrentUpdate(t *testing.T) {
 	store := newConversationIndexStore(t)
+	writer := newConcurrentRedisStore(t, store)
 	background := context.Background()
 
 	const (
@@ -249,46 +118,24 @@ func TestUpdateResponseKeepsMembershipRestoredByConcurrentUpdate(t *testing.T) {
 	require.NoError(t, store.StoreResponse(background, original))
 	require.NoError(t, store.ensureConversationIndexResolved(background, fromConversation))
 
-	hook := newUpdateCleanupRaceHook(t, store, fromConversation, toConversation, responseID, beforeCleanup)
-	store.client.AddHook(hook)
-
-	moved := *original
-	moved.ConversationID = toConversation
-	require.NoError(t, store.UpdateResponse(background, &moved))
-	require.True(t, hook.fired.Load(), "the competing update must actually have been injected for this to mean anything")
-
-	assertResponseListedIn(t, store, fromConversation, responseID)
-}
-
-// TestUpdateResponseRestoresMembershipLostToCleanupRace covers the window the
-// check above cannot close on its own. Redis Cluster forbids a
-// compare-and-remove spanning the payload and index keys — they hash to
-// different slots, so such a script is rejected with CROSSSLOT — which leaves
-// the read and the removal as two round trips. A competing update landing
-// between them is removed anyway, and only the re-read afterwards puts it
-// back.
-func TestUpdateResponseRestoresMembershipLostToCleanupRace(t *testing.T) {
-	store := newConversationIndexStore(t)
-	background := context.Background()
-
-	const (
-		fromConversation = "conv_aba_window_from"
-		toConversation   = "conv_aba_window_to"
-		responseID       = "resp_aba_window"
-	)
-	original := &responseapi.StoredResponse{
-		ID: responseID, ConversationID: fromConversation, Status: "original", CreatedAt: time.Now().Unix(),
+	movedBack := *original
+	movedBack.ConversationID = fromConversation
+	movedBack.Status = "moved-back"
+	movedBack.CreatedAt++
+	var injectedErr error
+	hook := &commandInterleavingHook{
+		match: func(cmd redis.Cmder) bool {
+			return commandRunsScriptOnKey(cmd, store.conversationIndexKey(toConversation))
+		},
+		inject: func() { injectedErr = writer.UpdateResponse(context.Background(), &movedBack) },
 	}
-	require.NoError(t, store.StoreResponse(background, original))
-	require.NoError(t, store.ensureConversationIndexResolved(background, fromConversation))
-
-	hook := newUpdateCleanupRaceHook(t, store, fromConversation, toConversation, responseID, insideCleanup)
 	store.client.AddHook(hook)
 
 	moved := *original
 	moved.ConversationID = toConversation
 	require.NoError(t, store.UpdateResponse(background, &moved))
 	require.True(t, hook.fired.Load(), "the competing update must actually have been injected for this to mean anything")
+	require.NoError(t, injectedErr)
 
 	assertResponseListedIn(t, store, fromConversation, responseID)
 }

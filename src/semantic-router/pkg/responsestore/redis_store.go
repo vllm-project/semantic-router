@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -57,16 +58,23 @@ const (
 	ConversationKeyPrefix = "conversation:"
 
 	// ConversationIndexKeyPrefix for the sorted set of a conversation's response
-	// IDs, scored by created_at: sr:conversation-index:conv_xxxxx
+	// IDs, scored by created_at: sr:conversation-index:{escaped_conversation_id}
 	//
 	// Must not start with ConversationKeyPrefix, or the sr:conversation:* scan in
 	// ListConversations would read these sorted sets as conversation JSON.
 	ConversationIndexKeyPrefix = "conversation-index:"
 
+	// ConversationIndexGenerationKeyPrefix is the HASH sidecar containing
+	// response ID -> payload generation witnesses for a conversation index.
+	// conversationIndexKey and conversationIndexGenerationKey use the same
+	// escaped Redis hash tag so scripts may update the ZSET and HASH atomically
+	// in Cluster mode.
+	ConversationIndexGenerationKeyPrefix = "conversation-index-gen:"
+
 	// ConversationIndexMigratedKeyPrefix marks a conversation ID for which a
 	// legacy-scan backfill has completed — found responses to index, or
-	// confirmed none exist: sr:conversation-index-migrated:conv_xxxxx,
-	// value "v1".
+	// confirmed none exist: sr:conversation-index-migrated:conv_xxxxx. Values
+	// distinguish "v1:empty" from "v1:populated".
 	//
 	// This is deliberately a *different* signal from "the index key exists":
 	// a conversation can accumulate real indexed members from ordinary
@@ -169,21 +177,12 @@ const (
 	conversationIndexCascadeMaxRaceRounds = 8
 
 	// responseCompensationTimeout bounds the compensating writes that repair a
-	// response whose update or store only partly landed: an update's rollback
-	// and reindex, and the removal of a membership the response has moved out
-	// of.
+	// response whose update or store only partly landed: a payload rollback and,
+	// for updates, reindexing the freshly generated restored record.
 	//
-	// Those all run on a context detached from the caller's, so they need a
-	// deadline of their own rather than inheriting one — the same reasoning,
-	// and the same bound, as conversationIndexRestoreTimeout below.
+	// These run on a context detached from the caller's, so they need a deadline
+	// of their own rather than inheriting one.
 	responseCompensationTimeout = 5 * time.Second
-
-	// conversationIndexRestoreTimeout bounds the compensating write that puts
-	// unresolved members back into a conversation index after a cascade
-	// batch removed them optimistically (restoreConversationIndexMembers).
-	// That write runs on a context deliberately detached from the caller's,
-	// so it needs a deadline of its own rather than inheriting one.
-	conversationIndexRestoreTimeout = 5 * time.Second
 
 	// ConversationIndexCompletionKeySuffix is a single global (not per-
 	// conversation) key: sr:conversation-index-complete:v1, value
@@ -217,18 +216,6 @@ const (
 	// one's completion.
 	conversationIndexCompletionValue = "v1"
 )
-
-// compareDeleteScript deletes KEYS[1] only if its current value equals
-// ARGV[1]. Single-key: legal in Redis Cluster with no hash-tagging needed.
-// Used to roll back a response payload after its index write fails, without
-// risking a blind DEL of a value a concurrent writer stored in the same slot
-// after the original payload's TTL expired.
-var compareDeleteScript = redis.NewScript(`
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-	return redis.call("DEL", KEYS[1])
-end
-return 0
-`)
 
 // The function validates configuration, establishes connection, and tests connectivity.
 func NewRedisStore(config StoreConfig) (*RedisStore, error) {
@@ -486,9 +473,22 @@ func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix
 }
 
+// conversationIndexTag escapes arbitrary conversation IDs into a brace-free
+// Redis Cluster hash tag. Raw URL base64 contains neither '{' nor '}', so the
+// ZSET and generation HASH keys below are guaranteed to select the same slot.
+func conversationIndexTag(conversationID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(conversationID))
+}
+
 // conversationIndexKey returns the sorted set indexing a conversation's responses.
 func (s *RedisStore) conversationIndexKey(conversationID string) string {
-	return s.buildKey(ConversationIndexKeyPrefix + conversationID)
+	return s.buildKey(ConversationIndexKeyPrefix + "{" + conversationIndexTag(conversationID) + "}")
+}
+
+// conversationIndexGenerationKey returns the HASH containing the generation
+// witness for each response ID in a conversation's ZSET.
+func (s *RedisStore) conversationIndexGenerationKey(conversationID string) string {
+	return s.buildKey(ConversationIndexGenerationKeyPrefix + "{" + conversationIndexTag(conversationID) + "}")
 }
 
 // conversationIndexMigratedKey returns the marker set once a legacy-scan

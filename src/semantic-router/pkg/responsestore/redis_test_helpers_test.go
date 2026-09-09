@@ -262,6 +262,16 @@ func mustMarshalResponse(t *testing.T, response *responseapi.StoredResponse) []b
 	return data
 }
 
+// mustMarshalGeneratedResponse writes the production flat JSON shape and
+// returns both its bytes and UUID-v4 generation for generation-CAS tests.
+func mustMarshalGeneratedResponse(t *testing.T, response *responseapi.StoredResponse) ([]byte, string) {
+	t.Helper()
+	generation := newResponseGeneration()
+	data, err := marshalResponseRecord(response, generation)
+	require.NoError(t, err)
+	return data, generation
+}
+
 func responseIDsOf(responses []*responseapi.StoredResponse) []string {
 	ids := make([]string, len(responses))
 	for i, r := range responses {

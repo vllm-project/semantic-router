@@ -178,11 +178,13 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 	require.NoError(t, getErr)
 	assert.Equal(t, []byte("not valid json"), raw)
 
-	// Repair the payload and retry: the cascade completes cleanly.
-	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure"),
-		mustMarshalResponse(t, &responseapi.StoredResponse{
-			ID: "resp_cascade_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
-		}), store.ttl).Err())
+	// Repair the payload as a new generated record and refresh its witness;
+	// legacy bytes cannot authorize destructive cleanup.
+	repaired, repairedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
+		ID: "resp_cascade_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"resp_cascade_failure"), repaired, store.ttl).Err())
+	require.NoError(t, store.indexResponse(ctx, convID, "resp_cascade_failure", repairedGeneration, time.Now().Unix(), store.ttlMillis()))
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 	_, getErr = store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, getErr, ErrNotFound)
@@ -191,11 +193,8 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 // TestRedisDeleteConversationCascadeLegacyUnindexed covers a cascade delete
 // against a conversation whose responses were never indexed — pre-#2814
 // legacy data, or a write from an indexing-unaware pod mid rolling upgrade.
-// Before deleteConversationResponses resolved the index first, this case
-// regressed the pre-#2814 scan-based cascade: an absent index made the
-// batch-delete loop exit immediately having deleted nothing, silently
-// orphaning the legacy payload forever once the conversation record itself
-// was gone.
+// The backfill may discover and list it, but without a generation neither
+// payload nor membership can safely authorize destructive cleanup.
 func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -213,20 +212,23 @@ func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 	require.Empty(t, conversationIndexMembers(t, store, convID),
 		"precondition: no index should exist yet for legacy data")
 
-	require.NoError(t, store.DeleteConversation(ctx, convID, true))
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no generation witness")
 
-	_, err := store.GetResponse(ctx, "resp_cascade_legacy")
-	assert.ErrorIs(t, err, ErrNotFound, "the legacy unindexed response must be deleted by the cascade, not orphaned")
+	_, err = store.GetResponse(ctx, "resp_cascade_legacy")
+	assert.NoError(t, err, "legacy payload must survive generation-less destructive cleanup")
 	_, err = store.GetConversation(ctx, convID)
-	assert.ErrorIs(t, err, ErrNotFound)
+	assert.NoError(t, err, "the conversation remains as the retry/migration anchor")
 }
 
 // TestRedisDeleteConversationCascadePartiallyMigrated is the cascade-delete
 // counterpart to TestRedisListResponsesByConversationPartiallyMigrated: a
 // conversation whose index exists (from an ordinary post-upgrade write) but
 // still has an older, unindexed legacy response sitting alongside it must
-// have *both* responses deleted, not just the one the index happens to
-// already list.
+// fail closed when backfill discovers a generation-less member. Independently
+// verified generated records in the same bounded batch may already be
+// deleted; the conversation remains the retry/migration anchor.
 func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -247,12 +249,14 @@ func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 	require.Zero(t, exists(t, store, store.conversationIndexMigratedKey(convID)),
 		"precondition: no backfill has run yet, despite the index already existing")
 
-	require.NoError(t, store.DeleteConversation(ctx, convID, true))
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no generation witness")
 
-	_, err := store.GetResponse(ctx, "resp_old")
-	assert.ErrorIs(t, err, ErrNotFound, "the legacy response must be deleted, not orphaned because the index didn't list it")
+	_, err = store.GetResponse(ctx, "resp_old")
+	assert.NoError(t, err)
 	_, err = store.GetResponse(ctx, "resp_new")
 	assert.ErrorIs(t, err, ErrNotFound)
 	_, err = store.GetConversation(ctx, convID)
-	assert.ErrorIs(t, err, ErrNotFound)
+	assert.NoError(t, err)
 }

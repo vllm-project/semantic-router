@@ -27,6 +27,16 @@ end
 return redis.call("PEXPIRE", KEYS[1], ARGV[2])
 `)
 
+// conditionalDeleteValueScript is intentionally scoped to opaque lease
+// tokens. Response payload CAS uses _vsr_generation instead and has no
+// byte-equality fallback.
+var conditionalDeleteValueScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) ~= ARGV[1] then
+	return 0
+end
+return redis.call("DEL", KEYS[1])
+`)
+
 // randomScanLeaseToken generates a cryptographically random lease token, so
 // two concurrent acquisition attempts can never collide on a guessable
 // value and mistake each other for the same holder.
@@ -66,10 +76,9 @@ func (s *RedisStore) renewConversationIndexScanLease(ctx context.Context, token 
 
 // releaseConversationIndexScanLease compare-deletes the lease, so a holder
 // can never release a lease it doesn't currently own (one that already
-// expired and was re-acquired by someone else). Reuses
-// compareDeleteResponsePayload's single-key compare-delete primitive.
+// expired and was re-acquired by someone else).
 func (s *RedisStore) releaseConversationIndexScanLease(ctx context.Context, token string) error {
-	if _, err := s.compareDeleteResponsePayload(ctx, s.conversationIndexScanLeaseKey(), []byte(token)); err != nil {
+	if err := conditionalDeleteValueScript.Run(ctx, s.client, []string{s.conversationIndexScanLeaseKey()}, token).Err(); err != nil {
 		return fmt.Errorf("failed to release conversation index scan lease: %w", err)
 	}
 	return nil

@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -34,10 +33,11 @@ const (
 	conversationIndexProofPopulated conversationIndexProof = "v1:populated"
 )
 
-// conversationIndexAddScript adds members to KEYS[1] and, in the same atomic
-// step, makes sure the key's expiry covers at least ARGV[1] milliseconds.
-// ARGV[1] <= 0 means "this index must never expire"; ARGV[2..] are score,
-// member pairs, and may be empty to ask only about the lifetime.
+// conversationIndexAddScript atomically updates a conversation's response
+// ZSET (KEYS[1]) and generation-witness HASH (KEYS[2]). The keys carry the
+// same escaped conversation hash tag, so this remains legal in Redis Cluster.
+// ARGV[1] is the required lifetime; the remaining arguments are score,
+// response ID, generation triples.
 //
 // The expiry is only ever raised, never lowered. A conversation index must
 // outlive every live payload it names, or a read finds no index and — once the
@@ -58,38 +58,93 @@ const (
 // cannot express this (it reads a missing TTL as infinite), quite apart from
 // making Redis 7.0 a hard runtime requirement.
 //
-// Single-key: KEYS[1] only, so it stays legal in Redis Cluster. Callers keep
-// members within redisBackfillBatchSize, so the unpack below stays far inside
-// Lua's argument limit.
+// A legacy member has no generation. It may be added only with ZADD NX and
+// never receives a witness: generation-less records cannot authorize a later
+// prune or CAS delete. New writes update the ZSET member and HASH witness in
+// one atomic step. The two keys are extended to the same monotonic lifetime,
+// so the witness cannot expire before the membership it protects.
 var conversationIndexAddScript = redis.NewScript(`
-local existing = redis.call("PTTL", KEYS[1])
-if #ARGV > 1 then
-	redis.call("ZADD", KEYS[1], unpack(ARGV, 2))
+local zset_ttl = redis.call("PTTL", KEYS[1])
+local generation_ttl = redis.call("PTTL", KEYS[2])
+
+for i = 2, #ARGV, 3 do
+	local score = ARGV[i]
+	local response_id = ARGV[i + 1]
+	local generation = ARGV[i + 2]
+	if generation == "" then
+		if redis.call("HEXISTS", KEYS[2], response_id) == 0 then
+			redis.call("ZADD", KEYS[1], "NX", score, response_id)
+		end
+	else
+		redis.call("ZADD", KEYS[1], score, response_id)
+		redis.call("HSET", KEYS[2], response_id, generation)
+	end
 end
+
 if redis.call("EXISTS", KEYS[1]) == 0 then
+	redis.call("DEL", KEYS[2])
 	return 0
 end
+
 local want = tonumber(ARGV[1])
-if want <= 0 then
-	if existing >= 0 then
+local generation_exists = redis.call("EXISTS", KEYS[2]) == 1
+if generation_exists then
+	if want <= 0 or zset_ttl == -1 or generation_ttl == -1 then
 		redis.call("PERSIST", KEYS[1])
+		redis.call("PERSIST", KEYS[2])
+		return 1
 	end
+	local shared_ttl = want
+	if zset_ttl > shared_ttl then shared_ttl = zset_ttl end
+	if generation_ttl > shared_ttl then shared_ttl = generation_ttl end
+	redis.call("PEXPIRE", KEYS[1], shared_ttl)
+	redis.call("PEXPIRE", KEYS[2], shared_ttl)
 	return 1
 end
-if existing == -1 or (existing >= 0 and existing >= want) then
+
+if want <= 0 or zset_ttl == -1 then
+	redis.call("PERSIST", KEYS[1])
 	return 1
 end
-redis.call("PEXPIRE", KEYS[1], want)
+if zset_ttl < want then redis.call("PEXPIRE", KEYS[1], want) end
 return 1
 `)
 
+// conditionalUnindexScript removes response IDs only while their sidecar
+// witness still equals the generation observed by the caller. ZREM and HDEL
+// are one same-slot atomic operation. Blank generations never authorize a
+// removal, so legacy members fail closed.
+var conditionalUnindexScript = redis.NewScript(`
+local removed = 0
+for i = 1, #ARGV, 2 do
+	local response_id = ARGV[i]
+	local expected = ARGV[i + 1]
+	if expected ~= "" and redis.call("HGET", KEYS[2], response_id) == expected then
+		removed = removed + redis.call("ZREM", KEYS[1], response_id)
+		redis.call("HDEL", KEYS[2], response_id)
+	end
+end
+return removed
+`)
+
+type conversationIndexMember struct {
+	responseID string
+	generation string
+	score      float64
+}
+
+type responseGenerationWitness struct {
+	responseID string
+	generation string
+}
+
 // conversationIndexAddArgs builds conversationIndexAddScript's ARGV: the
 // requested lifetime, then each member's score and value.
-func conversationIndexAddArgs(lifetimeMillis int64, members []redis.Z) []interface{} {
-	args := make([]interface{}, 0, 1+2*len(members))
+func conversationIndexAddArgs(lifetimeMillis int64, members []conversationIndexMember) []interface{} {
+	args := make([]interface{}, 0, 1+3*len(members))
 	args = append(args, lifetimeMillis)
 	for _, member := range members {
-		args = append(args, member.Score, member.Member)
+		args = append(args, member.score, member.responseID, member.generation)
 	}
 	return args
 }
@@ -97,8 +152,9 @@ func conversationIndexAddArgs(lifetimeMillis int64, members []redis.Z) []interfa
 // addConversationIndexMembers runs conversationIndexAddScript as a standalone
 // command. EVALSHA with go-redis's NOSCRIPT fallback, which is only available
 // outside a pipeline.
-func (s *RedisStore) addConversationIndexMembers(ctx context.Context, indexKey string, lifetimeMillis int64, members []redis.Z) error {
-	return conversationIndexAddScript.Run(ctx, s.client, []string{indexKey}, conversationIndexAddArgs(lifetimeMillis, members)...).Err()
+func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversationID string, lifetimeMillis int64, members []conversationIndexMember) error {
+	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
+	return conversationIndexAddScript.Run(ctx, s.client, keys, conversationIndexAddArgs(lifetimeMillis, members)...).Err()
 }
 
 // queueConversationIndexMembers queues the same script onto an existing
@@ -109,8 +165,9 @@ func (s *RedisStore) addConversationIndexMembers(ctx context.Context, indexKey s
 // until Exec, so a NOSCRIPT against a Redis that has never seen this script
 // would fail the whole batch. Redis caches by SHA on EVAL too, so the only
 // cost is shipping the script body once per conversation in the batch.
-func queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, indexKey string, lifetimeMillis int64, members []redis.Z) {
-	conversationIndexAddScript.Eval(ctx, pipe, []string{indexKey}, conversationIndexAddArgs(lifetimeMillis, members)...)
+func (s *RedisStore) queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, conversationID string, lifetimeMillis int64, members []conversationIndexMember) {
+	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
+	conversationIndexAddScript.Eval(ctx, pipe, keys, conversationIndexAddArgs(lifetimeMillis, members)...)
 }
 
 // longerIndexLifetime folds one member payload's remaining lifetime into the
@@ -142,8 +199,9 @@ func longerIndexLifetime(want, candidate int64) int64 {
 // follows Redis's PTTL convention — -1 never expires, unknownPayloadTTL means
 // there was nothing left to measure.
 type scannedResponse struct {
-	response  *responseapi.StoredResponse
-	ttlMillis int64
+	response   *responseapi.StoredResponse
+	generation string
+	ttlMillis  int64
 }
 
 // indexLifetime is how long this response's index membership must remain
@@ -185,37 +243,37 @@ func (r scannedResponse) indexLifetime(storeTTLMillis int64) int64 {
 // rollback is restoring a snapshot with whatever was left of the original,
 // and a repair is re-indexing a payload written at some earlier time. The
 // index is extended to cover it and never shortened — see
-// extendConversationIndexLifetimeScript for why that matters.
-func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID string, createdAt, memberLifetimeMillis int64) error {
+// conversationIndexAddScript for why that matters.
+func (s *RedisStore) indexResponse(ctx context.Context, conversationID, responseID, generation string, createdAt, memberLifetimeMillis int64) error {
 	if conversationID == "" || responseID == "" {
 		return nil
 	}
-	indexKey := s.conversationIndexKey(conversationID)
 	lifetime := longerIndexLifetime(s.ttlMillis(), memberLifetimeMillis)
-	members := []redis.Z{{Score: float64(createdAt), Member: responseID}}
+	members := []conversationIndexMember{{responseID: responseID, generation: generation, score: float64(createdAt)}}
 
-	if err := s.addConversationIndexMembers(ctx, indexKey, lifetime, members); err != nil {
+	if err := s.addConversationIndexMembers(ctx, conversationID, lifetime, members); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
 	}
 
 	return nil
 }
 
-// unindexResponse drops response IDs from a conversation index. ZREM is
-// variadic but touches only one key (the zset), all members belong to the
-// same conversation index, so it stays Cluster safe.
-func (s *RedisStore) unindexResponse(ctx context.Context, conversationID string, responseIDs ...string) error {
-	if conversationID == "" || len(responseIDs) == 0 {
+// unindexResponseGenerations removes only generation witnesses the caller
+// actually observed. The ZSET and sidecar HASH are co-located and changed by
+// one script, preventing a stale reader from deleting a recreated member.
+func (s *RedisStore) unindexResponseGenerations(ctx context.Context, conversationID string, witnesses ...responseGenerationWitness) error {
+	if conversationID == "" || len(witnesses) == 0 {
 		return nil
 	}
 
-	members := make([]interface{}, len(responseIDs))
-	for i, responseID := range responseIDs {
-		members[i] = responseID
+	args := make([]interface{}, 0, 2*len(witnesses))
+	for _, witness := range witnesses {
+		args = append(args, witness.responseID, witness.generation)
 	}
 
-	if err := s.client.ZRem(ctx, s.conversationIndexKey(conversationID), members...).Err(); err != nil {
-		return fmt.Errorf("failed to remove %d response(s) from conversation %s index: %w", len(responseIDs), conversationID, err)
+	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
+	if err := conditionalUnindexScript.Run(ctx, s.client, keys, args...).Err(); err != nil {
+		return fmt.Errorf("failed to remove %d response(s) from conversation %s index: %w", len(witnesses), conversationID, err)
 	}
 
 	return nil
@@ -371,7 +429,7 @@ func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversa
 // beyond total.
 func (s *RedisStore) indexBackfillMatches(ctx context.Context, conversationID string, batch []scannedResponse, total *atomic.Int64) error {
 	storeTTL := s.ttlMillis()
-	members := make([]redis.Z, 0, min(len(batch), redisBackfillBatchSize))
+	members := make([]conversationIndexMember, 0, min(len(batch), redisBackfillBatchSize))
 	lifetime := storeTTL
 	flush := func() error {
 		if err := s.indexBackfillBatch(ctx, conversationID, members, lifetime); err != nil {
@@ -387,7 +445,11 @@ func (s *RedisStore) indexBackfillMatches(ctx context.Context, conversationID st
 		if scanned.response.ConversationID != conversationID {
 			continue
 		}
-		members = append(members, redis.Z{Score: float64(scanned.response.CreatedAt), Member: scanned.response.ID})
+		members = append(members, conversationIndexMember{
+			responseID: scanned.response.ID,
+			generation: scanned.generation,
+			score:      float64(scanned.response.CreatedAt),
+		})
 		lifetime = longerIndexLifetime(lifetime, scanned.indexLifetime(storeTTL))
 		if len(members) >= redisBackfillBatchSize {
 			if err := flush(); err != nil {
@@ -419,7 +481,7 @@ func (s *RedisStore) finishEmptyBackfill(ctx context.Context, conversationID str
 // bring it back down to s.ttl. Both steps are best-effort; see
 // markConversationMigrated.
 func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID string) {
-	if err := s.addConversationIndexMembers(ctx, s.conversationIndexKey(conversationID), s.ttlMillis(), nil); err != nil {
+	if err := s.addConversationIndexMembers(ctx, conversationID, s.ttlMillis(), nil); err != nil {
 		logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
 			conversationID, err)
 	}
@@ -437,11 +499,11 @@ func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID
 // callback invocation, potentially from several concurrent goroutines (one
 // per Cluster master) at once; each call is independent and idempotent, so
 // no coordination between concurrent callers is needed.
-func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID string, members []redis.Z, lifetimeMillis int64) error {
+func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID string, members []conversationIndexMember, lifetimeMillis int64) error {
 	if len(members) == 0 {
 		return nil
 	}
-	if err := s.addConversationIndexMembers(ctx, s.conversationIndexKey(conversationID), lifetimeMillis, members); err != nil {
+	if err := s.addConversationIndexMembers(ctx, conversationID, lifetimeMillis, members); err != nil {
 		return fmt.Errorf("failed to backfill conversation index: %w", err)
 	}
 	return nil
@@ -589,19 +651,23 @@ func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.Uni
 	results := fetchResponsePayloadsAndTTLsPipelined(ctx, client, keys)
 	responses := make([]scannedResponse, 0, len(keys))
 	for i, result := range results {
-		response, err := s.decodeScannedResponse(keys[i], result)
+		record, err := s.decodeScannedResponse(keys[i], result)
 		if err != nil {
 			return nil, err
 		}
-		if response != nil {
-			responses = append(responses, scannedResponse{response: response, ttlMillis: result.ttlMillis})
+		if record != nil {
+			responses = append(responses, scannedResponse{
+				response:   record.response,
+				generation: record.generation,
+				ttlMillis:  result.ttlMillis,
+			})
 		}
 	}
 
 	return responses, nil
 }
 
-func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadResult) (*responseapi.StoredResponse, error) {
+func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadResult) (*responseRecord, error) {
 	if result.err != nil {
 		if errors.Is(result.err, redis.Nil) {
 			return nil, nil
@@ -609,12 +675,12 @@ func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadRes
 		return nil, fmt.Errorf("failed to read response at key %s during scan: %w", key, result.err)
 	}
 
-	var response responseapi.StoredResponse
-	if err := json.Unmarshal(result.raw, &response); err != nil {
+	record, err := decodeResponseRecord(result.raw)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse response at key %s during scan: %w", key, err)
 	}
-	if response.ID == "" || s.buildKey(ResponseKeyPrefix+response.ID) != key {
+	if record.response.ID == "" || s.buildKey(ResponseKeyPrefix+record.response.ID) != key {
 		return nil, fmt.Errorf("response payload identity does not match key %s", key)
 	}
-	return &response, nil
+	return &record, nil
 }
