@@ -41,6 +41,7 @@ type shadowTestBackend struct {
 	mu      sync.Mutex
 	bodies  [][]byte
 	headers []http.Header
+	uris    []string
 	handler func(w http.ResponseWriter, body []byte)
 }
 
@@ -60,6 +61,7 @@ func newShadowTestBackendWithTLS(t *testing.T, useTLS bool) *shadowTestBackend {
 		backend.mu.Lock()
 		backend.bodies = append(backend.bodies, body)
 		backend.headers = append(backend.headers, r.Header.Clone())
+		backend.uris = append(backend.uris, r.URL.RequestURI())
 		handler := backend.handler
 		backend.mu.Unlock()
 		handler(w, body)
@@ -820,5 +822,94 @@ func TestShadowDispatchRejectsCrossOriginRedirect(t *testing.T) {
 	}
 	if got := shadowCounter(shadowTestDecision, metrics.ShadowDispatchResultFailed, shadowReasonRedirectRejected); got < 1 {
 		t.Fatalf("redirect_rejected metric = %v, want at least 1", got)
+	}
+}
+
+// TestShadowDispatchPreservesAzureAPIVersion proves an Azure OpenAI shadow
+// target reaches the deployment path with its api-version query and the
+// provider's api-key header, exactly as the primary dispatch would address it.
+func TestShadowDispatchPreservesAzureAPIVersion(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for i := range router.Config.VLLMEndpoints {
+		if router.Config.VLLMEndpoints[i].Name == "shadow-backend" {
+			router.Config.VLLMEndpoints[i].ProviderProfileName = "shadow-azure"
+		}
+	}
+	router.Config.ProviderProfiles["shadow-azure"] = config.ProviderProfile{
+		Type:       "azure-openai",
+		BaseURL:    backend.server.URL + "/openai/deployments/gpt-4o",
+		APIVersion: "2024-02-01",
+	}
+	shadowParams := router.Config.ModelConfig[shadowTestModel]
+	shadowParams.AccessKey = "shadow-key"
+	router.Config.ModelConfig[shadowTestModel] = shadowParams
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
+	waitForShadow(t, router)
+
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("azure shadow verdict=%q reason=%q error=%q, want completed",
+			outcome.Verdict, outcome.Reason, outcome.Metadata["error"])
+	}
+	if got := backend.requestCount(); got != 1 {
+		t.Fatalf("shadow backend requests = %d, want 1", got)
+	}
+	const wantURI = "/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01"
+	if got := backend.uris[0]; got != wantURI {
+		t.Fatalf("shadow request URI = %q, want %q", got, wantURI)
+	}
+	if got := backend.headers[0].Get("api-key"); got != "shadow-key" {
+		t.Fatalf("api-key = %q, want the shadow model's static key without a prefix", got)
+	}
+	if got := backend.headers[0].Get("Authorization"); got != "" {
+		t.Fatalf("azure shadow sent Authorization=%q", got)
+	}
+}
+
+func TestSplitShadowEndpoint(t *testing.T) {
+	tests := []struct {
+		name      string
+		endpoint  string
+		wantPath  string
+		wantQuery string
+		wantErr   bool
+	}{
+		{name: "plain path", endpoint: "/v1/chat/completions", wantPath: "/v1/chat/completions"},
+		{
+			name:      "azure api version",
+			endpoint:  "/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-01",
+			wantPath:  "/openai/deployments/gpt-4o/chat/completions",
+			wantQuery: "api-version=2024-02-01",
+		},
+		{
+			name:      "chat_path override with its own query",
+			endpoint:  "/custom/chat?tenant=acme&api-version=2024-02-01",
+			wantPath:  "/custom/chat",
+			wantQuery: "tenant=acme&api-version=2024-02-01",
+		},
+		{name: "relative path", endpoint: "chat/completions", wantErr: true},
+		{name: "absolute URL", endpoint: "https://other.example/v1/chat/completions", wantErr: true},
+		{name: "protocol-relative host", endpoint: "//other.example/v1/chat/completions", wantErr: true},
+		{name: "fragment", endpoint: "/v1/chat/completions#frag", wantErr: true},
+		{name: "malformed query escape", endpoint: "/v1/chat/completions?api-version=%zz", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, query, err := splitShadowEndpoint(tt.endpoint)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want error", tt.endpoint, path, query)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("splitShadowEndpoint(%q) error = %v", tt.endpoint, err)
+			}
+			if path != tt.wantPath || query != tt.wantQuery {
+				t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want %q, %q", tt.endpoint, path, query, tt.wantPath, tt.wantQuery)
+			}
+		})
 	}
 }

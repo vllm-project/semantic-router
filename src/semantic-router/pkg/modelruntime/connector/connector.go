@@ -15,11 +15,16 @@ import (
 	"time"
 )
 
-// Operation describes one static operation in a remote model protocol.
+// Operation describes one static operation in a remote model protocol. Path
+// is the absolute request path; Query, when set, is the already-encoded query
+// string without its leading "?", kept apart from Path so a provider version
+// selector such as Azure's api-version travels as a validated query rather
+// than as path text.
 type Operation struct {
 	Name      string
 	Method    string
 	Path      string
+	Query     string
 	RetrySafe bool
 }
 
@@ -189,6 +194,12 @@ func validateOperation(operation Operation) error {
 	if !strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#") {
 		return fmt.Errorf("operation path must be an absolute path without query or fragment")
 	}
+	if strings.ContainsAny(operation.Query, "?#") {
+		return fmt.Errorf("operation query must not contain a fragment or a second query marker")
+	}
+	if _, err := url.ParseQuery(operation.Query); err != nil {
+		return fmt.Errorf("operation query is not a valid query string: %w", err)
+	}
 	return nil
 }
 
@@ -231,6 +242,7 @@ func (c *Client) newRequest(
 	target := *c.baseURL
 	target.Path = path.Join(c.baseURL.Path, operation.Path)
 	target.RawPath = ""
+	target.RawQuery = operation.Query
 	httpRequest, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(request.Body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}

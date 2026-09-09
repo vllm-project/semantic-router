@@ -35,6 +35,7 @@ type shadowTarget struct {
 	format        llmprotocol.WireFormat
 	baseURL       string
 	path          string
+	query         string
 }
 
 type preparedShadowCall struct {
@@ -54,6 +55,7 @@ func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResul
 		Name:      shadowDispatchOperationName,
 		Method:    http.MethodPost,
 		Path:      prepared.target.path,
+		Query:     prepared.target.query,
 		RetrySafe: true,
 	}
 	response, err := prepared.client.DoRequest(ctx, operation, connector.Request{
@@ -223,6 +225,10 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	if err != nil {
 		return nil, fmt.Errorf("shadow model %q: %w", model, err)
 	}
+	endpointPath, endpointQuery, err := splitShadowEndpoint(shadowEndpointPath(profile, format))
+	if err != nil {
+		return nil, fmt.Errorf("shadow model %q: %w", model, err)
+	}
 	return &shadowTarget{
 		logicalModel:  model,
 		backendName:   backendName,
@@ -230,8 +236,35 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 		profile:       profile,
 		format:        format,
 		baseURL:       shadowEndpointScheme(cfg, backendName, profile) + "://" + address,
-		path:          shadowEndpointPath(profile, format),
+		path:          endpointPath,
+		query:         endpointQuery,
 	}, nil
+}
+
+// splitShadowEndpoint parses a resolved provider endpoint into the absolute
+// path and the query the connector sends separately. A provider profile may
+// append a query, as Azure OpenAI does with api-version, and an operator's
+// chat_path override is free text, so the value is validated here rather than
+// trusted: it must be a path-only reference with no scheme, host, or fragment,
+// and any query must parse.
+func splitShadowEndpoint(endpoint string) (string, string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return "", "", fmt.Errorf("parse endpoint path %q: %w", endpoint, err)
+	}
+	if parsed.Scheme != "" || parsed.Host != "" || parsed.User != nil || parsed.Opaque != "" {
+		return "", "", fmt.Errorf("endpoint path %q must not name a scheme or host", endpoint)
+	}
+	if parsed.Fragment != "" || parsed.RawFragment != "" || strings.Contains(endpoint, "#") {
+		return "", "", fmt.Errorf("endpoint path %q must not carry a fragment", endpoint)
+	}
+	if !strings.HasPrefix(parsed.Path, "/") {
+		return "", "", fmt.Errorf("endpoint path %q must be absolute", endpoint)
+	}
+	if _, err := url.ParseQuery(parsed.RawQuery); err != nil {
+		return "", "", fmt.Errorf("endpoint path %q has an invalid query: %w", endpoint, err)
+	}
+	return parsed.Path, parsed.RawQuery, nil
 }
 
 func shadowEndpointScheme(cfg *config.RouterConfig, backendName string, profile *config.ProviderProfile) string {
