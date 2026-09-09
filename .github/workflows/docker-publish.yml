@@ -88,72 +88,8 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: |
-          case "$IMAGE" in
-            anthropic-shim)
-              CONTEXT="./e2e/testing/anthropic-shim"
-              DOCKERFILE="./e2e/testing/anthropic-shim/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            dashboard)
-              CONTEXT="."
-              DOCKERFILE="./dashboard/backend/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            extproc)
-              CONTEXT="."
-              DOCKERFILE="./tools/docker/Dockerfile.extproc"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            extproc-rocm)
-              CONTEXT="."
-              DOCKERFILE="./tools/docker/Dockerfile.extproc-rocm"
-              PLATFORMS="linux/amd64"
-              ;;
-            llm-katan)
-              CONTEXT="./e2e/testing/llm-katan"
-              DOCKERFILE="./e2e/testing/llm-katan/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            operator)
-              CONTEXT="."
-              DOCKERFILE="./deploy/operator/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            operator-bundle)
-              CONTEXT="./deploy/operator"
-              DOCKERFILE="./deploy/operator/bundle/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            vllm-sr)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            vllm-sr-cuda)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile.cuda"
-              PLATFORMS="linux/amd64"
-              ;;
-            vllm-sr-rocm)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile.rocm"
-              PLATFORMS="linux/amd64"
-              ;;
-            vllm-sr-sim)
-              CONTEXT="."
-              DOCKERFILE="./src/fleet-sim/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            *)
-              echo "::error::Unknown image '$IMAGE'"
-              exit 1
-              ;;
-          esac
-          {
-            echo "context=$CONTEXT"
-            echo "dockerfile=$DOCKERFILE"
-            echo "platforms=$PLATFORMS"
-          } >> "$GITHUB_OUTPUT"
+          python3 -m pip install PyYAML==6.0.3
+          python3 tools/ci/docker_image_catalog.py "$IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Resolve publication tags
         id: tags
@@ -171,7 +107,7 @@ jobs:
               ;;
             nightly)
               NIGHTLY_DATE="$(date -u +'%Y%m%d')"
-              PRIMARY_TAG="nightly-${NIGHTLY_DATE}"
+              PRIMARY_TAG="nightly-${NIGHTLY_DATE}-${GITHUB_SHA}"
               ;;
             main)
               PRIMARY_TAG="${GITHUB_SHA}"
@@ -179,17 +115,23 @@ jobs:
               ;;
           esac
           TAGS="${IMAGE}:${PRIMARY_TAG}"
+          MUTABLE_TAGS=""
+          if [[ "$MODE" == "nightly" ]]; then
+            MUTABLE_TAGS="${IMAGE}:nightly-${NIGHTLY_DATE}"
+          fi
           if [[ "$MODE" == "nightly" ]] &&
              [[ "${{ matrix.image }}" =~ ^(anthropic-shim|llm-katan)$ ]]; then
-            TAGS="${TAGS},${IMAGE}:nightly"
+            MUTABLE_TAGS="${MUTABLE_TAGS},${IMAGE}:nightly"
           fi
           if [[ "$PUBLISH_LATEST" == "true" ]]; then
-            TAGS="${TAGS},${IMAGE}:latest"
+            MUTABLE_TAGS="${MUTABLE_TAGS:+${MUTABLE_TAGS},}${IMAGE}:latest"
           fi
           {
             echo "primary=$PRIMARY_TAG"
             echo "nightly_date=$NIGHTLY_DATE"
             echo "tags=$TAGS"
+            echo "image=$IMAGE"
+            echo "mutable_tags=$MUTABLE_TAGS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Resolve build arguments
@@ -203,7 +145,8 @@ jobs:
           NIGHTLY_DATE: ${{ steps.tags.outputs.nightly_date }}
         run: bash tools/ci/docker-build-args.sh
 
-      - name: Build and publish image
+      - name: Build and publish immutable image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ${{ steps.definition.outputs.context }}
@@ -215,3 +158,51 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-publish,ignore-error=true
           build-args: ${{ steps.build-args.outputs.args }}
           provenance: false
+
+      - name: Record built digest for promotion
+        env:
+          IMAGE: ${{ steps.tags.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          MODE: ${{ inputs.mode }}
+          MUTABLE_TAGS: ${{ steps.tags.outputs.mutable_tags }}
+        run: |
+          jq -n --arg image "$IMAGE" --arg digest "$DIGEST" --arg sha "$GITHUB_SHA" \
+            --arg mode "$MODE" --arg tags "$MUTABLE_TAGS" \
+            '{image:$image,digest:$digest,sha:$sha,mode:$mode,mutable_tags:($tags|split(",")|map(select(length>0)))}' \
+            > promotion.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: promotion-${{ inputs.mode }}-${{ matrix.image }}
+          path: promotion.json
+          retention-days: 7
+
+  promote:
+    name: Promote ${{ matrix.image }}
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.images) }}
+    concurrency:
+      group: image-promotion-${{ github.repository }}-${{ matrix.image }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: promotion-${{ inputs.mode }}-${{ matrix.image }}
+      - name: Promote the qualified digest in source order
+        run: python3 tools/ci/promote_image.py promotion.json

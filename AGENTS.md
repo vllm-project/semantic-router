@@ -10,14 +10,15 @@ decision and algorithm, which select a backend and recipe-scoped plugins.
 - Use `tools/agent/docs/change-surfaces.md` when a user-visible router contract
   crosses configuration, runtime, deployment, or documentation.
 - `tools/agent/domains.yaml` is the single changed-path registry for ownership,
-  minimum checks, CI jobs, images, and E2E profiles.
+  related checks, CI jobs, images, and E2E profiles.
 
 ```bash
 make impact ENV=cpu CHANGED_FILES="path/one path/two"
 make check CHANGED_FILES="path/one path/two"
+make fmt CHANGED_FILES="path/one path/two"  # explicitly apply formatting
 make verify DOMAIN=<domain>       # explicit integration check
 make verify PROFILE=<e2e-profile>
-make ci-full                      # complete local PR baseline
+make ci-full                      # local quality and core test/build baseline
 ```
 
 Use `make harness-check` after changing the registry, workflows, harness code,
@@ -41,12 +42,12 @@ prescribe a work loop, or decide when the task is complete.
 - Use the existing `vllm-sr serve` local-image flow for local runtime behavior.
 - Keep steady-state configuration canonical. Legacy layouts belong in explicit
   migration tooling, not the runtime parser.
-- A behavior-visible routing, startup, config, Docker, CLI, or API change needs
-  an appropriate integration or E2E assertion. Pure refactors do not.
+- A behavior change needs a test that proves it. Use integration or E2E when
+  correctness depends on interaction across components. Pure refactors do not
+  require new E2E coverage.
 - Generated artifacts and public docs change with their source contract.
-- Numeric file, function, nesting, and interface limits are review signals, not
-  architecture. Forbidden dependencies, new cycles, generated invariants, and
-  unowned root files remain blocking checks.
+- Forbidden dependencies, new cycles, generated invariants, and unowned root
+  files are blocking checks. Assess module cohesion through review.
 - Prefer cohesive modules. Split or extract when ownership becomes mixed, not
   to satisfy a line-count target.
 - Use an execution plan only for genuinely resumable multi-session work. Prefer

@@ -16,6 +16,10 @@ jobs:
     workflow: .github/workflows/test-and-build.yml
     output: core_test
     full: true
+  python-unit:
+    workflow: .github/workflows/python-unit.yml
+    output: python_unit
+    full: true
   dashboard:
     workflow: .github/workflows/dashboard-test.yml
     output: dashboard
@@ -68,6 +72,9 @@ domains:
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
+      - tools/dev/with_test_resources.py
+      - tools/dev/tests/**
+      - tools/kind/**
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
@@ -127,9 +134,10 @@ domains:
     paths:
       - src/vllm-sr/**
       - pyproject.toml
+      - e2e/testing/vllm-sr-cli/**
     checks: [make vllm-sr-test]
     verify: [make vllm-sr-test-integration]
-    ci_jobs: [core-tests]
+    ci_jobs: [python-unit]
     escalation:
       jobs: [cli]
       paths:
@@ -144,7 +152,7 @@ domains:
     owner: fleet-sim
     paths: [src/fleet-sim/**]
     checks: [make vllm-sr-sim-test]
-    ci_jobs: [core-tests]
+    ci_jobs: [python-unit]
 
   dashboard:
     owner: dashboard
@@ -279,15 +287,23 @@ domains:
       - tools/models/train-mmbert32k-gpu.sh
       - website/docs/training/**
     checks: [make test-training-contracts]
-    ci_jobs: []
+    ci_jobs: [python-unit]
 
 images:
   dashboard:
+    context: .
+    dockerfile: dashboard/backend/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64,linux/arm64
     pr_paths:
       - dashboard/**/Dockerfile*
       - tools/docker/Dockerfile.dashboard
     publish_paths: [dashboard/**]
   extproc:
+    context: .
+    dockerfile: tools/docker/Dockerfile.extproc
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths: [tools/docker/Dockerfile.extproc]
     publish_paths:
       - src/semantic-router/**
@@ -295,15 +311,31 @@ images:
       - candle-binding/**
       - tools/docker/Dockerfile.extproc
   extproc-rocm:
+    context: .
+    dockerfile: tools/docker/Dockerfile.extproc-rocm
+    platforms: linux/amd64
+    pr_platforms: linux/amd64
     pr_paths: [tools/docker/Dockerfile.extproc-rocm]
     publish_paths: [tools/docker/Dockerfile.extproc-rocm]
   operator:
+    context: .
+    dockerfile: deploy/operator/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
   operator-bundle:
-    pr_paths: [deploy/operator/bundle.Dockerfile]
+    context: deploy/operator
+    dockerfile: deploy/operator/bundle/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
+    pr_paths: [deploy/operator/bundle/Dockerfile]
     publish_paths: [deploy/operator/**]
   vllm-sr:
+    context: .
+    dockerfile: src/vllm-sr/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths:
       - src/vllm-sr/Dockerfile
       - tools/docker/Dockerfile.vllm-sr
@@ -315,6 +347,10 @@ images:
       - candle-binding/**
       - tools/docker/Dockerfile.vllm-sr
   vllm-sr-cuda:
+    context: .
+    dockerfile: src/vllm-sr/Dockerfile.cuda
+    platforms: linux/amd64
+    pr_platforms: linux/amd64
     pr_paths:
       - src/vllm-sr/Dockerfile.cuda
       - tools/docker/*cuda*
@@ -322,15 +358,31 @@ images:
       - src/vllm-sr/Dockerfile.cuda
       - tools/docker/*cuda*
   vllm-sr-rocm:
+    context: .
+    dockerfile: src/vllm-sr/Dockerfile.rocm
+    platforms: linux/amd64
+    pr_platforms: linux/amd64
     pr_paths: [src/vllm-sr/Dockerfile.rocm]
     publish_paths: [src/vllm-sr/Dockerfile.rocm]
   anthropic-shim:
+    context: e2e/testing/anthropic-shim
+    dockerfile: e2e/testing/anthropic-shim/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths: [e2e/testing/anthropic-shim/Dockerfile]
     publish_paths: []
   llm-katan:
+    context: e2e/testing/llm-katan
+    dockerfile: e2e/testing/llm-katan/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths: [e2e/testing/llm-katan/Dockerfile]
     publish_paths: []
   vllm-sr-sim:
+    context: .
+    dockerfile: src/fleet-sim/Dockerfile
+    platforms: linux/amd64,linux/arm64
+    pr_platforms: linux/amd64
     pr_paths: [src/fleet-sim/Dockerfile]
     publish_paths: [src/fleet-sim/**]
 

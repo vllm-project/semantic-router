@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
+import builtins
+import contextlib
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCANNER_PATH = Path(__file__).with_name("ast_security_scanner.py")
 SPEC = importlib.util.spec_from_file_location("ast_security_scanner", SCANNER_PATH)
@@ -16,6 +20,33 @@ SPEC.loader.exec_module(SCANNER)
 
 
 class ASTSecurityScannerTests(unittest.TestCase):
+    def test_missing_parser_fails_instead_of_reporting_a_clean_scan(self):
+        real_import = builtins.__import__
+
+        def missing_javascript(name, *args, **kwargs):
+            if name == "tree_sitter_javascript":
+                raise ImportError("parser intentionally unavailable")
+            return real_import(name, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "payload.js").write_text("eval(remotePayload)\n")
+            output = io.StringIO()
+            with (
+                mock.patch.dict(SCANNER.LANG_REGISTRY, clear=True),
+                mock.patch.dict(SCANNER.EXT_TO_LANG_FAMILY, clear=True),
+                mock.patch("builtins.__import__", side_effect=missing_javascript),
+                mock.patch.object(
+                    sys, "argv", ["scanner", "scan", directory, "--json"]
+                ),
+                contextlib.redirect_stdout(output),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as result,
+            ):
+                SCANNER.main()
+            self.assertEqual(result.exception.code, 2)
+            self.assertIn("tree_sitter_javascript", output.getvalue())
+            self.assertNotIn("[CLEAN]", output.getvalue())
+
     def test_project_allowlist_is_loaded_from_security_tool_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             allowlist_path = (

@@ -141,7 +141,9 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 		return fmt.Errorf("failed to apply dashboard PVC: %w", err)
 	}
 
-	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, dashboardE2EDeploymentManifest); err != nil {
+	if err := framework.WithLocalImages(dashboardE2EDeploymentManifest, opts.LocalImages, func(path string) error {
+		return p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, path)
+	}); err != nil {
 		return fmt.Errorf("failed to apply dashboard deployment: %w", err)
 	}
 

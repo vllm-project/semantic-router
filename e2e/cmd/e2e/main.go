@@ -19,8 +19,9 @@ func main() {
 	// Parse command line flags
 	var (
 		profile            = flag.String("profile", "envoy-ai-gateway", fmt.Sprintf("Test profile to run (%s)", strings.Join(framework.RegisteredProfileNames(), ", ")))
-		clusterName        = flag.String("cluster", "semantic-router-e2e", "Kind cluster name")
-		imageTag           = flag.String("image-tag", "e2e-test", "Docker image tag")
+		clusterName        = flag.String("cluster", "", "Kind cluster name (default: unique per run)")
+		imageTag           = flag.String("image-tag", "", "Docker image tag (default: unique per run)")
+		outputDir          = flag.String("output-dir", os.Getenv("E2E_OUTPUT_DIR"), "Directory for this run's reports and logs")
 		keepCluster        = flag.Bool("keep-cluster", false, "Keep cluster after tests complete")
 		useExistingCluster = flag.Bool("use-existing-cluster", false, "Use existing cluster instead of creating a new one")
 		verbose            = flag.Bool("verbose", false, "Enable verbose logging")
@@ -69,6 +70,7 @@ func main() {
 		Profile:            *profile,
 		ClusterName:        *clusterName,
 		ImageTag:           *imageTag,
+		OutputDir:          *outputDir,
 		KeepCluster:        *keepCluster,
 		UseExistingCluster: *useExistingCluster,
 		Verbose:            *verbose,
@@ -77,6 +79,10 @@ func main() {
 		SetupOnly:          *setupOnly,
 		SkipSetup:          *skipSetup,
 		UseWorkspaceModels: *useWorkspaceModels,
+	}
+	if err := framework.ResolveRunResources(opts); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Get the profile implementation

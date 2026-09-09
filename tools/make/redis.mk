@@ -1,3 +1,23 @@
+start-redis: ## Start Redis Stack container for testing
+stop-redis: ## Stop and remove Redis container
+restart-redis: ## Restart Redis container
+redis-status: ## Show status of Redis container
+clean-redis: ## Clean up Redis data
+test-redis-cache: ## Test semantic cache with Redis backend
+test-semantic-router-redis: ## Test semantic-router with Redis cache backend
+run-redis-example: ## Run the Redis cache example
+verify-redis: ## Verify Redis installation and vector search capability
+redis-info: ## Show Redis information and cache statistics
+redis-cli: ## Open Redis CLI for interactive commands
+benchmark-redis: ## Run Redis cache performance benchmark
+benchmark-cache-comparison: ## Compare all cache backends
+
+# Hold the shared legacy datastore lease across setup, tests, and cleanup.
+REDIS_PUBLIC_TARGETS := start-redis stop-redis restart-redis redis-status clean-redis test-redis-cache test-semantic-router-redis run-redis-example verify-redis redis-info redis-cli benchmark-redis benchmark-cache-comparison
+.PHONY: $(REDIS_PUBLIC_TARGETS) $(addsuffix -unlocked,$(REDIS_PUBLIC_TARGETS))
+$(REDIS_PUBLIC_TARGETS):
+	@python3 tools/dev/with_test_resources.py --resource legacy-test-datastores -- $(MAKE) $@-unlocked
+
 # ======== redis.mk ========
 # = Everything For Redis   =
 # ======== redis.mk ========
@@ -5,7 +25,7 @@
 ##@ Redis
 
 # Redis container management
-start-redis: ## Start Redis Stack container for testing
+start-redis-unlocked:
 	@$(LOG_TARGET)
 	@if $(CONTAINER_RUNTIME) ps --filter "name=redis-semantic-cache" --format "{{.Names}}" | grep -q redis-semantic-cache; then \
 		echo "Redis container is already running"; \
@@ -24,15 +44,17 @@ start-redis: ## Start Redis Stack container for testing
 		echo "RedisInsight UI available at http://localhost:8001"; \
 	fi
 
-stop-redis: ## Stop and remove Redis container
+stop-redis-unlocked:
 	@$(LOG_TARGET)
 	@$(CONTAINER_RUNTIME) stop redis-semantic-cache || true
 	@$(CONTAINER_RUNTIME) rm redis-semantic-cache || true
 	@echo "Redis container stopped and removed"
 
-restart-redis: stop-redis start-redis ## Restart Redis container
+restart-redis-unlocked:
+	@$(MAKE) stop-redis
+	@$(MAKE) start-redis
 
-redis-status: ## Show status of Redis container
+redis-status-unlocked:
 	@$(LOG_TARGET)
 	@if $(CONTAINER_RUNTIME) ps --filter "name=redis-semantic-cache" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q redis-semantic-cache; then \
 		echo "Redis container is running:"; \
@@ -42,14 +64,14 @@ redis-status: ## Show status of Redis container
 		echo "Run 'make start-redis' to start it"; \
 	fi
 
-clean-redis: stop-redis ## Clean up Redis data
+clean-redis-unlocked: stop-redis
 	@$(LOG_TARGET)
 	@echo "Cleaning up Redis data..."
 	@rm -rf /tmp/redis-data 2>/dev/null || sudo -n rm -rf /tmp/redis-data
 	@echo "Redis data directory cleaned"
 
 # Test semantic cache with Redis backend
-test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
+test-redis-cache-unlocked: start-redis rust
 	@$(LOG_TARGET)
 	@echo "Testing semantic cache with Redis backend..."
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
@@ -58,7 +80,7 @@ test-redis-cache: start-redis rust ## Test semantic cache with Redis backend
 	@echo "Consider running 'make stop-redis' when done testing"
 
 # Test semantic-router with Redis enabled
-test-semantic-router-redis: build-router start-redis ## Test semantic-router with Redis cache backend
+test-semantic-router-redis-unlocked: build-router start-redis
 	@$(LOG_TARGET)
 	@echo "Testing semantic-router with Redis cache backend..."
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/nlp-binding/target/release && \
@@ -67,7 +89,7 @@ test-semantic-router-redis: build-router start-redis ## Test semantic-router wit
 	@echo "Consider running 'make stop-redis' when done testing"
 
 # Run Redis cache example
-run-redis-example: start-redis rust ## Run the Redis cache example
+run-redis-example-unlocked: start-redis rust
 	@$(LOG_TARGET)
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
@@ -79,7 +101,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@echo "  • http://localhost:8001 (RedisInsight UI)"
 
 # Verify Redis installation
-verify-redis: start-redis ## Verify Redis installation and vector search capability
+verify-redis-unlocked: start-redis
 	@$(LOG_TARGET)
 	@echo "Verifying Redis installation..."
 	@echo ""
@@ -104,7 +126,7 @@ verify-redis: start-redis ## Verify Redis installation and vector search capabil
 	@echo "  • UI:  http://localhost:8001"
 
 # Check Redis data
-redis-info: ## Show Redis information and cache statistics
+redis-info-unlocked:
 	@$(LOG_TARGET)
 	@echo "Redis Server Information:"
 	@echo "════════════════════════════════════════"
@@ -122,7 +144,7 @@ redis-info: ## Show Redis information and cache statistics
 	@$(CONTAINER_RUNTIME) exec redis-semantic-cache redis-cli FT._LIST || echo "No indexes found"
 
 # Redis CLI access
-redis-cli: ## Open Redis CLI for interactive commands
+redis-cli-unlocked:
 	@$(LOG_TARGET)
 	@echo "Opening Redis CLI (type 'exit' to quit)..."
 	@echo ""
@@ -135,7 +157,7 @@ redis-cli: ## Open Redis CLI for interactive commands
 	@$(CONTAINER_RUNTIME) exec -it redis-semantic-cache redis-cli
 
 # Benchmark Redis cache performance
-benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
+benchmark-redis-unlocked: rust start-redis
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Redis Cache Performance Benchmark"
@@ -158,7 +180,7 @@ benchmark-redis: rust start-redis ## Run Redis cache performance benchmark
 	@echo "Benchmark complete! Results in: benchmark_results/redis/results.txt"
 
 # Compare In-Memory vs Redis vs Valkey
-benchmark-cache-comparison: rust start-redis start-valkey ## Compare all cache backends
+benchmark-cache-comparison-unlocked: rust start-redis start-valkey
 	@$(LOG_TARGET)
 	@echo "═══════════════════════════════════════════════════════════"
 	@echo "  Cache Backend Comparison Benchmark"

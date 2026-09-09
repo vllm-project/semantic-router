@@ -11,6 +11,8 @@ jobs:
     name: CLI E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      VLLM_SR_TEST_OUTPUT_DIR: ${{ github.workspace }}/.agent-harness/cli
 
     steps:
       #######################################
@@ -40,37 +42,11 @@ jobs:
       - name: Run CLI Integration Tests
         run: make vllm-sr-test-integration
 
-      #######################################
-      # Cleanup
-      #######################################
-      - name: Show logs on failure
-        if: failure()
-        run: |
-          echo "=== Container Status ==="
-          docker ps -a
-          echo "=== Router Logs ==="
-          docker logs vllm-sr-router-container 2>&1 | tail -200 || true
-          echo "=== Envoy Logs ==="
-          docker logs vllm-sr-envoy-container 2>&1 | tail -200 || true
-          echo "=== Dashboard Logs ==="
-          docker logs vllm-sr-dashboard-container 2>&1 | tail -200 || true
-          echo "=== Legacy Single-Container Logs ==="
-          docker logs vllm-sr-container 2>&1 | tail -200 || true
-          echo "=== Storage Logs ==="
-          docker logs vllm-sr-redis 2>&1 | tail -100 || true
-          docker logs vllm-sr-postgres 2>&1 | tail -100 || true
-          echo "=== Stack Networks ==="
-          docker network ls
-          for network in vllm-sr-network vllm-sr-data-network; do
-            echo "--- $network ---"
-            docker network inspect "$network" \
-              --format '{{range .Containers}}{{.Name}} {{end}}' || true
-          done
-
-      - name: Clean up
+      - name: Upload CLI test logs
         if: always()
-        run: |
-          docker stop vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger vllm-sr-redis vllm-sr-postgres vllm-sr-milvus vllm-sr-cli-test-probe vllm-sr-cli-test-control-redis 2>/dev/null || true
-          docker rm vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger vllm-sr-redis vllm-sr-postgres vllm-sr-milvus vllm-sr-cli-test-probe vllm-sr-cli-test-control-redis 2>/dev/null || true
-          docker network rm vllm-sr-network vllm-sr-data-network 2>/dev/null || true
-          docker system prune -f || true
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-test-logs
+          path: ${{ env.VLLM_SR_TEST_OUTPUT_DIR }}/command.log
+          include-hidden-files: true
+          retention-days: 7

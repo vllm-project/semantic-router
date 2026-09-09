@@ -76,6 +76,9 @@ func (r *Runner) cleanupCluster(ctx context.Context) {
 }
 
 func (r *Runner) buildAndLoadImages(ctx context.Context) error {
+	if r.opts.SkipSetup {
+		return nil
+	}
 	r.log("Building and loading Docker images")
 
 	buildOpts := docker.BuildOptions{
@@ -96,7 +99,7 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		}
 		buildOpts := docker.BuildOptions{
 			Dockerfile:   image.Dockerfile,
-			Tag:          image.Tag,
+			Tag:          runImageReference(image.Tag, r.opts.ImageTag),
 			BuildContext: image.BuildContext,
 			BuildArgs:    buildArgs,
 		}
@@ -330,7 +333,7 @@ func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernet
 	}
 
 	// Write logs to file
-	logFilename := "semantic-router-logs.txt"
+	logFilename := filepath.Join(r.opts.OutputDir, "semantic-router-logs.txt")
 	if err := os.WriteFile(logFilename, []byte(allLogs.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write log file: %w", err)
 	}

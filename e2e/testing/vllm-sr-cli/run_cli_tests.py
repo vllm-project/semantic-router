@@ -327,9 +327,28 @@ Integration Tests:
 
     args = parser.parse_args()
 
+    integration = (
+        args.integration or os.getenv("RUN_INTEGRATION_TESTS", "").lower() == "true"
+    )
+    if integration and os.getenv("VLLM_SR_TEST_ISOLATED") != "1":
+        resource_runner = (
+            Path(__file__).resolve().parents[3] / "tools/dev/with_test_resources.py"
+        )
+        return subprocess.call(
+            [
+                sys.executable,
+                str(resource_runner),
+                "--isolate-stack",
+                "--",
+                sys.executable,
+                str(Path(__file__).resolve()),
+                *sys.argv[1:],
+            ]
+        )
+
     # Run pre-flight checks
     if not args.skip_checks and not check_prerequisites(
-        require_runtime_access=args.integration
+        require_runtime_access=integration
     ):
         print("\n❌ Pre-flight checks failed. Fix issues above and retry.")
         return 1
@@ -338,7 +357,7 @@ Integration Tests:
     success = run_tests(
         pattern=args.pattern,
         verbose=args.verbose,
-        integration=args.integration,
+        integration=integration,
     )
 
     return 0 if success else 1

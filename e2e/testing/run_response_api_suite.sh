@@ -4,7 +4,10 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SUITE_NAME="response-api"
-SUITE_DIR="${REPO_ROOT}/response-api-artifacts"
+OUTPUT_DIR="${E2E_OUTPUT_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/response-api.XXXXXX")}"
+mkdir -p "${OUTPUT_DIR}"
+OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
+SUITE_DIR="${OUTPUT_DIR}/response-api-artifacts"
 EXIT_CODES_FILE="${SUITE_DIR}/exit-codes.txt"
 AGGREGATED_REPORT_FILE="${SUITE_DIR}/suite-test-report.md"
 AGGREGATED_LOG_FILE="${SUITE_DIR}/suite-semantic-router-logs.txt"
@@ -24,22 +27,16 @@ run_profile() {
   local artifact_dir="${SUITE_DIR}/${profile}"
   local test_exit_code=0
 
-  rm -f "${REPO_ROOT}/test-report.json" "${REPO_ROOT}/test-report.md" "${REPO_ROOT}/semantic-router-logs.txt"
+  mkdir -p "${artifact_dir}"
 
   set +e
   (
     cd "${REPO_ROOT}"
-    make e2e-test E2E_PROFILE="${profile}"
+    make e2e-test E2E_PROFILE="${profile}" E2E_OUTPUT_DIR="${artifact_dir}"
   )
   test_exit_code=$?
   set -e
 
-  mkdir -p "${artifact_dir}"
-  for file in test-report.json test-report.md semantic-router-logs.txt; do
-    if [[ -f "${REPO_ROOT}/${file}" ]]; then
-      mv "${REPO_ROOT}/${file}" "${artifact_dir}/${file}"
-    fi
-  done
 
   if [[ -f "${artifact_dir}/test-report.md" ]]; then
     {
@@ -62,7 +59,7 @@ run_profile() {
 }
 
 write_suite_report() {
-  python3 - "${EXIT_CODES_FILE}" "${REPO_ROOT}/test-report.json" "${SUITE_NAME}" <<'PY'
+  python3 - "${EXIT_CODES_FILE}" "${OUTPUT_DIR}/test-report.json" "${SUITE_NAME}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -90,7 +87,10 @@ main() {
   local profile=""
   local suite_exit_code=0
 
-  rm -rf "${SUITE_DIR}"
+  if [[ -e "${SUITE_DIR}" ]]; then
+    echo "Refusing to overwrite existing suite artifacts: ${SUITE_DIR}" >&2
+    exit 2
+  fi
   mkdir -p "${SUITE_DIR}"
   : > "${EXIT_CODES_FILE}"
   : > "${AGGREGATED_REPORT_FILE}"
@@ -105,8 +105,8 @@ main() {
   done
 
   write_suite_report
-  cp "${AGGREGATED_REPORT_FILE}" "${REPO_ROOT}/test-report.md"
-  cp "${AGGREGATED_LOG_FILE}" "${REPO_ROOT}/semantic-router-logs.txt"
+  cp "${AGGREGATED_REPORT_FILE}" "${OUTPUT_DIR}/test-report.md"
+  cp "${AGGREGATED_LOG_FILE}" "${OUTPUT_DIR}/semantic-router-logs.txt"
   exit "${suite_exit_code}"
 }
 

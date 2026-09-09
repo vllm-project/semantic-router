@@ -71,7 +71,7 @@ For a non-trivial change, inspect the repository facts for the paths involved:
 make impact ENV=cpu CHANGED_FILES="path/one path/two"
 ```
 
-`impact` reports owners, minimum checks, candidate CI jobs, optional profiles,
+`impact` reports owners, related checks, candidate CI jobs, optional profiles,
 and available tools; it does not choose a skill or prescribe a development
 loop. Read the nearest `AGENTS.md` for directories you touch. Useful references
 are:
@@ -112,8 +112,10 @@ Run the daily changed-file check first:
 make check CHANGED_FILES="path/one path/two"
 ```
 
-It runs formatting/lint, deterministic architecture contracts, and the owning
-domains' smallest unit or static checks. Common direct targets include:
+It checks formatting/lint and deterministic dependency/generated contracts
+without editing source. Apply formatting explicitly with `make fmt`. Choose
+tests that prove the change; CI runs the affected suites in their owning jobs.
+Common direct targets include:
 
 | Change | Command |
 | --- | --- |
@@ -125,12 +127,15 @@ domains' smallest unit or static checks. Common direct targets include:
 | Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
 Integration and E2E are explicit because a path classifier cannot infer all
-runtime intent. Use the complete local baseline for high-risk changes or when
+runtime intent. Use the local core baseline for high-risk changes or when
 a reviewer asks for it:
 
 ```bash
 make ci-full
 ```
+
+This runs containerized quality checks and the local core test/build suite.
+It does not reproduce hardware-specific jobs or qualify a release.
 
 A failed gate is part of the work: fix the cause and rerun the smallest
 relevant command until it passes.
@@ -157,9 +162,10 @@ Follow the language's standard formatter and keep modules focused:
 - Python: Ruff-compatible formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
-Behavior-visible config, routing, CLI, Docker, startup, or API changes require
-matching E2E coverage unless they are pure refactors. Do not add a second source
-of truth for schemas, test selection, or public documentation.
+Behavior changes need tests that prove them. Use integration or E2E when
+correctness depends on interaction across components; pure refactors do not
+require new E2E coverage. Do not add a second source of truth for schemas,
+test selection, or public documentation.
 
 ## Submit a pull request
 

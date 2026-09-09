@@ -1,4 +1,6 @@
 import importlib
+import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -9,6 +11,44 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 check_support = importlib.import_module("check_support")
+
+
+class RustLintFailureTests(unittest.TestCase):
+    def test_infrastructure_failure_without_diagnostics_fails(self) -> None:
+        result = subprocess.CompletedProcess(
+            [], 101, "", "dependency download failed\n"
+        )
+        with mock.patch.object(check_support.subprocess, "run", return_value=result):
+            self.assertEqual(
+                check_support.run_rust_clippy_for_crate(Path("/crate"), set()), 101
+            )
+
+    def test_failed_build_with_other_file_diagnostic_still_fails(self) -> None:
+        diagnostic = json.dumps(
+            {
+                "reason": "compiler-message",
+                "message": {
+                    "level": "error",
+                    "spans": [{"file_name": "other.rs"}],
+                    "rendered": "build failed",
+                },
+            }
+        )
+        result = subprocess.CompletedProcess([], 101, diagnostic, "")
+        with mock.patch.object(check_support.subprocess, "run", return_value=result):
+            self.assertEqual(
+                check_support.run_rust_clippy_for_crate(
+                    Path("/crate"), {Path("/crate/changed.rs")}
+                ),
+                101,
+            )
+
+    def test_successful_build_with_no_diagnostic_passes(self) -> None:
+        result = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(check_support.subprocess, "run", return_value=result):
+            self.assertEqual(
+                check_support.run_rust_clippy_for_crate(Path("/crate"), set()), 0
+            )
 
 
 class ReferenceConfigLintTests(unittest.TestCase):

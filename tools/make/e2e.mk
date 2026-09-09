@@ -6,8 +6,9 @@
 
 # E2E test configuration
 E2E_PROFILE ?= envoy-ai-gateway
-E2E_CLUSTER_NAME ?= semantic-router-e2e
-E2E_IMAGE_TAG ?= e2e-test
+E2E_CLUSTER_NAME ?=
+E2E_IMAGE_TAG ?=
+E2E_OUTPUT_DIR ?=
 E2E_KEEP_CLUSTER ?= false
 E2E_USE_EXISTING_CLUSTER ?= false
 E2E_VERBOSE ?= true
@@ -25,13 +26,17 @@ build-e2e: ## Build the E2E test binary
 
 # Run E2E tests
 e2e-test: ## Run E2E tests (PROFILE=envoy-ai-gateway by default)
-e2e-test: build-e2e
+e2e-test:
 	@$(LOG_TARGET)
 	@echo "Running E2E tests with profile: $(E2E_PROFILE)"
-	@./bin/e2e \
+	@E2E_BINARY=$$(mktemp "$${TMPDIR:-/tmp}/semantic-router-e2e.XXXXXX"); \
+		trap 'rm -f "$$E2E_BINARY"' EXIT INT TERM; \
+		(cd e2e && go build -o "$$E2E_BINARY" ./cmd/e2e) && \
+		"$$E2E_BINARY" \
 		-profile=$(E2E_PROFILE) \
-		-cluster=$(E2E_CLUSTER_NAME) \
-		-image-tag=$(E2E_IMAGE_TAG) \
+		-cluster="$(E2E_CLUSTER_NAME)" \
+		-image-tag="$(E2E_IMAGE_TAG)" \
+		-output-dir="$(E2E_OUTPUT_DIR)" \
 		-keep-cluster=$(E2E_KEEP_CLUSTER) \
 		-use-existing-cluster=$(E2E_USE_EXISTING_CLUSTER) \
 		-use-workspace-models=$(E2E_USE_WORKSPACE_MODELS) \
@@ -98,6 +103,7 @@ e2e-test-response-api-suite: build-e2e
 	@echo "Running response-api E2E suite across memory, Redis, and Redis Cluster backends"
 	@E2E_CLUSTER_NAME="$(E2E_CLUSTER_NAME)" \
 		E2E_IMAGE_TAG="$(E2E_IMAGE_TAG)" \
+		E2E_OUTPUT_DIR="$(E2E_OUTPUT_DIR)" \
 		E2E_KEEP_CLUSTER="$(E2E_KEEP_CLUSTER)" \
 		E2E_USE_EXISTING_CLUSTER="$(E2E_USE_EXISTING_CLUSTER)" \
 		E2E_VERBOSE="$(E2E_VERBOSE)" \
@@ -110,7 +116,8 @@ e2e-test-response-api-suite: build-e2e
 e2e-cleanup: ## Clean up E2E test cluster
 	@$(LOG_TARGET)
 	@echo "Cleaning up E2E test cluster: $(E2E_CLUSTER_NAME)"
-	@kind delete cluster --name $(E2E_CLUSTER_NAME) || true
+	@test -n "$(E2E_CLUSTER_NAME)" || { echo "E2E_CLUSTER_NAME is required for cleanup" >&2; exit 2; }
+	@kind delete cluster --name "$(E2E_CLUSTER_NAME)"
 
 # Download E2E test dependencies
 e2e-deps: ## Download E2E test dependencies
@@ -141,8 +148,9 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Environment Variables:"
 	@echo "  E2E_PROFILE              - Test profile to run (default: envoy-ai-gateway)"
-	@echo "  E2E_CLUSTER_NAME         - Kind cluster name (default: semantic-router-e2e)"
-	@echo "  E2E_IMAGE_TAG            - Docker image tag (default: e2e-test)"
+	@echo "  E2E_CLUSTER_NAME         - Kind cluster name (default: unique per run)"
+	@echo "  E2E_IMAGE_TAG            - Docker image tag (default: unique per run)"
+	@echo "  E2E_OUTPUT_DIR           - Report/log directory (default: unique per run)"
 	@echo "  E2E_KEEP_CLUSTER         - Keep cluster and deployed profile after tests (default: false)"
 	@echo "  E2E_USE_EXISTING_CLUSTER - Use existing cluster (default: false)"
 	@echo "  E2E_VERBOSE              - Enable verbose logging (default: true)"
@@ -160,15 +168,15 @@ e2e-help: ## Show help for E2E testing
 	@echo "  make e2e-test-dynamo                             # Run Dynamo tests (requires GPU)"
 	@echo "  make e2e-test-debug                              # Run tests and keep cluster + deployed profile"
 	@echo "  make e2e-test-specific E2E_TESTS=\"test1,test2\"   # Run specific tests"
-	@echo "  make e2e-cleanup                                 # Clean up test cluster"
+	@echo "  make e2e-cleanup E2E_CLUSTER_NAME=my-e2e          # Clean up test cluster"
 	@echo ""
 	@echo "Advanced Workflows:"
-	@echo "  make e2e-setup                                   # Setup environment only (no tests)"
-	@echo "  make e2e-test-only                               # Run tests only (skip setup)"
-	@echo "  make e2e-test-only E2E_TESTS=\"test1\"             # Run specific test (skip setup)"
+	@echo "  make e2e-setup E2E_CLUSTER_NAME=my-e2e            # Setup environment only (no tests)"
+	@echo "  make e2e-test-only E2E_CLUSTER_NAME=my-e2e        # Run tests only (skip setup)"
+	@echo "  make e2e-test-only E2E_CLUSTER_NAME=my-e2e E2E_TESTS=\"test1\" # Run specific test (skip setup)"
 	@echo ""
 	@echo "Example Workflow (Setup once, run tests multiple times):"
-	@echo "  1. make e2e-setup                                # Setup environment"
-	@echo "  2. make e2e-test-only                            # Run all tests"
-	@echo "  3. make e2e-test-only E2E_TESTS=\"test1\"          # Run specific test"
+	@echo "  1. make e2e-setup E2E_CLUSTER_NAME=my-e2e         # Setup environment"
+	@echo "  2. make e2e-test-only E2E_CLUSTER_NAME=my-e2e     # Run all tests"
+	@echo "  3. make e2e-test-only E2E_CLUSTER_NAME=my-e2e E2E_TESTS=\"test1\" # Run specific test"
 	@echo "  4. make e2e-cleanup                              # Clean up when done"

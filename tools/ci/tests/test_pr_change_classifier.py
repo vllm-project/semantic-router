@@ -45,7 +45,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/vllm-sr/cli/evaluation/scoring.py": (
                 "quality",
                 "security",
-                "core-tests",
+                "python-unit",
             ),
         }
         for path, jobs in fixtures.items():
@@ -55,7 +55,7 @@ class PRChangeClassifierTests(unittest.TestCase):
     def test_runtime_cli_surface_has_explicit_integration_escalation(self) -> None:
         self.assert_classification(
             "src/vllm-sr/cli/commands/runtime.py",
-            ("quality", "security", "core-tests", "cli"),
+            ("quality", "security", "python-unit", "cli"),
         )
 
     def test_workflow_only_change_runs_only_its_reusable_workflow(self) -> None:
@@ -125,7 +125,14 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertEqual(
             result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e", "recipe-conformance"),
+            (
+                "quality",
+                "security",
+                "core-tests",
+                "python-unit",
+                "e2e",
+                "recipe-conformance",
+            ),
         )
         self.assertEqual(
             result.profiles,

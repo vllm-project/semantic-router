@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check configured module graphs and report package-health evidence."""
+"""Check real imports, module cycles, and repository root ownership."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+import tree_sitter_go
+import tree_sitter_rust
 import tree_sitter_typescript
 import yaml
 from tree_sitter import Language, Parser
@@ -281,45 +283,141 @@ def cyclic_components(graph: dict[str, set[str]]) -> tuple[frozenset[str], ...]:
     return tuple(sorted(components, key=sorted))
 
 
-def health_message(
-    scope: dict,
-    sources: dict[str, str],
-    graph: dict[str, set[str]] | None = None,
-) -> str:
-    test_patterns = scope.get("test_patterns", [])
-    test_files = sum(matches_any(path, test_patterns) for path in sources)
-    production_files = len(sources) - test_files
-    source_lines = sum(len(source.splitlines()) for source in sources.values())
-    fields = [
-        f"production_files={production_files}",
-        f"test_files={test_files}",
-        f"source_lines={source_lines}",
-    ]
-    if graph is not None:
-        fields.extend(
-            (
-                f"internal_edges={sum(len(targets) for targets in graph.values())}",
-                f"cycles={len(cyclic_components(graph))}",
-                f"max_fan_out={max((len(targets) for targets in graph.values()), default=0)}",
-            )
+def cycle_edges(graph: dict[str, set[str]]) -> set[tuple[str, str]]:
+    """Keep existing cycle edges ratcheted even when a cycle splits or shrinks."""
+    return {
+        (source, target)
+        for component in cyclic_components(graph)
+        for source in component
+        for target in graph[source].intersection(component)
+    }
+
+
+def evaluate_root_placement(path: str, rules: dict) -> list[Finding]:
+    if "/" in path or not (REPO_ROOT / path).is_file():
+        return []
+    if path in rules["root_files"]["allowed"]:
+        return []
+    return [
+        Finding(
+            "ERROR",
+            path,
+            "root file is not allowlisted; place it under its owning subtree",
         )
-    return ", ".join(fields)
+    ]
 
 
-def focused_graph(
-    scope: dict, sources: dict[str, str], graph: dict[str, set[str]]
-) -> tuple[dict[str, str], dict[str, set[str]]]:
-    focused_sources = {
-        path: source
-        for path, source in sources.items()
-        if matches_any(path, focus_patterns(scope))
-    }
-    focused_paths = set(focused_sources)
-    return focused_sources, {
-        path: targets.intersection(focused_paths)
-        for path, targets in graph.items()
-        if path in focused_paths
-    }
+def load_baseline_source(path: str, base_ref: str | None) -> str:
+    result = subprocess.run(
+        ["git", "show", f"{base_ref or 'HEAD'}:{path}"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout if result.returncode == 0 else ""
+
+
+def rust_use_paths(node, source: bytes, prefix: str = "") -> set[str]:
+    """Expand grouped imports without interpreting comments or arbitrary strings."""
+    if node.type == "use_as_clause":
+        return rust_use_paths(node.child_by_field_name("path"), source, prefix)
+    if node.type == "scoped_use_list":
+        parent = node.child_by_field_name("path")
+        stem = source[parent.start_byte : parent.end_byte].decode() if parent else ""
+        return rust_use_paths(
+            node.child_by_field_name("list"), source, prefix + stem + "::"
+        )
+    if node.type == "use_list":
+        return set().union(
+            *(rust_use_paths(child, source, prefix) for child in node.named_children)
+        )
+    value = source[node.start_byte : node.end_byte].decode()
+    return {prefix + value}
+
+
+def import_specifiers(path: str, source: str) -> set[str]:
+    suffix = PurePosixPath(path).suffix
+    imports: set[str] = set()
+    if suffix == ".py":
+        for node in ast.walk(ast.parse(source, filename=path)):
+            if isinstance(node, ast.Import):
+                imports.update(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                # Relative imports stay inside the package; the module graph
+                # checks their internal boundaries using resolved file paths.
+                if node.level:
+                    continue
+                base = node.module or ""
+                imports.add(base)
+                imports.update(
+                    ".".join(filter(None, (base, alias.name))) for alias in node.names
+                )
+        return imports
+    modules = {".go": tree_sitter_go, ".rs": tree_sitter_rust}
+    if suffix not in modules:
+        return imports
+    parser = Parser(Language(modules[suffix].language()))
+    source_bytes = source.encode()
+    tree = parser.parse(source_bytes)
+    if tree.root_node.has_error:
+        raise ValueError(f"cannot parse imports in {path}")
+    for node in walk_tree(tree.root_node):
+        if node.type == "import_spec":
+            value = node.child_by_field_name("path")
+            literal = source_bytes[value.start_byte : value.end_byte].decode()
+            imports.add(
+                literal[1:-1] if literal.startswith("`") else ast.literal_eval(literal)
+            )
+        elif node.type == "use_declaration":
+            imports.update(
+                rust_use_paths(node.child_by_field_name("argument"), source_bytes)
+            )
+        elif node.type == "extern_crate_declaration":
+            value = node.child_by_field_name("name")
+            imports.add(source_bytes[value.start_byte : value.end_byte].decode())
+    return {value.removeprefix("::").removeprefix("crate::") for value in imports}
+
+
+def evaluate_dependency_rules(
+    path: str, source: str, rules: dict, base_ref: str | None = None
+) -> list[Finding]:
+    applicable = [
+        rule
+        for rule in rules.get("dependency_rules", [])
+        if matches_any(path, rule["applies_to"])
+    ]
+    if not applicable:
+        return []
+    current = import_specifiers(path, source)
+    baseline = None
+    findings: list[Finding] = []
+    for rule in applicable:
+        for imported in sorted(current):
+            if not any(
+                imported == forbidden
+                or any(
+                    imported.startswith(forbidden + separator)
+                    for separator in ("/", ".", "::")
+                )
+                for forbidden in rule["forbidden_imports"]
+            ):
+                continue
+            if baseline is None and rule.get("policy") == "no-new":
+                baseline = import_specifiers(path, load_baseline_source(path, base_ref))
+            pre_existing = baseline is not None and imported in baseline
+            level = (
+                "WARN" if pre_existing and rule.get("policy") == "no-new" else "ERROR"
+            )
+            disposition = "pre-existing" if pre_existing else "new"
+            findings.append(
+                Finding(
+                    level,
+                    path,
+                    f"{rule['name']}: {disposition} forbidden import '{imported}'",
+                )
+            )
+    return findings
 
 
 def evaluate_forbidden_edges(
@@ -365,20 +463,20 @@ def evaluate_dependency_graph(
         return []
     current_graph = build_graph(scope, current_sources)
     baseline_graph = build_graph(scope, baseline_sources)
-    baseline_cycles = set(cyclic_components(baseline_graph))
-    focused_sources, focus_graph = focused_graph(scope, current_sources, current_graph)
-    findings = [
-        Finding(
-            "INFO", scope["name"], health_message(scope, focused_sources, focus_graph)
-        )
-    ]
+    baseline_cycle_edges = cycle_edges(baseline_graph)
+    findings: list[Finding] = []
     findings.extend(
         evaluate_forbidden_edges(scope, current_graph, baseline_graph, changed_files)
     )
     for component in cyclic_components(current_graph):
         if component.isdisjoint(changed_files):
             continue
-        pre_existing = component in baseline_cycles
+        current_edges = {
+            (source, target)
+            for source in component
+            for target in current_graph[source].intersection(component)
+        }
+        pre_existing = current_edges.issubset(baseline_cycle_edges)
         level = (
             "WARN"
             if pre_existing and scope.get("cycle_policy") == "no-new"
@@ -392,16 +490,9 @@ def evaluate_dependency_graph(
     return findings
 
 
-def evaluate_health_scope(scope: dict, changed_files: set[str]) -> list[Finding]:
-    if not scope_is_touched(scope, changed_files):
-        return []
-    sources = load_current_sources(scope)
-    return [Finding("INFO", scope["name"], health_message(scope, sources))]
-
-
 def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Check configured dependency graphs and package health"
+        description="Check import boundaries, dependency cycles, and root ownership"
     )
     parser.add_argument("files", nargs="*")
     parser.add_argument("--base-ref", default=os.getenv("BASE_REF"))
@@ -413,8 +504,25 @@ def main() -> int:
     changed_files = {
         normalize_path(path) for path in args.files if normalize_path(path)
     }
-    architecture = load_rules().get("architecture", {})
+    rules = load_rules()
+    architecture = rules.get("architecture", {})
     findings: list[Finding] = []
+    for path in sorted(changed_files):
+        findings.extend(evaluate_root_placement(path, rules))
+        absolute = REPO_ROOT / path
+        if (
+            absolute.is_file()
+            and not matches_any(path, rules.get("ignore_globs", []))
+            and any(
+                matches_any(path, rule["applies_to"])
+                for rule in rules.get("dependency_rules", [])
+            )
+        ):
+            findings.extend(
+                evaluate_dependency_rules(
+                    path, absolute.read_text(encoding="utf-8"), rules, args.base_ref
+                )
+            )
     for scope in architecture.get("dependency_graphs", []):
         if not scope_is_touched(scope, changed_files):
             continue
@@ -426,9 +534,6 @@ def main() -> int:
                 changed_files,
             )
         )
-    for scope in architecture.get("health_scopes", []):
-        findings.extend(evaluate_health_scope(scope, changed_files))
-
     if not findings:
         print("Architecture check passed (no configured scope changed).")
         return 0

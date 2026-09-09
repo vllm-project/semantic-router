@@ -37,6 +37,7 @@ func TestSetupProfileRegistersTeardownCleanupByDefault(t *testing.T) {
 	runner := &Runner{
 		opts:    &TestOptions{},
 		profile: &stubProfile{},
+		cluster: &cluster.KindCluster{Created: true},
 	}
 	state := &runState{}
 
@@ -46,6 +47,21 @@ func TestSetupProfileRegistersTeardownCleanupByDefault(t *testing.T) {
 
 	if len(state.cleanup) != 1 {
 		t.Fatalf("expected teardown cleanup to be registered, got %d cleanups", len(state.cleanup))
+	}
+}
+
+func TestSetupProfileDoesNotDeleteResourcesInBorrowedCluster(t *testing.T) {
+	runner := &Runner{
+		opts:    &TestOptions{UseExistingCluster: true},
+		profile: &stubProfile{},
+		cluster: &cluster.KindCluster{},
+	}
+	state := &runState{}
+	if err := runner.setupProfile(context.Background(), state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.cleanup) != 0 {
+		t.Fatal("registered destructive cleanup for a borrowed cluster")
 	}
 }
 

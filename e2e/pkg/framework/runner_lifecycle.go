@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -93,16 +94,16 @@ func (r *Runner) initializeReport() {
 func (r *Runner) finalizeReport(state *runState) {
 	r.reporter.Finalize(state.exitCode)
 
-	if err := r.reporter.WriteJSON("test-report.json"); err != nil {
+	if err := r.reporter.WriteJSON(filepath.Join(r.opts.OutputDir, "test-report.json")); err != nil {
 		r.log("Warning: failed to write JSON report: %v", err)
 	} else {
-		r.log("Test report written to: test-report.json")
+		r.log("Test report written to: %s", filepath.Join(r.opts.OutputDir, "test-report.json"))
 	}
 
-	if err := r.reporter.WriteMarkdown("test-report.md"); err != nil {
+	if err := r.reporter.WriteMarkdown(filepath.Join(r.opts.OutputDir, "test-report.md")); err != nil {
 		r.log("Warning: failed to write Markdown report: %v", err)
 	} else {
-		r.log("Test report written to: test-report.md")
+		r.log("Test report written to: %s", filepath.Join(r.opts.OutputDir, "test-report.md"))
 	}
 }
 
@@ -131,24 +132,29 @@ func (r *Runner) prepareRuntime(ctx context.Context, state *runState) error {
 
 func (r *Runner) prepareCluster(ctx context.Context, state *runState) error {
 	if r.opts.UseExistingCluster {
+		exists, err := r.cluster.Exists(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to check cluster %q for explicit reuse: %w", r.opts.ClusterName, err)
+		}
+		if !exists {
+			return fmt.Errorf("explicit reuse requires existing cluster %q", r.opts.ClusterName)
+		}
 		if r.opts.UseWorkspaceModels {
 			r.log("Workspace model reuse requires the existing cluster to have been created with -use-workspace-models enabled")
 		}
 		return nil
 	}
 
-	if err := r.setupCluster(ctx); err != nil {
-		return fmt.Errorf("failed to setup cluster: %w", err)
+	setupErr := r.setupCluster(ctx)
+	if !r.opts.KeepCluster && r.cluster.Created {
+		state.addCleanup(func() { r.cleanupClusterWithLogs(state) })
+	}
+	if setupErr != nil {
+		return fmt.Errorf("failed to setup cluster: %w", setupErr)
 	}
 
 	if err := r.cluster.EnsureSchedulableWorkloadNodes(ctx); err != nil {
 		return fmt.Errorf("failed to ensure schedulable workload nodes: %w", err)
-	}
-
-	if !r.opts.KeepCluster {
-		state.addCleanup(func() {
-			r.cleanupClusterWithLogs(state)
-		})
 	}
 
 	return nil
@@ -172,6 +178,7 @@ func (r *Runner) prepareKubeClient(ctx context.Context, state *runState) error {
 		return fmt.Errorf("failed to get kubeconfig: %w", err)
 	}
 	state.kubeConfig = kubeConfig
+	state.addCleanup(func() { _ = os.Remove(kubeConfig) })
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
 	if err != nil {
@@ -216,13 +223,14 @@ func (r *Runner) setupProfile(ctx context.Context, state *runState) error {
 		ImageTag:    r.opts.ImageTag,
 		Verbose:     r.opts.Verbose,
 		ValuesFiles: state.valuesFiles,
+		LocalImages: r.localImageReferences(),
 	}
 
 	if err := r.profile.Setup(ctx, setupOpts); err != nil {
 		return fmt.Errorf("failed to setup profile: %w", err)
 	}
 
-	if !r.opts.SetupOnly && !r.opts.KeepCluster {
+	if !r.opts.SetupOnly && !r.opts.KeepCluster && r.cluster.Created {
 		state.addCleanup(func() {
 			r.teardownProfile(state)
 		})
@@ -265,9 +273,9 @@ func (r *Runner) teardownProfile(state *runState) {
 func (r *Runner) logSetupOnlyHints() {
 	r.log("✅ Profile setup complete (--setup-only mode)")
 	r.log("💡 Cluster is ready. You can now:")
-	r.log("   - Run tests manually: ./bin/e2e -profile %s -skip-setup -use-existing-cluster", r.opts.Profile)
+	r.log("   - Run tests manually: ./bin/e2e -profile %s -cluster %s -skip-setup -use-existing-cluster", r.opts.Profile, r.opts.ClusterName)
 	r.log("   - Inspect the cluster: kubectl --context kind-%s get pods -A", r.opts.ClusterName)
-	r.log("   - Clean up when done: make e2e-cleanup")
+	r.log("   - Clean up when done: make e2e-cleanup E2E_CLUSTER_NAME=%s", r.opts.ClusterName)
 }
 
 func (r *Runner) logPreservedEnvironmentHints() {
@@ -276,7 +284,7 @@ func (r *Runner) logPreservedEnvironmentHints() {
 	}
 
 	r.log("💡 Preserved E2E environment for cluster %s", r.opts.ClusterName)
-	r.log("   - Re-run tests without setup: ./bin/e2e -profile %s -skip-setup -use-existing-cluster", r.opts.Profile)
+	r.log("   - Re-run tests without setup: ./bin/e2e -profile %s -cluster %s -skip-setup -use-existing-cluster", r.opts.Profile, r.opts.ClusterName)
 	r.log("   - Inspect the cluster: kubectl --context kind-%s get pods -A", r.opts.ClusterName)
 	r.log("   - Clean up when done: make e2e-cleanup E2E_CLUSTER_NAME=%s", r.opts.ClusterName)
 }

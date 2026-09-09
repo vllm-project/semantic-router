@@ -22,6 +22,9 @@ jobs:
   validate:
     name: Cross-Surface Version Validation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
@@ -59,6 +62,12 @@ jobs:
             echo "version=$VERSION"
             echo "tag=$TAG"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Require successful Main for the release commit
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/qualify_release.py --sha "$(git rev-parse HEAD)"
 
       - name: Validate release version contract
         id: contract

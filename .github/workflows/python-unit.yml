@@ -1,0 +1,55 @@
+name: Python unit tests
+
+on:
+  workflow_call:
+    inputs:
+      domains:
+        description: JSON ownership domains; defaults to the full Python unit baseline.
+        required: false
+        default: '["vllm-sr-cli","fleet-sim","training"]'
+        type: string
+      cli_integration:
+        description: The selected CLI integration job already runs CLI unit tests.
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Python package and training contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Resolve unit test scope
+        id: scope
+        env:
+          DOMAINS: ${{ inputs.domains }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          baseline = {"vllm-sr-cli", "fleet-sim", "training"}
+          domains = set(json.loads(os.environ["DOMAINS"]))
+          selected = baseline if "harness" in domains else (baseline & domains or baseline)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("domains=" + json.dumps(sorted(selected)) + "\n")
+          PYTHON
+      - name: Prepare the shared test interpreter
+        run: |
+          make harness-bootstrap
+          echo "$GITHUB_WORKSPACE/.venv-agent/bin" >> "$GITHUB_PATH"
+      - name: CLI unit tests
+        if: contains(fromJSON(steps.scope.outputs.domains), 'vllm-sr-cli') && !inputs.cli_integration
+        run: make vllm-sr-test
+      - name: Fleet simulator tests
+        if: contains(fromJSON(steps.scope.outputs.domains), 'fleet-sim')
+        run: make vllm-sr-sim-test
+      - name: Training contracts
+        if: contains(fromJSON(steps.scope.outputs.domains), 'training')
+        run: make test-training-contracts

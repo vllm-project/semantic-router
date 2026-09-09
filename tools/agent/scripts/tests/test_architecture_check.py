@@ -1,7 +1,9 @@
 import importlib
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 if str(SCRIPT_DIR) not in sys.path:
@@ -117,17 +119,124 @@ class DependencyGraphTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("domain-must-not-depend-on-entrypoint", errors[0].message)
 
-    def test_health_summary_is_diagnostic(self) -> None:
-        sources = {
-            "src/pkg/a.py": "VALUE = 1\n",
-            "src/pkg/test_a.py": "def test_value():\n    assert True\n",
+    def test_removing_cycle_edges_can_split_existing_component(self) -> None:
+        baseline = {
+            "src/pkg/a.py": "from pkg import b, c\n",
+            "src/pkg/b.py": "from pkg import a\n",
+            "src/pkg/c.py": "from pkg import a\n",
         }
+        current = dict(baseline)
+        current["src/pkg/a.py"] = "from pkg import b\n"
+        findings = architecture_check.evaluate_dependency_graph(
+            self.python_scope, current, baseline, {"src/pkg/a.py"}
+        )
+        self.assertTrue(any(f.level == "WARN" for f in findings))
+        self.assertFalse(any(f.level == "ERROR" for f in findings))
 
-        message = architecture_check.health_message(self.python_scope, sources)
+    def test_new_edge_inside_existing_cycle_is_rejected(self) -> None:
+        baseline = {
+            "src/pkg/a.py": "from pkg import b\n",
+            "src/pkg/b.py": "from pkg import c\n",
+            "src/pkg/c.py": "from pkg import a\n",
+        }
+        current = dict(baseline)
+        current["src/pkg/a.py"] = "from pkg import b, c\n"
+        findings = architecture_check.evaluate_dependency_graph(
+            self.python_scope, current, baseline, {"src/pkg/a.py"}
+        )
+        self.assertTrue(any(f.level == "ERROR" for f in findings))
 
-        self.assertIn("production_files=1", message)
-        self.assertIn("test_files=1", message)
-        self.assertIn("source_lines=3", message)
+
+class ImportBoundaryTests(unittest.TestCase):
+    def check_import(self, path, source, forbidden, baseline=""):
+        rules = {
+            "dependency_rules": [
+                {
+                    "name": "domain-boundary",
+                    "applies_to": ["src/*"],
+                    "forbidden_imports": [forbidden],
+                    "policy": "no-new",
+                }
+            ]
+        }
+        with mock.patch.object(
+            architecture_check, "load_baseline_source", return_value=baseline
+        ):
+            return architecture_check.evaluate_dependency_rules(path, source, rules)
+
+    def test_python_comments_and_data_do_not_create_dependencies(self):
+        source = '# import tools.agent\nPATH = "tools.agent"\n'
+        self.assertEqual(self.check_import("src/app.py", source, "tools.agent"), [])
+        self.assertEqual(
+            self.check_import("src/app.py", "from tools import agent\n", "tools.agent")[
+                0
+            ].level,
+            "ERROR",
+        )
+
+    def test_go_imports_are_checked_but_comments_and_path_strings_are_not(self):
+        source = 'package app\n// import "example.org/handlers"\nvar path = "example.org/handlers"\n'
+        self.assertEqual(
+            self.check_import("src/app.go", source, "example.org/handlers"), []
+        )
+        source = 'package app\nimport alias "example.org/handlers"\n'
+        self.assertEqual(
+            self.check_import("src/app.go", source, "example.org/handlers")[0].level,
+            "ERROR",
+        )
+        self.assertEqual(
+            self.check_import("src/app.go", source, "example.org/handlers", source)[
+                0
+            ].level,
+            "WARN",
+        )
+
+    def test_rust_grouped_imports_and_crate_prefix_are_checked(self):
+        source = '// use tools::agent;\nconst PATH: &str = "tools::agent";\n'
+        self.assertEqual(self.check_import("src/app.rs", source, "tools::agent"), [])
+        for source in (
+            "use tools::{agent::run, other};",
+            "use crate::tools::agent as helper;",
+        ):
+            self.assertEqual(
+                self.check_import("src/app.rs", source, "tools::agent")[0].level,
+                "ERROR",
+            )
+
+    def test_prefix_does_not_match_unrelated_module(self):
+        self.assertEqual(
+            self.check_import("src/app.py", "import tools.agentic\n", "tools.agent"), []
+        )
+
+    def test_relative_python_import_is_not_an_external_dependency(self):
+        self.assertEqual(
+            self.check_import(
+                "src/app.py", "from .tools import agent\n", "tools.agent"
+            ),
+            [],
+        )
+
+
+class RootPlacementTests(unittest.TestCase):
+    def test_only_existing_unowned_root_files_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "README.md").touch()
+            (root / "notes.md").touch()
+            (root / "tools").mkdir()
+            (root / "tools/notes.md").touch()
+            rules = {"root_files": {"allowed": ["README.md"]}}
+            with mock.patch.object(architecture_check, "REPO_ROOT", root):
+                for name in ("README.md", "tools/notes.md", "deleted.md"):
+                    self.assertEqual(
+                        architecture_check.evaluate_root_placement(name, rules), []
+                    )
+                self.assertEqual(
+                    architecture_check.evaluate_root_placement("notes.md", rules)[
+                        0
+                    ].level,
+                    "ERROR",
+                )
 
 
 if __name__ == "__main__":

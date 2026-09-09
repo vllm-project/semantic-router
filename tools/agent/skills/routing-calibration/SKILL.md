@@ -14,5 +14,6 @@ Before a live run, validate the probe manifest and identify the exact recipe,
 backend, and rollback point. Record the evaluated inputs, outputs, and observed
 quality rather than inferring success from process health.
 
-Run `make check`, then `make verify DOMAIN=maintained-recipes` for live
-recipe verification.
+Use `make recipe-conformance-live-cpu RECIPE_CONFORMANCE_RECIPES=<recipe>`
+for the recipe under calibration. Run `make recipe-conformance-live-cpu-all`
+when the change warrants maintained-recipe regression coverage.

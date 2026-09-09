@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
 from release_contract_markers import (
     candle_crate_workflow_markers,
     candle_release_notes_markers,
@@ -181,8 +182,8 @@ def parse_release_images() -> tuple[str, ...]:
             "could not find the release image inventory in release workflow"
         )
     images = sorted(json.loads(match.group(1)))
-    docker_workflow = read_text(DOCKER_PUBLISH_WORKFLOW_PATH)
-    missing = [image for image in images if f"{image})" not in docker_workflow]
+    registry = yaml.safe_load(read_text(REPO_ROOT / "tools/agent/domains.yaml"))
+    missing = [image for image in images if image not in registry["images"]]
     if missing:
         raise ValueError(
             "release images are missing from the canonical Docker publisher: "

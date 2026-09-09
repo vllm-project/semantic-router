@@ -83,3 +83,9 @@ generate-deepcopy: install-controller-gen ## Generate deepcopy methods using con
 
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
+
+check-generated-crd: generate-crd ## Verify root router CRDs and their Helm copies are current
+	@git diff --exit-code -- deploy/kubernetes/crds deploy/helm/semantic-router/crds
+	@test -z "$$(git ls-files --others --exclude-standard -- deploy/kubernetes/crds deploy/helm/semantic-router/crds)" || { echo "Untracked generated CRDs must be committed"; exit 1; }
+
+.PHONY: check-generated-crd

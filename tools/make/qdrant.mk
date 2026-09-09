@@ -1,3 +1,16 @@
+start-qdrant: ## Start Qdrant container for testing
+stop-qdrant: ## Stop and remove Qdrant container
+restart-qdrant: ## Restart Qdrant container
+qdrant-status: ## Show status of Qdrant container
+clean-qdrant: ## Clean up Qdrant data
+test-qdrant: ## Run Qdrant integration tests
+
+# Hold the shared legacy datastore lease across setup, tests, and cleanup.
+QDRANT_PUBLIC_TARGETS := start-qdrant stop-qdrant restart-qdrant qdrant-status clean-qdrant test-qdrant
+.PHONY: $(QDRANT_PUBLIC_TARGETS) $(addsuffix -unlocked,$(QDRANT_PUBLIC_TARGETS))
+$(QDRANT_PUBLIC_TARGETS):
+	@python3 tools/dev/with_test_resources.py --resource legacy-test-datastores -- $(MAKE) $@-unlocked
+
 # ======== qdrant.mk ========
 # = Everything For Qdrant   =
 # ======== qdrant.mk ========
@@ -7,7 +20,7 @@
 QDRANT_IMAGE ?= qdrant/qdrant:latest
 QDRANT_CONTAINER ?= qdrant-semantic-router
 
-start-qdrant: ## Start Qdrant container for testing
+start-qdrant-unlocked:
 	@$(LOG_TARGET)
 	@mkdir -p /tmp/qdrant-data
 	@$(CONTAINER_RUNTIME) run -d \
@@ -39,16 +52,18 @@ start-qdrant: ## Start Qdrant container for testing
 	fi
 	@echo "Qdrant available at localhost:6334 (gRPC) / localhost:6333 (REST)"
 
-stop-qdrant: ## Stop and remove Qdrant container
+stop-qdrant-unlocked:
 	@$(LOG_TARGET)
 	@$(CONTAINER_RUNTIME) stop $(QDRANT_CONTAINER) || true
 	@$(CONTAINER_RUNTIME) rm $(QDRANT_CONTAINER) || true
 	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo -n rm -rf /tmp/qdrant-data 2>/dev/null || true
 	@echo "Qdrant container stopped and removed"
 
-restart-qdrant: stop-qdrant start-qdrant ## Restart Qdrant container
+restart-qdrant-unlocked:
+	@$(MAKE) stop-qdrant
+	@$(MAKE) start-qdrant
 
-qdrant-status: ## Show status of Qdrant container
+qdrant-status-unlocked:
 	@$(LOG_TARGET)
 	@if $(CONTAINER_RUNTIME) ps --filter "name=$(QDRANT_CONTAINER)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -q $(QDRANT_CONTAINER); then \
 		echo "Qdrant container is running:"; \
@@ -58,13 +73,13 @@ qdrant-status: ## Show status of Qdrant container
 		echo "Run 'make start-qdrant' to start it"; \
 	fi
 
-clean-qdrant: stop-qdrant ## Clean up Qdrant data
+clean-qdrant-unlocked: stop-qdrant
 	@$(LOG_TARGET)
 	@echo "Cleaning up Qdrant data..."
 	@rm -rf /tmp/qdrant-data 2>/dev/null || sudo -n rm -rf /tmp/qdrant-data 2>/dev/null || true
 	@echo "Qdrant data directory cleaned"
 
-test-qdrant: start-qdrant rust ## Run Qdrant integration tests
+test-qdrant-unlocked: start-qdrant rust
 	@$(LOG_TARGET)
 	@echo "Running Qdrant integration tests..."
 	@export LD_LIBRARY_PATH=$${PWD}/candle-binding/target/release:$${PWD}/ml-binding/target/release:$${PWD}/nlp-binding/target/release && \

@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "${VLLM_SR_TEST_ISOLATED:-0}" != "1" ]]; then
+  exec python3 "${ROOT_DIR}/tools/dev/with_test_resources.py" --isolate-stack -- bash "${BASH_SOURCE[0]}" "$@"
+fi
 RECIPES="${RECIPES:-}"
 ROUTER_IMAGE="${ROUTER_IMAGE:-}"
 VLLM_SR_PORT_OFFSET="${VLLM_SR_PORT_OFFSET:-0}"
@@ -10,9 +13,13 @@ if ! [[ "${VLLM_SR_PORT_OFFSET}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 ROUTER_URL="${ROUTER_URL:-http://127.0.0.1:$((8080 + VLLM_SR_PORT_OFFSET))}"
-REPORT_ROOT="${REPORT_ROOT:-${ROOT_DIR}/.agent-harness/recipe-conformance}"
+REPORT_ROOT="${REPORT_ROOT:-${VLLM_SR_TEST_OUTPUT_DIR}/recipe-conformance}"
 READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-300}"
-GENERATED_RECIPE_DIRS=()
+STACK_STARTED=0
+CONTAINER_PREFIX="${VLLM_SR_STACK_NAME}-vllm-sr"
+if [[ "${VLLM_SR_STACK_NAME}" == "vllm-sr" ]]; then
+  CONTAINER_PREFIX="vllm-sr"
+fi
 
 if [[ -z "${RECIPES}" ]]; then
   echo "RECIPES is required (comma-separated recipe names)" >&2
@@ -23,13 +30,15 @@ if [[ -z "${ROUTER_IMAGE}" ]]; then
   exit 2
 fi
 
+WORK_DIR="$(mktemp -d -t vsr-recipe-test-XXXXXX)"
+
 cleanup() {
-  VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" vllm-sr stop >/dev/null 2>&1 || true
-  for directory in "${GENERATED_RECIPE_DIRS[@]}"; do
-    rm -rf "${directory}"
-  done
+  if [[ "${STACK_STARTED}" == "1" ]]; then
+    vllm-sr stop >/dev/null 2>&1 || true
+    STACK_STARTED=0
+  fi
 }
-trap cleanup EXIT
+trap 'cleanup; rm -rf "${WORK_DIR}"' EXIT
 
 wait_for_router() {
   local deadline=$((SECONDS + READY_TIMEOUT_SECONDS))
@@ -48,32 +57,38 @@ collect_logs() {
   local destination="${REPORT_ROOT}/${recipe}"
   mkdir -p "${destination}"
   for container in \
-    vllm-sr-router-container \
-    vllm-sr-envoy-container \
-    vllm-sr-dashboard-container \
-    vllm-sr-container; do
+    "${CONTAINER_PREFIX}-router-container" \
+    "${CONTAINER_PREFIX}-envoy-container" \
+    "${CONTAINER_PREFIX}-dashboard-container" \
+    "${CONTAINER_PREFIX}-container"; do
     docker logs "${container}" >"${destination}/${container}.log" 2>&1 || true
   done
-  docker ps -a >"${destination}/docker-status.txt" 2>&1 || true
+  docker ps -a --filter "name=${CONTAINER_PREFIX}-" >"${destination}/docker-status.txt" 2>&1 || true
 }
 
 IFS=',' read -r -a recipe_names <<<"${RECIPES}"
 for recipe in "${recipe_names[@]}"; do
   recipe="${recipe//[[:space:]]/}"
   [[ -n "${recipe}" ]] || continue
+  if ! [[ "${recipe}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    echo "invalid recipe name: ${recipe}" >&2
+    exit 2
+  fi
   config="${ROOT_DIR}/config/recipes/${recipe}/config.yaml"
-  generated_output="${ROOT_DIR}/config/recipes/${recipe}/.vllm-sr"
-  GENERATED_RECIPE_DIRS+=("${generated_output}")
-  rm -rf "${generated_output}"
   if [[ ! -f "${config}" ]]; then
     echo "unknown recipe: ${recipe}" >&2
     exit 2
   fi
 
+  mkdir -p "${WORK_DIR}/${recipe}"
+  cp -R "${ROOT_DIR}/config/recipes/${recipe}/." "${WORK_DIR}/${recipe}/"
+  rm -rf "${WORK_DIR}/${recipe}/.vllm-sr"
+  config="${WORK_DIR}/${recipe}/config.yaml"
+
   echo "=== recipe conformance: ${recipe} ==="
   cleanup
+  STACK_STARTED=1
   if ! POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-router-secret}" \
-    VLLM_SR_STATE_ROOT_DIR="${ROOT_DIR}" \
     vllm-sr serve \
       --image-pull-policy ifnotpresent \
       --router-image "${ROUTER_IMAGE}" \

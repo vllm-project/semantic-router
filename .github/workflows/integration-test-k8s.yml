@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      E2E_CLUSTER_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}-${{ strategy.job-index }}
+      E2E_OUTPUT_DIR: ${{ github.workspace }}/.agent-harness/e2e/${{ matrix.profile }}
       # Pipe falls back to direct on any proxy error; comma only on 404 and 410
       GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
@@ -27,6 +29,9 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+
+      - name: Prepare private CI kubeconfig path
+        run: echo "KUBECONFIG=$RUNNER_TEMP/semantic-router-e2e-kubeconfig.yaml" >> "$GITHUB_ENV"
 
       - name: Set up Kind
         uses: ./.github/actions/setup-kind
@@ -73,7 +78,16 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          bash ./e2e/testing/stream_semantic_router_logs.sh &
+          start_router_log_stream() {
+            # Kind creates a private kubeconfig; wait for this run's cluster only.
+            umask 077
+            until kind get kubeconfig --name "$E2E_CLUSTER_NAME" > "${KUBECONFIG}.tmp" 2>/dev/null; do
+              sleep 5
+            done
+            mv "${KUBECONFIG}.tmp" "$KUBECONFIG"
+            exec bash ./e2e/testing/stream_semantic_router_logs.sh
+          }
+          start_router_log_stream &
           ROUTER_LOG_STREAM_PID=$!
           cleanup_router_log_stream() {
             if kill -0 "${ROUTER_LOG_STREAM_PID}" 2>/dev/null; then
@@ -105,18 +119,28 @@ jobs:
       - name: Collect logs via kubectl (fallback)
         if: always()
         run: |
+          mkdir -p "$E2E_OUTPUT_DIR"
+          cd "$E2E_OUTPUT_DIR"
           if [ ! -f "semantic-router-logs.txt" ]; then
+            if [ ! -s "$KUBECONFIG" ]; then
+              umask 077
+              if ! kind get kubeconfig --name "$E2E_CLUSTER_NAME" > "${KUBECONFIG}.tmp" 2>/dev/null; then
+                echo "This run's cluster is unavailable; no fallback logs to collect."
+                exit 0
+              fi
+              mv "${KUBECONFIG}.tmp" "$KUBECONFIG"
+            fi
             echo "⚠️ semantic-router-logs.txt not found, collecting logs via kubectl as fallback..."
             echo "========================================" > semantic-router-logs.txt
             echo "Semantic Router Logs (collected via kubectl fallback)" >> semantic-router-logs.txt
             echo "========================================" >> semantic-router-logs.txt
             echo "" >> semantic-router-logs.txt
 
-            for pod in $(kubectl get pods -n vllm-semantic-router-system -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            for pod in $(kubectl --kubeconfig "$KUBECONFIG" get pods -n vllm-semantic-router-system -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
               echo "=== Pod: $pod ===" >> semantic-router-logs.txt
-              kubectl describe pod "$pod" -n vllm-semantic-router-system >> semantic-router-logs.txt 2>&1 || true
+              kubectl --kubeconfig "$KUBECONFIG" describe pod "$pod" -n vllm-semantic-router-system >> semantic-router-logs.txt 2>&1 || true
               echo "--- Logs ---" >> semantic-router-logs.txt
-              kubectl logs "$pod" -n vllm-semantic-router-system --all-containers=true >> semantic-router-logs.txt 2>&1 || true
+              kubectl --kubeconfig "$KUBECONFIG" logs "$pod" -n vllm-semantic-router-system --all-containers=true >> semantic-router-logs.txt 2>&1 || true
               echo "" >> semantic-router-logs.txt
             done
 
@@ -130,16 +154,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-reports-${{ matrix.profile }}
-          path: |
-            test-report.json
-            test-report.md
-            semantic-router-logs.txt
-            response-api-artifacts/**
+          path: ${{ env.E2E_OUTPUT_DIR }}/
+          include-hidden-files: true
           retention-days: 30
 
       - name: Create test summary from report
         if: always()
         run: |
+          mkdir -p "$E2E_OUTPUT_DIR"
+          cd "$E2E_OUTPUT_DIR"
           if [ -f "test-report.md" ]; then
             echo "=== Reading test report from test-report.md ==="
             cat test-report.md >> $GITHUB_STEP_SUMMARY
@@ -193,3 +216,4 @@ jobs:
         if: always()
         run: |
           make e2e-cleanup || true
+          rm -f "$KUBECONFIG" "${KUBECONFIG}.tmp"

@@ -57,14 +57,20 @@ def _init_languages():
         ".tsx": ("tree_sitter_typescript", "language_tsx", "typescript"),
         ".rs": ("tree_sitter_rust", "language", "rust"),
     }
+    languages = {}
+    families = {}
     for ext, (mod_name, func_name, family) in loaders.items():
         try:
             mod = __import__(mod_name, fromlist=[func_name])
             lang_fn = getattr(mod, func_name)
-            LANG_REGISTRY[ext] = tree_sitter.Language(lang_fn())
-            EXT_TO_LANG_FAMILY[ext] = family
-        except (ImportError, AttributeError, Exception):
-            pass
+            languages[ext] = tree_sitter.Language(lang_fn())
+            families[ext] = family
+        except Exception as exc:
+            raise RuntimeError(
+                f"Required scanner parser {mod_name}.{func_name} is unavailable: {exc}"
+            ) from exc
+    LANG_REGISTRY.update(languages)
+    EXT_TO_LANG_FAMILY.update(families)
 
 
 def get_parser(ext: str):

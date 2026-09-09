@@ -10,10 +10,10 @@ Read `tools/agent/docs/maintainer-ops.md` and
 head revision before mutating GitHub. Base decisions on current `main`, the
 actual diff, tests, CI, and related history—not on descriptions alone.
 
-Keep discovery read-only. Store local state only under
-`.agent-harness/maintainer/`; acquire the documented resource lease before an
-apply step and release it afterward. Prefer editing a mistaken comment over
-posting a duplicate. Never expose private infrastructure in public artifacts.
+Keep discovery read-only. Store any board snapshots under
+`.agent-harness/maintainer/`. Apply GitHub changes within the user's authorized
+scope. Prefer editing a mistaken comment over posting a duplicate. Never
+expose private infrastructure in public artifacts.
 
 For PRs, put blockers first and distinguish suggestions. For issue acceptance,
 use the exact `/accept` comment rather than applying the label directly. For a

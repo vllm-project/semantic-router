@@ -42,63 +42,8 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
         run: |
-          PLATFORMS="linux/amd64"
-          case "$IMAGE" in
-            anthropic-shim)
-              CONTEXT="./e2e/testing/anthropic-shim"
-              DOCKERFILE="./e2e/testing/anthropic-shim/Dockerfile"
-              ;;
-            dashboard)
-              CONTEXT="."
-              DOCKERFILE="./dashboard/backend/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
-            extproc)
-              CONTEXT="."
-              DOCKERFILE="./tools/docker/Dockerfile.extproc"
-              ;;
-            extproc-rocm)
-              CONTEXT="."
-              DOCKERFILE="./tools/docker/Dockerfile.extproc-rocm"
-              ;;
-            llm-katan)
-              CONTEXT="./e2e/testing/llm-katan"
-              DOCKERFILE="./e2e/testing/llm-katan/Dockerfile"
-              ;;
-            operator)
-              CONTEXT="."
-              DOCKERFILE="./deploy/operator/Dockerfile"
-              ;;
-            operator-bundle)
-              CONTEXT="./deploy/operator"
-              DOCKERFILE="./deploy/operator/bundle/Dockerfile"
-              ;;
-            vllm-sr)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile"
-              ;;
-            vllm-sr-cuda)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile.cuda"
-              ;;
-            vllm-sr-rocm)
-              CONTEXT="."
-              DOCKERFILE="./src/vllm-sr/Dockerfile.rocm"
-              ;;
-            vllm-sr-sim)
-              CONTEXT="."
-              DOCKERFILE="./src/fleet-sim/Dockerfile"
-              ;;
-            *)
-              echo "::error::Unknown image '$IMAGE'"
-              exit 1
-              ;;
-          esac
-          {
-            echo "context=$CONTEXT"
-            echo "dockerfile=$DOCKERFILE"
-            echo "platforms=$PLATFORMS"
-          } >> "$GITHUB_OUTPUT"
+          python3 -m pip install PyYAML==6.0.3
+          python3 tools/ci/docker_image_catalog.py "$IMAGE" --pr >> "$GITHUB_OUTPUT"
 
       - name: Resolve build arguments
         id: build-args

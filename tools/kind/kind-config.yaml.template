@@ -8,11 +8,11 @@ nodes:
     # Configure resource limits for the kind node
     # These settings will be applied to the Docker container running the node
     extraMounts:
-      - hostPath: /tmp/kind-semantic-router
+      - hostPath: ${KIND_STORAGE_DIR}
         containerPath: /tmp/hostpath-provisioner
     extraPortMappings:
       - containerPort: 30080
-        hostPort: 30080
+        hostPort: ${KIND_HTTP_PORT}
         protocol: TCP
     kubeadmConfigPatches:
       - |

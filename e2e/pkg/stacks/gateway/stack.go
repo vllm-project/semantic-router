@@ -140,7 +140,7 @@ func (s *Stack) ApplyPrerequisites(ctx context.Context, opts *framework.SetupOpt
 		return nil
 	}
 	s.log(opts.Verbose, "Applying prerequisite manifests")
-	return s.applyManifests(ctx, opts.KubeConfig, s.config.PrerequisiteManifests)
+	return s.applyManifests(ctx, opts, s.config.PrerequisiteManifests)
 }
 
 // DeployCore installs semantic-router, Envoy Gateway, and Envoy AI Gateway.
@@ -184,7 +184,7 @@ func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) er
 func (s *Stack) ApplyResources(ctx context.Context, opts *framework.SetupOptions) error {
 	if len(s.config.ResourceManifests) > 0 {
 		s.log(opts.Verbose, "Applying gateway resource manifests")
-		if err := s.applyManifests(ctx, opts.KubeConfig, s.config.ResourceManifests); err != nil {
+		if err := s.applyManifests(ctx, opts, s.config.ResourceManifests); err != nil {
 			return err
 		}
 	}
@@ -304,9 +304,12 @@ func (s *Stack) waitForService(
 	return serviceName, nil
 }
 
-func (s *Stack) applyManifests(ctx context.Context, kubeConfig string, manifests []string) error {
+func (s *Stack) applyManifests(ctx context.Context, opts *framework.SetupOptions, manifests []string) error {
 	for _, manifest := range manifests {
-		if err := s.runKubectl(ctx, kubeConfig, "apply", "-f", manifest); err != nil {
+		err := framework.WithLocalImages(manifest, opts.LocalImages, func(path string) error {
+			return s.runKubectl(ctx, opts.KubeConfig, "apply", "-f", path)
+		})
+		if err != nil {
 			return fmt.Errorf("apply manifest %s: %w", manifest, err)
 		}
 	}

@@ -19,6 +19,8 @@ jobs:
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/test-and-build.yml
+    with:
+      check_ck: true
     secrets: inherit
 
   dashboard:
@@ -92,12 +94,31 @@ jobs:
     with:
       profile: release
 
+  python-unit:
+    name: Nightly Python unit contracts
+    needs: core
+    uses: ./.github/workflows/python-unit.yml
+    with:
+      cli_integration: true
+
+  qualification:
+    name: Nightly qualification
+    if: always()
+    needs: [core, dashboard, e2e, cli, memory, operator, performance, router-learning, python-unit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every nightly validation
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e 'all(.[]; .result == "success")' <<< "$RESULTS"
+
   docker:
     name: Nightly Docker images
     if: >-
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
-    needs: core
+    needs: qualification
     permissions:
       contents: read
       packages: write
@@ -113,7 +134,7 @@ jobs:
     if: >-
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
-    needs: core
+    needs: qualification
     permissions:
       contents: read
       packages: write

@@ -22,6 +22,7 @@ type KindCluster struct {
 	Verbose            bool
 	GPUEnabled         bool // Enable GPU support for the cluster
 	WorkspaceModelsDir string
+	Created            bool // Only a successful create in this invocation owns deletion.
 }
 
 // NewKindCluster creates a new Kind cluster manager
@@ -42,6 +43,11 @@ func (k *KindCluster) SetWorkspaceModelsDir(dir string) {
 	k.WorkspaceModelsDir = dir
 }
 
+// ModelsDir is mutable model staging owned by this cluster, never a shared cache.
+func (k *KindCluster) ModelsDir() string {
+	return filepath.Join(os.TempDir(), "kind-ml-models-"+k.Name)
+}
+
 // Create creates a new Kind cluster
 func (k *KindCluster) Create(ctx context.Context) error {
 	k.log("Creating Kind cluster: %s", k.Name)
@@ -53,8 +59,7 @@ func (k *KindCluster) Create(ctx context.Context) error {
 	}
 
 	if exists {
-		k.log("Cluster %s already exists", k.Name)
-		return nil
+		return fmt.Errorf("cluster %s already exists; use an explicit --use-existing-cluster to reuse it", k.Name)
 	}
 
 	// If GPU enabled, verify Docker nvidia runtime first
@@ -73,6 +78,7 @@ func (k *KindCluster) Create(ctx context.Context) error {
 	if err := k.runCreateClusterCommand(ctx, configFile); err != nil {
 		return fmt.Errorf("failed to create cluster: %w", err)
 	}
+	k.Created = true
 
 	// Wait for cluster to be ready
 	k.log("Waiting for cluster to be ready...")
@@ -98,6 +104,13 @@ func (k *KindCluster) Create(ctx context.Context) error {
 
 func (k *KindCluster) runCreateClusterCommand(ctx context.Context, configFile string) error {
 	args := k.createClusterArgs(configFile)
+	config, err := os.CreateTemp("", "kind-create-kubeconfig-*.yaml")
+	if err != nil {
+		return err
+	}
+	closeFile(config)
+	defer removeFile(config.Name())
+	args = append(args, "--kubeconfig", config.Name())
 	cmd := exec.CommandContext(ctx, "kind", args...)
 	if k.Verbose {
 		cmd.Stdout = os.Stdout
@@ -153,9 +166,18 @@ func (k *KindCluster) runBestEffortKubectl(ctx context.Context, kubeConfig strin
 
 // Delete deletes the Kind cluster
 func (k *KindCluster) Delete(ctx context.Context) error {
+	if !k.Created {
+		return fmt.Errorf("refusing to delete cluster %s: this invocation did not create it", k.Name)
+	}
 	k.log("Deleting Kind cluster: %s", k.Name)
 
-	cmd := exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", k.Name)
+	kubeConfig, err := k.GetKubeConfig(ctx)
+	if err != nil {
+		return err
+	}
+	defer removeFile(kubeConfig)
+	// #nosec G204 -- Fixed executable and separate arguments; kubeConfig is created by GetKubeConfig.
+	cmd := exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", k.Name, "--kubeconfig", kubeConfig)
 	if k.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -192,7 +214,12 @@ func (k *KindCluster) WaitForReady(ctx context.Context, timeout time.Duration) e
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "kubectl", "wait",
+	kubeConfig, err := k.GetKubeConfig(ctx)
+	if err != nil {
+		return err
+	}
+	defer removeFile(kubeConfig)
+	cmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig, "wait",
 		"--for=condition=Ready",
 		"nodes",
 		"--all",
@@ -268,14 +295,15 @@ func (k *KindCluster) verifyNvidiaRuntime(ctx context.Context) error {
 }
 
 // getHostMountPath returns the appropriate host path for mounting based on OS
-// On Linux: uses /mnt (standard location)
+// On Linux: honors TMPDIR (CI sets /mnt/tmp on the larger runner disk)
 // On macOS: creates a temporary directory in /tmp (Docker Desktop compatible)
 // On Windows: creates a temporary directory in user's temp folder
 func (k *KindCluster) getHostMountPath() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
-		// On Linux, use /mnt as it's standard and typically has more space
-		return "/mnt", nil
+		// Use an owned directory so distinct clusters never share mutable PVC data.
+		dir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
+		return dir, os.MkdirAll(dir, 0o755)
 	case "darwin":
 		// On macOS, Docker Desktop only allows mounting from specific locations
 		// Use /tmp which is allowed by default
@@ -309,7 +337,7 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 
 	// Ensure ML models mount directory exists BEFORE Kind cluster creation
 	// This is required because Kind mounts are set up at cluster creation time
-	mlModelsDir := "/tmp/kind-ml-models"
+	mlModelsDir := k.ModelsDir()
 	if err := os.MkdirAll(mlModelsDir, 0755); err != nil {
 		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
 	}
@@ -325,7 +353,7 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 	}
 
 	// Base config with host mount for storage (always included)
-	// Also mount /tmp/kind-ml-models for ML model selection E2E tests
+	// Each cluster owns its mutable ML model staging directory.
 	kindConfig := fmt.Sprintf(`kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: %s
@@ -334,8 +362,8 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models%s`, k.Name, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+      - hostPath: %s
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -344,20 +372,20 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
+      - hostPath: %s
         containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
+      - hostPath: %s
         containerPath: /tmp/ml-models%s
-`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")
@@ -454,8 +482,13 @@ func (k *KindCluster) setupGPULibraries(ctx context.Context) error {
 
 // deployDevicePlugin deploys the NVIDIA device plugin
 func (k *KindCluster) deployDevicePlugin(ctx context.Context) error {
+	kubeConfig, err := k.GetKubeConfig(ctx)
+	if err != nil {
+		return err
+	}
+	defer removeFile(kubeConfig)
 	// Check if already deployed
-	checkCmd := exec.CommandContext(ctx, "kubectl", "get", "daemonset",
+	checkCmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig, "get", "daemonset",
 		"nvidia-device-plugin-daemonset", "-n", "kube-system")
 	if checkCmd.Run() == nil {
 		k.log("NVIDIA device plugin already deployed")
@@ -520,7 +553,7 @@ spec:
 	}
 	closeFile(tmpFile)
 
-	applyCmd := exec.CommandContext(ctx, "kubectl", "apply", "-f", tmpFile.Name())
+	applyCmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig, "apply", "-f", tmpFile.Name())
 	if output, err := applyCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to apply device plugin: %w\nOutput: %s", err, string(output))
 	}
@@ -529,7 +562,7 @@ spec:
 	time.Sleep(20 * time.Second)
 
 	// Verify GPUs are allocatable
-	verifyCmd := exec.CommandContext(ctx, "kubectl", "get", "nodes",
+	verifyCmd := exec.CommandContext(ctx, "kubectl", "--kubeconfig", kubeConfig, "get", "nodes",
 		"-o", "custom-columns=NAME:.metadata.name,GPU:.status.allocatable.nvidia\\.com/gpu")
 	if output, err := verifyCmd.CombinedOutput(); err != nil {
 		k.log("Warning: Could not verify GPU allocatable: %v", err)

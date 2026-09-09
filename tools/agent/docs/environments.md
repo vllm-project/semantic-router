@@ -1,9 +1,9 @@
 # Environments
 
-The shared `.venv-agent` contains pinned harness tools. Linked Git worktrees
-reuse the primary worktree's environment through an ignored symlink; run
-`make harness-bootstrap` to create it. Set `AGENT_VENV=<path>` only for an
-intentionally isolated tool environment.
+Each worktree has its own ignored `.venv-agent` for harness tools and editable
+packages. Run `make harness-bootstrap` to create it. This keeps an editable
+install in one branch from redirecting another branch's imports. Language
+package managers continue to share their download caches.
 
 ## Local runtime
 
@@ -29,3 +29,10 @@ Run `make verify DOMAIN=<domain>` for a domain's explicit integration command,
 or `make verify PROFILE=<profile>` for one Kubernetes E2E profile. CI uses the
 same profile names from `tools/agent/domains.yaml` through
 `.github/workflows/integration-test-k8s.yml`.
+
+Integration commands allocate isolated stack names, ports, images, and output
+directories by default. E2E prints its cluster and output directory; explicit
+cluster reuse requires `--use-existing-cluster`. Cleanup preserves reused
+clusters. Legacy datastore commands share a process lock. The local core
+baseline refuses existing legacy containers or data directories and cleans
+only services it starts, so a failed build preserves an earlier manual stack.

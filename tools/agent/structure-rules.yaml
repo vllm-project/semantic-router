@@ -1,15 +1,5 @@
 version: 2
 
-limits:
-  file_lines:
-    warn: 800
-  function_lines:
-    warn: 100
-  nesting:
-    warn: 4
-  interface_methods:
-    warn: 5
-
 root_files:
   allowed:
     - .dockerignore
@@ -30,32 +20,6 @@ root_files:
     - SECURITY.md
     - install.sh
 
-languages:
-  go:
-    globs:
-      - src/**/*.go
-      - dashboard/backend/**/*.go
-      - e2e/**/*.go
-      - deploy/**/*.go
-  python:
-    globs:
-      - src/**/*.py
-      - e2e/**/*.py
-      - tools/**/*.py
-      - bench/**/*.py
-  rust:
-    globs:
-      - candle-binding/src/**/*.rs
-      - ml-binding/src/**/*.rs
-      - nlp-binding/src/**/*.rs
-      - onnx-binding/src/**/*.rs
-  typescript:
-    parser: typescript
-    globs:
-      - dashboard/frontend/src/**/*.ts
-      - dashboard/frontend/src/**/*.tsx
-      - dashboard/frontend/e2e/evaluation/**/*.ts
-
 ignore_globs:
   - website/**
   - models/**
@@ -71,23 +35,23 @@ dependency_rules:
       - candle-binding/src/**/*.rs
       - ml-binding/src/**/*.rs
       - nlp-binding/src/**/*.rs
-    forbidden_literals:
+    forbidden_imports:
       - github.com/vllm-project/semantic-router/e2e
-      - e2e/
-      - tools/agent/docs/
-      - tools/agent/
-      - website/
+      - e2e
+      - tools.agent
+      - tools::agent
+      - website
   - name: dashboard-backend-must-not-reference-frontend-source
     applies_to:
       - dashboard/backend/**/*.go
-    forbidden_literals:
-      - dashboard/frontend/src/
+    forbidden_imports:
+      - github.com/vllm-project/semantic-router/dashboard/frontend/src
   - name: evaluation-backend-must-not-depend-on-http-handlers
     policy: no-new
     applies_to:
       - dashboard/backend/evaluationplane/*.go
       - dashboard/backend/evaluationplane/**/*.go
-    forbidden_literals:
+    forbidden_imports:
       - github.com/vllm-project/semantic-router/dashboard/backend/handlers
 
 architecture:
@@ -102,9 +66,6 @@ architecture:
       focus:
         - src/vllm-sr/cli/evaluation/*.py
         - src/vllm-sr/cli/evaluation/**/*.py
-      test_patterns:
-        - '**/test_*.py'
-        - '**/*_test.py'
       cycle_policy: no-new
       forbidden_edges:
         - name: evaluation-python-must-not-depend-on-command-entrypoints
@@ -128,9 +89,6 @@ architecture:
         - dashboard/frontend/src/components/evaluation-plane/*.tsx
         - dashboard/frontend/src/components/evaluation-plane/**/*.ts
         - dashboard/frontend/src/components/evaluation-plane/**/*.tsx
-      test_patterns:
-        - '**/*.test.ts'
-        - '**/*.test.tsx'
       aliases:
         '@/': dashboard/frontend/src/
       cycle_policy: no-new
@@ -147,11 +105,3 @@ architecture:
             - dashboard/frontend/src/pages/*.tsx
             - dashboard/frontend/src/pages/**/*.ts
             - dashboard/frontend/src/pages/**/*.tsx
-  health_scopes:
-    - name: evaluation-go
-      root: dashboard/backend/evaluationplane
-      include:
-        - dashboard/backend/evaluationplane/*.go
-        - dashboard/backend/evaluationplane/**/*.go
-      test_patterns:
-        - '**/*_test.go'

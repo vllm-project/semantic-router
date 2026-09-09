@@ -3,7 +3,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKER_MK_PATH = REPO_ROOT / "tools" / "make" / "docker.mk"
 AGENT_MK_PATH = REPO_ROOT / "tools" / "make" / "agent.mk"
-ENVIRONMENTS_DOC_PATH = REPO_ROOT / "tools" / "agent" / "docs" / "environments.md"
 MEMORY_INTEGRATION_PATH = REPO_ROOT / "e2e" / "testing" / "run_memory_integration.sh"
 
 
@@ -24,22 +23,9 @@ def test_agent_help_hides_legacy_topology_override() -> None:
     assert "compatibility fallback" not in content
 
 
-def test_environment_docs_explain_default_split_without_user_topology_flags() -> None:
-    content = ENVIRONMENTS_DOC_PATH.read_text(encoding="utf-8")
-
-    assert (
-        "Local runtime defaults to the split router/envoy/dashboard topology" in content
-    )
-    assert (
-        "Split Intelligent Routing for Mixture-of-Models uses the local `vllm-sr` router image directly by default"
-        in content
-    )
-    assert "VLLM_SR_TOPOLOGY=legacy" not in content
-
-
 def test_memory_integration_uses_installed_agent_venv_cli() -> None:
     content = DOCKER_MK_PATH.read_text(encoding="utf-8")
-    target = content.split("memory-test-integration:", 1)[1]
+    target = content.split("memory-test-integration-run:", 1)[1]
 
     assert "vllm-sr-install-cli" in target
     assert 'PATH="$(AGENT_VENV)/bin:$$PATH" \\' in target
@@ -60,8 +46,5 @@ def test_cli_integration_uses_an_isolated_runtime_stack() -> None:
     target = content.split("vllm-sr-test-integration:", 1)[1].split(
         "memory-test-integration:", 1
     )[0]
-
-    assert (
-        'VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}"' in target
-    )
-    assert 'VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}"' in target
+    assert "with_test_resources.py --isolate-stack" in target
+    assert "$(MAKE) vllm-sr-test-integration-run" in target

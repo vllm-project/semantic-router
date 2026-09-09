@@ -146,14 +146,17 @@ api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI
 .PHONY: api-docs-generate
 api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoint index from the route catalog
 	@$(LOG_TARGET)
-	@cd src/semantic-router && \
+	@INDEX_DIR=$$(mktemp -d) && \
+	trap 'rm -rf "$$INDEX_DIR"' EXIT HUP INT TERM && \
+	cd src/semantic-router && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
 		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
-		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
-	@python3 tools/agent/scripts/embed_generated_index.py \
+		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$INDEX_DIR/index.md" && \
+	cd ../.. && \
+	python3 tools/agent/scripts/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
-		--index /tmp/apiserver-endpoint-index.md \
+		--index "$$INDEX_DIR/index.md" \
 		--begin "$(APISERVER_INDEX_BEGIN)" \
 		--end "$(APISERVER_INDEX_END)"
 

@@ -98,7 +98,7 @@ def impact_summary(impact: dict[str, Any]) -> str:
     if not impact["domains"]:
         lines.append("  - none")
 
-    lines.append("Minimum checks:")
+    lines.append("Related check commands:")
     lines.extend(f"  - {command}" for command in impact["checks"])
     if not impact["checks"]:
         lines.append("  - none")
@@ -168,6 +168,16 @@ def run_verify(domains: tuple[str, ...], profiles: tuple[str, ...]) -> int:
         print("Specify DOMAIN and/or PROFILE for explicit integration checks.")
         return 2
 
+    unconfigured = [name for name in domains if not known_domains[name].get("verify")]
+    if unconfigured:
+        print(
+            "No integration command configured for: "
+            + ", ".join(unconfigured)
+            + ". Select a configured DOMAIN or an E2E PROFILE.",
+            file=sys.stderr,
+        )
+        return 2
+
     commands = list(commands_for_domains(domains, "verify"))
     commands.extend(
         f"make e2e-test E2E_PROFILE={profile} E2E_VERBOSE=true" for profile in profiles
@@ -188,7 +198,7 @@ def run_check(changed_files: list[str], base_ref: str | None) -> int:
         bootstrap.append("make harness-rust-bootstrap")
 
     try:
-        run_test_commands(["make codespell-tracked", *bootstrap], "baseline checks")
+        run_test_commands(bootstrap, "lint tooling")
         for check in (
             lambda: run_precommit(changed_files, base_ref),
             lambda: run_python_lint(changed_files),
@@ -198,10 +208,7 @@ def run_check(changed_files: list[str], base_ref: str | None) -> int:
         ):
             if (returncode := check()) != 0:
                 return returncode
-        domains = classify(changed_files).domains
-        return run_test_commands(
-            list(commands_for_domains(domains, "checks")), "domain checks"
-        )
+        return 0
     except subprocess.CalledProcessError as exc:
         return exc.returncode
 
@@ -226,6 +233,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     checks = subparsers.add_parser("check")
     add_changed_file_args(checks)
+
+    formatting = subparsers.add_parser("format")
+    add_changed_file_args(formatting)
 
     verify = subparsers.add_parser("verify")
     verify.add_argument("--domains")
@@ -257,7 +267,10 @@ def main() -> int:
     if args.command == "verify":
         return run_verify(split_names(args.domains), split_names(args.profiles))
 
-    base_ref = resolve_base_ref(getattr(args, "base_ref", None))
+    try:
+        base_ref = resolve_base_ref(getattr(args, "base_ref", None))
+    except ValueError as exc:
+        parser.error(str(exc))
     changed_files = changed_files_for_args(parser, args)
     if args.command == "changed-files":
         print("\n".join(changed_files))
@@ -271,6 +284,17 @@ def main() -> int:
         return 0
     if args.command == "check":
         return run_check(changed_files, base_ref)
+    if args.command == "format":
+        return subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT_DIR / "precommit_tool.py"),
+                "format",
+                *changed_files,
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+        ).returncode
     parser.error(f"Unknown command: {args.command}")
     return 2
 

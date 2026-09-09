@@ -18,7 +18,9 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Template and output files
 TEMPLATE_FILE="${SCRIPT_DIR}/kind-config.yaml.template"
-OUTPUT_FILE="${SCRIPT_DIR}/kind-config.yaml"
+OUTPUT_FILE="${OUTPUT_FILE:-${SCRIPT_DIR}/kind-config.yaml}"
+KIND_STORAGE_DIR="${KIND_STORAGE_DIR:-/tmp/kind-semantic-router}"
+KIND_HTTP_PORT="${KIND_HTTP_PORT:-0}"
 
 # Check if template exists
 if [[ ! -f "${TEMPLATE_FILE}" ]]; then
@@ -41,7 +43,8 @@ echo "  Models dir:   ${MODELS_DIR}"
 echo "  Output file:  ${OUTPUT_FILE}"
 
 # Use envsubst to replace ${PROJECT_ROOT} in template
-export PROJECT_ROOT
+mkdir -p "$(dirname "${OUTPUT_FILE}")"
+export PROJECT_ROOT KIND_STORAGE_DIR KIND_HTTP_PORT
 envsubst < "${TEMPLATE_FILE}" > "${OUTPUT_FILE}"
 
 echo -e "${GREEN}Generated ${OUTPUT_FILE}${NC}"

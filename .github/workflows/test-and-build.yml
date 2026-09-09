@@ -2,6 +2,12 @@ name: Test And Build
 
 on:
   workflow_call:
+    inputs:
+      check_ck:
+        description: Run CK graph rewriter unit contracts.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +22,10 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+
+      - name: CK graph rewriter contracts
+        if: inputs.check_ck
+        run: make ck-rewrite-test
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable

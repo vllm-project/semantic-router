@@ -8,7 +8,8 @@ from typing import Any, Protocol
 
 import yaml
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
-from domain_registry import job_records
+from docker_image_catalog import image_definition
+from domain_registry import image_records, job_records
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
@@ -103,7 +104,7 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
     if "compatibility" in dispatcher.jobs:
         errors.append(".github/workflows/pr.yml: compatibility matrix must be removed")
     gate = dispatcher.jobs.get("pr-gate", {})
-    if not isinstance(gate, dict) or gate.get("name") != "PR Gate":
+    if not isinstance(gate, dict) or "PR Gate" not in str(gate.get("name", "")):
         errors.append(".github/workflows/pr.yml: missing stable 'PR Gate' aggregate")
     else:
         expected_needs = {"changes", *job_records()}
@@ -206,6 +207,7 @@ def validate_classifier_contract(
     }
     expected_outputs.update(
         {
+            "domains",
             "website",
             "helm",
             "e2e",
@@ -386,6 +388,8 @@ def validate_mergify_contract(errors: list[str]) -> None:
         serialized = json.dumps(default_rule.get(section, []))
         if "check-success = PR Gate" not in serialized:
             errors.append(f".mergify.yml: {section} must require PR Gate")
+        if "check-skipped = PR Gate" in serialized:
+            errors.append(f".mergify.yml: {section} must not accept a skipped PR Gate")
         obsolete = (
             "test-and-build",
             "Lint",
@@ -416,6 +420,16 @@ def validate_mergify_contract(errors: list[str]) -> None:
 def validate_workflow_policies(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
+    for image in image_records():
+        for pr in (False, True):
+            try:
+                image_definition(image, pr=pr)
+            except (KeyError, ValueError) as exc:
+                errors.append(f"Invalid image definition: {exc}")
+    for name in ("docker-validate.yml", "docker-publish.yml"):
+        text = workflows[name].path.read_text(encoding="utf-8")
+        if "tools/ci/docker_image_catalog.py" not in text or 'case "$IMAGE"' in text:
+            errors.append(f"{name}: must use the shared Docker image definition")
     validate_pr_contract(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)

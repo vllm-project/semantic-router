@@ -49,6 +49,9 @@ type SetupOptions struct {
 	// ValuesFiles contains paths to Helm values files
 	// keyed by Helm release name for profile-specific overlays.
 	ValuesFiles map[string]string
+
+	// LocalImages maps manifest image references to this run's built images.
+	LocalImages map[string]string
 }
 
 // TeardownOptions contains options for profile teardown
@@ -76,6 +79,9 @@ type TestOptions struct {
 
 	// ImageTag is the Docker image tag to use
 	ImageTag string
+
+	// OutputDir owns this invocation's reports and diagnostic logs.
+	OutputDir string
 
 	// KeepCluster preserves the kind cluster and profile resources after the run.
 	KeepCluster bool

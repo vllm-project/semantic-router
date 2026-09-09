@@ -13,6 +13,7 @@ decision or algorithm, and selected backend/plugin behavior consistent. Update
 canonical config, generated or schema-derived artifacts, and user-visible docs
 only where that contract changes.
 
-Run `make check` first. Use `make verify DOMAIN=<domain>` for the affected
-integration contract, or `make verify PROFILE=<profile>` when behavior crosses
-the deployment boundary. A pure refactor does not need new E2E coverage.
+Choose tests that prove the affected contract. Use `make verify DOMAIN=<domain>`
+for a configured integration check, or `make verify PROFILE=<profile>` when
+behavior crosses the deployment boundary. A pure refactor does not need new
+E2E coverage.

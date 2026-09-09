@@ -1,6 +1,6 @@
 # Architecture guardrails
 
-Architecture checks distinguish invariants from heuristics.
+Architecture checks enforce dependency and generated-artifact constraints.
 
 ## Blocking invariants
 
@@ -13,12 +13,10 @@ Architecture checks distinguish invariants from heuristics.
 Existing forbidden edges may be ratcheted against `BASE_REF`; adding to them
 fails. Rules live in `tools/agent/structure-rules.yaml` and remain declarative.
 
-## Advisory evidence
+## Module design
 
-File length over 800 lines, function length over 100 lines, nesting over four
-levels, interface size over five methods, source counts, fan-out, and similar
-numeric metrics are review evidence. They never require a split by themselves
-and have no per-file exception registry.
+Module cohesion and interface quality are review judgments. The harness does
+not impose file length, function length, nesting, or interface-size thresholds.
 
 Prefer a cohesive deep module with a narrow API over several shallow wrappers.
 Extract only when ownership, dependency direction, independent testing, or

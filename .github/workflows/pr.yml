@@ -10,12 +10,15 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
+  group: pr-${{ github.event.pull_request.number }}-${{ (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'ci/full') && 'checks' || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   changes:
     name: Changes
+    if: >-
+      github.event.action != 'labeled' && github.event.action != 'unlabeled'
+      || github.event.label.name == 'ci/full'
     uses: ./.github/workflows/ci-changes.yml
 
   quality:
@@ -30,6 +33,7 @@ jobs:
         ${{ needs.changes.outputs.docs_only == 'true'
             && needs.changes.outputs.full != 'true' }}
       website: ${{ needs.changes.outputs.website == 'true' }}
+      domains: ${{ needs.changes.outputs.domains }}
 
   security:
     name: Core security
@@ -53,7 +57,21 @@ jobs:
       && (needs.changes.outputs.core_test == 'true'
         || needs.changes.outputs.full == 'true')
     uses: ./.github/workflows/test-and-build.yml
+    with:
+      check_ck: ${{ contains(fromJSON(needs.changes.outputs.domains), 'ck-flash-attn-rewriter') || needs.changes.outputs.full == 'true' }}
     secrets: inherit
+
+  python-unit:
+    name: Python unit tests
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.python_unit == 'true'
+    uses: ./.github/workflows/python-unit.yml
+    with:
+      domains: ${{ needs.changes.outputs.full == 'true' && '["vllm-sr-cli","fleet-sim","training"]' || needs.changes.outputs.domains }}
+      cli_integration: ${{ needs.changes.outputs.cli == 'true' }}
 
   dashboard:
     name: Dashboard
@@ -173,13 +191,16 @@ jobs:
     uses: ./.github/workflows/paper-build.yml
 
   pr-gate:
-    name: PR Gate
-    if: always()
+    name: ${{ (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'ci/full') && 'PR Gate' || 'Metadata event' }}
+    if: >-
+      always() && (github.event.action != 'labeled' && github.event.action != 'unlabeled'
+      || github.event.label.name == 'ci/full')
     needs:
       - changes
       - quality
       - security
       - core-tests
+      - python-unit
       - dashboard
       - operator
       - e2e
@@ -193,23 +214,9 @@ jobs:
       - paper
     runs-on: ubuntu-latest
     steps:
-      - name: Summarize affected domain results
+      - uses: actions/checkout@v4
+      - name: Require all selected checks
         env:
           DOMAIN_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -r '
-            to_entries[]
-            | "- \(.key): \(.value.result)"
-          ' <<< "$DOMAIN_RESULTS" >> "$GITHUB_STEP_SUMMARY"
-          failures="$(
-            jq -r '
-              to_entries[]
-              | select(.value.result != "success" and .value.result != "skipped")
-              | "\(.key)=\(.value.result)"
-            ' <<< "$DOMAIN_RESULTS"
-          )"
-          if [ -n "$failures" ]; then
-            echo "::error::Affected PR domain failed or was cancelled"
-            echo "$failures"
-            exit 1
-          fi
+          ACTIVE: ${{ !github.event.pull_request.draft || startsWith(github.head_ref, 'mergify/merge-queue/') }}
+        run: python3 tools/ci/gate_results.py

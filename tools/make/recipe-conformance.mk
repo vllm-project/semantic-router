@@ -3,7 +3,7 @@
 # =======================================
 
 RECIPE_CONFORMANCE_PYTHON ?= $(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3)
-RECIPE_CONFORMANCE_REPORT_DIR ?= $(CURDIR)/.agent-harness/recipe-conformance
+RECIPE_CONFORMANCE_REPORT_DIR ?= $(if $(VLLM_SR_TEST_OUTPUT_DIR),$(VLLM_SR_TEST_OUTPUT_DIR)/recipe-conformance,$(CURDIR)/.agent-harness/recipe-conformance)
 RECIPE_CONFORMANCE_SHARDS ?= 3
 RECIPE_CONFORMANCE_RECIPE ?=
 VLLM_SR_PORT_OFFSET ?= 0
@@ -55,6 +55,9 @@ recipe-conformance-eval: ## Evaluate one active recipe router (set RECIPE_CONFOR
 		--router-url "$(RECIPE_CONFORMANCE_ROUTER_URL)"
 
 recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_CONFORMANCE_RECIPES)
+	@python3 tools/dev/with_test_resources.py --isolate-stack -- $(MAKE) recipe-conformance-live-cpu-run
+
+recipe-conformance-live-cpu-run:
 	@$(LOG_TARGET)
 	@if [ -z "$(RECIPE_CONFORMANCE_RECIPES)" ]; then \
 		echo "RECIPE_CONFORMANCE_RECIPES is required"; \
@@ -73,5 +76,5 @@ recipe-conformance-live-cpu-all: ## Build once and run all maintained recipes
 
 .PHONY: recipe-conformance-static recipe-conformance-plan \
 	recipe-conformance-report \
-	recipe-conformance-eval recipe-conformance-live-cpu \
+	recipe-conformance-eval recipe-conformance-live-cpu recipe-conformance-live-cpu-run \
 	recipe-conformance-live-cpu-all

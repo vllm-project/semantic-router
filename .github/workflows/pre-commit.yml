@@ -4,192 +4,106 @@ on:
   workflow_call:
     inputs:
       docs_only:
-        description: Run the lightweight docs and website gate.
+        description: Avoid native lint tool setup for documentation-only changes.
         required: true
         type: boolean
       website:
-        description: Build the website in lightweight mode.
+        description: Build the website whenever website files change.
         required: false
         default: false
         type: boolean
+      domains:
+        description: JSON ownership domains from the shared classifier.
+        required: false
+        default: '[]'
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  docs-precommit:
-    if: inputs.docs_only
+  static:
+    name: Static and repository contracts
     runs-on: ubuntu-latest
-    name: Docs and website lightweight checks
-
+    timeout-minutes: 30
     steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: Set up Node
-        if: inputs.website
-        uses: actions/setup-node@v5
+          python-version: '3.11'
+      - uses: actions/setup-go@v5
         with:
-          node-version: 22
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+          go-version: '1.25'
+          cache-dependency-path: '**/go.sum'
+      - uses: actions/setup-node@v5
         with:
-          go-version: "1.25"
-
-      - name: Cache Node dependencies
-        if: inputs.website
-        uses: actions/cache@v4
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        if: ${{ !inputs.docs_only }}
         with:
-          path: |
-            ~/.npm
-            website/node_modules
-          key: ${{ runner.os }}-node-docs-ci-${{ hashFiles('website/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-docs-ci-
-
-      - name: Run changed-file checks
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export BASE_REF="origin/${{ github.base_ref }}"
-          else
-            export BASE_REF="HEAD^"
-          fi
-          make check
-
-      - name: Build website
-        if: inputs.website
-        run: |
-          cd website
-          npm ci
-          npm run build
-
-  full-precommit:
-    if: ${{ !inputs.docs_only }}
-    runs-on: ubuntu-latest
-    name: Full pre-commit checks
-
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch full history for pre-commit
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Set up Node
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.90
+          toolchain: '1.90'
           components: rustfmt, clippy
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            make \
-            build-essential \
-            pkg-config \
-            shellcheck
-
-      - name: Set up golangci-lint
+      - name: Install Go lint binary
+        if: ${{ !inputs.docs_only }}
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.5.0
           install-mode: binary
           args: --help
-
-      - name: Cache Rust dependencies
+      - name: Cache native lint dependencies
+        if: ${{ !inputs.docs_only }}
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
+            ~/.cargo/registry/
             ~/.cargo/git/db/
             candle-binding/target/
           key: ${{ runner.os }}-cargo-precommit-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-precommit-
-
-      - name: Cache Go dependencies
+      - name: Cache Node packages
         uses: actions/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-precommit-
-
-      - name: Cache Node dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-          key: ${{ runner.os }}-node-precommit-${{ hashFiles('website/package-lock.json') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-node-precommit-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-precommit-
-
-      - name: Cache pre-commit environments
-        uses: actions/cache@v4
+      - name: Install shell lint tooling
+        if: ${{ !inputs.docs_only }}
+        run: sudo apt-get update && sudo apt-get install -y shellcheck pkg-config
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-precommit-
-
-      # Domain checks may invoke dashboard tests that shell out to the CLI.
-      - name: Install vllm-sr CLI
-        run: pip install -e src/vllm-sr
-
-      - name: Run changed-file checks
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            export BASE_REF="origin/${{ github.base_ref }}"
-          else
-            export BASE_REF="HEAD^"
-          fi
-          make check
-
-      - name: Show pre-commit results
+      - name: Run changed-file static checks
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
+        run: make check
+      - name: Validate repository harness
+        if: contains(fromJSON(inputs.domains), 'harness')
+        run: make harness-check
+      - name: Check translation coverage
+        if: contains(fromJSON(inputs.domains), 'documentation')
+        run: make docs-check-translation-coverage
+      - name: Build website
+        if: inputs.website
+        working-directory: website
+        run: npm ci && npm run build
+      - name: Show generated or formatting differences
         if: failure()
-        run: |
-          echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
-          echo ""
-          echo "=== Files with gofmt issues (gofmt -l) ==="
-          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== gofmt diff for all modified Go files ==="
-          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
-          echo ""
-          echo "=== Working tree changes after pre-commit run ==="
-          git diff --name-only || true
-          echo ""
-          echo "=== Full git diff ==="
-          git diff || true
-          echo ""
-          echo "To reproduce the full PR baseline locally:"
-          echo "  make ci-full"
-          echo ""
-          echo "To run changed-file checks locally:"
-          echo "  make check BASE_REF=origin/${{ github.base_ref }}"
+        run: git diff --stat && git diff
+
+  e2e-compile:
+    name: Compile E2E framework
+    if: contains(fromJSON(inputs.domains), 'e2e-framework')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: e2e/go.sum
+      - run: make build-e2e

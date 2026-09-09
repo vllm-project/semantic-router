@@ -50,6 +50,7 @@ class Classification:
         outputs = {name: str(value).lower() for name, value in self.signals.items()}
         outputs.update(
             {
+                "domains": _compact_json(self.domains),
                 "e2e": str(bool(self.profiles)).lower(),
                 "e2e_profiles": _compact_json(self.profiles),
                 "full_e2e_profiles": _compact_json(full_e2e_profiles()),
@@ -153,6 +154,9 @@ def select_jobs(
     for domain_name in domains:
         domain = records[domain_name]
         enabled.update(domain.get("ci_jobs", []))
+    # Escalation paths are independent of ownership paths (for example shared
+    # Docker tooling can require CLI integration without belonging to the CLI).
+    for domain in records.values():
         escalation = domain.get("escalation", {})
         if not suppress_expensive and any_matches(changed, escalation.get("paths", [])):
             enabled.update(escalation.get("jobs", []))

@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
@@ -105,7 +106,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 
 	// Step 1: Train ML models (or verify they exist)
 	p.log("Step 1/7: Preparing ML models for model selection")
-	if err := p.prepareMLModels(ctx); err != nil {
+	if err := p.prepareMLModels(ctx, opts.ClusterName); err != nil {
 		return fmt.Errorf("failed to prepare ML models: %w", err)
 	}
 
@@ -319,7 +320,7 @@ func (p *Profile) log(format string, args ...interface{}) {
 
 // prepareMLModels ensures ML models are downloaded and available for the pod
 // Flow: Check local models → Download pretrained models from HuggingFace
-func (p *Profile) prepareMLModels(ctx context.Context) error {
+func (p *Profile) prepareMLModels(ctx context.Context, clusterName string) error {
 	// Source directory where trained models should exist (also used as mount source)
 	// Using .cache/ml-models to keep models outside of source tree
 	sourceDir := ".cache/ml-models"
@@ -393,7 +394,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 
 	// Step 1: Copy models to host directory for Linux CI (where hostPath works)
 	// This is the standard approach that works on native Linux
-	hostDir := "/tmp/kind-ml-models"
+	hostDir := cluster.NewKindCluster(clusterName, p.verbose).ModelsDir()
 	p.log("Copying models to host directory %s...", hostDir)
 	if err := os.MkdirAll(hostDir, 0755); err != nil {
 		p.log("  Warning: could not create host directory: %v (may need sudo on some systems)", err)
@@ -419,7 +420,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 	p.log("Copying models into Kind node containers...")
 
 	// Get actual Kind node names dynamically
-	kindNodes, err := p.getKindNodes(ctx)
+	kindNodes, err := p.getKindNodes(ctx, clusterName)
 	if err != nil {
 		return fmt.Errorf("failed to get Kind nodes: %w", err)
 	}
@@ -461,8 +462,8 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 }
 
 // getKindNodes returns the list of node names for the Kind cluster
-func (p *Profile) getKindNodes(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", "semantic-router-e2e")
+func (p *Profile) getKindNodes(ctx context.Context, clusterName string) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "kind", "get", "nodes", "--name", clusterName)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("kind get nodes failed: %w", err)

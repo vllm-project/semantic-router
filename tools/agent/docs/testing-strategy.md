@@ -11,19 +11,21 @@ make verify PROFILE=<profile>
 make ci-full
 ```
 
-`make check` is the daily default. It formats and lints changed files, enforces
-dependency/generated contracts, and runs the matching domains' unit or static
-contract checks from `tools/agent/domains.yaml`.
+`make check` checks formatting and lints changed files without editing source,
+and enforces dependency/generated contracts. Use `make fmt` to apply formatting.
+Choose focused unit or contract targets based on the behavior being changed;
+`make impact` lists related commands from `tools/agent/domains.yaml`.
 
 Use `make verify` for runtime, deployment, provider, storage, or other
 integration behavior. It requires an explicit domain/profile so a path
-classifier cannot silently choose an expensive or wrong environment. Add or
-update E2E when user-visible routing, startup, config, Docker, CLI, API, or
-protocol behavior changes; a pure refactor needs focused unit/contract proof.
+classifier cannot silently choose an expensive or wrong environment. Behavior
+changes need tests that prove them. Use integration or E2E when correctness
+depends on interaction across components. A pure refactor does not require
+new E2E coverage.
 
-Use `make ci-full` for high-risk changes or reviewer-requested full parity. It
-runs the complete pre-commit and test/build baseline and is intentionally not
-part of every local edit loop.
+Use `make ci-full` for the containerized quality and local core test/build
+baseline. It is intentionally outside the daily edit loop and does not cover
+hardware-specific jobs or release qualification.
 
 CI path classification is deliberately coarser than developer reasoning:
 
@@ -35,8 +37,23 @@ CI path classification is deliberately coarser than developer reasoning:
 - nightly and release workflows remain independent safety nets.
 
 The aggregate required check is `PR Gate`. Individual jobs may be skipped when
-their domain is unaffected; the gate fails if any selected job fails or is
-cancelled.
+their domain is unaffected; the gate fails if any selected job is missing,
+skipped, cancelled, or failed.
 
 Harness and workflow changes use `make harness-check`, which validates the
-registry, reusable workflow contracts, unit tests, and action syntax.
+registry, reusable workflow contracts, harness/resource tests, and action syntax.
+
+## CI ownership
+
+Quality runs static checks and repository contracts. Component jobs own their
+unit tests, generated API/CRD checks, compilation, and website builds. Python CLI,
+fleet, and training contracts share a lightweight workflow; CLI integration
+already includes its unit suite. Integration jobs own live stacks and profiles.
+The path registry selects these jobs; it does not prescribe a local work loop.
+
+Nightly publishers wait for all scheduled validation jobs. A release tag must
+point to the exact commit of a successful Main push run. Merge a candidate into
+main and finish Main validation before tagging; if its Main run failed, rerun
+that run successfully before retrying Release. Manual Release dispatch remains
+a version-contract dry run and does not publish. Shared image tags advance by
+source ancestry so an older run cannot overwrite a newer qualified source.

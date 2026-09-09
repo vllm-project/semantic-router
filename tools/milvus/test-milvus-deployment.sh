@@ -21,7 +21,10 @@ NC='\033[0m' # No Color
 
 # Configuration
 NAMESPACE="vllm-semantic-router-system"
-CLUSTER_NAME="semantic-router-cluster"
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-semantic-router-cluster}"
+export KIND_CLUSTER_NAME="${CLUSTER_NAME}"
+export KIND_KUBECONFIG="${KIND_KUBECONFIG:-${PWD}/.agent-harness/kube/${CLUSTER_NAME}/kubeconfig.yaml}"
+export KUBECONFIG="${KIND_KUBECONFIG}"
 RELEASE_NAME="milvus-semantic-cache"
 
 # Environment variable defaults (empty means interactive)
@@ -82,6 +85,8 @@ section_create_cluster() {
             make delete-cluster
         else
             log_info "Using existing cluster"
+            mkdir -p "$(dirname "${KUBECONFIG}")"
+            kind get kubeconfig --name "${CLUSTER_NAME}" > "${KUBECONFIG}"
             return 0
         fi
     fi

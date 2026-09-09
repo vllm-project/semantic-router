@@ -5,11 +5,6 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
     hooks:
-      - id: trailing-whitespace
-        files: \.(go|rs|py|js)$
-      - id: end-of-file-fixer
-        files: \.(go|rs|py|js)$
-        exclude: ^website/build/
       - id: check-added-large-files
         args: ["--maxkb=500"]
         files: \.(go|rs|py|js)$
@@ -19,7 +14,7 @@ repos:
     hooks:
       - id: go-fmt
         name: go fmt
-        entry: gofmt -w
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py go
         language: system
         files: \.go$
 
@@ -52,7 +47,7 @@ repos:
     hooks:
       - id: shellcheck
         name: shellcheck
-        entry: make shellcheck
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py shell
         language: system
         files: \.sh$
 
@@ -82,65 +77,40 @@ repos:
     hooks:
       - id: js-ts-lint
         name: js/ts lint
-        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py website
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py javascript
         language: system
-        files: \.(js|ts|tsx)$
-        exclude: ^(\node_modules/)
-        pass_filenames: false
+        files: \.(js|jsx|ts|tsx|mjs|cjs)$
+        exclude: (^|/)node_modules/
 
   # Rust specific hooks
   - repo: local
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: bash -c 'cd candle-binding && rustup component add rustfmt 2>/dev/null || true && cargo fmt'
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py rust
         language: system
         files: \.rs$
-        pass_filenames: false
 
-  # Python specific hooks
-  # Using only Black for Python formatting (simpler, no conflicts)
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  - repo: local
     hooks:
       - id: black
-        language_version: python3
+        name: Python format check
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py python
+        language: system
         files: \.py$
-        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
-
-  # Supply chain security scan (AST-based, tree-sitter)
-  - repo: local
-    hooks:
-      - id: supply-chain-security-scan
-        name: supply chain security scan (AST)
-        entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec ./.venv-agent/bin/python tools/security/ast_security_scanner.py scan . --fail-on HIGH'
+      - id: whitespace-check
+        name: whitespace check
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py whitespace
         language: system
-        pass_filenames: false
-        files: \.(py|go|js|ts|tsx|rs)$
-
-  # Deterministic architecture checks. Numeric size findings are advisory;
-  # forbidden dependencies, cycles, and root-placement contracts still block.
-  - repo: local
-    hooks:
-      - id: structure-check
-        name: structure check
-        entry: .venv-agent/bin/python tools/agent/scripts/structure_check.py
+        files: \.(go|rs|py|js)$
+      - id: codespell
+        name: changed-file spelling check
+        entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py codespell
         language: system
-        pass_filenames: true
-        require_serial: true
+        types: [text]
       - id: architecture-check
         name: architecture dependency check
         entry: .venv-agent/bin/python tools/agent/scripts/architecture_check.py
         language: system
         pass_filenames: true
         require_serial: true
-
-
-# Commented out flake8 - only reports issues, doesn't auto-fix
-# -   repo: https://github.com/PyCQA/flake8
-#     rev: 7.3.0
-#     hooks:
-#     -   id: flake8
-#         args: ['--max-line-length=88', '--extend-ignore=E203,W503']
-#         files: \.py$
-#         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site/)

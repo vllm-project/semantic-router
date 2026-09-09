@@ -9,20 +9,22 @@ an agent is finished.
 ```bash
 make impact ENV=cpu CHANGED_FILES="path/one path/two"
 make check CHANGED_FILES="path/one path/two"
+make fmt CHANGED_FILES="path/one path/two"  # explicitly apply formatting
 make verify DOMAIN=<domain>       # only when integration evidence is needed
 make verify PROFILE=<profile>     # explicit E2E
-make ci-full                      # complete local PR baseline
+make ci-full                      # local quality and core test/build baseline
 ```
 
-`impact` reports changed paths, matching ownership domains, minimum checks,
+`impact` reports changed paths, matching ownership domains, related checks,
 candidate CI jobs/images/profiles, and available host tools. The single source
 for those mappings is [domains.yaml](../domains.yaml).
 
-`check` runs changed-file formatting/lint, real dependency and generated
-contract checks, then the owning domains' smallest unit/contract commands.
-Numeric structure metrics are advisory. `verify` never guesses: callers name
-the integration domain or E2E profile. `ci-full` is the explicit expensive
-safety net.
+`check` checks changed-file formatting/lint and real dependency/generated
+contracts without editing source. `fmt` applies formatting explicitly. Choose
+the tests that prove the change using the existing domain targets; CI invokes
+those tests in their owning jobs. `verify` requires a configured integration
+domain or E2E profile. `ci-full` runs containerized quality and the local core
+test/build baseline; hardware jobs and release qualification remain separate.
 
 Use `make harness-check` for changes to harness code, workflows, the domain
 registry, or agent instructions.
@@ -31,7 +33,7 @@ registry, or agent instructions.
 
 - [change-surfaces.md](change-surfaces.md): cross-layer product contracts
 - [environments.md](environments.md): supported local and CI environments
-- [architecture-guardrails.md](architecture-guardrails.md): enforced versus advisory architecture checks
+- [architecture-guardrails.md](architecture-guardrails.md): dependency and generated-artifact constraints
 - [architecture-risks.md](architecture-risks.md): compact repository-only risk index
 - [maintainer-ops.md](maintainer-ops.md): reviewed GitHub and release operations
 - [openai-api-contracts.md](openai-api-contracts.md): protocol translation contracts

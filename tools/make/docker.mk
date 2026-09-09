@@ -505,13 +505,13 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli
+vllm-sr-test-integration-run: ## Run CLI unit + integration tests (requires local runtime images)
+vllm-sr-test-integration-run: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_TEST_UPSTREAM_IMAGE=$(VLLM_SR_TEST_UPSTREAM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
 
-memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
-memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-llm-katan
+memory-test-integration-run: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
+memory-test-integration-run: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
 	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
 	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
@@ -522,3 +522,11 @@ memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-bui
 	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
 	PATH="$(AGENT_VENV)/bin:$$PATH" \
 	bash e2e/testing/run_memory_integration.sh
+
+# Reserve runtime identity and ports before building mutable local images.
+.PHONY: vllm-sr-test-integration memory-test-integration
+vllm-sr-test-integration:
+	@python3 tools/dev/with_test_resources.py --isolate-stack -- $(MAKE) vllm-sr-test-integration-run
+
+memory-test-integration:
+	@python3 tools/dev/with_test_resources.py --isolate-stack -- $(MAKE) memory-test-integration-run

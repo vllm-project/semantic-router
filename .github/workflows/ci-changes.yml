@@ -3,6 +3,10 @@ name: CI Change Classification
 on:
   workflow_call:
     outputs:
+      domains:
+        value: ${{ jobs.classify.outputs.domains }}
+      python_unit:
+        value: ${{ jobs.classify.outputs.python_unit }}
       core_test:
         value: ${{ jobs.classify.outputs.core_test }}
       dashboard:
@@ -54,6 +58,8 @@ jobs:
     name: Classify changed files
     runs-on: ubuntu-latest
     outputs:
+      domains: ${{ steps.classify.outputs.domains }}
+      python_unit: ${{ steps.classify.outputs.python_unit }}
       core_test: ${{ steps.classify.outputs.core_test }}
       dashboard: ${{ steps.classify.outputs.dashboard }}
       website: ${{ steps.classify.outputs.website }}
@@ -79,6 +85,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Install classifier dependency
+        run: python3 -m pip install PyYAML==6.0.3
 
       - id: classify
         name: Classify domains and explicit escalations
