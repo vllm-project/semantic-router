@@ -251,6 +251,22 @@ def test_cli_validate_bundle(tmp_path, capsys):
     assert load_bundle(tmp_path).run == bundle.run
 
 
+@pytest.mark.parametrize(
+    "body, message",
+    [
+        ("[]", "manifest must be a JSON object, got list"),
+        ('"run"', "manifest must be a JSON object, got str"),
+        ('{"kind": ["run"]}', "unknown manifest kind: ['run']"),
+        ('{"kind": {"name": "run"}}', "unknown manifest kind: {'name': 'run'}"),
+    ],
+)
+def test_cli_rejects_malformed_manifest_shape(tmp_path, capsys, body, message):
+    path = tmp_path / "bad.json"
+    path.write_text(body)
+    assert main(["validate", str(path)]) == 1
+    assert message in capsys.readouterr().err
+
+
 def test_cli_reports_errors(tmp_path, capsys):
     bundle, _ = _bundle(tmp_path)
     bundle.evaluation.metrics = {}

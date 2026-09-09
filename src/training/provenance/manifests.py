@@ -90,9 +90,11 @@ def manifest_id(manifest: Manifest) -> str:
     )
 
 
-def manifest_from_dict(data: dict[str, Any]) -> Manifest:
+def manifest_from_dict(data: Any) -> Manifest:
+    if not isinstance(data, dict):
+        raise ValueError(f"manifest must be a JSON object, got {type(data).__name__}")
     kind = data.get("kind")
-    if kind not in MANIFEST_TYPES:
+    if not isinstance(kind, str) or kind not in MANIFEST_TYPES:
         raise ValueError(f"unknown manifest kind: {kind!r}")
     return MANIFEST_TYPES[kind].from_dict(data)
 
