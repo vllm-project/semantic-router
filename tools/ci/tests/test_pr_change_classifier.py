@@ -63,6 +63,18 @@ class PRChangeClassifierTests(unittest.TestCase):
             "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
             "website/static/img/blog/new-screenshot.png",
             ".github/workflows/image-routing-calibration.yml",
+            # Scoring path: the encoder, its bindings, and prototype scoring.
+            "candle-binding/src/model_architectures/embedding/multimodal_embedding.rs",
+            "candle-binding/src/model_architectures/embedding/pooling.rs",
+            "candle-binding/src/core/similarity.rs",
+            "candle-binding/src/ffi/embedding.rs",
+            "candle-binding/semantic-router.go",
+            "candle-binding/Cargo.lock",
+            "src/semantic-router/pkg/classification/embedding_classifier_scoring.go",
+            "src/semantic-router/pkg/classification/embedding_classifier_multimodal.go",
+            "src/semantic-router/pkg/classification/prototype_scoring.go",
+            "src/semantic-router/pkg/config/prototype_scoring_config.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
         ):
             with self.subTest(path=path):
                 self.assertIn("image-calibration", classify([path]).selected_jobs)

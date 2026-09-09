@@ -109,15 +109,8 @@ domains:
     checks: [make test-semantic-router]
     ci_jobs: [core-tests]
 
-  # Every input that can change the calibrated image-routing thresholds: the
-  # shipped pack, the calibration command and its labelled set, the fixture
-  # roots it scans for negatives, and the E2E profile that mirrors the pack.
-  # The model snapshot pin lives in the workflow, which selects itself when
-  # edited.
   image-calibration:
     owner: router-core
-    # Docs images under website/static/img are negatives in the calibration
-    # pool, so a documentation-only change there must still select this gate.
     documentation_check: true
     paths:
       - config/fragments/signal/embedding/image-routing.yaml
@@ -127,6 +120,21 @@ domains:
       - e2e/profiles/multimodal-routing/values.yaml
       - website/static/img/**
       - dashboard/frontend/public/**
+      - candle-binding/src/model_architectures/embedding/**
+      - candle-binding/src/model_architectures/model_factory.rs
+      - candle-binding/src/model_architectures/traits.rs
+      - candle-binding/src/core/**
+      - candle-binding/src/ffi/embedding.rs
+      - candle-binding/semantic-router.go
+      - candle-binding/Cargo.toml
+      - candle-binding/Cargo.lock
+      - src/semantic-router/pkg/classification/embedding_classifier*.go
+      - src/semantic-router/pkg/classification/classifier_signal_embedding*.go
+      - src/semantic-router/pkg/classification/prototype_scoring*.go
+      - src/semantic-router/pkg/config/prototype_scoring_config.go
+      - src/semantic-router/pkg/config/model_config_types.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/modelruntime/router_runtime.go
     checks: [make test-e2e-profile-multimodal]
     ci_jobs: [image-calibration]
 
