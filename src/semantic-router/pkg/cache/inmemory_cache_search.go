@@ -223,6 +223,17 @@ func (c *InMemoryCache) finishFindSimilarSearch(
 	}
 
 	if bestSimilarity >= threshold {
+		// Lexical polarity floor (#2691): reject high-similarity candidates
+		// when the queries differ only by an explicit negation or known antonym.
+		if lexicalPolarityConflict(bestEntry.Query, query) {
+			atomic.AddInt64(&c.missCount, 1)
+			logging.Debugf(
+				"InMemoryCache.FindSimilarWithThreshold: lexical polarity conflict, treating as cache miss",
+			)
+			metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+			return LookupResult{}, nil
+		}
+
 		// NLI polarity tier (#2751): verify the single winning candidate once,
 		// outside the cache lock, before it is served or its access info is
 		// touched.

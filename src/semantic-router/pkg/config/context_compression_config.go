@@ -30,10 +30,6 @@ type CompressionTokenLimit struct {
 	Value int
 }
 
-func AutoCompressionTokenLimit() *CompressionTokenLimit {
-	return &CompressionTokenLimit{Auto: true}
-}
-
 func (limit CompressionTokenLimit) MarshalJSON() ([]byte, error) {
 	if limit.Auto {
 		return json.Marshal("auto")
