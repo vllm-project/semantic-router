@@ -40,6 +40,11 @@ type HTTPTokenClassifierInference struct {
 	// and a remote O span reaching PIIEntities or masking would break parity.
 	known   map[string]struct{}
 	outside map[string]struct{}
+	// model is the configured llm_model_name of the external model. A response
+	// envelope may name the model that produced it; when it does, it must be
+	// this one, so a reply from a differently deployed model cannot pass as
+	// valid.
+	model string
 }
 
 func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
@@ -77,7 +82,7 @@ func newHTTPTokenClassifierInference(cfg *config.ExternalModelConfig, mapping *P
 		return nil, fmt.Errorf("create token_spans connector: %w", err)
 	}
 	known, outside := knownPIILabels(mapping)
-	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside}, nil
+	return &HTTPTokenClassifierInference{connector: remote, timeout: timeout, known: known, outside: outside, model: strings.TrimSpace(cfg.ModelName)}, nil
 }
 
 // tokenSpanWire is one span as the provider sends it. entity_group and word
@@ -131,11 +136,26 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 	if err != nil {
 		return nil, formatHTTPClassifyConnectorError(err)
 	}
-	spans, truncatedAt, err := decodeTokenSpansResponse(responseBody)
+	spans, truncatedAt, model, err := decodeTokenSpansResponse(responseBody)
 	if err != nil {
 		return nil, err
 	}
+	if err := h.checkModelIdentity(model); err != nil {
+		return nil, err
+	}
 	return alignTokenSpans(h.known, h.outside, text, spans, truncatedAt)
+}
+
+// checkModelIdentity enforces the model-identity rule of token_spans.v1: the
+// envelope's model member is optional, but when present it must equal the
+// configured llm_model_name. The bare-list form carries no model and is
+// accepted as is.
+func (h *HTTPTokenClassifierInference) checkModelIdentity(model string) error {
+	model = strings.TrimSpace(model)
+	if model == "" || h.model == "" || model == h.model {
+		return nil
+	}
+	return fmt.Errorf("token_spans response names model %q, backend is configured for %q", model, h.model)
 }
 
 // decodeTokenSpansResponse accepts either a bare JSON list of spans, which is
@@ -145,40 +165,40 @@ func (h *HTTPTokenClassifierInference) classifyTokens(ctx context.Context, text 
 // a spans member that is not an array, or a 200 that carries an error member.
 // None of those may become a clean zero-entity result, because PII would then
 // treat a broken provider as text with nothing to redact.
-func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, error) {
+func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, string, error) {
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 {
-		return nil, nil, fmt.Errorf("token_spans response is empty")
+		return nil, nil, "", fmt.Errorf("token_spans response is empty")
 	}
 	if trimmed[0] == '[' {
 		var spans []tokenSpanWire
 		if err := json.Unmarshal(trimmed, &spans); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse token_spans response: %w", err)
+			return nil, nil, "", fmt.Errorf("failed to parse token_spans response: %w", err)
 		}
-		return spans, nil, nil
+		return spans, nil, "", nil
 	}
 	if trimmed[0] != '{' {
-		return nil, nil, fmt.Errorf("token_spans response must be a JSON array or object")
+		return nil, nil, "", fmt.Errorf("token_spans response must be a JSON array or object")
 	}
 	var env tokenSpansEnvelope
 	if err := json.Unmarshal(trimmed, &env); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse token_spans response: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to parse token_spans response: %w", err)
 	}
 	if isPresentJSON(env.Error) {
-		return nil, nil, fmt.Errorf("token_spans provider reported an error: %s", bytes.TrimSpace(env.Error))
+		return nil, nil, "", fmt.Errorf("token_spans provider reported an error: %s", bytes.TrimSpace(env.Error))
 	}
 	if !isPresentJSON(env.Spans) {
-		return nil, nil, fmt.Errorf("token_spans response has no spans array")
+		return nil, nil, "", fmt.Errorf("token_spans response has no spans array")
 	}
 	spansRaw := bytes.TrimSpace(env.Spans)
 	if spansRaw[0] != '[' {
-		return nil, nil, fmt.Errorf("token_spans spans member must be an array")
+		return nil, nil, "", fmt.Errorf("token_spans spans member must be an array")
 	}
 	var spans []tokenSpanWire
 	if err := json.Unmarshal(spansRaw, &spans); err != nil {
-		return nil, nil, fmt.Errorf("failed to parse token_spans spans: %w", err)
+		return nil, nil, "", fmt.Errorf("failed to parse token_spans spans: %w", err)
 	}
-	return spans, env.TruncatedAt, nil
+	return spans, env.TruncatedAt, env.Model, nil
 }
 
 // isPresentJSON reports whether a raw member was sent with a value other than
@@ -284,6 +304,9 @@ func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map
 // the known-label check: it is in the mapping, but it names the absence of an
 // entity, and the native backend never emits it as a span.
 func spanLabel(i int, sp tokenSpanWire, known, outside map[string]struct{}) (string, error) {
+	if sp.Label != "" && sp.EntityGroup != "" && stripBIOPrefix(sp.Label) != stripBIOPrefix(sp.EntityGroup) {
+		return "", fmt.Errorf("token_spans span %d has conflicting label %q and entity_group %q", i, sp.Label, sp.EntityGroup)
+	}
 	label := sp.Label
 	if label == "" {
 		label = sp.EntityGroup
@@ -320,6 +343,9 @@ func spanBounds(i int, label string, sp tokenSpanWire, input spanInput, truncate
 // spanText resolves text / word and requires it to equal the code-point slice;
 // a mismatch is how an off-by-one in the offset unit shows up.
 func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end int) (string, error) {
+	if sp.Text != nil && sp.Word != nil && *sp.Text != *sp.Word {
+		return "", fmt.Errorf("token_spans span %d (%s) has conflicting text %q and word %q", i, label, *sp.Text, *sp.Word)
+	}
 	var text string
 	switch {
 	case sp.Text != nil:

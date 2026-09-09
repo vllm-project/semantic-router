@@ -180,3 +180,46 @@ func TestBuildMaskedPIITextChainedOverlapKeepsLongestSourcePlaceholder(t *testin
 		t.Fatalf("reverse order got %q", got)
 	}
 }
+
+// Masked text is a pure function of the detection list. The remote adapter
+// converts code-point offsets to bytes; the native backend reports bytes. For
+// the multi-byte and overlapping shapes the fixture corpus covers, both
+// renderings must mask identically (parity gate from #2922, masking half).
+func TestBuildMaskedPIITextLocalAndRemoteOffsetsAgree(t *testing.T) {
+	type span struct {
+		label, text    string
+		cpStart, cpEnd int
+	}
+	cases := []struct {
+		name  string
+		text  string
+		spans []span
+	}{
+		{"cjk", "李小龍的電話是 555-0100。", []span{{"PERSON", "李小龍", 0, 3}, {"PHONE_NUMBER", "555-0100", 8, 16}}},
+		{"emoji before entity", "Call 📞 555-0100 now", []span{{"PHONE_NUMBER", "555-0100", 7, 15}}},
+		{"overlap different types", "Reach me at mailto:jane@example.org for details.", []span{{"EMAIL_ADDRESS", "jane@example.org", 19, 35}, {"URL", "mailto:jane@example.org", 12, 35}}},
+		{"nested", "Send it to John Smith, 12 Baker Street, London.", []span{{"PERSON", "John Smith", 11, 21}, {"ADDRESS", "John Smith, 12 Baker Street, London", 11, 46}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			runes := []rune(tc.text)
+			byteAt := make([]int, len(runes)+1)
+			for i, r := range runes {
+				byteAt[i+1] = byteAt[i] + len(string(r))
+			}
+			var remote, local []classification.PIIDetection
+			for _, sp := range tc.spans {
+				// remote: code points converted once at the adapter boundary
+				remote = append(remote, classification.PIIDetection{EntityType: sp.label, Text: sp.text, Start: byteAt[sp.cpStart], End: byteAt[sp.cpEnd], Confidence: 0.9})
+				// local: native byte offsets found by searching the text
+				bs := strings.Index(tc.text, sp.text)
+				local = append(local, classification.PIIDetection{EntityType: sp.label, Text: sp.text, Start: bs, End: bs + len(sp.text), Confidence: 0.9})
+			}
+			gotRemote, gotLocal := maskedFor(t, tc.text, remote), maskedFor(t, tc.text, local)
+			if gotRemote != gotLocal {
+				t.Fatalf("masked text differs: remote=%q local=%q", gotRemote, gotLocal)
+			}
+			assertNoPIISurvives(t, gotRemote, remote)
+		})
+	}
+}
