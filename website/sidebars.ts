@@ -99,6 +99,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/embedding',
                 'tutorials/signal/learned/modality',
                 'tutorials/signal/learned/fact-check',
+                'tutorials/signal/learned/hallucination',
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
@@ -204,6 +205,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
+                'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
               ],
             },
@@ -248,6 +250,20 @@ const sidebars: SidebarsConfig = {
           },
           items: [
             'installation/configuration-workflows',
+            {
+              type: 'category',
+              label: 'Models',
+              link: {
+                type: 'doc',
+                id: 'installation/model-configuration',
+              },
+              items: [
+                'installation/catalog-backed-models',
+                'installation/custom-models',
+                'installation/model-reasoning',
+                'installation/model-configuration-patterns',
+              ],
+            },
           ],
         },
         {

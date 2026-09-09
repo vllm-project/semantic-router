@@ -67,7 +67,7 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		}
 		canonical.Global.ModelCatalog.Modules.Classifier = classifier
 	}
-	return nil
+	return r.applyOperatorComplexityModel(canonical, spec)
 }
 
 func (r *SemanticRouterReconciler) applyOperatorStoresAndIntegrations(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {

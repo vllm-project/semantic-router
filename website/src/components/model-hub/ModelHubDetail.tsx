@@ -233,7 +233,7 @@ export function ModelHubDetail({
                         ))}
                       </div>
                     )
-                  : <p>No mapped provider.</p>}
+                  : <p>No built-in provider choice. Connect a compatible provider and enter its model ID.</p>}
               </DetailSection>
             )}
         <DetailSection title={`Evidence · ${evaluations.length}`}>

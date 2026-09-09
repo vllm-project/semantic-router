@@ -48,15 +48,15 @@ and a recommended model reference is not a complete built-in model card.
 The old Dashboard therefore contained 40 provider presets, while the Router
 had seven hard-coded runtime types and the packaged catalog had no
 general-purpose physical-model registry. The implemented snapshot compiles 60
-serving providers, three protocol definitions, 83 physical Model Cards, five
-virtual Model Cards, 168 provider-owned model mappings, 64 benchmark
-definitions, and 1,360 exact evaluation records. The five default benchmark
-components produce 1,155 explicit slots over 231 model/effort rows; 124 slots
+serving providers, three protocol definitions, 84 physical Model Cards, five
+virtual Model Cards, 169 provider-owned model mappings, 64 benchmark
+definitions, and 1,365 exact evaluation records. The five default benchmark
+components produce 1,325 explicit slots over 265 model/effort rows; 125 slots
 are currently measured and every other slot stays explicitly missing. Support
 tier, lifecycle, and conformance remain independent, so catalog inclusion is
 not flattened into a native-support or benchmark claim.
 
-All 83 physical cards pass the hard admission rule: at least one exact
+All 84 physical cards pass the hard admission rule: at least one exact
 model, reasoning-effort, and evidence-provenance bucket contains five distinct
 benchmark identities.
 That does not mean every runtime-selectable effort has five published results.
@@ -74,8 +74,9 @@ first 20 individual models from any ranking or endpoint inventory. It focuses
 on roughly twenty mainstream creator companies (22 in this snapshot) and
 represents roughly their latest three generations or product lines. Closely
 related sizes or reasoning variants are included only when they are separately
-selectable and materially useful to operators. GPT-6 Astra remains
-intentionally absent for the separate Day-0 example change.
+selectable and materially useful to operators. GPT-6 Astra is added separately
+as the focused model-onboarding example rather than being folded into the
+baseline change.
 
 | Model creator (`publisher`) | Recent generations and representative lines | Models |
 | --- | --- | ---: |
@@ -164,8 +165,8 @@ and representative.
   model-and-reasoning-effort record.
 - It does not require every new model to have a composite score on release day;
   missing evidence remains explicitly unavailable.
-- GPT-6 Astra is intentionally excluded. It is the separate reference model
-  contribution after this architecture and baseline-catalog change.
+- GPT-6 Astra was intentionally excluded from the architecture baseline and is
+  added by the separate representative model-onboarding contribution.
 
 ## Design principles
 
@@ -564,7 +565,11 @@ A provider-model mapping may further declare `reasoning_modes` or
 new user configuration. They prevent an API-specific surface from accepting a
 mode that is valid for a self-hosted runtime but invalid on that provider; the
 materializer rejects a configured decision before startup when any selected
-backend cannot carry its requested control.
+backend cannot carry its requested control. When one provider exposes the same
+model through several protocols, `reasoning_efforts_by_protocol` can only
+narrow that common set for a named bound protocol. For example, an effort that
+is Responses-only is rejected during startup for a Chat binding instead of
+being sent upstream as a known-invalid request.
 
 The public decision contract remains only `use_reasoning`, optional
 `reasoning_mode`, and optional `reasoning_effort`. At the final dispatch
@@ -721,8 +726,8 @@ The initial population audit makes both coverage and gaps visible. The 64
 benchmark definitions retain all exact measurements as source records, while
 public Hub surfaces remove every exact benchmark/profile/metric tuple measured
 on fewer than ten distinct models. The default five-component matrix
-materializes 1,155 slots over 231
-model/effort rows. At this snapshot, 124 of those slots have an exact
+materializes 1,325 slots over 265
+model/effort rows. At this snapshot, 125 of those slots have an exact
 measurement. Other rows remain explicitly `missing`, `failed`,
 `not_applicable`, or `withheld`; none is fabricated as zero.
 
@@ -1133,9 +1138,9 @@ Protocol and provider adapters remain in narrow runtime packages.
 | 5 | Dashboard catalog API/Add Model migration and website Models page | Logos, forms, Model Hub, and benchmark comparisons consume generated data |
 | 6 | Model/provider contributor guide and repository gates | A compatible model/provider change has one authored source path |
 
-The architecture PR also establishes the initial physical-model baseline. A
-separate follow-up adds GPT-6 Astra as the focused, reviewable model-support
-reference example.
+The architecture change establishes the initial physical-model baseline. The
+focused GPT-6 Astra follow-up demonstrates the complete, reviewable
+model-onboarding path.
 
 ## Acceptance criteria
 
