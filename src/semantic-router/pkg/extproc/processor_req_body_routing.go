@@ -192,7 +192,7 @@ func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
 		"to":          model,
 		"wire_format": candidate.targetFormat,
 	})
-	metrics.ModelRoutingModifications.WithLabelValues(selected.logicalModel, model).Inc()
+	metrics.RecordModelRouting(selected.logicalModel, model)
 	return candidate, true
 }
 
