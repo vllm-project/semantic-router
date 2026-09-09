@@ -353,7 +353,7 @@ func (v *Validator) checkOnUnknownOnErrorConflict(expr BoolExpr, context string)
 	case *BoolNot:
 		v.checkOnUnknownOnErrorConflict(e.Expr, context)
 	case *SignalRefExpr:
-		if _, ok := getStringField(e.Fields, "on_error"); ok {
+		if v, ok := getStringField(e.Fields, "on_error"); ok && v != "" {
 			v.addDiag(DiagConstraint, e.Pos,
 				fmt.Sprintf("%s: condition on_error has no effect when on_unknown is set; remove one of them", context),
 				nil,
