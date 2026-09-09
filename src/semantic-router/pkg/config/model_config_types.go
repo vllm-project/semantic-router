@@ -208,6 +208,12 @@ func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 
 type ComplexityModelConfig struct {
 	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Backend attaches a named remote scorer. Its absence preserves local
+	// prototype scoring exactly as before. It sits here, beside
+	// prototype_scoring, rather than on a rule: routing.signals is replaced
+	// wholesale per recipe, so a backend declared there would disappear under
+	// any recipe that did not repeat it.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
