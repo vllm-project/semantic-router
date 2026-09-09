@@ -3709,7 +3709,9 @@ model_config:
 				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
 			})
 
-			It("should resolve the azure-openai responses path", func() {
+			It("should resolve the azure-openai responses path from the host root", func() {
+				// Azure's v1 Responses route ignores the deployment-scoped base URL and
+				// takes no api-version; the deployment name travels in the request body.
 				profile := &ProviderProfile{
 					Type:       "azure-openai",
 					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/astra-prod",
@@ -3717,7 +3719,19 @@ model_config:
 				}
 				path, err := profile.ResolveCreatePath("openai/responses@1")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/openai/deployments/astra-prod/responses?api-version=2026-09-03"))
+				Expect(path).To(Equal("/openai/v1/responses"))
+			})
+
+			It("should keep the deployment-scoped azure-openai chat path", func() {
+				profile := &ProviderProfile{
+					Type:       "azure-openai",
+					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/astra-prod",
+					APIVersion: "2026-09-03",
+				}
+				path, err := profile.ResolveCreatePath("openai/chat-completions@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal(
+					"/openai/deployments/astra-prod/chat/completions?api-version=2026-09-03"))
 			})
 
 			It("should resolve catalog-backed private runtimes", func() {

@@ -144,6 +144,21 @@ func (transport ReasoningTransport) SupportsFamilyType(familyType string) bool {
 	return ok
 }
 
+// OperationOverride carries per-operation wire deviations that a provider's
+// default path and API-version handling cannot express. Azure OpenAI needs it
+// because its v1 Responses route is rooted at the host and takes no
+// api-version, while its Chat Completions route stays deployment-scoped.
+type OperationOverride struct {
+	// Path replaces the protocol's operation path for this operation.
+	Path string `json:"path,omitempty"`
+	// AbsolutePath resolves Path from the host root, ignoring the path segment
+	// of the operator's configured base URL.
+	AbsolutePath bool `json:"absolute_path,omitempty"`
+	// SuppressAPIVersion drops the api-version query for this operation even
+	// when the provider otherwise sends one.
+	SuppressAPIVersion bool `json:"suppress_api_version,omitempty"`
+}
+
 type ProviderDefinition struct {
 	ID                  string                         `json:"id"`
 	DisplayName         string                         `json:"display_name"`
@@ -155,6 +170,7 @@ type ProviderDefinition struct {
 	DefaultProtocol     string                         `json:"default_protocol"`
 	SupportedOperations []string                       `json:"supported_operations"`
 	PathOverrides       map[string]string              `json:"path_overrides,omitempty"`
+	OperationOverrides  map[string]OperationOverride   `json:"operation_overrides,omitempty"`
 	DefaultHeaders      map[string]string              `json:"default_headers,omitempty"`
 	ReasoningTransport  ReasoningTransport             `json:"reasoning_transport,omitempty"`
 	APIVersionQuery     bool                           `json:"api_version_query,omitempty"`

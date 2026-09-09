@@ -41387,9 +41387,15 @@
           }
         }
       ],
+      "operation_overrides": {
+        "openai/responses@1#create": {
+          "absolute_path": true,
+          "path": "/openai/v1/responses",
+          "suppress_api_version": true
+        }
+      },
       "path_overrides": {
-        "openai/chat-completions@1#create": "/chat/completions",
-        "openai/responses@1#create": "/responses"
+        "openai/chat-completions@1#create": "/chat/completions"
       },
       "presentation": {
         "featured": true,
