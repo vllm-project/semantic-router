@@ -164,6 +164,13 @@ typedef struct {
     bool error;
 } TokenizationResult;
 
+// Byte ranges of an input that each fit the embedding window
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // Classification result structure
 typedef struct {
     int class;
@@ -247,6 +254,8 @@ extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern TokenizationResult tokenize_text(const char* text, int max_length);
 extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_cstring(char* s);
 extern void free_embedding(float* data, int length);
 
@@ -672,6 +681,42 @@ func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
 	default:
 		return false, fmt.Errorf("embedding model %q not loaded", modelType)
 	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into for the whole
+// of it to be embedded. A text that already fits comes back as one range, and
+// consecutive ranges overlap by half a window.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !modelInitialized {
+		return nil, fmt.Errorf("BERT model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+
+	if bool(result.error) {
+		return nil, fmt.Errorf("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := 0; i < count; i++ {
+		windows[i] = TextWindow{Start: int(offsets[i*2]), End: int(offsets[i*2+1])}
+	}
+	return windows, nil
 }
 
 // GetEmbedding gets the embedding vector for a text
