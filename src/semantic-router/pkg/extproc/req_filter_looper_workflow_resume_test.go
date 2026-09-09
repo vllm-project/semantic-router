@@ -19,6 +19,78 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
+func TestHandleLooperExecution_TwoRecipesSameDecisionDoNotShareState(t *testing.T) {
+	t.Parallel()
+
+	server, tracker := newWorkflowPauseResumeServer(t)
+	router := newWorkflowRouter(t, newWorkflowLooperConfig(t, server.URL, config.WorkflowStateBackendMemory))
+
+	pauseResp := routeWorkflowRequestWith(t, router, workflowPauseChatBody(t), workflowRouteOptions{recipe: "recipe-a"})
+	if got := immediateStatus(pauseResp); got != 200 {
+		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
+	}
+	pauseBody := immediateBody(pauseResp)
+	resumeBody := workflowResumeChatBody(t, pauseBody)
+
+	cross := routeWorkflowRequestWith(t, router, resumeBody, workflowRouteOptions{recipe: "recipe-b"})
+	if got := immediateStatus(cross); got != 500 {
+		t.Fatalf("recipe B resume status = %d, want 500, body %s", got, immediateBody(cross))
+	}
+	if !strings.Contains(string(immediateBody(cross)), "not found or expired") &&
+		!strings.Contains(string(immediateBody(cross)), "belongs to recipe") {
+		t.Fatalf("recipe B resume body = %s", immediateBody(cross))
+	}
+	if tracker.sawToolResult() || tracker.sawFinal() {
+		t.Fatal("recipe B consumed recipe A's workflow state")
+	}
+
+	resumeResp := routeWorkflowRequestWith(t, router, resumeBody, workflowRouteOptions{recipe: "recipe-a"})
+	if got := immediateStatus(resumeResp); got != 200 {
+		t.Fatalf("recipe A resume status = %d, body %s", got, immediateBody(resumeResp))
+	}
+	if !tracker.sawToolResult() || !tracker.sawFinal() {
+		t.Fatal("recipe A resume did not finish the workflow")
+	}
+}
+
+func TestHandleLooperExecution_StreamingPauseResumeStripsFlow(t *testing.T) {
+	t.Parallel()
+
+	server, tracker := newWorkflowPauseResumeServer(t)
+	router := newWorkflowRouter(t, newWorkflowLooperConfig(t, server.URL, config.WorkflowStateBackendMemory))
+
+	pauseResp := routeWorkflowRequestWith(t, router, workflowStreamingPauseChatBody(t), workflowRouteOptions{streaming: true})
+	if got := immediateStatus(pauseResp); got != 200 {
+		t.Fatalf("streaming pause status = %d, body %s", got, immediateBody(pauseResp))
+	}
+	pauseBody := immediateBody(pauseResp)
+	if strings.Contains(string(pauseBody), `"flow"`) {
+		t.Fatalf("streaming pause leaked looper flow extension: %s", pauseBody)
+	}
+	resumeResp := routeWorkflowRequestWith(t, router, workflowStreamingResumeChatBody(t, pauseBody), workflowRouteOptions{streaming: true})
+	if got := immediateStatus(resumeResp); got != 200 {
+		t.Fatalf("streaming resume status = %d, body %s", got, immediateBody(resumeResp))
+	}
+	if strings.Contains(string(immediateBody(resumeResp)), `"flow"`) {
+		t.Fatalf("streaming resume leaked looper flow extension: %s", immediateBody(resumeResp))
+	}
+	if !tracker.sawToolResult() || !tracker.sawFinal() {
+		t.Fatal("streaming resume did not finish the workflow")
+	}
+}
+
+func TestLooperClientResponseBody_StripsFlowFromSSE(t *testing.T) {
+	t.Parallel()
+	body := []byte("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"flow\":{\"pending_tool_call\":{\"state_id\":\"abc\"}},\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: [DONE]\n")
+	stripped := looperClientResponseBody(body)
+	if strings.Contains(string(stripped), `"flow"`) {
+		t.Fatalf("SSE still contains flow: %s", stripped)
+	}
+	if !strings.Contains(string(stripped), `"delta"`) {
+		t.Fatalf("SSE lost completion payload: %s", stripped)
+	}
+}
+
 func TestHandleLooperExecution_TwoIndependentRequestsPauseResume(t *testing.T) {
 	t.Parallel()
 
@@ -210,17 +282,39 @@ func routeWorkflowRequest(t *testing.T, router *OpenAIRouter, body []byte) *ext_
 	return resp
 }
 
+type workflowRouteOptions struct {
+	recipe    config.RecipeName
+	streaming bool
+}
+
+func routeWorkflowRequestWith(t *testing.T, router *OpenAIRouter, body []byte, opts workflowRouteOptions) *ext_proc.ProcessingResponse {
+	t.Helper()
+	resp, err := routeWorkflowRequestWithErr(router, body, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
 func routeWorkflowRequestErr(router *OpenAIRouter, body []byte) (*ext_proc.ProcessingResponse, error) {
+	return routeWorkflowRequestWithErr(router, body, workflowRouteOptions{})
+}
+
+func routeWorkflowRequestWithErr(router *OpenAIRouter, body []byte, opts workflowRouteOptions) (*ext_proc.ProcessingResponse, error) {
 	request, err := decodeWorkflowChatRequest(body)
 	if err != nil {
 		return nil, err
 	}
 	decision := workflowTestDecision()
 	ctx := &RequestContext{
-		RequestID:           "workflow-independent-turn",
-		TraceContext:        context.Background(),
-		SourceFormat:        llmprotocol.OpenAIChatV1,
-		VSRSelectedDecision: &decision,
+		RequestID:               "workflow-independent-turn",
+		TraceContext:            context.Background(),
+		SourceFormat:            llmprotocol.OpenAIChatV1,
+		VSRSelectedDecision:     &decision,
+		ExpectStreamingResponse: opts.streaming,
+	}
+	if opts.recipe != "" {
+		ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: opts.recipe})
 	}
 	resp, err := router.handleLooperExecution(context.Background(), request, &decision, ctx)
 	if err != nil {
@@ -246,7 +340,16 @@ func decodeWorkflowChatRequest(body []byte) (*llmprotocol.Request, error) {
 
 func workflowPauseChatBody(t *testing.T) []byte {
 	t.Helper()
-	return []byte(`{
+	return workflowChatBody(false)
+}
+
+func workflowStreamingPauseChatBody(t *testing.T) []byte {
+	t.Helper()
+	return workflowChatBody(true)
+}
+
+func workflowChatBody(stream bool) []byte {
+	body := `{
 		"model":"MoM",
 		"messages":[{"role":"user","content":"Use the lookup tool, then answer."}],
 		"tools":[{
@@ -257,13 +360,27 @@ func workflowPauseChatBody(t *testing.T) []byte {
 				"parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}
 			}
 		}],
-		"tool_choice":"auto"
-	}`)
+		"tool_choice":"auto"`
+	if stream {
+		body += `,
+		"stream":true`
+	}
+	return []byte(body + "\n\t}")
 }
 
 func workflowResumeChatBody(t *testing.T, pauseBody []byte) []byte {
 	t.Helper()
-	assistant, toolCallID := assistantToolMessageFromImmediateBody(t, pauseBody)
+	return workflowResumeChatBodyWithStream(t, pauseBody, false)
+}
+
+func workflowStreamingResumeChatBody(t *testing.T, pauseBody []byte) []byte {
+	t.Helper()
+	return workflowResumeChatBodyWithStream(t, pauseBody, true)
+}
+
+func workflowResumeChatBodyWithStream(t *testing.T, pauseBody []byte, stream bool) []byte {
+	t.Helper()
+	assistant, toolCallID := assistantToolMessageFromClientBody(t, pauseBody)
 	body := map[string]interface{}{
 		"model": "MoM",
 		"messages": []interface{}{
@@ -291,11 +408,77 @@ func workflowResumeChatBody(t *testing.T, pauseBody []byte) []byte {
 		},
 		"tool_choice": "auto",
 	}
+	if stream {
+		body["stream"] = true
+	}
 	data, err := json.Marshal(body)
 	if err != nil {
 		t.Fatalf("marshal resume request: %v", err)
 	}
 	return data
+}
+
+func assistantToolMessageFromClientBody(t *testing.T, body []byte) (map[string]interface{}, string) {
+	t.Helper()
+	trimmed := strings.TrimSpace(string(body))
+	if strings.HasPrefix(trimmed, "data:") || strings.Contains(string(body), "\ndata:") {
+		return assistantToolMessageFromSSEBody(t, body)
+	}
+	return assistantToolMessageFromImmediateBody(t, body)
+}
+
+func assistantToolMessageFromSSEBody(t *testing.T, body []byte) (map[string]interface{}, string) {
+	t.Helper()
+	if strings.Contains(string(body), `"flow"`) {
+		t.Fatalf("streaming pause leaked looper flow extension: %s", body)
+	}
+	var toolCalls []interface{}
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		var chunk map[string]interface{}
+		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+			t.Fatalf("parse SSE chunk %q: %v", payload, err)
+		}
+		if _, ok := chunk["flow"]; ok {
+			t.Fatalf("SSE chunk leaked flow: %s", payload)
+		}
+		choices, _ := chunk["choices"].([]interface{})
+		if len(choices) == 0 {
+			continue
+		}
+		choice, _ := choices[0].(map[string]interface{})
+		delta, _ := choice["delta"].(map[string]interface{})
+		if delta == nil {
+			continue
+		}
+		if raw, ok := delta["tool_calls"].([]interface{}); ok && len(raw) > 0 {
+			toolCalls = raw
+		}
+	}
+	if len(toolCalls) == 0 {
+		t.Fatalf("streaming pause missing tool_calls: %s", body)
+	}
+	toolCall, _ := toolCalls[0].(map[string]interface{})
+	toolCallID, _ := toolCall["id"].(string)
+	if toolCallID == "" {
+		t.Fatalf("streaming pause missing tool_call id: %s", body)
+	}
+	if !strings.HasPrefix(toolCallID, "flowtool_") {
+		t.Fatalf("pause tool_call id %q missing workflow state prefix", toolCallID)
+	}
+	delete(toolCall, "index")
+	return map[string]interface{}{
+		"role":       "assistant",
+		"content":    nil,
+		"tool_calls": toolCalls,
+	}, toolCallID
 }
 
 func assistantToolMessageFromImmediateBody(t *testing.T, body []byte) (map[string]interface{}, string) {

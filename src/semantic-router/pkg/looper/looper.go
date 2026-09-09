@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
@@ -135,6 +136,7 @@ type Looper interface {
 // state. Safe for concurrent use.
 type WorkflowStateService struct {
 	store  workflowToolStateStore
+	ttl    time.Duration
 	wg     sync.WaitGroup
 	mu     sync.RWMutex
 	closed bool
@@ -182,8 +184,22 @@ func NewWorkflowStateService(cfg *config.LooperConfig) *WorkflowStateService {
 	if cfg == nil {
 		return nil
 	}
+	flow := workflowFlowRuntimeConfig(cfg)
 	return &WorkflowStateService{
-		store: newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg)),
+		store: newWorkflowToolStateStoreFromConfig(flow),
+		ttl:   flow.State.WithDefaults().TTL(),
+	}
+}
+
+// CommitStorePolicy applies this generation's store policy after the router
+// swap commits. File-backed stores are shared across overlapping generations,
+// so TTL must not change while a candidate is only warming up.
+func (s *WorkflowStateService) CommitStorePolicy() {
+	if s == nil {
+		return
+	}
+	if store, ok := s.store.(*workflowFileToolStateStore); ok {
+		store.replaceTTL(s.ttl)
 	}
 }
 

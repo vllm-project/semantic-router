@@ -3,6 +3,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,9 +22,39 @@ import (
 
 func makeTestState(id string) *workflowPendingToolState {
 	return &workflowPendingToolState{
-		ID:        id,
-		CreatedAt: time.Now().UTC(),
+		ID:         id,
+		CreatedAt:  time.Now().UTC(),
+		RecipeName: string(config.DefaultRecipeName),
 	}
+}
+
+func consumeWorkflowState(s workflowToolStateStore, id string) (*workflowPendingToolState, bool, error) {
+	return consumeWorkflowStateForRecipe(s, config.DefaultRecipeName, id)
+}
+
+func consumeWorkflowStateForRecipe(s workflowToolStateStore, recipe config.RecipeName, id string) (*workflowPendingToolState, bool, error) {
+	ctx := context.Background()
+	claim, ok, err := s.Claim(ctx, recipe, id)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+	if err := s.Commit(ctx, recipe, id, claim.Token); err != nil {
+		return nil, false, err
+	}
+	return claim.State, true, nil
+}
+
+func setWorkflowStateClaimLease(t *testing.T, d time.Duration) {
+	t.Helper()
+	workflowStateClaimLeaseMu.Lock()
+	prev := workflowStateClaimLease
+	workflowStateClaimLease = d
+	workflowStateClaimLeaseMu.Unlock()
+	t.Cleanup(func() {
+		workflowStateClaimLeaseMu.Lock()
+		workflowStateClaimLease = prev
+		workflowStateClaimLeaseMu.Unlock()
+	})
 }
 
 func makeOversizedState() *workflowPendingToolState {
@@ -86,7 +117,7 @@ func TestStateStore_PauseResume(t *testing.T) {
 			}
 
 			// Request 2: resume — take state by ID from a fresh context.
-			got, ok, err := s.Take(ctx, id)
+			got, ok, err := consumeWorkflowState(s, id)
 			if err != nil {
 				t.Fatalf("Take: %v", err)
 			}
@@ -98,7 +129,7 @@ func TestStateStore_PauseResume(t *testing.T) {
 			}
 
 			// Second take must return nothing (already consumed).
-			_, ok2, err := s.Take(ctx, id)
+			_, ok2, err := consumeWorkflowState(s, id)
 			if err != nil {
 				t.Fatalf("second Take: %v", err)
 			}
@@ -116,9 +147,8 @@ func TestStateStore_TakeMissing(t *testing.T) {
 		t.Run(backend.name, func(t *testing.T) {
 			s := backend.store()
 			defer s.Close()
-			ctx := context.Background()
 
-			got, ok, err := s.Take(ctx, "nonexistent-id")
+			got, ok, err := consumeWorkflowState(s, "nonexistent-id")
 			if err != nil {
 				t.Fatalf("Take error: %v", err)
 			}
@@ -150,8 +180,8 @@ func TestStateStore_Clear(t *testing.T) {
 				t.Fatalf("Clear: %v", err)
 			}
 
-			_, ok1, _ := s.Take(ctx, state1.ID)
-			_, ok2, _ := s.Take(ctx, state2.ID)
+			_, ok1, _ := consumeWorkflowState(s, state1.ID)
+			_, ok2, _ := consumeWorkflowState(s, state2.ID)
 			if ok1 || ok2 {
 				t.Fatal("Clear failed to remove state")
 			}
@@ -182,7 +212,7 @@ func TestStateStore_ConcurrentTakeExactlyOnce(t *testing.T) {
 			for i := 0; i < goroutines; i++ {
 				go func() {
 					defer wg.Done()
-					_, ok, takeErr := s.Take(ctx, "race-test")
+					_, ok, takeErr := consumeWorkflowState(s, "race-test")
 					if takeErr != nil {
 						t.Errorf("Take: %v", takeErr)
 						return
@@ -248,9 +278,11 @@ func TestMemoryStateStore_CardinalityCap(t *testing.T) {
 
 	// Replacing an existing entry should still succeed at capacity.
 	existingID := ""
-	for id := range s.states {
-		existingID = id
-		break
+	for _, entry := range s.states {
+		if entry.state != nil {
+			existingID = entry.state.ID
+			break
+		}
 	}
 	if existingID == "" {
 		t.Fatal("expected at least one stored state")
@@ -330,7 +362,7 @@ func TestStateStore_TTLExpiry(t *testing.T) {
 			// Wait for TTL to pass.
 			time.Sleep(10 * time.Millisecond)
 
-			_, ok, err := s.Take(ctx, "ttl-test")
+			_, ok, err := consumeWorkflowState(s, "ttl-test")
 			if err != nil {
 				t.Fatalf("Take: %v", err)
 			}
@@ -387,7 +419,7 @@ func TestWorkflowRedisToolStateStore_PauseResume(t *testing.T) {
 		t.Fatalf("Put: %v", putErr)
 	}
 
-	got, ok, takeErr := s.Take(ctx, id)
+	got, ok, takeErr := consumeWorkflowState(s, id)
 	if takeErr != nil {
 		t.Fatalf("Take: %v", takeErr)
 	}
@@ -410,7 +442,7 @@ func TestWorkflowRedisToolStateStore_TTLExpiry(t *testing.T) {
 	mr.FastForward(200 * time.Millisecond) // fast-forward miniredis time
 	time.Sleep(10 * time.Millisecond)      // wait for local TTL logic just in case
 
-	_, ok, takeErr := s.Take(ctx, "redis-ttl")
+	_, ok, takeErr := consumeWorkflowState(s, "redis-ttl")
 	if takeErr != nil {
 		t.Fatalf("Take: %v", takeErr)
 	}
@@ -444,7 +476,7 @@ func TestWorkflowRedisToolStateStore_ConnectionPoolStable(t *testing.T) {
 					t.Errorf("Put: %v", putErr)
 					return
 				}
-				if _, _, takeErr := s.Take(ctx, id); takeErr != nil {
+				if _, _, takeErr := consumeWorkflowState(s, id); takeErr != nil {
 					t.Errorf("Take: %v", takeErr)
 					return
 				}
@@ -478,7 +510,7 @@ func TestWorkflowRedisToolStateStore_Clear(t *testing.T) {
 		t.Fatalf("Clear: %v", clearErr)
 	}
 
-	_, ok, _ := s.Take(ctx, "redis-clear1")
+	_, ok, _ := consumeWorkflowState(s, "redis-clear1")
 	if ok {
 		t.Fatal("Clear failed to remove state")
 	}
@@ -523,7 +555,7 @@ func TestFileStateStore_AggregateByteCap(t *testing.T) {
 	store.currentBytes = initialBytes
 	store.mu.Unlock()
 
-	taken, ok, err := store.Take(ctx, "file-cap-1")
+	taken, ok, err := consumeWorkflowState(store, "file-cap-1")
 	if err != nil || !ok || taken == nil {
 		t.Fatalf("Take state1 failed: ok=%v, err=%v", ok, err)
 	}
@@ -569,7 +601,7 @@ func fileStorePutTakeWorker(t *testing.T, store *workflowFileToolStateStore, ctx
 			t.Errorf("worker %d Put failed: %v", workerID, putErr)
 			return
 		}
-		taken, ok, takeErr := store.Take(ctx, id)
+		taken, ok, takeErr := consumeWorkflowState(store, id)
 		if takeErr != nil || !ok || taken == nil {
 			t.Errorf("worker %d Take failed: ok=%v, err=%v", workerID, ok, takeErr)
 			return
@@ -592,7 +624,7 @@ func writeWorkflowStateJSONFile(t *testing.T, dir, name string, state *workflowP
 
 func writeStartupOrphanArtifacts(t *testing.T, dir string) {
 	t.Helper()
-	for _, name := range []string{"startup-1.json.take-orphan", "startup-3.json.tmp-orphan"} {
+	for _, name := range []string{"default__startup-1.json.take-orphan", "startup-3.json.tmp-orphan"} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte("orphan"), 0o600); err != nil {
 			t.Fatalf("write orphan %s: %v", path, err)
@@ -609,7 +641,7 @@ func assertPathNotExist(t *testing.T, path string) {
 
 func requireWorkflowStateTake(t *testing.T, store *workflowFileToolStateStore, ctx context.Context, id string) {
 	t.Helper()
-	taken, ok, err := store.Take(ctx, id)
+	taken, ok, err := consumeWorkflowState(store, id)
 	if err != nil || !ok || taken == nil {
 		t.Fatalf("Take %s failed: ok=%v err=%v", id, ok, err)
 	}
@@ -640,19 +672,244 @@ func TestFileStateStore_ReclamationAndRaceSafety(t *testing.T) {
 
 func TestFileStateStore_StartupRecovery(t *testing.T) {
 	dir := t.TempDir()
-	d1 := writeWorkflowStateJSONFile(t, dir, "startup-1.json", makeTestState("startup-1"))
-	d2 := writeWorkflowStateJSONFile(t, dir, "startup-2.json", makeTestState("startup-2"))
+	d1 := writeWorkflowStateJSONFile(t, dir, "default__startup-1.json", makeTestState("startup-1"))
+	d2 := writeWorkflowStateJSONFile(t, dir, "default__startup-2.json", makeTestState("startup-2"))
 	writeStartupOrphanArtifacts(t, dir)
 
 	store := newWorkflowFileToolStateStore(dir, time.Hour)
 	defer store.Close()
 
 	assertFileStoreCurrentBytes(t, store, int64(len(d1)+len(d2)))
-	assertPathNotExist(t, filepath.Join(dir, "startup-1.json.take-orphan"))
+	assertPathNotExist(t, filepath.Join(dir, "default__startup-1.json.take-orphan"))
 	assertPathNotExist(t, filepath.Join(dir, "startup-3.json.tmp-orphan"))
 
 	ctx := context.Background()
 	requireWorkflowStateTake(t, store, ctx, "startup-1")
 	requireWorkflowStateTake(t, store, ctx, "startup-2")
 	assertFileStoreCurrentBytes(t, store, 0)
+}
+
+func TestStateStore_RecipeNamespaceIsolation(t *testing.T) {
+	t.Parallel()
+	for _, backend := range append(backends(t), redisBackend(t)) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			const id = "shared-decision-state"
+			state := makeTestState(id)
+			state.RecipeName = "recipe-a"
+			state.DecisionName = "shared-decision"
+			if _, err := s.Put(ctx, state); err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+
+			got, ok, err := consumeWorkflowStateForRecipe(s, "recipe-b", id)
+			if err != nil {
+				t.Fatalf("cross-recipe Claim: %v", err)
+			}
+			if ok || got != nil {
+				t.Fatal("recipe B consumed recipe A's namespaced state")
+			}
+
+			got, ok, err = consumeWorkflowStateForRecipe(s, "recipe-a", id)
+			if err != nil || !ok || got == nil {
+				t.Fatalf("recipe A Claim failed: ok=%v err=%v", ok, err)
+			}
+			if got.RecipeName != "recipe-a" {
+				t.Fatalf("stored recipe = %q, want recipe-a", got.RecipeName)
+			}
+		})
+	}
+}
+
+func TestStateStore_RejectsUnscopedLegacyState(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const id = "legacy-unscoped"
+
+	t.Run("memory", func(t *testing.T) {
+		s := newWorkflowMemoryToolStateStore(time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		s.mu.Lock()
+		s.states[id] = memoryStateEntry{state: &workflowPendingToolState{ID: id, CreatedAt: time.Now().UTC()}}
+		s.mu.Unlock()
+		_, _, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if !errors.Is(err, errWorkflowStateUnscoped) {
+			t.Fatalf("Claim unscoped memory = %v, want %v", err, errWorkflowStateUnscoped)
+		}
+	})
+
+	t.Run("file", func(t *testing.T) {
+		dir := t.TempDir()
+		s := newWorkflowFileToolStateStore(dir, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		writeWorkflowStateJSONFile(t, dir, id+".json", &workflowPendingToolState{ID: id, CreatedAt: time.Now().UTC()})
+		_, _, err := s.Claim(ctx, config.DefaultRecipeName, id)
+		if !errors.Is(err, errWorkflowStateUnscoped) {
+			t.Fatalf("Claim unscoped file = %v, want %v", err, errWorkflowStateUnscoped)
+		}
+	})
+
+	t.Run("redis", func(t *testing.T) {
+		mr, s := setupRedisStore(t)
+		t.Cleanup(func() {
+			_ = s.Close()
+			mr.Close()
+		})
+		legacy, err := json.Marshal(&workflowPendingToolState{ID: id, CreatedAt: time.Now().UTC()})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		if setErr := s.client.Set(ctx, s.legacyKey(id), legacy, time.Hour).Err(); setErr != nil {
+			t.Fatalf("SET legacy: %v", setErr)
+		}
+		_, _, err = s.Claim(ctx, config.DefaultRecipeName, id)
+		if !errors.Is(err, errWorkflowStateUnscoped) {
+			t.Fatalf("Claim unscoped redis = %v, want %v", err, errWorkflowStateUnscoped)
+		}
+	})
+}
+
+func TestStateStore_ClaimLeaseBusyThenRecover(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			assertClaimLeaseBusyThenRecover(t, s, func() {
+				time.Sleep(120 * time.Millisecond)
+			})
+		})
+	}
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-lease:",
+		}, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertClaimLeaseBusyThenRecover(t, s, func() {
+			mr.FastForward(120 * time.Millisecond)
+		})
+	})
+}
+
+func TestWorkflowRedisToolStateStore_CommitAfterLeaseExpiryDeletesState(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	mr := miniredis.RunT(t)
+	s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+		Address:   mr.Addr(),
+		KeyPrefix: "test-commit-expiry:",
+	}, time.Hour)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+	const id = "commit-after-expiry"
+	if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || claim == nil {
+		t.Fatalf("Claim: ok=%v err=%v", ok, err)
+	}
+
+	mr.FastForward(120 * time.Millisecond)
+	if err := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); err != nil {
+		t.Fatalf("Commit after lease expiry: %v", err)
+	}
+	got, ok, err := consumeWorkflowState(s, id)
+	if err != nil {
+		t.Fatalf("Claim after commit: %v", err)
+	}
+	if ok || got != nil {
+		t.Fatal("successful consume left Redis pause state after claim sidecar expiry")
+	}
+}
+
+func TestWorkflowRedisToolStateStore_CommitKeepsReplacementPause(t *testing.T) {
+	mr := miniredis.RunT(t)
+	s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+		Address:   mr.Addr(),
+		KeyPrefix: "test-commit-replace:",
+	}, time.Hour)
+	t.Cleanup(func() { _ = s.Close() })
+
+	ctx := context.Background()
+	const id = "commit-replace"
+	first := makeTestState(id)
+	first.DecisionName = "first"
+	if _, err := s.Put(ctx, first); err != nil {
+		t.Fatalf("Put first: %v", err)
+	}
+	claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || claim == nil {
+		t.Fatalf("Claim: ok=%v err=%v", ok, err)
+	}
+
+	replacement := makeTestState(id)
+	replacement.DecisionName = "second"
+	if _, err := s.Put(ctx, replacement); err != nil {
+		t.Fatalf("Put replacement: %v", err)
+	}
+	if err := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); err != nil {
+		t.Fatalf("Commit after replacement Put: %v", err)
+	}
+
+	got, ok, err := consumeWorkflowState(s, id)
+	if err != nil || !ok || got == nil {
+		t.Fatalf("replacement pause missing after Commit: ok=%v err=%v", ok, err)
+	}
+	if got.DecisionName != "second" {
+		t.Fatalf("Commit deleted the replacement pause: decision=%q", got.DecisionName)
+	}
+}
+
+func assertClaimLeaseBusyThenRecover(t *testing.T, s workflowToolStateStore, expire func()) {
+	t.Helper()
+	ctx := context.Background()
+	const id = "lease-recover"
+	if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	first, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || first == nil {
+		t.Fatalf("first Claim: ok=%v err=%v", ok, err)
+	}
+	second, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil {
+		t.Fatalf("busy Claim: %v", err)
+	}
+	if ok || second != nil {
+		t.Fatal("second Claim took a held lease")
+	}
+
+	expire()
+	recovered, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || recovered == nil {
+		t.Fatalf("Claim after lease expiry: ok=%v err=%v", ok, err)
+	}
+	if err := s.Commit(ctx, config.DefaultRecipeName, id, recovered.Token); err != nil {
+		t.Fatalf("Commit recovered claim: %v", err)
+	}
+}
+
+func redisBackend(t *testing.T) struct {
+	name  string
+	store func() workflowToolStateStore
+} {
+	t.Helper()
+	return struct {
+		name  string
+		store func() workflowToolStateStore
+	}{
+		name: "redis",
+		store: func() workflowToolStateStore {
+			mr := miniredis.RunT(t)
+			return newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+				Address:   mr.Addr(),
+				KeyPrefix: "test-ns:",
+			}, time.Hour)
+		},
+	}
 }

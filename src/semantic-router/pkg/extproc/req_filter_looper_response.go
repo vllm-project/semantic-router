@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -61,7 +62,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 			usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 			items: make(map[int]*semanticStreamItem),
 		}
-		frames, events, diagnostics, streamErr := stream.Push(resp.Body)
+		frames, events, diagnostics, streamErr := stream.Push(looperClientResponseBody(resp.Body))
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, diagnostics...)
 		state.observe(events)
 		for _, frame := range frames {
@@ -299,10 +300,41 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 }
 
 // looperClientResponseBody drops looper-private JSON extensions before the
-// protocol codec translates a buffered result. Workflow pause responses attach
-// a top-level "flow" trace that is not part of Chat Completions, and the
-// codec rejects unknown fields.
+// protocol codec translates a buffered or streaming result. Workflow pause
+// responses attach a top-level "flow" trace that is not part of Chat
+// Completions, and the codec rejects unknown fields.
 func looperClientResponseBody(body []byte) []byte {
+	if isLooperSSEBody(body) {
+		return stripFlowFromSSE(body)
+	}
+	return stripFlowFromJSON(body)
+}
+
+func isLooperSSEBody(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	return bytes.HasPrefix(trimmed, []byte("data:")) || bytes.Contains(body, []byte("\ndata:"))
+}
+
+func stripFlowFromSSE(body []byte) []byte {
+	lines := bytes.Split(body, []byte("\n"))
+	out := make([]byte, 0, len(body))
+	for i, line := range lines {
+		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok {
+			payload := bytes.TrimSpace(rest)
+			if !bytes.Equal(payload, []byte("[DONE]")) {
+				payload = stripFlowFromJSON(payload)
+			}
+			line = append([]byte("data: "), payload...)
+		}
+		out = append(out, line...)
+		if i < len(lines)-1 {
+			out = append(out, '\n')
+		}
+	}
+	return out
+}
+
+func stripFlowFromJSON(body []byte) []byte {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return body

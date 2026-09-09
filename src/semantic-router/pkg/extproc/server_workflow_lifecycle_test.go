@@ -11,6 +11,48 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 )
 
+func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+
+	upstream, tracker := newWorkflowPauseResumeServer(t)
+	cfg := newWorkflowLooperConfig(t, upstream.URL, config.WorkflowStateBackendFile)
+	oldRouter := newWorkflowRouter(t, cfg)
+	server := &Server{service: NewRouterService(oldRouter)}
+	t.Cleanup(func() { _ = server.service.Close() })
+	stubWorkflowReloadSeams(t, cfg)
+
+	pauseResp := routeWorkflowRequest(t, oldRouter, workflowPauseChatBody(t))
+	if got := immediateStatus(pauseResp); got != 200 {
+		t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
+	}
+
+	candidate := cfg
+	candidate.Flow.State.TTLSeconds = 1
+	buildReloadRouter = func(*config.RouterConfig) (*OpenAIRouter, error) {
+		return newWorkflowRouter(t, candidate), nil
+	}
+	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
+		return fmt.Errorf("warmup failed")
+	}
+
+	if err := server.reloadRouterFromConfig("file", "/tmp/unused-workflow.yaml", oldRouter.Config); err == nil {
+		t.Fatal("reloadRouterFromConfig succeeded; want warmup failure")
+	}
+	if server.service.GetRouter() != oldRouter {
+		t.Fatal("failed warmup swapped the active router")
+	}
+
+	time.Sleep(1500 * time.Millisecond)
+	resumeResp := routeWorkflowRequest(t, oldRouter, workflowResumeChatBody(t, immediateBody(pauseResp)))
+	if got := immediateStatus(resumeResp); got != 200 {
+		t.Fatalf("resume after failed warmup status = %d, body %s", got, immediateBody(resumeResp))
+	}
+	if !tracker.sawToolResult() || !tracker.sawFinal() {
+		t.Fatal("pending file state expired or changed after a rejected candidate TTL")
+	}
+}
+
 func TestReloadRouterFromConfig_WorkflowMemoryStateDoesNotSurvive(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()

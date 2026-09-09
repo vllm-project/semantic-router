@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const (
@@ -44,6 +46,9 @@ type workflowAgentToolTurn struct {
 type workflowPendingToolState struct {
 	ID                          string                             `json:"id"`
 	CreatedAt                   time.Time                          `json:"created_at"`
+	RecipeName                  string                             `json:"recipe_name,omitempty"`
+	ClaimToken                  string                             `json:"claim_token,omitempty"`
+	ClaimedAt                   time.Time                          `json:"claimed_at,omitempty"`
 	DecisionName                string                             `json:"decision_name,omitempty"`
 	Mode                        string                             `json:"mode,omitempty"`
 	Template                    string                             `json:"template,omitempty"`
@@ -521,6 +526,9 @@ func (l *WorkflowsLooper) formatWorkflowToolCallInterrupt(
 	state.AssistantRaw = patchedRaw
 	state.ToolCallIDs = append([]string(nil), toolCallIDs...)
 	state.CreatedAt = time.Now().UTC()
+	if strings.TrimSpace(state.RecipeName) == "" {
+		return nil, fmt.Errorf("workflow tool state missing recipe namespace")
+	}
 	if _, err := l.toolStates.Put(ctx, state); err != nil {
 		return nil, err
 	}
@@ -633,32 +641,39 @@ func (l *WorkflowsLooper) resumeWorkflowToolCall(
 	workerModels []string,
 	stateID string,
 ) (out *Response, err error) {
-	state, err := l.takeWorkflowToolState(ctx, stateID)
+	claim, err := l.claimWorkflowToolState(ctx, req.RecipeName, stateID)
 	if err != nil {
 		return nil, err
 	}
-	restoreState := true
+	restoreClaim := true
 	defer func() {
-		err = errors.Join(err, l.restoreWorkflowToolState(state, &restoreState))
+		err = errors.Join(err, l.releaseWorkflowToolState(claim, &restoreClaim))
 	}()
 
-	out, consumed, err := l.resumeWorkflowToolCallWithState(ctx, req, cfg, workerModels, state)
+	out, consumed, err := l.resumeWorkflowToolCallWithState(ctx, req, cfg, workerModels, claim.State)
 	if err != nil {
 		return nil, err
 	}
-	restoreState = !consumed
-	return out, nil
+	if consumed {
+		restoreClaim = false
+		err = l.commitWorkflowToolState(claim)
+	}
+	return out, err
 }
 
-func (l *WorkflowsLooper) takeWorkflowToolState(ctx context.Context, stateID string) (*workflowPendingToolState, error) {
-	state, ok, err := l.toolStates.Take(ctx, stateID)
+func (l *WorkflowsLooper) claimWorkflowToolState(
+	ctx context.Context,
+	recipe config.RecipeName,
+	stateID string,
+) (*workflowStateClaim, error) {
+	claim, ok, err := l.toolStates.Claim(ctx, recipe, stateID)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if !ok || claim == nil {
 		return nil, fmt.Errorf("workflow tool state %q not found or expired", stateID)
 	}
-	return state, nil
+	return claim, nil
 }
 
 func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
@@ -670,7 +685,7 @@ func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
 ) (*Response, bool, error) {
 	state.Streaming = req.IsStreaming
 	resumeCtx := newWorkflowResumeRequestContext(req, state)
-	if validateErr := validateWorkflowResumeState(state, workerModels, cfg, req.DecisionName); validateErr != nil {
+	if validateErr := validateWorkflowResumeState(state, workerModels, cfg, req.DecisionName, req.RecipeName); validateErr != nil {
 		return nil, false, validateErr
 	}
 	toolMessages, err := workflowToolMessagesForState(req.OriginalRequest, state)
@@ -742,9 +757,13 @@ func validateWorkflowResumeState(
 	workerModels []string,
 	cfg workflowsExecutionConfig,
 	decisionName string,
+	recipeName config.RecipeName,
 ) error {
 	if state == nil {
 		return fmt.Errorf("workflow tool state missing")
+	}
+	if err := workflowStateClaimable(state, recipeName); err != nil {
+		return err
 	}
 	if strings.TrimSpace(state.DecisionName) != "" && state.DecisionName != decisionName {
 		return fmt.Errorf("workflow tool state belongs to decision %q, not %q", state.DecisionName, decisionName)

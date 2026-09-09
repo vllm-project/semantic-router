@@ -440,6 +440,9 @@ func (s *Server) reloadRouterFromConfig(
 	}); err != nil {
 		return err
 	}
+	if newRouter != nil {
+		newRouter.WorkflowStateService.CommitStorePolicy()
+	}
 	return nil
 }
 

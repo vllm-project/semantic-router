@@ -33,11 +33,11 @@ func TestResumeWorkflowToolStateRestoreAfterCanceledOrDeadline(t *testing.T) {
 
 func assertResumeRestoresAfterRequestStop(t *testing.T, name string, stopErr error) {
 	t.Helper()
-	redisStore := setupDurableRedisStore(t)
+	redisStore, _ := setupDurableRedisStore(t)
 	stateID := "resume-restore-" + strings.ReplaceAll(name, " ", "-")
 	reqCtx := newLatchContext()
 	wrapped := &restoreProbeStore{workflowToolStateStore: redisStore}
-	wrapped.afterTake = func() { reqCtx.stop(stopErr) }
+	wrapped.afterClaim = func() { reqCtx.stop(stopErr) }
 
 	putWorkflowState(t, redisStore, stateID)
 	err := executeWorkflowResumeWithStore(t, wrapped, reqCtx, stateID)
@@ -45,82 +45,92 @@ func assertResumeRestoresAfterRequestStop(t *testing.T, name string, stopErr err
 	if reqCtx.Err() == nil {
 		t.Fatal("request context should be done before restore")
 	}
-	requireIndependentRestorePut(t, wrapped)
+	requireIndependentRestoreRelease(t, wrapped)
 	requireRedisStatePresent(t, redisStore, stateID, name)
 }
 
-func TestResumeWorkflowToolStateRestoreSurfacesPutError(t *testing.T) {
-	t.Parallel()
-	redisStore := setupDurableRedisStore(t)
-	const stateID = "resume-restore-put-error"
-	injected := errors.New("injected restore failure")
+func TestResumeWorkflowToolStateReleaseFailureKeepsClaimUntilLeaseExpiry(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	redisStore, mr := setupDurableRedisStore(t)
+	const stateID = "resume-restore-release-error"
+	injected := errors.New("injected release failure")
 	reqCtx := newLatchContext()
 	wrapped := &restoreProbeStore{
 		workflowToolStateStore: redisStore,
-		putErr:                 injected,
+		releaseErr:             injected,
 	}
-	wrapped.afterTake = func() { reqCtx.stop(context.Canceled) }
+	wrapped.afterClaim = func() { reqCtx.stop(context.Canceled) }
 
 	putWorkflowState(t, redisStore, stateID)
 	err := executeWorkflowResumeWithStore(t, wrapped, reqCtx, stateID)
-	if err == nil || !strings.Contains(err.Error(), "restore workflow tool state") {
-		t.Fatalf("expected restore Put failure, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "release workflow tool state") {
+		t.Fatalf("expected release failure, got %v", err)
 	}
 	if !errors.Is(err, injected) {
-		t.Fatalf("resume error missing injected Put cause: %v", err)
+		t.Fatalf("resume error missing injected release cause: %v", err)
 	}
-	requireIndependentRestorePut(t, wrapped)
-	requireRedisStateAbsent(t, redisStore, stateID)
+	requireIndependentRestoreRelease(t, wrapped)
+
+	claim, ok, claimErr := redisStore.Claim(context.Background(), config.DefaultRecipeName, stateID)
+	if claimErr != nil {
+		t.Fatalf("Claim while lease held: %v", claimErr)
+	}
+	if ok || claim != nil {
+		t.Fatal("failed release should leave the durable claim held")
+	}
+
+	mr.FastForward(120 * time.Millisecond)
+	requireRedisStatePresent(t, redisStore, stateID, "lease-expiry")
 }
 
 type restoreProbeStore struct {
 	workflowToolStateStore
-	afterTake func()
-	putErr    error
+	afterClaim func()
+	releaseErr error
 
-	mu             sync.Mutex
-	sawPut         bool
-	putCtxErr      error
-	putHasDeadline bool
+	mu                 sync.Mutex
+	sawRelease         bool
+	releaseCtxErr      error
+	releaseHasDeadline bool
 }
 
-func (s *restoreProbeStore) Take(ctx context.Context, id string) (*workflowPendingToolState, bool, error) {
-	state, ok, err := s.workflowToolStateStore.Take(ctx, id)
-	if s.afterTake != nil {
-		s.afterTake()
+func (s *restoreProbeStore) Claim(ctx context.Context, recipe config.RecipeName, id string) (*workflowStateClaim, bool, error) {
+	claim, ok, err := s.workflowToolStateStore.Claim(ctx, recipe, id)
+	if s.afterClaim != nil {
+		s.afterClaim()
 	}
-	return state, ok, err
+	return claim, ok, err
 }
 
-func (s *restoreProbeStore) Put(ctx context.Context, state *workflowPendingToolState) (string, error) {
+func (s *restoreProbeStore) Release(ctx context.Context, recipe config.RecipeName, id, token string) error {
 	s.mu.Lock()
-	s.sawPut = true
-	s.putCtxErr = ctx.Err()
-	_, s.putHasDeadline = ctx.Deadline()
-	putErr := s.putErr
+	s.sawRelease = true
+	s.releaseCtxErr = ctx.Err()
+	_, s.releaseHasDeadline = ctx.Deadline()
+	releaseErr := s.releaseErr
 	s.mu.Unlock()
-	if putErr != nil {
-		return "", putErr
+	if releaseErr != nil {
+		return releaseErr
 	}
-	return s.workflowToolStateStore.Put(ctx, state)
+	return s.workflowToolStateStore.Release(ctx, recipe, id, token)
 }
 
-func (s *restoreProbeStore) putCalled() bool {
+func (s *restoreProbeStore) releaseCalled() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.sawPut
+	return s.sawRelease
 }
 
-func (s *restoreProbeStore) putErrAtCall() error {
+func (s *restoreProbeStore) releaseErrAtCall() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.putCtxErr
+	return s.releaseCtxErr
 }
 
-func (s *restoreProbeStore) putHadDeadline() bool {
+func (s *restoreProbeStore) releaseHadDeadline() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.putHasDeadline
+	return s.releaseHasDeadline
 }
 
 type latchContext struct {
@@ -177,45 +187,37 @@ func putWorkflowState(t *testing.T, store workflowToolStateStore, stateID string
 func requireResumeFailedWithoutRestoreError(t *testing.T, err error) {
 	t.Helper()
 	if err == nil {
-		t.Fatal("expected resume to fail after taking state")
+		t.Fatal("expected resume to fail after claiming state")
 	}
-	if strings.Contains(err.Error(), "restore workflow tool state") {
-		t.Fatalf("restore failure should not be returned when Put succeeds: %v", err)
+	if strings.Contains(err.Error(), "release workflow tool state") {
+		t.Fatalf("release failure should not be returned when Release succeeds: %v", err)
 	}
 }
 
-func requireIndependentRestorePut(t *testing.T, store *restoreProbeStore) {
+func requireIndependentRestoreRelease(t *testing.T, store *restoreProbeStore) {
 	t.Helper()
-	if !store.putCalled() {
-		t.Fatal("restore did not Put the taken Redis state")
+	if !store.releaseCalled() {
+		t.Fatal("interrupted resume did not Release the claimed state")
 	}
-	if err := store.putErrAtCall(); err != nil {
-		t.Fatalf("restore reused a done request context: %v", err)
+	if err := store.releaseErrAtCall(); err != nil {
+		t.Fatalf("release reused a done request context: %v", err)
 	}
-	if !store.putHadDeadline() {
-		t.Fatal("restore Put context is unbounded")
+	if !store.releaseHadDeadline() {
+		t.Fatal("release context is unbounded")
 	}
 }
 
 func requireRedisStatePresent(t *testing.T, store workflowToolStateStore, stateID, resumeKind string) {
 	t.Helper()
-	taken, ok, err := store.Take(context.Background(), stateID)
+	claim, ok, err := store.Claim(context.Background(), config.DefaultRecipeName, stateID)
 	if err != nil {
-		t.Fatalf("Take after restore: %v", err)
+		t.Fatalf("Claim after restore: %v", err)
 	}
-	if !ok || taken == nil || taken.ID != stateID {
-		t.Fatalf("GETDEL state was lost after %s resume; ok=%v taken=%v", resumeKind, ok, taken)
+	if !ok || claim == nil || claim.State == nil || claim.State.ID != stateID {
+		t.Fatalf("claimed state was lost after %s resume; ok=%v claim=%v", resumeKind, ok, claim)
 	}
-}
-
-func requireRedisStateAbsent(t *testing.T, store workflowToolStateStore, stateID string) {
-	t.Helper()
-	_, ok, err := store.Take(context.Background(), stateID)
-	if err != nil {
-		t.Fatalf("Take after failed restore: %v", err)
-	}
-	if ok {
-		t.Fatal("failed restore should not have rewritten GETDEL state")
+	if err := store.Release(context.Background(), config.DefaultRecipeName, stateID, claim.Token); err != nil {
+		t.Fatalf("Release after presence check: %v", err)
 	}
 }
 
@@ -246,7 +248,7 @@ func executeWorkflowResumeWithStore(t *testing.T, store workflowToolStateStore, 
 	return err
 }
 
-func setupDurableRedisStore(t *testing.T) *workflowRedisToolStateStore {
+func setupDurableRedisStore(t *testing.T) (*workflowRedisToolStateStore, *miniredis.Miniredis) {
 	t.Helper()
 	mr, err := miniredis.Run()
 	if err != nil {
@@ -260,7 +262,7 @@ func setupDurableRedisStore(t *testing.T) *workflowRedisToolStateStore {
 		_ = store.Close()
 		mr.Close()
 	})
-	return store
+	return store, mr
 }
 
 func TestWorkflowStateRestoreContextIsIndependentAndBounded(t *testing.T) {
@@ -285,7 +287,7 @@ func TestWorkflowStateRestoreContextIsIndependentAndBounded(t *testing.T) {
 	}
 }
 
-func TestRestoreWorkflowToolStateSurfacesPutError(t *testing.T) {
+func TestReleaseWorkflowToolStateSurfacesError(t *testing.T) {
 	t.Parallel()
 	injected := fmt.Errorf("disk full")
 	mem := newWorkflowMemoryToolStateStore(time.Hour)
@@ -293,12 +295,16 @@ func TestRestoreWorkflowToolStateSurfacesPutError(t *testing.T) {
 	looper := &WorkflowsLooper{
 		toolStates: &restoreProbeStore{
 			workflowToolStateStore: mem,
-			putErr:                 injected,
+			releaseErr:             injected,
 		},
 	}
 	restore := true
-	err := looper.restoreWorkflowToolState(makeTestState("restore-error"), &restore)
+	err := looper.releaseWorkflowToolState(&workflowStateClaim{
+		Recipe: config.DefaultRecipeName,
+		ID:     "restore-error",
+		Token:  "token",
+	}, &restore)
 	if !errors.Is(err, injected) {
-		t.Fatalf("restore error = %v, want injected cause", err)
+		t.Fatalf("release error = %v, want injected cause", err)
 	}
 }

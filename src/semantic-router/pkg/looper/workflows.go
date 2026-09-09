@@ -461,6 +461,7 @@ func (l *WorkflowsLooper) executeWorkflowStepSequential(
 			return nil, failed, &workflowToolCallInterrupt{
 				resp: resp,
 				state: &workflowPendingToolState{
+					RecipeName:           string(normalizeWorkflowRecipeName(req.RecipeName)),
 					DecisionName:         req.DecisionName,
 					Mode:                 cfg.Mode,
 					Template:             cfg.Template,
@@ -518,6 +519,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 		return nil, &workflowToolCallInterrupt{
 			resp: resp,
 			state: &workflowPendingToolState{
+				RecipeName:      string(normalizeWorkflowRecipeName(req.RecipeName)),
 				DecisionName:    req.DecisionName,
 				Mode:            cfg.Mode,
 				Template:        cfg.Template,
