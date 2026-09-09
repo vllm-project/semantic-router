@@ -104,7 +104,9 @@ func (r *OpenAIRouter) switchGateVerdict(
 		Downgrade: downgrade,
 	}
 	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now); ok {
-		in.SwitchesInWindow = snapshot.SwitchCount
+		// The oscillation guard is window-scoped: count the model changes
+		// inside the gate's own evidence window, not the session lifetime.
+		in.SwitchesInWindow = sessiontelemetry.CountRecentSwitches(snapshot.SwitchTimestamps, windowTTL, now)
 		// LastSwitchAt is zero until the first real model change, so
 		// SecondsSince reports unknown and cooldown simply does not apply.
 		if secs, known := selection.SecondsSince(snapshot.LastSwitchAt, now); known {
