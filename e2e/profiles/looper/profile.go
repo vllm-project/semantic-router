@@ -62,6 +62,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"looper-ratings-happy-path",
 		"looper-fusion-usable-quorum",
+		"looper-confidence-telemetry",
 	}
 }
 

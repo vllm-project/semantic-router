@@ -113,10 +113,17 @@ Common Prometheus metric families:
 | Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+
+Looper metric labels are restricted to bounded algorithm, stage, status,
+reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
+decision names, model names, scores, and thresholds are available through
+traces or detailed Router Replay rather than Prometheus labels. Detailed
+attempt metrics currently cover the Confidence algorithm.
 
 ### Profiling
 
