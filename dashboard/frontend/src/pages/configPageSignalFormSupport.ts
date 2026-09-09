@@ -269,11 +269,20 @@ export function normalizeStructurePredicate(
 // precisely because two such lists drifted from the Go validator.
 export const CONVERSATION_FEATURE_TYPES = ['count', 'exists'] as const
 export const CONVERSATION_SOURCE_TYPES = [
-  'message', 'tool_definition', 'assistant_tool_call',
-  'assistant_tool_cycle', 'active_tool_loop', 'image_content',
+  'message',
+  'tool_definition',
+  'assistant_tool_call',
+  'assistant_tool_cycle',
+  'active_tool_loop',
+  'image_content',
 ] as const
 export const CONVERSATION_ROLES = [
-  'user', 'assistant', 'system', 'developer', 'tool', 'non_user',
+  'user',
+  'assistant',
+  'system',
+  'developer',
+  'tool',
+  'non_user',
 ] as const
 
 export const DEFAULT_CONVERSATION_FEATURE: ConversationFeature = {
@@ -354,6 +363,7 @@ const SIGNAL_CONFIG_TYPES: Record<SignalType, string> = {
   Modality: 'modality',
   Authz: 'authz',
   Jailbreak: 'jailbreak',
+  Hallucination: 'hallucination',
   PII: 'pii',
   KB: 'kb',
   Metadata: 'metadata',

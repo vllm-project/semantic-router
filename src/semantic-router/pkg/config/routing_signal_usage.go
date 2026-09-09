@@ -234,11 +234,19 @@ func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
 		c.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback)
 }
 
-// NeedsHallucinationDetectorForRouting reports whether any decision in any
-// recipe enables the response-side hallucination plugin.
+// NeedsHallucinationDetectorForRouting reports whether a request-reachable
+// routing profile depends on the hallucination detector: it declares a
+// hallucination rule, which is scored from the model's answer for the
+// selected decision's plugin to consume, or a decision's hallucination plugin
+// still classifies the answer itself because no rule is declared.
 func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
 	if c == nil || c.HallucinationMitigation.HallucinationModel.ModelID == "" {
 		return false
+	}
+	for _, signals := range c.reachableRoutingSignals() {
+		if len(signals.HallucinationRules) > 0 {
+			return true
+		}
 	}
 	decisions := c.routingConsumerDecisions()
 	for i := range decisions {
@@ -259,13 +267,21 @@ func (c *RouterConfig) NeedsLocalHallucinationModelsForRouting() bool {
 		c.HallucinationMitigation.HallucinationModel.NormalizedBackend() == HallucinationBackendCandle
 }
 
-// NeedsLocalHallucinationNLIForRouting reports whether an enabled local
-// hallucination plugin requests NLI explanations.
+// NeedsLocalHallucinationNLIForRouting reports whether a declared
+// hallucination rule, or an enabled local hallucination plugin that still
+// owns detection, requests NLI explanations.
 func (c *RouterConfig) NeedsLocalHallucinationNLIForRouting() bool {
 	if c == nil ||
 		!c.NeedsLocalHallucinationModelsForRouting() ||
 		c.HallucinationMitigation.NLIModel.ModelID == "" {
 		return false
+	}
+	for _, signals := range c.reachableRoutingSignals() {
+		for _, rule := range signals.HallucinationRules {
+			if rule.UseNLI {
+				return true
+			}
+		}
 	}
 	decisions := c.routingConsumerDecisions()
 	for i := range decisions {

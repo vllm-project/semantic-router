@@ -59,6 +59,7 @@ var (
 		validateComplexityContracts,
 		validateJailbreakContracts,
 		validateSignalStageContracts,
+		validateHallucinationSignalContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )
