@@ -52,6 +52,9 @@ MIN_LABEL_RECALL = 0.7
 MAX_SLICE_SPREAD = 0.1
 # Comparisons need at least two members to say anything.
 MIN_COMPARISON_SIZE = 2
+# A slice thinner than this moves by whole points on one row, so its spread
+# against another slice says more about the split than about the artifact.
+MIN_SLICE_ROWS = 30
 # A gate that misses more unsafe rows than this is not doing its job at the
 # threshold it is configured with.
 MIN_GATE_RECALL = 0.7
@@ -433,7 +436,9 @@ def _baseline_findings(baseline: dict[str, Any]) -> list[tuple[str, str]]:
             )
         )
 
-    slices = [entry for entry in baseline.get("slices", []) if entry["rows"]]
+    slices = [
+        entry for entry in baseline.get("slices", []) if entry["rows"] >= MIN_SLICE_ROWS
+    ]
     if len(slices) >= MIN_COMPARISON_SIZE:
         best = max(slices, key=lambda entry: entry["accuracy"])
         weakest = min(slices, key=lambda entry: entry["accuracy"])

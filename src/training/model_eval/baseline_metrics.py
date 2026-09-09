@@ -33,8 +33,11 @@ DEFAULT_BIN_COUNT = 10
 # against, since it answers every row.
 DEFAULT_THRESHOLDS = (0.0, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.99)
 # Length is the cheapest proxy for the long-context behaviour that separates the
-# 8K and 32K artifact families, so it is reported by default.
-LENGTH_BOUNDARIES = (64, 256, 1024)
+# 8K and 32K artifact families, so it is reported by default. The short bands are
+# narrow because that is where the shipped jailbreak detector fails: #2587
+# measured 31% of benign one-word and two-word prompts blocked against 2% at
+# four to five words, which a single band from 0 to 64 characters averages away.
+LENGTH_BOUNDARIES = (16, 32, 64, 256, 1024)
 
 
 def predict(
