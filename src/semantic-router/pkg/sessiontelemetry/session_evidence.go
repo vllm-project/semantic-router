@@ -21,7 +21,7 @@ const (
 	TurnSourceOutcomeIngest  = "outcome_ingest"  // derived from the learning outcome ingest
 )
 
-// Recent-window package defaults; PL-0041 TASK-07 wires these to config.
+// Recent-window bounds used until the gate configures a session.
 const (
 	defaultRecentWindowSize = 8
 	defaultRecentWindowTTL  = 15 * time.Minute
@@ -62,6 +62,39 @@ func (o TurnOutcome) Time() time.Time {
 	return time.UnixMilli(o.Timestamp)
 }
 
+// ConfigureTurnOutcomeWindow applies the active progress-gate window policy to
+// one session. The gate calls this on the request path before reading, so both
+// writers bound the window the way the operator configured it.
+func ConfigureTurnOutcomeWindow(sessionID string, size int, ttl time.Duration, now time.Time) {
+	if sessionID == "" {
+		return
+	}
+	size, ttl = normalizeWindowPolicy(size, ttl)
+
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	_, known := s.sessions[sessionID]
+	if now.IsZero() {
+		now = s.nowFn()
+	}
+	s.mu.Unlock()
+	// Recover shared state first: creating an empty local session here would
+	// otherwise shadow a window that only exists in the shared store.
+	if !known {
+		_, _ = loadSharedRouterSessionSnapshot(sessionID, now)
+	}
+
+	s.mu.Lock()
+	st := s.sessionLocked(sessionID)
+	st.outcomeWindowSize = size
+	st.outcomeWindowTTL = ttl
+	st.recentOutcomes = trimTurnOutcomes(pruneTurnOutcomes(st.recentOutcomes, ttl, now), size)
+	if st.lastSeen.IsZero() {
+		st.lastSeen = now
+	}
+	s.mu.Unlock()
+}
+
 // RecordTurnOutcome appends one typed turn outcome to the session's bounded
 // recent window. Callers pass the event time (when the outcome occurred);
 // outcome ingest may deliver an older event after newer ones arrived, so
@@ -85,7 +118,8 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 
 	s := globalRouterSessionMemory
 	s.mu.Lock()
-	if s.nowFn().Sub(ts) > defaultRecentWindowTTL {
+	size, ttl := s.sessions[sessionID].windowPolicy()
+	if s.nowFn().Sub(ts) > ttl {
 		s.mu.Unlock()
 		return
 	}
@@ -93,19 +127,27 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 	if st.lastSeen.IsZero() || ts.After(st.lastSeen) {
 		st.lastSeen = ts
 	}
-	st.recentOutcomes = appendTurnOutcome(st.recentOutcomes, outcome, ts)
+	st.recentOutcomes = appendTurnOutcome(st.recentOutcomes, outcome, ts, size, ttl)
 	s.mu.Unlock()
 
 	persistRouterSessionState(sessionID)
 }
 
-// RecentTurnOutcomes returns a pruned, cloned copy of the recent window ordered
-// oldest → newest; unknown or expired sessions return an empty window (cold
-// start). A zero now falls back to the store clock.
+// RecentTurnOutcomes returns the window under the packaged default policy, for
+// callers that do not own a progress-gate config.
 func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
+	return RecentTurnOutcomesWithPolicy(sessionID, now, defaultRecentWindowSize, defaultRecentWindowTTL)
+}
+
+// RecentTurnOutcomesWithPolicy returns a pruned, cloned copy of the recent
+// window ordered oldest → newest under the caller's policy; unknown or expired
+// sessions return an empty window (cold start). A zero now falls back to the
+// store clock.
+func RecentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl time.Duration) []TurnOutcome {
 	if sessionID == "" {
 		return nil
 	}
+	size, ttl = normalizeWindowPolicy(size, ttl)
 	s := globalRouterSessionMemory
 	s.mu.Lock()
 	if now.IsZero() {
@@ -114,7 +156,7 @@ func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	st := s.sessions[sessionID]
 	if st == nil {
 		s.mu.Unlock()
-		return sharedRecentTurnOutcomes(sessionID, now)
+		return sharedRecentTurnOutcomes(sessionID, now, size, ttl)
 	}
 	if now.Sub(st.lastSeen) > routerMemoryTTL {
 		s.mu.Unlock()
@@ -122,26 +164,52 @@ func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 	}
 	window := cloneTurnOutcomes(st.recentOutcomes)
 	s.mu.Unlock()
-	return pruneTurnOutcomes(window, defaultRecentWindowTTL, now)
+	return trimTurnOutcomes(pruneTurnOutcomes(window, ttl, now), size)
 }
 
 // sharedRecentTurnOutcomes recovers the window from the shared store on a
 // local miss.
-func sharedRecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
+func sharedRecentTurnOutcomes(sessionID string, now time.Time, size int, ttl time.Duration) []TurnOutcome {
 	snapshot, ok := loadSharedRouterSessionSnapshot(sessionID, now)
 	if !ok {
 		return nil
 	}
-	return pruneTurnOutcomes(snapshot.RecentOutcomes, defaultRecentWindowTTL, now)
+	return trimTurnOutcomes(pruneTurnOutcomes(snapshot.RecentOutcomes, ttl, now), size)
+}
+
+// windowPolicy returns the session's configured bounds, falling back to the
+// package defaults for sessions the gate has not configured yet.
+func (st *routerSessionState) windowPolicy() (int, time.Duration) {
+	if st == nil {
+		return defaultRecentWindowSize, defaultRecentWindowTTL
+	}
+	return normalizeWindowPolicy(st.outcomeWindowSize, st.outcomeWindowTTL)
+}
+
+func normalizeWindowPolicy(size int, ttl time.Duration) (int, time.Duration) {
+	if size <= 0 {
+		size = defaultRecentWindowSize
+	}
+	if ttl <= 0 {
+		ttl = defaultRecentWindowTTL
+	}
+	return size, ttl
+}
+
+func trimTurnOutcomes(outcomes []TurnOutcome, size int) []TurnOutcome {
+	if size <= 0 || len(outcomes) <= size {
+		return outcomes
+	}
+	return outcomes[len(outcomes)-size:]
 }
 
 // appendTurnOutcome prunes by TTL, inserts by event time (capture and ingest
 // are independent writers, so arrival order cannot be assumed), then trims to
 // capacity. Callers must hold the store lock.
-func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time) []TurnOutcome {
-	outcomes = pruneTurnOutcomes(outcomes, defaultRecentWindowTTL, now)
+func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time, size int, ttl time.Duration) []TurnOutcome {
+	outcomes = pruneTurnOutcomes(outcomes, ttl, now)
 	// A full window cannot accept an outcome older than everything in it.
-	if len(outcomes) >= defaultRecentWindowSize && outcome.Timestamp < outcomes[0].Timestamp {
+	if len(outcomes) >= size && outcome.Timestamp < outcomes[0].Timestamp {
 		return outcomes
 	}
 	i := len(outcomes)
@@ -151,10 +219,7 @@ func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Tim
 	outcomes = append(outcomes, TurnOutcome{})
 	copy(outcomes[i+1:], outcomes[i:])
 	outcomes[i] = outcome
-	if len(outcomes) > defaultRecentWindowSize {
-		outcomes = outcomes[len(outcomes)-defaultRecentWindowSize:]
-	}
-	return outcomes
+	return trimTurnOutcomes(outcomes, size)
 }
 
 // pruneTurnOutcomes returns the entries newer than ttl, without assuming

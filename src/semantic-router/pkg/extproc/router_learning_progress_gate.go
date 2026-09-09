@@ -24,6 +24,12 @@ func progressGateConfig(tuning config.RouterLearningProtectionTuning) selection.
 	if gate.Mode != "" {
 		cfg.Mode = gate.Mode
 	}
+	if gate.WindowSize != nil {
+		cfg.WindowSize = *gate.WindowSize
+	}
+	if gate.WindowTTLSeconds != nil {
+		cfg.WindowTTLSeconds = *gate.WindowTTLSeconds
+	}
 	if gate.MinWindowOutcomes != nil {
 		cfg.MinWindowOutcomes = *gate.MinWindowOutcomes
 	}
@@ -86,7 +92,11 @@ func (r *OpenAIRouter) switchGateVerdict(
 	}
 
 	now := time.Now()
-	window := sessiontelemetry.RecentTurnOutcomes(sessionKey, now)
+	// Apply the configured bounds before reading so both the gate and the
+	// response-path writers use the operator's window policy.
+	windowTTL := time.Duration(gateCfg.WindowTTLSeconds) * time.Second
+	sessiontelemetry.ConfigureTurnOutcomeWindow(sessionKey, gateCfg.WindowSize, windowTTL, now)
+	window := sessiontelemetry.RecentTurnOutcomesWithPolicy(sessionKey, now, gateCfg.WindowSize, windowTTL)
 	evidence := selection.EvaluateProgressEvidence(turnOutcomeFacts(window))
 
 	in := selection.SwitchGateInput{
@@ -95,7 +105,9 @@ func (r *OpenAIRouter) switchGateVerdict(
 	}
 	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now); ok {
 		in.SwitchesInWindow = snapshot.SwitchCount
-		if secs, known := selection.SecondsSince(snapshot.LastSeen, now); known && snapshot.SwitchCount > 0 {
+		// LastSwitchAt is zero until the first real model change, so
+		// SecondsSince reports unknown and cooldown simply does not apply.
+		if secs, known := selection.SecondsSince(snapshot.LastSwitchAt, now); known {
 			in.SecondsSinceLastSwitch = secs
 			in.LastSwitchKnown = true
 		}

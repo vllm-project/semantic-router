@@ -30,6 +30,9 @@ type RouterSessionSnapshot struct {
 	CurrentCandidate *config.ModelRef `json:"current_candidate,omitempty"`
 	LastSeen         time.Time
 	IdleFor          time.Duration
+	// LastSwitchAt is the time of the most recent model change; zero when the
+	// session has never switched.
+	LastSwitchAt time.Time `json:"last_switch_at,omitempty"`
 
 	TurnCount   int
 	SwitchCount int
@@ -90,6 +93,7 @@ type routerSessionState struct {
 	currentModel     string
 	currentCandidate *config.ModelRef
 	lastSeen         time.Time
+	lastSwitchAt     time.Time
 
 	turnCount   int
 	switchCount int
@@ -110,6 +114,10 @@ type routerSessionState struct {
 	lastPolicy                map[string]interface{}
 
 	recentOutcomes []TurnOutcome
+	// Evidence window policy for this session, set from the active progress
+	// gate config. Process-local: the gate re-applies it on the request path.
+	outcomeWindowSize int
+	outcomeWindowTTL  time.Duration
 }
 
 type routerSessionMemoryStore struct {
@@ -163,6 +171,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	}
 	if previous != "" && previous != p.SelectedModel {
 		st.switchCount++
+		st.lastSwitchAt = now
 	}
 	st.currentModel = p.SelectedModel
 	st.currentCandidate = cloneSessionCandidate(p.SelectedCandidate)
@@ -254,6 +263,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		CurrentModel:                    st.currentModel,
 		CurrentCandidate:                cloneSessionCandidate(st.currentCandidate),
 		LastSeen:                        st.lastSeen,
+		LastSwitchAt:                    st.lastSwitchAt,
 		IdleFor:                         idleFor,
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
