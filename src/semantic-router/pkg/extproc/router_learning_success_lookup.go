@@ -34,6 +34,9 @@ func (s routerLearningEvidenceSnapshot) hit(scope string, key string) scopedExpe
 
 func (s routerLearningEvidenceSnapshot) resolveExperience(model string) (routerLearningModelExperience, string, bool) {
 	hits := s.lookupChain(model)
+	if _, scope, status, _ := mergeScopedExperience(hits); status == successEstimateConflict {
+		return routerLearningModelExperience{}, scope, true
+	}
 	for _, hit := range hits {
 		if hit.found && !hit.exp.seedOnly() {
 			return hit.exp, hit.scope, true
@@ -47,9 +50,9 @@ func (s routerLearningEvidenceSnapshot) resolveExperience(model string) (routerL
 	return defaultRouterLearningModelExperience(), successEvidenceScopeGlobal, false
 }
 
-// mergeScopedExperience is the explicit merge path. Hierarchical lookup falls
-// back instead of merging; this helper exists so conflicting populated scopes
-// can be reported as `conflict` rather than a silent average.
+// mergeScopedExperience is the request-path merge. Hierarchical lookup falls
+// back instead of averaging; conflicting populated decision/global scopes
+// fail closed as `conflict`.
 func mergeScopedExperience(hits []scopedExperience) (routerLearningModelExperience, string, successEstimateStatus, string) {
 	populated := make([]scopedExperience, 0, len(hits))
 	for _, hit := range hits {
@@ -64,7 +67,7 @@ func mergeScopedExperience(hits []scopedExperience) (routerLearningModelExperien
 		return populated[0].exp, populated[0].scope, "", ""
 	}
 	if scopedExperienceRatesConflict(populated[0].exp, populated[1].exp) {
-		return routerLearningModelExperience{}, "", successEstimateConflict, successFallbackConflictingScopes
+		return routerLearningModelExperience{}, populated[0].scope, successEstimateConflict, successFallbackConflictingScopes
 	}
 	return populated[0].exp, populated[0].scope, "", ""
 }

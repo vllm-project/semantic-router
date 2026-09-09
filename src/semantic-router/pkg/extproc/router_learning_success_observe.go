@@ -2,10 +2,16 @@ package extproc
 
 import (
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
+
+// defaultSuccessEstimateStaleAfter is the observe-path horizon until #3412
+// exposes recipe-owned stale_after_seconds. A zero horizon would make stale
+// evidence unreachable from attachSuccessEstimateObserveDiagnostics.
+const defaultSuccessEstimateStaleAfter = 24 * time.Hour
 
 func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 	input routerLearningInput,
@@ -31,7 +37,7 @@ func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 		models,
 		"",
 	)
-	estimates := estimateCandidateSuccess(snap, models, successEstimateConfig{Now: snap.takenAt})
+	estimates := estimateCandidateSuccess(snap, models, successEstimateObserveConfig(snap))
 
 	diag := decision.policy.Details.Adaptation
 	if diag == nil {
@@ -66,6 +72,13 @@ func successEstimateModelNames(refs []config.ModelRef) []string {
 		names = append(names, model)
 	}
 	return names
+}
+
+func successEstimateObserveConfig(snap routerLearningEvidenceSnapshot) successEstimateConfig {
+	return successEstimateConfig{
+		Now:        snap.takenAt,
+		StaleAfter: defaultSuccessEstimateStaleAfter,
+	}
 }
 
 func selCtxDecisionName(selCtx *selection.SelectionContext) string {

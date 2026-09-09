@@ -150,6 +150,18 @@ func TestSuccessEstimateSnapshotIgnoresConcurrentOutcomeWrites(t *testing.T) {
 	}
 }
 
+func TestSuccessEstimateConflictingScopesAreNotMerged(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 10)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"frontier"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "frontier", successEstimateConfig{Now: snap.takenAt})
+	if got.Status != successEstimateConflict || got.FallbackReason != successFallbackConflictingScopes || got.Probability != 0 {
+		t.Fatalf("expected conflicting scopes to stay unresolved, got %#v", got)
+	}
+}
+
 func TestMergeScopedExperienceReportsConflict(t *testing.T) {
 	hits := []scopedExperience{
 		{
@@ -183,8 +195,42 @@ func TestSuccessEstimateObserveWiringDoesNotChangeSelection(t *testing.T) {
 	assertObserveSuccessEstimates(t, policy)
 }
 
+func TestSuccessEstimateObservePathReportsStaleEvidence(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("stale observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale || frontier.Probability != 0 {
+		t.Fatalf("expected observe-path stale evidence, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathReportsConflictingScopes(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	router.Config.RouterLearning.Adaptation.CandidateSet = config.RouterLearningCandidateSetGlobal
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		CandidateSet: config.RouterLearningCandidateSetGlobal,
+	}
+	rt := router.routerLearningRuntimeState()
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "", 0, "frontier", routerLearningOutcomeFailed, 10)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("conflict observe path must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateConflict || frontier.FallbackReason != successFallbackConflictingScopes || frontier.Probability != 0 {
+		t.Fatalf("expected observe-path conflicting scopes, got %#v", frontier)
+	}
+}
+
 func successEstimateObserveFixture() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
-	router := &OpenAIRouter{Config: routerLearningAdaptationTestConfig()}
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
 	router.routerLearningRuntimeState().recordModelExperience(
 		"adaptive",
 		2,
@@ -192,6 +238,11 @@ func successEstimateObserveFixture() (*OpenAIRouter, *RequestContext, *selection
 		routerLearningOutcomeGoodFit,
 		10,
 	)
+	return router, ctx, selCtx, baseResult
+}
+
+func successEstimateObserveFixtureWithoutExperience() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
+	router := &OpenAIRouter{Config: routerLearningAdaptationTestConfig()}
 	ctx := &RequestContext{
 		VSRSelectedDecision: &config.Decision{
 			Name: "adaptive",
@@ -253,6 +304,30 @@ func assertObserveSuccessReplay(t *testing.T, policy routerLearningPolicy) {
 	}
 	if _, ok := policy.ToMap()["success_estimates"]; ok {
 		t.Fatalf("compact policy map must not carry detailed success estimates, got %#v", policy.ToMap())
+	}
+}
+
+func observeEstimateByModel(t *testing.T, ctx *RequestContext, model string) successEstimate {
+	t.Helper()
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Details.Adaptation == nil {
+		t.Fatalf("expected adaptation diagnostics, got %#v", ctx.VSRLearningPolicies)
+	}
+	got, ok := estimatesByModel(policy.Details.Adaptation.successEstimates)[model]
+	if !ok {
+		t.Fatalf("expected estimate for %q, got %#v", model, policy.Details.Adaptation.successEstimates)
+	}
+	return got
+}
+
+func backdateObserveExperience(router *OpenAIRouter, decision string, tier int, model string, when time.Time) {
+	rt := router.routerLearningRuntimeState()
+	rt.shared.mu.Lock()
+	defer rt.shared.mu.Unlock()
+	for _, key := range snapshotExperienceKeys(decision, tier, "", model) {
+		if exp := rt.shared.experience[key]; exp != nil {
+			exp.LastUpdated = when
+		}
 	}
 }
 

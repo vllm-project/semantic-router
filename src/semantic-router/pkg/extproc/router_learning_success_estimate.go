@@ -103,6 +103,12 @@ func estimateOneCandidateSuccess(
 	model string,
 	cfg successEstimateConfig,
 ) successEstimate {
+	hits := snap.lookupChain(model)
+	if _, scope, status, reason := mergeScopedExperience(hits); status == successEstimateConflict {
+		est := successEstimate{CandidateModel: model, EvidenceScope: scope}
+		return unsupportedOrConflictEstimate(est, successEstimateConflict, reason)
+	}
+
 	exp, scope, found := snap.resolveExperience(model)
 	est := successEstimate{
 		CandidateModel:   model,
