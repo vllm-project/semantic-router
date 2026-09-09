@@ -6,6 +6,7 @@ import {
   getModelDeleteBlocker,
   getModelReferenceCounts,
   getReasoningFamilyFilterOptions,
+  validateEvaluationRecords,
   validateModelStructuredFields,
   validateNewModelName,
 } from './configPageModelInventory'
@@ -198,11 +199,6 @@ describe('model structured field validation', () => {
     ).toThrow(/family or inline reasoning/i)
     expect(() =>
       validateModelStructuredFields({
-        evaluations: [{ benchmark: 'support', metrics: { score: 0.8 } }],
-      }),
-    ).toThrow(/namespaced, versioned benchmark/i)
-    expect(() =>
-      validateModelStructuredFields({
         backend_refs: [
           {
             endpoint: 'localhost:8000',
@@ -217,8 +213,29 @@ describe('model structured field validation', () => {
         external_model_ids: { openai: 'gpt-4.1' },
         tags: ['premium', 'fast'],
         pricing: { currency: 'USD', prompt_per_1m: 0.5 },
-        evaluations: [{ benchmark: 'acme/support@1', metrics: { resolution_rate: '0.82' } }],
       }),
+    ).not.toThrow()
+  })
+})
+
+describe('evaluation record validation', () => {
+  it('validates model-linked, versioned benchmark records independently from Model Cards', () => {
+    expect(() =>
+      validateEvaluationRecords([
+        { model: 'private', benchmark: 'support', metrics: { score: 0.8 } },
+      ]),
+    ).toThrow(/namespaced, versioned benchmark/i)
+    expect(() =>
+      validateEvaluationRecords([{ benchmark: 'acme/support@1', metrics: { score: 0.8 } }]),
+    ).toThrow(/Model Card identity/i)
+    expect(() =>
+      validateEvaluationRecords([
+        {
+          model: 'private',
+          benchmark: 'acme/support@1',
+          metrics: { resolution_rate: '0.82' },
+        },
+      ]),
     ).not.toThrow()
   })
 })

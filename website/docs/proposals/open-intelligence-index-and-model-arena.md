@@ -152,9 +152,9 @@ coding-specific route. It simply cannot claim a comparable Overall score.
 ## Operator-owned evidence
 
 Release evidence and deployment-local evidence use the same typed graph. An
-operator defines new benchmark semantics and index DAGs under the top-level
-`evaluation_catalog`, then attaches measurements to
-`routing.modelCards[].evaluations`. Built-in benchmarks need no redeclaration.
+operator defines new benchmark semantics, index DAGs, and model-linked
+measurements under the top-level `evaluation`. Built-in benchmarks need no
+redeclaration.
 
 Operator resource IDs must be namespaced and versioned. They cannot shadow a
 built-in benchmark or index. Definitions pin profile, metric range, direction,
@@ -166,9 +166,9 @@ normalization, component weights, and one explicit missing-data policy:
 
 The latter two policies are deliberate operator index semantics, not implicit
 imputation. Every result still exposes its coverage. A route can impose a
-stricter `quality.min_coverage` than the index definition. An evaluation for an
-undeclared benchmark is preserved on the Model Card but cannot enter an index
-until its semantics are declared.
+stricter `quality.min_coverage` than the index definition. A record for an
+undeclared benchmark is preserved under `evaluation.records[]` but cannot
+enter an index until its semantics are declared.
 
 ## Physical and virtual models
 
@@ -278,7 +278,7 @@ they do not require another selection algorithm.
 This implementation closes the current contract across configuration, runtime,
 Dashboard, public Website, and documentation:
 
-- custom benchmark definitions, index DAGs, Model Card measurements, validation,
+- custom benchmark definitions, index DAGs, model-linked records, validation,
   canonical round-trip, and exact-effort routing are one path;
 - Balanced, Accuracy-first, and Cost-first are configurations of one selector;
 - Overall, Capabilities, and Benchmarks are the only Arena layers on both Hub

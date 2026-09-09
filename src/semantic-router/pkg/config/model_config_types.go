@@ -390,7 +390,6 @@ type ModelParams struct {
 	Description          string                                         `yaml:"description,omitempty"`
 	Capabilities         []string                                       `yaml:"capabilities,omitempty"`
 	Tags                 []string                                       `yaml:"tags,omitempty"`
-	Evaluations          []modelcatalog.UserEvaluation                  `yaml:"-" json:"-"`
 	IndexResults         map[string]modelcatalog.IndexResult            `yaml:"-" json:"-"`
 	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
 	QualityIndex         string                                         `yaml:"-" json:"-"`

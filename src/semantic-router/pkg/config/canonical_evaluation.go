@@ -23,7 +23,7 @@ import (
 )
 
 func canonicalEvaluationDefinitions(
-	catalog *CanonicalEvaluationCatalog,
+	evaluation *CanonicalEvaluation,
 	builtIn *modelcatalog.Registry,
 	input *modelcatalog.EvaluationConfig,
 ) (map[string]modelcatalog.BenchmarkDefinition, error) {
@@ -31,15 +31,15 @@ func canonicalEvaluationDefinitions(
 	for _, definition := range builtIn.Benchmarks() {
 		benchmarks[definition.ID] = definition
 	}
-	if catalog == nil {
+	if evaluation == nil {
 		return benchmarks, nil
 	}
 
-	cloned := cloneCanonicalEvaluationCatalog(catalog)
+	cloned := cloneCanonicalEvaluation(evaluation)
 	input.Benchmarks = cloned.Benchmarks
 	input.Indices = cloned.Indices
 	for index, definition := range input.Benchmarks {
-		path := fmt.Sprintf("evaluation_catalog.benchmarks[%d].id", index)
+		path := fmt.Sprintf("evaluation.benchmarks[%d].id", index)
 		if !operatorResourceID.MatchString(definition.ID) {
 			return nil, fmt.Errorf("%s must be a namespaced, versioned identity", path)
 		}
@@ -54,7 +54,7 @@ func canonicalEvaluationDefinitions(
 		indices[definition.ID] = struct{}{}
 	}
 	for index, definition := range input.Indices {
-		path := fmt.Sprintf("evaluation_catalog.indices[%d].id", index)
+		path := fmt.Sprintf("evaluation.indices[%d].id", index)
 		if !operatorResourceID.MatchString(definition.ID) {
 			return nil, fmt.Errorf("%s must be a namespaced, versioned identity", path)
 		}
@@ -66,13 +66,14 @@ func canonicalEvaluationDefinitions(
 	return benchmarks, nil
 }
 
-func cloneCanonicalEvaluationCatalog(source *CanonicalEvaluationCatalog) *CanonicalEvaluationCatalog {
+func cloneCanonicalEvaluation(source *CanonicalEvaluation) *CanonicalEvaluation {
 	if source == nil {
 		return nil
 	}
-	result := &CanonicalEvaluationCatalog{
+	result := &CanonicalEvaluation{
 		Benchmarks: make([]modelcatalog.BenchmarkDefinition, len(source.Benchmarks)),
 		Indices:    make([]modelcatalog.IndexDefinition, len(source.Indices)),
+		Records:    cloneCanonicalEvaluationRecords(source.Records),
 	}
 	for index, definition := range source.Benchmarks {
 		result.Benchmarks[index] = definition
@@ -98,6 +99,19 @@ func cloneCanonicalEvaluationCatalog(source *CanonicalEvaluationCatalog) *Canoni
 			)
 			result.Indices[index].Components[componentIndex].Normalization = cloneCatalogNormalization(component.Normalization)
 		}
+	}
+	return result
+}
+
+func cloneCanonicalEvaluationRecords(source []CanonicalEvaluationRecord) []CanonicalEvaluationRecord {
+	if len(source) == 0 {
+		return nil
+	}
+	result := make([]CanonicalEvaluationRecord, len(source))
+	for index, record := range source {
+		result[index] = record
+		result[index].Metrics = cloneFloatMap(record.Metrics)
+		result[index].Metadata = cloneAnyMap(record.Metadata)
 	}
 	return result
 }

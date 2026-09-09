@@ -1915,11 +1915,12 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
-class ModelEvaluation(BaseModel):
-    """Small operator-authored benchmark result attached to one model card."""
+class EvaluationRecord(BaseModel):
+    """Small operator-authored benchmark result linked to one model card."""
 
     model_config = ConfigDict(extra="forbid")
 
+    model: str = Field(min_length=1)
     benchmark: str = Field(
         min_length=1,
         pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
@@ -2084,13 +2085,14 @@ class EvaluationIndexDefinition(BaseModel):
     components: List[EvaluationIndexComponent] = Field(min_length=1)
 
 
-class EvaluationCatalog(BaseModel):
-    """Custom benchmark semantics and index DAGs shared by config and routing."""
+class Evaluation(BaseModel):
+    """Unified benchmark definitions, index DAGs, and model measurements."""
 
     model_config = ConfigDict(extra="forbid")
 
     benchmarks: List[EvaluationBenchmarkDefinition] = Field(default_factory=list)
     indices: List[EvaluationIndexDefinition] = Field(default_factory=list)
+    records: List[EvaluationRecord] = Field(default_factory=list)
 
 
 class RoutingModelPresentation(BaseModel):
@@ -2137,7 +2139,6 @@ class RoutingModel(BaseModel):
     tags: Optional[List[str]] = None
     modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
-    evaluations: List[ModelEvaluation] = Field(default_factory=list)
 
     @field_validator("released_at", "knowledge_cutoff", mode="before")
     @classmethod
@@ -2328,7 +2329,7 @@ class UserConfig(BaseModel):
     version: str
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
-    evaluation_catalog: Optional[EvaluationCatalog] = None
+    evaluation: Optional[Evaluation] = None
     routing: Routing = Field(default_factory=Routing)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)

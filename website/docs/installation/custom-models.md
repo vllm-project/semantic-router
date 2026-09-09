@@ -43,31 +43,31 @@ card is optional: omit it when the Router only needs a backend binding. If
 explicitly whenever the served checkpoint uses another name.
 
 Model Card metadata can also include publisher, presentation, distribution,
-LoRAs, and operator evaluations. It must not contain credentials. Put prices
-under `providers.models[].pricing` and credentials under the backend binding,
-preferably through `api_key_env`.
+and LoRAs. It must not contain credentials, prices, or evaluation records. Put
+prices under `providers.models[].pricing`, records under top-level
+`evaluation.records[]`, and credentials under the backend binding, preferably
+through `api_key_env`.
 
 ## Add evaluation evidence
 
-Attach a result for a built-in benchmark directly to the Model Card:
+Link a result for a built-in benchmark to the custom Model Card identity:
 
 ```yaml
-routing:
-  modelCards:
-    - name: private-chat
-      evaluations:
-        - benchmark: livecodebench/livecodebench@6.0.0
-          benchmark_profile: independent-code-generation
-          reasoning_effort: high
-          metrics: {pass_at_1: 0.61}
-          measured_at: 2026-09-09
-          source: https://benchmarks.example/runs/private-chat-lcb6
+evaluation:
+  records:
+    - model: private-chat
+      benchmark: livecodebench/livecodebench@6.0.0
+      benchmark_profile: independent-code-generation
+      reasoning_effort: high
+      metrics: {pass_at_1: 0.61}
+      measured_at: 2026-09-09
+      source: https://benchmarks.example/runs/private-chat-lcb6
 ```
 
 The result enters every compatible built-in index at the exact reasoning effort.
 For an organization-specific benchmark, first declare its metric and any index
-under `evaluation_catalog`. See
-[Custom evaluation catalogs](../benchmarking/custom-evaluation-catalog).
+under `evaluation`. See
+[Custom evaluations](../benchmarking/custom-evaluations).
 
 ## Add custom reasoning
 

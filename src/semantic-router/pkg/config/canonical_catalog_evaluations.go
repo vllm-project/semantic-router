@@ -16,23 +16,26 @@ var (
 )
 
 // catalogIndexableEvaluationRecords adapts operator measurements whose
-// benchmark semantics are built in or declared in evaluation_catalog into the
-// typed scoring graph.
-// Unknown namespaced benchmarks remain on EffectiveModelCard.Evaluations and
-// round-trip through canonical export, but cannot safely enter an index until
-// their metric range, direction, and profiles are declared.
+// benchmark semantics are built in or declared in evaluation.benchmarks into
+// the typed scoring graph. Unknown namespaced benchmarks remain in the
+// canonical evaluation records and round-trip through export, but cannot
+// safely enter an index until their metric range, direction, and profiles are
+// declared.
 func catalogIndexableEvaluationRecords(
-	card RoutingModel,
-	modelIndex int,
+	records []CanonicalEvaluationRecord,
 	benchmarks map[string]modelcatalog.BenchmarkDefinition,
+	configuredCards map[string]struct{},
 ) ([]modelcatalog.EvaluationRecord, error) {
-	records := make([]modelcatalog.EvaluationRecord, 0, len(card.Evaluations))
-	for evaluationIndex, evaluation := range card.Evaluations {
-		path := fmt.Sprintf("routing.modelCards[%s].evaluations[%d]", card.Name, evaluationIndex)
-		if err := validateUserEvaluation(evaluation, path); err != nil {
+	indexable := make([]modelcatalog.EvaluationRecord, 0, len(records))
+	for recordIndex, record := range records {
+		path := fmt.Sprintf("evaluation.records[%d]", recordIndex)
+		if err := validateCanonicalEvaluationRecord(record, path); err != nil {
 			return nil, err
 		}
-		benchmark, known := benchmarks[evaluation.Benchmark]
+		if _, exists := configuredCards[record.Model]; !exists {
+			return nil, fmt.Errorf("%s.model %q does not reference a configured Model Card identity", path, record.Model)
+		}
+		benchmark, known := benchmarks[record.Benchmark]
 		if !known {
 			continue
 		}
@@ -40,56 +43,59 @@ func catalogIndexableEvaluationRecords(
 		for _, metric := range benchmark.Metrics {
 			knownMetrics[metric.ID] = struct{}{}
 		}
-		metrics := make(map[string]float64, len(evaluation.Metrics))
-		for metric, value := range evaluation.Metrics {
+		metrics := make(map[string]float64, len(record.Metrics))
+		for metric, value := range record.Metrics {
 			if _, ok := knownMetrics[metric]; !ok {
-				return nil, fmt.Errorf("%s.metrics.%s is not defined by benchmark %q", path, metric, evaluation.Benchmark)
+				return nil, fmt.Errorf("%s.metrics.%s is not defined by benchmark %q", path, metric, record.Benchmark)
 			}
 			metrics[metric] = value
 		}
-		benchmarkProfile := evaluation.BenchmarkProfile
+		benchmarkProfile := record.BenchmarkProfile
 		if benchmarkProfile == "" {
 			benchmarkProfile = benchmark.DefaultProfile
 		}
-		reasoningEffort := evaluation.ReasoningEffort
+		reasoningEffort := record.ReasoningEffort
 		if reasoningEffort == "" {
 			reasoningEffort = "default"
 		}
 		subject := modelcatalog.EvaluationSubject{}
-		if len(evaluation.Metadata) > 0 {
-			subject["parameters"] = cloneAnyMap(evaluation.Metadata)
+		if len(record.Metadata) > 0 {
+			subject["parameters"] = cloneAnyMap(record.Metadata)
 		}
-		records = append(records, modelcatalog.EvaluationRecord{
-			ID:    fmt.Sprintf("operator/%d/%d/%s", modelIndex, evaluationIndex, sanitizeCatalogID(card.Name)),
-			Model: card.Name, Benchmark: evaluation.Benchmark, BenchmarkProfile: benchmarkProfile,
-			ReasoningEffort: reasoningEffort, Metrics: metrics, Status: "available", MeasuredAt: evaluation.MeasuredAt,
+		indexable = append(indexable, modelcatalog.EvaluationRecord{
+			ID:    fmt.Sprintf("operator/%d/%s", recordIndex, sanitizeCatalogID(record.Model)),
+			Model: record.Model, Benchmark: record.Benchmark, BenchmarkProfile: benchmarkProfile,
+			ReasoningEffort: reasoningEffort, Metrics: metrics, Status: "available", MeasuredAt: record.MeasuredAt,
 			Subject: subject,
 			Evidence: modelcatalog.EvaluationEvidence{
-				Provenance: "operator", Verification: "claimed", Source: evaluation.Source, Redistributable: true,
+				Provenance: "operator", Verification: "claimed", Source: record.Source, Redistributable: true,
 			},
 		})
 	}
-	return records, nil
+	return indexable, nil
 }
 
-func validateUserEvaluation(evaluation modelcatalog.UserEvaluation, path string) error {
-	if !operatorResourceID.MatchString(evaluation.Benchmark) {
+func validateCanonicalEvaluationRecord(record CanonicalEvaluationRecord, path string) error {
+	if strings.TrimSpace(record.Model) == "" {
+		return fmt.Errorf("%s.model cannot be empty", path)
+	}
+	if !operatorResourceID.MatchString(record.Benchmark) {
 		return fmt.Errorf("%s.benchmark must be a namespaced, versioned identity", path)
 	}
-	if len(evaluation.Metrics) == 0 {
+	if len(record.Metrics) == 0 {
 		return fmt.Errorf("%s.metrics cannot be empty", path)
 	}
-	for metric, value := range evaluation.Metrics {
+	for metric, value := range record.Metrics {
 		if !operatorMetricID.MatchString(metric) || math.IsNaN(value) || math.IsInf(value, 0) {
 			return fmt.Errorf("%s.metrics.%s must be a finite numeric metric", path, metric)
 		}
 	}
-	if evaluation.MeasuredAt != "" {
-		if _, err := time.Parse("2006-01-02", evaluation.MeasuredAt); err != nil {
+	if record.MeasuredAt != "" {
+		if _, err := time.Parse("2006-01-02", record.MeasuredAt); err != nil {
 			return fmt.Errorf("%s.measured_at must use YYYY-MM-DD", path)
 		}
 	}
-	for key, value := range evaluation.Metadata {
+	for key, value := range record.Metadata {
 		if strings.TrimSpace(key) == "" || !catalogMetadataScalar(value) {
 			return fmt.Errorf("%s.metadata must contain non-empty scalar key/value pairs", path)
 		}
@@ -108,22 +114,6 @@ func catalogMetadataScalar(value any) bool {
 	default:
 		return false
 	}
-}
-
-func cloneUserEvaluations(values []modelcatalog.UserEvaluation) []modelcatalog.UserEvaluation {
-	if len(values) == 0 {
-		return nil
-	}
-	result := make([]modelcatalog.UserEvaluation, len(values))
-	for index, value := range values {
-		result[index] = value
-		result[index].Metrics = make(map[string]float64, len(value.Metrics))
-		for key, metric := range value.Metrics {
-			result[index].Metrics[key] = metric
-		}
-		result[index].Metadata = cloneAnyMap(value.Metadata)
-	}
-	return result
 }
 
 func cloneAnyMap(values map[string]any) map[string]any {

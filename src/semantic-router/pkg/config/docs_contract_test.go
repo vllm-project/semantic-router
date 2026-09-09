@@ -44,7 +44,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nevaluation_catalog:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`providers.defaults.model`",
 			"vllm-sr validate --config config.yaml",
 			"Environment references and secrets",
@@ -82,7 +82,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nevaluation_catalog:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`routing.modelCards`",
 			"`routing.modelCards[].loras`",
 			"`config/fragments/algorithm/`",

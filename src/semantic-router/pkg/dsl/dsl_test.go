@@ -709,7 +709,6 @@ MODEL "qwen2.5:3b" {
   context_window_size: 32768
   description: "Compact reasoning model for general and STEM traffic"
   capabilities: ["general", "reasoning", "math"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.82 } }]
   modality: "text"
 }
 
@@ -718,7 +717,6 @@ MODEL "qwen3:70b" {
   context_window_size: 131072
   description: "Large reasoning model for urgent and difficult AI queries"
   capabilities: ["general", "reasoning", "coding", "long_context"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 

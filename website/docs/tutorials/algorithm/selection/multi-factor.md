@@ -130,7 +130,7 @@ quality:
   for the entire comparison. It never changes weights for only one model.
 
 See [Open Intelligence Index](../../../benchmarking/open-intelligence-index) for
-the built-in hierarchy and [Custom evaluation catalogs](../../../benchmarking/custom-evaluation-catalog)
+the built-in hierarchy and [Custom evaluations](../../../benchmarking/custom-evaluations)
 for operator-defined evidence.
 
 ## Cost and SLOs

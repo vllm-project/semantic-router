@@ -90,7 +90,6 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Capabilities:         append([]string(nil), card.Capabilities...),
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
 		Tags:                 append([]string(nil), card.Tags...),
-		Evaluations:          cloneUserEvaluations(model.Card.Evaluations),
 		ReasoningFamily:      card.ReasoningFamily,
 		Modality:             modality,
 		IndexResults:         cloneCatalogIndexResults(indexResults),

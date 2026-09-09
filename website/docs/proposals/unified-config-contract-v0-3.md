@@ -22,7 +22,7 @@ The public configuration has eight top-level sections:
 version:
 listeners:
 providers:
-evaluation_catalog:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -34,7 +34,7 @@ global:
 | `version` | Selects the configuration contract. |
 | `listeners` | Defines request-facing and management listeners. |
 | `providers` | Binds logical model names to provider identifiers and endpoints. |
-| `evaluation_catalog` | Optionally defines operator-owned benchmark semantics and versioned index DAGs. |
+| `evaluation` | Optionally defines operator-owned benchmarks, index DAGs, and model-linked records. |
 | `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
 | `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
 | `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
@@ -57,10 +57,10 @@ gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
 
-`evaluation_catalog` owns optional operator benchmark and index definitions;
-measurements remain attached to `routing.modelCards[].evaluations`. This keeps
-model evidence beside model identity while the reusable scoring semantics have
-one top-level owner.
+`evaluation` owns optional operator benchmark definitions, index DAGs, and
+measurement records. Each `evaluation.records[].model` references one canonical
+Model Card identity, so reusable scoring semantics and model evidence have one
+top-level owner without being embedded in routing metadata.
 
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with
@@ -90,9 +90,9 @@ Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
 The DSL is an authoring view of routing semantics. It does not own provider
-credentials, listeners, stores, or global runtime services. Import and export must
-preserve the same canonical routing document rather than invent another steady-state
-schema.
+credentials, listeners, evaluation definitions or records, stores, or global
+runtime services. Import and export preserve the same canonical routing
+document rather than inventing another steady-state schema.
 
 Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
 that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision

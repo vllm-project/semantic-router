@@ -110,7 +110,7 @@ latency, cost, and load continue to work; candidate-local weight changes do not.
 `quality.min_coverage` can require more evidence than an index's own missing-data
 policy, and `quality.min_score` is a hard quality floor. This lets a deployment
 route on a deliberately partial operator index without weakening the complete-case
-1.0 Overall contract. See [Custom evaluation catalogs](custom-evaluation-catalog)
+1.0 Overall contract. See [Custom evaluations](custom-evaluations)
 for the YAML contract and [Multi Factor](../tutorials/algorithm/selection/multi-factor)
 for Balanced, Accuracy-first, and Cost-first objectives.
 

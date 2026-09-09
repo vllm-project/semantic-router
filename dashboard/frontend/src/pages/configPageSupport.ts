@@ -183,7 +183,8 @@ export interface ModelReasoningConfig {
   disabled?: string
 }
 
-export interface ModelEvaluationConfig {
+export interface EvaluationRecordConfig {
+  model: string
   benchmark: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -253,7 +254,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -350,7 +350,6 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   card_override?: RoutingModelCard
   modality?: string
   pricing?: {
@@ -1246,9 +1245,10 @@ export interface ConfigData {
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
-  evaluation_catalog?: {
+  evaluation?: {
     benchmarks?: CatalogBenchmark[]
     indices?: CatalogIndex[]
+    records?: EvaluationRecordConfig[]
   }
   routing?: RoutingConfig
   entrypoints?: EntrypointConfig[]

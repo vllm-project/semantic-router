@@ -14,6 +14,18 @@ import (
 func TestUnknownOperatorBenchmarkSurvivesMaterializationAndCanonicalExport(t *testing.T) {
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion([]byte(`
 version: v0.3
+evaluation:
+  records:
+    - model: private-reasoner
+      benchmark: acme/support-bench@1
+      benchmark_profile: production
+      reasoning_effort: high
+      metrics:
+        resolution_rate: 0.82
+      source: https://evals.example/runs/42
+      measured_at: 2026-09-01
+      metadata:
+        runtime: vllm
 providers:
   models:
     - name: private-reasoner
@@ -25,22 +37,13 @@ providers:
 routing:
   modelCards:
     - name: private-reasoner
-      evaluations:
-        - benchmark: acme/support-bench@1
-          benchmark_profile: production
-          reasoning_effort: high
-          metrics:
-            resolution_rate: 0.82
-          source: https://evals.example/runs/42
-          measured_at: 2026-09-01
-          metadata:
-            runtime: vllm
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := modelcatalog.UserEvaluation{
+	want := CanonicalEvaluationRecord{
+		Model:            "private-reasoner",
 		Benchmark:        "acme/support-bench@1",
 		BenchmarkProfile: "production",
 		ReasoningEffort:  "high",
@@ -53,10 +56,10 @@ routing:
 	assertUnknownOperatorEvaluationNotIndexed(t, cfg, want.Benchmark)
 }
 
-func TestCustomEvaluationCatalogComputesAndRoundTripsIndex(t *testing.T) {
+func TestCustomEvaluationComputesAndRoundTripsIndex(t *testing.T) {
 	document := []byte(`
 version: v0.3
-evaluation_catalog:
+evaluation:
   benchmarks:
     - id: acme/support-bench@1.0.0
       display_name: ACME Support Bench
@@ -85,6 +88,14 @@ evaluation_catalog:
           metric: resolution_rate
           weight: 1
           normalization: {type: linear_clamp, min: 0, max: 100}
+  records:
+    - model: private-reasoner
+      benchmark: acme/support-bench@1.0.0
+      benchmark_profile: production
+      reasoning_effort: high
+      metrics: {resolution_rate: 82}
+      source: https://evals.example/runs/42
+      measured_at: 2026-09-01
 providers:
   models:
     - name: private-reasoner
@@ -95,13 +106,6 @@ providers:
 routing:
   modelCards:
     - name: private-reasoner
-      evaluations:
-        - benchmark: acme/support-bench@1.0.0
-          benchmark_profile: production
-          reasoning_effort: high
-          metrics: {resolution_rate: 82}
-          source: https://evals.example/runs/42
-          measured_at: 2026-09-01
 `)
 
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
@@ -111,8 +115,9 @@ routing:
 	assertCustomIndexScore(t, cfg, 82)
 
 	exported := CanonicalConfigFromRouterConfig(cfg)
-	if exported.EvaluationCatalog == nil || len(exported.EvaluationCatalog.Benchmarks) != 1 || len(exported.EvaluationCatalog.Indices) != 1 {
-		t.Fatalf("exported evaluation catalog = %#v", exported.EvaluationCatalog)
+	if exported.Evaluation == nil || len(exported.Evaluation.Benchmarks) != 1 ||
+		len(exported.Evaluation.Indices) != 1 || len(exported.Evaluation.Records) != 1 {
+		t.Fatalf("exported evaluation = %#v", exported.Evaluation)
 	}
 	encoded, err := yaml.Marshal(exported)
 	if err != nil {
@@ -125,10 +130,10 @@ routing:
 	assertCustomIndexScore(t, replayed, 82)
 }
 
-func TestCustomEvaluationCatalogCanAdmitExplicitPartialCoverage(t *testing.T) {
+func TestCustomEvaluationCanAdmitExplicitPartialCoverage(t *testing.T) {
 	document := []byte(`
 version: v0.3
-evaluation_catalog:
+evaluation:
   benchmarks:
     - id: acme/support-bench@1.0.0
       display_name: ACME Support Bench
@@ -165,6 +170,12 @@ evaluation_catalog:
           metric: grounded_rate
           weight: 0.5
           normalization: {type: identity}
+  records:
+    - model: private-reasoner
+      benchmark: acme/support-bench@1.0.0
+      benchmark_profile: production
+      reasoning_effort: high
+      metrics: {resolution_rate: 0.82}
 providers:
   models:
     - name: private-reasoner
@@ -175,11 +186,6 @@ providers:
 routing:
   modelCards:
     - name: private-reasoner
-      evaluations:
-        - benchmark: acme/support-bench@1.0.0
-          benchmark_profile: production
-          reasoning_effort: high
-          metrics: {resolution_rate: 0.82}
 `)
 
 	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
@@ -203,29 +209,29 @@ func assertCustomIndexScore(t *testing.T, cfg *RouterConfig, want float64) {
 	}
 }
 
-func TestCustomEvaluationCatalogRejectsUnversionedOrBuiltInIdentities(t *testing.T) {
+func TestCustomEvaluationRejectsUnversionedOrBuiltInIdentities(t *testing.T) {
 	tests := []struct {
-		name      string
-		catalog   CanonicalEvaluationCatalog
-		wantError string
+		name       string
+		evaluation CanonicalEvaluation
+		wantError  string
 	}{
 		{
 			name: "unversioned benchmark",
-			catalog: CanonicalEvaluationCatalog{Benchmarks: []modelcatalog.BenchmarkDefinition{{
+			evaluation: CanonicalEvaluation{Benchmarks: []modelcatalog.BenchmarkDefinition{{
 				ID: "support-bench",
 			}}},
 			wantError: "namespaced, versioned identity",
 		},
 		{
 			name: "built-in benchmark shadow",
-			catalog: CanonicalEvaluationCatalog{Benchmarks: []modelcatalog.BenchmarkDefinition{{
+			evaluation: CanonicalEvaluation{Benchmarks: []modelcatalog.BenchmarkDefinition{{
 				ID: "tiger-ai-lab/mmlu-pro@1.0.0",
 			}}},
 			wantError: "conflicts with an existing benchmark",
 		},
 		{
 			name: "built-in index shadow",
-			catalog: CanonicalEvaluationCatalog{Indices: []modelcatalog.IndexDefinition{{
+			evaluation: CanonicalEvaluation{Indices: []modelcatalog.IndexDefinition{{
 				ID: "vllm-sr/intelligence@1.0.0",
 			}}},
 			wantError: "conflicts with an existing index",
@@ -233,9 +239,47 @@ func TestCustomEvaluationCatalogRejectsUnversionedOrBuiltInIdentities(t *testing
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := canonicalCatalogInput(&CanonicalConfig{EvaluationCatalog: &test.catalog})
+			_, err := canonicalCatalogInput(&CanonicalConfig{Evaluation: &test.evaluation})
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("canonicalCatalogInput() error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestCustomEvaluationRecordMustReferenceConfiguredModelCard(t *testing.T) {
+	_, err := canonicalCatalogInput(&CanonicalConfig{
+		Evaluation: &CanonicalEvaluation{Records: []CanonicalEvaluationRecord{{
+			Model: "missing-card", Benchmark: "acme/support@1", Metrics: map[string]float64{"score": 1},
+		}}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not reference a configured Model Card identity") {
+		t.Fatalf("canonicalCatalogInput() error = %v", err)
+	}
+}
+
+func TestRemovedEvaluationLayoutsAreRejected(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{
+			name: "evaluation catalog root",
+			yaml: "version: v0.3\nevaluation_catalog: {}\nrouting: {}\n",
+			want: "evaluation_catalog",
+		},
+		{
+			name: "model card evaluations",
+			yaml: "version: v0.3\nrouting:\n  modelCards:\n    - name: private\n      evaluations: []\n",
+			want: "routing.modelCards[0].evaluations",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ParseYAMLBytesWithoutEnvExpansion([]byte(test.yaml))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ParseYAMLBytesWithoutEnvExpansion() error = %v, want %q", err, test.want)
 			}
 		})
 	}
@@ -244,21 +288,18 @@ func TestCustomEvaluationCatalogRejectsUnversionedOrBuiltInIdentities(t *testing
 func assertUnknownOperatorEvaluationPreserved(
 	t *testing.T,
 	cfg *RouterConfig,
-	want modelcatalog.UserEvaluation,
+	want CanonicalEvaluationRecord,
 ) {
 	t.Helper()
-	effective, ok := cfg.EffectiveModelRegistry.Model("private-reasoner")
-	if !ok || len(effective.Card.Evaluations) != 1 || !reflect.DeepEqual(effective.Card.Evaluations[0], want) {
-		t.Fatalf("effective custom evaluation = %#v, want %#v", effective.Card.Evaluations, want)
-	}
-	if got := cfg.ModelConfig["private-reasoner"].Evaluations; len(got) != 1 || !reflect.DeepEqual(got[0], want) {
-		t.Fatalf("runtime custom evaluation = %#v, want %#v", got, want)
+	if cfg.Evaluation == nil || len(cfg.Evaluation.Records) != 1 ||
+		!reflect.DeepEqual(cfg.Evaluation.Records[0], want) {
+		t.Fatalf("runtime canonical evaluation = %#v, want %#v", cfg.Evaluation, want)
 	}
 
 	exported := CanonicalConfigFromRouterConfig(cfg)
-	if len(exported.Routing.ModelCards) != 1 || len(exported.Routing.ModelCards[0].Evaluations) != 1 ||
-		!reflect.DeepEqual(exported.Routing.ModelCards[0].Evaluations[0], want) {
-		t.Fatalf("canonical custom evaluation = %#v, want %#v", exported.Routing.ModelCards, want)
+	if exported.Evaluation == nil || len(exported.Evaluation.Records) != 1 ||
+		!reflect.DeepEqual(exported.Evaluation.Records[0], want) {
+		t.Fatalf("canonical evaluation = %#v, want %#v", exported.Evaluation, want)
 	}
 }
 
@@ -279,50 +320,51 @@ func assertUnknownOperatorEvaluationNotIndexed(t *testing.T, cfg *RouterConfig, 
 	}
 }
 
-func TestValidateUserEvaluationAcceptsSmallGenericSurface(t *testing.T) {
-	err := validateUserEvaluation(modelcatalog.UserEvaluation{
+func TestValidateCanonicalEvaluationRecordAcceptsSmallGenericSurface(t *testing.T) {
+	err := validateCanonicalEvaluationRecord(CanonicalEvaluationRecord{
+		Model:      "private-reasoner",
 		Benchmark:  "acme/support-bench@1",
 		Metrics:    map[string]float64{"resolution_rate": 0.82},
 		MeasuredAt: "2026-09-01",
 		Metadata:   map[string]any{"runtime": "vllm", "tensor_parallel": 2},
-	}, "routing.modelCards[private].evaluations[0]")
+	}, "evaluation.records[0]")
 	if err != nil {
-		t.Fatalf("validateUserEvaluation() error = %v", err)
+		t.Fatalf("validateCanonicalEvaluationRecord() error = %v", err)
 	}
 }
 
-func TestValidateUserEvaluationRejectsAmbiguousOrNonFiniteData(t *testing.T) {
+func TestValidateCanonicalEvaluationRecordRejectsAmbiguousOrNonFiniteData(t *testing.T) {
 	tests := []struct {
 		name       string
-		evaluation modelcatalog.UserEvaluation
+		evaluation CanonicalEvaluationRecord
 		want       string
 	}{
 		{
 			name:       "unversioned benchmark",
-			evaluation: modelcatalog.UserEvaluation{Benchmark: "support", Metrics: map[string]float64{"score": 1}},
+			evaluation: CanonicalEvaluationRecord{Model: "private", Benchmark: "support", Metrics: map[string]float64{"score": 1}},
 			want:       "namespaced, versioned identity",
 		},
 		{
 			name:       "non-finite metric",
-			evaluation: modelcatalog.UserEvaluation{Benchmark: "acme/support@1", Metrics: map[string]float64{"score": math.NaN()}},
+			evaluation: CanonicalEvaluationRecord{Model: "private", Benchmark: "acme/support@1", Metrics: map[string]float64{"score": math.NaN()}},
 			want:       "finite numeric metric",
 		},
 		{
 			name:       "nested metadata",
-			evaluation: modelcatalog.UserEvaluation{Benchmark: "acme/support@1", Metrics: map[string]float64{"score": 1}, Metadata: map[string]any{"runtime": map[string]any{"name": "vllm"}}},
+			evaluation: CanonicalEvaluationRecord{Model: "private", Benchmark: "acme/support@1", Metrics: map[string]float64{"score": 1}, Metadata: map[string]any{"runtime": map[string]any{"name": "vllm"}}},
 			want:       "scalar key/value pairs",
 		},
 		{
 			name:       "invalid date",
-			evaluation: modelcatalog.UserEvaluation{Benchmark: "acme/support@1", Metrics: map[string]float64{"score": 1}, MeasuredAt: "September 1"},
+			evaluation: CanonicalEvaluationRecord{Model: "private", Benchmark: "acme/support@1", Metrics: map[string]float64{"score": 1}, MeasuredAt: "September 1"},
 			want:       "YYYY-MM-DD",
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateUserEvaluation(test.evaluation, "evaluation")
+			err := validateCanonicalEvaluationRecord(test.evaluation, "evaluation.records[0]")
 			if err == nil || !strings.Contains(err.Error(), test.want) {
-				t.Fatalf("validateUserEvaluation() error = %v, want %q", err, test.want)
+				t.Fatalf("validateCanonicalEvaluationRecord() error = %v, want %q", err, test.want)
 			}
 		})
 	}

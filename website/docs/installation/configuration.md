@@ -12,7 +12,7 @@ Helm, and Operator. The top-level structure is:
 version:
 listeners:
 providers:
-evaluation_catalog:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -31,7 +31,7 @@ or runtime behavior that differs from the built-in defaults.
 | `version` | Canonical schema version. Use `v0.3`. |
 | `listeners` | Public Router listeners and timeouts. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
-| `evaluation_catalog` | Optional operator-owned benchmark semantics and versioned index DAGs. |
+| `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
 | `entrypoints` | Public virtual model aliases mapped to named recipes. |
 | `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
@@ -52,9 +52,10 @@ Provider pricing belongs beside each concrete model under
 `cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
 repeat deployment prices or credentials.
 
-Evaluation measurements belong on `routing.modelCards[].evaluations`. Built-in
-benchmark IDs work directly; define new benchmark semantics and indices under
-`evaluation_catalog`. See [Custom evaluation catalogs](../benchmarking/custom-evaluation-catalog).
+Evaluation measurements belong in `evaluation.records[]` and reference a
+canonical Model Card identity through `model`. Built-in benchmark IDs work
+directly; define new benchmark semantics and indices beside the records under
+`evaluation`. See [Custom evaluations](../benchmarking/custom-evaluations).
 
 Use [Protocol Compatibility](protocol-compatibility) to choose the model's
 backend `api_format`. Then see

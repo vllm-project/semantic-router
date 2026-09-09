@@ -1,8 +1,7 @@
 version: v0.3
 
-# Optional operator-owned benchmark definitions and versioned index DAGs.
-# Raw measurements remain attached to routing.modelCards[].evaluations.
-evaluation_catalog: {}
+# Optional operator-owned benchmark definitions, versioned index DAGs, and
+# model-linked measurements live together under evaluation.
 
 listeners:
   - name: http-8899
@@ -132,6 +131,24 @@ providers:
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
 
+evaluation:
+  records:
+    - model: qwen3-8b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.83
+    - model: qwen3-32b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.96
+    - model: llava-omni
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: sdxl-image
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.79
 routing:
   strategy: priority
   modelCards:
@@ -159,10 +176,6 @@ routing:
       modalities:
         input: [text]
         output: [text]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.83
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
@@ -173,10 +186,6 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.96
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -184,10 +193,6 @@ routing:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.88
       modality: omni
       tags: [multimodal, omni]
     - name: sdxl-image
@@ -195,10 +200,6 @@ routing:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.79
       modality: diffusion
       tags: [image, diffusion]
 

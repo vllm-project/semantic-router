@@ -488,7 +488,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'benchmarking/overview',
         'benchmarking/open-intelligence-index',
-        'benchmarking/custom-evaluation-catalog',
+        'benchmarking/custom-evaluations',
         'benchmarking/evaluation-plane',
       ],
     },
