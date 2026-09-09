@@ -98,6 +98,11 @@ routing:
             auto_store: true
 global:
   services:
+    authz:
+      # The memory E2E client simulates the upstream external authorization
+      # boundary by injecting x-authz-user-id before the router ingress.
+      providers:
+        - type: header-injection
     response_api:
       enabled: true
       store_backend: memory
