@@ -251,8 +251,8 @@ func TestDeriveTrustedIdentityKeepsSessionOverridePriority(t *testing.T) {
 		}},
 	}}
 	ctx := &RequestContext{Headers: map[string]string{
-		"X-SESSION-ID":       "operator-session",
-		"x-learning-session": "configured-session",
+		"X-SESSION-ID":             "operator-session",
+		"x-learning-session":       "configured-session",
 		"X-CLAUDE-CODE-SESSION-ID": "anthropic-session",
 	}}
 
