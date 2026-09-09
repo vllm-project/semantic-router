@@ -189,6 +189,14 @@ bottom. A score of 0.99 satisfies both `hard` conditions at once, so the
 decision for `extreme:hard` needs the higher `priority`, or the looser rule
 takes the request.
 
+Give every rung an explicit `priority`, and give the stricter rung the higher
+number. `priority` may be omitted, and two decisions that both match at the
+same priority are separated by confidence - which `score.v1` never reports, so
+the comparison falls through to the decisions' names in alphabetical order.
+Renaming a decision would then change which model a request reaches, and
+nothing reports that it happened - #3658 tracks making the comparison that
+settled a request observable.
+
 `score.v1` reports no confidence. A score just short of `hard_above` is the
 least certain position rather than a strong one, so no confidence is derived
 from it, and any decision gated on such a rule ranks on the engine's structural
