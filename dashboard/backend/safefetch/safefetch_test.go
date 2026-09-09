@@ -354,3 +354,96 @@ func closeResponse(resp *http.Response) {
 		_ = resp.Body.Close()
 	}
 }
+
+// Every resolved address is validated, so all of them are safe to dial. Pinning
+// the first one drops the fallback the stock dialer gives you, and a host whose
+// first record is unreachable then looks dead. This is the ordinary shape of a
+// partial IPv6 outage: the AAAA answer is tried first and nothing is listening.
+func TestClientFallsBackAcrossValidatedAddresses(t *testing.T) {
+	// v4-only server, so the IPv6 loopback answer below refuses immediately.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("reached"))
+	}))
+	defer server.Close()
+
+	host, port := splitHostPort(t, server.Listener.Addr().String())
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("::1"), // first answer, nothing listening
+			netip.MustParseAddr(host),  // second answer, the server
+		}}).
+		AllowingPrivate(netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128"))
+
+	resp, err := policy.NewClient().Get(fmt.Sprintf("http://dual-stack.invalid:%s/", port))
+	if err != nil {
+		t.Fatalf("Get() = %v, want a fallback to the second validated address", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := ReadBounded(resp.Body, 1024)
+	if err != nil {
+		t.Fatalf("ReadBounded() = %v", err)
+	}
+	if string(body) != "reached" {
+		t.Errorf("body = %q, want %q", body, "reached")
+	}
+}
+
+// A refusal on every validated address is still a failure, and the error names
+// what was tried rather than being swallowed.
+func TestClientFailsWhenEveryValidatedAddressIsUnreachable(t *testing.T) {
+	// Bind then release, so the port is closed on both families.
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	_, port := splitHostPort(t, probe.Addr().String())
+	_ = probe.Close()
+
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("::1"),
+			netip.MustParseAddr("127.0.0.1"),
+		}}).
+		AllowingPrivate(netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128"))
+
+	resp, dialErr := policy.NewClient().Get(fmt.Sprintf("http://dead.invalid:%s/", port))
+	closeResponse(resp)
+	if dialErr == nil {
+		t.Fatal("expected an error when no validated address accepts a connection")
+	}
+}
+
+// orderByFamily interleaves the two families so a broken IPv6 path cannot
+// consume every attempt before the first IPv4 answer is reached.
+func TestOrderByFamilyInterleaves(t *testing.T) {
+	v6a, v6b := netip.MustParseAddr("2606:4700::1"), netip.MustParseAddr("2606:4700::2")
+	v4a, v4b := netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("1.0.0.1")
+
+	tests := []struct {
+		name    string
+		in      []netip.Addr
+		network string
+		want    []netip.Addr
+	}{
+		{"v6 first leads with v6", []netip.Addr{v6a, v6b, v4a, v4b}, "tcp", []netip.Addr{v6a, v4a, v6b, v4b}},
+		{"v4 first leads with v4", []netip.Addr{v4a, v4b, v6a, v6b}, "tcp", []netip.Addr{v4a, v6a, v4b, v6b}},
+		{"single family is untouched", []netip.Addr{v4a, v4b}, "tcp", []netip.Addr{v4a, v4b}},
+		{"tcp4 drops v6 answers", []netip.Addr{v6a, v4a}, "tcp4", []netip.Addr{v4a}},
+		{"tcp6 drops v4 answers", []netip.Addr{v4a, v6a}, "tcp6", []netip.Addr{v6a}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := orderByFamily(tt.in, tt.network)
+			if len(got) != len(tt.want) {
+				t.Fatalf("orderByFamily() = %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("orderByFamily() = %v, want %v", got, tt.want)
+				}
+			}
+		})
+	}
+}

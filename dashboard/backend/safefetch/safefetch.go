@@ -232,7 +232,69 @@ func (p Policy) dial(
 		}
 	}
 
-	return dialer.DialContext(ctx, network, net.JoinHostPort(addresses[0].Unmap().String(), port))
+	// Every candidate is validated, so any of them is safe to dial. Try them in
+	// turn rather than pinning the first: the stock dialer resolves the name
+	// itself and falls back across answers, and dialing one address would drop
+	// that. A host whose first record is unreachable, which is the ordinary
+	// shape of a partial IPv6 outage or a multi-A record with one bad host,
+	// would otherwise fail outright.
+	var errs error
+	for _, candidate := range orderByFamily(addresses, network) {
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(candidate.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		errs = errors.Join(errs, dialErr)
+		// The overall deadline belongs to the caller. Once it is gone, further
+		// attempts only burn time we no longer have.
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	if errs == nil {
+		return nil, ErrDestinationForbidden
+	}
+	return nil, errs
+}
+
+// orderByFamily returns the validated addresses with the two families
+// interleaved, keeping the resolver's order within each and leading with the
+// family the resolver put first. Trying every IPv6 answer before the first IPv4
+// one is what makes a broken IPv6 path look like a dead host.
+//
+// Addresses the transport cannot use for this network are dropped, so a tcp4
+// dial does not spend an attempt on an IPv6 answer.
+func orderByFamily(addresses []netip.Addr, network string) []netip.Addr {
+	var v4, v6 []netip.Addr
+	for _, a := range addresses {
+		a = a.Unmap()
+		switch {
+		case a.Is4():
+			if network != "tcp6" && network != "udp6" {
+				v4 = append(v4, a)
+			}
+		default:
+			if network != "tcp4" && network != "udp4" {
+				v6 = append(v6, a)
+			}
+		}
+	}
+
+	first, second := v4, v6
+	if len(addresses) > 0 && !addresses[0].Unmap().Is4() {
+		first, second = v6, v4
+	}
+
+	ordered := make([]netip.Addr, 0, len(first)+len(second))
+	for i := 0; i < len(first) || i < len(second); i++ {
+		if i < len(first) {
+			ordered = append(ordered, first[i])
+		}
+		if i < len(second) {
+			ordered = append(ordered, second[i])
+		}
+	}
+	return ordered
 }
 
 // ReadBounded reads at most limit bytes and reports ErrResponseTooLarge if the
