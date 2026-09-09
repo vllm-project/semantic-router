@@ -32,6 +32,12 @@ jobs:
     uses: ./.github/workflows/test-and-build.yml
     secrets: inherit
 
+  image-calibration:
+    needs: changes
+    if: needs.changes.outputs.image_calibration == 'true'
+    uses: ./.github/workflows/image-routing-calibration.yml
+    secrets: inherit
+
   dashboard:
     needs: changes
     if: needs.changes.outputs.dashboard == 'true'
@@ -76,6 +82,7 @@ jobs:
       - quality
       - security
       - core
+      - image-calibration
       - dashboard
       - operator
       - e2e

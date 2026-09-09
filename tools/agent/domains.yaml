@@ -16,6 +16,10 @@ jobs:
     workflow: .github/workflows/test-and-build.yml
     output: core_test
     full: true
+  image-calibration:
+    workflow: .github/workflows/image-routing-calibration.yml
+    output: image_calibration
+    full: true
   dashboard:
     workflow: .github/workflows/dashboard-test.yml
     output: dashboard
@@ -104,6 +108,27 @@ domains:
       - Cargo.lock
     checks: [make test-semantic-router]
     ci_jobs: [core-tests]
+
+  # Every input that can change the calibrated image-routing thresholds: the
+  # shipped pack, the calibration command and its labelled set, the fixture
+  # roots it scans for negatives, and the E2E profile that mirrors the pack.
+  # The model snapshot pin lives in the workflow, which selects itself when
+  # edited.
+  image-calibration:
+    owner: router-core
+    # Docs images under website/static/img are negatives in the calibration
+    # pool, so a documentation-only change there must still select this gate.
+    documentation_check: true
+    paths:
+      - config/fragments/signal/embedding/image-routing.yaml
+      - src/semantic-router/cmd/image-routing-calibration/**
+      - e2e/testcases/testdata/image-fixtures/**
+      - e2e/profiles/multimodal-routing/crds/intelligentroute.yaml
+      - e2e/profiles/multimodal-routing/values.yaml
+      - website/static/img/**
+      - dashboard/frontend/public/**
+    checks: [make test-e2e-profile-multimodal]
+    ci_jobs: [image-calibration]
 
   native-bindings:
     owner: native-bindings

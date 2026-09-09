@@ -2,16 +2,16 @@ name: Image Routing Calibration
 
 # Exact-head trust gate for the image-routing threshold pack (issue #2165).
 # Reruns cmd/image-routing-calibration over every fixture in its calibration
-# set and fails unless each shipped threshold in
-# config/fragments/signal/embedding/image-routing.yaml equals the value the
-# report selects. Runs as a PR check only when that file changes, so a
-# threshold cannot be edited without the calibration reproducing it; it can
-# also be dispatched by hand against any ref. The Markdown report lands in
-# the job summary and both reports upload as an artifact.
+# set at the calibrated model snapshot and fails unless each shipped
+# threshold in config/fragments/signal/embedding/image-routing.yaml equals
+# the value the report selects. It also runs the multimodal-routing profile
+# package tests, which assert the E2E CRD mirrors the pack.
+#
+# Dispatched by pr.yml through the image-calibration registry job whenever a
+# calibration input changes (see tools/agent/domains.yaml), so it feeds the
+# required PR Gate; it can also be run by hand against any ref.
 on:
-  pull_request:
-    paths:
-      - config/fragments/signal/embedding/image-routing.yaml
+  workflow_call:
   workflow_dispatch:
     inputs:
       ref:
@@ -38,7 +38,7 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -75,6 +75,11 @@ jobs:
       # runtime library path below.
       - name: Build Rust libraries (CPU-only, no CUDA)
         run: make rust-ci
+
+      # The profile package asserts the E2E CRD mirrors the shipped pack and
+      # that the profile keeps the chart's runtime defaults; no cluster needed.
+      - name: Run multimodal-routing profile package tests
+        run: make test-e2e-profile-multimodal
 
       - name: Install HuggingFace CLI
         run: pip install -U "huggingface_hub[cli]"

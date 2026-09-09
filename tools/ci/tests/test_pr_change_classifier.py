@@ -52,6 +52,26 @@ class PRChangeClassifierTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assert_classification(path, jobs)
 
+    def test_calibration_inputs_select_the_image_calibration_gate(self) -> None:
+        """Every input that can move the calibrated image-routing thresholds
+        must run the calibration job, which feeds the required PR Gate."""
+        for path in (
+            "config/fragments/signal/embedding/image-routing.yaml",
+            "src/semantic-router/cmd/image-routing-calibration/main.go",
+            "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json",
+            "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+            "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
+            "website/static/img/blog/new-screenshot.png",
+            ".github/workflows/image-routing-calibration.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("image-calibration", classify([path]).selected_jobs)
+
+    def test_unrelated_router_change_does_not_run_the_calibration_gate(self) -> None:
+        result = classify(["src/semantic-router/pkg/extproc/processor.go"])
+
+        self.assertNotIn("image-calibration", result.selected_jobs)
+
     def test_runtime_cli_surface_has_explicit_integration_escalation(self) -> None:
         self.assert_classification(
             "src/vllm-sr/cli/commands/runtime.py",
@@ -125,7 +145,14 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertEqual(
             result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e", "recipe-conformance"),
+            (
+                "quality",
+                "security",
+                "core-tests",
+                "image-calibration",
+                "e2e",
+                "recipe-conformance",
+            ),
         )
         self.assertEqual(
             result.profiles,

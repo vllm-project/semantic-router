@@ -27,15 +27,26 @@ type profileValues struct {
 	} `json:"config"`
 }
 
+type embeddingRule struct {
+	Name      string  `json:"name"`
+	Threshold float64 `json:"threshold"`
+}
+
 type intelligentRouteManifest struct {
 	Spec struct {
 		Signals struct {
-			Embeddings []struct {
-				Name      string  `json:"name"`
-				Threshold float64 `json:"threshold"`
-			} `json:"embeddings"`
+			Embeddings []embeddingRule `json:"embeddings"`
 		} `json:"signals"`
 	} `json:"spec"`
+}
+
+// imageRoutingPack is the shape of config/fragments/signal/embedding/image-routing.yaml.
+type imageRoutingPack struct {
+	Routing struct {
+		Signals struct {
+			Embeddings []embeddingRule `json:"embeddings"`
+		} `json:"signals"`
+	} `json:"routing"`
 }
 
 func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
@@ -69,7 +80,11 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	}
 }
 
-func TestImageRulesKeepCalibratedDiscriminationThreshold(t *testing.T) {
+// The profile thresholds are not tuned to the three fixtures; they mirror the
+// calibrated values shipped in the image-routing pack, so the E2E run is an
+// acceptance test of what users deploy. cmd/image-routing-calibration
+// derives the pack values and CI gates them; this keeps the mirror honest.
+func TestImageRulesMirrorTheShippedPack(t *testing.T) {
 	raw, err := os.ReadFile("crds/intelligentroute.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -82,13 +97,31 @@ func TestImageRulesKeepCalibratedDiscriminationThreshold(t *testing.T) {
 	if err := json.Unmarshal(jsonDocument, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	rules := manifest.Spec.Signals.Embeddings
-	if len(rules) != 3 {
-		t.Fatalf("embedding rules = %d, want 3", len(rules))
+
+	packRaw, err := os.ReadFile("../../../config/fragments/signal/embedding/image-routing.yaml")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, rule := range rules {
-		if rule.Name == "" || rule.Threshold != 0.42 {
+	packJSON, err := utilyaml.ToJSON(packRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pack imageRoutingPack
+	if err := json.Unmarshal(packJSON, &pack); err != nil {
+		t.Fatal(err)
+	}
+
+	rules := manifest.Spec.Signals.Embeddings
+	shipped := pack.Routing.Signals.Embeddings
+	if len(rules) != 3 || len(shipped) != 3 {
+		t.Fatalf("embedding rules: profile=%d pack=%d, want 3 and 3", len(rules), len(shipped))
+	}
+	for i, rule := range rules {
+		if rule.Name == "" || rule.Threshold <= 0 {
 			t.Fatalf("uncalibrated image rule: %+v", rule)
+		}
+		if rule.Name != shipped[i].Name || rule.Threshold != shipped[i].Threshold {
+			t.Fatalf("profile rule %d = %+v does not mirror the shipped pack rule %+v", i, rule, shipped[i])
 		}
 	}
 }
