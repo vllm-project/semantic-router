@@ -106,20 +106,21 @@ func TestRedisStoreResponseRollsBackIndexFailure(t *testing.T) {
 	assert.Equal(t, []string{"resp_rollback"}, conversationIndexMembers(t, store, "conv_rollback"))
 }
 
-// TestRedisCompareDeleteResponsePayload covers the ABA race the blueprint
-// calls out (§2.3): rollback must never delete a payload that changed after
-// the failed write, e.g. because a concurrent writer replaced it once the
-// original value's TTL expired.
+// TestRedisCompareDeleteResponsePayload proves response CAS is generation
+// based. Business-payload byte equality cannot authorize deletion, and legacy
+// payloads without a generation fail closed.
 func TestRedisCompareDeleteResponsePayload(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
 	key := store.buildKey(ResponseKeyPrefix + "resp_cas")
+	response := &responseapi.StoredResponse{ID: "resp_cas", Status: "completed", CreatedAt: time.Now().Unix()}
 
-	t.Run("deletes when value matches", func(t *testing.T) {
-		require.NoError(t, store.client.Set(ctx, key, []byte("payload-a"), store.ttl).Err())
+	t.Run("deletes when generation matches", func(t *testing.T) {
+		payload, generation := mustMarshalGeneratedResponse(t, response)
+		require.NoError(t, store.client.Set(ctx, key, payload, store.ttl).Err())
 
-		deleted, err := store.compareDeleteResponsePayload(ctx, key, []byte("payload-a"))
+		deleted, err := store.compareDeleteResponsePayload(ctx, key, generation)
 		require.NoError(t, err)
 		assert.True(t, deleted)
 
@@ -128,22 +129,34 @@ func TestRedisCompareDeleteResponsePayload(t *testing.T) {
 		assert.Zero(t, exists)
 	})
 
-	t.Run("leaves a changed value untouched", func(t *testing.T) {
-		require.NoError(t, store.client.Set(ctx, key, []byte("payload-a"), store.ttl).Err())
+	t.Run("leaves a different generation with identical business bytes untouched", func(t *testing.T) {
+		payload, _ := mustMarshalGeneratedResponse(t, response)
+		_, staleGeneration := mustMarshalGeneratedResponse(t, response)
+		require.NoError(t, store.client.Set(ctx, key, payload, store.ttl).Err())
 
-		deleted, err := store.compareDeleteResponsePayload(ctx, key, []byte("payload-b"))
+		deleted, err := store.compareDeleteResponsePayload(ctx, key, staleGeneration)
 		require.NoError(t, err)
 		assert.False(t, deleted)
 
-		value, err := store.client.Get(ctx, key).Result()
+		value, err := store.client.Get(ctx, key).Bytes()
 		require.NoError(t, err)
-		assert.Equal(t, "payload-a", value)
+		assert.Equal(t, payload, value)
+	})
+
+	t.Run("legacy payload fails closed", func(t *testing.T) {
+		payload := mustMarshalResponse(t, response)
+		require.NoError(t, store.client.Set(ctx, key, payload, store.ttl).Err())
+
+		deleted, err := store.compareDeleteResponsePayload(ctx, key, newResponseGeneration())
+		require.NoError(t, err)
+		assert.False(t, deleted)
+		assert.Equal(t, int64(1), exists(t, store, key))
 	})
 
 	t.Run("no-op against a missing key", func(t *testing.T) {
 		require.NoError(t, store.client.Del(ctx, key).Err())
 
-		deleted, err := store.compareDeleteResponsePayload(ctx, key, []byte("anything"))
+		deleted, err := store.compareDeleteResponsePayload(ctx, key, newResponseGeneration())
 		require.NoError(t, err)
 		assert.False(t, deleted)
 	})
@@ -291,10 +304,9 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	// compare-and-swap against) lands through the same atomic
 	// replace-and-snapshot UpdateResponse itself uses, so the snapshot under
 	// test is exactly the one production would have captured.
-	failedUpdateData, err := json.Marshal(&responseapi.StoredResponse{
+	failedUpdateData, failedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_update_conflict_failed", Status: "failed-update", CreatedAt: time.Now().Unix(),
 	})
-	require.NoError(t, err)
 
 	snapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, failedUpdateData)
 	require.NoError(t, err)
@@ -307,13 +319,12 @@ func TestRedisUpdateResponseRollbackConflictPreservesNewerWrite(t *testing.T) {
 	newer := &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_update_conflict_newer", Status: "newer-update", CreatedAt: time.Now().Unix(),
 	}
-	newerData, err := json.Marshal(newer)
-	require.NoError(t, err)
+	newerData, newerGeneration := mustMarshalGeneratedResponse(t, newer)
 	require.NoError(t, store.client.Set(ctx, key, newerData, store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newer.CreatedAt, store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, newer.ConversationID, responseID, newerGeneration, newer.CreatedAt, store.ttlMillis()))
 
 	injectedErr := errors.New("injected index failure")
-	err = store.rollbackUpdatePayload(ctx, key, responseID, failedUpdateData, snapshot, injectedErr)
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedGeneration, snapshot, injectedErr)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, injectedErr)
 
@@ -346,16 +357,14 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 	first := &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_first", Status: "first-success", CreatedAt: time.Now().Unix() + 1,
 	}
-	firstData, err := json.Marshal(first)
-	require.NoError(t, err)
-	_, err = store.replaceResponseAndSnapshot(ctx, key, responseID, firstData)
+	firstData, firstGeneration := mustMarshalGeneratedResponse(t, first)
+	_, err := store.replaceResponseAndSnapshot(ctx, key, responseID, firstData)
 	require.NoError(t, err)
 
 	second := &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_second", Status: "second-failed", CreatedAt: time.Now().Unix() + 2,
 	}
-	secondData, err := json.Marshal(second)
-	require.NoError(t, err)
+	secondData, secondGeneration := mustMarshalGeneratedResponse(t, second)
 	secondSnapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, secondData)
 	require.NoError(t, err)
 	assert.JSONEq(t, string(firstData), string(secondSnapshot.data),
@@ -363,9 +372,9 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 
 	// The first update can finish its index write while the second update is
 	// still in flight. The second update then fails and rolls itself back.
-	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, first.CreatedAt, store.ttlMillis()))
+	require.NoError(t, store.indexResponse(ctx, first.ConversationID, responseID, firstGeneration, first.CreatedAt, store.ttlMillis()))
 	injectedErr := errors.New("injected second update index failure")
-	err = store.rollbackUpdatePayload(ctx, key, responseID, secondData, secondSnapshot, injectedErr)
+	err = store.rollbackUpdatePayload(ctx, key, responseID, secondGeneration, secondSnapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)
 
 	current, err := store.GetResponse(ctx, responseID)
@@ -373,6 +382,14 @@ func TestRedisUpdateResponseRollbackRestoresImmediatePredecessor(t *testing.T) {
 	assert.Equal(t, "first-success", current.Status)
 	assert.Equal(t, "conv_first", current.ConversationID)
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, "conv_first"))
+	raw, err := store.client.Get(ctx, key).Bytes()
+	require.NoError(t, err)
+	restoredRecord, err := decodeResponseRecord(raw)
+	require.NoError(t, err)
+	assert.NotEqual(t, firstGeneration, restoredRecord.generation,
+		"rollback must mint a fresh generation instead of resurrecting the snapshot generation")
+	assert.NotEqual(t, secondGeneration, restoredRecord.generation)
+	assert.Equal(t, restoredRecord.generation, indexedGeneration(t, store, "conv_first", responseID))
 }
 
 // TestRedisUpdateResponseRollbackPreservesRemainingTTL covers that a
@@ -391,17 +408,16 @@ func TestRedisUpdateResponseRollbackPreservesRemainingTTL(t *testing.T) {
 	require.NoError(t, store.StoreResponse(ctx, original))
 	require.NoError(t, store.client.Expire(ctx, key, 100*time.Second).Err())
 
-	failedData, err := json.Marshal(&responseapi.StoredResponse{
+	failedData, failedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_update_ttl_failed", Status: "failed", CreatedAt: time.Now().Unix(),
 	})
-	require.NoError(t, err)
 
 	snapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, failedData)
 	require.NoError(t, err)
 	require.InDelta(t, (100 * time.Second).Milliseconds(), snapshot.pttlMillis, 2000)
 
 	injectedErr := errors.New("injected index failure")
-	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedGeneration, snapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)
 
 	ttl, err := store.client.TTL(ctx, key).Result()
@@ -427,17 +443,16 @@ func TestRedisUpdateResponseRollbackPreservesPersistentTTL(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.client.Set(ctx, key, data, 0).Err())
 
-	failedData, err := json.Marshal(&responseapi.StoredResponse{
+	failedData, failedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_update_persistent_failed", Status: "failed", CreatedAt: time.Now().Unix(),
 	})
-	require.NoError(t, err)
 
 	snapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, failedData)
 	require.NoError(t, err)
 	require.EqualValues(t, -1, snapshot.pttlMillis)
 
 	injectedErr := errors.New("injected index failure")
-	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedGeneration, snapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)
 
 	ttl, err := store.client.TTL(ctx, key).Result()
@@ -464,10 +479,9 @@ func TestRedisUpdateResponseRollbackDeletesWhenSnapshotTTLElapsed(t *testing.T) 
 	}
 	directSetResponsePayload(t, store, original)
 
-	failedData, err := json.Marshal(&responseapi.StoredResponse{
+	failedData, failedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
 		ID: responseID, ConversationID: "conv_update_expired_failed", Status: "failed", CreatedAt: time.Now().Unix(),
 	})
-	require.NoError(t, err)
 
 	snapshot, err := store.replaceResponseAndSnapshot(ctx, key, responseID, failedData)
 	require.NoError(t, err)
@@ -480,7 +494,7 @@ func TestRedisUpdateResponseRollbackDeletesWhenSnapshotTTLElapsed(t *testing.T) 
 	time.Sleep(5 * time.Millisecond)
 
 	injectedErr := errors.New("injected index failure")
-	err = store.rollbackUpdatePayload(ctx, key, responseID, failedData, snapshot, injectedErr)
+	err = store.rollbackUpdatePayload(ctx, key, responseID, failedGeneration, snapshot, injectedErr)
 	require.ErrorIs(t, err, injectedErr)
 
 	_, getErr := store.GetResponse(ctx, responseID)

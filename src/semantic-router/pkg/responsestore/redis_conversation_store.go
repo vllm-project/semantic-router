@@ -151,17 +151,12 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // as a read would: backfill from a legacy scan, or confirm the conversation
 // is genuinely empty.
 //
-// Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an
-// offsetting range): deleteConversationResponseBatch removes candidates
-// before resolving their payloads and restores only unresolved members, so
-// the next read naturally advances past resolved work. If a batch reports any
-// unresolved response (see deleteConversationResponseBatch — ownership
-// verified per response, never a blind delete), this returns the error and
-// stops rather than silently logging and reporting success — per blueprint
-// §5 Phase 5, the caller needs to know the cascade was only partially
-// applied. The failure is safely retryable: an already-resolved response's
-// index member is gone, so a retry's ZRange only ever re-reads the
-// responses still genuinely unresolved.
+// Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an offsetting
+// range), atomically pairing each member with its sidecar generation. Payload
+// deletion and later ZSET/HASH cleanup are both conditional on that observed
+// generation. If a batch reports an unresolved or legacy response, this stops
+// instead of silently reporting success. Already-resolved members are gone;
+// a stale witness left by a cleanup failure remains a safe retry anchor.
 //
 // An empty read is not on its own permission to delete the index. A
 // StoreResponse landing between that read and the delete has committed a real
@@ -173,15 +168,13 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // conversation being written to faster than it can be drained gives up, and it
 // says so rather than reporting a cascade that silently left responses behind.
 func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversationID string) error {
-	indexKey := s.conversationIndexKey(conversationID)
-
 	if err := s.ensureConversationIndexResolved(ctx, conversationID); err != nil {
 		return err
 	}
 
 	raced := 0
 	for {
-		candidates, err := s.client.ZRangeWithScores(ctx, indexKey, 0, redisDeleteBatchSize-1).Result()
+		candidates, err := s.readCascadeCandidates(ctx, conversationID)
 		if err != nil {
 			return fmt.Errorf("failed to list responses for deletion: %w", err)
 		}
@@ -193,7 +186,7 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 			continue
 		}
 
-		emptied, deleteErr := s.deleteEmptyConversationIndex(ctx, indexKey)
+		emptied, deleteErr := s.deleteEmptyConversationIndex(ctx, conversationID)
 		if deleteErr != nil {
 			return deleteErr
 		}
@@ -306,11 +299,11 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return err
 	}
 
-	if stored.ConversationID == "" || stored.ConversationID != conversationID {
+	if stored.response.ConversationID == "" || stored.response.ConversationID != conversationID {
 		return ErrInvalidInput
 	}
 
-	if err := s.indexResponse(ctx, conversationID, responseID, stored.CreatedAt, lifetimeMillis); err != nil {
+	if err := s.indexResponse(ctx, conversationID, responseID, stored.generation, stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("failed to index response in Redis: %w", err)
 	}
 

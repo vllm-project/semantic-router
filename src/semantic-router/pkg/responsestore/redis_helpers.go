@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -112,51 +111,29 @@ func decodePayloadTTL(cmd *redis.DurationCmd) int64 {
 // exactly the assumption that lets a conversation index retire ahead of a
 // longer-lived payload it names. Neither is a hot path, so the extra command
 // costs nothing that matters.
-func (s *RedisStore) getResponseWithLifetime(ctx context.Context, responseID string) (*responseapi.StoredResponse, int64, error) {
+func (s *RedisStore) getResponseWithLifetime(ctx context.Context, responseID string) (responseRecord, int64, error) {
 	if !s.enabled {
-		return nil, 0, ErrStoreDisabled
+		return responseRecord{}, 0, ErrStoreDisabled
 	}
 	if responseID == "" {
-		return nil, 0, ErrInvalidInput
+		return responseRecord{}, 0, ErrInvalidInput
 	}
 
 	key := s.buildKey(ResponseKeyPrefix + responseID)
 	result := fetchResponsePayloadsAndTTLsPipelined(ctx, s.client, []string{key})[0]
 	if result.err != nil {
 		if errors.Is(result.err, redis.Nil) {
-			return nil, 0, ErrNotFound
+			return responseRecord{}, 0, ErrNotFound
 		}
-		return nil, 0, fmt.Errorf("failed to get response from Redis: %w", result.err)
+		return responseRecord{}, 0, fmt.Errorf("failed to get response from Redis: %w", result.err)
 	}
 
-	var response responseapi.StoredResponse
-	if err := json.Unmarshal(result.raw, &response); err != nil {
-		return nil, 0, fmt.Errorf("failed to deserialize response: %w", err)
-	}
-
-	return &response, result.ttlMillis, nil
-}
-
-// storedConversationID reports a response's current conversation so update and
-// delete can repair the index, and returns ErrNotFound when it is absent. An
-// unreadable payload is not fatal, it only costs the old index entry.
-func (s *RedisStore) storedConversationID(ctx context.Context, responseID string) (string, error) {
-	data, err := s.client.Get(ctx, s.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	record, err := decodeResponseRecord(result.raw)
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return "", ErrNotFound
-		}
-		return "", fmt.Errorf("failed to check response existence: %w", err)
+		return responseRecord{}, 0, err
 	}
 
-	var stored responseapi.StoredResponse
-	if err := json.Unmarshal(data, &stored); err != nil {
-		logging.Warnf("RedisStore: failed to parse stored response %s while updating its conversation index: %v",
-			responseID, err)
-		return "", nil
-	}
-
-	return stored.ConversationID, nil
+	return record, result.ttlMillis, nil
 }
 
 func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
@@ -227,13 +204,13 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 			continue
 		}
 
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
+		record, err := decodeResponseRecord(data)
+		if err != nil {
 			logging.Warnf("RedisStore: failed to parse response %s: %v", responseIDs[i], err)
 			continue
 		}
 
-		found = append(found, &response)
+		found = append(found, record.response)
 	}
 
 	return found, missingIDs, nil

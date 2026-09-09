@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -32,6 +31,30 @@ type commandFailureHook struct {
 	key  string
 	err  error
 	used bool
+}
+
+// scriptFailureHook fails one warmed EVALSHA by script identity. Warming the
+// script first avoids mistaking a harmless NOSCRIPT probe for the operation
+// whose failure the test intends to inject.
+type scriptFailureHook struct {
+	hash string
+	err  error
+	used atomic.Bool
+}
+
+func (h *scriptFailureHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *scriptFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *scriptFailureHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		args := cmd.Args()
+		if cmd.Name() == "evalsha" && len(args) > 1 && args[1] == h.hash && h.used.CompareAndSwap(false, true) {
+			return h.err
+		}
+		return next(ctx, cmd)
+	}
 }
 
 func (h *commandFailureHook) matches(cmd redis.Cmder) bool {
@@ -72,51 +95,6 @@ func (h *commandFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook)
 	}
 }
 
-// raceInjectingHook lets the real GET for targetKey execute and return its
-// genuine value, then immediately overwrites the key with newValue — a
-// real, wire-level simulation of "a concurrent write landed right after
-// this read," rather than a mocked-out CAS conflict. Fires at most once.
-type raceInjectingHook struct {
-	targetKey string
-	client    redis.UniversalClient
-	newValue  []byte
-	fired     bool
-}
-
-type recreateAfterDeleteHook struct {
-	targetKey string
-	indexKey  string
-	response  *responseapi.StoredResponse
-	client    *redis.Client
-	fired     atomic.Bool
-}
-
-func (h *recreateAfterDeleteHook) DialHook(next redis.DialHook) redis.DialHook { return next }
-func (h *recreateAfterDeleteHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return next
-}
-
-func (h *recreateAfterDeleteHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
-	return func(ctx context.Context, cmd redis.Cmder) error {
-		err := next(ctx, cmd)
-		if err != nil || (cmd.Name() != "eval" && cmd.Name() != "evalsha") || !commandContainsArg(cmd, h.targetKey) || !h.fired.CompareAndSwap(false, true) {
-			return err
-		}
-		payload, marshalErr := json.Marshal(h.response)
-		if marshalErr != nil {
-			panic(marshalErr)
-		}
-		if setErr := h.client.Set(context.Background(), h.targetKey, payload, time.Minute).Err(); setErr != nil {
-			panic(setErr)
-		}
-		if zaddErr := h.client.ZAdd(context.Background(), h.indexKey,
-			redis.Z{Score: float64(h.response.CreatedAt), Member: h.response.ID}).Err(); zaddErr != nil {
-			panic(zaddErr)
-		}
-		return nil
-	}
-}
-
 func commandContainsArg(cmd redis.Cmder, target string) bool {
 	for _, arg := range cmd.Args() {
 		if value, ok := arg.(string); ok && value == target {
@@ -124,53 +102,6 @@ func commandContainsArg(cmd redis.Cmder, target string) bool {
 		}
 	}
 	return false
-}
-
-func (h *raceInjectingHook) DialHook(next redis.DialHook) redis.DialHook { return next }
-
-// matchesTarget reports whether cmd is the not-yet-fired GET this hook is
-// waiting for.
-func (h *raceInjectingHook) matchesTarget(cmd redis.Cmder) bool {
-	if h.fired || cmd.Name() != "get" {
-		return false
-	}
-	args := cmd.Args()
-	if len(args) < 2 {
-		return false
-	}
-	key, ok := args[1].(string)
-	return ok && key == h.targetKey
-}
-
-// inject marks the race fired and overwrites targetKey with newValue.
-func (h *raceInjectingHook) inject() {
-	h.fired = true
-	if setErr := h.client.Set(context.Background(), h.targetKey, h.newValue, 0).Err(); setErr != nil {
-		panic(fmt.Sprintf("raceInjectingHook: failed to inject concurrent write: %v", setErr))
-	}
-}
-
-func (h *raceInjectingHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
-	return func(ctx context.Context, cmd redis.Cmder) error {
-		err := next(ctx, cmd)
-		if h.matchesTarget(cmd) {
-			h.inject()
-		}
-		return err
-	}
-}
-
-func (h *raceInjectingHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
-	return func(ctx context.Context, cmds []redis.Cmder) error {
-		err := next(ctx, cmds)
-		for _, cmd := range cmds {
-			if h.matchesTarget(cmd) {
-				h.inject()
-				break
-			}
-		}
-		return err
-	}
 }
 
 // TestCascadeDeleteMissingPayloadPrunesIndexMember covers "missing payload
@@ -235,10 +166,10 @@ func TestCascadeDeleteGetFailurePreservesAndReports(t *testing.T) {
 	assert.NoError(t, getErr, "the payload must be untouched by a failed GET")
 }
 
-// TestCascadeDeleteZremFailureReported covers "ZREM failed -> reported":
-// candidate membership is removed before touching payloads, so a failure
-// must preserve the payload and surface for retry.
-func TestCascadeDeleteZremFailureReported(t *testing.T) {
+// TestCascadeDeleteUnindexFailureReported covers a failure of the atomic
+// conditional ZREM+HDEL after payload deletion. The stale witness remains a
+// retry anchor, so the failure is safe and recoverable.
+func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
@@ -248,19 +179,26 @@ func TestCascadeDeleteZremFailureReported(t *testing.T) {
 		ID: "resp_zrem_failure", ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
 	}))
 
-	indexKey := store.conversationIndexKey(convID)
-	injectedErr := errors.New("injected ZREM failure")
-	store.client.AddHook(&commandFailureHook{name: "zrem", key: indexKey, err: injectedErr})
+	require.NoError(t, store.ensureConversationIndexResolved(ctx, convID))
+	// Warm the conditional script so the injected EVALSHA is the actual
+	// unindex attempt, not a NOSCRIPT probe.
+	require.NoError(t, store.unindexResponseGenerations(ctx, convID,
+		responseGenerationWitness{responseID: "not-present", generation: newResponseGeneration()}))
+	injectedErr := errors.New("injected conditional unindex failure")
+	store.client.AddHook(&scriptFailureHook{hash: conditionalUnindexScript.Hash(), err: injectedErr})
 
 	err := store.DeleteConversation(ctx, convID, true)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, injectedErr)
 
-	// Pre-removal failed, so payload and conversation both survive intact.
+	// The payload CAS committed before unindex failed. The membership remains
+	// deliberately, allowing the next cascade attempt to prune it as missing.
 	_, getErr := store.GetResponse(ctx, "resp_zrem_failure")
-	assert.NoError(t, getErr)
+	assert.ErrorIs(t, getErr, ErrNotFound)
+	assert.Equal(t, []string{"resp_zrem_failure"}, conversationIndexMembers(t, store, convID))
 	_, getErr = store.GetConversation(ctx, convID)
-	assert.NoError(t, getErr, "the conversation record must survive a reported ZREM failure")
+	assert.NoError(t, getErr, "the conversation record must survive a reported unindex failure")
+	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 }
 
 // TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload covers "stored
@@ -288,11 +226,11 @@ func TestCascadeDeleteStaleMovedMemberPreservesNewOwnerPayload(t *testing.T) {
 	// The response's payload moves to newConvID, but the old index's member
 	// is left stale on purpose — simulating UpdateResponse's best-effort
 	// unindex of the previous conversation having failed or not yet run.
-	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+respID),
-		mustMarshalResponse(t, &responseapi.StoredResponse{
-			ID: respID, ConversationID: newConvID, Status: "completed", CreatedAt: time.Now().Unix(),
-		}), store.ttl).Err())
-	require.NoError(t, store.indexResponse(ctx, newConvID, respID, time.Now().Unix(), store.ttlMillis()))
+	movedPayload, movedGeneration := mustMarshalGeneratedResponse(t, &responseapi.StoredResponse{
+		ID: respID, ConversationID: newConvID, Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+	require.NoError(t, store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+respID), movedPayload, store.ttl).Err())
+	require.NoError(t, store.indexResponse(ctx, newConvID, respID, movedGeneration, time.Now().Unix(), store.ttlMillis()))
 	require.Equal(t, []string{respID}, conversationIndexMembers(t, store, oldConvID),
 		"precondition: the stale member is still in the old conversation's index")
 
@@ -333,24 +271,23 @@ func TestCascadeDeleteConcurrentUpdatePreservesNewerPayload(t *testing.T) {
 	require.NoError(t, store.ensureConversationIndexResolved(ctx, convID))
 
 	responseKey := store.buildKey(ResponseKeyPrefix + "resp_concurrent_update")
-	updatedPayload := mustMarshalResponse(t, &responseapi.StoredResponse{
+	updated := &responseapi.StoredResponse{
 		ID: "resp_concurrent_update", ConversationID: convID, Status: "completed",
 		CreatedAt: time.Now().Unix(), Model: "concurrently-updated",
-	})
-	// A genuinely separate client/connection injects the concurrent write —
-	// a real concurrent writer would never share the connection whose
-	// in-flight command this race targets, and reusing store.client here
-	// (the very client the hook is installed on) makes the injected Set
-	// reentrant into that same client's hook chain, which go-redis does not
-	// handle as a simple nested call.
-	concurrentWriter := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	t.Cleanup(func() { _ = concurrentWriter.Close() })
-	hook := &raceInjectingHook{targetKey: responseKey, client: concurrentWriter, newValue: updatedPayload}
+	}
+	writer := newConcurrentRedisStore(t, store)
+	var injectedErr error
+	hook := &commandInterleavingHook{
+		pipeline: true,
+		match:    func(cmd redis.Cmder) bool { return commandReadsKey(cmd, responseKey) },
+		inject:   func() { injectedErr = writer.UpdateResponse(context.Background(), updated) },
+	}
 	store.client.AddHook(hook)
 
 	err := store.DeleteConversation(ctx, convID, true)
 	require.Error(t, err, "the first attempt must see a CAS conflict against the concurrently-updated payload")
-	assert.True(t, hook.fired, "the race must actually have been injected for this assertion to be meaningful")
+	assert.True(t, hook.fired.Load(), "the race must actually have been injected for this assertion to be meaningful")
+	require.NoError(t, injectedErr)
 
 	_, getErr := store.GetConversation(ctx, convID)
 	assert.NoError(t, getErr, "the conversation record must survive a reported CAS conflict")
@@ -388,20 +325,22 @@ func TestCascadeDeleteDoesNotEraseRecreatedMembership(t *testing.T) {
 	}))
 	require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
 
-	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	t.Cleanup(func() { _ = writer.Close() })
-	hook := &recreateAfterDeleteHook{
-		targetKey: store.buildKey(ResponseKeyPrefix + responseID),
-		indexKey:  store.conversationIndexKey(conversationID),
-		response: &responseapi.StoredResponse{
-			ID: responseID, ConversationID: conversationID, Status: "recreated", CreatedAt: time.Now().Unix() + 1,
+	writer := newConcurrentRedisStore(t, store)
+	recreated := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID, Status: "recreated", CreatedAt: time.Now().Unix() + 1,
+	}
+	var injectedErr error
+	hook := &commandInterleavingHook{
+		match: func(cmd redis.Cmder) bool {
+			return commandRunsScriptOnKey(cmd, store.buildKey(ResponseKeyPrefix+responseID))
 		},
-		client: writer,
+		inject: func() { injectedErr = writer.StoreResponse(context.Background(), recreated) },
 	}
 	store.client.AddHook(hook)
 
 	require.NoError(t, store.DeleteConversation(ctx, conversationID, true))
 	assert.True(t, hook.fired.Load(), "the response must have been recreated in the target race window")
+	require.NoError(t, injectedErr)
 	_, err := store.GetResponse(ctx, responseID)
 	assert.ErrorIs(t, err, ErrNotFound, "the recreated indexed response must be observed by the next cascade batch")
 }
@@ -442,16 +381,10 @@ func TestCascadeDeleteClusterCrossSlotSafe(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNotFound)
 }
 
-// TestCascadeDeleteCancelledContextRestoresIndexMembers is the regression
-// test for the compensating restore's context: deleteConversationResponseBatch
-// removes a batch's index members up front (so a response recreated mid-
-// cascade keeps the membership its own writer just added — see
-// TestCascadeDeleteDoesNotEraseRecreatedMembership) and restores whatever it
-// could not resolve. If that restore ran on the caller's context, a request
-// cancelled after the ZREM had already landed would fail it every time,
-// leaving a live payload with no index member: invisible to reads, and
-// unrecoverable once the store is finalized.
-func TestCascadeDeleteCancelledContextRestoresIndexMembers(t *testing.T) {
+// TestCascadeDeleteCancellationKeepsRetryWitness cancels after payload CAS but
+// before conditional unindex. The stale witness must remain so a retry can
+// observe the missing payload and finish cleanup.
+func TestCascadeDeleteCancellationKeepsRetryWitness(t *testing.T) {
 	store := newConversationIndexStore(t)
 	baseCtx := context.Background()
 
@@ -463,25 +396,28 @@ func TestCascadeDeleteCancelledContextRestoresIndexMembers(t *testing.T) {
 	require.NoError(t, store.StoreResponse(baseCtx, &responseapi.StoredResponse{
 		ID: respID, ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
 	}))
-	// Resolve the proof first, so DeleteConversation's own first-touch legacy
-	// scan doesn't issue the ZREM this test's hook is waiting for.
+	// Resolve the proof first so the hook targets the cascade payload CAS.
 	require.NoError(t, store.ensureConversationIndexResolved(baseCtx, convID))
 
 	ctx, cancel := context.WithCancel(baseCtx)
 	defer cancel()
 
-	// Cancel the moment the batch's up-front ZREM has committed: every
-	// command after it — the payload GET, and the restore — sees a cancelled
-	// caller context.
-	store.client.AddHook(&afterCommandHook{name: "zrem", after: cancel})
+	hook := &commandInterleavingHook{
+		match: func(cmd redis.Cmder) bool {
+			return commandRunsScriptOnKey(cmd, store.buildKey(ResponseKeyPrefix+respID))
+		},
+		inject: cancel,
+	}
+	store.client.AddHook(hook)
 
 	err := store.DeleteConversation(ctx, convID, true)
 	require.Error(t, err, "a cancelled cascade must report failure, not silently succeed")
 
+	assert.True(t, hook.fired.Load())
 	assert.Equal(t, []string{respID}, conversationIndexMembers(t, store, convID),
-		"a cancelled cascade must restore the members it optimistically removed")
-	assert.Equal(t, int64(1), exists(t, store, store.buildKey(ResponseKeyPrefix+respID)),
-		"the payload must still be live: nothing resolved it")
+		"a cancelled conditional unindex must retain the stale retry witness")
+	assert.Zero(t, exists(t, store, store.buildKey(ResponseKeyPrefix+respID)),
+		"the payload generation was safely deleted before cancellation")
 
 	// The conversation record survived as the retry anchor, and a retry on a
 	// live context completes the cascade for real rather than reporting
@@ -508,12 +444,11 @@ func TestCascadeDeleteCancelledContextRestoresIndexMembers(t *testing.T) {
 // injected commands reentrant into that same hook chain, which go-redis does
 // not handle as a simple nested call.
 type cascadeRaceHook struct {
-	indexKey   string
-	payloadKey string
-	response   *responseapi.StoredResponse
-	client     *redis.Client
-	always     bool
-	fired      atomic.Int64
+	indexKey string
+	response *responseapi.StoredResponse
+	writer   *RedisStore
+	always   bool
+	fired    atomic.Int64
 }
 
 func (h *cascadeRaceHook) DialHook(next redis.DialHook) redis.DialHook { return next }
@@ -532,55 +467,48 @@ func (h *cascadeRaceHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook 
 		}
 		h.fired.Add(1)
 
-		payload, marshalErr := json.Marshal(h.response)
-		if marshalErr != nil {
-			panic(marshalErr)
-		}
-		// Payload first, then the index member: exactly StoreResponse's own
-		// ordering, so what lands here is a write that has genuinely
-		// committed, not a half-written one.
-		if setErr := h.client.Set(context.Background(), h.payloadKey, payload, time.Minute).Err(); setErr != nil {
-			panic(setErr)
-		}
-		if zaddErr := h.client.ZAdd(context.Background(), h.indexKey,
-			redis.Z{Score: float64(h.response.CreatedAt), Member: h.response.ID}).Err(); zaddErr != nil {
-			panic(zaddErr)
+		if storeErr := h.writer.StoreResponse(context.Background(), h.response); storeErr != nil {
+			panic(storeErr)
 		}
 		return err
 	}
 }
 
-// emptiedIndexRead reports whether cmd is the cascade's own scored read of
-// this conversation's index, come back empty. The ZSliceCmd type is what
-// distinguishes it from a plain ZRANGE a test assertion might run against the
-// same key.
+// emptiedIndexRead reports whether cmd is the cascade's generation-snapshotted
+// candidate script, come back empty.
 func (h *cascadeRaceHook) emptiedIndexRead(cmd redis.Cmder) bool {
-	scored, ok := cmd.(*redis.ZSliceCmd)
-	if !ok || cmd.Name() != "zrange" || len(scored.Val()) != 0 {
+	if cmd.Name() != "evalsha" {
 		return false
 	}
 	args := cmd.Args()
-	if len(args) < 2 {
+	if len(args) < 4 || args[1] != readCascadeCandidatesScript.Hash() {
 		return false
 	}
-	key, ok := args[1].(string)
-	return ok && key == h.indexKey
+	key, keyOK := args[3].(string)
+	result, resultOK := cmd.(*redis.Cmd)
+	if !keyOK || key != h.indexKey || !resultOK {
+		return false
+	}
+	items, ok := result.Val().([]interface{})
+	return ok && len(items) == 0
 }
 
 func newCascadeRaceHook(t *testing.T, store *RedisStore, conversationID, responseID string, always bool) *cascadeRaceHook {
 	t.Helper()
 
-	writer := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	t.Cleanup(func() { _ = writer.Close() })
+	// Populate Redis's script cache before installing the hook, so the hook
+	// observes the successful EVALSHA result rather than a NOSCRIPT probe.
+	_, err := store.readCascadeCandidates(context.Background(), conversationID)
+	require.NoError(t, err)
+	writer := newConcurrentRedisStore(t, store)
 
 	return &cascadeRaceHook{
-		indexKey:   store.conversationIndexKey(conversationID),
-		payloadKey: store.buildKey(ResponseKeyPrefix + responseID),
+		indexKey: store.conversationIndexKey(conversationID),
 		response: &responseapi.StoredResponse{
 			ID: responseID, ConversationID: conversationID,
 			Status: "completed", CreatedAt: time.Now().Unix() + 1,
 		},
-		client: writer,
+		writer: writer,
 		always: always,
 		fired:  atomic.Int64{},
 	}

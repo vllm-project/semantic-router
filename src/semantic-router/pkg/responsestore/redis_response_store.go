@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -13,13 +12,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// responseUpdateSnapshot captures a response payload's exact bytes and
-// remaining lifetime at one instant, so a failed update's rollback can
-// restore both the value and its TTL — not just the value with a
-// freshly-reset TTL — and so the restore can be a compare-and-swap against
-// the exact bytes this snapshot saw, never a blind write.
+// responseUpdateSnapshot captures a response payload and remaining lifetime at
+// one instant. A failed update restores the logical snapshot with a fresh
+// generation and its projected TTL; the failed write's generation is the CAS
+// witness, never serialized byte equality.
 type responseUpdateSnapshot struct {
 	data           []byte
+	response       *responseapi.StoredResponse
+	generation     string
 	conversationID string
 	createdAt      int64
 	pttlMillis     int64 // -1 persistent, -2/absent handled as ErrNotFound before a snapshot exists
@@ -53,11 +53,11 @@ type compareRestoreResult int64
 
 const (
 	// compareRestoreConflict means the key's current value no longer
-	// matched expectedCurrent: a newer write already landed, and rollback
+	// carries the expected generation: a newer write already landed, and rollback
 	// must not clobber it or reindex the snapshot it was about to restore.
 	compareRestoreConflict compareRestoreResult = 0
-	// compareRestoreRestored means the snapshot's bytes were written back
-	// with its (projected) remaining TTL.
+	// compareRestoreRestored means the logical snapshot was written under a
+	// fresh generation with its projected remaining TTL.
 	compareRestoreRestored compareRestoreResult = 1
 	// compareRestoreExpired means the CAS matched, but the snapshot's TTL
 	// had already elapsed by the time of the restore, so the key was
@@ -87,29 +87,6 @@ end
 return {previous, previous_ttl}
 `)
 
-// compareRestoreScript is StoreResponse's compareDeleteScript's counterpart
-// for UpdateResponse's rollback: restore ARGV[2] with TTL ARGV[3]
-// (milliseconds; 0 deletes instead, negative means persistent) only if the
-// key's current value still equals ARGV[1] — never a blind SET, for the
-// same ABA-race reason compareDeleteScript exists. Single-key: KEYS[1] only.
-var compareRestoreScript = redis.NewScript(`
-local current = redis.call("GET", KEYS[1])
-if current ~= ARGV[1] then
-	return 0
-end
-
-local ttl = tonumber(ARGV[3])
-if ttl == 0 then
-	redis.call("DEL", KEYS[1])
-	return 2
-elseif ttl < 0 then
-	redis.call("SET", KEYS[1], ARGV[2])
-else
-	redis.call("SET", KEYS[1], ARGV[2], "PX", ttl)
-end
-return 1
-`)
-
 func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error {
 	if !s.enabled {
 		return ErrStoreDisabled
@@ -120,7 +97,8 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	data, err := json.Marshal(response)
+	generation := newResponseGeneration()
+	data, err := marshalResponseRecord(response, generation)
 	if err != nil {
 		return fmt.Errorf("failed to serialize response: %w", err)
 	}
@@ -139,8 +117,8 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt, s.ttlMillis()); err != nil {
-		return s.rollbackStoredPayload(ctx, key, data, err)
+	if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, response.CreatedAt, s.ttlMillis()); err != nil {
+		return s.rollbackStoredPayload(ctx, key, generation, err)
 	}
 
 	return nil
@@ -161,7 +139,7 @@ func (s *RedisStore) handleDuplicateResponse(ctx context.Context, response *resp
 
 // rollbackStoredPayload runs when a freshly stored response's index write
 // fails. Compare-delete rollback: never a blind DEL. Only removes the
-// payload if it is still exactly what this call wrote, so a concurrent
+// payload if it still carries the generation this call wrote, so a concurrent
 // writer that stored a new value after this payload's TTL expired is never
 // clobbered (the ABA race the blueprint calls out).
 //
@@ -173,13 +151,13 @@ func (s *RedisStore) handleDuplicateResponse(ctx context.Context, response *resp
 // That response is invisible to every listing, and once
 // FinalizeConversationIndex has sealed the store, to every scan that could
 // have rediscovered it.
-func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key string, data []byte, indexErr error) error {
+func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key, generation string, indexErr error) error {
 	wrapped := fmt.Errorf("failed to index response in Redis: %w", indexErr)
 
 	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
 	defer cancel()
 
-	deleted, rollbackErr := s.compareDeleteResponsePayload(rollbackCtx, key, data)
+	deleted, rollbackErr := s.compareDeleteResponsePayload(rollbackCtx, key, generation)
 	if rollbackErr != nil {
 		return fmt.Errorf("%w (rollback failed: %w)", wrapped, rollbackErr)
 	}
@@ -189,17 +167,14 @@ func (s *RedisStore) rollbackStoredPayload(ctx context.Context, key string, data
 	return wrapped
 }
 
-// compareDeleteResponsePayload deletes key only if its current value equals
-// expected. Used to roll back a response payload after its index write
-// fails, without risking a blind DEL removing a value a concurrent writer
-// stored after the original payload expired on its TTL; also reused by
-// ensureConversationIndex to release the migration lock without releasing
-// one it doesn't hold (e.g. one that expired and was re-acquired).
-//
-// Single-key Lua script — touches only KEYS[1] — so it stays legal in Redis
-// Cluster; a two-key script spanning the response and index keys would not.
-func (s *RedisStore) compareDeleteResponsePayload(ctx context.Context, key string, expected []byte) (bool, error) {
-	res, err := compareDeleteScript.Run(ctx, s.client, []string{key}, expected).Result()
+// compareDeleteResponsePayload deletes only the generation owned by the
+// caller. The Lua script extracts _vsr_generation with cjson; legacy or
+// malformed payloads fail closed and are never compared by serialized bytes.
+func (s *RedisStore) compareDeleteResponsePayload(ctx context.Context, key, expectedGeneration string) (bool, error) {
+	if expectedGeneration == "" {
+		return false, nil
+	}
+	res, err := compareDeleteGenerationScript.Run(ctx, s.client, []string{key}, expectedGeneration).Result()
 	if err != nil {
 		return false, fmt.Errorf("failed to compare-delete response payload %s: %w", key, err)
 	}
@@ -231,7 +206,7 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 		return fmt.Errorf("failed to read stored response %s for index repair: %w", attempted.ID, err)
 	}
 
-	if stored.ConversationID == "" || stored.ConversationID != attempted.ConversationID {
+	if stored.response.ConversationID == "" || stored.response.ConversationID != attempted.ConversationID {
 		// Either no index is expected, or the stored payload proves this
 		// duplicate belongs to a different conversation than attempted.
 		// Repairing the attempted conversation's index here would be
@@ -239,7 +214,7 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, stored.ConversationID, stored.ID, stored.CreatedAt, lifetimeMillis); err != nil {
+	if err := s.indexResponse(ctx, stored.response.ConversationID, stored.response.ID, stored.generation, stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("response already exists but failed to repair conversation index: %w", err)
 	}
 
@@ -264,18 +239,18 @@ func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*respo
 		return nil, fmt.Errorf("failed to get response from Redis: %w", err)
 	}
 
-	var response responseapi.StoredResponse
-	if err := json.Unmarshal(data, &response); err != nil {
-		return nil, fmt.Errorf("failed to deserialize response: %w", err)
+	record, err := decodeResponseRecord(data)
+	if err != nil {
+		return nil, err
 	}
 
-	return &response, nil
+	return record.response, nil
 }
 
 // UpdateResponse replaces a response's payload and keeps its conversation
 // index in step: indexes under the new ConversationID (if any), then
 // best-effort unindexes the previous one if it changed. If the new index
-// write fails, restores the previous payload bytes and best-effort
+// write fails, restores the previous logical payload with a fresh generation and best-effort
 // reindexes the previous conversation before returning the error — an
 // update must never leave a payload pointing at a conversation whose index
 // was never actually written, matching the repairability blueprint §5 Phase
@@ -298,7 +273,8 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 
 	key := s.buildKey(ResponseKeyPrefix + response.ID)
 
-	data, err := json.Marshal(response)
+	generation := newResponseGeneration()
+	data, err := marshalResponseRecord(response, generation)
 	if err != nil {
 		return fmt.Errorf("failed to serialize response: %w", err)
 	}
@@ -309,111 +285,23 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	}
 
 	if response.ConversationID != "" {
-		if err := s.indexResponse(ctx, response.ConversationID, response.ID, response.CreatedAt, s.ttlMillis()); err != nil {
-			return s.rollbackUpdatePayload(ctx, key, response.ID, data, snapshot, err)
+		if err := s.indexResponse(ctx, response.ConversationID, response.ID, generation, response.CreatedAt, s.ttlMillis()); err != nil {
+			return s.rollbackUpdatePayload(ctx, key, response.ID, generation, snapshot, err)
 		}
 	}
 
-	// The new index write (if any) is now confirmed in place, so the previous
-	// entry — if the conversation actually changed — can be dropped. Never
-	// with a bare ZREM, though: by the time this runs the response may have
-	// been moved back by someone else, and the entry would be theirs. See
-	// removePreviousConversationMembership.
-	//
-	// Best-effort: a stale leftover here is pruned by the next listing.
+	// The previous generation owns its sidecar witness. Removing it is one
+	// conditional same-slot ZREM+HDEL, so a move back that has already
+	// installed a newer generation cannot be erased by this stale cleanup.
 	if snapshot.conversationID != "" && snapshot.conversationID != response.ConversationID {
-		if err := s.removePreviousConversationMembership(ctx, snapshot.conversationID, response.ID); err != nil {
+		witness := responseGenerationWitness{responseID: response.ID, generation: snapshot.generation}
+		if err := s.unindexResponseGenerations(ctx, snapshot.conversationID, witness); err != nil {
 			logging.Warnf("RedisStore: failed to remove response %s from previous conversation %s index: %v",
 				response.ID, snapshot.conversationID, err)
 		}
 	}
 
 	return nil
-}
-
-// removePreviousConversationMembership drops responseID's entry in the
-// conversation it has just moved out of.
-//
-// Deliberately not an unconditional ZREM. A (conversation, response) index
-// entry is valid exactly while the response's stored payload names that
-// conversation, and the payload is the only thing that can say so — so this
-// reads the payload and removes the entry only once it can see the response
-// has genuinely moved on.
-//
-// Without that check the removal is an ABA hazard. An A->B update that pauses
-// here, while a concurrent B->A update runs to completion and legitimately
-// re-adds A's entry, resumes and deletes the membership that second update
-// just created. Both calls report success, GetResponse still answers with the
-// response in A, and listing A returns nothing. No prune repairs it, because
-// pruning only ever removes entries; no scan repairs it either once
-// FinalizeConversationIndex has sealed the store; and cascade-deleting A walks
-// an index that no longer names the payload, so it leaks.
-//
-// The read and the removal remain two round trips, and Redis Cluster forbids
-// collapsing them: the payload key (ResponseKeyPrefix) and the index key
-// (ConversationIndexKeyPrefix) share no hash tag and so hash to different
-// slots, which makes a compare-and-remove Lua script spanning both illegal —
-// Redis answers CROSSSLOT. Hash-tagging them into one slot is not available
-// either, since a response's conversation is precisely what changes here,
-// and tagging every key alike would collapse the whole keyspace onto a single
-// node.
-//
-// What closes the gap instead is re-reading afterwards and putting the entry
-// back if the response had moved home in the meantime. That is not atomicity
-// — a listing landing inside the window still misses the response — but every
-// interleaving converges on the index agreeing with the payload, which the
-// unconditional removal does not.
-//
-// Runs detached from the caller's context with its own deadline: a
-// cancellation arriving between the removal and the re-check would strand the
-// index in exactly the missing-membership state this exists to prevent.
-func (s *RedisStore) removePreviousConversationMembership(ctx context.Context, previousConversationID, responseID string) error {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
-	defer cancel()
-
-	stored, _, err := s.getResponseWithLifetime(cleanupCtx, responseID)
-	switch {
-	case errors.Is(err, ErrNotFound):
-		// No payload at all now, so no conversation owns this response and
-		// the entry is stale whatever it once meant.
-	case err != nil:
-		return fmt.Errorf("failed to read response %s before dropping its previous conversation membership: %w",
-			responseID, err)
-	case stored.ConversationID == previousConversationID:
-		// It is in this conversation again (or never left). The entry is
-		// current, and removing it would erase live membership.
-		return nil
-	}
-
-	if err := s.unindexResponse(cleanupCtx, previousConversationID, responseID); err != nil {
-		return err
-	}
-
-	return s.restorePreviousConversationMembership(cleanupCtx, previousConversationID, responseID)
-}
-
-// restorePreviousConversationMembership undoes the removal above when the
-// response moved back into previousConversationID while that removal was in
-// flight — the residual window Redis Cluster's slot rules leave open.
-//
-// Re-indexes from the payload as it stands right now, never from what the
-// update that triggered the cleanup believed, so the restored entry's score
-// and the index's lifetime both come from the response that actually owns the
-// membership.
-func (s *RedisStore) restorePreviousConversationMembership(ctx context.Context, previousConversationID, responseID string) error {
-	stored, lifetimeMillis, err := s.getResponseWithLifetime(ctx, responseID)
-	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return nil
-		}
-		return fmt.Errorf("failed to re-read response %s after dropping its previous conversation membership: %w",
-			responseID, err)
-	}
-	if stored.ConversationID != previousConversationID {
-		return nil
-	}
-
-	return s.indexResponse(ctx, previousConversationID, responseID, stored.CreatedAt, lifetimeMillis)
 }
 
 // replaceResponseAndSnapshot serializes concurrent payload replacements at
@@ -436,9 +324,9 @@ func (s *RedisStore) replaceResponseAndSnapshot(ctx context.Context, key, respon
 
 // decodeResponseUpdateSnapshot turns replaceAndSnapshotResponseScript's
 // {value, pttl} reply into the snapshot a failed update's rollback needs,
-// best-effort parsing the displaced payload's ConversationID/CreatedAt. A
-// parse failure is not fatal to the update: the snapshot's bytes are still
-// usable for restore, it just has nothing to unindex or reindex.
+// best-effort parsing the displaced payload. A parse failure is not fatal to
+// the update, but rollback will fail closed by deleting only the failed
+// update's generation instead of resurrecting undecodable bytes.
 func decodeResponseUpdateSnapshot(result interface{}, capturedAt time.Time, responseID string) (responseUpdateSnapshot, error) {
 	items, ok := result.([]interface{})
 	if !ok || len(items) != 2 {
@@ -455,20 +343,22 @@ func decodeResponseUpdateSnapshot(result interface{}, capturedAt time.Time, resp
 
 	snapshot := responseUpdateSnapshot{data: []byte(data), pttlMillis: pttlMillis, capturedAt: capturedAt}
 
-	var previous responseapi.StoredResponse
-	if err := json.Unmarshal(snapshot.data, &previous); err != nil {
+	record, err := decodeResponseRecord(snapshot.data)
+	if err != nil {
 		logging.Warnf("RedisStore: failed to parse previous stored response %s during update: %v", responseID, err)
 		return snapshot, nil
 	}
-	snapshot.conversationID = previous.ConversationID
-	snapshot.createdAt = previous.CreatedAt
+	snapshot.response = record.response
+	snapshot.generation = record.generation
+	snapshot.conversationID = record.response.ConversationID
+	snapshot.createdAt = record.response.CreatedAt
 
 	return snapshot, nil
 }
 
 // compareRestoreResponsePayload restores previous with the snapshot's
-// projected remaining TTL, but only if key's current value still equals
-// expectedCurrent — the exact bytes the failed update wrote — so a rollback
+// projected remaining TTL, but only if key's current payload still carries
+// expectedGeneration — the failed update's unique token — so a rollback
 // can never clobber a newer concurrent write. remainingTTLMillis follows
 // responseUpdateSnapshot.remainingTTLMillis's convention: -1 persistent, 0
 // means the snapshot's own TTL has since elapsed (delete rather than
@@ -476,8 +366,8 @@ func decodeResponseUpdateSnapshot(result interface{}, capturedAt time.Time, resp
 //
 // Single-key Lua script — touches only KEYS[1] — so it stays legal in Redis
 // Cluster, matching compareDeleteResponsePayload.
-func (s *RedisStore) compareRestoreResponsePayload(ctx context.Context, key string, expectedCurrent, previous []byte, remainingTTLMillis int64) (compareRestoreResult, error) {
-	res, err := compareRestoreScript.Run(ctx, s.client, []string{key}, expectedCurrent, previous, remainingTTLMillis).Result()
+func (s *RedisStore) compareRestoreResponsePayload(ctx context.Context, key, expectedGeneration string, previous []byte, remainingTTLMillis int64) (compareRestoreResult, error) {
+	res, err := compareRestoreGenerationScript.Run(ctx, s.client, []string{key}, expectedGeneration, previous, remainingTTLMillis).Result()
 	if err != nil {
 		return compareRestoreConflict, fmt.Errorf("failed to compare-restore response payload %s: %w", key, err)
 	}
@@ -491,8 +381,8 @@ func (s *RedisStore) compareRestoreResponsePayload(ctx context.Context, key stri
 }
 
 // rollbackUpdatePayload runs when an update's new-conversation index write
-// fails. Restores the pre-update snapshot via compare-and-swap against the
-// exact bytes this call just wrote (failedData) — never a blind SET — so a
+// fails. Restores the pre-update snapshot under a newly minted generation via
+// compare-and-swap against the failed write's generation — never a blind SET — so a
 // newer concurrent update landing between this update's write and its
 // failed rollback is never overwritten: compareRestoreConflict means
 // exactly that happened, and this leaves the newer payload alone rather
@@ -502,7 +392,7 @@ func (s *RedisStore) compareRestoreResponsePayload(ctx context.Context, key stri
 // also not reindexed, since there is nothing left to point an index at.
 // Only compareRestoreRestored reindexes the previous conversation, using
 // its own stored CreatedAt, never a fabricated timestamp.
-func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID string, failedData []byte, snapshot responseUpdateSnapshot, indexErr error) error {
+func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID, failedGeneration string, snapshot responseUpdateSnapshot, indexErr error) error {
 	wrapped := fmt.Errorf("failed to index updated response in Redis: %w", indexErr)
 
 	// Detached, for the reason spelled out on rollbackStoredPayload: a
@@ -515,7 +405,21 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), responseCompensationTimeout)
 	defer cancel()
 
-	result, restoreErr := s.compareRestoreResponsePayload(rollbackCtx, key, failedData, snapshot.data, snapshot.remainingTTLMillis())
+	if snapshot.response == nil {
+		_, deleteErr := s.compareDeleteResponsePayload(rollbackCtx, key, failedGeneration)
+		if deleteErr != nil {
+			return fmt.Errorf("%w (rollback failed: %w)", wrapped, deleteErr)
+		}
+		return fmt.Errorf("%w (previous payload was not restorable)", wrapped)
+	}
+
+	restoredGeneration := newResponseGeneration()
+	restoredData, marshalErr := marshalResponseRecord(snapshot.response, restoredGeneration)
+	if marshalErr != nil {
+		return fmt.Errorf("%w (rollback failed: %w)", wrapped, marshalErr)
+	}
+	remainingTTL := snapshot.remainingTTLMillis()
+	result, restoreErr := s.compareRestoreResponsePayload(rollbackCtx, key, failedGeneration, restoredData, remainingTTL)
 	if restoreErr != nil {
 		return fmt.Errorf("%w (rollback failed: %w)", wrapped, restoreErr)
 	}
@@ -526,7 +430,7 @@ func (s *RedisStore) rollbackUpdatePayload(ctx context.Context, key, responseID 
 			// The restored payload carries the snapshot's own remaining
 			// lifetime, not a fresh store TTL, so the index is extended to
 			// match what was actually put back.
-			if reindexErr := s.indexResponse(rollbackCtx, snapshot.conversationID, responseID, snapshot.createdAt, snapshot.remainingTTLMillis()); reindexErr != nil {
+			if reindexErr := s.indexResponse(rollbackCtx, snapshot.conversationID, responseID, restoredGeneration, snapshot.createdAt, remainingTTL); reindexErr != nil {
 				logging.Warnf("RedisStore: failed to reindex restored response %s under previous conversation %s after update rollback: %v",
 					responseID, snapshot.conversationID, reindexErr)
 			}
@@ -550,25 +454,34 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 
 	key := s.buildKey(ResponseKeyPrefix + responseID)
 
-	// Needed to drop the index entry; also the existence check.
-	conversationID, err := s.storedConversationID(ctx, responseID)
+	// The single-key script is the deletion linearization point. Its returned
+	// bytes identify the exact generation whose sidecar witness this call owns;
+	// a StoreResponse that recreates the ID afterwards receives a fresh witness.
+	result, err := takeResponsePayloadScript.Run(ctx, s.client, []string{key}).Result()
 	if err != nil {
-		return err
-	}
-
-	deleted, err := s.client.Del(ctx, key).Result()
-	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return ErrNotFound
+		}
 		return fmt.Errorf("failed to delete response from Redis: %w", err)
 	}
-	if deleted == 0 {
-		return ErrNotFound
+	data, ok := result.(string)
+	if !ok {
+		return fmt.Errorf("unexpected response delete result type %T", result)
+	}
+
+	record, decodeErr := decodeResponseRecord([]byte(data))
+	if decodeErr != nil {
+		logging.Warnf("RedisStore: deleted response %s but could not decode its index ownership: %v", responseID, decodeErr)
+		return nil
 	}
 
 	// Best-effort: the payload delete above is the user-visible operation, and
-	// a stale index entry is pruned by the next listing that finds it missing.
-	if err := s.unindexResponse(ctx, conversationID, responseID); err != nil {
+	// only the deleted generation may authorize removal. Legacy payloads carry
+	// no witness and therefore deliberately leave their member untouched.
+	witness := responseGenerationWitness{responseID: responseID, generation: record.generation}
+	if err := s.unindexResponseGenerations(ctx, record.response.ConversationID, witness); err != nil {
 		logging.Warnf("RedisStore: failed to remove response %s from conversation %s index: %v",
-			responseID, conversationID, err)
+			responseID, record.response.ConversationID, err)
 	}
 
 	return nil

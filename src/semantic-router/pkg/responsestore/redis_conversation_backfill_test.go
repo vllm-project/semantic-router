@@ -61,20 +61,21 @@ func (h *indexWriteObserverHook) ProcessPipelineHook(next redis.ProcessPipelineH
 
 // indexWriteMemberCount reports how many members one conversationIndexAddScript
 // call is adding. EVAL/EVALSHA lay out as: verb, script (or SHA), numkeys, the
-// one key this script takes, the requested lifetime, then score/member pairs.
+// two keys this script takes, the requested lifetime, then
+// score/member/generation triples.
 func indexWriteMemberCount(cmd redis.Cmder) (int, bool) {
 	if cmd.Name() != "eval" && cmd.Name() != "evalsha" {
 		return 0, false
 	}
 	args := cmd.Args()
-	if len(args) < 5 {
+	if len(args) < 6 {
 		return 0, false
 	}
 	key, ok := args[3].(string)
 	if !ok || !strings.Contains(key, ConversationIndexKeyPrefix) {
 		return 0, false
 	}
-	return (len(args) - 5) / 2, true
+	return (len(args) - 6) / 3, true
 }
 
 func (h *indexWriteObserverHook) totalMembers() int {
@@ -206,10 +207,13 @@ func TestIndexBackfillBatchConcurrentCallersRaceFree(t *testing.T) {
 		wg.Add(1)
 		go func(g int) {
 			defer wg.Done()
-			members := make([]redis.Z, perGoroutine)
+			members := make([]conversationIndexMember, perGoroutine)
 			now := time.Now().Unix()
 			for i := 0; i < perGoroutine; i++ {
-				members[i] = redis.Z{Score: float64(now), Member: fmt.Sprintf("resp_concurrent_batch_%d_%d", g, i)}
+				members[i] = conversationIndexMember{
+					responseID: fmt.Sprintf("resp_concurrent_batch_%d_%d", g, i),
+					score:      float64(now),
+				}
 			}
 			assert.NoError(t, store.indexBackfillBatch(ctx, "conv_concurrent_backfill", members, store.ttlMillis()))
 		}(g)

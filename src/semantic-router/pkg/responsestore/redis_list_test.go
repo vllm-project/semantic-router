@@ -2,7 +2,6 @@ package responsestore
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -548,15 +547,17 @@ func (s *benchmarkSeeder) add(tb testing.TB, conversationID, responseID string, 
 	tb.Helper()
 	ctx := context.Background()
 
-	payload, err := json.Marshal(&responseapi.StoredResponse{
+	generation := newResponseGeneration()
+	payload, err := marshalResponseRecord(&responseapi.StoredResponse{
 		ID: responseID, ConversationID: conversationID, Status: "completed", CreatedAt: createdAt,
-	})
+	}, generation)
 	require.NoError(tb, err)
 
 	s.pipe.Set(ctx, s.store.buildKey(ResponseKeyPrefix+responseID), payload, s.store.ttl)
 	s.pipe.ZAdd(ctx, s.store.conversationIndexKey(conversationID),
 		redis.Z{Score: float64(createdAt), Member: responseID})
-	s.queued += 2
+	s.pipe.HSet(ctx, s.store.conversationIndexGenerationKey(conversationID), responseID, generation)
+	s.queued += 3
 	if s.queued >= benchmarkSeedPipelineSize {
 		s.flush(tb)
 	}

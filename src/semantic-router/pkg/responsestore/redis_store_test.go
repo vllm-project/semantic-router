@@ -473,7 +473,9 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 	store := &RedisStore{keyPrefix: "sr:"}
 
 	indexKey := store.conversationIndexKey("conv_123")
-	assert.Equal(t, "sr:conversation-index:conv_123", indexKey)
+	assert.Equal(t, "sr:conversation-index:{Y29udl8xMjM}", indexKey)
+	generationKey := store.conversationIndexGenerationKey("conv_123")
+	assert.Equal(t, "sr:conversation-index-gen:{Y29udl8xMjM}", generationKey)
 
 	migratedKey := store.conversationIndexMigratedKey("conv_123")
 	assert.Equal(t, "sr:conversation-index-migrated:conv_123", migratedKey)
@@ -486,24 +488,33 @@ func TestRedisConversationIndexKeyIsolation(t *testing.T) {
 		store.buildKey(ConversationKeyPrefix),
 		store.buildKey(ResponseKeyPrefix),
 	}
-	for _, key := range []string{indexKey, migratedKey, leaseKey} {
+	for _, key := range []string{indexKey, generationKey, migratedKey, leaseKey} {
 		for _, scanPrefix := range scanPrefixes {
 			assert.Falsef(t, strings.HasPrefix(key, scanPrefix),
 				"key %q must not be matched by the %q* scan pattern", key, scanPrefix)
 		}
 	}
 
-	// The migrated marker and scan-lease key families must also be distinct
-	// from the index key family itself: either one accidentally matching
-	// the index scan prefix would let a marker or lease be read back as
+	// The sidecar, migrated marker, and scan-lease key families must also be
+	// distinct from the index key family itself: any one accidentally matching
+	// the index scan prefix would let a HASH, marker, or lease be read back as
 	// sorted-set data by anything that scans "conversation-index:*" (e.g. a
 	// future admin tool).
 	indexScanPrefix := store.buildKey(ConversationIndexKeyPrefix)
 	require.True(t, strings.HasPrefix(indexKey, indexScanPrefix))
+	assert.Falsef(t, strings.HasPrefix(generationKey, indexScanPrefix),
+		"generation sidecar key %q must not be matched by the %q* index scan pattern", generationKey, indexScanPrefix)
 	assert.Falsef(t, strings.HasPrefix(migratedKey, indexScanPrefix),
 		"migrated marker key %q must not be matched by the %q* index scan pattern", migratedKey, indexScanPrefix)
 	assert.Falsef(t, strings.HasPrefix(leaseKey, indexScanPrefix),
 		"scan lease key %q must not be matched by the %q* index scan pattern", leaseKey, indexScanPrefix)
+
+	escapedIndex := store.conversationIndexKey("conv_{unsafe}")
+	escapedGeneration := store.conversationIndexGenerationKey("conv_{unsafe}")
+	assert.NotContains(t, escapedIndex, "unsafe")
+	assert.Equal(t, escapedIndex[strings.IndexByte(escapedIndex, '{'):],
+		escapedGeneration[strings.IndexByte(escapedGeneration, '{'):],
+		"ZSET and HASH must carry exactly the same brace-safe Redis Cluster hash tag")
 }
 
 // TestRedisConversationIndexMigrationKeyIsolation covers the global

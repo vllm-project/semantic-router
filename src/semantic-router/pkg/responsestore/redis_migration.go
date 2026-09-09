@@ -158,8 +158,11 @@ func (s *RedisStore) sweepAndIndexAllConversations(ctx context.Context) (Convers
 			if grouped.members == nil {
 				grouped.lifetime = storeTTL
 			}
-			grouped.members = append(grouped.members,
-				redis.Z{Score: float64(response.CreatedAt), Member: response.ID})
+			grouped.members = append(grouped.members, conversationIndexMember{
+				responseID: response.ID,
+				generation: entry.generation,
+				score:      float64(response.CreatedAt),
+			})
 			grouped.lifetime = longerIndexLifetime(grouped.lifetime, entry.indexLifetime(storeTTL))
 			byConversation[response.ConversationID] = grouped
 		}
@@ -189,7 +192,7 @@ func (s *RedisStore) sweepAndIndexAllConversations(ctx context.Context) (Convers
 // quietly retiring an index ahead of the 30-day payloads it names; see
 // extendConversationIndexLifetimeScript.
 type conversationIndexBatch struct {
-	members  []redis.Z
+	members  []conversationIndexMember
 	lifetime int64
 }
 
@@ -210,7 +213,7 @@ func (s *RedisStore) pipelineIndexBatch(ctx context.Context, byConversation map[
 	pipe := s.client.Pipeline()
 	var total int64
 	for conversationID, grouped := range byConversation {
-		queueConversationIndexMembers(ctx, pipe, s.conversationIndexKey(conversationID), grouped.lifetime, grouped.members)
+		s.queueConversationIndexMembers(ctx, pipe, conversationID, grouped.lifetime, grouped.members)
 		total += int64(len(grouped.members))
 	}
 	if _, err := pipe.Exec(ctx); err != nil {

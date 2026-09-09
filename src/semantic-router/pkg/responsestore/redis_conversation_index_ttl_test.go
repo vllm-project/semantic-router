@@ -22,6 +22,74 @@ func indexPTTL(t *testing.T, store *RedisStore, conversationID string) time.Dura
 	return pttl
 }
 
+func indexGenerationPTTL(t *testing.T, store *RedisStore, conversationID string) time.Duration {
+	t.Helper()
+
+	pttl, err := store.client.PTTL(context.Background(), store.conversationIndexGenerationKey(conversationID)).Result()
+	require.NoError(t, err)
+	return pttl
+}
+
+// TestGeneratedIndexAndSidecarShareMonotonicTTL proves every generated index
+// write projects the longer lifetime onto both co-located keys. Neither the
+// membership nor the witness may expire first.
+func TestGeneratedIndexAndSidecarShareMonotonicTTL(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 60)
+	ctx := context.Background()
+
+	const conversationID = "conv_sidecar_ttl"
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: "resp_sidecar_ttl_1", ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}))
+
+	zsetKey := store.conversationIndexKey(conversationID)
+	hashKey := store.conversationIndexGenerationKey(conversationID)
+	require.NoError(t, store.client.PExpire(ctx, zsetKey, 2*time.Minute).Err())
+	require.NoError(t, store.client.PExpire(ctx, hashKey, 20*time.Second).Err())
+
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: "resp_sidecar_ttl_2", ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix() + 1,
+	}))
+
+	zsetTTL := indexPTTL(t, store, conversationID)
+	hashTTL := indexGenerationPTTL(t, store, conversationID)
+	assert.InDelta(t, zsetTTL.Milliseconds(), hashTTL.Milliseconds(), 100)
+	assert.Greater(t, zsetTTL, 110*time.Second, "the shorter write must not lower either key's lifetime")
+
+	require.NoError(t, store.client.Persist(ctx, hashKey).Err())
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: "resp_sidecar_ttl_3", ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix() + 2,
+	}))
+	assert.EqualValues(t, -1, indexPTTL(t, store, conversationID))
+	assert.EqualValues(t, -1, indexGenerationPTTL(t, store, conversationID))
+}
+
+func TestConditionalUnindexDeletesOnlyOwnedSidecarField(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const conversationID = "conv_sidecar_hdel"
+	for _, responseID := range []string{"resp_sidecar_keep", "resp_sidecar_delete"} {
+		require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+			ID: responseID, ConversationID: conversationID,
+			Status: "completed", CreatedAt: time.Now().Unix(),
+		}))
+	}
+	require.NoError(t, store.DeleteResponse(ctx, "resp_sidecar_delete"))
+
+	hashKey := store.conversationIndexGenerationKey(conversationID)
+	deletedExists, err := store.client.HExists(ctx, hashKey, "resp_sidecar_delete").Result()
+	require.NoError(t, err)
+	assert.False(t, deletedExists)
+	keptExists, err := store.client.HExists(ctx, hashKey, "resp_sidecar_keep").Result()
+	require.NoError(t, err)
+	assert.True(t, keptExists)
+	assert.Equal(t, []string{"resp_sidecar_keep"}, conversationIndexMembers(t, store, conversationID))
+}
+
 // TestFinalizedIndexOutlivesLongerLivedPayloads covers the finalization sweep's
 // half of the rule: an index must never be stamped with the store's currently
 // configured TTL when the payloads it names have longer to live. Once the
