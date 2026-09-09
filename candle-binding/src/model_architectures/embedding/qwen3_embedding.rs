@@ -1722,6 +1722,12 @@ impl Qwen3EmbeddingModel {
         &self.tokenizer_config
     }
 
+    /// Model configuration as loaded from `config.json`; `max_position_embeddings`
+    /// is the sequence length the RoPE cache and the position guard are built for.
+    pub fn config(&self) -> &Qwen3EmbeddingConfig {
+        &self.config
+    }
+
     /// Get number of transformer layers
     pub fn num_layers(&self) -> usize {
         self.layers.len()
