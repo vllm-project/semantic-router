@@ -217,7 +217,6 @@ func (r *OpenAIRouter) protectionRescueDecision(
 		learningCtx,
 		current,
 		proposalModel,
-		selection.SwitchOriginEscalation,
 		false,
 	)
 	if gateRan {
@@ -400,7 +399,7 @@ func (r *OpenAIRouter) selectProtectionResultForContext(
 	if err := selection.ValidateSelectionResult(learningCtx, result); err != nil {
 		return nil, err
 	}
-	r.applySwitchGateToResult(cfg, requestCtx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	r.applySwitchGateToResult(cfg, requestCtx, learningCtx, selector, result)
 	return result, nil
 }
 
@@ -414,7 +413,6 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	learningCtx *selection.SelectionContext,
 	selector *selection.SessionAwareSelector,
 	result *selection.SelectionResult,
-	origin string,
 ) {
 	if result == nil {
 		return
@@ -423,7 +421,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	proposedModel := selectedModelName(result)
 	downgrade := selector.IsDowngrade(currentModel, proposedModel)
 
-	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, origin, downgrade)
+	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
 	if !ran {
 		return
 	}
