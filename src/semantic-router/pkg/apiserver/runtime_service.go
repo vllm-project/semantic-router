@@ -10,9 +10,9 @@ import (
 )
 
 type intentClassificationService interface {
-	ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error)
-	ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error)
-	DetectPII(req services.PIIRequest) (*services.PIIResponse, error)
+	ClassifyIntent(ctx context.Context, req services.IntentRequest) (*services.IntentResponse, error)
+	ClassifyIntentForEval(ctx context.Context, req services.IntentRequest) (*services.EvalResponse, error)
+	DetectPII(ctx context.Context, req services.PIIRequest) (*services.PIIResponse, error)
 	CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error)
 }
 
@@ -22,9 +22,9 @@ type batchClassificationService interface {
 }
 
 type auxiliaryClassificationService interface {
-	ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error)
-	ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error)
-	ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error)
+	ClassifyFactCheck(ctx context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error)
+	ClassifyUserFeedback(ctx context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error)
+	ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error)
 	IsNLIReady() bool
 	HasClassifier() bool
 }
@@ -83,16 +83,16 @@ func (s *liveClassificationService) current() classificationService {
 	return services.NewPlaceholderClassificationService()
 }
 
-func (s *liveClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
-	return s.current().ClassifyIntent(req)
+func (s *liveClassificationService) ClassifyIntent(ctx context.Context, req services.IntentRequest) (*services.IntentResponse, error) {
+	return s.current().ClassifyIntent(ctx, req)
 }
 
-func (s *liveClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
-	return s.current().ClassifyIntentForEval(req)
+func (s *liveClassificationService) ClassifyIntentForEval(ctx context.Context, req services.IntentRequest) (*services.EvalResponse, error) {
+	return s.current().ClassifyIntentForEval(ctx, req)
 }
 
-func (s *liveClassificationService) DetectPII(req services.PIIRequest) (*services.PIIResponse, error) {
-	return s.current().DetectPII(req)
+func (s *liveClassificationService) DetectPII(ctx context.Context, req services.PIIRequest) (*services.PIIResponse, error) {
+	return s.current().DetectPII(ctx, req)
 }
 
 func (s *liveClassificationService) CheckSecurity(ctx context.Context, req services.SecurityRequest) (*services.SecurityResponse, error) {
@@ -106,18 +106,19 @@ func (s *liveClassificationService) ClassifyBatchUnifiedWithOptions(
 	return s.current().ClassifyBatchUnifiedWithOptions(texts, options)
 }
 
-func (s *liveClassificationService) ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error) {
-	return s.current().ClassifyFactCheck(req)
+func (s *liveClassificationService) ClassifyFactCheck(ctx context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error) {
+	return s.current().ClassifyFactCheck(ctx, req)
 }
 
 func (s *liveClassificationService) ClassifyUserFeedback(
+	ctx context.Context,
 	req services.UserFeedbackRequest,
 ) (*services.UserFeedbackResponse, error) {
-	return s.current().ClassifyUserFeedback(req)
+	return s.current().ClassifyUserFeedback(ctx, req)
 }
 
-func (s *liveClassificationService) ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error) {
-	return s.current().ClassifyNLI(req)
+func (s *liveClassificationService) ClassifyNLI(ctx context.Context, req services.NLIRequest) (*services.NLIResponse, error) {
+	return s.current().ClassifyNLI(ctx, req)
 }
 
 func (s *liveClassificationService) IsNLIReady() bool {

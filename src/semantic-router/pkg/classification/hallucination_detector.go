@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -144,7 +145,7 @@ func (d *HallucinationDetector) Initialize() error {
 // context: The tool results or RAG context that should ground the answer
 // question: The original user question
 // answer: The LLM-generated answer to verify
-func (d *HallucinationDetector) Detect(context, question, answer string) (*HallucinationResult, error) {
+func (d *HallucinationDetector) Detect(ctx context.Context, contextText, question, answer string) (*HallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -159,7 +160,7 @@ func (d *HallucinationDetector) Detect(context, question, answer string) (*Hallu
 		}, nil
 	}
 
-	if context == "" {
+	if contextText == "" {
 		return nil, fmt.Errorf("context is required for hallucination detection")
 	}
 
@@ -172,8 +173,8 @@ func (d *HallucinationDetector) Detect(context, question, answer string) (*Hallu
 	// Call hallucination detection via candle bindings with threshold
 	// Threshold is applied at token level in Rust - only tokens with confidence >= threshold
 	// are considered hallucinated and included in spans
-	candleResult, err := admitModelInference(nil, d.gate, admissionDeploymentHallucinationDetector, func() (*candle.HallucinationDetectionResult, error) {
-		return detectHallucinationsInChunks(context, question, answer, threshold)
+	candleResult, err := admitModelInference(ctx, d.gate, admissionDeploymentHallucinationDetector, func() (*candle.HallucinationDetectionResult, error) {
+		return detectHallucinationsInChunks(contextText, question, answer, threshold)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection error: %w", err)

@@ -83,7 +83,7 @@ func TestClassifyPIIWithDetails_DetectsEntityPastTheModelWindow(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestClassifyPIIWithDetails_OffsetsAreCorrectInMultibyteText(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestClassifyPIIWithDetails_ReportsAnOverlappedEntityOnce(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestClassifyPIIWithDetails_ShortTextTakesASingleCall(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}

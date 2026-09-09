@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -101,7 +102,7 @@ func (c *FactCheckClassifier) Initialize() error {
 }
 
 // Classify determines if a prompt needs fact-checking using the ML model
-func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
+func (c *FactCheckClassifier) Classify(ctx context.Context, text string) (*FactCheckResult, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -117,7 +118,7 @@ func (c *FactCheckClassifier) Classify(text string) (*FactCheckResult, error) {
 		}, nil
 	}
 
-	result, err := admitModelInference(nil, c.gate, admissionDeploymentFactCheckClassifier, func() (candle.ClassResult, error) {
+	result, err := admitModelInference(ctx, c.gate, admissionDeploymentFactCheckClassifier, func() (candle.ClassResult, error) {
 		if c.useMmBERT32K {
 			return candle.ClassifyMmBert32KFactcheck(text)
 		}

@@ -43,9 +43,6 @@ func admitModelInference[T any](
 	deployment string,
 	fn func() (T, error),
 ) (T, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if gate == nil {
 		gate = admission.Noop{}
 	}

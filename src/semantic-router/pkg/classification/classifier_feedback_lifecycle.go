@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -40,12 +41,12 @@ func (c *Classifier) initializeFeedbackDetector() error {
 }
 
 // ClassifyFeedback performs user feedback classification on the given text.
-func (c *Classifier) ClassifyFeedback(text string) (*FeedbackResult, error) {
+func (c *Classifier) ClassifyFeedback(ctx context.Context, text string) (*FeedbackResult, error) {
 	if c.feedbackDetector == nil || !c.feedbackDetector.IsInitialized() {
 		return nil, fmt.Errorf("feedback detector is not initialized")
 	}
 
-	result, err := c.feedbackDetector.Classify(text)
+	result, err := c.feedbackDetector.Classify(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("feedback classification failed: %w", err)
 	}

@@ -96,12 +96,13 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, mu, textForSignal(config.SignalTypeFactCheck)) },
+			func() { c.evaluateFactCheckSignal(requestCtx, results, mu, textForSignal(config.SignalTypeFactCheck)) },
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() {
 				c.evaluateUserFeedbackSignal(
+					requestCtx,
 					results,
 					mu,
 					textForSignal(config.SignalTypeUserFeedback),

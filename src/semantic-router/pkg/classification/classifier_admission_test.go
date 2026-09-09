@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
@@ -240,5 +241,98 @@ func TestPIIInferenceErrorPopulatesSignalErrors(t *testing.T) {
 	}
 	if len(results.MatchedPIIRules) != 0 {
 		t.Fatalf("MatchedPIIRules = %v, want none", results.MatchedPIIRules)
+	}
+}
+
+type countingPIIInference struct{ calls int }
+
+func (c *countingPIIInference) ClassifyTokens(context.Context, string) (candle_binding.TokenClassificationResult, error) {
+	c.calls++
+	return candle_binding.TokenClassificationResult{}, nil
+}
+
+func heldWaitGate(t *testing.T) admission.Admissioner {
+	t.Helper()
+	gate := admission.NewSemaphore(1, 1, 0, admission.OverflowWait)
+	ticket, err := gate.Acquire(context.Background())
+	if err != nil {
+		t.Fatalf("hold slot: %v", err)
+	}
+	t.Cleanup(ticket)
+	return gate
+}
+
+func abandonedContexts(t *testing.T) map[string]struct {
+	ctx  context.Context
+	want error
+} {
+	t.Helper()
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	expired, cancelExpired := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	t.Cleanup(cancelExpired)
+	return map[string]struct {
+		ctx  context.Context
+		want error
+	}{
+		"canceled": {canceled, context.Canceled},
+		"deadline": {expired, context.DeadlineExceeded},
+	}
+}
+
+func TestDirectPIIClassificationHonorsCallerContextWhileQueued(t *testing.T) {
+	for name, tc := range abandonedContexts(t) {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.PIIMappingPath = "mapping.json"
+			cfg.PIIModel.ModelID = "pii"
+			backend := &countingPIIInference{}
+			classifier := &Classifier{
+				Config:       cfg,
+				PIIMapping:   &PIIMapping{},
+				piiInference: admittedPIIInference{backend: backend, gate: heldWaitGate(t), deployment: admissionDeploymentPIIClassifier},
+			}
+
+			start := time.Now()
+			_, err := classifier.ClassifyPIIWithDetails(tc.ctx, "text")
+
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if elapsed := time.Since(start); elapsed > time.Second {
+				t.Fatalf("waited %v for an abandoned request", elapsed)
+			}
+			if backend.calls != 0 {
+				t.Fatalf("backend calls = %d, want none", backend.calls)
+			}
+		})
+	}
+}
+
+func TestFactCheckSignalHonorsCallerContextWhileQueued(t *testing.T) {
+	for name, tc := range abandonedContexts(t) {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.FactCheckRules = []config.FactCheckRule{{Name: "needs_fact_check"}}
+			classifier := &Classifier{
+				Config:              cfg,
+				factCheckClassifier: &FactCheckClassifier{initialized: true, gate: heldWaitGate(t)},
+			}
+			results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalErrors: make(map[string]string)}
+			var mu sync.Mutex
+
+			start := time.Now()
+			classifier.evaluateFactCheckSignal(tc.ctx, results, &mu, "text")
+
+			if elapsed := time.Since(start); elapsed > time.Second {
+				t.Fatalf("waited %v for an abandoned request", elapsed)
+			}
+			if results.SignalErrors["fact_check:needs_fact_check"] != factCheckEvaluationFailedCode {
+				t.Fatalf("SignalErrors = %#v, want %q", results.SignalErrors, factCheckEvaluationFailedCode)
+			}
+			if len(results.MatchedFactCheckRules) != 0 {
+				t.Fatalf("MatchedFactCheckRules = %v, want none", results.MatchedFactCheckRules)
+			}
+		})
 	}
 }

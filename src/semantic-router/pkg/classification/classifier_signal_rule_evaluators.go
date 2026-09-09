@@ -135,9 +135,9 @@ func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalRe
 	}
 }
 
-func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateFactCheckSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	factCheckResult, err := c.ClassifyFactCheck(text)
+	factCheckResult, err := c.ClassifyFactCheck(ctx, text)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -180,14 +180,14 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 	}
 }
 
-func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync.Mutex, text string, hasPriorAssistantReply bool) {
+func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, hasPriorAssistantReply bool) {
 	if !shouldEvaluateUserFeedbackSignal(hasPriorAssistantReply) {
 		logging.Debugf("[Signal Computation] User feedback signal skipped: no prior assistant reply")
 		return
 	}
 
 	start := time.Now()
-	feedbackResult, err := c.ClassifyFeedback(text)
+	feedbackResult, err := c.ClassifyFeedback(ctx, text)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

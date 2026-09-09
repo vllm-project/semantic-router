@@ -60,7 +60,7 @@ func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter,
 		return
 	}
 
-	result, err := s.classificationSvc.ClassifyNLI(req)
+	result, err := s.classificationSvc.ClassifyNLI(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, admission.ErrQueueFull) {
 			s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())

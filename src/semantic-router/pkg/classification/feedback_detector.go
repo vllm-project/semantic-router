@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -170,7 +171,7 @@ func (d *FeedbackDetector) Initialize() error {
 }
 
 // Classify determines user feedback type from follow-up message using the ML model
-func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
+func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*FeedbackResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -186,7 +187,7 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		}, nil
 	}
 
-	result, err := admitModelInference(nil, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResult, error) {
+	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResult, error) {
 		if d.useMmBERT32K {
 			return candle.ClassifyMmBert32KFeedback(text)
 		}
