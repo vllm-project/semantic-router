@@ -41654,6 +41654,33 @@
       "conformance": {
         "status": "unverified"
       },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Cloudflare Workers AI OpenAI-compatible inference.",
+      "display_name": "Cloudflare Workers AI",
+      "id": "cloudflare-workers-ai",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "Cf"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
       "default_base_url": "https://api.cohere.com/compatibility/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Command models through the compatibility API.",
