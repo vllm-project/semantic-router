@@ -41,6 +41,9 @@ func (s *InMemoryStore) IsEnabled() bool {
 
 // Store saves a new memory.
 func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !s.enabled {
 		return nil
 	}
@@ -49,8 +52,11 @@ func (s *InMemoryStore) Store(ctx context.Context, memory *Memory) error {
 	defer s.mu.Unlock()
 
 	// Generate embedding if not already set
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if len(memory.Embedding) == 0 {
-		embedding, err := GenerateEmbedding(memory.Content, s.embeddingConfig)
+		embedding, err := GenerateEmbeddingContext(ctx, memory.Content, s.embeddingConfig)
 		if err != nil {
 			return err
 		}

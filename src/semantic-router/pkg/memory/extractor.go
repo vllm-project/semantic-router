@@ -225,6 +225,9 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if e == nil || e.store == nil || !e.store.IsEnabled() {
 		logging.Infof("Memory chunk store: SKIPPED - store not enabled (store=%v)", e != nil && e.store != nil)
 		return 0, nil
@@ -274,6 +277,9 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 }
 
 func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assistantResponse, userID string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	chunk := formatTurnChunk(userMessage, assistantResponse)
 	sanitized, err := sanitizeMemoryContent(chunk)
 	if err != nil {
@@ -288,6 +294,9 @@ func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assis
 		Source:     "conversation",
 		CreatedAt:  time.Now(),
 		Importance: 0.5,
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	if err := e.store.Store(ctx, mem); err != nil {
 		return false, fmt.Errorf("failed to store conversation chunk: %w", err)
@@ -308,6 +317,9 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if len(history) == 0 {
 		return false, nil
 	}
@@ -353,6 +365,9 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 		Importance: 0.7,
 	}
 
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if err := e.store.Store(ctx, mem); err != nil {
 		return false, fmt.Errorf("failed to store session chunk: %w", err)
 	}

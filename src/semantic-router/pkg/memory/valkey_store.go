@@ -199,6 +199,9 @@ func (v *ValkeyStore) hashKey(id string) string {
 // Store saves a new memory to Valkey.
 // Generates embedding for the content and inserts as a HASH key.
 func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	startTime := time.Now()
 	backend := "valkey"
 	operation := "store"
@@ -227,7 +230,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		embedding = memory.Embedding
 	} else {
 		var err error
-		embedding, err = GenerateEmbedding(memory.Content, v.embeddingConfig)
+		embedding, err = GenerateEmbeddingContext(ctx, memory.Content, v.embeddingConfig)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)

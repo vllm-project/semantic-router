@@ -151,12 +151,17 @@ global:
 
 | Field | Meaning | Default |
 | --- | --- | --- |
-| `timeout_seconds` | Bounds one extraction-plus-write attempt | 30 |
+| `timeout_seconds` | Cancels one extraction-plus-write attempt and reports its terminal timeout | 30 |
 | `concurrency` | Writes running at once | 8 |
 | `queue` | Writes waiting for a worker | 64 |
 | `shutdown_grace_seconds` | Time a reload or shutdown allows queued and in-flight writes to finish before cancelling them | 5 |
 
 Omit a field or set it to `0` to take the default.
+
+Timeouts report one terminal outcome. Native embedding calls cannot be
+interrupted, so timed-out work retains its worker slot and resources until it
+exits; shutdown defers cleanup while work remains active. Cancellation does not
+undo writes already accepted by a backend.
 
 When every worker is busy and the queue is full, a new write is **dropped**
 rather than held or blocked, so a slow backend cannot grow unbounded state.

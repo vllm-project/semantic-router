@@ -192,6 +192,9 @@ func memoryToPayload(mem *Memory) map[string]any {
 }
 
 func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if !s.enabled {
 		return fmt.Errorf("qdrant store is not enabled")
 	}
@@ -208,7 +211,7 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 	emb := mem.Embedding
 	if len(emb) == 0 {
 		var err error
-		emb, err = GenerateEmbedding(mem.Content, s.embeddingConfig)
+		emb, err = GenerateEmbeddingContext(ctx, mem.Content, s.embeddingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding: %w", err)
 		}

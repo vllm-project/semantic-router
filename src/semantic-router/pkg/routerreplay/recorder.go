@@ -2,7 +2,6 @@ package routerreplay
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -59,8 +58,10 @@ type (
 )
 
 type Recorder struct {
-	storage  store.Storage
-	outcomes *outcomeQueue
+	storage   store.Storage
+	outcomes  *outcomeQueue
+	closeOnce sync.Once
+	closeErr  error
 	// operationTimeout bounds audit-store I/O independently from the client
 	// request. It is immutable after construction in production; tests may
 	// shorten it before issuing operations to exercise stalled backends.
@@ -421,11 +422,6 @@ func (r *Recorder) ListAllRecords() []RoutingRecord {
 		return []RoutingRecord{}
 	}
 	return records
-}
-
-// Releases resources held by the storage backend.
-func (r *Recorder) Close() error {
-	return errors.Join(r.DrainOutcomes(), r.storage.Close())
 }
 
 // replayOperationContext is intentionally independent from a client request:

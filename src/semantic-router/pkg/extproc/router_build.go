@@ -243,9 +243,9 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	components.memoryPersistence = createMemoryPersistenceRunner(cfg)
 	if components.memoryPersistence != nil {
 		grace := memoryPersistenceGrace(cfg)
-		components.resources.add(func() error {
+		components.resources.addDraining(func() error {
 			return components.memoryPersistence.RetireAndWait(grace)
-		})
+		}, components.memoryPersistence.Done())
 	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
