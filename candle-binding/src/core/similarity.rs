@@ -231,6 +231,36 @@ impl BertSimilarity {
         normalize_l2(&embedding)
     }
 
+    /// Byte ranges of `text` that each fit the model's window.
+    ///
+    /// [`get_embedding`] truncates at the window, so a caller that embeds a long
+    /// input once sees only its opening. Embedding each range instead keeps
+    /// every part of the input reachable. Ranges overlap by half a window so a
+    /// sentence cut by one boundary is whole inside its neighbour.
+    pub fn window_byte_ranges(
+        &self,
+        text: &str,
+        max_length: Option<usize>,
+    ) -> Result<Vec<(usize, usize)>> {
+        let window = max_length.unwrap_or(512);
+        let mut tokenizer = self.tokenizer.clone();
+        tokenizer.with_truncation(None).map_err(E::msg)?;
+        let encoding = tokenizer.encode(text, false).map_err(E::msg)?;
+        let offsets: Vec<(usize, usize)> = encoding
+            .get_offsets()
+            .iter()
+            .copied()
+            .filter(|(start, end)| end > start)
+            .collect();
+        // Every window is encoded with its own two special tokens.
+        let budget = window.saturating_sub(2).max(1);
+        Ok(crate::core::tokenization_window::window_ranges(
+            &offsets,
+            budget,
+            budget.div_ceil(2),
+        ))
+    }
+
     /// Calculate cosine similarity between two texts
     ///
     /// ## Arguments

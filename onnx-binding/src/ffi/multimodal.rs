@@ -9,7 +9,7 @@ use crate::model_architectures::embedding::multimodal_embedding::MultiModalEmbed
 use std::ffi::{c_char, CStr};
 use std::sync::OnceLock;
 
-static GLOBAL_MULTIMODAL: OnceLock<MultiModalEmbeddingModel> = OnceLock::new();
+pub(crate) static GLOBAL_MULTIMODAL: OnceLock<MultiModalEmbeddingModel> = OnceLock::new();
 
 /// Initialize multi-modal embedding model.
 ///

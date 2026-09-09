@@ -101,7 +101,6 @@ global:
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: false
 ```
 
 Leave `dimension` unset to use the loaded model's native width. If you set a
