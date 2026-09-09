@@ -138,7 +138,14 @@ _Appears in:_
 
 #### ComplexityRulesConfig
 
-ComplexityRulesConfig defines complexity-based signal classification
+ComplexityRulesConfig defines complexity-based signal classification.
+
+The CEL rules below reject at admission the boundary combinations the Router
+refuses at config load. Without them the API server accepts the object and
+the Router crashloops on it, which turns a typo into an outage instead of a
+rejected write. They are per-object and static; anything needing the model
+catalog - whether backend.model resolves, for instance - stays with the
+Router's validator, which remains the single source of truth for the rest.
 
 _Appears in:_
 
@@ -150,9 +157,9 @@ _Appears in:_
 | `description` _string_ | Description of what this rule classifies |  | Optional: \{\} <br /> |
 | `threshold` _string_ | Threshold for the local prototype-scoring path (0.0-1.0), stored as a<br />string to avoid float precision issues. The local margin is<br />hard-minus-easy and centred on zero, so the threshold is symmetric: a<br />margin above it is "hard", below its negative is "easy", and in between<br />is "medium". It does not apply under a score.v1 backend, whose score is<br />in the model's own units; state a boundary pair instead. |  | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `hard_above` _string_ | HardAbove and EasyBelow are the two cut points for a score where a<br />higher value is harder, in the scoring model's own units - so no [0,1]<br />pattern applies and negative values are valid. Both are required<br />together, and the pair is mutually exclusive with Threshold and with<br />HardBelow/EasyAbove. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
-| `easy_below` _string_ |  |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_below` _string_ | EasyBelow is the lower cut point of the harder-when-higher pair: a score<br />below it is "easy", and anything between EasyBelow and HardAbove is<br />"medium". It must be below HardAbove, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
 | `hard_below` _string_ | HardBelow and EasyAbove are the pair for a score where a lower value is<br />harder - a model predicting the chance of a correct answer, say. They<br />require a score.v1 backend: the local margin is harder-when-higher by<br />construction, and inverting it locally means swapping the candidate<br />lists. Stored as strings to avoid float precision issues. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
-| `easy_above` _string_ |  |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
+| `easy_above` _string_ | EasyAbove is the upper cut point of the harder-when-lower pair: a score<br />above it is "easy", and anything between HardBelow and EasyAbove is<br />"medium". It must be above HardBelow, and both are required together. |  | Pattern: `^-?[0-9]+(\.[0-9]+)?$` <br />Optional: \{\} <br /> |
 | `hard` _[ComplexityCandidates](#complexitycandidates)_ | Hard candidates represent complex/difficult examples. Read only by the<br />local path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
 | `easy` _[ComplexityCandidates](#complexitycandidates)_ | Easy candidates represent simple/easy examples. Read only by the local<br />path; a remote backend never consults them, so they are optional. |  | Optional: \{\} <br /> |
 | `composer` _[RuleComposition](#rulecomposition)_ | Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical) |  | Optional: \{\} <br /> |

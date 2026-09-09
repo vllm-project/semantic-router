@@ -1105,7 +1105,19 @@ type EmbeddingEndpointConfig struct {
 	Dimensions int `json:"dimensions,omitempty"`
 }
 
-// ComplexityRulesConfig defines complexity-based signal classification
+// ComplexityRulesConfig defines complexity-based signal classification.
+//
+// The CEL rules below reject at admission the boundary combinations the Router
+// refuses at config load. Without them the API server accepts the object and
+// the Router crashloops on it, which turns a typo into an outage instead of a
+// rejected write. They are per-object and static; anything needing the model
+// catalog - whether backend.model resolves, for instance - stays with the
+// Router's validator, which remains the single source of truth for the rest.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.threshold) && (has(self.hard_above) || has(self.easy_below) || has(self.hard_below) || has(self.easy_above)))",message="threshold and an explicit boundary pair are mutually exclusive; keep one"
+// +kubebuilder:validation:XValidation:rule="!((has(self.hard_above) || has(self.easy_below)) && (has(self.hard_below) || has(self.easy_above)))",message="a rule states one direction: use hard_above with easy_below, or hard_below with easy_above"
+// +kubebuilder:validation:XValidation:rule="has(self.hard_above) == has(self.easy_below)",message="hard_above and easy_below are required together"
+// +kubebuilder:validation:XValidation:rule="has(self.hard_below) == has(self.easy_above)",message="hard_below and easy_above are required together"
 type ComplexityRulesConfig struct {
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
@@ -1132,6 +1144,10 @@ type ComplexityRulesConfig struct {
 	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
 	// +optional
 	HardAbove string `json:"hard_above,omitempty"`
+
+	// EasyBelow is the lower cut point of the harder-when-higher pair: a score
+	// below it is "easy", and anything between EasyBelow and HardAbove is
+	// "medium". It must be below HardAbove, and both are required together.
 	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
 	// +optional
 	EasyBelow string `json:"easy_below,omitempty"`
@@ -1144,6 +1160,10 @@ type ComplexityRulesConfig struct {
 	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
 	// +optional
 	HardBelow string `json:"hard_below,omitempty"`
+
+	// EasyAbove is the upper cut point of the harder-when-lower pair: a score
+	// above it is "easy", and anything between HardBelow and EasyAbove is
+	// "medium". It must be above HardBelow, and both are required together.
 	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
 	// +optional
 	EasyAbove string `json:"easy_above,omitempty"`
