@@ -42,24 +42,25 @@ func warnResponseJailbreakPluginOwnsDetection(cfg *RouterConfig) {
 }
 
 // validateDecisionsReadRequestStageSignals rejects a decision that reads a
-// response-direction jailbreak rule, directly in its rule tree or through a
-// projection it reads. Decisions and projections are evaluated while the
-// request is being routed and the model has not answered, so the rule could
-// only ever read as unknown there, and a projection would turn that into its
-// configured miss value; the observation is consumed by the selected
-// decision's response_jailbreak plugin once the response exists. Caught at
-// load rather than as a decision that silently never matches.
+// response-stage rule (a jailbreak rule with direction: response, or any
+// hallucination rule), directly in its rule tree or through a projection it
+// reads. Decisions and projections are evaluated while the request is being
+// routed and the model has not answered, so the rule could only ever read as
+// unknown there, and a projection would turn that into its configured miss
+// value; the observation is consumed by the selected decision's response
+// plugin once the response exists. Caught at load rather than as a decision
+// that silently never matches.
 func validateDecisionsReadRequestStageSignals(cfg *RouterConfig) error {
 	for _, decision := range cfg.AllRoutingDecisions() {
-		rule, via, ok := cfg.decisionReadsResponseSignal(&decision.Rules)
+		ref, ok := cfg.decisionReadsResponseSignal(&decision.Rules)
 		if !ok {
 			continue
 		}
 		through := ""
-		if via != "" {
-			through = fmt.Sprintf(" through projection %q", via)
+		if ref.Via != "" {
+			through = fmt.Sprintf(" through projection %q", ref.Via)
 		}
-		return fmt.Errorf("decision %q reads jailbreak rule %q%s, which has direction: response; a response-direction rule is consumed by the selected decision's response_jailbreak plugin, not by decision rules", decision.Name, rule, through)
+		return fmt.Errorf("decision %q reads %s rule %q%s, which is observed at the response stage; a response-stage rule is consumed by the selected decision's response plugin, not by decision rules", decision.Name, ref.Type, ref.Name, through)
 	}
 	return nil
 }

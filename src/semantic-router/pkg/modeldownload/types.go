@@ -10,6 +10,9 @@ type ModelSpec struct {
 	Revision string
 	// Required files to verify model completeness
 	RequiredFiles []string
+	// Glob patterns passed to `hf download --exclude` so artifacts the configured
+	// runtime never loads are skipped. Empty means the full snapshot is fetched.
+	ExcludePatterns []string
 }
 
 // DownloadConfig contains configuration for model downloading

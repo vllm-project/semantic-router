@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -281,7 +282,7 @@ func TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		classifier.evaluateComplexitySignal(results, &mu, "wafer photo query", imageURL, cache)
+		classifier.evaluateComplexitySignal(context.Background(), results, &mu, "wafer photo query", imageURL, cache)
 	}()
 	wg.Wait()
 

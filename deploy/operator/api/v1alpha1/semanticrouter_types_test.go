@@ -296,13 +296,13 @@ func TestComplexityRulesConfig(t *testing.T) {
 				Name:        "code-complexity",
 				Description: "Classify coding tasks by complexity",
 				Threshold:   "0.7",
-				Hard: ComplexityCandidates{
+				Hard: &ComplexityCandidates{
 					Candidates: []string{
 						"Implement a distributed lock manager",
 						"Design a database migration system",
 					},
 				},
-				Easy: ComplexityCandidates{
+				Easy: &ComplexityCandidates{
 					Candidates: []string{
 						"Write a function to reverse a string",
 						"Create a class to represent a rectangle",
@@ -316,12 +316,12 @@ func TestComplexityRulesConfig(t *testing.T) {
 			config: ComplexityRulesConfig{
 				Name:      "medical-complexity",
 				Threshold: "0.7",
-				Hard: ComplexityCandidates{
+				Hard: &ComplexityCandidates{
 					Candidates: []string{
 						"Differential diagnosis for chest pain",
 					},
 				},
-				Easy: ComplexityCandidates{
+				Easy: &ComplexityCandidates{
 					Candidates: []string{
 						"What is normal body temperature?",
 					},
@@ -343,10 +343,10 @@ func TestComplexityRulesConfig(t *testing.T) {
 			config: ComplexityRulesConfig{
 				Name:      "language-complexity",
 				Threshold: "0.65",
-				Hard: ComplexityCandidates{
+				Hard: &ComplexityCandidates{
 					Candidates: []string{"complex query"},
 				},
-				Easy: ComplexityCandidates{
+				Easy: &ComplexityCandidates{
 					Candidates: []string{"simple query"},
 				},
 				Composer: &RuleComposition{
@@ -386,11 +386,11 @@ func TestComplexityRulesConfig(t *testing.T) {
 			if config.Name != tt.config.Name {
 				t.Errorf("Name = %v, want %v", config.Name, tt.config.Name)
 			}
-			if len(config.Hard.Candidates) != len(tt.config.Hard.Candidates) {
-				t.Errorf("Hard.Candidates length = %v, want %v", len(config.Hard.Candidates), len(tt.config.Hard.Candidates))
+			if candidateCount(config.Hard) != candidateCount(tt.config.Hard) {
+				t.Errorf("Hard.Candidates length = %v, want %v", candidateCount(config.Hard), candidateCount(tt.config.Hard))
 			}
-			if len(config.Easy.Candidates) != len(tt.config.Easy.Candidates) {
-				t.Errorf("Easy.Candidates length = %v, want %v", len(config.Easy.Candidates), len(tt.config.Easy.Candidates))
+			if candidateCount(config.Easy) != candidateCount(tt.config.Easy) {
+				t.Errorf("Easy.Candidates length = %v, want %v", candidateCount(config.Easy), candidateCount(tt.config.Easy))
 			}
 
 			// Verify composer if present
@@ -492,10 +492,10 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 					{
 						Name:      "code-complexity",
 						Threshold: "0.7",
-						Hard: ComplexityCandidates{
+						Hard: &ComplexityCandidates{
 							Candidates: []string{"complex task"},
 						},
-						Easy: ComplexityCandidates{
+						Easy: &ComplexityCandidates{
 							Candidates: []string{"simple task"},
 						},
 					},
@@ -523,20 +523,20 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 					{
 						Name:      "code-complexity",
 						Threshold: "0.7",
-						Hard: ComplexityCandidates{
+						Hard: &ComplexityCandidates{
 							Candidates: []string{"Implement distributed system"},
 						},
-						Easy: ComplexityCandidates{
+						Easy: &ComplexityCandidates{
 							Candidates: []string{"Write hello world"},
 						},
 					},
 					{
 						Name:      "reasoning-complexity",
 						Threshold: "0.65",
-						Hard: ComplexityCandidates{
+						Hard: &ComplexityCandidates{
 							Candidates: []string{"Analyze geopolitical implications"},
 						},
-						Easy: ComplexityCandidates{
+						Easy: &ComplexityCandidates{
 							Candidates: []string{"What is the capital?"},
 						},
 					},
@@ -679,13 +679,13 @@ func TestSemanticRouterWithNewFeatures(t *testing.T) {
 							{
 								Name:      "code-complexity",
 								Threshold: "0.7",
-								Hard: ComplexityCandidates{
+								Hard: &ComplexityCandidates{
 									Candidates: []string{
 										"Implement a distributed lock manager",
 										"Design a database migration system",
 									},
 								},
-								Easy: ComplexityCandidates{
+								Easy: &ComplexityCandidates{
 									Candidates: []string{
 										"Write a function to reverse a string",
 										"Create a simple counter",
