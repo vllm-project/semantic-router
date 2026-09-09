@@ -108,7 +108,8 @@ func TestAppendTurnOutcomeCombinedBounds(t *testing.T) {
 		outcomeAt(base, 4, 2, TurnNoProgress, true),  // stale by t=20m
 		outcomeAt(base, 12, 3, TurnNoProgress, true), // fresh
 	}
-	outcomes = appendTurnOutcome(outcomes, outcomeAt(base, 20, 4, TurnNoProgress, true), base.Add(20*time.Minute))
+	outcomes = appendTurnOutcome(outcomes, outcomeAt(base, 20, 4, TurnNoProgress, true), base.Add(20*time.Minute),
+		defaultRecentWindowSize, defaultRecentWindowTTL)
 
 	if len(outcomes) != 2 {
 		t.Fatalf("len = %d, want 2 (stale pruned, then appended)", len(outcomes))
@@ -435,7 +436,33 @@ func TestRecordTurnOutcomeDelayedArrivalStaysOrderedAndExpires(t *testing.T) {
 	}
 }
 
-// 11. Reads return clones: mutating a read must not leak into the store.
+// 11. A configured window policy bounds both writes and reads.
+func TestConfiguredWindowPolicyBoundsWindow(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	const sessionID = "configured-window"
+	setRouterSessionMemoryNowForTesting(func() time.Time { return fixedBase.Add(3 * time.Minute) })
+	defer setRouterSessionMemoryNowForTesting(nil)
+
+	// Capacity 2 must evict on write even though the package default is 8.
+	ConfigureTurnOutcomeWindow(sessionID, 2, 5*time.Minute, fixedBase)
+	for i := 0; i < 3; i++ {
+		RecordTurnOutcome(sessionID, outcomeAt(fixedBase, i, i, TurnNoProgress, true),
+			fixedBase.Add(time.Duration(i)*time.Minute))
+	}
+
+	window := RecentTurnOutcomesWithPolicy(sessionID, fixedBase.Add(3*time.Minute), 2, 5*time.Minute)
+	if len(window) != 2 || window[0].TurnIndex != 1 || window[1].TurnIndex != 2 {
+		t.Fatalf("configured capacity not applied: %+v", window)
+	}
+
+	// A TTL shorter than the package default must expire evidence early:
+	// at t+2m only the outcome recorded at t+2m is within 45s.
+	if aged := RecentTurnOutcomesWithPolicy(sessionID, fixedBase.Add(2*time.Minute), 2, 45*time.Second); len(aged) != 1 {
+		t.Fatalf("configured read TTL not applied: %+v", aged)
+	}
+}
+
+// 12. Reads return clones: mutating a read must not leak into the store.
 func TestRecentTurnOutcomesReturnClones(t *testing.T) {
 	ResetRouterSessionMemoryForTesting()
 	const sessionID = "clone"

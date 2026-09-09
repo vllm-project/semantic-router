@@ -29,6 +29,8 @@ func TestProgressGateConfigOverridesOnlySuppliedFields(t *testing.T) {
 		ProgressGate: &config.ProgressGateTuning{
 			Enabled:                   gateBoolPtr(true),
 			Mode:                      selection.GateModeEnforce,
+			WindowSize:                gateIntPtr(5),
+			WindowTTLSeconds:          gateIntPtr(30),
 			MinConsecutiveRegressions: gateIntPtr(3),
 			CooldownSeconds:           gateFloatPtr(45),
 		},
@@ -38,6 +40,9 @@ func TestProgressGateConfigOverridesOnlySuppliedFields(t *testing.T) {
 	}
 	if cfg.MinConsecutiveRegressions != 3 || cfg.CooldownSeconds != 45 {
 		t.Fatalf("threshold overrides not applied: %+v", cfg)
+	}
+	if cfg.WindowSize != 5 || cfg.WindowTTLSeconds != 30 {
+		t.Fatalf("window policy not applied: %+v", cfg)
 	}
 	// Untouched fields keep the packaged defaults.
 	defaults := selection.DefaultProgressGateConfig()
@@ -259,21 +264,8 @@ func TestSwitchGateVerdictAllowsOnSustainedRegression(t *testing.T) {
 	}
 }
 
-func TestSwitchGateVerdictHardConstraintShortCircuits(t *testing.T) {
-	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+func TestSwitchGateCooldownUsesLastSwitchNotActivity(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	ctx := &RequestContext{SessionID: "gate-hardlock"}
-	sessionKey := routingSessionStateKey(ctx)
-
-	now := time.Now()
-	for i := 0; i < 3; i++ {
-		sessiontelemetry.RecordTurnOutcome(sessionKey, sessiontelemetry.TurnOutcome{
-			TurnIndex: i,
-			Model:     "model-a",
-			Category:  sessiontelemetry.TurnNoProgress,
-		}, now.Add(time.Duration(i)*time.Second))
-	}
-
 	cfg := config.RouterLearningProtectionConfig{
 		Tuning: config.RouterLearningProtectionTuning{
 			ProgressGate: &config.ProgressGateTuning{
@@ -282,75 +274,48 @@ func TestSwitchGateVerdictHardConstraintShortCircuits(t *testing.T) {
 			},
 		},
 	}
-	learningCtx := &selection.SelectionContext{
-		AgenticSession: &selection.AgenticSessionContext{ActiveToolLoop: true},
+	seed := func(sessionID string, switchAgo time.Duration) {
+		sessiontelemetry.ResetRouterSessionMemoryForTesting()
+		ctx := &RequestContext{SessionID: sessionID}
+		key := routingSessionStateKey(ctx)
+		now := time.Now()
+		for i := 0; i < 3; i++ {
+			sessiontelemetry.RecordTurnOutcome(key, sessiontelemetry.TurnOutcome{
+				TurnIndex: i,
+				Model:     "model-b",
+				Category:  sessiontelemetry.TurnNoProgress,
+			}, now.Add(time.Duration(i-4)*time.Second))
+		}
+		sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+			SessionID: key, SelectedModel: "model-a", Timestamp: now.Add(-switchAgo - time.Minute),
+		})
+		sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+			SessionID: key, PreviousModel: "model-a", SelectedModel: "model-b",
+			Timestamp: now.Add(-switchAgo),
+		})
+		// Fresh activity after the switch refreshes LastSeen only; it must not
+		// renew the cooldown clock.
+		sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
+			SessionID: key, Model: "model-b", CompletionTokens: 1, Timestamp: now.Add(-10 * time.Second),
+		})
 	}
 
+	seed("gate-old-switch", 10*time.Minute)
 	decision, _, ran := router.switchGateVerdict(
-		cfg, ctx, learningCtx, "model-a", "model-b", false,
-	)
-	if !ran {
-		t.Fatalf("gate should have evaluated")
-	}
-	// Evidence is sufficient, but the tool loop is authoritative.
-	if !decision.Suppressed() || decision.Reason != selection.GateReasonHardConstraint {
-		t.Fatalf("hard lock must win over sufficient evidence: %+v", decision)
-	}
-}
-
-func TestSwitchGateVerdictDowngradeOrigin(t *testing.T) {
-	sessiontelemetry.ResetRouterSessionMemoryForTesting()
-	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
-
-	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	ctx := &RequestContext{SessionID: "gate-downgrade"}
-	cfg := config.RouterLearningProtectionConfig{
-		Tuning: config.RouterLearningProtectionTuning{
-			ProgressGate: &config.ProgressGateTuning{
-				Enabled: gateBoolPtr(true),
-				Mode:    selection.GateModeObserve,
-			},
-		},
-	}
-
-	decision, trace, ran := router.switchGateVerdict(
-		cfg, ctx, nil, "frontier", "cheap", true,
+		cfg, &RequestContext{SessionID: "gate-old-switch"}, nil, "model-b", "model-c", false,
 	)
 	if !ran {
 		t.Fatal("gate should have evaluated")
 	}
-	if decision.Origin != selection.SwitchOriginDowngrade ||
-		trace.Origin != selection.SwitchOriginDowngrade {
-		t.Fatalf("downgrade origin lost: decision=%+v trace=%+v", decision, trace)
-	}
-}
-
-func TestSwitchGateVerdictObserveModeRecordsWithoutSuppressing(t *testing.T) {
-	sessiontelemetry.ResetRouterSessionMemoryForTesting()
-	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	ctx := &RequestContext{SessionID: "gate-observe"}
-	cfg := config.RouterLearningProtectionConfig{
-		Tuning: config.RouterLearningProtectionTuning{
-			ProgressGate: &config.ProgressGateTuning{
-				Enabled: gateBoolPtr(true),
-				Mode:    selection.GateModeObserve,
-			},
-		},
+	if decision.Suppressed() || decision.Reason == selection.GateReasonCooldown {
+		t.Fatalf("a 10-minute-old switch is outside the 120s cooldown: %+v", decision)
 	}
 
-	decision, trace, ran := router.switchGateVerdict(
-		cfg, ctx, nil, "model-a", "model-b", false,
+	seed("gate-recent-switch", 30*time.Second)
+	decision, _, ran = router.switchGateVerdict(
+		cfg, &RequestContext{SessionID: "gate-recent-switch"}, nil, "model-b", "model-c", false,
 	)
-	if !ran {
-		t.Fatalf("gate should have evaluated")
-	}
-	if decision.Decision != selection.GateDecisionSuppress || decision.Reason == "" {
-		t.Fatalf("observe mode must still reason: %+v", decision)
-	}
-	if decision.Suppressed() {
-		t.Fatalf("observe mode must not intercept the switch: %+v", decision)
-	}
-	if trace.Mode != selection.GateModeObserve || trace.Enforced {
-		t.Fatalf("trace must record observe mode: %+v", trace)
+	if !ran || !decision.Suppressed() || decision.Reason != selection.GateReasonCooldown {
+		t.Fatalf("a 30-second-old switch must still be inside the cooldown: %+v", decision)
 	}
 }

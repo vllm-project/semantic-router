@@ -26,6 +26,9 @@ type ProgressGateConfig struct {
 	Enabled bool
 	Mode    string
 
+	WindowSize       int
+	WindowTTLSeconds int
+
 	MinWindowOutcomes         int
 	MinConsecutiveRegressions int
 	MinConsecutiveRecoveries  int
@@ -38,6 +41,8 @@ func DefaultProgressGateConfig() ProgressGateConfig {
 	return ProgressGateConfig{
 		Enabled:                   false,
 		Mode:                      GateModeObserve,
+		WindowSize:                8,
+		WindowTTLSeconds:          900,
 		MinWindowOutcomes:         3,
 		MinConsecutiveRegressions: 2,
 		MinConsecutiveRecoveries:  2,
