@@ -2270,6 +2270,35 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/api/v1/models
+  - catalog: openai/gpt-6-astra
+    relationship: gateway
+    id: openai/gpt-6-astra
+    protocols:
+    - openai/chat-completions@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    reasoning_efforts_by_protocol:
+      openai/chat-completions@1:
+      - low
+      - medium
+      - high
+      - xhigh
+    pricing:
+      currency: USD
+      prompt_per_1m: 10.0
+      cached_input_per_1m: 1.0
+      cache_write_per_1m: 12.5
+      completion_per_1m: 50.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-08'
+      source: https://openrouter.ai/openai/gpt-6-astra
 - id: perplexity
   display_name: Perplexity
   description: Search-grounded models and online answers.

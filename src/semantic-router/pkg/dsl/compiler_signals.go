@@ -246,6 +246,10 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
 	}
+	rule.HardAbove = complexityBoundaryField(s.Fields, "hard_above")
+	rule.EasyBelow = complexityBoundaryField(s.Fields, "easy_below")
+	rule.HardBelow = complexityBoundaryField(s.Fields, "hard_below")
+	rule.EasyAbove = complexityBoundaryField(s.Fields, "easy_above")
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}
@@ -439,4 +443,18 @@ func parseAuthzSubjects(v Value) []config.Subject {
 		subjects = append(subjects, subj)
 	}
 	return subjects
+}
+
+// complexityBoundaryField reads one optional boundary. The pointer matters:
+// nil means "not declared", which is what distinguishes a rule that relies on
+// the threshold shorthand from one that explicitly sets a cut point at zero.
+func complexityBoundaryField(fields map[string]Value, name string) *float64 {
+	// Read as float64: the boundary fields are float64 on the config, and
+	// going through float32 turns a declared 0.85 into 0.8500000238418579 on
+	// a round trip.
+	value, ok := getFloat64Field(fields, name)
+	if !ok {
+		return nil
+	}
+	return &value
 }

@@ -244,6 +244,12 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
 		},
+		{
+			name: "OpenRouter GPT-6 Astra Chat reasoning object", catalog: "openai/gpt-6-astra", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
 	}
 	runCatalogReasoningWireCases(t, tests)
 }

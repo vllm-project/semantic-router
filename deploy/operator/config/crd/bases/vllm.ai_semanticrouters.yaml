@@ -1095,11 +1095,68 @@ spec:
                             type: boolean
                         type: object
                     type: object
+                  complexity_model:
+                    description: |-
+                      ComplexityModel says how the complexity signal produces its score.
+                      Absent, the signal scores locally against each rule's hard/easy
+                      candidates. With a backend, a remote model produces the score and the
+                      candidates are never read. Mirrors
+                      global.model_catalog.modules.complexity in the router config.
+                    properties:
+                      backend:
+                        description: |-
+                          Backend names a remote scoring model. Its absence keeps local prototype
+                          scoring; when set, the signal never reads the rules' hard/easy
+                          candidates. It sits on the module rather than on a rule because routing
+                          signals are replaced wholesale per recipe, so a per-rule backend would
+                          vanish under any recipe that did not repeat it.
+                        properties:
+                          contract:
+                            description: |-
+                              Contract is the response shape the signal reads. Complexity reads two -
+                              score.v1, one regression number interpreted through each rule's
+                              boundaries, and label_distribution.v1, hard/easy/medium probabilities -
+                              so the router requires it there rather than guessing per request.
+                            enum:
+                            - score.v1
+                            - label_distribution.v1
+                            type: string
+                          deadline_ms:
+                            description: DeadlineMs bounds one remote call. Defaults
+                              to the router's value.
+                            minimum: 1
+                            type: integer
+                          model:
+                            description: Model is the name of an entry in the external
+                              model catalog.
+                            minLength: 1
+                            type: string
+                          protocol:
+                            description: Protocol is how the remote is called.
+                            enum:
+                            - http_classify
+                            type: string
+                        required:
+                        - model
+                        - protocol
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: 'complexity reads two response shapes, so backend.contract
+                        must be stated: score.v1 or label_distribution.v1'
+                      rule: '!has(self.backend) || has(self.backend.contract)'
                   complexity_rules:
                     description: Complexity rules for complexity-aware routing
                     items:
-                      description: ComplexityRulesConfig defines complexity-based
-                        signal classification
+                      description: |-
+                        ComplexityRulesConfig defines complexity-based signal classification.
+
+                        The CEL rules below reject at admission the boundary combinations the Router
+                        refuses at config load. Without them the API server accepts the object and
+                        the Router crashloops on it, which turns a typo into an outage instead of a
+                        rejected write. They are per-object and static; anything needing the model
+                        catalog - whether backend.model resolves, for instance - stays with the
+                        Router's validator, which remains the single source of truth for the rest.
                       properties:
                         composer:
                           description: Composer allows filtering based on other signals
@@ -1141,7 +1198,9 @@ spec:
                           description: Description of what this rule classifies
                           type: string
                         easy:
-                          description: Easy candidates represent simple/easy examples
+                          description: |-
+                            Easy candidates represent simple/easy examples. Read only by the local
+                            path; a remote backend never consults them, so they are optional.
                           properties:
                             candidates:
                               description: List of candidate phrases or examples
@@ -1151,9 +1210,24 @@ spec:
                           required:
                           - candidates
                           type: object
+                        easy_above:
+                          description: |-
+                            EasyAbove is the upper cut point of the harder-when-lower pair: a score
+                            above it is "easy", and anything between HardBelow and EasyAbove is
+                            "medium". It must be above HardBelow, and both are required together.
+                          pattern: ^-?[0-9]+(\.[0-9]+)?$
+                          type: string
+                        easy_below:
+                          description: |-
+                            EasyBelow is the lower cut point of the harder-when-higher pair: a score
+                            below it is "easy", and anything between EasyBelow and HardAbove is
+                            "medium". It must be below HardAbove, and both are required together.
+                          pattern: ^-?[0-9]+(\.[0-9]+)?$
+                          type: string
                         hard:
-                          description: Hard candidates represent complex/difficult
-                            examples
+                          description: |-
+                            Hard candidates represent complex/difficult examples. Read only by the
+                            local path; a remote backend never consults them, so they are optional.
                           properties:
                             candidates:
                               description: List of candidate phrases or examples
@@ -1163,21 +1237,62 @@ spec:
                           required:
                           - candidates
                           type: object
+                        hard_above:
+                          description: |-
+                            HardAbove and EasyBelow are the two cut points for a score where a
+                            higher value is harder, in the scoring model's own units - so no [0,1]
+                            pattern applies and negative values are valid. Both are required
+                            together, and the pair is mutually exclusive with Threshold and with
+                            HardBelow/EasyAbove. Stored as strings to avoid float precision issues.
+                          pattern: ^-?[0-9]+(\.[0-9]+)?$
+                          type: string
+                        hard_below:
+                          description: |-
+                            HardBelow and EasyAbove are the pair for a score where a lower value is
+                            harder - a model predicting the chance of a correct answer, say. They
+                            require a score.v1 backend: the local margin is harder-when-higher by
+                            construction, and inverting it locally means swapping the candidate
+                            lists. Stored as strings to avoid float precision issues.
+                          pattern: ^-?[0-9]+(\.[0-9]+)?$
+                          type: string
                         name:
                           description: Name of the complexity rule (e.g., "code-complexity",
                             "reasoning-complexity")
                           type: string
                         threshold:
                           description: |-
-                            Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
-                            Queries scoring above this threshold are classified as "hard"
+                            Threshold for the local prototype-scoring path (0.0-1.0), stored as a
+                            string to avoid float precision issues. The local margin is
+                            hard-minus-easy and centred on zero, so the threshold is symmetric: a
+                            margin above it is "hard", below its negative is "easy", and in between
+                            is "medium". It does not apply under a score.v1 backend, whose score is
+                            in the model's own units; state a boundary pair instead.
                           pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                           type: string
                       required:
-                      - easy
-                      - hard
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: threshold and an explicit boundary pair are mutually
+                          exclusive; keep one
+                        rule: '!(has(self.threshold) && (has(self.hard_above) || has(self.easy_below)
+                          || has(self.hard_below) || has(self.easy_above)))'
+                      - message: 'a rule states one direction: use hard_above with
+                          easy_below, or hard_below with easy_above'
+                        rule: '!((has(self.hard_above) || has(self.easy_below)) &&
+                          (has(self.hard_below) || has(self.easy_above)))'
+                      - message: hard_above and easy_below are required together
+                        rule: has(self.hard_above) == has(self.easy_below)
+                      - message: hard_below and easy_above are required together
+                        rule: has(self.hard_below) == has(self.easy_above)
+                      - message: easy_below must be below hard_above; the band between
+                          them is medium
+                        rule: '!(has(self.hard_above) && has(self.easy_below)) ||
+                          double(self.easy_below) < double(self.hard_above)'
+                      - message: hard_below must be below easy_above; the band between
+                          them is medium
+                        rule: '!(has(self.hard_below) && has(self.easy_above)) ||
+                          double(self.hard_below) < double(self.easy_above)'
                     type: array
                   decisions:
                     description: Routing decisions based on signals (domain, complexity,

@@ -123,6 +123,35 @@ func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIRes
 	}, nil
 }
 
+// detectHallucinationsWithNLIInChunks scans a long answer the way
+// detectHallucinationsInChunks does, because the NLI entry point windows only
+// its premise and truncates the answer the same way.
+func detectHallucinationsWithNLIInChunks(context, question, answer string, threshold float32) (*candle.EnhancedHallucinationDetectionResult, error) {
+	chunks := hallucinationAnswerChunks(answer)
+	if len(chunks) <= 1 {
+		return candle.DetectHallucinationsWithNLI(context, question, answer, threshold)
+	}
+
+	merged := &candle.EnhancedHallucinationDetectionResult{Confidence: 1}
+	seen := make(map[string]struct{})
+	for _, chunk := range chunks {
+		result, err := candle.DetectHallucinationsWithNLI(context, question, chunk, threshold)
+		if err != nil {
+			return nil, err
+		}
+		merged.Confidence = mergeChunkConfidence(merged.HasHallucination, merged.Confidence, result.HasHallucination, result.Confidence)
+		merged.HasHallucination = merged.HasHallucination || result.HasHallucination
+		for _, span := range result.Spans {
+			if _, duplicate := seen[span.Text]; duplicate {
+				continue
+			}
+			seen[span.Text] = struct{}{}
+			merged.Spans = append(merged.Spans, span)
+		}
+	}
+	return merged, nil
+}
+
 // DetectWithNLI detects hallucinations and provides NLI-based explanations.
 // It combines token-level hallucination detection with NLI classification.
 func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) (*EnhancedHallucinationResult, error) {
@@ -147,7 +176,7 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 
 	hallucinationThreshold := d.hallucinationThreshold()
 	nliThreshold := d.nliThreshold()
-	candleResult, err := candle.DetectHallucinationsWithNLI(context, question, answer, hallucinationThreshold)
+	candleResult, err := detectHallucinationsWithNLIInChunks(context, question, answer, hallucinationThreshold)
 	if err != nil {
 		return nil, fmt.Errorf("enhanced hallucination detection error: %w", err)
 	}
