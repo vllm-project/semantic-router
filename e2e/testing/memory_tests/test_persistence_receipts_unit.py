@@ -157,6 +157,13 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
                     [call.args[0] for call in case._container_command.call_args_list],
                     ["stop", "start"],
                 )
+                first_poll = case._wait_for_terminal_receipt.call_args_list[0]
+                self.assertEqual(
+                    first_poll.kwargs["timeout"],
+                    receipts.FAILURE_RECEIPT_BUDGET_SECONDS,
+                )
+                if status in receipts.FAILURE_RECEIPTS:
+                    self.assertEqual(case._wait_for_terminal_receipt.call_count, 2)
 
 
 if __name__ == "__main__":

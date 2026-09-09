@@ -46,8 +46,11 @@ type PersistenceRunner struct {
 	baseCtx context.Context
 	cancel  context.CancelFunc
 
-	mu      sync.Mutex
-	retired bool
+	mu         sync.Mutex
+	retired    bool
+	retireOnce sync.Once
+	retireErr  error
+	done       chan struct{}
 }
 
 func NewPersistenceRunner(timeout time.Duration, concurrency, queue int) *PersistenceRunner {
@@ -67,6 +70,7 @@ func NewPersistenceRunner(timeout time.Duration, concurrency, queue int) *Persis
 		timeout: timeout,
 		baseCtx: baseCtx,
 		cancel:  cancel,
+		done:    make(chan struct{}),
 	}
 
 	r.workers.Add(concurrency)
@@ -125,23 +129,52 @@ func (r *PersistenceRunner) worker() {
 }
 
 func (r *PersistenceRunner) run(traceCtx context.Context, job PersistenceJob) {
+	jobCtx, cancel := context.WithTimeout(context.WithoutCancel(traceCtx), r.timeout)
+	defer cancel()
+	stop := context.AfterFunc(r.baseCtx, cancel)
+	defer stop()
+	if r.baseCtx.Err() != nil {
+		cancel()
+	}
+
+	// Report cancellation even when Run cannot unwind yet. Keep this worker and
+	// its resources occupied until Run actually exits; never detach the work.
+	var terminal sync.Once
+	report := job.Report
+	job.Report = func(status, reason string, failOpen bool, cause error) {
+		terminal.Do(func() { report(status, reason, failOpen, cause) })
+	}
+	reported := make(chan struct{})
+	stopReport := context.AfterFunc(jobCtx, func() {
+		defer close(reported)
+		reportPersistenceResult(jobCtx, job, PersistenceOutcome{}, nil)
+	})
+	defer func() {
+		if !stopReport() {
+			<-reported
+		}
+	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			logging.ComponentErrorEvent("memory", "persistence_panic", map[string]interface{}{
 				"panic": recovered,
 				"stack": string(debug.Stack()),
 			})
-			reportSafely(job, "store_failed", "panic", true, nil)
+			reportPersistenceResult(jobCtx, job, PersistenceOutcome{
+				Status: "store_failed", Reason: "panic", FailOpen: true,
+			}, nil)
 		}
 	}()
 
-	jobCtx, cancel := context.WithTimeout(context.WithoutCancel(traceCtx), r.timeout)
-	defer cancel()
-	stop := context.AfterFunc(r.baseCtx, cancel)
-	defer stop()
-
+	if jobCtx.Err() != nil {
+		reportPersistenceResult(jobCtx, job, PersistenceOutcome{}, nil)
+		return
+	}
 	outcome, err := job.Run(jobCtx)
+	reportPersistenceResult(jobCtx, job, outcome, err)
+}
 
+func reportPersistenceResult(jobCtx context.Context, job PersistenceJob, outcome PersistenceOutcome, err error) {
 	switch {
 	case errors.Is(jobCtx.Err(), context.DeadlineExceeded):
 		reportSafely(job, "timeout", "persist_timeout", true, jobCtx.Err())
@@ -157,27 +190,33 @@ func (r *PersistenceRunner) run(traceCtx context.Context, job PersistenceJob) {
 }
 
 func (r *PersistenceRunner) RetireAndWait(grace time.Duration) error {
+	r.retireOnce.Do(func() { r.retireErr = r.retireAndWait(grace) })
+	return r.retireErr
+}
+
+// Done closes only after retirement and the exit of every job and reporter.
+// A shutdown deadline is not permission to close resources: owners must defer
+// their cleanup until Done, including when RetireAndWait returns an error.
+func (r *PersistenceRunner) Done() <-chan struct{} { return r.done }
+
+func (r *PersistenceRunner) retireAndWait(grace time.Duration) error {
 	if grace <= 0 {
 		grace = DefaultPersistenceShutdownGrace
 	}
 
 	r.mu.Lock()
-	if r.retired {
-		r.mu.Unlock()
-		return nil
-	}
 	r.retired = true
 	close(r.jobs)
 	r.mu.Unlock()
 
-	done := make(chan struct{})
 	go func() {
 		r.workers.Wait()
-		close(done)
+		r.cancel()
+		close(r.done)
 	}()
 
 	select {
-	case <-done:
+	case <-r.done:
 		r.cancel()
 		return nil
 	case <-time.After(grace):
@@ -186,7 +225,7 @@ func (r *PersistenceRunner) RetireAndWait(grace time.Duration) error {
 	r.cancel()
 	unwound := false
 	select {
-	case <-done:
+	case <-r.done:
 		unwound = true
 	case <-time.After(persistenceCancelUnwind):
 	}

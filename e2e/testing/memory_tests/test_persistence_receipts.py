@@ -15,6 +15,9 @@ RECEIPT_PLUGIN = "memory_persistence"
 RECEIPT_DECISION = "persistence_receipt_route"
 RECEIPT_MARKER = "PERSISTENCE_RECEIPT_MARKER"
 FAILURE_RECEIPTS = {"store_failed": "persist_error", "timeout": "persist_timeout"}
+# The fixture uses the default 30-second attempt timeout; allow receipt I/O
+# and polling five more seconds, without waiting for backend recovery.
+FAILURE_RECEIPT_BUDGET_SECONDS = 35
 MILVUS_CONTAINER = "milvus-semantic-cache"
 METRICS_CANDIDATES = (
     "http://localhost:9190/metrics",
@@ -201,7 +204,9 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
                 "fail-open response must still carry model output",
             )
 
-            receipt = self._wait_for_terminal_receipt(result)
+            receipt = self._wait_for_terminal_receipt(
+                result, timeout=FAILURE_RECEIPT_BUDGET_SECONDS
+            )
             status = receipt["verdict"]
             self.assertIn(status, FAILURE_RECEIPTS, receipt)
             self.assertEqual(receipt["reason"], FAILURE_RECEIPTS[status], receipt)
@@ -215,3 +220,8 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         self.print_test_result(
             True, f"{status} receipts {baseline[status]} -> {observed}"
         )
+
+        # A late write result after recovery must not append another terminal
+        # outcome (for example completed after an earlier timeout).
+        recovered_receipt = self._wait_for_terminal_receipt(result)
+        self.assertEqual(recovered_receipt, receipt)
