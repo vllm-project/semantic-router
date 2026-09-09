@@ -60,10 +60,11 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		failStartup(startupWriter, "Failed to start management API: %v", err)
 	}
 	var (
-		routerServer    *extproc.Server
-		metricsServer   *http.Server
-		shutdownHooks   = make([]func(context.Context) error, 0)
-		shutdownTracing = func(context.Context) error { return nil }
+		routerServer     *extproc.Server
+		metricsServer    *http.Server
+		servingLifecycle *servingComponentLifecycle
+		shutdownHooks    = make([]func(context.Context) error, 0)
+		shutdownTracing  = func(context.Context) error { return nil }
 	)
 	// Return errors below so deferred shutdown can release started resources.
 	defer func() {
@@ -74,6 +75,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 			apiServer,
 			routerServer,
 			metricsServer,
+			servingLifecycle,
 			&shutdownHooks,
 			shutdownTracing,
 		))
@@ -109,7 +111,8 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
-	return runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
+	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
+	return err
 }
 
 func shutdownRouterProcess(
@@ -117,6 +120,7 @@ func shutdownRouterProcess(
 	apiServer *apiserver.Server,
 	routerServer *extproc.Server,
 	metricsServer *http.Server,
+	servingLifecycle *servingComponentLifecycle,
 	shutdownHooks *[]func(context.Context) error,
 	shutdownTracing func(context.Context) error,
 ) error {
@@ -129,6 +133,18 @@ func shutdownRouterProcess(
 	if routerServer != nil {
 		servingShutdowns = append(servingShutdowns, routerServer.ShutdownServing)
 		resourceShutdown = routerServer.ShutdownResources
+	}
+	if servingLifecycle != nil {
+		routerResourceShutdown := resourceShutdown
+		resourceShutdown = func(ctx context.Context) error {
+			if err := servingLifecycle.Shutdown(ctx); err != nil {
+				return err
+			}
+			if routerResourceShutdown != nil {
+				return routerResourceShutdown(ctx)
+			}
+			return nil
+		}
 	}
 	if metricsServer != nil {
 		servingShutdowns = append(servingShutdowns, metricsServer.Shutdown)
@@ -304,7 +320,7 @@ func runRouterServing(
 	opts runtimeOptions,
 	routerServer *extproc.Server,
 	startupWriter startupstatus.StatusWriter,
-) error {
+) (*servingComponentLifecycle, error) {
 	components := []func(context.Context) error{
 		func(ctx context.Context) error {
 			return startExtProcServer(ctx, routerServer, startupWriter)
@@ -315,25 +331,67 @@ func runRouterServing(
 			return startKubernetesController(ctx, cfg, opts.kubeconfig, opts.namespace)
 		})
 	}
-	return runServingComponents(ctx, components...)
+	lifecycle := startServingComponents(ctx, components...)
+	return lifecycle, lifecycle.Wait(ctx)
 }
 
-func runServingComponents(ctx context.Context, components ...func(context.Context) error) error {
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+type servingComponentLifecycle struct {
+	cancel context.CancelFunc
+	first  <-chan error
+	done   <-chan struct{}
+}
 
+func startServingComponents(ctx context.Context, components ...func(context.Context) error) *servingComponentLifecycle {
+	runCtx, cancel := context.WithCancel(ctx)
 	results := make(chan error, len(components))
 	for _, component := range components {
 		go func(component func(context.Context) error) {
 			results <- component(runCtx)
 		}(component)
 	}
+	first := make(chan error, 1)
+	done := make(chan struct{})
+	if len(components) == 0 {
+		first <- nil
+		close(done)
+		return &servingComponentLifecycle{cancel: cancel, first: first, done: done}
+	}
+	go func() {
+		first <- <-results
+		cancel()
+		for range len(components) - 1 {
+			<-results
+		}
+		close(done)
+	}()
+	return &servingComponentLifecycle{cancel: cancel, first: first, done: done}
+}
 
+func (l *servingComponentLifecycle) Wait(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
+		l.cancel()
 		return nil
-	case err := <-results:
+	case err := <-l.first:
 		return err
+	}
+}
+
+func (l *servingComponentLifecycle) Shutdown(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+	l.cancel()
+	select {
+	case <-l.done:
+		return nil
+	case <-ctx.Done():
+		select {
+		case <-l.done:
+			return nil
+		default:
+			return ctx.Err()
+		}
 	}
 }
 

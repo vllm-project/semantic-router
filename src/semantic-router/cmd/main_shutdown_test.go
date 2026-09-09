@@ -108,7 +108,7 @@ func TestShutdownRouterProcessBoundsSlowHookAndPreservesErrors(t *testing.T) {
 	defer cancel()
 
 	started := time.Now()
-	err := shutdownRouterProcess(ctx, nil, nil, nil, &hooks, func(context.Context) error {
+	err := shutdownRouterProcess(ctx, nil, nil, nil, nil, &hooks, func(context.Context) error {
 		return tracingErr
 	})
 	if elapsed := time.Since(started); elapsed > time.Second {
@@ -121,12 +121,13 @@ func TestShutdownRouterProcessBoundsSlowHookAndPreservesErrors(t *testing.T) {
 	}
 }
 
-func TestRunServingComponentsReturnsFailureAndCancelsPeers(t *testing.T) {
+func TestServingComponentLifecycleCancelsAndWaitsForPeers(t *testing.T) {
 	componentErr := errors.New("controller failed")
 	peerStarted := make(chan struct{})
 	peerCanceled := make(chan struct{})
+	releasePeer := make(chan struct{})
 
-	err := runServingComponents(
+	lifecycle := startServingComponents(
 		context.Background(),
 		func(context.Context) error {
 			<-peerStarted
@@ -136,13 +137,29 @@ func TestRunServingComponentsReturnsFailureAndCancelsPeers(t *testing.T) {
 			close(peerStarted)
 			<-ctx.Done()
 			close(peerCanceled)
+			<-releasePeer
 			return nil
 		},
 	)
+	err := lifecycle.Wait(context.Background())
 	if !errors.Is(err, componentErr) {
-		t.Fatalf("runServingComponents() error = %v, want %v", err, componentErr)
+		t.Fatalf("Wait() error = %v, want %v", err, componentErr)
 	}
 	waitForTestSignal(t, peerCanceled, "peer serving component was not canceled")
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownDone <- lifecycle.Shutdown(context.Background())
+	}()
+	select {
+	case shutdownErr := <-shutdownDone:
+		t.Fatalf("serving lifecycle stopped waiting for its peer: %v", shutdownErr)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(releasePeer)
+	if shutdownErr := waitForTestError(t, shutdownDone, "serving lifecycle did not finish after its peer exited"); shutdownErr != nil {
+		t.Fatalf("Shutdown() error = %v", shutdownErr)
+	}
 }
 
 func TestShutdownRouterComponentsDrainsAcceptedManagementRequestBeforeResources(t *testing.T) {

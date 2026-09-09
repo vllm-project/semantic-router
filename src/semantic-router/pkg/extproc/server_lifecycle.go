@@ -26,6 +26,7 @@ type serverLifecycle struct {
 	watchMu     sync.Mutex
 	watchCancel context.CancelFunc
 	watchDone   chan struct{}
+	reloads     sync.WaitGroup
 }
 
 func (l *serverLifecycle) startWatcher(parent context.Context) (context.Context, func()) {
@@ -59,10 +60,34 @@ func (l *serverLifecycle) beginShutdown() {
 	l.watchMu.Unlock()
 }
 
-func (l *serverLifecycle) waitForWatcher(ctx context.Context) error {
+func (l *serverLifecycle) startReload() (func(), bool) {
+	l.watchMu.Lock()
+	defer l.watchMu.Unlock()
+	if l.stopping.Load() {
+		return nil, false
+	}
+	l.reloads.Add(1)
+	return l.reloads.Done, true
+}
+
+func (l *serverLifecycle) stopAndWaitForBackgroundWork(ctx context.Context) error {
+	l.beginShutdown()
 	l.watchMu.Lock()
 	done := l.watchDone
 	l.watchMu.Unlock()
+	if err := waitForLifecycleDone(ctx, done); err != nil {
+		return err
+	}
+
+	reloadsDone := make(chan struct{})
+	go func() {
+		l.reloads.Wait()
+		close(reloadsDone)
+	}()
+	return waitForLifecycleDone(ctx, reloadsDone)
+}
+
+func waitForLifecycleDone(ctx context.Context, done <-chan struct{}) error {
 	if done == nil {
 		return nil
 	}

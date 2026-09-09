@@ -6,9 +6,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -39,14 +41,13 @@ func (p *blockingWarmupEmbeddingProvider) EmbedBatch(context.Context, []string) 
 func (*blockingWarmupEmbeddingProvider) Dimension() int  { return 1 }
 func (*blockingWarmupEmbeddingProvider) Backend() string { return "test" }
 
-type kubernetesReloadShutdownFixture struct {
+type scheduledReloadShutdownFixture struct {
 	server          *Server
 	resourcesClosed chan struct{}
-	releaseReload   chan struct{}
-	reloadDone      chan error
+	releaseReload   func()
 }
 
-func startKubernetesReloadShutdownFixture(t *testing.T) *kubernetesReloadShutdownFixture {
+func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownFixture {
 	t.Helper()
 	resourcesClosed := make(chan struct{})
 	resources := newResourceScope()
@@ -59,13 +60,32 @@ func startKubernetesReloadShutdownFixture(t *testing.T) *kubernetesReloadShutdow
 	}
 	t.Cleanup(func() { _ = server.service.Close() })
 
-	_, watcherDone := server.lifecycle.startWatcher(context.Background())
+	watchCtx, watcherDone := server.lifecycle.startWatcher(context.Background())
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = watcher.Close() })
 	reloadStarted := make(chan struct{})
-	releaseReload := make(chan struct{})
-	reloadDone := make(chan error, 1)
+	releaseReloadCh := make(chan struct{})
+	var releaseReloadOnce sync.Once
+	releaseReload := func() { releaseReloadOnce.Do(func() { close(releaseReloadCh) }) }
+	t.Cleanup(func() {
+		releaseReload()
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := server.lifecycle.stopAndWaitForBackgroundWork(cleanupCtx); err != nil {
+			t.Errorf("wait for scheduled reload cleanup: %v", err)
+		}
+	})
+	candidateCfg := &config.RouterConfig{}
+	parseReloadConfig = func(string) (*config.RouterConfig, error) {
+		return candidateCfg, nil
+	}
+	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
 	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
 		close(reloadStarted)
-		<-releaseReload
+		<-releaseReloadCh
 		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
 	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
@@ -74,16 +94,22 @@ func startKubernetesReloadShutdownFixture(t *testing.T) *kubernetesReloadShutdow
 	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
 		return nil
 	}
+	configPath := filepath.Join(t.TempDir(), "router.yaml")
+	loop := configFileReloadLoop{server: server, watcher: watcher, cfgFile: configPath}
 	go func() {
 		defer watcherDone()
-		reloadDone <- server.reloadRouterFromConfig("kubernetes", "", &config.RouterConfig{})
+		loop.run(watchCtx)
 	}()
-	<-reloadStarted
-	return &kubernetesReloadShutdownFixture{
+	loop.scheduleReload(watchCtx, fsnotify.Event{Name: configPath, Op: fsnotify.Write})
+	select {
+	case <-reloadStarted:
+	case <-time.After(time.Second):
+		t.Fatal("scheduled reload did not start")
+	}
+	return &scheduledReloadShutdownFixture{
 		server:          server,
 		resourcesClosed: resourcesClosed,
 		releaseReload:   releaseReload,
-		reloadDone:      reloadDone,
 	}
 }
 
@@ -193,10 +219,10 @@ func TestServerShutdownDoesNotCloseResourcesUnderCanceledStartupWarmup(t *testin
 	}
 }
 
-func TestServerShutdownResourcesWaitsForKubernetesReload(t *testing.T) {
+func TestServerShutdownResourcesWaitsForScheduledReload(t *testing.T) {
 	restoreReloadSeams := stubReloadSeams(t)
-	defer restoreReloadSeams()
-	fixture := startKubernetesReloadShutdownFixture(t)
+	t.Cleanup(restoreReloadSeams)
+	fixture := startScheduledReloadShutdownFixture(t)
 
 	if err := fixture.server.ShutdownServing(context.Background()); err != nil {
 		t.Fatalf("ShutdownServing() error = %v", err)
@@ -213,14 +239,10 @@ func TestServerShutdownResourcesWaitsForKubernetesReload(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	close(fixture.releaseReload)
-	reloadErr := <-fixture.reloadDone
+	fixture.releaseReload()
 	shutdownErr := <-shutdownDone
 	if closedDuringReload {
 		t.Fatal("generation resources closed while reload was still running")
-	}
-	if reloadErr != nil {
-		t.Fatalf("reload error = %v", reloadErr)
 	}
 	if shutdownErr != nil {
 		t.Fatalf("ShutdownResources() error = %v", shutdownErr)
@@ -232,10 +254,10 @@ func TestServerShutdownResourcesWaitsForKubernetesReload(t *testing.T) {
 	}
 }
 
-func TestServerShutdownResourcesDoesNotCloseUnderStuckKubernetesReload(t *testing.T) {
+func TestServerShutdownResourcesDoesNotCloseUnderStuckScheduledReload(t *testing.T) {
 	restoreReloadSeams := stubReloadSeams(t)
-	defer restoreReloadSeams()
-	fixture := startKubernetesReloadShutdownFixture(t)
+	t.Cleanup(restoreReloadSeams)
+	fixture := startScheduledReloadShutdownFixture(t)
 
 	if err := fixture.server.ShutdownServing(context.Background()); err != nil {
 		t.Fatalf("ShutdownServing() error = %v", err)
@@ -252,9 +274,9 @@ func TestServerShutdownResourcesDoesNotCloseUnderStuckKubernetesReload(t *testin
 	default:
 	}
 
-	close(fixture.releaseReload)
-	if reloadErr := <-fixture.reloadDone; reloadErr != nil {
-		t.Fatalf("reload error = %v", reloadErr)
+	fixture.releaseReload()
+	if err := fixture.server.lifecycle.stopAndWaitForBackgroundWork(context.Background()); err != nil {
+		t.Fatalf("stopAndWaitForBackgroundWork() error = %v", err)
 	}
 }
 

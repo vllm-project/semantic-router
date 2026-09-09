@@ -325,9 +325,8 @@ func (s *Server) ShutdownResources(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
 		defer cancel()
 	}
-
 	return s.lifecycle.resources.run(func() error {
-		if err := s.lifecycle.waitForWatcher(ctx); err != nil {
+		if err := s.lifecycle.stopAndWaitForBackgroundWork(ctx); err != nil {
 			return err
 		}
 		if s.service != nil {
