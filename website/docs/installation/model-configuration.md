@@ -94,12 +94,14 @@ routing:
       capabilities: [image_generation]
 ```
 
-The protocol capability vocabulary is defined by the `llmprotocol` package.
-The Router recognizes the names it compares during negotiation — for example
-`image_input`, `image_output`, `image_generation`, `audio_output`, `tools`,
-`reasoning`, `streaming`, `structured_json` — and treats a declared name it
-does not recognize as unannotated, judging the model on wire expressibility
-alone.
+The protocol capability vocabulary is defined by the `llmprotocol` package,
+and only task/modality capabilities participate in declaration steering:
+`image_input`, `image_output`, `image_generation`, `audio_input`,
+`audio_output`, `video_input`, `video_output`, `file_input`, `file_output`.
+A declared name outside this set (including transport or accounting fidelity
+like `tools`, `reasoning`, `streaming`, `structured_json`) is treated as
+unannotated for declaration filtering — those are verified against wire codec
+expressibility, not the model declaration.
 
 ## Validate the result
 
