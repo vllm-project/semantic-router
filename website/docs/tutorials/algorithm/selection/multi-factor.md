@@ -154,7 +154,9 @@ multi_factor:
 
 SLO ceilings are enforced only when the corresponding observation is available.
 If every candidate is excluded, `on_no_candidates` chooses `cheapest`, `first`,
-or `fail`.
+or `fail`. `fail` is a strict policy: the Router returns HTTP 503 and never
+substitutes the first configured candidate. Eval dry-runs report the selection
+as unavailable for the same request.
 
 ## Parameters
 

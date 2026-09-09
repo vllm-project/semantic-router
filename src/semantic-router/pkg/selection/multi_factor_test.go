@@ -12,6 +12,7 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -469,6 +470,9 @@ func TestMultiFactor_FailWhenAllSLOExcluded(t *testing.T) {
 	_, err := s.Select(context.Background(), &SelectionContext{CandidateModels: candidates("a", "b")})
 	if err == nil {
 		t.Fatal("expected error when on_no_candidates=fail and all candidates excluded")
+	}
+	if !errors.Is(err, ErrNoEligibleCandidates) {
+		t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
 	}
 }
 

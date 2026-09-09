@@ -380,7 +380,12 @@ func (s *MultiFactorSelector) exceedsSLO(model string, selCtx *SelectionContext)
 func (s *MultiFactorSelector) applyNoCandidatePolicy(selCtx *SelectionContext, cause string, excluded int) (*SelectionResult, error) {
 	switch strings.ToLower(s.config.OnNoCandidates) {
 	case "fail":
-		return nil, fmt.Errorf("multi_factor: all %d candidates excluded by %s", excluded, cause)
+		return nil, fmt.Errorf(
+			"%w: multi_factor excluded all %d candidates by %s",
+			ErrNoEligibleCandidates,
+			excluded,
+			cause,
+		)
 	case "first":
 		c := selCtx.CandidateModels[0]
 		return s.noCandidateResult(c, "all_candidates_excluded_by_"+cause+":first"), nil

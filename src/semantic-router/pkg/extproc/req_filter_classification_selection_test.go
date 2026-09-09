@@ -202,6 +202,36 @@ func TestSelectModelFromCandidatesPropagatesRequestCancellation(t *testing.T) {
 	}
 }
 
+func TestSelectModelFromCandidatesPreservesFailClosedPolicy(t *testing.T) {
+	registry := selection.NewRegistry()
+	policyErr := fmt.Errorf("%w: test policy", selection.ErrNoEligibleCandidates)
+	registry.Register(
+		selection.MethodStatic,
+		selectionResultSelector{err: policyErr},
+	)
+	router := &OpenAIRouter{ModelSelector: registry}
+	requestContext := &RequestContext{}
+
+	selected, _, err := router.selectModelFromCandidates(
+		&selection.SelectionContext{
+			DecisionName:    "strict",
+			CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		},
+		nil,
+		requestContext,
+	)
+
+	if !errors.Is(err, selection.ErrNoEligibleCandidates) {
+		t.Fatalf("error = %v, want ErrNoEligibleCandidates", err)
+	}
+	if selected != nil {
+		t.Fatalf("fail-closed selection returned fallback %#v", selected)
+	}
+	if requestContext.VSRSelectionReasoning != "" {
+		t.Fatalf("fail-closed selection recorded fallback diagnostics %q", requestContext.VSRSelectionReasoning)
+	}
+}
+
 func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)

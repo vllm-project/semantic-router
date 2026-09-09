@@ -256,7 +256,8 @@ The quality lookup uses the candidate's exact reasoning effort and accepts only
 `status: available`:
 
 - `exclude` removes candidates missing that index. The existing
-  `on_no_candidates` policy applies if none remain.
+  `on_no_candidates` policy applies if none remain; `fail` returns HTTP 503
+  without falling back to an unevaluated candidate.
 - `disable_quality` keeps every candidate; if any candidate lacks the selected
   index, the selector disables quality for the entire candidate pool and uses
   only latency, cost, load, and configured SLOs. It never reweights one model
