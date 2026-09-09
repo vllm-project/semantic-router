@@ -68,6 +68,7 @@ func (l *BaseLooper) callModelWithContextGate(
 	)
 }
 
+// startConfidenceModelAttempt validates and dispatches one traced Confidence model call.
 func (l *BaseLooper) startConfidenceModelAttempt(
 	ctx context.Context,
 	baseReq *Request,

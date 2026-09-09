@@ -22,33 +22,39 @@ import (
 )
 
 var (
+	// LooperAttemptsTotal counts terminal attempts by bounded outcome.
 	LooperAttemptsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "llm_looper_attempts_total",
 		Help: "Total Looper attempts by bounded execution outcome.",
 	}, []string{"algorithm", "stage", "status", "reason"})
 
+	// LooperAttemptDuration records end-to-end attempt duration.
 	LooperAttemptDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "llm_looper_attempt_duration_seconds",
 		Help:    "Looper attempt duration in seconds.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"algorithm", "stage", "status"})
 
+	// LooperAttemptFirstByte records time to the first upstream response byte.
 	LooperAttemptFirstByte = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "llm_looper_attempt_first_byte_seconds",
 		Help:    "Looper attempt time to first response byte in seconds.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"algorithm", "stage"})
 
+	// LooperAttemptTokens counts prompt and completion tokens by attempt stage.
 	LooperAttemptTokens = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "llm_looper_attempt_tokens_total",
 		Help: "Total prompt and completion tokens consumed by Looper attempts.",
 	}, []string{"algorithm", "stage", "token_type"})
 
+	// LooperAttemptCost sums configured attempt cost by currency.
 	LooperAttemptCost = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "llm_looper_attempt_cost_total",
 		Help: "Total configured cost of Looper attempts by currency.",
 	}, []string{"algorithm", "stage", "currency"})
 
+	// LooperExecutionDuration records end-to-end Looper execution duration.
 	LooperExecutionDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "llm_looper_execution_duration_seconds",
 		Help:    "End-to-end Looper execution duration in seconds.",
@@ -82,6 +88,7 @@ func RecordLooperAttempt(
 	}
 }
 
+// RecordLooperExecution records one terminal Looper execution.
 func RecordLooperExecution(algorithm, status string, durationSeconds float64) {
 	LooperExecutionDuration.WithLabelValues(algorithm, status).Observe(durationSeconds)
 }

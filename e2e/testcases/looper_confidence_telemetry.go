@@ -29,6 +29,7 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
+// looperConfidenceTraceProbe selects the deterministic Confidence telemetry route.
 const looperConfidenceTraceProbe = "__LOOPER_CONFIDENCE_TRACE_PROBE__"
 
 func init() {

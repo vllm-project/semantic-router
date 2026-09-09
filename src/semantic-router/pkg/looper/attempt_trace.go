@@ -43,8 +43,10 @@ const (
 	maxTraceStringBytes   = 256
 )
 
+// AttemptStatus is the bounded terminal state of one dispatched Looper attempt.
 type AttemptStatus string
 
+// AttemptReason explains the bounded outcome of one Looper attempt.
 type AttemptReason string
 
 const (
@@ -62,6 +64,7 @@ const (
 	AttemptReasonDeadline        AttemptReason = "deadline_exceeded"
 )
 
+// AttemptTrace contains bounded, content-free evidence for one Looper attempt.
 type AttemptTrace struct {
 	Ordinal int    `json:"ordinal"`
 	Stage   string `json:"stage"`
@@ -94,6 +97,7 @@ type AttemptTrace struct {
 	TotalLatencyMs     int64  `json:"total_latency_ms"`
 }
 
+// ExecutionTrace groups bounded attempt evidence for one Looper execution.
 type ExecutionTrace struct {
 	Version             int            `json:"version"`
 	TraceID             string         `json:"trace_id,omitempty"`
@@ -105,6 +109,7 @@ type ExecutionTrace struct {
 	DroppedUsage        TokenUsage     `json:"dropped_usage,omitempty"`
 }
 
+// attemptSpec contains metadata known before an upstream dispatch starts.
 type attemptSpec struct {
 	stage           string
 	role            string
@@ -114,6 +119,7 @@ type attemptSpec struct {
 	pricing         modelpricing.Rates
 }
 
+// attemptResult contains terminal observations used to finish an attempt.
 type attemptResult struct {
 	response        *ModelResponse
 	err             error
@@ -128,12 +134,14 @@ type attemptResult struct {
 
 type attemptTrackerKey struct{}
 
+// attemptTracker owns ordered attempt evidence for one Looper execution.
 type attemptTracker struct {
 	mu          sync.Mutex
 	trace       ExecutionTrace
 	nextOrdinal int
 }
 
+// attemptHandle coordinates timing, span completion, and trace recording.
 type attemptHandle struct {
 	tracker   *attemptTracker
 	ordinal   int
@@ -148,6 +156,7 @@ type attemptHandle struct {
 	once        sync.Once
 }
 
+// newAttemptTracker starts the parent execution span and attaches its tracker to context.
 func newAttemptTracker(ctx context.Context, algorithm string) (*attemptTracker, context.Context, oteltrace.Span) {
 	algorithm = boundedTraceString(algorithm)
 	ctx, span := tracing.StartSpan(ctx, "looper.execute", oteltrace.WithSpanKind(oteltrace.SpanKindInternal))
@@ -166,6 +175,7 @@ func attemptTrackerFromContext(ctx context.Context) *attemptTracker {
 	return tracker
 }
 
+// modelAttemptSpec derives bounded dispatch metadata and optional accounting estimates.
 func modelAttemptSpec(req *Request, stageReq *openai.ChatCompletionNewParams, stage, role, model string) attemptSpec {
 	spec := attemptSpec{stage: stage, role: role, model: model}
 	if reserve := looperOutputTokenReserve(stageReq); reserve > 0 {
@@ -209,6 +219,7 @@ func modelPricingRates(pricing config.ModelPricing) modelpricing.Rates {
 	}
 }
 
+// startAttempt allocates an ordinal, starts a child span, and reserves trace storage.
 func startAttempt(ctx context.Context, spec attemptSpec) (context.Context, *attemptHandle) {
 	tracker := attemptTrackerFromContext(ctx)
 	if tracker == nil {
@@ -253,6 +264,7 @@ func startAttempt(ctx context.Context, spec attemptSpec) (context.Context, *atte
 	return context.WithValue(ctx, attemptTimingKey{}, handle), handle
 }
 
+// finish records one terminal result, emits metrics, and ends the child span exactly once.
 func (a *attemptHandle) finish(result attemptResult) {
 	if a == nil {
 		return
@@ -364,6 +376,7 @@ func (t *attemptTracker) attemptCount() int {
 	return t.nextOrdinal
 }
 
+// snapshot returns an ordered, bounded copy suitable for Replay persistence.
 func (t *attemptTracker) snapshot() ExecutionTrace {
 	if t == nil {
 		return ExecutionTrace{Version: ExecutionTraceVersion}
@@ -387,6 +400,7 @@ func (t *attemptTracker) attemptLocked(ordinal int) *AttemptTrace {
 
 type attemptTimingKey struct{}
 
+// recordAttemptFirstByte records the first response byte once for the active attempt.
 func recordAttemptFirstByte(ctx context.Context) {
 	handle, _ := ctx.Value(attemptTimingKey{}).(*attemptHandle)
 	if handle == nil {
@@ -399,6 +413,7 @@ func recordAttemptFirstByte(ctx context.Context) {
 	handle.mu.Unlock()
 }
 
+// classifyAttemptError maps transport failures to bounded status and reason values.
 func classifyAttemptError(err error) (AttemptStatus, AttemptReason) {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -410,6 +425,7 @@ func classifyAttemptError(err error) (AttemptStatus, AttemptReason) {
 	}
 }
 
+// attemptReasonFromError maps an error to a bounded reason without storing its text.
 func attemptReasonFromError(err error) AttemptReason {
 	if err == nil {
 		return ""
@@ -426,6 +442,7 @@ func attemptReasonFromError(err error) AttemptReason {
 	}
 }
 
+// boundExecutionTrace enforces attempt count and serialized-size limits.
 func boundExecutionTrace(trace ExecutionTrace) ExecutionTrace {
 	bounded := trace
 	bounded.Attempts = nil
@@ -488,6 +505,7 @@ func attemptCurrency(spec attemptSpec) string {
 	return spec.pricing.Currency
 }
 
+// estimatedAttemptCost prices the estimated input and reserved output tokens.
 func estimatedAttemptCost(spec attemptSpec) *float64 {
 	if !spec.pricing.IsConfigured() || spec.estimatedTokens == nil {
 		return nil

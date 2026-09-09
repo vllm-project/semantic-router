@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
+// looperReplayDiagnostics projects runtime attempt evidence into the Replay schema.
 func looperReplayDiagnostics(trace looper.ExecutionTrace) *routerreplay.LooperDiagnostics {
 	if trace.Version == 0 {
 		return nil
