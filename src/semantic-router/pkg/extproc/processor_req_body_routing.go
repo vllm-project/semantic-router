@@ -280,18 +280,26 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	return response, nil
 }
 
-// A ProtocolError is a client error, so it is returned unwrapped for
-// processBodyRoutingError to turn into a clean 400. status.Errorf formats with
-// Sprintf, which would flatten it and hide it from errors.As.
+// processBodyRoutingError answers every ProtocolError it recognizes with HTTP
+// 400, so only client-owned categories may reach it unwrapped. status.Errorf
+// formats with Sprintf, which flattens the error and hides it from errors.As,
+// keeping server-owned categories on the internal path where they belong.
 func dispatchWireError(err error, ctx *RequestContext, reason string) error {
 	var protocolError *llmprotocol.ProtocolError
-	if errors.As(err, &protocolError) {
+	if errors.As(err, &protocolError) && isClientProtocolError(protocolError.Category) {
 		if ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
 		}
 		return err
 	}
 	return status.Errorf(codes.Internal, "%s: %v", reason, err)
+}
+
+// Categories a caller can fix by changing the request. Everything else,
+// including ErrorInternal and the upstream categories, is a server fault.
+func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
+	return category == llmprotocol.ErrorInvalidRequest ||
+		category == llmprotocol.ErrorUnsupportedFeature
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
