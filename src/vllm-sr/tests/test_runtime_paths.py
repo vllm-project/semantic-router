@@ -376,3 +376,52 @@ def test_materialize_uses_custom_host_state_without_container_path_leak(
 
     assert active == state_root / ".vllm-sr" / "runtime-config.audit-a.yaml"
     assert not (source.parent / ".vllm-sr").exists()
+
+
+def test_container_readable_state_reader_does_not_revoke_relaxed_mode(
+    tmp_path: Path,
+):
+    # Regression: reading a 0644 secret must not chmod it back to 0600.
+    target = tmp_path / "secret"
+    runtime_paths.write_private_state_bytes(
+        target,
+        b"value\n",
+        mode=runtime_paths.CONTAINER_READABLE_STATE_FILE_MODE,
+    )
+    assert stat.S_IMODE(target.stat().st_mode) == 0o644
+
+    data = runtime_paths.read_container_readable_state_bytes(target)
+
+    assert data == b"value\n"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o644
+
+
+def test_container_readable_state_reader_accepts_an_owner_only_file(
+    tmp_path: Path,
+):
+    target = tmp_path / "secret"
+    runtime_paths.write_private_state_bytes(target, b"value\n")
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+    data = runtime_paths.read_container_readable_state_bytes(target)
+
+    assert data == b"value\n"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_container_readable_state_reader_returns_none_for_a_missing_file(
+    tmp_path: Path,
+):
+    target = tmp_path / "absent"
+    assert runtime_paths.read_container_readable_state_bytes(target) is None
+
+
+def test_container_readable_state_reader_rejects_an_unexpected_mode(
+    tmp_path: Path,
+):
+    target = tmp_path / "secret"
+    runtime_paths.write_private_state_bytes(target, b"value\n")
+    os.chmod(target, 0o666)
+
+    with pytest.raises(ValueError, match="unexpected permissions"):
+        runtime_paths.read_container_readable_state_bytes(target)

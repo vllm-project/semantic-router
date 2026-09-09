@@ -282,6 +282,7 @@ def _start_vllm_sr_locked(
         dashboard_disabled,
         enable_observability,
         started_backends=started_backends,
+        state_root_dir=state_root_dir,
     )
 
 
