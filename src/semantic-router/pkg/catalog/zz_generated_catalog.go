@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:0ec4a5b682f7ef3a184047a8f1e6b8c6908a030411d3e58fac5303e97bc238d1"
+const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -93636,9 +93636,15 @@ const builtInCatalogJSON = `{
           }
         }
       ],
+      "operation_overrides": {
+        "openai/responses@1#create": {
+          "absolute_path": true,
+          "path": "/openai/v1/responses",
+          "suppress_api_version": true
+        }
+      },
       "path_overrides": {
-        "openai/chat-completions@1#create": "/chat/completions",
-        "openai/responses@1#create": "/responses"
+        "openai/chat-completions@1#create": "/chat/completions"
       },
       "presentation": {
         "featured": true,
