@@ -162,7 +162,6 @@ search:
 
 development:
   auto_create_collection: true
-  verbose_errors: true
 `
 					err := os.WriteFile(milvusConfigPath, []byte(milvusConfig), 0o644)
 					Expect(err).NotTo(HaveOccurred())
@@ -252,7 +251,6 @@ search:
   consistency_level: "Session"
 development:
   auto_create_collection: true
-  verbose_errors: true
 `
 					err := yaml.Unmarshal([]byte(yamlConfig), &milvusConfig)
 					Expect(err).NotTo(HaveOccurred())
@@ -318,14 +316,9 @@ index:
 search:
   topk: 1
 
-logging:
-  enable_query_log: false
-  enable_metrics: false
-
 development:
   drop_index_on_startup: true
   auto_create_index: true
-  verbose_errors: true
 `
 					err := os.WriteFile(redisConfigPath, []byte(redisConfig), 0o644)
 					Expect(err).NotTo(HaveOccurred())
@@ -416,12 +409,9 @@ search:
   topk: 1
 logging:
   level: "info"
-  enable_query_log: false
-  enable_metrics: true
 development:
   drop_index_on_startup: true
   auto_create_index: true
-  verbose_errors: true
 `
 					err := yaml.Unmarshal([]byte(yamlConfig), &redisConfig)
 					Expect(err).NotTo(HaveOccurred())

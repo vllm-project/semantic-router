@@ -437,6 +437,22 @@ routing:
               name: long_context
             - type: domain
               name: "computer science"
+      - name: deep_synthesis
+        # The explicit boundary pair, the asymmetric form of `threshold`: the
+        # two verdicts do not have to sit the same distance from the middle.
+        # hard_above with easy_below reads in the direction the local margin
+        # runs, where a higher score is harder.
+        hard_above: 0.25
+        easy_below: -0.05
+        description: Escalate synthesis-heavy prompts, with a wider medium band than needs_reasoning.
+        hard:
+          candidates:
+            - synthesise these sources into one argument
+            - reconcile the conflicting requirements
+        easy:
+          candidates:
+            - list the headings
+            - restate this sentence
 
     modality:
       - name: AR
@@ -480,6 +496,16 @@ routing:
         direction: response
         threshold: 0.85
         description: Detect jailbreak content in the model's own output.
+
+    # Hallucination rules check the model's answer against the grounding
+    # context the request carried (tool results or retrieved context), so they
+    # only exist once the model has answered; the selected decision's
+    # hallucination plugin enforces on them. use_nli asks the detector for
+    # span-level NLI explanations.
+    hallucination:
+      - name: ungrounded_claims
+        use_nli: true
+        description: Detect claims the grounding context does not support.
 
     pii:
       - name: restricted_pii
@@ -724,6 +750,23 @@ routing:
       algorithm:
         type: static
       plugins:
+        # Shadow a candidate model on a small sample of this route's traffic.
+        # The primary response never waits on or changes because of the shadow.
+        - type: shadow_dispatch
+          configuration:
+            enabled: true
+            model: qwen3-32b
+            sample_rate: 0.05
+            max_concurrency: 2
+            max_queue_depth: 8
+            timeout_seconds: 30
+            max_response_bytes: 1048576
+            max_retries: 0
+            capture_response_body: false
+            max_capture_bytes: 4096
+            tls_skip_verify: false
+            # Decision header mutations reach the shadow only when listed here.
+            forward_headers: []
         - type: system_prompt
           configuration:
             enabled: true
@@ -1939,30 +1982,11 @@ global:
             ef: 64
           topk: 10
           consistency_level: Bounded
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 128
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
         logging:
           level: info
-          enable_query_log: true
-          enable_metrics: true
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: true
     memory:
       enabled: true
       backend: milvus
@@ -2010,10 +2034,6 @@ global:
       hybrid_search: true
       hybrid_mode: rerank
       adaptive_threshold: true
-      quality_scoring:
-        initial_strength_days: 30
-        prune_threshold: 0.15
-        max_memories_per_user: 200
       reflection:
         enabled: true
         algorithm: recency_semantic
@@ -2065,30 +2085,11 @@ global:
             ef: 64
           topk: 10
           consistency_level: Strong
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 64
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
         logging:
           level: info
-          enable_query_log: true
-          enable_metrics: true
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: true
       memory:
         max_entries_per_store: 5000
       llama_stack:

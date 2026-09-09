@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import type { CatalogProvider } from '../types/modelCatalog'
 import {
   filterModelProviderPresets,

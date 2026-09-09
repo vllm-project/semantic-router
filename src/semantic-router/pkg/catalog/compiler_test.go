@@ -62,6 +62,20 @@ func TestBuiltInRegistryOwnsProviderProtocolAndPresentation(t *testing.T) {
 	}
 }
 
+func TestRegistryRejectsPersistedPlaceholderIndexResults(t *testing.T) {
+	document := snapshot{
+		SchemaVersion: "vllm-sr/model-catalog/v2",
+		Catalogs:      []CatalogHeader{{CatalogVersion: "latest"}},
+		IndexResults: []IndexResult{{
+			Model: "acme/model", Index: "acme/index@1.0.0", Status: "missing",
+		}},
+	}
+	if _, err := registryFromSnapshot(document, "sha256:test"); err == nil ||
+		!strings.Contains(err.Error(), "placeholder index result") {
+		t.Fatalf("persisted placeholder index result was accepted: %v", err)
+	}
+}
+
 func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -155,8 +169,8 @@ func TestDeepSeekV4HasEffortIsolatedEvaluationAndProviderBindings(t *testing.T) 
 func assertDeepSeekModelSupport(t *testing.T, registry *Registry, modelID string) {
 	t.Helper()
 	defaultResult, ok := registry.IndexResult(modelID, "vllm-sr/intelligence@1.0.0")
-	if !ok || defaultResult.ReasoningEffort != "high" || defaultResult.Status != "missing" || defaultResult.Score != nil {
-		t.Fatalf("%s default-effort result must not borrow max-effort evidence: %+v", modelID, defaultResult)
+	if ok {
+		t.Fatalf("%s default-effort result must be absent without sufficient evidence: %+v", modelID, defaultResult)
 	}
 	result, ok := registry.IndexResultForEffort(modelID, "max", "vllm-sr/intelligence@1.0.0")
 	if !ok || result.Status != "available" || result.Score == nil || result.Coverage != 1 {
@@ -246,28 +260,6 @@ func assertProviderBindingRelationships(
 			}
 		}
 	}
-}
-
-func TestEvaluationCoverageReturnsDefensiveValues(t *testing.T) {
-	registry, err := BuiltIn()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	coverage := registry.EvaluationCoverage()
-	for index := range coverage {
-		if coverage[index].Value == nil {
-			continue
-		}
-		original := *coverage[index].Value
-		*coverage[index].Value = original + 1
-		reloaded := registry.EvaluationCoverage()
-		if reloaded[index].Value == nil || *reloaded[index].Value != original {
-			t.Fatalf("registry coverage value was mutated: got %+v, want %v", reloaded[index].Value, original)
-		}
-		return
-	}
-	t.Fatal("built-in evaluation coverage has no available values")
 }
 
 func TestCompileCustomRuntimeCardAndBuiltInReasoning(t *testing.T) {

@@ -1,6 +1,26 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"time"
+)
+
+const DefaultExternalRAGTimeoutSeconds = 30
+
+const DefaultOpenAIRAGTimeoutSeconds = 60
+
+const MaxRAGTimeoutSeconds = math.MaxInt64 / int64(time.Second)
+
+func ragTimeout(seconds *int, defaultSeconds int) time.Duration {
+	if seconds == nil || *seconds <= 0 {
+		return time.Duration(defaultSeconds) * time.Second
+	}
+	if int64(*seconds) > MaxRAGTimeoutSeconds {
+		return time.Duration(MaxRAGTimeoutSeconds) * time.Second
+	}
+	return time.Duration(*seconds) * time.Second
+}
 
 // MilvusRAGConfig represents configuration for Milvus-based RAG retrieval.
 type MilvusRAGConfig struct {
@@ -22,6 +42,10 @@ type ExternalAPIRAGConfig struct {
 	Headers          map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
 }
 
+func (c *ExternalAPIRAGConfig) GetTimeout() time.Duration {
+	return ragTimeout(c.TimeoutSeconds, DefaultExternalRAGTimeoutSeconds)
+}
+
 // MCPRAGConfig represents configuration for MCP-based RAG retrieval.
 type MCPRAGConfig struct {
 	ServerName     string             `json:"server_name" yaml:"server_name"`
@@ -41,6 +65,10 @@ type OpenAIRAGConfig struct {
 	Filter           *StructuredPayload `json:"filter,omitempty" yaml:"filter,omitempty"`
 	TimeoutSeconds   *int               `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
 	WorkflowMode     string             `json:"workflow_mode,omitempty" yaml:"workflow_mode,omitempty"`
+}
+
+func (c *OpenAIRAGConfig) GetTimeout() time.Duration {
+	return ragTimeout(c.TimeoutSeconds, DefaultOpenAIRAGTimeoutSeconds)
 }
 
 // HybridRAGConfig represents configuration for hybrid RAG with multiple backends.

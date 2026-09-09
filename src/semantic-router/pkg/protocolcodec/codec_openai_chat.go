@@ -68,6 +68,7 @@ type chatRequestWire struct {
 	TopLogprobs          json.RawMessage        `json:"top_logprobs,omitempty"`
 	Verbosity            json.RawMessage        `json:"verbosity,omitempty"`
 	WebSearchOptions     json.RawMessage        `json:"web_search_options,omitempty"`
+	ChatTemplateKwargs   json.RawMessage        `json:"chat_template_kwargs,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -243,7 +244,8 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 			Temperature: wire.Temperature, TopP: wire.TopP, Seed: wire.Seed,
 			FrequencyPenalty: wire.FrequencyPenalty, PresencePenalty: wire.PresencePenalty,
 		},
-		Trusted: llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
+		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
+		ChatTemplateKwargs: wire.ChatTemplateKwargs,
 	}
 	if wire.StreamOptions != nil {
 		request.StreamOptions = llmprotocol.StreamOptions{

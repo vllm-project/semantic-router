@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { getBuiltInModelCatalog } from '../utils/modelCatalogApi'
 

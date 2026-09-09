@@ -47,12 +47,15 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
 	// decision carries a plugin; the plugins below then consume it.
-	r.evaluateResponseJailbreakSignal(ctx, semanticAssistantContent(semanticResponse))
+	assistantContent := semanticAssistantContent(semanticResponse)
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
 
 	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
 	// Recorded before a block returns, so a blocked response leaves the same
 	// evidence in Router Replay as a delivered one.
 	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 	if jailbreakResponse != nil {
 		return jailbreakResponse
 	}
@@ -129,19 +132,26 @@ func appendNonEmpty(codes []string, code string) []string {
 	return append(codes, code)
 }
 
-// addResponseStageSignalHeaders rewrites x-vsr-matched-jailbreak in the body
-// phase once the response-direction rules have been scored. The response
-// headers phase wrote the request-stage matches before the body existed, so
-// the debug header would otherwise never show a response-stage match. Same
-// gate as the request-stage signal headers: only when debug is requested.
+// addResponseStageSignalHeaders writes the response-stage matches in the body
+// phase: x-vsr-matched-jailbreak is rewritten once the response-direction
+// rules have been scored, and x-vsr-matched-hallucination is written once the
+// answer has been checked. The response headers phase wrote the request-stage
+// matches before the body existed, so the debug headers would otherwise never
+// show a response-stage match. Same gate as the request-stage signal headers:
+// only when debug is requested.
 func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || len(ctx.VSRMatchedResponseJailbreak) == 0 || !debugHeadersRequested(ctx) {
+	if ctx == nil || !debugHeadersRequested(ctx) {
 		return
 	}
-	matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
-	matched = append(matched, ctx.VSRMatchedJailbreak...)
-	matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
-	setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
+		matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
+		matched = append(matched, ctx.VSRMatchedJailbreak...)
+		matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	}
+	if len(ctx.VSRMatchedHallucination) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(ctx.VSRMatchedHallucination, ","))
+	}
 }
 
 // setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header

@@ -1,5 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
+import { useHistory, useLocation } from '@docusaurus/router'
+import Translate from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
+import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
 import { ModelHubBenchmark } from '../components/model-hub/ModelHubBenchmark'
@@ -24,10 +27,31 @@ import {
   modelHubDirectoryDefaults,
   type ModelHubDirectoryFilters,
 } from '../data/modelHubDirectorySupport'
+import {
+  parseModelHubUrlState,
+  serializeModelHubUrlState,
+  type ModelHubBenchmarkUrlState,
+  type ModelHubUrlState,
+} from '../data/modelHubUrlState'
 import styles from './models.module.css'
 
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
+const MODEL_HUB_SECTIONS = [
+  { key: 'models', label: 'Models' },
+  { key: 'benchmarks', label: 'Benchmarks' },
+  { key: 'providers', label: 'Providers' },
+] as const
+
+type UpdateModelHubUrlState = (
+  updater: (current: ModelHubUrlState) => ModelHubUrlState,
+  push?: boolean,
+) => void
+
+function modelHubActiveSection(hash: string): string {
+  const id = hash.replace('#', '')
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
+}
 
 const supportedLifecycle = (
   model: CatalogModel,
@@ -65,10 +89,11 @@ function availableEvaluations(): Map<string, CatalogEvaluation[]> {
   return grouped
 }
 
-function useCatalogDirectory() {
-  const [filters, setFilters] = useState(modelHubDirectoryDefaults)
-  const [view, setView] = useState<ModelView>('list')
-  const [page, setPage] = useState(1)
+function useCatalogDirectory(
+  urlState: ModelHubUrlState,
+  updateUrlState: UpdateModelHubUrlState,
+) {
+  const { filters, view } = urlState
   const providersByModel = useMemo(modelBindings, [])
   const evaluationsByModel = useMemo(availableEvaluations, [])
   const publishers = useMemo(
@@ -125,24 +150,34 @@ function useCatalogDirectory() {
         )
       })
   }, [filters, providersByModel])
-  const updateFilters = (patch: Partial<ModelHubDirectoryFilters>) => {
-    setFilters(current => ({ ...current, ...patch }))
-    setPage(1)
-  }
   const pageCount = Math.max(1, Math.ceil(models.length / MODEL_PAGE_SIZE))
+  const page = Math.min(urlState.page, pageCount)
   const pageModels = models.slice((page - 1) * MODEL_PAGE_SIZE, page * MODEL_PAGE_SIZE)
+  const updateFilters = (patch: Partial<ModelHubDirectoryFilters>) =>
+    updateUrlState(current => ({
+      ...current,
+      filters: { ...current.filters, ...patch },
+      page: 1,
+    }))
 
   return {
     filters,
     updateFilters,
-    resetFilters: () => {
-      setFilters(modelHubDirectoryDefaults)
-      setPage(1)
-    },
+    resetFilters: () => updateUrlState(current => ({
+      ...current,
+      filters: modelHubDirectoryDefaults,
+      page: 1,
+    })),
     view,
-    setView,
+    setView: (nextView: ModelView) => updateUrlState(current => ({
+      ...current,
+      view: nextView,
+    })),
     page,
-    setPage,
+    setPage: (nextPage: number) => updateUrlState(current => ({
+      ...current,
+      page: nextPage,
+    })),
     pageCount,
     pageModels,
     models,
@@ -154,7 +189,10 @@ function useCatalogDirectory() {
   }
 }
 
-function useBenchmarkExplorer() {
+function useBenchmarkExplorer(
+  benchmarkState: ModelHubBenchmarkUrlState,
+  updateUrlState: UpdateModelHubUrlState,
+) {
   const allCharts = useMemo(() => modelHubBenchmarkCharts(catalog), [])
   const colors = useMemo(
     () =>
@@ -164,9 +202,7 @@ function useBenchmarkExplorer() {
       ),
     [],
   )
-  const [benchmarkFilter, setBenchmarkFilter] = useState('all')
-  const [query, setQuery] = useState('')
-  const [publisher, setPublisher] = useState('all')
+  const { filter: benchmarkFilter, query, publisher } = benchmarkState
   const benchmarkFilters = useMemo(() => {
     const tagCounts = new Map<string, number>()
     const domainCounts = new Map<string, number>()
@@ -245,25 +281,48 @@ function useBenchmarkExplorer() {
     chartCount: allCharts.length,
     filters: benchmarkFilters,
     filter: activeBenchmarkFilter,
-    setFilter: setBenchmarkFilter,
+    setFilter: (filter: string) => updateUrlState(current => ({
+      ...current,
+      benchmark: { ...current.benchmark, filter },
+    })),
     query,
-    setQuery,
+    setQuery: (nextQuery: string) => updateUrlState(current => ({
+      ...current,
+      benchmark: { ...current.benchmark, query: nextQuery },
+    })),
     publisher: activePublisher,
-    setPublisher,
+    setPublisher: (nextPublisher: string) => updateUrlState(current => ({
+      ...current,
+      benchmark: { ...current.benchmark, publisher: nextPublisher },
+    })),
     publishers,
   }
 }
 
 export default function ModelsPage() {
-  const directory = useCatalogDirectory()
-  const [selectedModelID, setSelectedModelID] = useState<string | null>(null)
+  const history = useHistory()
+  const location = useLocation()
+  const urlState = useMemo(
+    () => parseModelHubUrlState(location.search),
+    [location.search],
+  )
+  const updateUrlState = useCallback<UpdateModelHubUrlState>((updater, push = false) => {
+    const current = parseModelHubUrlState(location.search)
+    const nextSearch = serializeModelHubUrlState(updater(current), location.search)
+    const nextLocation = `${location.pathname}${nextSearch}${location.hash}`
+    if (push) history.push(nextLocation)
+    else history.replace(nextLocation)
+  }, [history, location.hash, location.pathname, location.search])
+  const directory = useCatalogDirectory(urlState, updateUrlState)
   const modelByID = useMemo(() => new Map(catalog.models.map(model => [model.id, model])), [])
   const reasoningFamilies = useMemo(
     () => new Map(catalog.reasoning_families.map(family => [family.id, family])),
     [],
   )
-  const benchmark = useBenchmarkExplorer()
-  const selectedModel = selectedModelID ? modelByID.get(selectedModelID) : undefined
+  const benchmark = useBenchmarkExplorer(urlState.benchmark, updateUrlState)
+  const selectedModel = urlState.selectedModelID
+    ? modelByID.get(urlState.selectedModelID)
+    : undefined
   const selectedProviders = selectedModel
     ? (directory.providersByModel.get(selectedModel.id) ?? [])
     : []
@@ -275,13 +334,24 @@ export default function ModelsPage() {
   const selectedFamily = selectedModel?.reasoning_family
     ? reasoningFamilies.get(selectedModel.reasoning_family)
     : undefined
-  const closeModelDetail = useCallback(() => setSelectedModelID(null), [])
+  const selectModel = useCallback((selectedModelID: string) => {
+    updateUrlState(current => ({ ...current, selectedModelID }), true)
+  }, [updateUrlState])
+  const closeModelDetail = useCallback(() => {
+    updateUrlState(current => ({ ...current, selectedModelID: null }))
+  }, [updateUrlState])
+  const sections = useMemo(
+    () => MODEL_HUB_SECTIONS.map(section => ({
+      ...section,
+      to: `${location.pathname}${location.search}#${section.key}`,
+    })),
+    [location.pathname, location.search],
+  )
   const physicalModels = catalog.models.filter(model => model.kind === 'physical').length
   const virtualModels = catalog.models.length - physicalModels
   const creators = new Set(
     catalog.models.filter(model => model.kind === 'physical').map(model => model.publisher),
   ).size
-  const mappedProviders = catalog.providers.filter(provider => provider.models?.length).length
   const evaluations = modelHubPublicEvaluations(catalog.evaluations).length
 
   return (
@@ -289,73 +359,81 @@ export default function ModelsPage() {
       title="Model Hub"
       description="Built-in models and exact benchmark evidence for vLLM Semantic Router."
     >
-      <main className={styles.page}>
-        <header className={styles.pageHeader}>
-          <div>
-            <h1>Model Hub</h1>
-            <p>Models, ready to route.</p>
-          </div>
-          <dl>
-            <div>
-              <dd>{catalog.models.length}</dd>
-              <dt>models</dt>
-            </div>
-            <div>
-              <dd>{creators}</dd>
-              <dt>creators</dt>
-            </div>
-            <div>
-              <dd>{mappedProviders}</dd>
-              <dt>mapped providers</dt>
-            </div>
-            <div>
-              <dd>{evaluations}</dd>
-              <dt>evaluations</dt>
-            </div>
-          </dl>
-        </header>
+      <div className={styles.page}>
+        <BrowseLayout
+          activeKey={modelHubActiveSection(location.hash)}
+          description="Models, ready to route."
+          eyebrow={<Translate id="models.layout.eyebrow">Catalog</Translate>}
+          groups={[
+            {
+              key: 'explore',
+              label: 'Explore',
+              items: sections,
+            },
+          ]}
+          sidebarLabel="Model Hub sections"
+          title="Model Hub"
+          actions={(
+            <dl className={styles.stats}>
+              <div>
+                <dd>{catalog.models.length}</dd>
+                <dt>models</dt>
+              </div>
+              <div>
+                <dd>{creators}</dd>
+                <dt>creators</dt>
+              </div>
+              <div>
+                <dd>{catalog.providers.length}</dd>
+                <dt>providers</dt>
+              </div>
+              <div>
+                <dd>{evaluations}</dd>
+                <dt>evaluations</dt>
+              </div>
+            </dl>
+          )}
+        >
+          <section id="models" className={styles.section} aria-labelledby="models-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="models-heading">Models</h2>
+              <span>
+                {physicalModels}
+                {' '}
+                single ·
+                {' '}
+                {virtualModels}
+                {' '}
+                virtual
+              </span>
+            </header>
+            <ModelHubDirectory
+              {...directory}
+              pageSize={MODEL_PAGE_SIZE}
+              selectModel={selectModel}
+            />
+          </section>
 
-        <section id="models" className={styles.section} aria-labelledby="models-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="models-heading">Models</h2>
-            <span>
-              {physicalModels}
-              {' '}
-              single ·
-              {virtualModels}
-              {' '}
-              virtual
-            </span>
-          </header>
-          <ModelHubDirectory
-            {...directory}
-            pageSize={MODEL_PAGE_SIZE}
-            selectModel={setSelectedModelID}
-          />
-        </section>
+          <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="benchmarks-heading">Benchmarks</h2>
+              <span>Exact published results</span>
+            </header>
+            <ModelHubBenchmark {...benchmark} selectModel={selectModel} />
+          </section>
 
-        <section id="benchmarks" className={styles.section} aria-labelledby="benchmarks-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="benchmarks-heading">Benchmarks</h2>
-            <span>Exact published results</span>
-          </header>
-          <ModelHubBenchmark {...benchmark} selectModel={setSelectedModelID} />
-        </section>
-
-        <section id="providers" className={styles.section} aria-labelledby="providers-heading">
-          <header className={styles.sectionHeading}>
-            <h2 id="providers-heading">Providers</h2>
-            <span>
-              {mappedProviders}
-              {' '}
-              mapped ·
-              {catalog.providers.length}
-              {' '}
-              runtime contracts
-            </span>
-          </header>
-          <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />
-        </section>
+          <section id="providers" className={styles.section} aria-labelledby="providers-heading">
+            <header className={styles.sectionHeading}>
+              <h2 id="providers-heading">Providers</h2>
+              <span>
+                {catalog.providers.length}
+                {' '}
+                available providers
+              </span>
+            </header>
+            <ModelHubProviders providers={catalog.providers} protocols={catalog.protocols} />
+          </section>
+        </BrowseLayout>
 
         {selectedModel
           ? (
@@ -370,7 +448,7 @@ export default function ModelsPage() {
               />
             )
           : null}
-      </main>
+      </div>
     </Layout>
   )
 }
