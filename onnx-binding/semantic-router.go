@@ -105,6 +105,13 @@ extern int calculate_embedding_similarity(const char* text1, const char* text2, 
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -148,6 +155,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -378,6 +386,39 @@ func GetEmbedding(text string, maxLength int) ([]float32, error) {
 		return nil, err
 	}
 	return output.Embedding, nil
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns overlapping byte ranges using the loaded ONNX embedding
+// model's tokenizer and context limit. A positive maxLength can lower that limit.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if len(text) > math.MaxInt32 || maxLength > math.MaxInt32 || strings.IndexByte(text, 0) >= 0 {
+		return nil, errors.New("invalid text or maximum length for ONNX text windows")
+	}
+	if maxLength < 0 {
+		maxLength = 0
+	}
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if result.error {
+		return nil, errors.New("ONNX embedding model unavailable or text windowing failed")
+	}
+	if result.window_count == 0 {
+		return nil, nil
+	}
+	offsets := unsafe.Slice(result.offsets, int(result.window_count)*2)
+	windows := make([]TextWindow, int(result.window_count))
+	for i := range windows {
+		windows[i] = TextWindow{Start: int(offsets[2*i]), End: int(offsets[2*i+1])}
+	}
+	return windows, nil
 }
 
 // GetEmbeddingDefault generates an embedding with default settings

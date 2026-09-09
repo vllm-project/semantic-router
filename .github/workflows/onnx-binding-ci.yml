@@ -1,0 +1,50 @@
+name: ONNX Binding CI
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Binding tests and router build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: src/semantic-router/go.onnx.sum
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libssl-dev
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-onnx-cargo-${{ hashFiles('onnx-binding/Cargo.lock', 'ml-binding/Cargo.lock', 'nlp-binding/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-onnx-cargo-
+
+      - name: Test ONNX tokenizer windows and Go FFI
+        run: make test-onnx-binding
+
+      - name: Build router with the ONNX replacement module
+        run: make test-onnx-router-build

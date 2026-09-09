@@ -132,6 +132,15 @@ jobs:
       && needs.changes.outputs.openvino == 'true'
     uses: ./.github/workflows/openvino-binding-ci.yml
 
+  onnx:
+    name: ONNX
+    needs: changes
+    if: >-
+      (!github.event.pull_request.draft
+        || startsWith(github.head_ref, 'mergify/merge-queue/'))
+      && needs.changes.outputs.onnx == 'true'
+    uses: ./.github/workflows/onnx-binding-ci.yml
+
   images:
     name: Images
     needs: changes
@@ -187,6 +196,7 @@ jobs:
       - memory
       - recipe-conformance
       - openvino
+      - onnx
       - images
       - performance
       - router-learning

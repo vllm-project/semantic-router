@@ -16,6 +16,10 @@ jobs:
     workflow: .github/workflows/test-and-build.yml
     output: core_test
     full: true
+  onnx:
+    workflow: .github/workflows/onnx-binding-ci.yml
+    output: onnx
+    full: true
   dashboard:
     workflow: .github/workflows/dashboard-test.yml
     output: dashboard
@@ -111,10 +115,21 @@ domains:
       - candle-binding/**
       - ml-binding/**
       - nlp-binding/**
-      - onnx-binding/**
     checks: [make test-binding-minimal]
     verify: [make test-binding-lora]
     ci_jobs: [core-tests]
+
+  onnx-binding:
+    owner: native-bindings
+    paths:
+      - onnx-binding/**
+      - candle-binding/semantic-router.go
+      - src/semantic-router/go.onnx.mod
+      - src/semantic-router/go.onnx.sum
+      - e2e/testcases/testdata/image-fixtures/*.jpg
+      - tools/make/onnx.mk
+    checks: [make test-onnx-binding]
+    ci_jobs: [onnx]
 
   ck-flash-attn-rewriter:
     owner: native-bindings

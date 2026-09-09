@@ -68,6 +68,11 @@ jobs:
     if: needs.changes.outputs.openvino == 'true'
     uses: ./.github/workflows/openvino-binding-ci.yml
 
+  onnx:
+    needs: changes
+    if: needs.changes.outputs.onnx == 'true'
+    uses: ./.github/workflows/onnx-binding-ci.yml
+
   gate:
     name: Main validation gate
     if: always()
@@ -82,6 +87,7 @@ jobs:
       - cli
       - recipe-conformance
       - openvino
+      - onnx
     runs-on: ubuntu-latest
     steps:
       - name: Verify affected domains

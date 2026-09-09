@@ -64,6 +64,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             ".github/workflows/operator-ci.yml": "operator",
             ".github/workflows/integration-test-memory.yml": "memory",
             ".github/workflows/openvino-binding-ci.yml": "openvino",
+            ".github/workflows/onnx-binding-ci.yml": "onnx",
         }
         for path, selected in fixtures.items():
             with self.subTest(path=path):
@@ -84,6 +85,29 @@ class PRChangeClassifierTests(unittest.TestCase):
         self.assertEqual(result.profiles, ())
         self.assertEqual(result.pr_images, ())
         self.assertEqual(result.publish_images, ())
+
+    def test_onnx_source_and_unit_tests_select_binding_ci_without_images(self) -> None:
+        for path in (
+            "onnx-binding/src/core/text_windows.rs",
+            "onnx-binding/src/core/text_windows_test.rs",
+            "onnx-binding/text_windows_test.go",
+            "onnx-binding/Cargo.lock",
+            "tools/make/onnx.mk",
+        ):
+            with self.subTest(path=path):
+                self.assert_classification(path, ("quality", "security", "onnx"))
+                self.assertTrue(classify([path]).signals["onnx"])
+
+    def test_candle_api_and_onnx_module_changes_keep_replacement_coverage(self) -> None:
+        for path in (
+            "candle-binding/semantic-router.go",
+            "src/semantic-router/go.onnx.mod",
+            "src/semantic-router/go.onnx.sum",
+        ):
+            with self.subTest(path=path):
+                self.assert_classification(
+                    path, ("quality", "security", "core-tests", "onnx")
+                )
 
     def test_actual_e2e_test_selects_its_named_profile(self) -> None:
         result = classify(["e2e/testcases/istio_routes_test.go"])
@@ -125,7 +149,7 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertEqual(
             result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e", "recipe-conformance"),
+            ("quality", "security", "core-tests", "onnx", "e2e", "recipe-conformance"),
         )
         self.assertEqual(
             result.profiles,
