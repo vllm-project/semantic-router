@@ -2,6 +2,7 @@ package sessiontelemetry
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -433,6 +434,85 @@ func TestRecordTurnOutcomeDelayedArrivalStaysOrderedAndExpires(t *testing.T) {
 	window = mustWindow(t, sessionID, fixedBase.Add(18*time.Minute))
 	if len(window) != 1 || window[0].TurnIndex != 2 {
 		t.Fatalf("expired delayed outcome survived: %+v", window)
+	}
+}
+
+// 12. The two writers' views of one turn merge into a single fact: the ingest
+// verdict owns the category, response capture owns the usage measurements.
+func TestRecordTurnOutcomeMergesSameTurn(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		capture bool
+	}{
+		{"capture_then_ingest", false},
+		{"ingest_then_capture", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ResetRouterSessionMemoryForTesting()
+			const sessionID = "merge-turn"
+			capture := TurnOutcome{
+				RequestID:    "req-1",
+				TurnIndex:    5,
+				Timestamp:    fixedBase.UnixMilli(),
+				Model:        "model-a",
+				Category:     TurnProgress,
+				OutputTokens: 42,
+				LatencyMs:    700,
+				Source:       TurnSourceRouterObserved,
+			}
+			ingest := TurnOutcome{
+				RequestID:  "req-1",
+				TurnIndex:  5,
+				Timestamp:  fixedBase.Add(time.Second).UnixMilli(),
+				Model:      "model-a",
+				Category:   TurnRegression,
+				Confidence: 0.9,
+				Source:     TurnSourceOutcomeIngest,
+			}
+			if tc.capture {
+				RecordTurnOutcome(sessionID, ingest, fixedBase.Add(time.Second))
+				RecordTurnOutcome(sessionID, capture, fixedBase)
+			} else {
+				RecordTurnOutcome(sessionID, capture, fixedBase)
+				RecordTurnOutcome(sessionID, ingest, fixedBase.Add(time.Second))
+			}
+
+			window := RecentTurnOutcomes(sessionID, fixedBase.Add(2*time.Second))
+			if len(window) != 1 {
+				t.Fatalf("same turn produced %d facts: %+v", len(window), window)
+			}
+			got := window[0]
+			if got.Category != TurnRegression || got.Source != TurnSourceOutcomeIngest || got.Confidence != 0.9 {
+				t.Fatalf("ingest verdict must own the semantics: %+v", got)
+			}
+			if got.OutputTokens != 42 || got.LatencyMs != 700 || got.RequestID != "req-1" {
+				t.Fatalf("capture measurements must survive the merge: %+v", got)
+			}
+			if !got.ModelAttributable {
+				t.Fatalf("merged fact must be attributable via the ingest category: %+v", got)
+			}
+		})
+	}
+}
+
+// 13. Distinct turns never merge, even from the same model and writer.
+func TestRecordTurnOutcomeKeepsDistinctTurns(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	const sessionID = "distinct-turns"
+
+	for i := 0; i < 3; i++ {
+		RecordTurnOutcome(sessionID, TurnOutcome{
+			RequestID: fmt.Sprintf("req-%d", i),
+			TurnIndex: 0, // stateless clients repeat the index every turn
+			Model:     "model-a",
+			Category:  TurnNoProgress,
+			Source:    TurnSourceRouterObserved,
+		}, fixedBase.Add(time.Duration(i)*time.Second))
+	}
+
+	window := RecentTurnOutcomes(sessionID, fixedBase.Add(10*time.Second))
+	if len(window) != 3 {
+		t.Fatalf("distinct requests must stay separate facts: %+v", window)
 	}
 }
 

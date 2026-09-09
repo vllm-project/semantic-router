@@ -151,3 +151,55 @@ func TestRouterSessionSnapshotSwitchState(t *testing.T) {
 		t.Fatalf("last switch lost across restart: %v", recovered.LastSwitchAt)
 	}
 }
+
+func TestSwitchTimestampsWindowCount(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	base := time.Now().Truncate(time.Second)
+	setRouterSessionMemoryNowForTesting(func() time.Time { return base.Add(30 * time.Minute) })
+	defer setRouterSessionMemoryNowForTesting(nil)
+
+	const sessionID = "switch-window"
+	ConfigureTurnOutcomeWindow(sessionID, 8, 15*time.Minute, base)
+	switchAt := func(previous, next string, at time.Time) {
+		RecordSessionDecision(SessionDecisionParams{
+			SessionID: sessionID, PreviousModel: previous, SelectedModel: next, Timestamp: at,
+		})
+	}
+	switchAt("", "model-a", base)
+	switchAt("model-a", "model-b", base.Add(time.Minute))
+	switchAt("model-b", "model-a", base.Add(2*time.Minute))
+
+	snapshot, ok := GetRouterSessionSnapshot(sessionID, base.Add(10*time.Minute))
+	if !ok {
+		t.Fatal("snapshot missing")
+	}
+	if snapshot.SwitchCount != 2 {
+		t.Fatalf("lifetime switch count = %d, want 2", snapshot.SwitchCount)
+	}
+	if got := CountRecentSwitches(snapshot.SwitchTimestamps, 15*time.Minute, base.Add(10*time.Minute)); got != 2 {
+		t.Fatalf("window count = %d, want 2 inside 15m", got)
+	}
+	if got := CountRecentSwitches(snapshot.SwitchTimestamps, 30*time.Second, base.Add(10*time.Minute)); got != 0 {
+		t.Fatalf("window count = %d, want 0 inside 30s", got)
+	}
+
+	// A later switch prunes the series by the session's window TTL.
+	switchAt("model-a", "model-b", base.Add(20*time.Minute))
+	snapshot, _ = GetRouterSessionSnapshot(sessionID, base.Add(21*time.Minute))
+	if len(snapshot.SwitchTimestamps) != 1 || snapshot.SwitchTimestamps[0] != base.Add(20*time.Minute).UnixMilli() {
+		t.Fatalf("stale switch timestamps not pruned: %v", snapshot.SwitchTimestamps)
+	}
+
+	// Persistence round-trip keeps the series.
+	store := newFakeSessionStateStore()
+	SetRouterSessionStateStore(store)
+	defer SetRouterSessionStateStore(nil)
+	ResetRouterSessionMemoryForTesting()
+	switchAt("", "model-a", base)
+	switchAt("model-a", "model-b", base.Add(time.Minute))
+	ResetRouterSessionMemoryForTesting()
+	recovered, ok := GetRouterSessionSnapshot(sessionID, base.Add(2*time.Minute))
+	if !ok || len(recovered.SwitchTimestamps) != 1 {
+		t.Fatalf("switch timestamps lost across restart: ok=%v %+v", ok, recovered)
+	}
+}

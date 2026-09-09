@@ -134,7 +134,7 @@ A switch proposal is suppressed, in priority order, when:
 | `cold_start` | No observable outcomes yet |
 | `insufficient_evidence` | Fewer attributable outcomes than `min_window_outcomes`, or the streak/trend thresholds are not met |
 | `cooldown` | Last switch was less than `cooldown_seconds` ago |
-| `oscillation_guard` | Already switched `max_switches_per_window` times in the window |
+| `oscillation_guard` | Already switched `max_switches_per_window` times inside the evidence window |
 
 Escalation (proposing a stronger model) requires the regression streak plus a
 non-positive trend; downgrading uses consecutive recoveries instead. Hard

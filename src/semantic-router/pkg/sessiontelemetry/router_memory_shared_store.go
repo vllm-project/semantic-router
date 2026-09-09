@@ -245,6 +245,7 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		currentModel:                    snapshot.CurrentModel,
 		lastSeen:                        snapshot.LastSeen,
 		lastSwitchAt:                    snapshot.LastSwitchAt,
+		switchTimestamps:                cloneInt64Slice(snapshot.SwitchTimestamps),
 		turnCount:                       snapshot.TurnCount,
 		switchCount:                     snapshot.SwitchCount,
 		modelTurns:                      modelTurns,

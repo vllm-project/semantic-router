@@ -44,6 +44,7 @@ func recordSessionTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) {
 	}
 	now := time.Now()
 	sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
+		RequestID:    ctx.RequestID,
 		TurnIndex:    ctx.TurnIndex,
 		Model:        ctx.RequestModel,
 		Category:     classifyTurnOutcome(ctx, usage),
@@ -90,6 +91,7 @@ func recordIngestedTurnOutcome(
 	}
 	sessionKey := config.RoutingNamespaceKey(config.RecipeName(record.Recipe), record.SessionID)
 	sessiontelemetry.RecordTurnOutcome(sessionKey, sessiontelemetry.TurnOutcome{
+		RequestID:  record.RequestID,
 		TurnIndex:  record.TurnIndex,
 		Model:      model,
 		Category:   category,
