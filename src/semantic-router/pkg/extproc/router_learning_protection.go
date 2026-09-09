@@ -196,7 +196,6 @@ func (r *OpenAIRouter) protectionRescueDecision(
 		learningCtx,
 		current,
 		proposalModel,
-		selection.SwitchOriginEscalation,
 		false,
 	)
 	if gateRan {
@@ -376,7 +375,7 @@ func (r *OpenAIRouter) selectProtectionResultForContext(
 		logging.Warnf("[RouterLearning] protection produced invalid result: %v", err)
 		return nil, false
 	}
-	r.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result, selection.SwitchOriginEscalation)
+	r.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 	return result, true
 }
 
@@ -390,7 +389,6 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	learningCtx *selection.SelectionContext,
 	selector *selection.SessionAwareSelector,
 	result *selection.SelectionResult,
-	origin string,
 ) {
 	if result == nil {
 		return
@@ -399,7 +397,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	proposedModel := selectedModelName(result)
 	downgrade := selector.IsDowngrade(currentModel, proposedModel)
 
-	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, origin, downgrade)
+	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
 	if !ran {
 		return
 	}

@@ -166,7 +166,7 @@ func TestSwitchGateVerdictSkipsWhenDisabledOrNoSwitch(t *testing.T) {
 	// Disabled gate.
 	if _, _, ran := router.switchGateVerdict(
 		config.RouterLearningProtectionConfig{},
-		ctx, nil, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		ctx, nil, "model-a", "model-b", false,
 	); ran {
 		t.Fatalf("disabled gate must not run")
 	}
@@ -178,14 +178,14 @@ func TestSwitchGateVerdictSkipsWhenDisabledOrNoSwitch(t *testing.T) {
 		},
 	}
 	if _, _, ran := router.switchGateVerdict(
-		enabled, ctx, nil, "model-a", "model-a", selection.SwitchOriginEscalation, false,
+		enabled, ctx, nil, "model-a", "model-a", false,
 	); ran {
 		t.Fatalf("a non-switch must not be gated")
 	}
 
 	// Enabled but the session cannot be keyed.
 	if _, _, ran := router.switchGateVerdict(
-		enabled, &RequestContext{}, nil, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		enabled, &RequestContext{}, nil, "model-a", "model-b", false,
 	); ran {
 		t.Fatalf("session-less request must not be gated")
 	}
@@ -205,7 +205,7 @@ func TestSwitchGateVerdictColdStartSuppressesInEnforceMode(t *testing.T) {
 	}
 
 	decision, trace, ran := router.switchGateVerdict(
-		cfg, ctx, nil, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		cfg, ctx, nil, "model-a", "model-b", false,
 	)
 	if !ran {
 		t.Fatalf("gate should have evaluated")
@@ -246,7 +246,7 @@ func TestSwitchGateVerdictAllowsOnSustainedRegression(t *testing.T) {
 		},
 	}
 	decision, trace, ran := router.switchGateVerdict(
-		cfg, ctx, nil, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		cfg, ctx, nil, "model-a", "model-b", false,
 	)
 	if !ran {
 		t.Fatalf("gate should have evaluated")
@@ -287,7 +287,7 @@ func TestSwitchGateVerdictHardConstraintShortCircuits(t *testing.T) {
 	}
 
 	decision, _, ran := router.switchGateVerdict(
-		cfg, ctx, learningCtx, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		cfg, ctx, learningCtx, "model-a", "model-b", false,
 	)
 	if !ran {
 		t.Fatalf("gate should have evaluated")
@@ -295,6 +295,33 @@ func TestSwitchGateVerdictHardConstraintShortCircuits(t *testing.T) {
 	// Evidence is sufficient, but the tool loop is authoritative.
 	if !decision.Suppressed() || decision.Reason != selection.GateReasonHardConstraint {
 		t.Fatalf("hard lock must win over sufficient evidence: %+v", decision)
+	}
+}
+
+func TestSwitchGateVerdictDowngradeOrigin(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{SessionID: "gate-downgrade"}
+	cfg := config.RouterLearningProtectionConfig{
+		Tuning: config.RouterLearningProtectionTuning{
+			ProgressGate: &config.ProgressGateTuning{
+				Enabled: gateBoolPtr(true),
+				Mode:    selection.GateModeObserve,
+			},
+		},
+	}
+
+	decision, trace, ran := router.switchGateVerdict(
+		cfg, ctx, nil, "frontier", "cheap", true,
+	)
+	if !ran {
+		t.Fatal("gate should have evaluated")
+	}
+	if decision.Origin != selection.SwitchOriginDowngrade ||
+		trace.Origin != selection.SwitchOriginDowngrade {
+		t.Fatalf("downgrade origin lost: decision=%+v trace=%+v", decision, trace)
 	}
 }
 
@@ -312,7 +339,7 @@ func TestSwitchGateVerdictObserveModeRecordsWithoutSuppressing(t *testing.T) {
 	}
 
 	decision, trace, ran := router.switchGateVerdict(
-		cfg, ctx, nil, "model-a", "model-b", selection.SwitchOriginEscalation, false,
+		cfg, ctx, nil, "model-a", "model-b", false,
 	)
 	if !ran {
 		t.Fatalf("gate should have evaluated")
