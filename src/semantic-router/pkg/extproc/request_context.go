@@ -137,6 +137,7 @@ type RequestContext struct {
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
 	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
+	VSRLooperDiagnostics            *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
@@ -260,6 +261,10 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+
+	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
+	// configuration, or nil when the selected decision declares none.
+	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
 
 	// Looper context
 	LooperRequest   bool // True only for token-authenticated in-process looper requests

@@ -162,6 +162,21 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeResult{}, ErrBackendUnavailable
 }
 
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	return false, ErrBackendUnavailable
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into to be embedded
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	return nil, ErrBackendUnavailable
+}
+
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	return nil, ErrBackendUnavailable
