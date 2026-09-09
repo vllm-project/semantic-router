@@ -176,6 +176,7 @@ impl ModernBertAttention {
             },
             causal: false,
             scale,
+            q_offset: 0,
         };
 
         // Use Flash Attention if enabled, otherwise use the shared chunked kernel

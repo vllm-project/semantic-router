@@ -57,6 +57,14 @@ uses LoRA rank 32 and alpha 64, five epochs, batch 16, and learning rate
 `2e-5`. Evaluation reports accuracy and weighted F1; deployment evaluation
 should also inspect per-class recall and confusion with `other`.
 
+MMLU-Pro publishes only `validation` (70 rows) and `test` (12032 rows), so the
+training pool has to come out of `test`. The trainer reserves a stratified 20%
+of `test` before it samples anything, keeps those rows off the gradient path,
+and writes their row indices together with the metrics measured on them to
+`heldout_eval.json` beside the checkpoint. Quote that number: accuracy over the
+whole `test` split covers rows the model trained on, so it is not held-out
+evidence.
+
 Artifacts:
 [`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged),
 [`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora).

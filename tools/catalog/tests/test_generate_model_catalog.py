@@ -291,9 +291,14 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             for item in resources["evaluations"]
             if item["model"] == "openai/gpt-6-astra"
         ]
-        self.assertEqual(len(evaluations), 5)
+        launch_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("openai/gpt-6-astra-launch-")
+        ]
+        self.assertEqual(len(launch_evaluations), 5)
         self.assertEqual(
-            {item["benchmark"] for item in evaluations},
+            {item["benchmark"] for item in launch_evaluations},
             {
                 "idavidrein/gpqa-diamond@1.0.0",
                 "cais/humanitys-last-exam@1.0.0",
@@ -303,19 +308,54 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             },
         )
         self.assertTrue(
-            all(item["reasoning_effort"] == "unspecified" for item in evaluations)
+            all(
+                item["reasoning_effort"] == "unspecified" for item in launch_evaluations
+            )
         )
         self.assertTrue(
             all(
                 item["subject"]["result_selection"]
                 == "maximum_across_supported_efforts"
-                for item in evaluations
+                for item in launch_evaluations
             )
         )
         self.assertTrue(
             all(
                 item["evidence"]["provenance"] == "vendor_claimed"
-                for item in evaluations
+                for item in launch_evaluations
+            )
+        )
+
+        independent_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("independent/gpt-6-astra-")
+        ]
+        independent_efforts = {"low", "medium", "high", "xhigh", "max"}
+        independent_benchmarks = {
+            "idavidrein/gpqa-diamond@1.0.0",
+            "cais/humanitys-last-exam@1.0.0",
+            "harbor/terminal-bench@2.1.0",
+            "scicode-bench/scicode@1.0.0",
+        }
+        self.assertEqual(len(independent_evaluations), 20)
+        self.assertEqual(
+            {
+                (item["reasoning_effort"], item["benchmark"])
+                for item in independent_evaluations
+            },
+            {
+                (effort, benchmark)
+                for effort in independent_efforts
+                for benchmark in independent_benchmarks
+            },
+        )
+        self.assertTrue(
+            all(
+                item["evidence"]["provenance"] == "third_party"
+                and item["evidence"]["verification"] == "imported"
+                and item["subject"]["run_kind"] == "independent"
+                for item in independent_evaluations
             )
         )
 

@@ -55,6 +55,8 @@ var BaselineRouterContract = []string{
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
 	"language-routing",
+	// Reask signal rule matching and routing (issue #3178)
+	"reask-routing",
 	// Reliability timeouts runtime contract (issue #3210)
 	"reliability-timeouts",
 }

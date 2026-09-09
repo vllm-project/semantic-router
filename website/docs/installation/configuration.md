@@ -81,6 +81,20 @@ response contract. Omit `backend` to retain local behavior. The deprecated
 canonical configuration uses `variant: candle`, `variant: modernbert`, or
 `variant: mmbert32k`.
 
+Complexity attaches the same block under
+`global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
+two contracts, so `contract` cannot be defaulted and must be stated:
+`score.v1` for a regression model, where each rule turns the score into a
+verdict through its own `hard_above`/`easy_below` boundaries (or
+`hard_below`/`easy_above` for a score that falls as difficulty rises), and
+`label_distribution.v1` for a model that returns `hard`/`easy`/`medium`
+directly. `threshold` remains the symmetric shorthand for the local signed
+margin. `score.v1` reports no confidence, so decisions gated on those rules
+rank on the engine's structural default; the Router warns at startup. The
+remote call is visible through `llm_remote_connector_*` and
+`llm_complexity_*` metrics, and a scorer failure is recorded on every
+complexity rule's signal errors rather than dropped.
+
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.
@@ -108,6 +122,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `hallucination` — learned signal | `hallucination` checks the model's answer against the grounding context the request carried, such as tool results or retrieved documents, and reports the claims that context does not support. | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [Guide](../tutorials/signal/learned/hallucination) |
 | `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
@@ -162,6 +177,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `response-cache` — route plugin | `response_cache` is the route-local plugin for reusing exact or semantically compatible prior responses. | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [Guide](../tutorials/plugin/response-cache) |
 | `response-jailbreak` — route plugin | `response_jailbreak` is a route-local plugin for screening the model response before it is returned. | [`config/fragments/plugin/response-jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-jailbreak/) | [Guide](../tutorials/plugin/response-jailbreak) |
 | `router-replay` — route plugin | `router_replay` is a route-local plugin for overriding replay/debug capture on one route. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
+| `shadow-dispatch` — route plugin | `shadow_dispatch` is a route-local plugin that sends a bounded, sampled copy of the approved request to a secondary model and records the outcome without changing or delaying the primary response. | [`config/fragments/plugin/shadow-dispatch/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/shadow-dispatch/) | [Guide](../tutorials/plugin/shadow-dispatch) |
 | `system-prompt` — route plugin | `system_prompt` is a route-local plugin for inserting or modifying the system prompt on matched traffic. | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [Guide](../tutorials/plugin/system-prompt) |
 | `tool-selection` — route plugin | `tool_selection` is a decision plugin that controls how tools are chosen for a matched route. | [`config/fragments/plugin/tool-selection/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tool-selection/) | [Guide](../tutorials/plugin/tool-selection) |
 | `tools` — route plugin | `tools` is a route-local plugin for tool filtering and semantic tool selection. | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [Guide](../tutorials/plugin/tools) |
