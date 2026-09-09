@@ -16,12 +16,13 @@ deployment endpoints and credentials.
 
 ## Implemented contract
 
-The public configuration has seven top-level sections:
+The public configuration has eight top-level sections:
 
 ```yaml
 version:
 listeners:
 providers:
+evaluation_catalog:
 routing:
 entrypoints:
 recipes:
@@ -33,6 +34,7 @@ global:
 | `version` | Selects the configuration contract. |
 | `listeners` | Defines request-facing and management listeners. |
 | `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `evaluation_catalog` | Optionally defines operator-owned benchmark semantics and versioned index DAGs. |
 | `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
 | `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
 | `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
@@ -54,6 +56,11 @@ models; external-gateway metadata-only configurations are deployed through the
 gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
+
+`evaluation_catalog` owns optional operator benchmark and index definitions;
+measurements remain attached to `routing.modelCards[].evaluations`. This keeps
+model evidence beside model identity while the reusable scoring semantics have
+one top-level owner.
 
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with

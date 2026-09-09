@@ -43,7 +43,6 @@ test('model hub URL state defaults are compact and stable', () => {
     },
     view: 'list',
     page: 1,
-    benchmark: { filter: 'all', query: '', publisher: 'all' },
     arenaScope: 'all',
     arenaLayer: 'overall',
     arenaCapability: '',
@@ -56,8 +55,7 @@ test('model hub URL state defaults are compact and stable', () => {
 test('every model hub control round-trips through the URL', () => {
   const search = '?q=mixture+router&kind=virtual&distribution=router_recipe'
     + '&creator=vLLM&provider=openai&capability=tools&lifecycle=all&sort=context'
-    + '&view=table&page=3&benchmark=tag%3Acore&benchmark_q=astra'
-    + '&benchmark_creator=OpenAI&arena=virtual&arena_layer=benchmarks'
+    + '&view=table&page=3&arena=virtual&arena_layer=benchmarks'
     + '&arena_capability=vllm-sr%2Fcoding%401.0.0'
     + '&arena_benchmark=livecodebench%2Flivecodebench%406.0.0'
     + '&model=openai%2Fgpt-6-astra'
@@ -75,11 +73,6 @@ test('every model hub control round-trips through the URL', () => {
   })
   assert.equal(state.view, 'table')
   assert.equal(state.page, 3)
-  assert.deepEqual(state.benchmark, {
-    filter: 'tag:core',
-    query: 'astra',
-    publisher: 'OpenAI',
-  })
   assert.equal(state.arenaScope, 'virtual')
   assert.equal(state.arenaLayer, 'benchmarks')
   assert.equal(state.arenaCapability, 'vllm-sr/coding@1.0.0')

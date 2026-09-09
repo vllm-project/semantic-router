@@ -10,15 +10,24 @@ import (
 
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version     string                `yaml:"version,omitempty"`
-	Listeners   []Listener            `yaml:"listeners,omitempty"`
-	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
-	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
-	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
-	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
+	Version           string                      `yaml:"version,omitempty"`
+	Listeners         []Listener                  `yaml:"listeners,omitempty"`
+	Providers         CanonicalProviders          `yaml:"providers,omitempty"`
+	EvaluationCatalog *CanonicalEvaluationCatalog `yaml:"evaluation_catalog,omitempty"`
+	Routing           CanonicalRouting            `yaml:"routing,omitempty"`
+	Entrypoints       []CanonicalEntrypoint       `yaml:"entrypoints,omitempty"`
+	Recipes           []CanonicalRecipe           `yaml:"recipes,omitempty"`
+	Global            *CanonicalGlobal            `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
+}
+
+// CanonicalEvaluationCatalog declares operator-owned benchmark semantics and
+// versioned index DAGs. Measurements stay on routing.modelCards so model
+// identity and evidence provenance round-trip together.
+type CanonicalEvaluationCatalog struct {
+	Benchmarks []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
+	Indices    []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
 }
 
 // CanonicalRouting contains the DSL-owned routing surface.
@@ -129,6 +138,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 	cfg.EffectiveModelRegistry = effective
+	cfg.EvaluationCatalog = cloneCanonicalEvaluationCatalog(canonical.EvaluationCatalog)
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()

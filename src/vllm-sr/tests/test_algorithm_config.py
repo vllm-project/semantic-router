@@ -19,6 +19,7 @@ from cli.algorithms import (  # noqa: E402
     AutoMixSelectionConfig,
     FusionAlgorithmConfig,
     HybridSelectionConfig,
+    MultiFactorObjectiveConfig,
     MultiFactorSelectionConfig,
     PromptSelectionConfig,
     QualityEvidenceConfig,
@@ -435,6 +436,61 @@ class TestAlgorithmConfigIntegration:
         assert config.type == "multi_factor"
         assert config.multi_factor.weights.quality == 0.4
         assert config.multi_factor.quality.on_missing == "exclude"
+
+    def test_multi_factor_lexicographic_objective(self):
+        config = AlgorithmConfig(
+            type="multi_factor",
+            multi_factor=MultiFactorSelectionConfig(
+                objective=MultiFactorObjectiveConfig(
+                    strategy="lexicographic",
+                    priorities=[
+                        {"factor": "quality", "tolerance": 0.02},
+                        {"factor": "cost"},
+                    ],
+                ),
+                quality={
+                    "index": "vllm-sr/intelligence@1.0.0",
+                    "min_coverage": 1.0,
+                    "min_score": 40,
+                },
+            ),
+        )
+
+        assert config.multi_factor.objective.priorities[0].factor == "quality"
+        assert config.multi_factor.quality.min_coverage == 1.0
+        assert config.multi_factor.quality.min_score == 40
+
+    @pytest.mark.parametrize(
+        "multi_factor",
+        [
+            {
+                "objective": {
+                    "strategy": "lexicographic",
+                    "priorities": [{"factor": "quality"}],
+                },
+                "weights": {"quality": 1},
+            },
+            {
+                "objective": {
+                    "strategy": "lexicographic",
+                    "priorities": [
+                        {"factor": "cost"},
+                        {"factor": "cost"},
+                    ],
+                }
+            },
+            {
+                "quality": {
+                    "index": "vllm-sr/intelligence@1.0.0",
+                    "on_missing": "disable_quality",
+                    "min_score": 40,
+                }
+            },
+        ],
+    )
+    def test_multi_factor_rejects_ambiguous_objectives(self, multi_factor):
+        with pytest.raises(PydanticValidationError):
+            MultiFactorSelectionConfig.model_validate(multi_factor)
 
     def test_workflows_algorithm_config(self):
         """Test AlgorithmConfig with workflows dynamic config."""

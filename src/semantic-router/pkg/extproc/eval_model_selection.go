@@ -122,6 +122,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		CategoryName:               input.Category,
 		CandidateModels:            decision.ModelRefs,
 		CandidateIterations:        decision.CandidateIterations,
+		InputTokens:                input.ContextTokenCount,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: tpot,

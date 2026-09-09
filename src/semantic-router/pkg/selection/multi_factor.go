@@ -29,17 +29,32 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// MultiFactorConfig configures the multi_factor selector that composes raw
-// quality / latency / cost / load signals into a single weighted score per
-// candidate, with optional SLO hard ceilings that prune candidates before
-// scoring. See issue #37.
+// MultiFactorConfig configures the multi_factor selector that compares raw
+// quality / latency / cost / load signals with either a weighted or ordered
+// objective. Optional hard ceilings prune candidates before optimization.
 type MultiFactorConfig struct {
-	Weights           MultiFactorWeights
-	SLO               MultiFactorSLO
-	QualityIndex      string
-	QualityOnMissing  string
-	LatencyPercentile int
-	OnNoCandidates    string
+	Objective          MultiFactorObjective
+	Weights            MultiFactorWeights
+	SLO                MultiFactorSLO
+	QualityIndex       string
+	QualityOnMissing   string
+	QualityMinCoverage float64
+	QualityMinScore    *float64
+	LatencyPercentile  int
+	OnNoCandidates     string
+}
+
+// MultiFactorObjective selects weighted or ordered lexicographic comparison.
+type MultiFactorObjective struct {
+	Strategy   string
+	Priorities []MultiFactorPriority
+}
+
+// MultiFactorPriority retains candidates within a relative Tolerance of the
+// best raw value for Factor before the next priority is applied.
+type MultiFactorPriority struct {
+	Factor    string
+	Tolerance float64
 }
 
 // MultiFactorWeights are the per-signal weights in the scoring formula
@@ -72,6 +87,7 @@ const (
 // SLOs, p95 latency, "cheapest" fallback).
 func DefaultMultiFactorConfig() *MultiFactorConfig {
 	return &MultiFactorConfig{
+		Objective: MultiFactorObjective{Strategy: config.MultiFactorObjectiveWeighted},
 		Weights: MultiFactorWeights{
 			Quality: 0.25,
 			Latency: 0.25,
@@ -105,6 +121,7 @@ func NewMultiFactorSelector(cfg *MultiFactorConfig) *MultiFactorSelector {
 		cfg = DefaultMultiFactorConfig()
 	}
 	normalizeWeights(&cfg.Weights)
+	normalizeMultiFactorObjective(&cfg.Objective)
 	if cfg.LatencyPercentile <= 0 || cfg.LatencyPercentile > 100 {
 		cfg.LatencyPercentile = defaultMFLatencyPercentile
 	}
@@ -143,7 +160,7 @@ func (s *MultiFactorSelector) UpdateFeedback(_ context.Context, _ *Feedback) err
 	return nil
 }
 
-// Select runs the SLO filter, then the weighted multi-signal scoring.
+// Select applies hard eligibility filters, then the configured objective.
 func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if len(selCtx.CandidateModels) == 0 {
 		return nil, fmt.Errorf("no candidate models provided")
@@ -152,33 +169,22 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	kept, dropped := s.applySLOFilter(selCtx.CandidateModels)
+	kept, dropped := s.applySLOFilter(selCtx.CandidateModels, selCtx)
 	if len(kept) == 0 {
 		return s.applyNoCandidatePolicy(selCtx, "slo", len(dropped))
 	}
 
-	signals := s.gatherSignals(kept)
+	signals := s.gatherSignals(kept, selCtx)
+	kept, signals, qualityFloorExcluded := s.applyQualityFloor(kept, signals)
+	if len(kept) == 0 {
+		return s.applyNoCandidatePolicy(selCtx, "quality_floor", qualityFloorExcluded)
+	}
 	kept, signals, qualityExcluded, qualityDisabled := s.applyQualityEvidencePolicy(kept, signals)
 	if len(kept) == 0 {
 		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
 	}
 	mins, maxs := signalExtrema(signals)
-	allScores := make(map[string]float64, len(kept))
-
-	var bestIdx int
-	bestScore := math.Inf(-1)
-	secondBest := math.Inf(-1)
-	for i, sig := range signals {
-		score := s.scoreCandidate(sig, mins, maxs)
-		allScores[sig.model] = score
-		if score > bestScore {
-			secondBest = bestScore
-			bestScore = score
-			bestIdx = i
-		} else if score > secondBest {
-			secondBest = score
-		}
-	}
+	bestIdx, allScores, bestScore, secondBest := s.chooseCandidate(signals, mins, maxs)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5
@@ -193,11 +199,12 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	}
 
 	reasoning := fmt.Sprintf(
-		"multi_factor: weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_excluded=%d",
+		"multi_factor: objective=%s weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_min_coverage=%.2f quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_floor_excluded=%d, quality_excluded=%d",
+		multiFactorObjectiveDescription(s.config.Objective),
 		s.config.Weights.Quality, s.config.Weights.Latency,
 		s.config.Weights.Cost, s.config.Weights.Load,
-		s.config.QualityIndex, s.config.QualityOnMissing, qualityDisabled,
-		s.config.LatencyPercentile, len(kept), len(dropped), qualityExcluded,
+		s.config.QualityIndex, s.config.QualityOnMissing, s.config.QualityMinCoverage, qualityDisabled,
+		s.config.LatencyPercentile, len(kept), len(dropped), qualityFloorExcluded, qualityExcluded,
 	)
 
 	logging.Infof("[MultiFactor] candidates=%d -> %s (score=%.4f confidence=%.2f, dropped_by_slo=%d)",
@@ -226,17 +233,18 @@ type signalSet struct {
 	load    float64
 }
 
-func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []signalSet {
+func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx *SelectionContext) []signalSet {
 	out := make([]signalSet, 0, len(candidates))
 	for _, c := range candidates {
 		sig := signalSet{model: c.Model}
 		if params, ok := s.modelParams[c.Model]; ok {
-			if score, available := params.EvidenceScoreAt(s.config.QualityIndex, c.ReasoningEffort); available {
-				sig.quality = score
+			if result, available := params.EvidenceResultAt(s.config.QualityIndex, c.ReasoningEffort); available &&
+				result.Coverage >= s.config.QualityMinCoverage {
+				sig.quality = *result.Score
 				sig.hasQ = true
 			}
-			if params.Pricing.PromptPer1M > 0 {
-				sig.cost = params.Pricing.PromptPer1M
+			if cost, available := estimatedRequestCost(params.Pricing, selCtx); available {
+				sig.cost = cost
 				sig.hasCost = true
 			}
 		}
@@ -250,11 +258,32 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef) []sign
 	return out
 }
 
+func (s *MultiFactorSelector) applyQualityFloor(
+	candidates []config.ModelRef,
+	signals []signalSet,
+) ([]config.ModelRef, []signalSet, int) {
+	if s.config.QualityMinScore == nil {
+		return candidates, signals, 0
+	}
+	keptCandidates := make([]config.ModelRef, 0, len(candidates))
+	keptSignals := make([]signalSet, 0, len(signals))
+	excluded := 0
+	for index, signal := range signals {
+		if !signal.hasQ || signal.quality < *s.config.QualityMinScore {
+			excluded++
+			continue
+		}
+		keptCandidates = append(keptCandidates, candidates[index])
+		keptSignals = append(keptSignals, signal)
+	}
+	return keptCandidates, keptSignals, excluded
+}
+
 func (s *MultiFactorSelector) applyQualityEvidencePolicy(
 	candidates []config.ModelRef,
 	signals []signalSet,
 ) ([]config.ModelRef, []signalSet, int, bool) {
-	if s.config.Weights.Quality <= 0 {
+	if !s.qualityRelevant() {
 		return candidates, signals, 0, false
 	}
 	missing := 0
@@ -284,6 +313,18 @@ func (s *MultiFactorSelector) applyQualityEvidencePolicy(
 	return candidates, signals, 0, true
 }
 
+func (s *MultiFactorSelector) qualityRelevant() bool {
+	if s.config.Objective.Strategy != config.MultiFactorObjectiveLexicographic {
+		return s.config.Weights.Quality > 0
+	}
+	for _, priority := range s.config.Objective.Priorities {
+		if priority.Factor == config.MultiFactorFactorQuality {
+			return true
+		}
+	}
+	return false
+}
+
 // latencySignal returns a single representative latency (TPOT-prioritized) at
 // the configured percentile. Returns ok=false when no observations exist.
 func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
@@ -296,9 +337,9 @@ func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
 	return 0, false
 }
 
-func (s *MultiFactorSelector) applySLOFilter(candidates []config.ModelRef) (kept, dropped []config.ModelRef) {
+func (s *MultiFactorSelector) applySLOFilter(candidates []config.ModelRef, selCtx *SelectionContext) (kept, dropped []config.ModelRef) {
 	for _, c := range candidates {
-		if reason, drop := s.exceedsSLO(c.Model); drop {
+		if reason, drop := s.exceedsSLO(c.Model, selCtx); drop {
 			logging.Debugf("[MultiFactor] dropping %s by SLO: %s", c.Model, reason)
 			dropped = append(dropped, c)
 			continue
@@ -308,7 +349,7 @@ func (s *MultiFactorSelector) applySLOFilter(candidates []config.ModelRef) (kept
 	return kept, dropped
 }
 
-func (s *MultiFactorSelector) exceedsSLO(model string) (string, bool) {
+func (s *MultiFactorSelector) exceedsSLO(model string, selCtx *SelectionContext) (string, bool) {
 	slo := s.config.SLO
 
 	if slo.MaxTPOTMs > 0 {
@@ -322,8 +363,10 @@ func (s *MultiFactorSelector) exceedsSLO(model string) (string, bool) {
 		}
 	}
 	if slo.MaxCostPer1M > 0 {
-		if params, ok := s.modelParams[model]; ok && params.Pricing.PromptPer1M > slo.MaxCostPer1M {
-			return fmt.Sprintf("cost=$%.2f>$%.2f per 1M", params.Pricing.PromptPer1M, slo.MaxCostPer1M), true
+		if params, ok := s.modelParams[model]; ok {
+			if rate, available := effectiveCostPer1M(params.Pricing, selCtx); available && rate > slo.MaxCostPer1M {
+				return fmt.Sprintf("cost=$%.2f>$%.2f per 1M", rate, slo.MaxCostPer1M), true
+			}
 		}
 	}
 	if slo.MaxInflight > 0 {
@@ -342,18 +385,20 @@ func (s *MultiFactorSelector) applyNoCandidatePolicy(selCtx *SelectionContext, c
 		c := selCtx.CandidateModels[0]
 		return s.noCandidateResult(c, "all_candidates_excluded_by_"+cause+":first"), nil
 	default:
-		c := s.cheapestCandidate(selCtx.CandidateModels)
+		c := s.cheapestCandidate(selCtx.CandidateModels, selCtx)
 		return s.noCandidateResult(c, "all_candidates_excluded_by_"+cause+":cheapest"), nil
 	}
 }
 
-func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef) config.ModelRef {
+func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef, selCtx *SelectionContext) config.ModelRef {
 	best := candidates[0]
 	bestCost := math.Inf(1)
 	for _, c := range candidates {
 		cost := math.Inf(1)
-		if params, ok := s.modelParams[c.Model]; ok && params.Pricing.PromptPer1M > 0 {
-			cost = params.Pricing.PromptPer1M
+		if params, ok := s.modelParams[c.Model]; ok {
+			if estimate, available := estimatedRequestCost(params.Pricing, selCtx); available {
+				cost = estimate
+			}
 		}
 		if cost < bestCost {
 			bestCost = cost
@@ -361,6 +406,50 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef) co
 		}
 	}
 	return best
+}
+
+func estimatedRequestCost(pricing config.ModelPricing, selCtx *SelectionContext) (float64, bool) {
+	if !modelPricingConfigured(pricing) {
+		return 0, false
+	}
+	inputTokens, outputTokens := selectionTokenCounts(selCtx)
+	if inputTokens+outputTokens > 0 {
+		cost := (float64(inputTokens)*pricing.PromptPer1M +
+			float64(outputTokens)*pricing.CompletionPer1M) / 1_000_000
+		return cost, true
+	}
+	if pricing.PromptPer1M > 0 {
+		return pricing.PromptPer1M, true
+	}
+	if pricing.CompletionPer1M > 0 {
+		return pricing.CompletionPer1M, true
+	}
+	return 0, true
+}
+
+func effectiveCostPer1M(pricing config.ModelPricing, selCtx *SelectionContext) (float64, bool) {
+	if !modelPricingConfigured(pricing) {
+		return 0, false
+	}
+	inputTokens, outputTokens := selectionTokenCounts(selCtx)
+	if total := inputTokens + outputTokens; total > 0 {
+		rate := (float64(inputTokens)*pricing.PromptPer1M +
+			float64(outputTokens)*pricing.CompletionPer1M) / float64(total)
+		return rate, true
+	}
+	return estimatedRequestCost(pricing, nil)
+}
+
+func modelPricingConfigured(pricing config.ModelPricing) bool {
+	return strings.TrimSpace(pricing.Currency) != "" || pricing.PromptPer1M != 0 ||
+		pricing.CompletionPer1M != 0 || pricing.CachedInputPer1M != 0 || pricing.CacheWritePer1M != nil
+}
+
+func selectionTokenCounts(selCtx *SelectionContext) (int, int) {
+	if selCtx == nil {
+		return 0, 0
+	}
+	return max(selCtx.InputTokens, 0), max(selCtx.ExpectedOutputTokens, 0)
 }
 
 func (s *MultiFactorSelector) noCandidateResult(c config.ModelRef, reason string) *SelectionResult {

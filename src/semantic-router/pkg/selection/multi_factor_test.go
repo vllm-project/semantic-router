@@ -190,6 +190,182 @@ func TestMultiFactor_PicksCheapestWhenCostDominant(t *testing.T) {
 	}
 }
 
+func TestMultiFactor_AccuracyFirstUsesCostWithinQualityTolerance(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Objective = MultiFactorObjective{
+		Strategy: config.MultiFactorObjectiveLexicographic,
+		Priorities: []MultiFactorPriority{
+			{Factor: config.MultiFactorFactorQuality, Tolerance: 0.03},
+			{Factor: config.MultiFactorFactorCost},
+		},
+	}
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+	params := map[string]config.ModelParams{
+		"best-expensive": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 30},
+		}, 0.90),
+		"near-cheap": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 1},
+		}, 0.88),
+		"below-tolerance": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 0.1},
+		}, 0.80),
+	}
+	selector := buildMFSelector(cfg, params,
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: candidates("best-expensive", "near-cheap", "below-tolerance"),
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "near-cheap" {
+		t.Fatalf("accuracy-first selected %q, want near-cheap", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, "lexicographic[quality±0.03,cost±0]") {
+		t.Fatalf("reasoning does not expose the objective: %q", result.Reasoning)
+	}
+}
+
+func TestMultiFactor_CostFirstHonorsQualityFloor(t *testing.T) {
+	qualityFloor := 70.0
+	cfg := DefaultMultiFactorConfig()
+	cfg.Objective = MultiFactorObjective{
+		Strategy: config.MultiFactorObjectiveLexicographic,
+		Priorities: []MultiFactorPriority{
+			{Factor: config.MultiFactorFactorCost},
+			{Factor: config.MultiFactorFactorQuality},
+		},
+	}
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+	cfg.QualityMinScore = &qualityFloor
+	params := map[string]config.ModelParams{
+		"cheap-below-floor": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 0.1},
+		}, 0.60),
+		"affordable-qualified": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 2},
+		}, 0.75),
+		"expensive-best": addTestQuality(config.ModelParams{
+			Pricing: config.ModelPricing{PromptPer1M: 20},
+		}, 0.95),
+	}
+	selector := buildMFSelector(cfg, params,
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: candidates("cheap-below-floor", "affordable-qualified", "expensive-best"),
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "affordable-qualified" {
+		t.Fatalf("cost-first selected %q, want affordable-qualified", result.SelectedModel)
+	}
+	if !strings.Contains(result.Reasoning, "quality_floor_excluded=1") {
+		t.Fatalf("reasoning does not expose the quality floor: %q", result.Reasoning)
+	}
+}
+
+func TestMultiFactor_MinCoverageTreatsIncompleteEvidenceAsMissing(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Quality: 1}
+	cfg.QualityOnMissing = config.QualityEvidenceOnMissingExclude
+	cfg.QualityMinCoverage = 0.8
+	incomplete := modelParamsWithTestQuality(0.99)
+	incomplete.IndexResults[testIntelligenceIndex] = modelcatalog.IndexResult{
+		Index: testIntelligenceIndex, Status: "available", Score: floatPointer(99), Coverage: 0.5,
+	}
+	complete := modelParamsWithTestQuality(0.75)
+	selector := buildMFSelector(cfg, map[string]config.ModelParams{
+		"incomplete": incomplete,
+		"complete":   complete,
+	},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: candidates("incomplete", "complete"),
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "complete" {
+		t.Fatalf("coverage policy selected %q, want complete", result.SelectedModel)
+	}
+}
+
+func TestMultiFactor_RequestShapedCostUsesInputAndExpectedOutput(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Weights = MultiFactorWeights{Cost: 1}
+	selector := buildMFSelector(cfg, map[string]config.ModelParams{
+		"input-cheap-output-expensive": {
+			Pricing: config.ModelPricing{PromptPer1M: 1, CompletionPer1M: 100},
+		},
+		"input-expensive-output-cheap": {
+			Pricing: config.ModelPricing{PromptPer1M: 10, CompletionPer1M: 1},
+		},
+	},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels:      candidates("input-cheap-output-expensive", "input-expensive-output-cheap"),
+		InputTokens:          1_000,
+		ExpectedOutputTokens: 100,
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "input-expensive-output-cheap" {
+		t.Fatalf("request-shaped cost selected %q, want input-expensive-output-cheap", result.SelectedModel)
+	}
+}
+
+func TestMultiFactor_CostObjectivePreservesExplicitFreePricing(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Objective = MultiFactorObjective{
+		Strategy: config.MultiFactorObjectiveLexicographic,
+		Priorities: []MultiFactorPriority{
+			{Factor: config.MultiFactorFactorCost},
+		},
+	}
+	selector := buildMFSelector(cfg, map[string]config.ModelParams{
+		"free": {Pricing: config.ModelPricing{Currency: "USD"}},
+		"paid": {Pricing: config.ModelPricing{Currency: "USD", PromptPer1M: 0.1}},
+	},
+		func(string) int { return 0 },
+		func(string, int) (float64, bool) { return 0, false },
+		func(string, int) (float64, bool) { return 0, false },
+	)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: candidates("paid", "free"),
+		InputTokens:     1_000,
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "free" {
+		t.Fatalf("cost objective selected %q, want explicit free model", result.SelectedModel)
+	}
+}
+
+func floatPointer(value float64) *float64 {
+	return &value
+}
+
 func TestMultiFactor_PicksLeastLoadedWhenLoadDominant(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.Weights = MultiFactorWeights{Load: 1.0}

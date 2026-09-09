@@ -401,35 +401,55 @@ type ModelParams struct {
 // EvidenceScore resolves a versioned static model index. Missing, failed, and
 // not-applicable results return ok=false and are never coerced to zero.
 func (params ModelParams) EvidenceScore(index string) (float64, bool) {
+	result, ok := params.EvidenceResult(index)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResult resolves one available preferred-effort index result and
+// returns a defensive copy so callers can inspect coverage safely.
+func (params ModelParams) EvidenceResult(index string) (modelcatalog.IndexResult, bool) {
 	if index == "" {
 		index = params.QualityIndex
 	}
 	result, ok := params.IndexResults[index]
 	if !ok || result.Status != "available" || result.Score == nil {
-		return 0, false
+		return modelcatalog.IndexResult{}, false
 	}
-	return *result.Score, true
+	return cloneCatalogIndexResult(result), true
 }
 
 // EvidenceScoreAt resolves evidence for the exact configured reasoning effort
 // when one is present on the candidate. An empty effort uses the model's
 // catalog-preferred result. Scores are never borrowed across efforts.
 func (params ModelParams) EvidenceScoreAt(index, reasoningEffort string) (float64, bool) {
+	result, ok := params.EvidenceResultAt(index, reasoningEffort)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResultAt resolves an available index result for the exact configured
+// reasoning effort. Results are never borrowed from another effort.
+func (params ModelParams) EvidenceResultAt(index, reasoningEffort string) (modelcatalog.IndexResult, bool) {
 	if reasoningEffort == "" {
-		return params.EvidenceScore(index)
+		return params.EvidenceResult(index)
 	}
 	if index == "" {
 		index = params.QualityIndex
 	}
 	results, ok := params.IndexResultsByEffort[reasoningEffort]
 	if !ok {
-		return 0, false
+		return modelcatalog.IndexResult{}, false
 	}
 	result, ok := results[index]
 	if !ok || result.Status != "available" || result.Score == nil {
-		return 0, false
+		return modelcatalog.IndexResult{}, false
 	}
-	return *result.Score, true
+	return cloneCatalogIndexResult(result), true
 }
 
 type LoRAAdapter struct {

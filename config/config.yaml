@@ -1,5 +1,9 @@
 version: v0.3
 
+# Optional operator-owned benchmark definitions and versioned index DAGs.
+# Raw measurements remain attached to routing.modelCards[].evaluations.
+evaluation_catalog: {}
+
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -1431,9 +1435,13 @@ routing:
       algorithm:
         type: multi_factor
         multi_factor:
+          objective:
+            strategy: weighted
           quality:
             index: vllm-sr/coding@1.0.0
             on_missing: exclude
+            min_coverage: 1.0
+            min_score: 0.0
           weights:
             quality: 0.4
             latency: 0.2

@@ -53,7 +53,12 @@ describe('DSL structured field schemas', () => {
     ])
     const quality = requireField(multiFactor, 'quality')
     expect(quality.type).toBe('object')
-    expect(quality.fields?.map((field) => field.key)).toEqual(['index', 'on_missing'])
+    expect(quality.fields?.map((field) => field.key)).toEqual([
+      'index',
+      'on_missing',
+      'min_coverage',
+      'min_score',
+    ])
     expect(requireField(quality.fields || [], 'on_missing').options).toEqual([
       'exclude',
       'disable_quality',

@@ -53,20 +53,6 @@
   font-size: 0.75rem;
 }
 
-.intro a {
-  padding: 0.42rem 0.65rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  color: #b8b8bf;
-  font-size: 0.72rem;
-  text-decoration: none;
-}
-
-.intro a:hover {
-  border-color: var(--border-strong);
-  color: #fff;
-}
-
 .layerTabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -175,6 +161,30 @@
 .surfaceHeading > span strong {
   color: #eeeef1;
   font-variant-numeric: tabular-nums;
+}
+
+.surfaceMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.7rem;
+  margin-top: 0.45rem;
+  color: #72727b;
+  font-size: 0.67rem;
+}
+
+.surfaceMeta code {
+  color: #a6a6ae;
+  font-family: var(--font-mono);
+}
+
+.surfaceMeta a {
+  color: #d7d7dc;
+  text-decoration: none;
+}
+
+.surfaceMeta a:hover {
+  color: #fff;
 }
 
 .chart {
@@ -386,10 +396,6 @@
   .surfaceHeading {
     align-items: flex-start;
     flex-direction: column;
-  }
-  .intro a {
-    align-self: stretch;
-    text-align: center;
   }
   .layerTabs button {
     text-align: center;

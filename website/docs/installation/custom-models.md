@@ -47,6 +47,28 @@ LoRAs, and operator evaluations. It must not contain credentials. Put prices
 under `providers.models[].pricing` and credentials under the backend binding,
 preferably through `api_key_env`.
 
+## Add evaluation evidence
+
+Attach a result for a built-in benchmark directly to the Model Card:
+
+```yaml
+routing:
+  modelCards:
+    - name: private-chat
+      evaluations:
+        - benchmark: livecodebench/livecodebench@6.0.0
+          benchmark_profile: independent-code-generation
+          reasoning_effort: high
+          metrics: {pass_at_1: 0.61}
+          measured_at: 2026-09-09
+          source: https://benchmarks.example/runs/private-chat-lcb6
+```
+
+The result enters every compatible built-in index at the exact reasoning effort.
+For an organization-specific benchmark, first declare its metric and any index
+under `evaluation_catalog`. See
+[Custom evaluation catalogs](../benchmarking/custom-evaluation-catalog).
+
 ## Add custom reasoning
 
 Reasoning is optional and has two supported forms:

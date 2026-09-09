@@ -62,23 +62,6 @@
   line-height: 1.5;
 }
 
-.intro > a {
-  flex: 0 0 auto;
-  padding: 0.48rem 0.75rem;
-  border: 1px solid var(--site-border);
-  border-radius: var(--radius-md);
-  color: var(--site-text-strong);
-  font-size: var(--text-sm);
-  font-weight: var(--site-font-weight-medium);
-}
-
-.intro > a:hover {
-  border-color: var(--site-hover-border-strong);
-  background: var(--site-hover-chrome-bg);
-  color: var(--site-accent-strong);
-  text-decoration: none;
-}
-
 .layerTabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -198,6 +181,26 @@
 .surfaceHeading > span strong {
   color: var(--site-text-strong);
   font-variant-numeric: tabular-nums;
+}
+
+.surfaceMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
+  color: var(--site-muted);
+  font-size: var(--text-xs);
+}
+
+.surfaceMeta code {
+  color: var(--site-muted-bright);
+  font-size: inherit;
+}
+
+.surfaceMeta a {
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-medium);
 }
 
 .chart {
@@ -417,10 +420,6 @@
     flex-direction: column;
   }
 
-  .intro > a {
-    align-self: stretch;
-    text-align: center;
-  }
 
   .layerTabs button {
     text-align: center;

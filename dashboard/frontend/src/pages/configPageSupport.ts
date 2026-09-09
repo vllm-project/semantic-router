@@ -1,7 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -1246,6 +1246,10 @@ export interface ConfigData {
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
+  evaluation_catalog?: {
+    benchmarks?: CatalogBenchmark[]
+    indices?: CatalogIndex[]
+  }
   routing?: RoutingConfig
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]

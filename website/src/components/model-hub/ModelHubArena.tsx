@@ -203,7 +203,6 @@ export function ModelHubArena({
           <h3>{arena.index.display_name}</h3>
           <p>One evidence graph for standalone models, virtual models, and routing.</p>
         </div>
-        {arena.index.methodology ? <a href={arena.index.methodology}>Methodology</a> : null}
       </div>
 
       <div className={styles.layerTabs} role="tablist" aria-label="Arena ranking layer">
@@ -261,6 +260,28 @@ export function ModelHubArena({
           <small>{layer === 'overall' ? 'Overall rank' : layer === 'capabilities' ? 'Capability rank' : 'Benchmark rank'}</small>
           <h3>{surface.displayName}</h3>
           <p>{surface.description}</p>
+          <div className={styles.surfaceMeta}>
+            <code>{surface.id}</code>
+            {surface.profiles?.length
+              ? (
+                  <span>
+                    Profile:
+                    {' '}
+                    {surface.profiles.join(' / ')}
+                  </span>
+                )
+              : null}
+            {surface.metric
+              ? (
+                  <span>
+                    Metric:
+                    {' '}
+                    {surface.metric.replace(/_/g, ' ')}
+                  </span>
+                )
+              : null}
+            {surface.source ? <a href={surface.source}>Source</a> : null}
+          </div>
         </div>
         <span>
           <strong>{surface.rows.length}</strong>

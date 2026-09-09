@@ -37,6 +37,7 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 type catalogInputBuilder struct {
 	input             modelcatalog.CompileInput
 	builtIn           *modelcatalog.Registry
+	benchmarks        map[string]modelcatalog.BenchmarkDefinition
 	cards             map[string]RoutingModel
 	boundCards        map[string]struct{}
 	materializedCards map[string]struct{}
@@ -51,6 +52,10 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 	if err != nil {
 		return nil, fmt.Errorf("load built-in model catalog: %w", err)
 	}
+	benchmarks, err := canonicalEvaluationDefinitions(canonical.EvaluationCatalog, builtIn, &input.Evaluations)
+	if err != nil {
+		return nil, err
+	}
 	cards := make(map[string]RoutingModel, len(canonical.Routing.ModelCards))
 	for cardIndex, card := range canonical.Routing.ModelCards {
 		if _, exists := cards[card.Name]; exists {
@@ -59,7 +64,7 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 		cards[card.Name] = card
 	}
 	return &catalogInputBuilder{
-		input: input, builtIn: builtIn, cards: cards,
+		input: input, builtIn: builtIn, benchmarks: benchmarks, cards: cards,
 		boundCards:        make(map[string]struct{}, len(canonical.Providers.Models)),
 		materializedCards: make(map[string]struct{}, len(canonical.Providers.Models)),
 	}, nil
@@ -199,7 +204,7 @@ func (builder *catalogInputBuilder) materializeCard(
 	if _, alreadyMaterialized := builder.materializedCards[card.Name]; alreadyMaterialized {
 		return nil
 	}
-	overlay, records, err := catalogCardOverlay(card, model, modelIndex, builder.builtIn)
+	overlay, records, err := catalogCardOverlay(card, model, modelIndex, builder.benchmarks)
 	if err != nil {
 		return err
 	}
@@ -288,7 +293,7 @@ func catalogCardOverlay(
 	card RoutingModel,
 	model CanonicalProviderModel,
 	modelIndex int,
-	builtIn *modelcatalog.Registry,
+	benchmarks map[string]modelcatalog.BenchmarkDefinition,
 ) (modelcatalog.ModelCardOverlay, []modelcatalog.EvaluationRecord, error) {
 	catalogBacked := strings.TrimSpace(model.Catalog) != ""
 	overlay := modelcatalog.ModelCardOverlay{Name: card.Name, BuiltIn: &catalogBacked}
@@ -297,7 +302,7 @@ func catalogCardOverlay(
 	applyCatalogCardLists(card, &overlay)
 	applyCatalogCardReasoning(model, &overlay)
 	overlay.Evaluations = cloneUserEvaluations(card.Evaluations)
-	records, err := catalogIndexableEvaluationRecords(card, modelIndex, builtIn)
+	records, err := catalogIndexableEvaluationRecords(card, modelIndex, benchmarks)
 	if err != nil {
 		return overlay, nil, err
 	}

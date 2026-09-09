@@ -25,6 +25,9 @@ export interface ModelHubArenaSurface {
   description: string
   kind: ModelHubArenaSurfaceKind
   weight: number
+  source?: string
+  profiles?: string[]
+  metric?: string
   rows: ModelHubArenaRow[]
 }
 
@@ -213,6 +216,9 @@ function benchmarkSurface(
     description: `${capabilityName} · ${component.metric.replace(/_/g, ' ')}`,
     kind: 'benchmark',
     weight,
+    source: benchmark.source,
+    profiles,
+    metric: component.metric,
     rows: rankedRows(rows),
   }
 }

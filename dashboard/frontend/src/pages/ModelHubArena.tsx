@@ -155,9 +155,6 @@ export const ModelHubArena: React.FC<{
           <h2 id="model-arena-heading">Model Arena</h2>
           <p>One evidence graph for standalone models, virtual models, and routing.</p>
         </div>
-        <a href={arena.index.methodology} target="_blank" rel="noreferrer">
-          Methodology
-        </a>
       </header>
 
       <div className={styles.layerTabs} role="tablist" aria-label="Arena ranking layer">
@@ -217,6 +214,16 @@ export const ModelHubArena: React.FC<{
           </small>
           <h3>{surface.displayName}</h3>
           <p>{surface.description}</p>
+          <div className={styles.surfaceMeta}>
+            <code>{surface.id}</code>
+            {surface.profiles?.length ? <span>Profile: {surface.profiles.join(' / ')}</span> : null}
+            {surface.metric ? <span>Metric: {surface.metric.replace(/_/g, ' ')}</span> : null}
+            {surface.source ? (
+              <a href={surface.source} target="_blank" rel="noreferrer">
+                Source
+              </a>
+            ) : null}
+          </div>
         </div>
         <span>
           <strong>{surface.rows.length}</strong> ranked models

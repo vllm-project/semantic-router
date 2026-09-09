@@ -149,6 +149,10 @@ type RouterConfig struct {
 	// EffectiveModelRegistry is the immutable catalog/config join used to
 	// materialize this runtime snapshot.
 	EffectiveModelRegistry *modelcatalog.EffectiveRegistry `yaml:"-" json:"-"`
+	// EvaluationCatalog preserves the operator-authored benchmark and index
+	// definitions for canonical export. Compiled results live in
+	// EffectiveModelRegistry.
+	EvaluationCatalog *CanonicalEvaluationCatalog `yaml:"-" json:"-"`
 }
 
 // AuthzConfig configures how the router resolves per-user LLM API keys.

@@ -461,15 +461,56 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
     case 'multi_factor':
       return [
         {
+          key: 'objective',
+          label: 'Objective',
+          type: 'object',
+          description: 'Use weighted for balance or ordered priorities for quality/cost first',
+          fields: [
+            {
+              key: 'strategy',
+              label: 'Strategy',
+              type: 'select',
+              options: ['weighted', 'lexicographic'],
+            },
+            {
+              key: 'priorities',
+              label: 'Priorities',
+              type: 'object[]',
+              addLabel: 'Add priority',
+              emptyLabel: 'No ordered priorities. Weighted strategy uses the weights below.',
+              itemLabel: 'Priority',
+              itemLabelKey: 'factor',
+              fields: [
+                {
+                  key: 'factor',
+                  label: 'Factor',
+                  type: 'select',
+                  required: true,
+                  options: ['quality', 'latency', 'cost', 'load'],
+                },
+                {
+                  key: 'tolerance',
+                  label: 'Relative Tolerance',
+                  type: 'number',
+                  min: 0,
+                  max: 1,
+                  placeholder: '0.02',
+                  description: 'Retain values within this relative gap before the next priority',
+                },
+              ],
+            },
+          ],
+        },
+        {
           key: 'weights',
           label: 'Weights',
           type: 'object',
           description: 'Per-signal weights for quality, latency, cost, and load',
           fields: [
-            { key: 'quality', label: 'Quality', type: 'number', placeholder: '0.4' },
-            { key: 'latency', label: 'Latency', type: 'number', placeholder: '0.3' },
-            { key: 'cost', label: 'Cost', type: 'number', placeholder: '0.2' },
-            { key: 'load', label: 'Load', type: 'number', placeholder: '0.1' },
+            { key: 'quality', label: 'Quality', type: 'number', min: 0, placeholder: '0.4' },
+            { key: 'latency', label: 'Latency', type: 'number', min: 0, placeholder: '0.3' },
+            { key: 'cost', label: 'Cost', type: 'number', min: 0, placeholder: '0.2' },
+            { key: 'load', label: 'Load', type: 'number', min: 0, placeholder: '0.1' },
           ],
         },
         {
@@ -508,12 +549,30 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
               type: 'select',
               options: ['exclude', 'disable_quality'],
             },
+            {
+              key: 'min_coverage',
+              label: 'Minimum Coverage',
+              type: 'number',
+              min: 0,
+              max: 1,
+              placeholder: '1.0',
+              description: 'Treat lower-coverage index results as missing',
+            },
+            {
+              key: 'min_score',
+              label: 'Minimum Score',
+              type: 'number',
+              placeholder: '40',
+              description: 'Eligibility floor; requires missing evidence to be excluded',
+            },
           ],
         },
         {
           key: 'latency_percentile',
           label: 'Latency Percentile',
           type: 'number',
+          min: 1,
+          max: 100,
           placeholder: '95',
         },
         {

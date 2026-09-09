@@ -26,6 +26,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -345,8 +346,11 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 		TurnIndex:            2,
 		HistoryTokenCount:    1024,
 		VSRContextTokenCount: 2048,
-		SessionIdleSeconds:   12,
-		SessionIdleKnown:     true,
+		SemanticRequest: &llmprotocol.Request{
+			Sampling: llmprotocol.Sampling{MaxOutputTokens: llmprotocol.Int64(512)},
+		},
+		SessionIdleSeconds: 12,
+		SessionIdleKnown:   true,
 		VSRConversationFacts: classification.ConversationFacts{
 			AssistantToolCallCount: 1,
 			ToolResultCount:        1,
@@ -373,6 +377,13 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 	}
 	if got := selCtx.AgenticSession.ModelContextWindows["model-a"]; got != 8192 {
 		t.Fatalf("expected model context window 8192, got %d", got)
+	}
+	if selCtx.InputTokens != 2048 || selCtx.ExpectedOutputTokens != 512 {
+		t.Fatalf(
+			"expected request token budget 2048+512, got %d+%d",
+			selCtx.InputTokens,
+			selCtx.ExpectedOutputTokens,
+		)
 	}
 }
 

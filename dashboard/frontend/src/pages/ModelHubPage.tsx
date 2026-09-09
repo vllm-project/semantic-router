@@ -41,7 +41,7 @@ const ModelHubPage: React.FC = () => {
         catalog={catalog}
         route={arenaRoute}
         setRoute={setArenaRoute}
-        openModel={hub.openModelFromBenchmark}
+        openModel={hub.openModelFromArena}
       />
 
       <ModelHubExplorer catalog={catalog} hub={hub} />

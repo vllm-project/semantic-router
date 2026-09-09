@@ -16,8 +16,9 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	}
 
 	return CanonicalConfig{
-		Version:   "v0.3",
-		Listeners: append([]Listener(nil), cfg.Listeners...),
+		Version:           "v0.3",
+		Listeners:         append([]Listener(nil), cfg.Listeners...),
+		EvaluationCatalog: cloneCanonicalEvaluationCatalog(cfg.EvaluationCatalog),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
 				DefaultModel:           cfg.DefaultModel,

@@ -397,6 +397,17 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 			Load:    decisionCfg.Weights.Load,
 		}
 	}
+	if decisionCfg.Objective != nil {
+		result.Objective = selection.MultiFactorObjective{
+			Strategy:   decisionCfg.Objective.Strategy,
+			Priorities: make([]selection.MultiFactorPriority, 0, len(decisionCfg.Objective.Priorities)),
+		}
+		for _, priority := range decisionCfg.Objective.Priorities {
+			result.Objective.Priorities = append(result.Objective.Priorities, selection.MultiFactorPriority{
+				Factor: priority.Factor, Tolerance: priority.Tolerance,
+			})
+		}
+	}
 	if decisionCfg.SLO != nil {
 		result.SLO = selection.MultiFactorSLO{
 			MaxTPOTMs:    decisionCfg.SLO.MaxTPOTMs,
@@ -408,6 +419,11 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 	if decisionCfg.Quality != nil {
 		result.QualityIndex = decisionCfg.Quality.Index
 		result.QualityOnMissing = decisionCfg.Quality.OnMissing
+		result.QualityMinCoverage = decisionCfg.Quality.MinCoverage
+		if decisionCfg.Quality.MinScore != nil {
+			value := *decisionCfg.Quality.MinScore
+			result.QualityMinScore = &value
+		}
 		if result.QualityOnMissing == "" {
 			result.QualityOnMissing = config.QualityEvidenceOnMissingExclude
 		}

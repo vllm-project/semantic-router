@@ -31,6 +31,9 @@ export interface ModelHubArenaSurface {
   displayName: string
   description: string
   kind: 'overall' | 'capability' | 'benchmark'
+  source?: string
+  profiles?: string[]
+  metric?: string
   rows: ModelHubArenaRow[]
 }
 
@@ -243,6 +246,9 @@ function benchmarkSurface(
     displayName: benchmark.display_name,
     description: `${capabilityName} · ${component.metric.split('_').join(' ')}`,
     kind: 'benchmark',
+    source: benchmark.source,
+    profiles,
+    metric: component.metric,
     rows: rankedRows(
       models.flatMap<Omit<ModelHubArenaRow, 'rank'>>((model) => {
         const evaluation = preferredEvaluation(

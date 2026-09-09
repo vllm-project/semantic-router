@@ -425,6 +425,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/open-intelligence-index-and-model-arena',
             'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
@@ -487,6 +488,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'benchmarking/overview',
         'benchmarking/open-intelligence-index',
+        'benchmarking/custom-evaluation-catalog',
         'benchmarking/evaluation-plane',
       ],
     },

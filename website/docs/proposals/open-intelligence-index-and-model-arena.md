@@ -149,6 +149,27 @@ This does not make incomplete evidence useless. A model missing General may
 still have an available Coding score and participate in a Coding rank or a
 coding-specific route. It simply cannot claim a comparable Overall score.
 
+## Operator-owned evidence
+
+Release evidence and deployment-local evidence use the same typed graph. An
+operator defines new benchmark semantics and index DAGs under the top-level
+`evaluation_catalog`, then attaches measurements to
+`routing.modelCards[].evaluations`. Built-in benchmarks need no redeclaration.
+
+Operator resource IDs must be namespaced and versioned. They cannot shadow a
+built-in benchmark or index. Definitions pin profile, metric range, direction,
+normalization, component weights, and one explicit missing-data policy:
+
+- `require_all` produces a score only with every component;
+- `require_coverage` produces a score after a declared coverage threshold;
+- `reported_only` produces a score from any reported component.
+
+The latter two policies are deliberate operator index semantics, not implicit
+imputation. Every result still exposes its coverage. A route can impose a
+stricter `quality.min_coverage` than the index definition. An evaluation for an
+undeclared benchmark is preserved on the Model Card but cannot enter an index
+until its semantics are declared.
+
 ## Physical and virtual models
 
 A virtual model is evaluated through a frozen endpoint over every task in the
@@ -166,8 +187,13 @@ Both Hub surfaces render three independent views from the same catalog:
 
 Each view uses competition rank, exposes the selected reasoning effort, treats
 physical and virtual models identically, and supports shareable scope and layer
-state. Model details remain shareable. Incomplete models appear wherever their
-evidence is valid instead of appearing in a fabricated Overall rank.
+state. The public Hub also preserves directory filters and model details in its
+URL. Incomplete models appear wherever their evidence is valid instead of
+appearing in a fabricated Overall rank.
+
+Benchmarks are the Arena's third layer. The previous standalone benchmark
+explorer is removed from both the public Hub and Dashboard so ranking, filters,
+and URL state cannot diverge between two presentations of the same evidence.
 
 The generated snapshot currently contains 101 model cards and 1,509 evaluation
 records. Unique models with available 1.0 results are: General 35, Reasoning 86,
@@ -178,7 +204,10 @@ when a missing leaf prevents Overall eligibility.
 
 ## Routing
 
-`multi_factor` can select any versioned Overall or capability index:
+`multi_factor` can select any versioned Overall, capability, or operator index.
+It separates hard eligibility from the optimization objective.
+
+Balanced routing uses normalized weights:
 
 ```yaml
 algorithm:
@@ -187,11 +216,40 @@ algorithm:
     quality:
       index: vllm-sr/coding@1.0.0
       on_missing: exclude
+      min_coverage: 1.0
     weights:
       quality: 0.4
       latency: 0.2
       cost: 0.2
       load: 0.2
+```
+
+Accuracy-first and cost-first use the same generic lexicographic engine rather
+than product-specific branches:
+
+```yaml
+# Accuracy-first: keep models within 3% of the best quality, then minimize cost.
+objective:
+  strategy: lexicographic
+  priorities:
+    - {factor: quality, tolerance: 0.03}
+    - {factor: cost, tolerance: 0.05}
+    - {factor: latency, tolerance: 0.05}
+```
+
+```yaml
+# Cost-first: enforce a quality floor, then choose within the cheapest band.
+quality:
+  index: vllm-sr/intelligence@1.0.0
+  on_missing: exclude
+  min_coverage: 1.0
+  min_score: 65
+objective:
+  strategy: lexicographic
+  priorities:
+    - {factor: cost, tolerance: 0.05}
+    - {factor: quality, tolerance: 0.03}
+    - {factor: latency, tolerance: 0.05}
 ```
 
 The quality lookup uses the candidate's exact reasoning effort and accepts only
@@ -208,6 +266,50 @@ A general decision can select `vllm-sr/intelligence@1.0.0`; a classified coding
 decision can select `vllm-sr/coding@1.0.0`. A future benchmark is added as a
 versioned leaf and composed into a new capability/index version, without adding
 benchmark-specific branches to the router.
+
+Cost uses the current input-token estimate and requested maximum output-token
+budget with separate input/output prices. Hard SLOs and quality floors run
+before either objective. Future safety-first and cybersecurity-first recipes
+therefore add policy/eligibility gates and select the relevant versioned index;
+they do not require another selection algorithm.
+
+## Follow-up closure and roadmap
+
+This implementation closes the current contract across configuration, runtime,
+Dashboard, public Website, and documentation:
+
+- custom benchmark definitions, index DAGs, Model Card measurements, validation,
+  canonical round-trip, and exact-effort routing are one path;
+- Balanced, Accuracy-first, and Cost-first are configurations of one selector;
+- Overall, Capabilities, and Benchmarks are the only Arena layers on both Hub
+  surfaces, with shareable Arena state and complete public-Hub URL state;
+- configuration, evaluation, and algorithm guides publish the same fields and
+  missing-data behavior.
+
+The following work remains versioned follow-up, not hidden behavior in 1.0:
+
+- **MoM:** publish Cost-first, Accuracy-first, Safety-first, and
+  Cybersecurity-first virtual models beside the current Balanced recipe, then
+  optimize frozen recipes from online outcomes plus evaluation, inference, and
+  research evidence;
+- **Evaluation:** activate 1.5 and 2.0 only after their open suites are pinned,
+  expand capability indices and the Arena, and keep old benchmark/index versions
+  queryable during migration;
+- **Inference:** admit additional current models, including Kimi K3 and DSV4
+  Flash Vision Exp, through the same model/provider/evidence contract;
+- **Research:** pursue the routing program as nine concrete tracks:
+  1. select models from large open and closed model pools;
+  2. reuse KV cache across models when switching;
+  3. determine which context to retain when switching models;
+  4. improve SLMs by caching and reusing LLM reasoning traces for similar
+     requests;
+  5. learn failure patterns for self-improving distillation routing between
+     SLMs and LLMs;
+  6. route from model-internal latent statistics;
+  7. forward embeddings or other representations beyond the prompt when
+     routing to a model;
+  8. use model collaboration for test-time scaling; and
+  9. build a self-improving router with routing memory.
 
 ## Versioning and migration
 

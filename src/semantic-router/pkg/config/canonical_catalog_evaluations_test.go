@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v2"
+
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
@@ -49,6 +51,194 @@ routing:
 	}
 	assertUnknownOperatorEvaluationPreserved(t, cfg, want)
 	assertUnknownOperatorEvaluationNotIndexed(t, cfg, want.Benchmark)
+}
+
+func TestCustomEvaluationCatalogComputesAndRoundTripsIndex(t *testing.T) {
+	document := []byte(`
+version: v0.3
+evaluation_catalog:
+  benchmarks:
+    - id: acme/support-bench@1.0.0
+      display_name: ACME Support Bench
+      domain: support
+      source: https://evals.example/support-bench
+      default_profile: production
+      profiles:
+        - id: production
+          display_name: Production
+          description: Frozen production support set.
+      metrics:
+        - id: resolution_rate
+          unit: percent
+          direction: higher_is_better
+          range: [0, 100]
+  indices:
+    - id: acme/support-quality@1.0.0
+      display_name: ACME Support Quality
+      aggregation: weighted_mean
+      scale: [0, 100]
+      missing: {policy: require_all}
+      domains: {support: 1}
+      components:
+        - benchmark: acme/support-bench@1.0.0
+          benchmark_profile: production
+          metric: resolution_rate
+          weight: 1
+          normalization: {type: linear_clamp, min: 0, max: 100}
+providers:
+  models:
+    - name: private-reasoner
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          base_url: http://127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: private-reasoner
+      evaluations:
+        - benchmark: acme/support-bench@1.0.0
+          benchmark_profile: production
+          reasoning_effort: high
+          metrics: {resolution_rate: 82}
+          source: https://evals.example/runs/42
+          measured_at: 2026-09-01
+`)
+
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCustomIndexScore(t, cfg, 82)
+
+	exported := CanonicalConfigFromRouterConfig(cfg)
+	if exported.EvaluationCatalog == nil || len(exported.EvaluationCatalog.Benchmarks) != 1 || len(exported.EvaluationCatalog.Indices) != 1 {
+		t.Fatalf("exported evaluation catalog = %#v", exported.EvaluationCatalog)
+	}
+	encoded, err := yaml.Marshal(exported)
+	if err != nil {
+		t.Fatalf("marshal canonical config: %v", err)
+	}
+	replayed, err := ParseYAMLBytesWithoutEnvExpansion(encoded)
+	if err != nil {
+		t.Fatalf("reparse canonical config: %v\n%s", err, encoded)
+	}
+	assertCustomIndexScore(t, replayed, 82)
+}
+
+func TestCustomEvaluationCatalogCanAdmitExplicitPartialCoverage(t *testing.T) {
+	document := []byte(`
+version: v0.3
+evaluation_catalog:
+  benchmarks:
+    - id: acme/support-bench@1.0.0
+      display_name: ACME Support Bench
+      domain: support
+      default_profile: production
+      profiles:
+        - id: production
+          display_name: Production
+          description: Frozen production support set.
+      metrics:
+        - id: resolution_rate
+          unit: proportion
+          direction: higher_is_better
+          range: [0, 1]
+        - id: grounded_rate
+          unit: proportion
+          direction: higher_is_better
+          range: [0, 1]
+  indices:
+    - id: acme/support-quality@1.0.0
+      display_name: ACME Support Quality
+      aggregation: weighted_mean
+      scale: [0, 100]
+      missing: {policy: require_coverage, minimum: 0.5}
+      domains: {support: 1}
+      components:
+        - benchmark: acme/support-bench@1.0.0
+          benchmark_profile: production
+          metric: resolution_rate
+          weight: 0.5
+          normalization: {type: identity}
+        - benchmark: acme/support-bench@1.0.0
+          benchmark_profile: production
+          metric: grounded_rate
+          weight: 0.5
+          normalization: {type: identity}
+providers:
+  models:
+    - name: private-reasoner
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          base_url: http://127.0.0.1:8000/v1
+routing:
+  modelCards:
+    - name: private-reasoner
+      evaluations:
+        - benchmark: acme/support-bench@1.0.0
+          benchmark_profile: production
+          reasoning_effort: high
+          metrics: {resolution_rate: 0.82}
+`)
+
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, ok := cfg.ModelConfig["private-reasoner"].EvidenceResultAt(
+		"acme/support-quality@1.0.0", "high",
+	)
+	if !ok || result.Score == nil || math.Abs(*result.Score-82) > 1e-9 || math.Abs(result.Coverage-0.5) > 1e-9 {
+		t.Fatalf("partial custom index result = %#v, want available score 82 at 0.5 coverage", result)
+	}
+}
+
+func assertCustomIndexScore(t *testing.T, cfg *RouterConfig, want float64) {
+	t.Helper()
+	params := cfg.ModelConfig["private-reasoner"]
+	result, ok := params.IndexResultsByEffort["high"]["acme/support-quality@1.0.0"]
+	if !ok || result.Status != "available" || result.Score == nil || math.Abs(*result.Score-want) > 1e-9 {
+		t.Fatalf("custom index result = %#v, want available score %.1f", result, want)
+	}
+}
+
+func TestCustomEvaluationCatalogRejectsUnversionedOrBuiltInIdentities(t *testing.T) {
+	tests := []struct {
+		name      string
+		catalog   CanonicalEvaluationCatalog
+		wantError string
+	}{
+		{
+			name: "unversioned benchmark",
+			catalog: CanonicalEvaluationCatalog{Benchmarks: []modelcatalog.BenchmarkDefinition{{
+				ID: "support-bench",
+			}}},
+			wantError: "namespaced, versioned identity",
+		},
+		{
+			name: "built-in benchmark shadow",
+			catalog: CanonicalEvaluationCatalog{Benchmarks: []modelcatalog.BenchmarkDefinition{{
+				ID: "tiger-ai-lab/mmlu-pro@1.0.0",
+			}}},
+			wantError: "conflicts with an existing benchmark",
+		},
+		{
+			name: "built-in index shadow",
+			catalog: CanonicalEvaluationCatalog{Indices: []modelcatalog.IndexDefinition{{
+				ID: "vllm-sr/intelligence@1.0.0",
+			}}},
+			wantError: "conflicts with an existing index",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := canonicalCatalogInput(&CanonicalConfig{EvaluationCatalog: &test.catalog})
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("canonicalCatalogInput() error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
 }
 
 func assertUnknownOperatorEvaluationPreserved(

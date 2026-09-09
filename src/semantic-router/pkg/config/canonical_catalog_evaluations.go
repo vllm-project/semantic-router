@@ -11,23 +11,28 @@ import (
 )
 
 var (
-	operatorBenchmarkID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$`)
-	operatorMetricID    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	operatorResourceID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$`)
+	operatorMetricID   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 )
 
 // catalogIndexableEvaluationRecords adapts operator measurements whose
-// benchmark semantics are known by this release into the typed scoring graph.
+// benchmark semantics are built in or declared in evaluation_catalog into the
+// typed scoring graph.
 // Unknown namespaced benchmarks remain on EffectiveModelCard.Evaluations and
 // round-trip through canonical export, but cannot safely enter an index until
-// the repository defines their metric range, direction, and profiles.
-func catalogIndexableEvaluationRecords(card RoutingModel, modelIndex int, builtIn *modelcatalog.Registry) ([]modelcatalog.EvaluationRecord, error) {
+// their metric range, direction, and profiles are declared.
+func catalogIndexableEvaluationRecords(
+	card RoutingModel,
+	modelIndex int,
+	benchmarks map[string]modelcatalog.BenchmarkDefinition,
+) ([]modelcatalog.EvaluationRecord, error) {
 	records := make([]modelcatalog.EvaluationRecord, 0, len(card.Evaluations))
 	for evaluationIndex, evaluation := range card.Evaluations {
 		path := fmt.Sprintf("routing.modelCards[%s].evaluations[%d]", card.Name, evaluationIndex)
 		if err := validateUserEvaluation(evaluation, path); err != nil {
 			return nil, err
 		}
-		benchmark, known := builtIn.Benchmark(evaluation.Benchmark)
+		benchmark, known := benchmarks[evaluation.Benchmark]
 		if !known {
 			continue
 		}
@@ -68,7 +73,7 @@ func catalogIndexableEvaluationRecords(card RoutingModel, modelIndex int, builtI
 }
 
 func validateUserEvaluation(evaluation modelcatalog.UserEvaluation, path string) error {
-	if !operatorBenchmarkID.MatchString(evaluation.Benchmark) {
+	if !operatorResourceID.MatchString(evaluation.Benchmark) {
 		return fmt.Errorf("%s.benchmark must be a namespaced, versioned identity", path)
 	}
 	if len(evaluation.Metrics) == 0 {
