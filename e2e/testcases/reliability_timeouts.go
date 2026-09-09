@@ -41,6 +41,11 @@ func init() {
 		Tags:        []string{"reliability", "timeout", "connect"},
 		Fn:          testReliabilityShortConnectFailures,
 	})
+	pkgtestcases.Register("reliability-non-timeout-abort", pkgtestcases.TestCase{
+		Description: "Verify client cancellation before response does not record timeout telemetry",
+		Tags:        []string{"reliability", "timeout", "abort"},
+		Fn:          testReliabilityNonTimeoutAbort,
+	})
 }
 
 // TimeoutProbeModel names used for deadline, streaming, and connect verification
@@ -95,6 +100,9 @@ func testReliabilityTimeouts(ctx context.Context, client *kubernetes.Clientset, 
 	}
 	if err := testReliabilityShortConnectFailures(ctx, client, opts); err != nil {
 		failures = append(failures, fmt.Errorf("short-connect-failures: %w", err))
+	}
+	if err := testReliabilityNonTimeoutAbort(ctx, client, opts); err != nil {
+		failures = append(failures, fmt.Errorf("non-timeout-abort: %w", err))
 	}
 	if err := verifyTimeoutMetrics(ctx, client, opts, initialMetricsBody); err != nil {
 		failures = append(failures, fmt.Errorf("timeout-metrics: %w", err))
@@ -310,6 +318,35 @@ func testReliabilityShortConnectFailures(ctx context.Context, client *kubernetes
 	return nil
 }
 
+func testReliabilityNonTimeoutAbort(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if opts.Verbose {
+		fmt.Println("[Test] Testing non-timeout client abort behavior")
+	}
+
+	localPort, stop, err := setupServiceConnection(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer stop()
+
+	abortPrompt := "__mock_header_delay_4s__ client abort probe"
+	abortCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+
+	_, err = sendLocalChatCompletion(abortCtx, localPort, timeoutProbeSlowModel, abortPrompt, 200*time.Millisecond)
+	if err == nil {
+		return fmt.Errorf("expected client request to be aborted by context timeout, but got success")
+	}
+	time.Sleep(500 * time.Millisecond)
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{
+			"non_timeout_abort_verified": true,
+			"aborted_as_expected":        true,
+		})
+	}
+	return nil
+}
+
 // evaluateTimeoutBounds verifies that elapsed time is within [minBound, maxBound].
 func evaluateTimeoutBounds(name string, elapsed, minBound, maxBound time.Duration) error {
 	if elapsed < minBound {
@@ -344,8 +381,10 @@ func fetchMetricsBody(ctx context.Context, client *kubernetes.Clientset, opts pk
 }
 
 // verifyTimeoutMetrics verifies that the router's Prometheus /metrics endpoint records
-// timeout errors in llm_request_errors_total, expecting a delta of 2 for timeout-probe-fast
-// (1 from deadline timeout and 1 from stalled stream idle timeout).
+// timeout errors in llm_request_errors_total:
+// - delta == 2 for timeout-probe-fast (1 from deadline timeout 504, 1 from stalled stream idle timeout)
+// - delta == 0 for timeout-probe-slow (completed within deadline and client abort does not record timeout)
+// - delta == 1 for timeout-probe-unreachable (from connect timeout 503)
 func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, initialBody string) error {
 	if client == nil || opts.RestConfig == nil {
 		return nil
@@ -374,16 +413,24 @@ func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opt
 	finalSlow := parseRequestErrorCount(finalBody, timeoutProbeSlowModel, "timeout")
 	deltaSlow := finalSlow - initialSlow
 	if deltaSlow != 0 {
-		return fmt.Errorf("expected 0 timeout errors for slow model %q within deadline, got delta %.0f (before=%.0f, after=%.0f)",
+		return fmt.Errorf("expected 0 timeout errors for slow model %q within deadline and on client abort, got delta %.0f (before=%.0f, after=%.0f)",
 			timeoutProbeSlowModel, deltaSlow, initialSlow, finalSlow)
+	}
+
+	initialUnreachable := parseRequestErrorCount(initialBody, timeoutProbeUnreachableModel, "timeout")
+	finalUnreachable := parseRequestErrorCount(finalBody, timeoutProbeUnreachableModel, "timeout")
+	deltaUnreachable := finalUnreachable - initialUnreachable
+	if deltaUnreachable != 1 {
+		return fmt.Errorf("expected 1 timeout error for unreachable model %q (from connect timeout), got delta %.0f (before=%.0f, after=%.0f)",
+			timeoutProbeUnreachableModel, deltaUnreachable, initialUnreachable, finalUnreachable)
 	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"timeout_metrics_verified": true,
-			"initial_timeout_count":    initialFast,
-			"final_timeout_count":      finalFast,
-			"timeout_delta":            deltaFast,
+			"timeout_metrics_verified":  true,
+			"fast_timeout_delta":        deltaFast,
+			"slow_timeout_delta":        deltaSlow,
+			"unreachable_timeout_delta": deltaUnreachable,
 		})
 	}
 	return nil

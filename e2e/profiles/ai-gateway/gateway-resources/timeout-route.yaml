@@ -16,9 +16,6 @@ spec:
               value: timeout-probe-fast
       backendRefs:
         - name: vllm-llama3-8b-instruct
-      timeouts:
-        request: 2s
-        backendRequest: 2s
     - matches:
         - headers:
             - type: Exact
@@ -26,9 +23,6 @@ spec:
               value: timeout-probe-slow
       backendRefs:
         - name: vllm-llama3-8b-instruct
-      timeouts:
-        request: 15s
-        backendRequest: 15s
     - matches:
         - headers:
             - type: Exact
@@ -36,9 +30,6 @@ spec:
               value: timeout-unreachable-backend
       backendRefs:
         - name: timeout-unreachable-backend
-      timeouts:
-        request: 2s
-        backendRequest: 2s
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
@@ -53,3 +44,4 @@ spec:
   timeout:
     tcp:
       connectTimeout: 1s
+

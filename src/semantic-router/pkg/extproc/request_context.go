@@ -84,7 +84,8 @@ type RequestContext struct {
 	// the response-header phase. Zero means the status was never observed for
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
-	UpstreamStatusCode int
+	UpstreamStatusCode          int
+	UpstreamErrorMetricRecorded bool
 
 	// TTFT tracking
 	TTFTRecorded bool

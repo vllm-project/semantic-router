@@ -65,6 +65,7 @@ func (r *OpenAIRouter) handleExternalGatewayModelRouting(
 	// retains the already-selected route because this mode never clears the
 	// route cache, so upstream ownership remains with the external gateway.
 	setProviderRequestPath(&state.setHeaders, nil, targetFormat)
+	r.appendReliabilityHeaders(&state.setHeaders, model)
 	response := buildRequestBodyContinueResponse(state, nil, false)
 
 	logging.ComponentDebugEvent("extproc", "external_gateway_dispatch_prepared", map[string]interface{}{

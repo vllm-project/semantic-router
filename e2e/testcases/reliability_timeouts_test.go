@@ -161,16 +161,16 @@ func TestParseRequestErrorCount(t *testing.T) {
 
 	metricsExposition := `# HELP llm_request_errors_total Total number of request errors
 # TYPE llm_request_errors_total counter
-llm_request_errors_total{model="timeout-probe-fast",reason="timeout"} 2
+llm_request_errors_total{model="timeout-probe-fast",reason="timeout"} 1
 llm_request_errors_total{model="timeout-probe-slow",reason="timeout"} 0
-llm_request_errors_total{model="timeout-probe-unreachable",reason="upstream_5xx"} 1
+llm_request_errors_total{model="timeout-probe-unreachable",reason="timeout"} 1
 llm_request_errors_total{model="other-model",reason="invalid_request"} 5
 `
 
 	// Match exact model and reason
 	fastCount := parseRequestErrorCount(metricsExposition, "timeout-probe-fast", "timeout")
-	if fastCount != 2 {
-		t.Errorf("expected fast timeout count 2, got %v", fastCount)
+	if fastCount != 1 {
+		t.Errorf("expected fast timeout count 1, got %v", fastCount)
 	}
 
 	slowCount := parseRequestErrorCount(metricsExposition, "timeout-probe-slow", "timeout")
@@ -178,9 +178,9 @@ llm_request_errors_total{model="other-model",reason="invalid_request"} 5
 		t.Errorf("expected slow timeout count 0, got %v", slowCount)
 	}
 
-	unreachable5xx := parseRequestErrorCount(metricsExposition, "timeout-probe-unreachable", "upstream_5xx")
-	if unreachable5xx != 1 {
-		t.Errorf("expected unreachable upstream_5xx count 1, got %v", unreachable5xx)
+	unreachableTimeout := parseRequestErrorCount(metricsExposition, "timeout-probe-unreachable", "timeout")
+	if unreachableTimeout != 1 {
+		t.Errorf("expected unreachable timeout count 1, got %v", unreachableTimeout)
 	}
 
 	// Model not present or reason not matched returns 0

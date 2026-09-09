@@ -3,7 +3,9 @@ package extproc
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -355,6 +357,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		return errorResponse
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
+	r.appendReliabilityHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
 	return buildRequestBodyContinueResponse(state, nil, false)
@@ -519,6 +522,35 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: headers.SelectedModel, RawValue: []byte(model),
 	}})
+}
+
+func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueOption, model string) {
+	if r == nil || r.Config == nil || model == "" {
+		return
+	}
+	modelParams, ok := r.Config.ModelConfig[model]
+	if !ok {
+		return
+	}
+	rel := modelParams.Reliability
+	if rel.RequestTimeout != "" {
+		if dur, err := time.ParseDuration(rel.RequestTimeout); err == nil {
+			timeoutMs := dur.Milliseconds()
+			*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
+				Key:      "x-envoy-upstream-rq-timeout-ms",
+				RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+			}})
+		}
+	}
+	if rel.StreamIdleTimeout != "" {
+		if dur, err := time.ParseDuration(rel.StreamIdleTimeout); err == nil && dur > 0 {
+			timeoutMs := dur.Milliseconds()
+			*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
+				Key:      "x-envoy-upstream-stream-idle-timeout-ms",
+				RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+			}})
+		}
+	}
 }
 
 func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength int) {
