@@ -26,6 +26,7 @@ const signalTypes: SignalType[] = [
   'Modality',
   'Authz',
   'Jailbreak',
+  'Hallucination',
   'PII',
   'KB',
   'Metadata',
@@ -75,6 +76,43 @@ function stringListField({
     description,
     shouldHide: shouldHide ?? hideUnless(signalType),
   }
+}
+
+function piiFormFields(): FieldConfig<AddSignalFormState>[] {
+  return [
+    {
+      name: 'pii_source',
+      label: 'Source (PII only)',
+      type: 'select',
+      options: ['default', 'tool_result'],
+      shouldHide: hideUnless('PII'),
+    },
+    {
+      name: 'pii_threshold',
+      label: 'Threshold (PII only)',
+      type: 'number',
+      min: 0,
+      max: 1,
+      step: 0.01,
+      placeholder: '0.5',
+      shouldHide: hideUnless('PII'),
+    },
+    stringListField({
+      name: 'pii_types_allowed',
+      label: 'Allowed PII Types (PII only)',
+      signalType: 'PII',
+      addLabel: 'Allow PII type',
+      emptyLabel: 'No allowed PII types; all detected types are denied.',
+      itemLabel: 'PII type',
+      placeholder: 'EMAIL_ADDRESS',
+    }),
+    {
+      name: 'pii_include_history',
+      label: 'Include History (PII only)',
+      type: 'boolean',
+      shouldHide: hideUnless('PII'),
+    },
+  ]
 }
 
 function jailbreakFormFields(): FieldConfig<AddSignalFormState>[] {
@@ -450,37 +488,12 @@ export function buildSignalFormFields(): FieldConfig<AddSignalFormState>[] {
     },
     ...jailbreakFormFields(),
     {
-      name: 'pii_source',
-      label: 'Source (PII only)',
-      type: 'select',
-      options: ['default', 'tool_result'],
-      shouldHide: hideUnless('PII'),
-    },
-    {
-      name: 'pii_threshold',
-      label: 'Threshold (PII only)',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.5',
-      shouldHide: hideUnless('PII'),
-    },
-    stringListField({
-      name: 'pii_types_allowed',
-      label: 'Allowed PII Types (PII only)',
-      signalType: 'PII',
-      addLabel: 'Allow PII type',
-      emptyLabel: 'No allowed PII types; all detected types are denied.',
-      itemLabel: 'PII type',
-      placeholder: 'EMAIL_ADDRESS',
-    }),
-    {
-      name: 'pii_include_history',
-      label: 'Include History (PII only)',
+      name: 'hallucination_use_nli',
+      label: 'Use NLI explanations (hallucination only)',
       type: 'boolean',
-      shouldHide: hideUnless('PII'),
+      shouldHide: hideUnless('Hallucination'),
     },
+    ...piiFormFields(),
     {
       name: 'kb_name',
       label: 'Knowledge Base (KB only)',

@@ -46,6 +46,7 @@ var supportedSignalTypes = []string{
 	SignalTypeEmbedding,
 	SignalTypeFactCheck,
 	SignalTypeJailbreak,
+	SignalTypeHallucination,
 	SignalTypeKeyword,
 	SignalTypeLanguage,
 	SignalTypeModality,

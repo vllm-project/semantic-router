@@ -23,7 +23,8 @@ describe('signal form fields', () => {
   it('offers Conversation as a signal type', () => {
     const typeField = buildSignalFormFields().find((field) => field.name === 'type')
     expect((typeField as { options?: string[] }).options).toContain('Conversation')
-    expect((typeField as { options?: string[] }).options).toHaveLength(19)
+    expect((typeField as { options?: string[] }).options).toContain('Hallucination')
+    expect((typeField as { options?: string[] }).options).toHaveLength(20)
   })
 
   it('hides the conversation predicate unless the feature is a count', () => {
@@ -33,13 +34,22 @@ describe('signal form fields', () => {
     const shouldHide = predicateField?.shouldHide as (data: AddSignalFormState) => boolean
 
     expect(
-      shouldHide(baseForm({ conversation_feature: { type: 'exists', source: { type: 'message' } } })),
+      shouldHide(
+        baseForm({ conversation_feature: { type: 'exists', source: { type: 'message' } } }),
+      ),
     ).toBe(true)
     expect(
-      shouldHide(baseForm({ conversation_feature: { type: 'count', source: { type: 'message' } } })),
+      shouldHide(
+        baseForm({ conversation_feature: { type: 'count', source: { type: 'message' } } }),
+      ),
     ).toBe(false)
     expect(
-      shouldHide(baseForm({ type: 'Keywords', conversation_feature: { type: 'count', source: { type: 'message' } } })),
+      shouldHide(
+        baseForm({
+          type: 'Keywords',
+          conversation_feature: { type: 'count', source: { type: 'message' } },
+        }),
+      ),
     ).toBe(true)
   })
 

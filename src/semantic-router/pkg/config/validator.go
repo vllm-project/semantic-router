@@ -60,6 +60,7 @@ var (
 		validateJailbreakContracts,
 		validatePIIContracts,
 		validateSignalStageContracts,
+		validateHallucinationSignalContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

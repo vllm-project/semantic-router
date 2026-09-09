@@ -6,6 +6,7 @@ import type {
   DomainSignal,
   EmbeddingSignal,
   FactCheckSignal,
+  HallucinationSignal,
   JailbreakSignal,
   KBSignal,
   KeywordSignal,
@@ -36,6 +37,7 @@ type UnifiedSignalData = Partial<
     ModalitySignal &
     RoleBindingSignal &
     JailbreakSignal &
+    HallucinationSignal &
     PIISignal &
     KBSignal &
     MetadataSignal &

@@ -11,8 +11,11 @@ import type { ViewSection } from '../components/ViewModal'
 import type {
   AddSignalFormState,
   ConfigData,
+  DomainSignal,
+  HallucinationSignal,
   JailbreakSignal,
   MetadataSignal,
+  PIISignal,
   SignalType,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
@@ -151,6 +154,62 @@ function jailbreakFormStateFrom(rawData: UnifiedSignal['rawData']): JailbreakFor
   }
 }
 
+function hallucinationSummary(rule: HallucinationSignal): string {
+  const description = rule.description || 'No description'
+  return rule.use_nli ? `${description} (NLI explanations)` : description
+}
+
+function hallucinationDetailFields(rawData: UnifiedSignal['rawData']): ViewSection['fields'] {
+  return [
+    { label: 'Use NLI explanations', value: rawData.use_nli ? 'Yes' : 'No', fullWidth: true },
+    { label: 'Description', value: rawData.description || 'N/A', fullWidth: true },
+  ]
+}
+
+// responseStageDetailSection renders the rules that are scored from the
+// model's output, which share a view shape but not their fields.
+function responseStageDetailSection(signal: UnifiedSignal): ViewSection {
+  if (signal.type === 'Hallucination') {
+    return { title: 'Hallucination Signal', fields: hallucinationDetailFields(signal.rawData) }
+  }
+  return { title: 'Jailbreak Signal', fields: jailbreakDetailFields(signal.rawData) }
+}
+
+function buildDomainEntry(name: string, formData: AddSignalFormState): DomainSignal {
+  return {
+    name,
+    description: formData.description,
+    mmlu_categories: normalizeStringList(formData.mmlu_categories, 'MMLU categories'),
+  }
+}
+
+function buildHallucinationEntry(name: string, formData: AddSignalFormState): HallucinationSignal {
+  const entry: HallucinationSignal = { name, description: formData.description || undefined }
+  if (formData.hallucination_use_nli) {
+    entry.use_nli = true
+  }
+  return entry
+}
+
+function buildPIIEntry(name: string, formData: AddSignalFormState): PIISignal {
+  const pii_threshold = formData.pii_threshold ?? 0.5
+  if (pii_threshold < 0 || pii_threshold > 1) {
+    throw new Error('PII threshold must be between 0.0 and 1.0.')
+  }
+  const normalizedAllowedTypes = normalizeStringList(
+    formData.pii_types_allowed,
+    'Allowed PII types',
+  )
+  return {
+    name,
+    threshold: pii_threshold,
+    ...(formData.pii_source === 'tool_result' ? { source: 'tool_result' } : {}),
+    pii_types_allowed: normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined,
+    include_history: formData.pii_include_history || false,
+    description: formData.description || undefined,
+  }
+}
+
 function buildJailbreakEntry(name: string, formData: AddSignalFormState): JailbreakSignal {
   const jailbreak_threshold = formData.jailbreak_threshold ?? 0.65
   if (jailbreak_threshold < 0 || jailbreak_threshold > 1) {
@@ -229,6 +288,7 @@ export default function ConfigPageSignalsSection({
           modality: undefined,
           role_bindings: undefined,
           jailbreak: config?.jailbreak,
+          hallucination: config?.hallucination,
           pii: config?.pii,
         }
       : null
@@ -377,6 +437,15 @@ export default function ConfigPageSignalsSection({
       type: 'Authz',
       summary: `${binding.role} • ${subjectCount} ${subjectCount === 1 ? 'subject' : 'subjects'}`,
       rawData: binding,
+    })
+  })
+
+  effectiveSignals?.hallucination?.forEach((rule) => {
+    allSignals.push({
+      name: rule.name,
+      type: 'Hallucination',
+      summary: hallucinationSummary(rule),
+      rawData: rule,
     })
   })
 
@@ -817,8 +886,8 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ],
       })
-    } else if (signal.type === 'Jailbreak') {
-      sections.push({ title: 'Jailbreak Signal', fields: jailbreakDetailFields(signal.rawData) })
+    } else if (signal.type === 'Jailbreak' || signal.type === 'Hallucination') {
+      sections.push(responseStageDetailSection(signal))
     } else if (signal.type === 'PII') {
       sections.push({
         title: 'PII Signal',
@@ -933,6 +1002,7 @@ export default function ConfigPageSignalsSection({
       composer_operator: 'AND',
       composer_conditions: [],
       ...jailbreakFormDefaults(),
+      hallucination_use_nli: false,
       pii_threshold: 0.5,
       pii_source: 'default',
       pii_types_allowed: [],
@@ -994,6 +1064,8 @@ export default function ConfigPageSignalsSection({
             composer_operator: signal.rawData.composer?.operator || 'AND',
             composer_conditions: [...(signal.rawData.composer?.conditions || [])],
             ...jailbreakFormStateFrom(signal.rawData),
+            hallucination_use_nli:
+              signal.type === 'Hallucination' ? !!signal.rawData.use_nli : false,
             pii_threshold: signal.rawData.threshold ?? 0.5,
             pii_source: signal.rawData.source === 'tool_result' ? 'tool_result' : 'default',
             pii_types_allowed: [...(signal.rawData.pii_types_allowed || [])],
@@ -1092,14 +1164,9 @@ export default function ConfigPageSignalsSection({
           break
         }
         case 'Domain': {
-          const mmlu_categories = normalizeStringList(formData.mmlu_categories, 'MMLU categories')
           newConfig.signals.domains = [
             ...(newConfig.signals.domains || []),
-            {
-              name,
-              description: formData.description,
-              mmlu_categories,
-            },
+            buildDomainEntry(name, formData),
           ]
           break
         }
@@ -1288,28 +1355,15 @@ export default function ConfigPageSignalsSection({
           ]
           break
         }
-        case 'PII': {
-          const pii_threshold = formData.pii_threshold ?? 0.5
-          if (pii_threshold < 0 || pii_threshold > 1) {
-            throw new Error('PII threshold must be between 0.0 and 1.0.')
-          }
-          const normalizedAllowedTypes = normalizeStringList(
-            formData.pii_types_allowed,
-            'Allowed PII types',
-          )
-          const allowedList = normalizedAllowedTypes.length > 0 ? normalizedAllowedTypes : undefined
-          const source = formData.pii_source === 'tool_result' ? 'tool_result' : undefined
-          newConfig.signals.pii = [
-            ...(newConfig.signals.pii || []),
-            {
-              name,
-              threshold: pii_threshold,
-              ...(source ? { source } : {}),
-              pii_types_allowed: allowedList,
-              include_history: formData.pii_include_history || false,
-              description: formData.description || undefined,
-            },
+        case 'Hallucination': {
+          newConfig.signals.hallucination = [
+            ...(newConfig.signals.hallucination || []),
+            buildHallucinationEntry(name, formData),
           ]
+          break
+        }
+        case 'PII': {
+          newConfig.signals.pii = [...(newConfig.signals.pii || []), buildPIIEntry(name, formData)]
           break
         }
         case 'KB': {
