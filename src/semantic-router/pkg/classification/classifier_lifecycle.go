@@ -149,6 +149,8 @@ func (c *Classifier) Close() error {
 
 	closeResource("MCP category classifier", c.mcpCategoryInitializer)
 	closeResource("jailbreak classifier", c.jailbreakInference)
+	closeResource("complexity score backend", c.complexityScoreBackend)
+	closeResource("complexity label backend", c.complexityLabelBackend)
 	genericNames := make([]string, 0, len(c.genericClassifiers))
 	for name := range c.genericClassifiers {
 		genericNames = append(genericNames, name)

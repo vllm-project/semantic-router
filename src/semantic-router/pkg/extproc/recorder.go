@@ -586,6 +586,89 @@ func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRu
 	return outcome
 }
 
+// recordRouterReplayHallucination appends the response-stage hallucination
+// observation to the replay record, one outcome per hallucination rule, the
+// way recordRouterReplayResponseJailbreak does for jailbreak rules. A rule the
+// request never evaluated (the fact-check signal said the prompt makes no
+// claims worth grounding) is recorded as not applicable, so the record says
+// why nothing was checked rather than saying nothing.
+func (r *OpenAIRouter) recordRouterReplayHallucination(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+	rules := r.hallucinationRules(ctx)
+	if len(rules) == 0 {
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+	now := time.Now().UTC()
+	action := ""
+	if r.isHallucinationEnabledForDecision(ctx.VSRSelectedDecision) {
+		action = r.getHallucinationActionForDecision(ctx.VSRSelectedDecision)
+	}
+	for _, rule := range rules {
+		outcome := hallucinationReplayOutcome(ctx, rule, now, action)
+		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_hallucination_outcome_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"replay_id":  ctx.RouterReplayID,
+				"rule":       rule.Name,
+				"error":      err.Error(),
+			})
+		}
+	}
+}
+
+func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRule, now time.Time, action string) routerreplay.Outcome {
+	key := signalKey(config.SignalTypeHallucination, rule.Name)
+	outcome := routerreplay.Outcome{
+		Timestamp: now,
+		Source:    "router",
+		Target:    key,
+		Verdict:   "not_applicable",
+		Reason:    "fact_check_not_needed",
+		Metadata: map[string]string{
+			"signal":    config.SignalTypeHallucination,
+			"direction": config.SignalDirectionResponse,
+			"use_nli":   strconv.FormatBool(rule.UseNLI),
+		},
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
+	}
+	if action != "" {
+		outcome.Metadata["action"] = action
+	}
+	if code, failed := ctx.VSRSignalErrors[key]; failed {
+		outcome.Verdict = "unavailable"
+		outcome.Reason = code
+		return outcome
+	}
+	score, observed := ctx.VSRSignalConfidences[key]
+	if !observed {
+		return outcome
+	}
+	outcome.Verdict = "not_detected"
+	outcome.Reason = ""
+	outcome.Score = score
+	if evidence := ctx.VSRHallucinationEvidence; evidence != nil {
+		outcome.Metadata["spans"] = strconv.Itoa(len(evidence.Spans))
+	}
+	for _, matched := range ctx.VSRMatchedHallucination {
+		if matched == rule.Name {
+			outcome.Verdict = "detected"
+			break
+		}
+	}
+	return outcome
+}
+
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
 	if ctx == nil || ctx.RouterReplayID == "" || usage.TotalTokens == nil {
 		return

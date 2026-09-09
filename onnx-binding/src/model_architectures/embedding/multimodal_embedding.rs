@@ -253,6 +253,9 @@ impl MultiModalEmbeddingModel {
     pub fn model_path(&self) -> &str {
         &self.model_path
     }
+    pub fn tokenizer(&self) -> &Tokenizer {
+        &self.tokenizer
+    }
 
     /// Encode text → L2-normalised embedding.
     pub fn encode_text(&self, text: &str, target_dim: Option<usize>) -> UnifiedResult<Array1<f32>> {

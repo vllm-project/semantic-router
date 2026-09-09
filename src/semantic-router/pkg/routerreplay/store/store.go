@@ -111,6 +111,55 @@ type ToolTraceStep struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
+// LooperUsage is content-free token accounting for one Looper attempt.
+type LooperUsage struct {
+	PromptTokens     int64 `json:"prompt_tokens,omitempty"`
+	CompletionTokens int64 `json:"completion_tokens,omitempty"`
+	TotalTokens      int64 `json:"total_tokens,omitempty"`
+}
+
+// LooperAttempt records one bounded model or verifier attempt without content.
+type LooperAttempt struct {
+	Ordinal int    `json:"ordinal"`
+	Stage   string `json:"stage"`
+	Role    string `json:"role,omitempty"`
+	Model   string `json:"model,omitempty"`
+
+	Status      string `json:"status"`
+	Reason      string `json:"reason,omitempty"`
+	Usable      *bool  `json:"usable,omitempty"`
+	Accepted    *bool  `json:"accepted,omitempty"`
+	Selected    bool   `json:"selected,omitempty"`
+	Synthesized bool   `json:"synthesized,omitempty"`
+	Discarded   bool   `json:"discarded,omitempty"`
+
+	VerifierType       string      `json:"verifier_type,omitempty"`
+	VerifierVersion    string      `json:"verifier_version,omitempty"`
+	Score              *float64    `json:"score,omitempty"`
+	Threshold          *float64    `json:"threshold,omitempty"`
+	ReservedTokens     *int64      `json:"reserved_tokens,omitempty"`
+	EstimatedTokens    *int64      `json:"estimated_tokens,omitempty"`
+	Usage              LooperUsage `json:"usage,omitempty"`
+	EstimatedCost      *float64    `json:"estimated_cost,omitempty"`
+	ActualCost         *float64    `json:"actual_cost,omitempty"`
+	Currency           string      `json:"currency,omitempty"`
+	QueueLatencyMs     *int64      `json:"queue_latency_ms,omitempty"`
+	FirstByteLatencyMs *int64      `json:"first_byte_latency_ms,omitempty"`
+	TotalLatencyMs     int64       `json:"total_latency_ms"`
+}
+
+// LooperDiagnostics is the versioned, bounded execution trace retained by Replay.
+type LooperDiagnostics struct {
+	Version             int             `json:"version"`
+	TraceID             string          `json:"trace_id,omitempty"`
+	Algorithm           string          `json:"algorithm"`
+	Attempts            []LooperAttempt `json:"attempts,omitempty"`
+	FinalAttemptOrdinal int             `json:"final_attempt_ordinal,omitempty"`
+	AttemptsTruncated   bool            `json:"attempts_truncated,omitempty"`
+	DroppedAttemptCount int             `json:"dropped_attempt_count,omitempty"`
+	DroppedUsage        LooperUsage     `json:"dropped_usage,omitempty"`
+}
+
 // RouteDiagnostics summarizes the final route, Router Learning protection,
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
@@ -121,6 +170,7 @@ type RouteDiagnostics struct {
 	SelectionMethod                string                   `json:"selection_method,omitempty"`
 	SelectionReasoning             string                   `json:"selection_reasoning,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics `json:"fusion_quorum,omitempty"`
+	Looper                         *LooperDiagnostics       `json:"looper,omitempty"`
 	PromptHelperModel              string                   `json:"prompt_helper_model,omitempty"`
 	PromptHelperPromptTokens       int64                    `json:"prompt_helper_prompt_tokens,omitempty"`
 	PromptHelperCompletionTokens   int64                    `json:"prompt_helper_completion_tokens,omitempty"`
@@ -536,9 +586,25 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
+	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	return &cloned
+}
+
+func cloneLooperDiagnostics(value *LooperDiagnostics) *LooperDiagnostics {
+	if value == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var cloned LooperDiagnostics
+	if err := json.Unmarshal(encoded, &cloned); err != nil {
+		return nil
+	}
 	return &cloned
 }
 
