@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -756,5 +757,68 @@ func TestShadowDispatcherCloseDrainsInflightCalls(t *testing.T) {
 	}
 	if err := router.ShadowDispatcher.ctx.Err(); err != context.Canceled {
 		t.Fatalf("dispatcher context after close = %v, want canceled", err)
+	}
+}
+
+// TestShadowDispatchRejectsCrossOriginRedirect proves a shadow backend cannot
+// redirect the router elsewhere: the prompt and the shadow credential reach
+// only the configured origin, the redirect target receives nothing, and the
+// outcome names the rejection without retrying.
+func TestShadowDispatchRejectsCrossOriginRedirect(t *testing.T) {
+	var leaked atomic.Int32
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked.Add(1)
+		_, _ = io.Copy(io.Discard, r.Body)
+		writeShadowChatCompletion(w, "stolen")
+	}))
+	t.Cleanup(other.Close)
+
+	backend := newShadowTestBackend(t)
+	backend.setHandler(func(w http.ResponseWriter, _ []byte) {
+		w.Header().Set("Location", other.URL+"/v1/chat/completions")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+	router, primaryModel := newShadowTestRouter(t, backend)
+	shadowParams := router.Config.ModelConfig[shadowTestModel]
+	shadowParams.AccessKey = "shadow-key"
+	router.Config.ModelConfig[shadowTestModel] = shadowParams
+	cfg := shadowTestPluginConfig()
+	cfg.MaxRetries = 2
+
+	baseline := runShadowRequest(t, router, primaryModel, nil, nil)
+	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	if !bytes.Equal(baseline.body, run.body) {
+		t.Fatal("primary body changed when shadow backend redirected")
+	}
+	waitForShadow(t, router)
+
+	if got := backend.requestCount(); got != 1 {
+		t.Fatalf("configured backend requests = %d, want exactly 1 (no retry of a redirect)", got)
+	}
+	if got := backend.headers[0].Get("Authorization"); got != "Bearer shadow-key" {
+		t.Fatalf("configured backend Authorization = %q", got)
+	}
+	if !bytes.Contains(backend.bodies[0], []byte("please shadow this prompt")) {
+		t.Fatalf("configured backend did not receive the prompt: %s", backend.bodies[0])
+	}
+	if got := leaked.Load(); got != 0 {
+		t.Fatalf("redirect target received %d request(s); prompt or credential left the configured origin", got)
+	}
+
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonRedirectRejected {
+		t.Fatalf("outcome verdict=%q reason=%q, want failed/redirect_rejected", outcome.Verdict, outcome.Reason)
+	}
+	if outcome.Metadata["status_code"] != "307" || outcome.Metadata["attempts"] != "1" {
+		t.Fatalf("metadata = %v", outcome.Metadata)
+	}
+	if strings.Contains(outcome.Metadata["error"], "/v1/chat/completions") {
+		t.Fatalf("outcome error leaked the redirect path: %q", outcome.Metadata["error"])
+	}
+	if _, ok := outcome.Metadata["response_sha256"]; ok {
+		t.Fatal("rejected redirect must not carry response provenance")
+	}
+	if got := shadowCounter(shadowTestDecision, metrics.ShadowDispatchResultFailed, shadowReasonRedirectRejected); got < 1 {
+		t.Fatalf("redirect_rejected metric = %v, want at least 1", got)
 	}
 }

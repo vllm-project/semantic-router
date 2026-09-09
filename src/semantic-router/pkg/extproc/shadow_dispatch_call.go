@@ -190,6 +190,10 @@ func shadowConnectorFailure(callCtx, rootCtx context.Context, err error) (reason
 		return shadowReasonCredentialUnresolved, attempts, 0
 	case connector.KindStatus:
 		return shadowReasonUpstreamStatus, attempts, connectorErr.StatusCode
+	case connector.KindRedirect:
+		// The connector never follows a redirect, so the prompt and the
+		// shadow credential only ever reached the configured origin.
+		return shadowReasonRedirectRejected, attempts, connectorErr.StatusCode
 	case connector.KindResponse:
 		if errors.Is(err, connector.ErrResponseTooLarge) {
 			return shadowReasonResponseTooLarge, attempts, 0

@@ -53,6 +53,7 @@ const (
 	shadowReasonTimeout              = "timeout"
 	shadowReasonTransportError       = "transport_error"
 	shadowReasonUpstreamStatus       = "upstream_status"
+	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
 

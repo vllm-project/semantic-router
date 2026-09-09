@@ -15,7 +15,7 @@
 
 Promoting a new model into a routing recipe needs evidence from production-shaped requests. Offline evaluation misses real prompt distributions, and gray release exposes users to an unproven model. Shadow dispatch fills the step in between: the primary model still answers every request, while a copy of the same finalized request is sent to the candidate in the background. The shadow result is stored as an immutable outcome on the request's replay record, so operators can correlate primary and shadow observations later without exposing protected content.
 
-The shadow copy starts from the same approved neutral request the primary dispatch was built from, after every request plugin has run. It is then rendered for the shadow model through the same encode and provider-adaptation steps a primary dispatch uses, so reasoning controls follow the shadow model's family, not the primary's. It is always sent non-streaming. Only the W3C `traceparent` and `tracestate` headers are propagated; client headers are not, and that includes `baggage`, which the tracing propagator extracts from the client and which may carry anything the client chose to attach. Decision header mutations run for the primary backend and stay there unless `forward_headers` names them, so an operator opts in per header and a custom credential the router cannot recognise is never copied by default. Known credential carriers and whichever header the primary or shadow provider profile resolves as its `auth_header` are dropped even when listed. Only the router's own static credentials for the shadow model's backend are used, so a primary credential can never cross into the shadow backend.
+The shadow copy starts from the same approved neutral request the primary dispatch was built from, after every request plugin has run. It is then rendered for the shadow model through the same encode and provider-adaptation steps a primary dispatch uses, so reasoning controls follow the shadow model's family, not the primary's. It is always sent non-streaming. Only the W3C `traceparent` and `tracestate` headers are propagated; client headers are not, and that includes `baggage`, which the tracing propagator extracts from the client and which may carry anything the client chose to attach. Decision header mutations run for the primary backend and stay there unless `forward_headers` names them, so an operator opts in per header and a custom credential the router cannot recognise is never copied by default. Known credential carriers and whichever header the primary or shadow provider profile resolves as its `auth_header` are dropped even when listed. Only the router's own static credentials for the shadow model's backend are used, so a primary credential can never cross into the shadow backend. The shadow call is sent only to the configured backend address: a redirect answer is never followed, so neither the prompt nor the shadow credential can be forwarded to an origin the configuration does not name.
 
 ## When to Use
 
@@ -75,7 +75,7 @@ The request path does one non-blocking slot check and returns. Everything else r
 | Result | Reasons |
 | --- | --- |
 | `completed` | `completed` |
-| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `response_too_large`, `malformed_response` |
+| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
 | `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
 | `sampled_out` | `sampled_out` |
 
@@ -89,6 +89,7 @@ A `failed` outcome does not always say something about the candidate model. Read
 | --- | --- | --- |
 | Candidate rejected the request | `upstream_status` with a 4xx `status_code` | The shadow model could not accept the approved request, for example an unsupported parameter or a context window that is too small. Count it against the candidate. |
 | Candidate health or capacity | `upstream_status` with a 5xx `status_code`, `timeout`, `transport_error` | The backend was unreachable, overloaded, or too slow within `timeout_seconds` after `max_retries`. This measures the deployment, not answer quality. |
+| Candidate tried to redirect | `redirect_rejected` with a 3xx `status_code` | The backend answered with a redirect. The router never follows it, so the prompt and the shadow credential only reached the configured backend. Point the shadow model at the backend's final address. |
 | Candidate output problem | `malformed_response`, `response_too_large` | The backend answered but the body was not a valid response for its wire format or exceeded `max_response_bytes`. |
 | Router-side, not about the candidate | `backend_unresolved`, `credential_unresolved`, `encode_failed` | The router could not build or address the shadow call. Fix the configuration and exclude these from any candidate comparison. |
 

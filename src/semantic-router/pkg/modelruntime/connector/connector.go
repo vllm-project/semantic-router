@@ -88,8 +88,36 @@ func New(
 		baseURL:   parsed,
 		authorize: authorize,
 		options:   options,
-		http:      &http.Client{Transport: transport},
+		http: &http.Client{
+			Transport:     transport,
+			CheckRedirect: rejectRedirect,
+		},
 	}, nil
+}
+
+// rejectRedirect stops the HTTP client from following any redirect. The
+// connector binds one configured origin; following a redirect would replay
+// the request body and its credential headers to whatever origin the remote
+// named, which is outside the trust boundary the caller configured. Returning
+// ErrUseLastResponse hands the redirect response back to readResponse, where
+// it is classified as KindRedirect without a second request being sent.
+func rejectRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+// isRedirectStatus reports the status codes for which the standard client
+// would have issued a follow-up request.
+func isRedirectStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusMovedPermanently,
+		http.StatusFound,
+		http.StatusSeeOther,
+		http.StatusTemporaryRedirect,
+		http.StatusPermanentRedirect:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateOptions(options Options) error {
@@ -226,6 +254,15 @@ func (c *Client) readResponse(
 	response *http.Response,
 	attempt int,
 ) (Result, *Error) {
+	if isRedirectStatus(response.StatusCode) {
+		return Result{}, &Error{
+			Kind:       KindRedirect,
+			Operation:  operation.Name,
+			StatusCode: response.StatusCode,
+			Attempt:    attempt,
+			Cause:      fmt.Errorf("%w: %s", ErrRedirectRejected, redirectTarget(response)),
+		}
+	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
@@ -267,6 +304,20 @@ func (c *Client) readResponse(
 		}
 	}
 	return Result{Body: responseBody, StatusCode: response.StatusCode}, nil
+}
+
+// redirectTarget names where a rejected redirect pointed, reduced to its
+// scheme and host so the diagnostic never carries a path or query.
+func redirectTarget(response *http.Response) string {
+	location := strings.TrimSpace(response.Header.Get("Location"))
+	if location == "" {
+		return "no location"
+	}
+	parsed, err := url.Parse(location)
+	if err != nil || parsed.Host == "" {
+		return "relative location"
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {
