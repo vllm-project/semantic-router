@@ -15,7 +15,9 @@ from provenance.metrics import (  # noqa: E402
     abstention_curve,
     calibration_metrics,
     classification_metrics,
+    discrimination,
     latency_percentiles,
+    operating_points,
 )
 from provenance.redaction import RedactionError  # noqa: E402
 
@@ -450,3 +452,125 @@ def test_metrics_reject_misaligned_inputs():
         calibration_metrics([1], [1], [0.9], bin_count=1)
     with pytest.raises(ValueError):
         latency_percentiles([])
+
+
+GATE_MAPPING = {"benign": 0, "jailbreak": 1}
+# Above this the argmax of a two-class softmax picks the positive label.
+ARGMAX_BOUNDARY = 0.5
+
+
+def test_operating_points_score_the_positive_class_mass():
+    """Row 0 and row 1 are unsafe; only row 0 clears 0.7. Row 2 is a misfire."""
+    probabilities = [[0.1, 0.9], [0.6, 0.4], [0.2, 0.8], [0.9, 0.1]]
+
+    (point,) = operating_points(
+        [1, 1, 0, 0], probabilities, GATE_MAPPING, ["jailbreak"], (0.7,)
+    )
+
+    assert point["recall"] == pytest.approx(0.5)
+    assert point["false_positive_rate"] == pytest.approx(0.5)
+    assert point["precision"] == pytest.approx(0.5)
+    assert point["flagged_rate"] == pytest.approx(0.5)
+
+
+def test_operating_points_disagree_with_the_argmax():
+    """The mass on two positive classes clears the gate while benign wins argmax."""
+    mapping = {"benign": 0, "jailbreak": 1, "injection": 2}
+    probabilities = [[0.35, 0.33, 0.32], [0.9, 0.05, 0.05]]
+
+    (point,) = operating_points(
+        [1, 0], probabilities, mapping, ["jailbreak", "injection"], (0.6,)
+    )
+    curve = abstention_curve([1, 0], [0, 0], [0.35, 0.9], thresholds=(0.6,))["curve"]
+
+    assert point["recall"] == pytest.approx(1.0)
+    assert point["false_positive_rate"] == pytest.approx(0.0)
+    # The argmax reading calls the same row benign and answers only the other.
+    assert curve[0]["selective_accuracy"] == pytest.approx(1.0)
+
+
+def test_operating_points_report_null_for_a_side_the_split_does_not_carry():
+    (point,) = operating_points(
+        [0, 0], [[0.2, 0.8], [0.9, 0.1]], GATE_MAPPING, ["jailbreak"], (0.7,)
+    )
+
+    assert point["recall"] is None
+    assert point["false_positive_rate"] == pytest.approx(0.5)
+
+
+def test_operating_points_skip_a_label_the_artifact_does_not_define():
+    assert (
+        operating_points([1], [[0.2, 0.8]], GATE_MAPPING, ["malicious"], (0.7,)) == []
+    )
+
+
+def test_discrimination_ranks_without_fixing_a_threshold():
+    """Every unsafe row outranks every safe one, whatever the threshold is."""
+    probabilities = [[0.4, 0.6], [0.45, 0.55], [0.7, 0.3], [0.9, 0.1]]
+
+    separation = discrimination(
+        [1, 1, 0, 0], probabilities, GATE_MAPPING, ["jailbreak"]
+    )
+
+    assert separation["roc_auc"] == pytest.approx(1.0)
+    assert separation["recall_at_fpr_budget"] == pytest.approx(1.0)
+    assert separation["fpr_budget"] == pytest.approx(0.01)
+
+
+def test_discrimination_survives_a_threshold_the_gate_cannot_use():
+    """Ranking is perfect while no configured threshold separates the two sides.
+
+    Every score sits above 0.5, so the argmax calls all four rows unsafe and the
+    accuracy is 0.5. The separation is still 1.0, which is the point of
+    reporting it.
+    """
+    probabilities = [[0.1, 0.9], [0.2, 0.8], [0.3, 0.7], [0.4, 0.6]]
+
+    separation = discrimination(
+        [1, 1, 0, 0], probabilities, GATE_MAPPING, ["jailbreak"]
+    )
+
+    assert all(row[1] > ARGMAX_BOUNDARY for row in probabilities)
+    assert separation["roc_auc"] == pytest.approx(1.0)
+
+
+def test_discrimination_shares_the_rank_of_a_tie():
+    """A tie across the two sides cannot be split to buy separation."""
+    separation = discrimination(
+        [1, 0], [[0.5, 0.5], [0.5, 0.5]], GATE_MAPPING, ["jailbreak"]
+    )
+
+    assert separation["roc_auc"] == pytest.approx(0.5)
+    # No threshold flags the positive without also flagging the negative.
+    assert separation["recall_at_fpr_budget"] is None
+
+
+def test_recall_at_fpr_budget_stops_at_the_budget():
+    """The budget truncates the sweep before the remaining positives are reached.
+
+    Two unsafe rows score above every safe row, and two score below all of them.
+    A budget of one safe row in four reaches the first safe score and stops, so
+    half the unsafe rows are unreachable at that budget even though the ranking
+    would find them later.
+    """
+    scores = [0.9, 0.8, 0.3, 0.2, 0.7, 0.6, 0.5, 0.4]
+    probabilities = [[1 - score, score] for score in scores]
+    y_true = [1, 1, 1, 1, 0, 0, 0, 0]
+
+    separation = discrimination(
+        y_true, probabilities, GATE_MAPPING, ["jailbreak"], fpr_budget=0.25
+    )
+
+    assert separation["recall_at_fpr_budget"] == pytest.approx(0.5)
+    # Ranking alone would rate it higher; the budget is what costs the recall.
+    assert separation["roc_auc"] == pytest.approx(0.5)
+
+
+def test_discrimination_is_undefined_when_the_split_carries_one_side():
+    assert (
+        discrimination([1, 1], [[0.1, 0.9], [0.2, 0.8]], GATE_MAPPING, ["jailbreak"])
+        is None
+    )
+    assert (
+        discrimination([1, 0], [[0.1, 0.9], [0.8, 0.2]], GATE_MAPPING, ["nope"]) is None
+    )

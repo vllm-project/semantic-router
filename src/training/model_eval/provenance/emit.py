@@ -298,6 +298,7 @@ def build_evaluation_manifest(
     abstention: dict[str, Any],
     performance: dict[str, Any],
     slices: list[dict[str, Any]] | None = None,
+    discrimination: dict[str, Any] | None = None,
     description: str | None = None,
 ) -> dict[str, Any]:
     harness: dict[str, Any] = {
@@ -329,6 +330,8 @@ def build_evaluation_manifest(
     }
     if slices:
         manifest["slices"] = slices
+    if discrimination:
+        manifest["discrimination"] = discrimination
     if description:
         manifest["description"] = description
     return manifest

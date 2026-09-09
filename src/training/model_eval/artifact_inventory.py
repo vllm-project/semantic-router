@@ -97,12 +97,11 @@ class ServedArtifact:
         classifier, so its recall and false-positive rate are what the report
         has to state.
         """
-        declared: list[str] = []
-        for site in self.sites:
-            declared += [
-                label for label in site.positive_labels if label not in declared
-            ]
-        return tuple(declared)
+        return tuple(
+            dict.fromkeys(
+                label for site in self.sites for label in site.positive_labels
+            )
+        )
 
     @property
     def mapping_paths(self) -> tuple[str, ...]:
