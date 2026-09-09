@@ -38,6 +38,7 @@ export const PLUGIN_TYPES = [
   'request_params',
   'response_jailbreak',
   'context_compression',
+  'shadow_dispatch',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -54,6 +55,7 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   request_params: 'Mutate request parameters before forwarding to the model',
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
   context_compression: 'Compress large tool outputs before provider dispatch',
+  shadow_dispatch: 'Send a bounded, sampled copy of the request to a secondary model without affecting the live response',
 }
 
 export const BACKEND_TYPES = [

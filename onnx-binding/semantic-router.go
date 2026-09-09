@@ -104,6 +104,7 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -476,6 +477,24 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedModelType, modelType)
+	}
+}
+
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
 	}
 }
 

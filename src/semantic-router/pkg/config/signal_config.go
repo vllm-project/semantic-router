@@ -450,12 +450,24 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 }
 
 type ComplexityRule struct {
-	Name        string               `yaml:"name"`
-	Threshold   float32              `yaml:"threshold"`
-	Hard        ComplexityCandidates `yaml:"hard"`
-	Easy        ComplexityCandidates `yaml:"easy"`
-	Description string               `yaml:"description,omitempty"`
-	Composer    *RuleCombination     `yaml:"composer,omitempty"`
+	Name string `yaml:"name"`
+	// Threshold is the symmetric shorthand, kept because the local margin is
+	// signed and centred on zero: hard above +threshold, easy below
+	// -threshold. Mutually exclusive with the explicit pair below.
+	Threshold float32              `yaml:"threshold"`
+	Hard      ComplexityCandidates `yaml:"hard"`
+	Easy      ComplexityCandidates `yaml:"easy"`
+	// The explicit boundary pair, for a score whose scale is the model's own
+	// rather than a signed margin. The pair used states which way difficulty
+	// runs, so no separate direction field is needed: hard_above with
+	// easy_below where a higher score is harder, hard_below with easy_above
+	// where a lower one is. Resolved by EffectiveBoundaries.
+	HardAbove   *float64         `yaml:"hard_above,omitempty"`
+	EasyBelow   *float64         `yaml:"easy_below,omitempty"`
+	HardBelow   *float64         `yaml:"hard_below,omitempty"`
+	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Composer    *RuleCombination `yaml:"composer,omitempty"`
 }
 
 type Category struct {
