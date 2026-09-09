@@ -4827,8 +4827,10 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 }
 
 // TestEmbeddingCapabilitiesConformance verifies the shared versioned capability
-// contract without requiring any model to be loaded.
+// contract without requiring downloaded model assets.
 func TestEmbeddingCapabilitiesConformance(t *testing.T) {
+	t.Run("BatchedOnly", testBatchedOnlyCapabilities)
+
 	cases := []struct {
 		modelType      string
 		wantModelType  ModelType

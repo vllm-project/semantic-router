@@ -39,7 +39,7 @@ fn positive_dimension(value: usize) -> Result<u32, ()> {
 use super::capabilities::{
     MODEL_TYPE_GEMMA, MODEL_TYPE_MMBERT, MODEL_TYPE_MULTIMODAL, MODEL_TYPE_QWEN3,
 };
-use super::embedding::{get_multimodal_refs, GLOBAL_MODEL_FACTORY};
+use super::embedding::{get_batched_qwen3_dimensions, get_multimodal_refs, GLOBAL_MODEL_FACTORY};
 use crate::model_architectures::embedding::gemma_embedding::SUPPORTED_EMBEDDING_DIMENSIONS;
 use crate::model_architectures::traits::LongContextEmbeddingCapable;
 
@@ -58,15 +58,20 @@ fn loaded_metadata(model_type: u32) -> Option<(usize, Vec<usize>)> {
             model.get_matryoshka_dimensions(),
         ));
     }
+    if model_type == MODEL_TYPE_QWEN3 {
+        return GLOBAL_MODEL_FACTORY
+            .get()
+            .and_then(|factory| factory.get_qwen3_model())
+            .map(|model| {
+                (
+                    model.get_embedding_dimension(),
+                    model.get_matryoshka_dimensions(),
+                )
+            })
+            .or_else(get_batched_qwen3_dimensions);
+    }
     let factory = GLOBAL_MODEL_FACTORY.get()?;
     match model_type {
-        MODEL_TYPE_QWEN3 => {
-            let model = factory.get_qwen3_model()?;
-            Some((
-                model.get_embedding_dimension(),
-                model.get_matryoshka_dimensions(),
-            ))
-        }
         MODEL_TYPE_GEMMA => {
             let model = factory.get_gemma_model()?;
             Some((
