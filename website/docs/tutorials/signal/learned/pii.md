@@ -46,6 +46,55 @@ routing:
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
 
+## Remote backend (token_spans.v1)
+
+With no `backend`, PII detection keeps its local model. A remote PII classifier
+uses the shared backend block: `model` names an entry in
+`global.model_catalog.external[]` with `model_role: classification`, the
+protocol is `http_classify`, and the contract is `token_spans.v1`. The service
+receives `{"inputs": "<request text>"}` and answers with entity spans whose
+`start`/`end` are Unicode code-point offsets into that exact string, a `label`
+from the configured PII mapping, a `score` in `[0, 1]`, and the span `text`,
+which must equal the slice it points at. The HuggingFace token-classification
+spellings `entity_group` and `word` are accepted as aliases. A bare JSON list of
+spans or an envelope `{"spans": [...], "truncated_at": n, "model": "..."}` are
+both valid; the envelope's `model`, when present, must equal the catalog
+entry's `llm_model_name`.
+
+The router rejects the whole response, rather than part of it, when a span is
+outside the text, overlaps itself, carries an unknown or outside label, has a
+score out of range, has conflicting alias values, or when the body is not a span
+list. A declared `truncated_at` keeps the spans before the cut and marks the
+rest of the content as unscored. What a rejected or partial response does to a
+PII rule is `on_error`: `allow` (default) treats that content as not matching,
+`block` matches it as `classification_error`, so unverified text cannot pass as
+clean.
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: pii-service
+        model_role: classification
+        llm_endpoint:
+          address: pii-spans.default.svc
+          port: 8080
+        llm_model_name: pii-spans-v1
+    modules:
+      classifier:
+        pii:
+          backend:
+            protocol: http_classify
+            contract: token_spans.v1
+            model: pii-service
+            deadline_ms: 5000
+          on_error: block
+```
+
+`PIIDetected`, `PIIEntities`, `MatchedPIIRules` and the masked text are the
+same whether the spans came from the local model or from a remote backend;
+overlapping and nested spans are merged before masking.
+
 ## Dependencies and Limitations
 
 The PII classifier processes the prompt and optional history. It is a routing
