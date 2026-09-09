@@ -608,10 +608,3 @@ export function hasFlatSignals(config: unknown): boolean {
 export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
   return detectConfigFormat(config) === 'python-cli'
 }
-
-/**
- * Check if config is in legacy format
- */
-export function isLegacyFormat(config: unknown): config is LegacyConfig {
-  return detectConfigFormat(config) === 'legacy'
-}

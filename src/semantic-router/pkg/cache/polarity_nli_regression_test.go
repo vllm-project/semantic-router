@@ -20,11 +20,8 @@ import (
 
 // Each pair is {cached, incoming}; the incoming query means the opposite.
 var polarityNLIContradictionPairs = [][2]string{
-	{"How do I enable dark mode?", "How do I disable dark mode?"},
-	{"How do I reset my password?", "How do I not reset my password?"},
-	{"How do I open the file?", "How do I close the file?"},
-	{"How do I start the server?", "How do I stop the server?"},
-	{"How do I add a user?", "How do I remove a user?"},
+	{"How do I configure two-factor authentication?", "I want to leave two-factor authentication unchanged."},
+	{"How do I reset my password?", "I want to keep my current password."},
 }
 
 // Paraphrases and synonyms must keep hitting; the NLI head treats

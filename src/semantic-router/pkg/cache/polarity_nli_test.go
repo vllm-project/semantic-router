@@ -33,7 +33,7 @@ func newPolarityTestCache(t *testing.T, useNLI bool) (*InMemoryCache, CacheEntry
 	entry := CacheEntry{
 		RequestID:    "e1",
 		Model:        "model-x",
-		Query:        "How do I enable two-factor authentication?",
+		Query:        "How do I configure two-factor authentication?",
 		ResponseBody: []byte("ENABLE-ANSWER"),
 		Embedding:    []float32{1, 0, 0},
 		Timestamp:    time.Now(),
@@ -68,7 +68,7 @@ func TestPolarityNLIGuardRejectsContradiction(t *testing.T) {
 		return 0.97, nil
 	})
 
-	const query = "How do I disable two-factor authentication?"
+	const query = "How do I remove two-factor authentication?"
 	result, err := finishWithCandidate(c, context.Background(), query, entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -130,7 +130,7 @@ func TestPolarityNLIGuardDisabledNeverCallsVerifier(t *testing.T) {
 		return 0, nil
 	})
 
-	result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+	result, err := finishWithCandidate(c, context.Background(), "How do I remove two-factor authentication?", entry)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 		installVerifier(t, func(context.Context, string, string) (float32, error) {
 			return 0, errors.New("nli backend unavailable")
 		})
-		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+		result, err := finishWithCandidate(c, context.Background(), "How do I remove two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("verifier errors must not surface to the caller: %v", err)
 		}
@@ -157,7 +157,7 @@ func TestPolarityNLIGuardFailsOpen(t *testing.T) {
 	t.Run("nil verifier serves the hit", func(t *testing.T) {
 		c, entry := newPolarityTestCache(t, true)
 		installVerifier(t, nil)
-		result, err := finishWithCandidate(c, context.Background(), "How do I disable two-factor authentication?", entry)
+		result, err := finishWithCandidate(c, context.Background(), "How do I remove two-factor authentication?", entry)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -176,7 +176,7 @@ func TestPolarityNLIGuardHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := finishWithCandidate(c, ctx, "How do I disable two-factor authentication?", entry)
+	result, err := finishWithCandidate(c, ctx, "How do I remove two-factor authentication?", entry)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got result=%+v err=%v", result, err)
 	}
