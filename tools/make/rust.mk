@@ -14,6 +14,9 @@ TEST_GPU_DEVICE ?= 2
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_default \
+	core::tokenization_window::tests::test_window_ranges_cover_every_token \
+	core::tokenization_window::tests::test_window_ranges_overlap_on_a_short_stride \
+	core::tokenization_window::tests::test_window_ranges_edges \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \

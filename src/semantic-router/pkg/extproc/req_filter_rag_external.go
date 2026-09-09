@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -90,19 +89,35 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("invalid external API RAG config: %w", err)
 	}
 
-	// Build request based on format
-	var requestBody []byte
+	// Build one request per window of the query for the formats that search by
+	// vector, so a long query is not searched by its opening alone.
+	var requestBodies [][]byte
 	var buildErr error
 
 	switch apiConfig.RequestFormat {
-	case "pinecone":
-		requestBody, buildErr = r.buildPineconeRequest(ctx, ragConfig)
-	case "weaviate":
-		requestBody, buildErr = r.buildWeaviateRequest(ctx, ragConfig)
+	case "pinecone", "weaviate":
+		var queryEmbeddings [][]float32
+		queryEmbeddings, buildErr = ragQueryEmbeddings(ctx.UserContent)
+		for _, queryEmbedding := range queryEmbeddings {
+			var body []byte
+			if apiConfig.RequestFormat == "pinecone" {
+				body, buildErr = r.buildPineconeRequest(queryEmbedding, ragConfig)
+			} else {
+				body, buildErr = r.buildWeaviateRequest(queryEmbedding, ragConfig)
+			}
+			if buildErr != nil {
+				break
+			}
+			requestBodies = append(requestBodies, body)
+		}
 	case "elasticsearch":
-		requestBody, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
+		var body []byte
+		body, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
+		requestBodies = [][]byte{body}
 	case "custom":
-		requestBody, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
+		var body []byte
+		body, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
+		requestBodies = [][]byte{body}
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
 	}
@@ -111,10 +126,55 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 		return "", fmt.Errorf("failed to build request: %w", buildErr)
 	}
 
-	// Create HTTP request
+	topK := 5
+	if ragConfig.TopK != nil {
+		topK = *ragConfig.TopK
+	}
+
+	// A document that several windows retrieve is kept once, at the rank the
+	// first window that found it gave it.
+	var documents []string
+	seen := make(map[string]struct{})
+	var totalLatency float64
+	for _, requestBody := range requestBodies {
+		apiResponse, latency, sendErr := r.sendExternalRAGRequest(traceCtx, apiConfig, requestBody)
+		totalLatency += latency
+		if sendErr != nil {
+			return "", sendErr
+		}
+		windowDocuments, extractErr := r.extractDocumentsFromResponse(apiResponse, apiConfig.RequestFormat)
+		if extractErr != nil {
+			return "", fmt.Errorf("failed to extract context: %w", extractErr)
+		}
+		for _, document := range windowDocuments {
+			if _, duplicate := seen[document]; duplicate {
+				continue
+			}
+			seen[document] = struct{}{}
+			documents = append(documents, document)
+		}
+	}
+	ctx.RAGRetrievalLatency = totalLatency
+
+	if len(documents) == 0 {
+		return "", fmt.Errorf("no content found in %s response", apiConfig.RequestFormat)
+	}
+	if topK > 0 && len(documents) > topK {
+		documents = documents[:topK]
+	}
+
+	logging.Infof("Retrieved %d documents from external API over %d query window(s) (latency: %.3fs, format: %s)",
+		len(documents), len(requestBodies), totalLatency, apiConfig.RequestFormat)
+	return strings.Join(documents, "\n\n---\n\n"), nil
+}
+
+// sendExternalRAGRequest posts one request body and decodes the response,
+// returning how long the call took so a caller that sends several can report
+// their total.
+func (r *OpenAIRouter) sendExternalRAGRequest(traceCtx context.Context, apiConfig *config.ExternalAPIRAGConfig, requestBody []byte) (map[string]interface{}, float64, error) {
 	req, err := http.NewRequestWithContext(traceCtx, "POST", apiConfig.Endpoint, bytes.NewBuffer(requestBody))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Set headers
@@ -127,14 +187,14 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 
 		// Validate header name
 		if validateErr := validateHeaderName(authHeader); validateErr != nil {
-			return "", fmt.Errorf("invalid auth header name: %w", validateErr)
+			return nil, 0, fmt.Errorf("invalid auth header name: %w", validateErr)
 		}
 
 		// Validate and sanitize API key to prevent header injection
 		sanitizedAPIKey, validateErr := validateHeaderValue(apiConfig.APIKey)
 		if validateErr != nil {
 			logging.Errorf("Failed to sanitize API key: %v", validateErr)
-			return "", fmt.Errorf("invalid API key format")
+			return nil, 0, fmt.Errorf("invalid API key format")
 		}
 
 		req.Header.Set(authHeader, fmt.Sprintf("Bearer %s", sanitizedAPIKey))
@@ -164,36 +224,27 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("API request failed: %w", err)
+		return nil, 0, fmt.Errorf("API request failed: %w", err)
 	}
 	defer func() {
 		_ = resp.Body.Close()
 	}()
 
 	latency := time.Since(start).Seconds()
-	ctx.RAGRetrievalLatency = latency
 
 	if resp.StatusCode != http.StatusOK {
 		// Limit error response body size to prevent memory exhaustion
 		const maxErrorBodySize = 1024 * 10 // 10KB limit
 		limitedReader := io.LimitReader(resp.Body, maxErrorBodySize)
 		body, _ := io.ReadAll(limitedReader)
-		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, latency, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	apiResponse, decodeErr := decodeExternalRAGResponse(resp.Body, apiConfig.MaxResponseBytes)
 	if decodeErr != nil {
-		return "", fmt.Errorf("failed to parse response: %w", decodeErr)
+		return nil, latency, fmt.Errorf("failed to parse response: %w", decodeErr)
 	}
-
-	// Extract context based on format
-	context, err := r.extractContextFromResponse(apiResponse, apiConfig.RequestFormat)
-	if err != nil {
-		return "", fmt.Errorf("failed to extract context: %w", err)
-	}
-
-	logging.Infof("Retrieved context from external API (latency: %.3fs, format: %s)", latency, apiConfig.RequestFormat)
-	return context, nil
+	return apiResponse, latency, nil
 }
 
 func decodeExternalRAGResponse(body io.Reader, maxResponseBytes int64) (map[string]interface{}, error) {
@@ -213,13 +264,7 @@ func decodeExternalRAGResponse(body io.Reader, maxResponseBytes int64) (map[stri
 }
 
 // buildPineconeRequest builds a Pinecone query request
-func (r *OpenAIRouter) buildPineconeRequest(ctx *RequestContext, ragConfig *config.RAGPluginConfig) ([]byte, error) {
-	// Generate embedding
-	queryEmbedding, err := candle_binding.GetEmbedding(ctx.UserContent, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate embedding: %w", err)
-	}
-
+func (r *OpenAIRouter) buildPineconeRequest(queryEmbedding []float32, ragConfig *config.RAGPluginConfig) ([]byte, error) {
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -236,13 +281,7 @@ func (r *OpenAIRouter) buildPineconeRequest(ctx *RequestContext, ragConfig *conf
 }
 
 // buildWeaviateRequest builds a Weaviate query request
-func (r *OpenAIRouter) buildWeaviateRequest(ctx *RequestContext, ragConfig *config.RAGPluginConfig) ([]byte, error) {
-	// Generate embedding
-	queryEmbedding, err := candle_binding.GetEmbedding(ctx.UserContent, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate embedding: %w", err)
-	}
-
+func (r *OpenAIRouter) buildWeaviateRequest(queryEmbedding []float32, ragConfig *config.RAGPluginConfig) ([]byte, error) {
 	topK := 5
 	if ragConfig.TopK != nil {
 		topK = *ragConfig.TopK
@@ -338,7 +377,7 @@ func (r *OpenAIRouter) buildCustomRequest(ctx *RequestContext, ragConfig *config
 }
 
 // extractContextFromResponse extracts context from API response based on format
-func (r *OpenAIRouter) extractContextFromResponse(response map[string]interface{}, format string) (string, error) {
+func (r *OpenAIRouter) extractDocumentsFromResponse(response map[string]interface{}, format string) ([]string, error) {
 	switch format {
 	case "pinecone":
 		return r.extractPineconeContext(response)
@@ -349,10 +388,10 @@ func (r *OpenAIRouter) extractContextFromResponse(response map[string]interface{
 	case "custom":
 		// For custom format, assume response has a "content" or "text" field
 		if content, ok := response["content"].(string); ok {
-			return content, nil
+			return []string{content}, nil
 		}
 		if text, ok := response["text"].(string); ok {
-			return text, nil
+			return []string{text}, nil
 		}
 		// Try to extract from results array
 		if results, ok := response["results"].([]interface{}); ok {
@@ -366,19 +405,19 @@ func (r *OpenAIRouter) extractContextFromResponse(response map[string]interface{
 					}
 				}
 			}
-			return strings.Join(parts, "\n\n---\n\n"), nil
+			return parts, nil
 		}
-		return "", fmt.Errorf("unable to extract context from custom response format")
+		return nil, fmt.Errorf("unable to extract context from custom response format")
 	default:
-		return "", fmt.Errorf("unknown response format: %s", format)
+		return nil, fmt.Errorf("unknown response format: %s", format)
 	}
 }
 
 // extractPineconeContext extracts context from Pinecone response
-func (r *OpenAIRouter) extractPineconeContext(response map[string]interface{}) (string, error) {
+func (r *OpenAIRouter) extractPineconeContext(response map[string]interface{}) ([]string, error) {
 	matches, ok := response["matches"].([]interface{})
 	if !ok {
-		return "", fmt.Errorf("no matches in Pinecone response")
+		return nil, fmt.Errorf("no matches in Pinecone response")
 	}
 
 	var parts []string
@@ -394,28 +433,24 @@ func (r *OpenAIRouter) extractPineconeContext(response map[string]interface{}) (
 		}
 	}
 
-	if len(parts) == 0 {
-		return "", fmt.Errorf("no content found in Pinecone matches")
-	}
-
-	return strings.Join(parts, "\n\n---\n\n"), nil
+	return parts, nil
 }
 
 // extractWeaviateContext extracts context from Weaviate response
-func (r *OpenAIRouter) extractWeaviateContext(response map[string]interface{}) (string, error) {
+func (r *OpenAIRouter) extractWeaviateContext(response map[string]interface{}) ([]string, error) {
 	data, ok := response["data"].(map[string]interface{})
 	if !ok {
-		return "", fmt.Errorf("no data in Weaviate response")
+		return nil, fmt.Errorf("no data in Weaviate response")
 	}
 
 	get, ok := data["Get"].(map[string]interface{})
 	if !ok {
-		return "", fmt.Errorf("no Get in Weaviate response")
+		return nil, fmt.Errorf("no Get in Weaviate response")
 	}
 
 	document, ok := get["Document"].([]interface{})
 	if !ok {
-		return "", fmt.Errorf("no Document in Weaviate response")
+		return nil, fmt.Errorf("no Document in Weaviate response")
 	}
 
 	var parts []string
@@ -427,23 +462,19 @@ func (r *OpenAIRouter) extractWeaviateContext(response map[string]interface{}) (
 		}
 	}
 
-	if len(parts) == 0 {
-		return "", fmt.Errorf("no content found in Weaviate documents")
-	}
-
-	return strings.Join(parts, "\n\n---\n\n"), nil
+	return parts, nil
 }
 
 // extractElasticsearchContext extracts context from Elasticsearch response
-func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface{}) (string, error) {
+func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface{}) ([]string, error) {
 	hits, ok := response["hits"].(map[string]interface{})
 	if !ok {
-		return "", fmt.Errorf("no hits in Elasticsearch response")
+		return nil, fmt.Errorf("no hits in Elasticsearch response")
 	}
 
 	hitsArray, ok := hits["hits"].([]interface{})
 	if !ok {
-		return "", fmt.Errorf("no hits array in Elasticsearch response")
+		return nil, fmt.Errorf("no hits array in Elasticsearch response")
 	}
 
 	var parts []string
@@ -459,9 +490,5 @@ func (r *OpenAIRouter) extractElasticsearchContext(response map[string]interface
 		}
 	}
 
-	if len(parts) == 0 {
-		return "", fmt.Errorf("no content found in Elasticsearch hits")
-	}
-
-	return strings.Join(parts, "\n\n---\n\n"), nil
+	return parts, nil
 }

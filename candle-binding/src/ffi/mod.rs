@@ -11,6 +11,7 @@ pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
 pub mod mlp; // MLP selector for model selection (GPU-accelerated)
 pub mod similarity; //  similarity functions
+pub mod text_windows; //  embedding window ranges
 pub mod tokenization; //  tokenization function
 pub mod types; //  C structure definitions
 pub mod validation; //  parameter validation functions
@@ -28,6 +29,7 @@ pub use memory::*;
 pub use mlp::*; // MLP selector FFI functions
 
 pub use similarity::*;
+pub use text_windows::*;
 pub use tokenization::*;
 pub use types::*;
 pub use validation::*;
