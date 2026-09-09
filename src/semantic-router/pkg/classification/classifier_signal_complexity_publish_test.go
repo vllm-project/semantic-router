@@ -1,11 +1,13 @@
 package classification
 
 import (
+	"fmt"
 	"sort"
 	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 // Each path publishes only the numbers it actually produced. A remote score
@@ -62,11 +64,12 @@ func TestPublishComplexityValuesKeysBySource(t *testing.T) {
 	}
 }
 
-// A failed evaluation must reach the decision engine as an error on every
-// rule, not as a silently absent signal. The engine reads SignalErrors and
-// honours a rule node's on_error, so this is what lets a decision choose to
-// fail open or closed.
-func TestRecordComplexityFailureMarksEveryRule(t *testing.T) {
+// A failed evaluation must be keyed the way a decision names the condition.
+// validateComplexityConditionName rejects a bare rule name at config load, so
+// every complexity leaf is "<rule>:<verdict>" and a failure recorded under the
+// bare rule name would never be found - the outage would read as a clean
+// no-match. A failure has no verdict, so all three are marked.
+func TestRecordComplexityFailureMarksEveryVerdictOfEveryRule(t *testing.T) {
 	cfg := remoteComplexityConfig(config.RemoteClassifierContractScore)
 	cfg.ComplexityRules = append(cfg.ComplexityRules, config.ComplexityRule{
 		Name:      "extreme",
@@ -80,17 +83,73 @@ func TestRecordComplexityFailureMarksEveryRule(t *testing.T) {
 	classifier.recordComplexityFailure(results, &mu)
 
 	for _, rule := range []string{"needs_reasoning", "extreme"} {
-		code, ok := results.SignalErrors["complexity:"+rule]
-		if !ok {
-			t.Errorf("rule %q: no SignalErrors entry", rule)
-			continue
-		}
-		if code != complexityEvaluationFailedCode {
-			t.Errorf("rule %q: code = %q, want %q", rule, code, complexityEvaluationFailedCode)
+		for _, verdict := range ComplexityVerdictLabels {
+			// Built the way decision/engine.go builds its lookup key, so this
+			// breaks if either side of the contract moves.
+			key := fmt.Sprintf("%s:%s:%s", config.SignalTypeComplexity, rule, verdict)
+			code, ok := results.SignalErrors[key]
+			if !ok {
+				t.Errorf("no SignalErrors entry under %q, the key a decision leaf resolves to", key)
+				continue
+			}
+			if code != complexityEvaluationFailedCode {
+				t.Errorf("%s: code = %q, want %q", key, code, complexityEvaluationFailedCode)
+			}
 		}
 	}
-	if len(results.SignalErrors) != 2 {
-		t.Fatalf("SignalErrors = %v, want exactly the two configured rules", results.SignalErrors)
+	if want := len(ComplexityVerdictLabels) * 2; len(results.SignalErrors) != want {
+		t.Fatalf("SignalErrors has %d entries, want %d (every verdict of both rules): %v",
+			len(results.SignalErrors), want, results.SignalErrors)
+	}
+}
+
+// The end-to-end contract: what recordComplexityFailure writes must be what
+// the real decision engine reads, so rules.on_unknown can actually govern a
+// scorer outage. Asserting the map alone missed this once already.
+func TestComplexityFailureReachesTheDecisionEngine(t *testing.T) {
+	classifier := &Classifier{
+		Config:                 remoteComplexityConfig(config.RemoteClassifierContractScore),
+		complexityScoreBackend: &closableScorer{},
+	}
+	results := &SignalResults{}
+	var mu sync.Mutex
+	classifier.recordComplexityFailure(results, &mu)
+
+	escalate := func(policy config.UnknownPolicy) config.Decision {
+		return config.Decision{
+			Name:     "escalate",
+			Priority: 100,
+			Rules: config.RuleNode{
+				Operator:  "AND",
+				OnUnknown: policy,
+				Conditions: []config.RuleNode{{
+					Type: config.SignalTypeComplexity,
+					Name: "needs_reasoning:hard",
+				}},
+			},
+		}
+	}
+	// No verdict was produced, only the failure - exactly the outage shape.
+	signals := &decision.SignalMatches{SignalErrors: results.SignalErrors}
+
+	matched := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{escalate(config.RuleOnUnknownMatch)}, "")
+	result, err := matched.EvaluateDecisionsWithSignals(signals)
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals with on_unknown=match: %v", err)
+	}
+	if result == nil || result.Decision == nil {
+		t.Fatal("on_unknown=match must resolve a failed complexity signal into a match; the engine saw no failure")
+	}
+
+	// Without a policy the failure must stay a no-match, so the default is
+	// still to fall through rather than escalate every ungraded request.
+	silent := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{escalate("")}, "")
+	result, err = silent.EvaluateDecisionsWithSignals(signals)
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals without a policy: %v", err)
+	}
+	if result != nil && result.Decision != nil {
+		t.Fatalf("without on_unknown a failed signal must not match, got %q", result.Decision.Name)
 	}
 }
 

@@ -55,11 +55,15 @@ func (c *Classifier) complexitySignalSource() string {
 
 // recordComplexityFailure makes a failed evaluation visible instead of letting
 // the signal silently vanish. Every rule is marked, because one evaluation
-// serves all of them. The decision engine already reads SignalErrors: a rule
-// node over a failed signal evaluates false unless its `on_error: match` says
-// a failure counts as a match, so a decision can fail open or closed without
-// a new setting here. The counter surfaces the outage in dashboards, which
-// matters most for a remote scorer, where a network fault is routine.
+// serves all of them.
+//
+// The key must match how a decision names the condition, not how the rule is
+// named: validateComplexityConditionName rejects a bare rule name at config
+// load, so every complexity leaf is "<rule>:<verdict>" and the engine looks up
+// "complexity:<rule>:<verdict>". A failure has no verdict, so all three are
+// marked - whichever verdict a decision happens to gate on, evalLeaf finds the
+// failure and, with rules.on_unknown set, the request resolves through that
+// policy instead of reading the outage as a clean no-match.
 func (c *Classifier) recordComplexityFailure(results *SignalResults, mu *sync.Mutex) {
 	metrics.RecordComplexityEvaluationFailure(c.complexitySignalSource())
 	mu.Lock()
@@ -68,6 +72,9 @@ func (c *Classifier) recordComplexityFailure(results *SignalResults, mu *sync.Mu
 		results.SignalErrors = make(map[string]string)
 	}
 	for _, rule := range c.complexityRules() {
-		results.SignalErrors[signalConfidenceKey(config.SignalTypeComplexity, rule.Name)] = complexityEvaluationFailedCode
+		for _, verdict := range ComplexityVerdictLabels {
+			key := signalConfidenceKey(config.SignalTypeComplexity, rule.Name+":"+verdict)
+			results.SignalErrors[key] = complexityEvaluationFailedCode
+		}
 	}
 }

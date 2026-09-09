@@ -111,7 +111,12 @@ func (s *scoringHTTPBackend) Score(ctx context.Context, text string) (float64, e
 // was never a classifier from wrapping its one number in a one-element list
 // under a label it has no use for.
 func decodeScoreResponse(body []byte) (float64, error) {
-	trimmed := bytes.TrimLeft(body, " \t\r\n")
+	// A UTF-8 byte-order mark is legal to emit and some runtimes prepend one.
+	// Left in place it makes the first byte neither '[' nor '{', and the shape
+	// check below would blame the response format - sending the operator to
+	// rewrite a payload that was already correct.
+	trimmed := bytes.TrimPrefix(body, []byte("\xef\xbb\xbf"))
+	trimmed = bytes.TrimLeft(trimmed, " \t\r\n")
 	if len(trimmed) == 0 {
 		return 0, fmt.Errorf("score.v1 response is empty")
 	}

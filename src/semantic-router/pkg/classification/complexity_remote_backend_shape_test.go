@@ -24,6 +24,11 @@ func TestDecodeScoreResponse_Shapes(t *testing.T) {
 		{"object", `{"score":0.42}`, 0.42, true},
 		{"object with label", `{"label":"difficulty","score":7.5}`, 7.5, true},
 		{"object, negative units", ` {"score":-0.5}`, -0.5, true},
+		// Some runtimes prepend a UTF-8 byte-order mark. Rejecting it would
+		// report a wrong response shape and send the operator to rewrite a
+		// payload that was already correct.
+		{"byte-order mark", "\xef\xbb\xbf{\"score\":0.42}", 0.42, true},
+		{"byte-order mark, array", "\xef\xbb\xbf[{\"score\":0.42}]", 0.42, true},
 		{"object without score", `{"label":"x"}`, 0, false},
 		{"object null score", `{"score":null}`, 0, false},
 		{"bare scalar", `0.42`, 0, false},

@@ -27,13 +27,19 @@ func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *Sign
 		return
 	}
 
+	// The metric's source names which path answered - the same label the
+	// failure counter uses - so the two can be joined. result.SignalSource is
+	// finer than that on the local path ("text" or "image", whichever channel
+	// dominated the fusion) and is kept for the published detail.
+	signalSource := c.complexitySignalSource()
+
 	bestConfidence := 0.0
 	mu.Lock()
 	for _, result := range classifyResults {
 		matchName := fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty)
 		c.recordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
 		c.recordSignalMatch(config.SignalTypeComplexity, matchName)
-		metrics.RecordComplexityVerdict(result.RuleName, result.Difficulty, result.SignalSource)
+		metrics.RecordComplexityVerdict(result.RuleName, result.Difficulty, signalSource)
 		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
 		// A signal that reports no confidence leaves the key absent, which the
 		// decision engine reads as its structural default while marking the

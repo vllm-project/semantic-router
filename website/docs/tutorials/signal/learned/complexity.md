@@ -232,26 +232,48 @@ report what they do:
   every call through the shared connector. `outcome` is `success` or the error
   kind (`transport`, `status`, `authorization`, `request`, `response`), and
   `llm_remote_connector_retries_total` counts retried attempts.
-- `llm_complexity_verdict_total{rule, verdict, source}` counts verdicts. Its
-  shape is the check for a mismatched scale: a `[1,10]` scorer behind
+- `llm_complexity_verdict_total{rule, verdict, source}` counts verdicts, where
+  `source` is `local`, `remote_score` or `remote_labels` - the same label the
+  failure counter carries, so the two can be read together. The shape of this
+  distribution is the check for a mismatched scale: a `[1,10]` scorer behind
   `hard_above: 0.85` shows up as `hard` taking every request for that rule,
   which no single log line would reveal.
 - `llm_complexity_evaluation_failures_total{source}` counts evaluations that
   produced no verdict.
 
 When the scorer cannot be reached, the request still routes. The complexity
-signal is absent, every complexity rule carries `complexity_evaluation_failed`
-in the request's signal errors, and `llm_complexity_evaluation_failures_total`
-counts it - so the decision engine sees a failure rather than a quiet
-non-match, and so does whoever watches the dashboard. A decision rule over a
-complexity signal
-evaluates as not matched by default; set `on_error: match` on that rule to
-treat a scorer failure as a match instead, when routing a request you could
-not grade to the stronger model is the safer default.
+signal is absent, every complexity rule is marked
+`complexity_evaluation_failed` in the request's signal errors, and
+`llm_complexity_evaluation_failures_total` counts it.
 
-The published value keeps its meaning: a `score.v1` result appears as
-`complexity:<rule>:score`, in the model's own units, while local scoring keeps
-publishing `complexity:<rule>:margin` and its text/image components.
+By default a decision whose condition reads a failed complexity rule treats it
+as not matched, so the request falls through to whatever matches next. To
+decide deliberately instead, set `on_unknown` on that decision's root `rules`
+node:
+
+```yaml
+decisions:
+  - name: deep-reasoning
+    priority: 100
+    rules:
+      on_unknown: match       # no_match (default) | match | fail_request
+      operator: AND
+      conditions:
+        - type: complexity
+          name: needs_reasoning:hard
+```
+
+`match` sends a request you could not grade to the stronger model, which is
+usually the safer default; `fail_request` refuses it outright. `on_unknown`
+belongs on the root `rules` node and applies to the whole decision - the
+per-condition `on_error` field is accepted only on `classifier` conditions,
+so putting it on a `complexity` condition is rejected at config load.
+
+The scorer's number is published as `complexity:<rule>:score`, in the model's
+own units, where local scoring publishes `complexity:<rule>:margin` and its
+text/image components. These reach replay records and observability; a
+decision condition matches on the verdict (`<rule>:<verdict>`), not on the
+number, so a numeric predicate over `:score` is not a routing mechanism.
 
 ## Dependencies and Limitations
 
