@@ -234,9 +234,16 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	existingData, err := os.ReadFile(configPath)
+	existingData, err := readLiveConfig(configPath)
 	if err != nil {
-		existingData = nil
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_read_failed",
+			"message": "Deploy aborted: the current config could not be read, so it cannot be merged or backed up.",
+		})
+		log.Printf("[Deploy] aborted, current config unreadable: %v", err)
+		return
 	}
 
 	// Step 2: Deep merge the routing fragment into the deploy base.

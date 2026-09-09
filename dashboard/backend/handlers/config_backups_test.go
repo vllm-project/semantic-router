@@ -364,3 +364,116 @@ func TestCreateConfigBackupFailsClosedOnUnwritableDir(t *testing.T) {
 		t.Fatal("expected createConfigBackup to fail closed on an unwritable parent")
 	}
 }
+
+// config.dsl sits beside the backup directory, and a deploy carrying no DSL
+// never rewrites it, so the repair pass has to reach it explicitly.
+func TestRepairTightensLegacyDSLSnapshot(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	configDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(configDir, ".vllm-sr"), 0o755); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	dslPath := archivedDSLPath(configDir)
+	if err := os.WriteFile(dslPath, []byte("api_key: leaked\n"), 0o644); err != nil {
+		t.Fatalf("seed dsl: %v", err)
+	}
+
+	// A deploy with no DSL payload: archiveDeployDSL returns early.
+	if _, err := createConfigBackup(configDir, []byte("version: v0.3\n")); err != nil {
+		t.Fatalf("createConfigBackup: %v", err)
+	}
+
+	if got := filePerm(t, dslPath); got != configSnapshotFileMode {
+		t.Fatalf("legacy config.dsl mode = %04o, want %04o", got, configSnapshotFileMode)
+	}
+}
+
+// os.Chmod follows symlinks, so the repair must skip them entirely.
+func TestRepairSkipsSymlinkedDSLSnapshot(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	configDir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.yaml")
+	if err := os.WriteFile(outside, []byte("untouched\n"), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(configDir, ".vllm-sr"), 0o755); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := os.Symlink(outside, archivedDSLPath(configDir)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := createConfigBackup(configDir, []byte("version: v0.3\n")); err != nil {
+		t.Fatalf("createConfigBackup: %v", err)
+	}
+
+	if got := filePerm(t, outside); got != 0o644 {
+		t.Fatalf("symlink destination mode = %04o, want it untouched at 0644", got)
+	}
+}
+
+// Only a missing file means "no config". Any other read error must abort so a
+// deploy or rollback cannot overwrite an unreadable live config unprotected.
+func TestReadLiveConfigSeparatesAbsenceFromFailure(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permission checks")
+	}
+	dir := t.TempDir()
+
+	missing, err := readLiveConfig(filepath.Join(dir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("a missing config must not be an error: %v", err)
+	}
+	if missing != nil {
+		t.Fatalf("missing config data = %q, want nil", missing)
+	}
+
+	unreadable := filepath.Join(dir, "unreadable.yaml")
+	if err := os.WriteFile(unreadable, []byte("api_key: secret\n"), 0o000); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := readLiveConfig(unreadable); err == nil {
+		t.Fatal("an unreadable config must be reported, not treated as absent")
+	}
+}
+
+func TestSnapshotBeforeRollbackAbortsOnUnreadableConfig(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permission checks")
+	}
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("api_key: secret\n"), 0o000); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	data, err := snapshotCurrentConfigBeforeRollback(configPath, configDir)
+	if err == nil {
+		t.Fatal("expected rollback to abort on an unreadable live config")
+	}
+	if data != nil {
+		t.Fatalf("data = %q, want nil on failure", data)
+	}
+}
+
+// The rename is only durable once the parent directory entry is synced.
+func TestWriteConfigSnapshotSyncsParentDirectory(t *testing.T) {
+	skipWithoutPOSIXModes(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.20200101-000000.yaml")
+
+	if err := writeConfigSnapshot(path, []byte("api_key: secret\n")); err != nil {
+		t.Fatalf("writeConfigSnapshot: %v", err)
+	}
+	if err := syncSnapshotDirectory(dir); err != nil {
+		t.Fatalf("syncSnapshotDirectory: %v", err)
+	}
+
+	// A directory that no longer exists cannot be synced, so the failure the
+	// write path propagates is a real one rather than a silent success.
+	if err := syncSnapshotDirectory(filepath.Join(dir, "missing")); err == nil {
+		t.Fatal("expected syncSnapshotDirectory to report a missing directory")
+	}
+}

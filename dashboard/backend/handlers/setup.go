@@ -541,16 +541,21 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 }
 
 func backupCurrentConfig(configPath string, configDir string) error {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
+	// A missing config is the first-run case and has nothing to back up; any
+	// other read error must abort rather than activate over an unreadable file.
+	existingData, err := readLiveConfig(configPath)
+	if err != nil {
 		return err
+	}
+	if len(existingData) == 0 {
+		return nil
 	}
 
 	backupDir := configBackupDir(configDir)
 	if err := ensureConfigSnapshotDir(backupDir); err != nil {
 		return err
 	}
-	repairConfigSnapshotPermissions(backupDir)
+	repairConfigSnapshotPermissions(configDir)
 
 	version := time.Now().Format("20060102-150405")
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
