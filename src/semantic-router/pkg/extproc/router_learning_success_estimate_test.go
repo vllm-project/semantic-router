@@ -229,6 +229,65 @@ func TestSuccessEstimateObservePathReportsConflictingScopes(t *testing.T) {
 	}
 }
 
+func TestSuccessEstimateObservePathUsesDecisionStaleHorizon(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 86400
+	decisionSeconds := 1
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		Success: &config.RouterLearningSuccessConfig{StaleAfterSeconds: &decisionSeconds},
+	}
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "cheap" || result.SelectedModel != "cheap" {
+		t.Fatalf("decision stale horizon must not change the selected model, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale || frontier.Probability != 0 {
+		t.Fatalf("expected decision-local stale horizon to mark evidence stale, got %#v", frontier)
+	}
+	if frontier.Outcome != config.RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected default success outcome on observe estimates, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathInheritsGlobalStaleHorizon(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 1
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied {
+		t.Fatal("global stale horizon must not change selection")
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status != successEstimateStale || frontier.FallbackReason != successFallbackStale {
+		t.Fatalf("expected global stale horizon to mark evidence stale, got %#v", frontier)
+	}
+}
+
+func TestSuccessEstimateObservePathKeepsFreshEvidenceWhenHorizonDisabled(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixture()
+	globalSeconds := 1
+	disabled := 0
+	router.Config.RouterLearning.Adaptation.Success.StaleAfterSeconds = &globalSeconds
+	ctx.VSRSelectedDecision.Adaptations.Adaptation = &config.DecisionLearningAdaptationConfig{
+		Success: &config.RouterLearningSuccessConfig{StaleAfterSeconds: &disabled},
+	}
+	backdateObserveExperience(router, "adaptive", 2, "frontier", time.Now().UTC().Add(-2*time.Second))
+
+	_, _, _, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied {
+		t.Fatal("disabled stale horizon must not change selection")
+	}
+	frontier := observeEstimateByModel(t, ctx, "frontier")
+	if frontier.Status == successEstimateStale {
+		t.Fatalf("decision-local zero horizon must keep evidence, got %#v", frontier)
+	}
+}
+
 func successEstimateObserveFixture() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
 	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
 	router.routerLearningRuntimeState().recordModelExperience(
@@ -301,6 +360,9 @@ func assertObserveSuccessReplay(t *testing.T, policy routerLearningPolicy) {
 	replay := policy.toReplayAdaptation()
 	if replay == nil || replay.SnapshotIdentity == "" || replay.SuccessEstimates["frontier"].Status != string(successEstimateUnsupported) {
 		t.Fatalf("expected replay success estimates, got %#v", replay)
+	}
+	if replay.SuccessEstimates["frontier"].Outcome != config.RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected replay success outcome identity, got %#v", replay)
 	}
 	if _, ok := policy.ToMap()["success_estimates"]; ok {
 		t.Fatalf("compact policy map must not carry detailed success estimates, got %#v", policy.ToMap())

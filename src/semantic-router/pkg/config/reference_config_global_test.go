@@ -33,6 +33,7 @@ func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string
 
 	assertMapCoversStructFields(t, learning, reflect.TypeOf(RouterLearningConfig{}), "global.router.learning")
 	assertMapCoversStructFields(t, adaptation, reflect.TypeOf(RouterLearningAdaptationConfig{}), "global.router.learning.adaptation")
+	assertMapCoversStructFields(t, mustMapAt(t, adaptation, "success"), reflect.TypeOf(RouterLearningSuccessConfig{}), "global.router.learning.adaptation.success")
 	assertMapCoversStructFields(t, protection, reflect.TypeOf(RouterLearningProtectionConfig{}), "global.router.learning.protection")
 	assertMapCoversStructFields(t, identity, reflect.TypeOf(RouterLearningIdentityConfig{}), "global.router.learning.protection.identity")
 	assertMapCoversStructFields(t, identityHeaders, reflect.TypeOf(RouterLearningIdentityHeadersConfig{}), "global.router.learning.protection.identity.headers")

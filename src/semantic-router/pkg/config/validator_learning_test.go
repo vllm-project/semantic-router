@@ -35,6 +35,8 @@ routing:
         adaptation:
           mode: observe
           candidate_set: global
+          success:
+            stale_after_seconds: 60
         protection:
           mode: apply
           stability_weight: 1.5
@@ -47,6 +49,9 @@ global:
         enabled: true
         candidate_set: tier
         strategy: routing_sampling
+        success:
+          outcome: request_completion
+          stale_after_seconds: 3600
       protection:
         enabled: true
         scope: session
@@ -101,6 +106,12 @@ func assertLearningConfig(t *testing.T, cfg *RouterConfig) {
 	if cfg.RouterLearning.Adaptation.EffectiveStrategy() != RouterLearningStrategyRoutingSampling {
 		t.Fatalf("expected routing_sampling strategy, got %q", cfg.RouterLearning.Adaptation.EffectiveStrategy())
 	}
+	if cfg.RouterLearning.Adaptation.Success.EffectiveOutcome() != RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected success outcome, got %#v", cfg.RouterLearning.Adaptation.Success)
+	}
+	if cfg.RouterLearning.Adaptation.Success.EffectiveStaleAfterSeconds() != 3600 {
+		t.Fatalf("expected global success stale horizon, got %#v", cfg.RouterLearning.Adaptation.Success)
+	}
 	if cfg.RouterLearning.Protection.EffectiveScope() != RouterLearningScopeSession {
 		t.Fatalf("expected session protection scope, got %q", cfg.RouterLearning.Protection.EffectiveScope())
 	}
@@ -117,6 +128,10 @@ func assertDecisionAdaptations(t *testing.T, adaptations DecisionAdaptationsConf
 	}
 	if adaptations.AdaptationCandidateSet(defaultCandidateSet) != RouterLearningCandidateSetGlobal {
 		t.Fatalf("expected decision candidate_set override, got %#v", adaptations.Adaptation)
+	}
+	gotSuccess := adaptations.AdaptationSuccess(RouterLearningSuccessConfig{})
+	if gotSuccess.EffectiveStaleAfterSeconds() != 60 {
+		t.Fatalf("expected decision success stale horizon override, got %#v", adaptations.Adaptation)
 	}
 	if adaptations.ProtectionMode() != DecisionAdaptationModeApply {
 		t.Fatalf("expected protection apply mode, got %#v", adaptations)
@@ -396,6 +411,46 @@ func TestDecisionAdaptationsCandidateSetDefaultsToGlobal(t *testing.T) {
 	cfg.Adaptation = &DecisionLearningAdaptationConfig{CandidateSet: RouterLearningCandidateSetGlobal}
 	if got := cfg.AdaptationCandidateSet(RouterLearningCandidateSetTier); got != RouterLearningCandidateSetGlobal {
 		t.Fatalf("expected decision candidate set override, got %q", got)
+	}
+}
+
+func TestDecisionAdaptationsSuccessOverridesGlobal(t *testing.T) {
+	globalSeconds := 86400
+	decisionSeconds := 3600
+	global := RouterLearningSuccessConfig{
+		Outcome:           RouterLearningSuccessOutcomeRequestCompletion,
+		StaleAfterSeconds: &globalSeconds,
+	}
+	cfg := DecisionAdaptationsConfig{}
+	got := cfg.AdaptationSuccess(global)
+	if got.EffectiveOutcome() != RouterLearningSuccessOutcomeRequestCompletion || got.EffectiveStaleAfterSeconds() != 86400 {
+		t.Fatalf("expected global success defaults, got %#v", got)
+	}
+
+	cfg.Adaptation = &DecisionLearningAdaptationConfig{
+		Success: &RouterLearningSuccessConfig{StaleAfterSeconds: &decisionSeconds},
+	}
+	got = cfg.AdaptationSuccess(global)
+	if got.EffectiveOutcome() != RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected outcome to stay global, got %#v", got)
+	}
+	if got.EffectiveStaleAfterSeconds() != 3600 {
+		t.Fatalf("expected decision stale horizon override, got %#v", got)
+	}
+}
+
+func TestRouterLearningSuccessConfigDefaultsWhenOmitted(t *testing.T) {
+	cfg := RouterLearningSuccessConfig{}
+	if cfg.EffectiveOutcome() != RouterLearningSuccessOutcomeRequestCompletion {
+		t.Fatalf("expected default outcome, got %q", cfg.EffectiveOutcome())
+	}
+	if cfg.EffectiveStaleAfterSeconds() != 86400 {
+		t.Fatalf("expected default stale horizon, got %d", cfg.EffectiveStaleAfterSeconds())
+	}
+	zero := 0
+	cfg.StaleAfterSeconds = &zero
+	if cfg.EffectiveStaleAfterSeconds() != 0 {
+		t.Fatalf("expected explicit zero to disable stale horizon, got %d", cfg.EffectiveStaleAfterSeconds())
 	}
 }
 

@@ -47,6 +47,7 @@ type LearningSuccessEstimate struct {
 	FreshnessSeconds   int64   `json:"freshness_seconds,omitempty"`
 	CalibrationVersion string  `json:"calibration_version,omitempty"`
 	FallbackReason     string  `json:"fallback_reason,omitempty"`
+	Outcome            string  `json:"outcome,omitempty"`
 }
 
 // LearningSamplingDiagnostics records whether routing_sampling used a random

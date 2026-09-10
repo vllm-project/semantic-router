@@ -177,10 +177,18 @@ def _unsupported_router_learning_fields(data: Dict[str, Any]) -> list[str]:
     fields.extend(
         _unknown_fields(
             adaptation,
-            {"enabled", "candidate_set", "strategy"},
+            {"enabled", "candidate_set", "strategy", "success"},
             "global.router.learning.adaptation",
         )
     )
+    if isinstance(adaptation, dict):
+        fields.extend(
+            _unknown_fields(
+                adaptation.get("success"),
+                {"outcome", "stale_after_seconds"},
+                "global.router.learning.adaptation.success",
+            )
+        )
 
     protection = learning.get("protection")
     fields.extend(
@@ -249,6 +257,11 @@ def _invalid_router_learning_values(data: Dict[str, Any]) -> list[str]:
             errors.append(
                 "global.router.learning.adaptation.strategy must be routing_sampling"
             )
+        _validate_success_config(
+            errors,
+            adaptation.get("success"),
+            "global.router.learning.adaptation.success",
+        )
 
     protection = learning.get("protection")
     if not isinstance(protection, dict):
@@ -321,18 +334,39 @@ def _invalid_decision_adaptation_values(data: Dict[str, Any]) -> list[str]:
             if not isinstance(component, dict):
                 continue
             component_mode = str(component.get("mode") or "").strip()
-            if not component_mode:
-                continue
-            path = f"routing.decisions[{index}].adaptations.{component_name}.mode"
-            if decision_mode == "bypass" and component_mode != "bypass":
-                errors.append(
-                    f"{path} cannot be {component_mode} when adaptations.mode is bypass"
-                )
-            elif decision_mode == "observe" and component_mode == "apply":
-                errors.append(
-                    f"{path} cannot be apply when adaptations.mode is observe"
+            if component_mode:
+                path = f"routing.decisions[{index}].adaptations.{component_name}.mode"
+                if decision_mode == "bypass" and component_mode != "bypass":
+                    errors.append(
+                        f"{path} cannot be {component_mode} when adaptations.mode is bypass"
+                    )
+                elif decision_mode == "observe" and component_mode == "apply":
+                    errors.append(
+                        f"{path} cannot be apply when adaptations.mode is observe"
+                    )
+            if component_name == "adaptation":
+                _validate_success_config(
+                    errors,
+                    component.get("success"),
+                    f"routing.decisions[{index}].adaptations.adaptation.success",
                 )
     return errors
+
+
+def _validate_success_config(errors: list[str], value: Any, prefix: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        errors.append(f"{prefix} must be an object")
+        return
+    outcome = value.get("outcome")
+    if outcome not in (None, "", "request_completion"):
+        errors.append(f"{prefix}.outcome must be request_completion")
+    _validate_non_negative_int(
+        errors,
+        value.get("stale_after_seconds"),
+        f"{prefix}.stale_after_seconds",
+    )
 
 
 def _validate_non_negative_int(

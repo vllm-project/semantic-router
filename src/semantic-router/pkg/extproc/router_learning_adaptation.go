@@ -221,6 +221,7 @@ func (r *OpenAIRouter) adaptationConfig(
 	cfg := r.Config.RouterLearning.Adaptation
 	if ctx.VSRSelectedDecision != nil {
 		cfg.CandidateSet = ctx.VSRSelectedDecision.Adaptations.AdaptationCandidateSet(cfg.EffectiveCandidateSet())
+		cfg.Success = ctx.VSRSelectedDecision.Adaptations.AdaptationSuccess(cfg.Success)
 	}
 	return cfg, r.Config.RouterLearning.Enabled && cfg.EffectiveEnabled()
 }

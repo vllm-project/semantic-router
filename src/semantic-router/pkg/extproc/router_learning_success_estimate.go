@@ -45,12 +45,14 @@ type successEstimate struct {
 	FreshnessSeconds   int64
 	CalibrationVersion string
 	FallbackReason     string
+	Outcome            string
 }
 
 type successEstimateConfig struct {
 	Now        time.Time
 	StaleAfter time.Duration
 	Artifact   *successCalibrationArtifact
+	Outcome    string
 }
 
 // successCalibrationArtifact is the request-path view of an accepted
@@ -93,6 +95,7 @@ func estimateCandidateSuccess(
 			Now:        now,
 			StaleAfter: cfg.StaleAfter,
 			Artifact:   cfg.Artifact,
+			Outcome:    cfg.Outcome,
 		}))
 	}
 	return out
@@ -105,7 +108,11 @@ func estimateOneCandidateSuccess(
 ) successEstimate {
 	hits := snap.lookupChain(model)
 	if _, scope, status, reason := mergeScopedExperience(hits); status == successEstimateConflict {
-		est := successEstimate{CandidateModel: model, EvidenceScope: scope}
+		est := successEstimate{
+			CandidateModel: model,
+			EvidenceScope:  scope,
+			Outcome:        strings.TrimSpace(cfg.Outcome),
+		}
 		return unsupportedOrConflictEstimate(est, successEstimateConflict, reason)
 	}
 
@@ -115,6 +122,7 @@ func estimateOneCandidateSuccess(
 		EvidenceScope:    scope,
 		SampleCount:      exp.outcomeSamples(),
 		FreshnessSeconds: experienceFreshnessSeconds(exp, cfg.Now),
+		Outcome:          strings.TrimSpace(cfg.Outcome),
 	}
 
 	if isExperienceStale(exp, cfg.Now, cfg.StaleAfter) {

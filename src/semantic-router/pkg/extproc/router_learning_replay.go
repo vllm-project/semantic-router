@@ -64,6 +64,7 @@ func replaySuccessEstimates(estimates []successEstimate) map[string]routerreplay
 			FreshnessSeconds:   estimate.FreshnessSeconds,
 			CalibrationVersion: strings.TrimSpace(estimate.CalibrationVersion),
 			FallbackReason:     strings.TrimSpace(estimate.FallbackReason),
+			Outcome:            strings.TrimSpace(estimate.Outcome),
 		}
 		if estimate.Status == successEstimateCalibrated {
 			row.Probability = roundLearningFloat(estimate.Probability)
