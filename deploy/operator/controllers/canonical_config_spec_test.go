@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
-
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
 
@@ -186,8 +185,9 @@ func TestOperatorPIIBackendResolvesInGeneratedRouterConfig(t *testing.T) {
 	if cfg.PIIMappingPath != "/config/pii.yaml" {
 		t.Fatalf("PII mapping path was lost; the token_spans adapter requires it: %q", cfg.PIIMappingPath)
 	}
-	if cfg.PIIModel.OnError != routerconfig.OnErrorBlock {
-		t.Fatalf("on_error did not survive the operator path: %q", cfg.PIIModel.OnError)
+	pii := cfg.PIIModel
+	if pii.OnError != routerconfig.OnErrorBlock {
+		t.Fatalf("on_error did not survive the operator path: %q", pii.OnError)
 	}
 	if len(cfg.ExternalModels) != 1 || cfg.ExternalModels[0].ModelName != "pii-spans-v1" {
 		t.Fatalf("external catalog did not reach the parsed router config: %#v", cfg.ExternalModels)
