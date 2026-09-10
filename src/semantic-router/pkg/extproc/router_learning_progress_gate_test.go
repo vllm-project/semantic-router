@@ -479,3 +479,111 @@ func TestSwitchGateVerdictObserveModeRecordsWithoutSuppressing(t *testing.T) {
 		t.Fatalf("trace must record observe mode: %+v", trace)
 	}
 }
+
+// The gate must read the decision state from the key protection records it
+// under. Conversation scope records switches under "<session>/<conversation>",
+// so reading the session-scoped routing key would blind the cooldown.
+func TestSwitchGateReadsDecisionStateFromLearningKey(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	cfg := config.RouterLearningProtectionConfig{
+		Tuning: config.RouterLearningProtectionTuning{
+			ProgressGate: &config.ProgressGateTuning{
+				Enabled: gateBoolPtr(true),
+				Mode:    selection.GateModeEnforce,
+			},
+		},
+	}
+	ctx := &RequestContext{
+		SessionID:            "gate-learning-key",
+		VSRLearningSessionID: "gate-learning-key/conv-1",
+	}
+	stateKey := routingLearningStateKey(ctx)
+	if stateKey == routingSessionStateKey(ctx) {
+		t.Fatal("test setup must keep the learning key distinct from the routing key")
+	}
+
+	now := time.Now()
+	for i := 0; i < 3; i++ {
+		sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
+			TurnIndex: i,
+			Model:     "model-b",
+			Category:  sessiontelemetry.TurnNoProgress,
+		}, now.Add(time.Duration(i-4)*time.Second))
+	}
+	// Protection records the switch under the conversation-scoped memory key.
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID: stateKey, SelectedModel: "model-a", Timestamp: now.Add(-time.Minute),
+	})
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID: stateKey, PreviousModel: "model-a", SelectedModel: "model-b",
+		Timestamp: now.Add(-30 * time.Second),
+	})
+
+	decision, trace, ran := router.switchGateVerdict(cfg, ctx, nil, "model-b", "model-c", false)
+	if !ran {
+		t.Fatal("gate should have evaluated")
+	}
+	if !decision.Suppressed() || decision.Reason != selection.GateReasonCooldown {
+		t.Fatalf("a switch recorded under the learning key must trigger cooldown: %+v", decision)
+	}
+	if !trace.LastSwitchKnown {
+		t.Fatalf("trace must see the recorded switch: %+v", trace)
+	}
+}
+
+// Same alignment for the oscillation guard: windowed switches recorded under
+// the learning key must be counted.
+func TestSwitchGateCountsLearningKeySwitchesInWindow(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	cfg := config.RouterLearningProtectionConfig{
+		Tuning: config.RouterLearningProtectionTuning{
+			ProgressGate: &config.ProgressGateTuning{
+				Enabled: gateBoolPtr(true),
+				Mode:    selection.GateModeEnforce,
+			},
+		},
+	}
+	ctx := &RequestContext{
+		SessionID:            "gate-learning-osc",
+		VSRLearningSessionID: "gate-learning-osc/conv-1",
+	}
+	stateKey := routingLearningStateKey(ctx)
+
+	now := time.Now()
+	for i := 0; i < 3; i++ {
+		sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
+			TurnIndex: i,
+			Model:     "model-b",
+			Category:  sessiontelemetry.TurnNoProgress,
+		}, now.Add(time.Duration(i-4)*time.Second))
+	}
+	// Two real switches inside the evidence window but outside the 120s cooldown.
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID: stateKey, SelectedModel: "model-a", Timestamp: now.Add(-10 * time.Minute),
+	})
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID: stateKey, PreviousModel: "model-a", SelectedModel: "model-b",
+		Timestamp: now.Add(-9 * time.Minute),
+	})
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID: stateKey, PreviousModel: "model-b", SelectedModel: "model-a",
+		Timestamp: now.Add(-8 * time.Minute),
+	})
+
+	decision, trace, ran := router.switchGateVerdict(cfg, ctx, nil, "model-a", "model-b", false)
+	if !ran {
+		t.Fatal("gate should have evaluated")
+	}
+	if !decision.Suppressed() || decision.Reason != selection.GateReasonOscillationGuard {
+		t.Fatalf("windowed switches under the learning key must trip the guard: %+v", decision)
+	}
+	if trace.SwitchesInWindow < 2 {
+		t.Fatalf("trace must count the windowed switches: %+v", trace)
+	}
+}

@@ -90,12 +90,22 @@ func (r *OpenAIRouter) switchGateVerdict(
 	if sessionKey == "" {
 		return selection.SwitchGateDecision{}, nil, false
 	}
+	// Protection records the decision state (current model, last switch, switch
+	// history) under its conversation-scoped memory key; reading it from the
+	// session-scoped routing key would always miss, blinding cooldown and the
+	// oscillation guard.
+	stateKey := routingLearningStateKey(ctx)
 
 	now := time.Now()
 	// Apply the configured bounds before reading so both the gate and the
 	// response-path writers use the operator's window policy.
 	windowTTL := time.Duration(gateCfg.WindowTTLSeconds) * time.Second
 	sessiontelemetry.ConfigureTurnOutcomeWindow(sessionKey, gateCfg.WindowSize, windowTTL, now)
+	if stateKey != sessionKey {
+		// The decision state prunes its switch timestamps with its own window
+		// policy, so the learning key needs the same bounds.
+		sessiontelemetry.ConfigureTurnOutcomeWindow(stateKey, gateCfg.WindowSize, windowTTL, now)
+	}
 	window := sessiontelemetry.RecentTurnOutcomesWithPolicy(sessionKey, now, gateCfg.WindowSize, windowTTL)
 	evidence := selection.EvaluateProgressEvidence(turnOutcomeFacts(window))
 
@@ -103,7 +113,7 @@ func (r *OpenAIRouter) switchGateVerdict(
 		Evidence:  evidence,
 		Downgrade: downgrade,
 	}
-	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now); ok {
+	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(stateKey, now); ok {
 		// The oscillation guard is window-scoped: count the model changes
 		// inside the gate's own evidence window, not the session lifetime.
 		in.SwitchesInWindow = sessiontelemetry.CountRecentSwitches(snapshot.SwitchTimestamps, windowTTL, now)
