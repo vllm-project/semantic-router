@@ -714,6 +714,36 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 )
             )
 
+    def test_cloudflare_workers_ai_provider_contract_is_complete(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        provider = providers["cloudflare-workers-ai"]
+
+        self.assertEqual(provider["display_name"], "Cloudflare Workers AI")
+        self.assertEqual(provider["category"], "model_api")
+        self.assertEqual(provider["support_tier"], "compatible")
+        self.assertNotIn("default_base_url", provider)
+        self.assertEqual(provider["protocols"], ["openai/chat-completions@1"])
+        self.assertEqual(provider["default_protocol"], "openai/chat-completions@1")
+        self.assertEqual(
+            provider["supported_operations"],
+            ["openai/chat-completions@1#create"],
+        )
+        self.assertEqual(
+            provider["auth"],
+            {
+                "strategy": "bearer",
+                "header": "Authorization",
+                "prefix": "Bearer",
+            },
+        )
+        self.assertEqual(
+            provider["presentation"],
+            {"logo": "monogram", "monogram": "Cf", "monochrome": False},
+        )
+        self.assertEqual(provider["conformance"], {"status": "unverified"})
+        self.assertNotIn("models", provider)
+
     def test_core_reasoning_families_match_native_control_surfaces(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         families = {item["id"]: item for item in resources["reasoning_families"]}
