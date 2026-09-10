@@ -10,11 +10,16 @@ SOAK_VENV_DIR=${SOAK_VENV_DIR:-${SOAK_LOG_DIR}/venv}
 SOAK_ROUTER_BASE_CONFIG=e2e/config/config.e2e.yaml
 SOAK_CONFIG=${SOAK_CONFIG:-}
 SOAK_OUT_DIR=${SOAK_OUT_DIR:-soak-results/$(date -u +%Y-%m-%dT%H-%M-%SZ)}
+SOAK_STREAMING=${SOAK_STREAMING:-0}
 
 SOAK_MOCK_PORT=${SOAK_MOCK_PORT:-8010}
 SOAK_BACKEND_PORT=${SOAK_BACKEND_PORT:-8000}
 SOAK_DELAY_MS=${SOAK_DELAY_MS:-1500}
 SOAK_DELAY_JITTER_MS=${SOAK_DELAY_JITTER_MS:-500}
+SOAK_STREAM_TTFT_MS=${SOAK_STREAM_TTFT_MS:-500}
+SOAK_STREAM_TTFT_JITTER_MS=${SOAK_STREAM_TTFT_JITTER_MS:-0}
+SOAK_STREAM_INTERVAL_MS=${SOAK_STREAM_INTERVAL_MS:-50}
+SOAK_STREAM_FRAMES=${SOAK_STREAM_FRAMES:-64}
 
 SOAK_METRICS_PORT=${SOAK_METRICS_PORT:-9190}
 SOAK_PPROF_PORT=${SOAK_PPROF_PORT:-6060}
@@ -122,6 +127,26 @@ require_port_free() {
   fi
 }
 
+case "${SOAK_STREAMING}" in
+  0)
+    SOAK_RESPONSE_MODE=buffered
+    SOAK_PROXY_DELAY_MS=${SOAK_DELAY_MS}
+    SOAK_PROXY_DELAY_JITTER_MS=${SOAK_DELAY_JITTER_MS}
+    SOAK_PROXY_STREAM_INTERVAL_MS=0
+    SOAK_PROXY_STREAM_FRAMES=0
+    ;;
+  1)
+    SOAK_RESPONSE_MODE=streaming
+    SOAK_PROXY_DELAY_MS=${SOAK_STREAM_TTFT_MS}
+    SOAK_PROXY_DELAY_JITTER_MS=${SOAK_STREAM_TTFT_JITTER_MS}
+    SOAK_PROXY_STREAM_INTERVAL_MS=${SOAK_STREAM_INTERVAL_MS}
+    SOAK_PROXY_STREAM_FRAMES=${SOAK_STREAM_FRAMES}
+    ;;
+  *)
+    die "SOAK_STREAMING must be 0 or 1 (got ${SOAK_STREAMING})"
+    ;;
+esac
+
 mkdir -p "${SOAK_LOG_DIR}"
 
 [[ -x bin/router ]] || die "bin/router missing; run 'make soak-local' (or 'make build-router') first"
@@ -163,13 +188,15 @@ log "starting mock-vllm on :${SOAK_MOCK_PORT}"
 MOCK_PID=$!
 wait_for_url mock-vllm "http://127.0.0.1:${SOAK_MOCK_PORT}/openapi.json"
 
-log "starting fault proxy on :${SOAK_BACKEND_PORT} (delay ${SOAK_DELAY_MS}ms + 0..${SOAK_DELAY_JITTER_MS}ms jitter)"
+log "starting fault proxy on :${SOAK_BACKEND_PORT} (response ${SOAK_RESPONSE_MODE}, first-byte delay ${SOAK_PROXY_DELAY_MS}ms + 0..${SOAK_PROXY_DELAY_JITTER_MS}ms jitter, stream interval ${SOAK_PROXY_STREAM_INTERVAL_MS}ms, content frames ${SOAK_PROXY_STREAM_FRAMES})"
 "${SOAK_VENV_DIR}/bin/python" bench/openai_fault_proxy.py \
   --listen-host 127.0.0.1 \
   --listen-port "${SOAK_BACKEND_PORT}" \
   --upstream-base-url "http://127.0.0.1:${SOAK_MOCK_PORT}" \
-  --delay-ms "${SOAK_DELAY_MS}" \
-  --delay-jitter-ms "${SOAK_DELAY_JITTER_MS}" \
+  --delay-ms "${SOAK_PROXY_DELAY_MS}" \
+  --delay-jitter-ms "${SOAK_PROXY_DELAY_JITTER_MS}" \
+  --stream-interval-ms "${SOAK_PROXY_STREAM_INTERVAL_MS}" \
+  --stream-frames "${SOAK_PROXY_STREAM_FRAMES}" \
   >"${SOAK_LOG_DIR}/fault-proxy.log" 2>&1 &
 PROXY_PID=$!
 wait_for_url fault-proxy "http://127.0.0.1:${SOAK_BACKEND_PORT}/health"
@@ -267,8 +294,11 @@ if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
 fi
 {
   echo "git_sha=${GIT_SHA}"
-  echo "delay_ms=${SOAK_DELAY_MS}"
-  echo "delay_jitter_ms=${SOAK_DELAY_JITTER_MS}"
+  echo "response_mode=${SOAK_RESPONSE_MODE}"
+  echo "delay_ms=${SOAK_PROXY_DELAY_MS}"
+  echo "delay_jitter_ms=${SOAK_PROXY_DELAY_JITTER_MS}"
+  echo "stream_interval_ms=${SOAK_PROXY_STREAM_INTERVAL_MS}"
+  echo "stream_content_frames=${SOAK_PROXY_STREAM_FRAMES}"
   echo "envoy_version=${SOAK_ENVOY_VERSION}"
   echo "router_config=${SOAK_CONFIG}"
   echo "envoy_config=${SOAK_ENVOY_CONFIG}"
@@ -276,6 +306,10 @@ fi
 } >"${SOAK_OUT_DIR}/run-env.txt"
 
 log "running soak harness (router pid ${ROUTER_PID}), results -> ${SOAK_OUT_DIR}"
+SOAK_HARNESS_ARGS=()
+if [[ "${SOAK_STREAMING}" == "1" ]]; then
+  SOAK_HARNESS_ARGS+=("-stream")
+fi
 set +e
 ./bin/soak \
   -gateway-url "http://127.0.0.1:${SOAK_ENVOY_PORT}" \
@@ -283,6 +317,7 @@ set +e
   -pprof-url "http://127.0.0.1:${SOAK_PPROF_PORT}" \
   -router-pid "${ROUTER_PID}" \
   -out "${SOAK_OUT_DIR}" \
+  "${SOAK_HARNESS_ARGS[@]}" \
   "$@"
 SOAK_STATUS=$?
 set -e

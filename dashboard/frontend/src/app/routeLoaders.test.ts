@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { loadDashboardPage, preloadDashboardRoute, resetDashboardRouteLoader } from './routeLoaders'
+import {
+  lazyRoutePage,
+  loadDashboardPage,
+  preloadDashboardRoute,
+  resetDashboardRouteLoader,
+} from './routeLoaders'
+
+describe('lazy route pages', () => {
+  it('keeps one lazy page per loader until the route is reset for a retry', () => {
+    const loader = () => Promise.resolve({ default: () => null })
+    const first = lazyRoutePage(loader)
+
+    expect(lazyRoutePage(loader)).toBe(first)
+
+    resetDashboardRouteLoader(loader)
+    expect(lazyRoutePage(loader)).not.toBe(first)
+  })
+})
 
 describe('route preloading', () => {
   it('ignores paths outside the dashboard route registry', () => {
