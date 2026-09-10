@@ -3,10 +3,11 @@ package extproc
 import (
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 func newObservedEventLogger(t *testing.T) *observer.ObservedLogs {
