@@ -1210,6 +1210,7 @@ type ComplexityCandidates struct {
 // - categories does - keeps the field optional and defaults it.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract in ['score.v1', 'label_distribution.v1']",message="complexity reads score.v1 or label_distribution.v1; token_spans.v1 is the PII contract"
 type ComplexityModelConfig struct {
 	// Backend names a remote scoring model. Its absence keeps local prototype
 	// scoring; when set, the signal never reads the rules' hard/easy
@@ -1486,7 +1487,14 @@ type CategoryModelConfig struct {
 	CategoryMappingPath string `json:"category_mapping_path,omitempty"`
 }
 
-// PIIModelConfig defines PII model configuration
+// PIIModelConfig defines PII model configuration.
+//
+// The contract rule sits on the consumer, as on ComplexityModelConfig: the
+// shared backend block lists every contract any consumer reads, and each
+// consumer narrows it to what it can parse, so a mismatch is refused at
+// admission instead of by the router at load.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
 type PIIModelConfig struct {
 	// +optional
 	ModelID string `json:"model_id,omitempty"`

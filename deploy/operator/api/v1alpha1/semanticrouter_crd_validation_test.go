@@ -13,9 +13,9 @@ import (
 // the CRD simply stops validating. This asserts the generated artifacts still
 // carry each expression.
 //
-// It checks presence, not CEL semantics: evaluating the expressions needs an
-// API server, so a rule that is present but wrong would pass here. What it
-// does catch is the failure that actually happened once on this branch - a
+// It checks presence, not CEL semantics; semanticrouter_cel_admission_test.go
+// evaluates the expressions with the API server's own validator. What this
+// one catches is the failure that actually happened once on this branch - a
 // generated CRD copy left behind by an API change.
 func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 	expressions := []string{
