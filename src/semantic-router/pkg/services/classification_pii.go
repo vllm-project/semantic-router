@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -44,7 +45,7 @@ type PIIEntity struct {
 }
 
 // DetectPII performs PII detection
-func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) {
+func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (*PIIResponse, error) {
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -65,9 +66,9 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 	var detections []classification.PIIDetection
 	var err error
 	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
-		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(req.Text, float32(req.Options.ConfidenceThreshold))
+		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(ctx, req.Text, float32(req.Options.ConfidenceThreshold))
 	} else {
-		detections, err = classifier.ClassifyPIIWithDetails(req.Text)
+		detections, err = classifier.ClassifyPIIWithDetails(ctx, req.Text)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)

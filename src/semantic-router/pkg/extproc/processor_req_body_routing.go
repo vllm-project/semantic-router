@@ -383,12 +383,12 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "encode provider request")
 	}
 	body, err = r.adaptProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
-		return nil, status.Errorf(codes.Internal, "adapt provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "adapt provider request")
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -408,6 +408,28 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// processBodyRoutingError answers every ProtocolError it recognizes with HTTP
+// 400, so only client-owned categories may reach it unwrapped. status.Errorf
+// formats with Sprintf, which flattens the error and hides it from errors.As,
+// keeping server-owned categories on the internal path where they belong.
+func dispatchWireError(err error, ctx *RequestContext, reason string) error {
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) && isClientProtocolError(protocolError.Category) {
+		if ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
+		return err
+	}
+	return status.Errorf(codes.Internal, "%s: %v", reason, err)
+}
+
+// Categories a caller can fix by changing the request. Everything else,
+// including ErrorInternal and the upstream categories, is a server fault.
+func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
+	return category == llmprotocol.ErrorInvalidRequest ||
+		category == llmprotocol.ErrorUnsupportedFeature
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(

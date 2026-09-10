@@ -313,7 +313,7 @@ func endpointSpanExplanation(explanation, category, subcategory string) string {
 // through on error and records the detection_error path rather than not_detected.
 // A clean result is reserved for an empty answer (nothing to verify) and for a
 // successfully parsed empty span list.
-func (d *EndpointHallucinationDetector) DetectWithNLI(reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
+func (d *EndpointHallucinationDetector) DetectWithNLI(ctx context.Context, reqContext, question, answer string) (*EnhancedHallucinationResult, error) {
 	if answer == "" {
 		return d.cleanResult(), nil
 	}
@@ -325,7 +325,7 @@ func (d *EndpointHallucinationDetector) DetectWithNLI(reqContext, question, answ
 	if err != nil {
 		return nil, fmt.Errorf("failed to build hallucination detection request: %w", err)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), "POST", d.endpoint+"/chat/completions", bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", d.endpoint+"/chat/completions", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create hallucination detection request: %w", err)
 	}
@@ -371,8 +371,8 @@ func (d *EndpointHallucinationDetector) cleanResult() *EnhancedHallucinationResu
 	}
 }
 
-func (d *EndpointHallucinationDetector) Detect(reqContext, question, answer string) (*HallucinationResult, error) {
-	enhanced, err := d.DetectWithNLI(reqContext, question, answer)
+func (d *EndpointHallucinationDetector) Detect(ctx context.Context, reqContext, question, answer string) (*HallucinationResult, error) {
+	enhanced, err := d.DetectWithNLI(ctx, reqContext, question, answer)
 	if err != nil {
 		return nil, err
 	}

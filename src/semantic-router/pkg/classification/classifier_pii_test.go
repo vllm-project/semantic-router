@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -34,7 +35,7 @@ func (m *MockPIIInference) setMockResponse(text string, entities []candle_bindin
 	}
 }
 
-func (m *MockPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (m *MockPIIInference) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
 	if response, exists := m.responseMap[text]; exists {
 		return response.classifyTokensResult, response.classifyTokensError
 	}
@@ -183,7 +184,7 @@ var _ = Describe("PII detection configuration", func() {
 			classifier.Config.PIIMappingPath = row.piiMappingPath
 			classifier.PIIMapping = row.piiMapping
 
-			piiTypes, err := classifier.ClassifyPII("Some text")
+			piiTypes, err := classifier.ClassifyPII(context.Background(), "Some text")
 
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("PII detection is not properly configured"))
@@ -195,7 +196,7 @@ var _ = Describe("PII detection configuration", func() {
 	)
 
 	It("should ignore empty text", func() {
-		piiTypes, err := classifier.ClassifyPII("")
+		piiTypes, err := classifier.ClassifyPII(context.Background(), "")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(piiTypes).To(BeEmpty())
@@ -220,7 +221,7 @@ var _ = Describe("PII classification", func() {
 			},
 		}
 
-		piiTypes, err := classifier.ClassifyPII("John Doe john@example.com")
+		piiTypes, err := classifier.ClassifyPII(context.Background(), "John Doe john@example.com")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(piiTypes).To(ConsistOf("PERSON", "EMAIL"))
@@ -234,7 +235,7 @@ var _ = Describe("PII classification", func() {
 			},
 		}
 
-		piiTypes, err := classifier.ClassifyPII("John Doe john@example.com")
+		piiTypes, err := classifier.ClassifyPII(context.Background(), "John Doe john@example.com")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(piiTypes).To(ConsistOf("PERSON"))
@@ -245,7 +246,7 @@ var _ = Describe("PII classification", func() {
 			Entities: []candle_binding.TokenEntity{},
 		}
 
-		piiTypes, err := classifier.ClassifyPII("Some text")
+		piiTypes, err := classifier.ClassifyPII(context.Background(), "Some text")
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(piiTypes).To(BeEmpty())
@@ -254,7 +255,7 @@ var _ = Describe("PII classification", func() {
 	It("should surface model inference failures", func() {
 		mockModel.classifyTokensError = errors.New("PII model inference failed")
 
-		piiTypes, err := classifier.ClassifyPII("Some text")
+		piiTypes, err := classifier.ClassifyPII(context.Background(), "Some text")
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("PII token classification error"))
@@ -275,7 +276,7 @@ var _ = Describe("PII content analysis", func() {
 	It("should fail when the PII mapping is missing", func() {
 		classifier.PIIMapping = nil
 
-		hasPII, _, err := classifier.AnalyzeContentForPII([]string{"Some text"})
+		hasPII, _, err := classifier.AnalyzeContentForPII(context.Background(), []string{"Some text"})
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("PII detection is not properly configured"))
@@ -293,7 +294,7 @@ var _ = Describe("PII content analysis", func() {
 		mockModel.setMockResponse("No PII here", []candle_binding.TokenEntity{}, nil)
 		mockModel.setMockResponse("", []candle_binding.TokenEntity{}, nil)
 
-		hasPII, results, err := classifier.AnalyzeContentForPII([]string{"Bob", "Lisa Smith", "Alice Smith", "No PII here", ""})
+		hasPII, results, err := classifier.AnalyzeContentForPII(context.Background(), []string{"Bob", "Lisa Smith", "Alice Smith", "No PII here", ""})
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(hasPII).To(BeTrue())
@@ -331,7 +332,7 @@ var _ = Describe("PII content detection", func() {
 		mockModel.setMockResponse("No PII here", []candle_binding.TokenEntity{}, nil)
 		mockModel.setMockResponse("", []candle_binding.TokenEntity{}, nil)
 
-		detectedPII := classifier.DetectPIIInContent([]string{"Bob", "Lisa Smith", "Alice Smith alice@example.com", "No PII here", ""})
+		detectedPII := classifier.DetectPIIInContent(context.Background(), []string{"Bob", "Lisa Smith", "Alice Smith alice@example.com", "No PII here", ""})
 
 		Expect(detectedPII).To(ConsistOf("PERSON", "EMAIL"))
 	})
