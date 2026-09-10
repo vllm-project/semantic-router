@@ -73,6 +73,8 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/semantic-router/pkg/classification/embedding_classifier_scoring.go",
             "src/semantic-router/pkg/classification/embedding_classifier_multimodal.go",
             "src/semantic-router/pkg/classification/prototype_scoring.go",
+            "src/semantic-router/pkg/classification/prototype_bank.go",
+            "src/semantic-router/pkg/classification/prototype_clustering.go",
             "src/semantic-router/pkg/config/prototype_scoring_config.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
         ):
