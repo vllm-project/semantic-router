@@ -64,7 +64,13 @@ func normalizeEmbeddingModelType(modelType string) string {
 func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract, error) {
 	normalizedModelType := normalizeEmbeddingModelType(modelType)
 	result, status := loadEmbeddingDimensionContract(normalizedModelType)
-	defer C.free_embedding_dimension_contract(&result)
+	if result == nil {
+		return EmbeddingDimensionContract{}, fmt.Errorf(
+			"failed to allocate embedding dimension contract for model %q",
+			normalizedModelType,
+		)
+	}
+	defer releaseEmbeddingDimensionContract(result)
 
 	if status != 0 || bool(result.error) {
 		return EmbeddingDimensionContract{}, fmt.Errorf(
@@ -74,20 +80,37 @@ func GetEmbeddingDimensionContract(modelType string) (EmbeddingDimensionContract
 		)
 	}
 
-	return parseEmbeddingDimensionContract(normalizedModelType, &result)
+	return parseEmbeddingDimensionContract(normalizedModelType, result)
 }
 
-func loadEmbeddingDimensionContract(modelType string) (C.EmbeddingDimensionContractResult, C.int) {
-	var result C.EmbeddingDimensionContractResult
+// allocateEmbeddingDimensionContract allocates the output structure in C
+// memory so native code never receives a pointer into the Go heap.
+func allocateEmbeddingDimensionContract() *C.EmbeddingDimensionContractResult {
+	size := C.size_t(unsafe.Sizeof(C.EmbeddingDimensionContractResult{}))
+	return (*C.EmbeddingDimensionContractResult)(C.calloc(1, size))
+}
+
+// releaseEmbeddingDimensionContract frees the native fields and the C-owned
+// output structure returned by the dimension contract functions.
+func releaseEmbeddingDimensionContract(result *C.EmbeddingDimensionContractResult) {
+	C.free_embedding_dimension_contract(result)
+	C.free(unsafe.Pointer(result))
+}
+
+func loadEmbeddingDimensionContract(modelType string) (*C.EmbeddingDimensionContractResult, C.int) {
+	result := allocateEmbeddingDimensionContract()
+	if result == nil {
+		return nil, -1
+	}
 
 	if modelType == "multimodal" {
-		status := C.get_multimodal_embedding_dimension_contract(&result)
+		status := C.get_multimodal_embedding_dimension_contract(result)
 		return result, status
 	}
 
 	cModelType := C.CString(modelType)
 	defer C.free(unsafe.Pointer(cModelType))
-	status := C.get_embedding_dimension_contract(cModelType, &result)
+	status := C.get_embedding_dimension_contract(cModelType, result)
 	return result, status
 }
 
