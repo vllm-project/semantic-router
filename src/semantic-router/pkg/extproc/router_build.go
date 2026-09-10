@@ -223,8 +223,9 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
 	}
 
-	if err := components.buildMemoryRuntime(createMemoryStore); err != nil {
-		return nil, err
+	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
+	if components.memoryStore != nil {
+		components.resources.add(components.memoryStore.Close)
 	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
