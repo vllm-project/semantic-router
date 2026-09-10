@@ -16,12 +16,13 @@ deployment endpoints and credentials.
 
 ## Implemented contract
 
-The public configuration has seven top-level sections:
+The public configuration has eight top-level sections:
 
 ```yaml
 version:
 listeners:
 providers:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -33,6 +34,7 @@ global:
 | `version` | Selects the configuration contract. |
 | `listeners` | Defines request-facing and management listeners. |
 | `providers` | Binds logical model names to provider identifiers and endpoints. |
+| `evaluation` | Optionally defines operator-owned benchmarks, index DAGs, and model-linked records. |
 | `routing` | Defines the default model cards, signals, projections, decisions, algorithms, and plugins. |
 | `entrypoints` | Maps request-facing model names to the default profile or a named recipe. |
 | `recipes` | Defines additional isolated routing profiles that share providers and global infrastructure. |
@@ -45,8 +47,20 @@ silently translated at runtime.
 
 `providers.defaults` owns the default provider behavior and default model.
 `providers.models[].backend_refs[]` owns physical backend bindings.
+`providers.models[].api_format` owns only the upstream wire format and never
+selects a Provider. A physical model in a Router-owned listener configuration
+must declare an explicit backend Provider; metadata-only external-gateway
+configuration and built-in virtual models may remain backendless.
+The local CLI serve path owns Envoy transport and rejects backendless physical
+models; external-gateway metadata-only configurations are deployed through the
+gateway integration rather than converted into a standalone Envoy data plane.
 `providers.models[].pricing` owns optional deployment cost metadata used by
 cost-aware selection and accounting. Pricing does not belong to routing model cards.
+
+`evaluation` owns optional operator benchmark definitions, index DAGs, and
+measurement records. Each `evaluation.records[].model` references one canonical
+Model Card identity, so reusable scoring semantics and model evidence have one
+top-level owner without being embedded in routing metadata.
 
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with
@@ -76,9 +90,9 @@ Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
 The DSL is an authoring view of routing semantics. It does not own provider
-credentials, listeners, stores, or global runtime services. Import and export must
-preserve the same canonical routing document rather than invent another steady-state
-schema.
+credentials, listeners, evaluation definitions or records, stores, or global
+runtime services. Import and export preserve the same canonical routing
+document rather than inventing another steady-state schema.
 
 Classifier backend failures enter decision evaluation as `Unknown`. `NOT` preserves
 that state, while `AND` and `OR` use CEL-style short-circuit semantics. A decision
@@ -109,6 +123,16 @@ exact external-catalog name. The category consumer currently accepts
 `http_classify` plus `label_distribution.v1`, preserving the full label-score
 distribution. Prompt guard remains on its existing configuration surface until
 its separately scoped migration.
+
+Complexity is the second consumer and keeps its runtime policy in
+`global.model_catalog.modules.complexity`, so a backend survives the per-recipe
+replacement of `routing.signals`. It accepts `http_classify` with either
+`score.v1`, a continuous score the signal converts into a verdict through
+per-rule boundaries, or `label_distribution.v1`, where the winning label is the
+verdict. A consumer that reads more than one contract cannot default the field:
+omitting it would leave the runtime guessing which response shape to expect,
+and guessing wrong surfaces per request rather than at config load. Consumers
+reading exactly one contract keep it as the default, so category is unchanged.
 Connector byte ceilings belong to the connector configuration. External LLM
 classifier entries and the MCP classifier module use `max_response_bytes`.
 The dashboard, Helm chart, and operator may help users author or transport config, but

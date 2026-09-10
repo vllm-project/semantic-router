@@ -19,6 +19,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"regexp"
@@ -246,27 +247,21 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 
 	// Helper to compute AutoMix value for a model
 	getValue := func(ref config.ModelRef) float64 {
-		quality := 0.5   // Default quality estimate
-		costScore := 0.5 // Default cost score (mid-range)
+		quality, costScore := 0.0, 0.0
+		hasQuality, hasCost := false, false
 
 		if modelParams != nil {
 			if params, ok := modelParams[ref.Model]; ok {
-				// Use configured QualityScore if available
-				if params.QualityScore > 0 && params.QualityScore <= 1.0 {
-					quality = params.QualityScore
-				} else {
-					// Fallback: estimate quality from param_size (larger = higher quality)
-					size := parseParamSize(params.ParamSize)
-					if size > 0 {
-						// Normalize size: assume 1B-70B range maps to 0.3-1.0 quality
-						quality = 0.3 + 0.7*math.Min(float64(size)/70000, 1.0)
-					}
+				if score, available := params.EvidenceScore(""); available {
+					quality = math.Max(0, math.Min(1, score/100))
+					hasQuality = true
 				}
 
 				// Normalize cost: 0 = most expensive, 1 = cheapest
 				cost := params.Pricing.PromptPer1M
 				if cost > 0 && costRange > 0 {
 					costScore = 1.0 - (cost-minCost)/costRange
+					hasCost = true
 				}
 			}
 		}
@@ -276,8 +271,17 @@ func sortModelRefsByAutoMix(refs []config.ModelRef, modelParams map[string]confi
 		// When tradeoff = 0: pure quality ordering
 		// When tradeoff = 1: pure cost ordering (cheapest first)
 		// When tradeoff = 0.3: favor quality but consider cost
-		value := (1-tradeoff)*quality + tradeoff*costScore
-		return value
+		qualityWeight, costWeight := 1-tradeoff, tradeoff
+		if !hasQuality {
+			qualityWeight = 0
+		}
+		if !hasCost {
+			costWeight = 0
+		}
+		if qualityWeight+costWeight == 0 {
+			return 0
+		}
+		return (qualityWeight*quality + costWeight*costScore) / (qualityWeight + costWeight)
 	}
 
 	// Sort by value ascending (start with lower-value/cheaper models for cascading)
@@ -634,9 +638,14 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	var allResponses []*ModelResponse
 	var modelsUsed []string
 	var lastEvaluationErr error
+	lastAttemptOrdinal := 0
 	attempts := 0
 	partialExecutionError := func(cause error) error {
-		return newConfidencePartialExecutionError(cause, allResponses, modelsUsed, attempts)
+		trace := ExecutionTrace{Version: ExecutionTraceVersion}
+		if tracker := attemptTrackerFromContext(ctx); tracker != nil {
+			trace = tracker.snapshot()
+		}
+		return newConfidencePartialExecutionError(cause, allResponses, modelsUsed, attempts, trace)
 	}
 
 	for _, modelRef := range sortedRefs {
@@ -661,11 +670,13 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		})
 
 		attempts++
-		resp, err := l.callModelWithContextGate(
+		resp, attempt, err := l.startConfidenceModelAttempt(
 			ctx,
 			req,
 			req.OriginalRequest,
 			modelName,
+			"candidate",
+			"generator",
 			confidenceModelCallStreaming(req.IsStreaming, evaluator),
 			attempts,
 			logprobsCfg,
@@ -694,6 +705,8 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 
 		var confidence float64
 		var meetsThreshold bool
+		usable := true
+		attemptReason := AttemptReasonThresholdNotMet
 
 		// Evaluate confidence using configured method
 		switch {
@@ -703,6 +716,8 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			var verifyErr error
 			confidence, meetsThreshold, verifyErr = l.performAutoMixEntailment(ctx, req, evaluator, modelName, resp.Content)
 			if verifyErr != nil {
+				usable = false
+				attemptReason = AttemptReasonInvalidResponse
 				logging.ComponentWarnEvent("looper", "automix_entailment_failed", map[string]interface{}{
 					"looper":    "confidence",
 					"decision":  req.DecisionName,
@@ -710,6 +725,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 					"error":     verifyErr.Error(),
 				})
 				if onError == "fail" {
+					if attempt != nil {
+						attempt.finish(attemptResult{response: resp, reason: attemptReason, usable: &usable})
+					}
 					return nil, partialExecutionError(fmt.Errorf(
 						"automix_entailment verification for %s failed: %w",
 						modelName,
@@ -745,6 +763,8 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 				allResponses = append(allResponses, verification.Response)
 			}
 			if verifyErr != nil {
+				usable = false
+				attemptReason = AttemptReasonInvalidResponse
 				lastEvaluationErr = fmt.Errorf("self verification for model %q failed: %w", modelName, verifyErr)
 				logging.ComponentWarnEvent("looper", "self_verification_failed", map[string]interface{}{
 					"looper":    "confidence",
@@ -754,6 +774,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 					"attempted": verification.Attempted,
 					"error":     verifyErr.Error(),
 				})
+				if attempt != nil {
+					attempt.finish(attemptResult{response: resp, reason: attemptReason, usable: &usable})
+				}
 				if onError == "fail" {
 					return nil, partialExecutionError(lastEvaluationErr)
 				}
@@ -773,6 +796,8 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			var evaluateErr error
 			confidence, meetsThreshold, evaluateErr = evaluator.evaluate(resp)
 			if evaluateErr != nil {
+				usable = false
+				attemptReason = AttemptReasonUnusable
 				lastEvaluationErr = fmt.Errorf("confidence evaluation for model %q failed: %w", modelName, evaluateErr)
 				logging.ComponentWarnEvent("looper", "confidence_evaluation_failed", map[string]interface{}{
 					"looper":    "confidence",
@@ -782,6 +807,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 					"method":    evaluator.Method,
 					"error":     evaluateErr.Error(),
 				})
+				if attempt != nil {
+					attempt.finish(attemptResult{response: resp, reason: attemptReason, usable: &usable})
+				}
 				if onError == "fail" {
 					return nil, partialExecutionError(lastEvaluationErr)
 				}
@@ -812,6 +840,17 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			}
 		}
 
+		if meetsThreshold {
+			attemptReason = AttemptReasonThresholdMet
+		}
+		if attempt != nil {
+			attempt.finish(attemptResult{
+				response: resp, reason: attemptReason, usable: &usable,
+				accepted: &meetsThreshold, score: &confidence, threshold: &evaluator.Threshold,
+				verifierType: evaluator.Method,
+			})
+			lastAttemptOrdinal = attempt.ordinal
+		}
 		lastResponse = resp
 
 		if meetsThreshold {
@@ -842,6 +881,10 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		return nil, partialExecutionError(fmt.Errorf("all models failed"))
 	}
 
+	if tracker := attemptTrackerFromContext(ctx); tracker != nil {
+		tracker.markSelected(lastAttemptOrdinal)
+	}
+
 	// Publish only the last confidence-evaluated response. Usage and models-used
 	// retain every paid attempt, including a skipped response with missing
 	// logprob evidence.
@@ -855,15 +898,22 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		HasToolCalls:    lastResponse.HasToolCalls,
 	}
 
+	var response *Response
+	var err error
 	if req.IsStreaming {
-		return l.formatConfidenceStreamingResponse(
+		response, err = l.formatConfidenceStreamingResponse(
 			agg,
 			modelsUsed,
 			attempts,
 			confidenceStreamUsageRequested(req),
 		)
+	} else {
+		response, err = l.formatConfidenceJSONResponse(agg, modelsUsed, attempts)
 	}
-	return l.formatConfidenceJSONResponse(agg, modelsUsed, attempts)
+	if err != nil {
+		return nil, partialExecutionError(err)
+	}
+	return response, nil
 }
 
 func confidenceStreamUsageRequested(req *Request) bool {
@@ -904,7 +954,9 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.callModelWithContextGate(ctx, req, verifyRequest, modelName, false, iteration, nil, accessKey)
+	verifyResp, attempt, err := l.startConfidenceModelAttempt(
+		ctx, req, verifyRequest, modelName, "self_verifier", "verifier", false, iteration, nil, accessKey,
+	)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}
@@ -912,10 +964,27 @@ func (l *ConfidenceLooper) performSelfVerification(
 	// Parse the self-verification result
 	result, err := parseSelfVerification(verifyResp.Content)
 	if err != nil {
+		if attempt != nil {
+			usable := false
+			attempt.finish(attemptResult{response: verifyResp, err: err, reason: AttemptReasonInvalidResponse, usable: &usable})
+		}
 		return selfVerificationExecution{
 			Response:  verifyResp,
 			Attempted: true,
 		}, fmt.Errorf("could not parse verifier result: %w", err)
+	}
+	accepted := result.Confidence >= threshold
+	if attempt != nil {
+		usable := true
+		attemptReason := AttemptReasonThresholdNotMet
+		if accepted {
+			attemptReason = AttemptReasonThresholdMet
+		}
+		attempt.finish(attemptResult{
+			response: verifyResp, reason: attemptReason, usable: &usable,
+			accepted: &accepted, score: &result.Confidence, threshold: &threshold,
+			verifierType: "self_verify",
+		})
 	}
 
 	logging.ComponentDebugEvent("looper", "self_verification_result_parsed", map[string]interface{}{
@@ -927,7 +996,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 
 	return selfVerificationExecution{
 		Confidence: result.Confidence,
-		Accepted:   result.Confidence >= threshold,
+		Accepted:   accepted,
 		Response:   verifyResp,
 		Attempted:  true,
 	}, nil
@@ -1069,8 +1138,6 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
 
-	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes)
-
 	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
 		"looper":     "confidence",
 		"decision":   req.DecisionName,
@@ -1078,11 +1145,55 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		"server_url": evaluator.VerifierServerURL,
 	})
 
-	verifyResp, err := client.Verify(ctx, question, responseContent, "", evaluator.Threshold)
+	// Verify through the shared verifier contract so the AutoMix HTTP adapter
+	// remains the single verifier seam (issue #2857).
+	attemptCtx, attempt := startAttempt(ctx, attemptSpec{
+		stage: "external_verifier",
+		role:  "verifier",
+		model: modelName,
+	})
+	verifier := NewAutoMixVerifier(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds, evaluator.MaxResponseBytes, evaluator.Threshold)
+	result, err := verifier.Verify(attemptCtx, &VerifierRequest{
+		Task: question,
+		Candidates: []VerifierCandidate{
+			{ID: modelName, Content: responseContent},
+		},
+	})
 	if err != nil {
+		var verr *VerifierError
+		if errors.As(err, &verr) && verr.Code == VerifierFailureTimeout {
+			if attempt != nil {
+				attempt.finish(attemptResult{err: context.DeadlineExceeded})
+			}
+			return 0, false, fmt.Errorf("verifier call failed (timeout): %w", err)
+		}
+		if attempt != nil {
+			attempt.finish(attemptResult{err: err})
+		}
 		return 0, false, fmt.Errorf("verifier call failed: %w", err)
 	}
+	if result.Confidence == nil {
+		err := errors.New("verifier returned no confidence")
+		if attempt != nil {
+			usable := false
+			attempt.finish(attemptResult{err: err, reason: AttemptReasonInvalidResponse, usable: &usable})
+		}
+		return 0, false, err
+	}
 
-	accepted := verifyResp.Confidence >= evaluator.Threshold
-	return verifyResp.Confidence, accepted, nil
+	confidence := *result.Confidence
+	accepted := result.Disposition == DispositionApprove
+	if attempt != nil {
+		usable := true
+		reason := AttemptReasonThresholdNotMet
+		if accepted {
+			reason = AttemptReasonThresholdMet
+		}
+		attempt.finish(attemptResult{
+			reason: reason, usable: &usable, accepted: &accepted,
+			score: &confidence, threshold: &evaluator.Threshold,
+			verifierType: MethodAutoMixEntailment,
+		})
+	}
+	return confidence, accepted, nil
 }

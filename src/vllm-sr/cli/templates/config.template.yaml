@@ -12,11 +12,12 @@ listeners:
 
 providers:
   defaults:
-    default_model: "replace-with-your-model"
+    model: "replace-with-your-model"
   models:
     - name: "replace-with-your-model"
       backend_refs:
         - name: "primary"
+          provider: vllm
           endpoint: "host.docker.internal:8000"
           protocol: "http"
           weight: 100

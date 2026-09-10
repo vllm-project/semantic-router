@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - "config/catalog/**"
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
       - "src/vllm-sr/MANIFEST.in"
+      - "src/vllm-sr/setup.py"
       - "src/vllm-sr/cli/commands/general.py"
       - "src/vllm-sr/cli/model_assets/**"
       - "src/vllm-sr/cli/model_bundle.py"
@@ -14,20 +16,27 @@ on:
       - "src/vllm-sr/cli/model_catalog_export.py"
       - "src/vllm-sr/cli/model_catalog_types.py"
       - "src/vllm-sr/cli/model_catalog_validation.py"
+      - "src/semantic-router/pkg/catalog/**"
+      - "dashboard/frontend/src/modelCatalogDocument.ts"
+      - "website/static/model-catalog/catalog.json"
       - "src/vllm-sr/pyproject.toml"
       - "config/schemas/recipe-probes-v1.schema.json"
       - "tools/dev/router-calibration/**"
+      - "tools/catalog/**"
+      - "tools/make/model-catalog.mk"
       - "tools/make/recipe-conformance.mk"
-      - "tools/release/sync_model_catalog.py"
+      - "tools/release/stage_model_catalog_package.py"
       - "tools/release/snapshot_model_catalog.py"
       - ".github/workflows/recipe-distribution.yml"
   push:
     branches:
       - main
     paths:
+      - "config/catalog/**"
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
       - "src/vllm-sr/MANIFEST.in"
+      - "src/vllm-sr/setup.py"
       - "src/vllm-sr/cli/commands/general.py"
       - "src/vllm-sr/cli/model_assets/**"
       - "src/vllm-sr/cli/model_bundle.py"
@@ -35,11 +44,16 @@ on:
       - "src/vllm-sr/cli/model_catalog_export.py"
       - "src/vllm-sr/cli/model_catalog_types.py"
       - "src/vllm-sr/cli/model_catalog_validation.py"
+      - "src/semantic-router/pkg/catalog/**"
+      - "dashboard/frontend/src/modelCatalogDocument.ts"
+      - "website/static/model-catalog/catalog.json"
       - "src/vllm-sr/pyproject.toml"
       - "config/schemas/recipe-probes-v1.schema.json"
       - "tools/dev/router-calibration/**"
+      - "tools/catalog/**"
+      - "tools/make/model-catalog.mk"
       - "tools/make/recipe-conformance.mk"
-      - "tools/release/sync_model_catalog.py"
+      - "tools/release/stage_model_catalog_package.py"
       - "tools/release/snapshot_model_catalog.py"
       - ".github/workflows/recipe-distribution.yml"
 
@@ -69,10 +83,10 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Validate source contracts and generated package assets
+      - name: Validate source contracts
         run: |
           python -m pip install -r tools/agent/requirements.txt
-          python tools/release/sync_model_catalog.py --check
+          make model-catalog-check
           make recipe-conformance-static
 
       - name: Protect snapshots already bound to release tags
@@ -87,6 +101,7 @@ jobs:
       - name: Verify the installed model catalog
         run: |
           python -m pip install ./src/vllm-sr
+          make model-catalog-package-check
           python -m cli.model_catalog_export >/tmp/model-catalog.json
 
       - name: Write catalog validation receipt
@@ -96,7 +111,7 @@ jobs:
           mkdir -p "$receipt_dir"
           cp /tmp/model-catalog.json "$receipt_dir/catalog.json"
           printf '%s\n' "$GITHUB_SHA" >"$receipt_dir/source-commit.txt"
-          find config/recipes/built-in src/vllm-sr/cli/model_assets \
+          find config/recipes/built-in \
             -type f \( -name '*.yaml' -o -name '*.md' -o -name '*.dsl' \) -print0 \
             | sort -z \
             | xargs -0 sha256sum >"$receipt_dir/SHA256SUMS"

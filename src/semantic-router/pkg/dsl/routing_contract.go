@@ -208,6 +208,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
+	for i := range d.cfg.HallucinationRules {
+		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
+	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}
@@ -245,12 +248,6 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if model.QualityScore != 0 {
-		d.write(
-			"  quality_score: %s\n",
-			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
-		)
-	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
@@ -312,9 +309,6 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	}
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
-	}
-	if model.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.QualityScore}
 	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}

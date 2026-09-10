@@ -81,8 +81,7 @@ type FusionTrace struct {
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	l.client.SetDecisionName(req.DecisionName)
-	l.client.SetFusionDepth(1)
-	defer l.client.SetFusionDepth(0)
+	ctx = contextWithFusionDepth(ctx, 1)
 
 	cfg := l.resolveFusionExecutionConfig(req)
 	if len(cfg.AnalysisModels) == 0 {
@@ -119,7 +118,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
 	// model calls, so usage is summed from the full panel (the real cost paid).
-	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panel.responses)
+	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(ctx, req, cfg, panel.responses)
 	if err != nil {
 		return nil, err
 	}

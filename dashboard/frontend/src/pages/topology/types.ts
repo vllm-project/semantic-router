@@ -19,6 +19,7 @@ export type SignalType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'hallucination'
   | 'pii'
   | 'kb'
   | 'conversation'
@@ -268,6 +269,7 @@ export type PluginType =
   | 'tools'
   | 'tool_selection'
   | 'context_compression'
+  | 'shadow_dispatch'
 
 export interface PluginConfig {
   type: PluginType
@@ -279,7 +281,8 @@ export interface PluginConfig {
 export interface ModelRefConfig {
   model: string
   use_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+  reasoning_effort?: string
   lora_name?: string
   reasoning_family?: string
 }
@@ -519,6 +522,11 @@ export interface ConfigData {
     direction?: 'request' | 'response'
     description?: string
   }>
+  hallucination?: Array<{
+    name: string
+    use_nli?: boolean
+    description?: string
+  }>
   pii?: Array<{
     name: string
     threshold?: number
@@ -674,6 +682,11 @@ export interface ConfigData {
       direction?: 'request' | 'response'
       description?: string
     }>
+    hallucination?: Array<{
+      name: string
+      use_nli?: boolean
+      description?: string
+    }>
     pii?: Array<{
       name: string
       threshold?: number
@@ -714,7 +727,8 @@ export interface ConfigData {
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean
-      reasoning_effort?: 'low' | 'medium' | 'high'
+      reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+      reasoning_effort?: string
       lora_name?: string
     }>
     plugins?: Array<{
@@ -725,11 +739,18 @@ export interface ConfigData {
   }>
   providers?: {
     defaults?: {
-      default_model?: string
+      model?: string
     }
     models?: Array<{
       name: string
-      reasoning_family?: string
+      catalog?: string
+      reasoning?: {
+        family?: string
+        type?: string
+        parameter?: string
+        levels?: string[]
+        default?: string
+      }
     }>
   }
   routing?: {
