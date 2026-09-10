@@ -79,6 +79,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/semantic-router/pkg/classification/request_image_embedding_cache.go",
             "src/semantic-router/pkg/classification/classifier_signal_group_similarity.go",
             "src/semantic-router/pkg/config/prototype_scoring_config.go",
+            "src/semantic-router/pkg/config/signal_config.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
         ):
             with self.subTest(path=path):
