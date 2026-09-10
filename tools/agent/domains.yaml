@@ -594,6 +594,8 @@ profiles:
       - e2e/testcases/testdata/hallucination_detection_cases.json
       - src/semantic-router/pkg/extproc/res_filter_hallucination.go
       - src/semantic-router/pkg/extproc/res_filter_response_stage_hallucination.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   jailbreak-onerror:
     owner: e2e
     coverage_role: prompt-guard-on-error
@@ -613,6 +615,8 @@ profiles:
       - deploy/kubernetes/response-jailbreak/**
       - src/semantic-router/pkg/extproc/res_filter_jailbreak.go
       - src/semantic-router/pkg/extproc/res_filter_response_stage_signal.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/classification/classifier_signal_response_jailbreak.go
       - src/semantic-router/pkg/classification/classifier_jailbreak_risk.go
       - src/semantic-router/pkg/config/signal_stage.go
