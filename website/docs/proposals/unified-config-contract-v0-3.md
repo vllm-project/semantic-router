@@ -116,6 +116,16 @@ exact external-catalog name. The category consumer currently accepts
 `http_classify` plus `label_distribution.v1`, preserving the full label-score
 distribution. Prompt guard remains on its existing configuration surface until
 its separately scoped migration.
+
+Complexity is the second consumer and keeps its runtime policy in
+`global.model_catalog.modules.complexity`, so a backend survives the per-recipe
+replacement of `routing.signals`. It accepts `http_classify` with either
+`score.v1`, a continuous score the signal converts into a verdict through
+per-rule boundaries, or `label_distribution.v1`, where the winning label is the
+verdict. A consumer that reads more than one contract cannot default the field:
+omitting it would leave the runtime guessing which response shape to expect,
+and guessing wrong surfaces per request rather than at config load. Consumers
+reading exactly one contract keep it as the default, so category is unchanged.
 Connector byte ceilings belong to the connector configuration. External LLM
 classifier entries and the MCP classifier module use `max_response_bytes`.
 The dashboard, Helm chart, and operator may help users author or transport config, but

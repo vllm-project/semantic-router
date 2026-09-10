@@ -437,6 +437,22 @@ routing:
               name: long_context
             - type: domain
               name: "computer science"
+      - name: deep_synthesis
+        # The explicit boundary pair, the asymmetric form of `threshold`: the
+        # two verdicts do not have to sit the same distance from the middle.
+        # hard_above with easy_below reads in the direction the local margin
+        # runs, where a higher score is harder.
+        hard_above: 0.25
+        easy_below: -0.05
+        description: Escalate synthesis-heavy prompts, with a wider medium band than needs_reasoning.
+        hard:
+          candidates:
+            - synthesise these sources into one argument
+            - reconcile the conflicting requirements
+        easy:
+          candidates:
+            - list the headings
+            - restate this sentence
 
     modality:
       - name: AR

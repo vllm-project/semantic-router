@@ -89,6 +89,9 @@ func (d *FeedbackDetector) loadMapping(path string) error {
 	if len(idxToLabel) == 0 {
 		return fmt.Errorf("feedback mapping %s declares no labels", path)
 	}
+	if err := ValidateLabelMappingAgainstModelConfig(path, d.config.ModelID, idxToLabel); err != nil {
+		return err
+	}
 	d.mapping = &FeedbackMapping{
 		LabelToIdx: make(map[string]int, len(labelToIdx)),
 		IdxToLabel: make(map[string]string, len(idxToLabel)),

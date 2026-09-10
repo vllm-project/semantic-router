@@ -78,6 +78,7 @@ func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T
 		classificationSvc: newLiveClassificationService(
 			services.NewPlaceholderClassificationService(),
 			func() classificationService { return resolvedSvc },
+			nil,
 		),
 		config: &config.RouterConfig{},
 	}

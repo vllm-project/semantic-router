@@ -331,7 +331,11 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 }
 
 func assertReferenceConfigComplexityModuleCoverage(t testingT, complexity map[string]interface{}) {
-	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity")
+	// backend is the remote path and is mutually exclusive with the local
+	// prototype scoring the exhaustive reference keeps active, the same way
+	// classifier.domain excepts its own backend above. Remote parsing and
+	// validation are covered by classifier_backend_complexity_test.go.
+	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity", "backend")
 	assertMapCoversStructFields(
 		t,
 		mustMapAt(t, complexity, "prototype_scoring"),

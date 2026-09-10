@@ -70,6 +70,12 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
+	// Remote complexity backends. At most one is set, and its presence means
+	// the local prototype path is not taken: score for score.v1, labels for
+	// label_distribution.v1.
+	complexityScoreBackend ScoringBackend
+	complexityLabelBackend SequenceClassifierBackend
+
 	// Event classifier for event-driven request routing
 	eventClassifier *EventClassifier
 
@@ -156,6 +162,18 @@ func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
 func withStructureClassifier(structureClassifier *StructureClassifier) option {
 	return func(c *Classifier) {
 		c.structureClassifier = structureClassifier
+	}
+}
+
+func withComplexityScoreBackend(backend ScoringBackend) option {
+	return func(c *Classifier) {
+		c.complexityScoreBackend = backend
+	}
+}
+
+func withComplexityLabelBackend(backend SequenceClassifierBackend) option {
+	return func(c *Classifier) {
+		c.complexityLabelBackend = backend
 	}
 }
 
