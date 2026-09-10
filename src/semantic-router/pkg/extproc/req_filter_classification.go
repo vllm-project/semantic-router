@@ -243,6 +243,7 @@ func (r *OpenAIRouter) buildSelectionContext(
 	if reqCtx != nil {
 		recipeName = reqCtx.Routing.RecipeName()
 	}
+	inputTokens, expectedOutputTokens := selectionTokenBudget(reqCtx)
 
 	return &selection.SelectionContext{
 		Query:                      query,
@@ -251,6 +252,8 @@ func (r *OpenAIRouter) buildSelectionContext(
 		CategoryName:               categoryName,
 		CandidateModels:            modelRefs,
 		CandidateIterations:        candidateIterations,
+		InputTokens:                inputTokens,
+		ExpectedOutputTokens:       expectedOutputTokens,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
@@ -261,6 +264,18 @@ func (r *OpenAIRouter) buildSelectionContext(
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
+}
+
+func selectionTokenBudget(reqCtx *RequestContext) (int, int) {
+	if reqCtx == nil {
+		return 0, 0
+	}
+	expectedOutput := 0
+	if reqCtx.SemanticRequest != nil && reqCtx.SemanticRequest.Sampling.MaxOutputTokens != nil &&
+		*reqCtx.SemanticRequest.Sampling.MaxOutputTokens > 0 {
+		expectedOutput = int(*reqCtx.SemanticRequest.Sampling.MaxOutputTokens)
+	}
+	return reqCtx.VSRContextTokenCount, expectedOutput
 }
 
 func (r *OpenAIRouter) buildAgenticSessionContext(

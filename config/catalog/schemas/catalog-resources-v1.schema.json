@@ -1174,37 +1174,44 @@
                 "normalization"
               ],
               "properties": {
-                "benchmark": {
-                  "$ref": "#/$defs/versionedID"
+                "benchmark": {"$ref": "#/$defs/versionedID"},
+                "metric": {"$ref": "#/$defs/slug"},
+                "benchmark_profile": {"$ref": "#/$defs/slug"},
+                "benchmark_profiles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {"$ref": "#/$defs/slug"}
                 },
-                "metric": {
-                  "$ref": "#/$defs/slug"
-                },
-                "benchmark_profile": {
-                  "$ref": "#/$defs/slug"
-                },
-                "index": {
-                  "$ref": "#/$defs/versionedID"
-                },
-                "weight": {
-                  "type": "number",
-                  "exclusiveMinimum": 0
-                },
-                "normalization": {
-                  "$ref": "#/$defs/normalization"
-                }
+                "index": {"$ref": "#/$defs/versionedID"},
+                "weight": {"type": "number", "exclusiveMinimum": 0},
+                "normalization": {"$ref": "#/$defs/normalization"}
               },
               "oneOf": [
                 {
-                  "required": [
-                    "benchmark",
-                    "metric",
-                    "benchmark_profile"
+                  "allOf": [
+                    {
+                      "oneOf": [
+                        {"required": ["benchmark", "metric", "benchmark_profile"]},
+                        {"required": ["benchmark", "metric", "benchmark_profiles"]}
+                      ]
+                    },
+                    {"not": {"required": ["index"]}}
                   ]
                 },
                 {
-                  "required": [
-                    "index"
+                  "allOf": [
+                    {"required": ["index"]},
+                    {
+                      "not": {
+                        "anyOf": [
+                          {"required": ["benchmark"]},
+                          {"required": ["metric"]},
+                          {"required": ["benchmark_profile"]},
+                          {"required": ["benchmark_profiles"]}
+                        ]
+                      }
+                    }
                   ]
                 }
               ]

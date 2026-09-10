@@ -85,7 +85,6 @@ const normalizedProviderModel = (
     capabilities: override?.capabilities ?? builtIn?.capabilities,
     loras: override?.loras,
     tags: override?.tags ?? builtIn?.tags,
-    evaluations: override?.evaluations,
     modality: override?.modality ?? catalogRuntimeModality(builtIn),
     card_override: override,
     pricing: model.pricing,
@@ -103,7 +102,6 @@ const normalizedUnboundCard = (card: RoutingModelCard): NormalizedModel => ({
   capabilities: card.capabilities,
   loras: card.loras,
   tags: card.tags,
-  evaluations: card.evaluations,
   modality: card.modality,
 })
 
