@@ -92877,6 +92877,33 @@
       "conformance": {
         "status": "unverified"
       },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Foundation models served from a Databricks workspace.",
+      "display_name": "Databricks",
+      "id": "databricks",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "DB"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
       "default_base_url": "https://api.deepinfra.com/v1/openai",
       "default_protocol": "openai/chat-completions@1",
       "description": "Serverless inference across open models.",
