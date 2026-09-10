@@ -138,6 +138,8 @@ func TestDecodePayloadTTLDistinguishesGoneFromUnreadable(t *testing.T) {
 		{name: "persistent", cmd: redis.NewDurationResult(-1, nil), wantTTL: -1},
 		{name: "gone", cmd: redis.NewDurationResult(-2, nil), wantTTL: unknownPayloadTTL},
 		{name: "finite", cmd: redis.NewDurationResult(90*time.Second, nil), wantTTL: 90_000},
+		{name: "expiring", cmd: redis.NewDurationResult(0, nil), wantTTL: minPayloadLifetimeMillis},
+		{name: "sub millisecond", cmd: redis.NewDurationResult(500*time.Microsecond, nil), wantTTL: minPayloadLifetimeMillis},
 		{name: "unreadable", cmd: redis.NewDurationResult(0, errors.New("PTTL denied")), wantTTL: unknownPayloadTTL, wantErr: errors.New("PTTL denied")},
 	}
 
@@ -152,6 +154,62 @@ func TestDecodePayloadTTLDistinguishesGoneFromUnreadable(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFinalizationClampsExpiringPayloadLifetime covers the other end of the
+// PTTL boundary. Redis answers 0 for a key inside its final millisecond, and a
+// non-positive lifetime is how this package spells "never expires": passed
+// through, it would PERSIST the conversation ZSET and its generation sidecar on
+// behalf of a payload about to vanish, and conversationIndexAddScript only ever
+// raises an expiry, so no later finite write could put one back.
+func TestFinalizationClampsExpiringPayloadLifetime(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_expiring_payload_lifetime"
+	const responseID = "resp_expiring_payload_lifetime"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	hook := &pttlValueHook{key: store.buildKey(ResponseKeyPrefix + responseID), value: 0}
+	store.client.AddHook(hook)
+
+	stats, err := store.FinalizeConversationIndex(ctx)
+	require.NoError(t, err)
+	assert.True(t, hook.used.Load(), "the scan must have observed the injected zero PTTL")
+	assert.EqualValues(t, 1, stats.ResponsesIndexed)
+
+	assert.Positive(t, indexPTTL(t, store, conversationID),
+		"a payload in its last millisecond must not persist its conversation index")
+	assert.Positive(t, indexGenerationPTTL(t, store, conversationID),
+		"a payload in its last millisecond must not persist the generation sidecar")
+}
+
+// TestWitnessRepairClampsExpiringPayloadLifetime is the same boundary reached
+// through the explicit repair path rather than a sweep: AddResponseToConversation
+// indexes a payload it only read, so it takes its lifetime from the same
+// pipelined PTTL.
+func TestWitnessRepairClampsExpiringPayloadLifetime(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_repair_expiring_lifetime"
+	const responseID = "resp_repair_expiring_lifetime"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	hook := &pttlValueHook{key: store.buildKey(ResponseKeyPrefix + responseID), value: 0}
+	store.client.AddHook(hook)
+
+	require.NoError(t, store.AddResponseToConversation(ctx, conversationID, responseID))
+	assert.True(t, hook.used.Load(), "the repair must have observed the injected zero PTTL")
+
+	assert.Positive(t, indexPTTL(t, store, conversationID))
+	assert.Positive(t, indexGenerationPTTL(t, store, conversationID))
 }
 
 // TestGeneratedIndexAndSidecarShareMonotonicTTL proves every generated index

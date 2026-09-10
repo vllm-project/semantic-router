@@ -30,11 +30,32 @@ type responsePayloadResult struct {
 	err       error
 }
 
-// unknownPayloadTTL is responsePayloadResult.ttlMillis when no PTTL was
-// asked for, or when Redis answered that the key is already gone. Both are
-// "this payload contributes nothing to how long its conversation index must
-// live", and Redis's own -2 is the natural spelling of that.
-const unknownPayloadTTL int64 = -2
+const (
+	// unknownPayloadTTL is responsePayloadResult.ttlMillis when no PTTL was
+	// asked for, or when Redis answered that the key is already gone. Both are
+	// "this payload contributes nothing to how long its conversation index must
+	// live", and Redis's own -2 is the natural spelling of that.
+	unknownPayloadTTL int64 = -2
+
+	// persistentPayloadTTL is the lifetime of a payload Redis reported as
+	// never expiring. It is the only successful PTTL reply permitted to reach
+	// the index-lifetime convention's "never expires" branch, where
+	// conversationIndexAddScript PERSISTs a conversation's ZSET and its
+	// generation sidecar.
+	persistentPayloadTTL int64 = -1
+
+	// minPayloadLifetimeMillis is the shortest finite lifetime this package
+	// will report for a payload that still exists.
+	//
+	// Redis answers PTTL 0 for a key inside its final millisecond, and 0 is
+	// exactly how longerIndexLifetime and conversationIndexAddScript spell
+	// "never expires". Returning it verbatim would persist a conversation
+	// index and its witness sidecar on behalf of a payload about to vanish,
+	// and the script only ever raises an expiry, so no later finite write
+	// could restore one. Clamping keeps the reply finite and lets the store
+	// TTL — always at least this long — decide the index's real lifetime.
+	minPayloadLifetimeMillis int64 = 1
+)
 
 // fetchResponsePayloadsPipelined reads each key's payload. Used by the read
 // and cascade paths, which act on the payload alone and have no reason to
@@ -90,6 +111,14 @@ func fetchResponsePayloads(ctx context.Context, client redis.UniversalClient, ke
 // so they are mapped back explicitly. A failed PTTL is not a lifetime: callers
 // must keep its error distinct from Redis's successful "key is gone" reply so
 // they cannot certify an index that may expire before a retained payload.
+//
+// Only PTTL -1 may report persistence. A successful finite reply is clamped to
+// minPayloadLifetimeMillis, because Redis answers 0 for a key in its last
+// millisecond and every consumer of this value reads a non-positive lifetime as
+// "never expires". The same rule is already enforced on the package's other two
+// lifetime paths — promoteLegacyPayloadScript refuses a pttl <= 0 outright, and
+// an elapsed update snapshot deletes rather than restores — so a live payload's
+// remaining milliseconds can never be mistaken for an unbounded one.
 func decodePayloadTTL(cmd *redis.DurationCmd) (int64, error) {
 	ttl, err := cmd.Result()
 	if err != nil {
@@ -97,9 +126,11 @@ func decodePayloadTTL(cmd *redis.DurationCmd) (int64, error) {
 	}
 	switch {
 	case ttl == -1:
-		return -1, nil
+		return persistentPayloadTTL, nil
 	case ttl < 0:
 		return unknownPayloadTTL, nil
+	case ttl.Milliseconds() < minPayloadLifetimeMillis:
+		return minPayloadLifetimeMillis, nil
 	default:
 		return ttl.Milliseconds(), nil
 	}

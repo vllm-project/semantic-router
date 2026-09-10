@@ -115,6 +115,40 @@ func (h *commandFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook)
 	}
 }
 
+// pttlValueHook rewrites one key's pipelined PTTL reply to a fixed duration,
+// at most once. Redis will not produce a key's final millisecond on demand, so
+// the boundary where a live payload answers PTTL 0 has to be injected rather
+// than waited for. Only the reply is rewritten; the payload itself keeps the
+// long retention the test gave it.
+type pttlValueHook struct {
+	key   string
+	value time.Duration
+	used  atomic.Bool
+}
+
+func (h *pttlValueHook) DialHook(next redis.DialHook) redis.DialHook          { return next }
+func (h *pttlValueHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook { return next }
+
+func (h *pttlValueHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		err := next(ctx, cmds)
+		for _, cmd := range cmds {
+			ttlCmd, isDuration := cmd.(*redis.DurationCmd)
+			if !isDuration || cmd.Name() != "pttl" {
+				continue
+			}
+			args := cmd.Args()
+			if len(args) < 2 {
+				continue
+			}
+			if key, ok := args[1].(string); ok && key == h.key && h.used.CompareAndSwap(false, true) {
+				ttlCmd.SetVal(h.value)
+			}
+		}
+		return err
+	}
+}
+
 // conversationIndexMembers reads the index directly, so tests can assert on it
 // and not only on what a listing happens to return.
 func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID string) []string {
