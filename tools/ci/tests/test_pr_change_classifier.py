@@ -66,6 +66,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             # Scoring path: the encoder, its bindings, and prototype scoring.
             "candle-binding/src/model_architectures/embedding/multimodal_embedding.rs",
             "candle-binding/src/model_architectures/embedding/pooling.rs",
+            "candle-binding/src/model_architectures/attention/chunked_sdpa.rs",
             "candle-binding/src/core/similarity.rs",
             "candle-binding/src/ffi/embedding.rs",
             "candle-binding/semantic-router.go",
@@ -75,6 +76,7 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/semantic-router/pkg/classification/prototype_scoring.go",
             "src/semantic-router/pkg/classification/prototype_bank.go",
             "src/semantic-router/pkg/classification/prototype_clustering.go",
+            "src/semantic-router/pkg/classification/request_image_embedding_cache.go",
             "src/semantic-router/pkg/config/prototype_scoring_config.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
         ):

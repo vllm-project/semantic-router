@@ -121,6 +121,7 @@ domains:
       - website/static/img/**
       - dashboard/frontend/public/**
       - candle-binding/src/model_architectures/embedding/**
+      - candle-binding/src/model_architectures/attention/**
       - candle-binding/src/model_architectures/model_factory.rs
       - candle-binding/src/model_architectures/traits.rs
       - candle-binding/src/core/**
@@ -131,6 +132,7 @@ domains:
       - src/semantic-router/pkg/classification/embedding_classifier*.go
       - src/semantic-router/pkg/classification/classifier_signal_embedding*.go
       - src/semantic-router/pkg/classification/prototype_*.go
+      - src/semantic-router/pkg/classification/request_image_embedding_cache.go
       - src/semantic-router/pkg/config/prototype_scoring_config.go
       - src/semantic-router/pkg/config/model_config_types.go
       - src/semantic-router/pkg/config/canonical_defaults.go
