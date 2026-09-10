@@ -65,8 +65,10 @@ Key Features:
 import json
 import os
 import random
+import resource
 import shutil
 import sys
+import time
 from pathlib import Path
 
 import torch
@@ -77,6 +79,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     Trainer,
+    set_seed,
 )
 
 # Import common LoRA utilities
@@ -89,6 +92,7 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
+from jailbreak_provenance import emit_evaluation_manifest, resolve_training_pins
 from jailbreak_training_assets import (
     DATASET_CONFIGS,
     LONG_JAILBREAK_PATTERNS,
@@ -110,7 +114,9 @@ LONG_PATTERN_REPEAT = 3
 DATASET_IMBALANCE_TOLERANCE = 10
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
+def create_tokenizer_for_model(
+    model_path: str, base_model_name: str | None = None, revision: str | None = None
+):
     """
     Create tokenizer with model-specific configuration.
 
@@ -124,17 +130,24 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str | None = No
     if "roberta" in model_identifier.lower():
         # RoBERTa requires add_prefix_space=True for sequence classification
         logger.info("Using RoBERTa tokenizer with add_prefix_space=True")
-        return AutoTokenizer.from_pretrained(model_path, add_prefix_space=True)
+        return AutoTokenizer.from_pretrained(
+            model_path, add_prefix_space=True, revision=revision
+        )
     else:
-        return AutoTokenizer.from_pretrained(model_path)
+        return AutoTokenizer.from_pretrained(model_path, revision=revision)
 
 
 class JailbreakDataset:
     """Dataset class for jailbreak sequence classification fine-tuning."""
 
-    def __init__(self, max_samples_per_source=None):
-        """Initialize the dataset loader with multiple data sources."""
+    def __init__(self, max_samples_per_source=None, dataset_revisions=None):
+        """Initialize the dataset loader with multiple data sources.
+
+        dataset_revisions pins every upstream to the commit resolved before the
+        run started, so the manifests describe the rows that were read.
+        """
         self.max_samples_per_source = max_samples_per_source
+        self.dataset_revisions = dataset_revisions or {}
         self.label2id = {}
         self.id2label = {}
         self.dataset_configs = DATASET_CONFIGS
@@ -152,11 +165,14 @@ class JailbreakDataset:
         logger.info(f"Loading {config_key} dataset: {dataset_name}")
 
         try:
-            # Load dataset
+            # Load dataset at the revision this run pinned
+            revision = self.dataset_revisions.get(config_key)
             if config.get("config"):
-                dataset = load_dataset(dataset_name, config["config"])
+                dataset = load_dataset(
+                    dataset_name, config["config"], revision=revision
+                )
             else:
-                dataset = load_dataset(dataset_name)
+                dataset = load_dataset(dataset_name, revision=revision)
 
             # Use train split if available, otherwise use the first available split
             split_name = "train" if "train" in dataset else next(iter(dataset.keys()))
@@ -385,9 +401,9 @@ class JailbreakDataset:
         }
 
 
-def create_jailbreak_dataset(max_samples=1000):
+def create_jailbreak_dataset(max_samples=1000, dataset_revisions=None):
     """Create jailbreak dataset using real data."""
-    dataset_loader = JailbreakDataset()
+    dataset_loader = JailbreakDataset(dataset_revisions=dataset_revisions)
     datasets = dataset_loader.prepare_datasets(max_samples)
 
     train_texts, train_labels = datasets["train"]
@@ -413,12 +429,14 @@ class SecurityLoRATrainer(Trainer):
     # The default Trainer.compute_loss handles it correctly
 
 
-def create_lora_security_model(model_name: str, num_labels: int, lora_config: dict):
+def create_lora_security_model(
+    model_name: str, num_labels: int, lora_config: dict, revision: str | None = None
+):
     """Create LoRA-enhanced security classification model."""
     logger.info(f"Creating LoRA security classification model with base: {model_name}")
 
     # Load tokenizer with model-specific configuration
-    tokenizer = create_tokenizer_for_model(model_name, model_name)
+    tokenizer = create_tokenizer_for_model(model_name, model_name, revision=revision)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -429,6 +447,7 @@ def create_lora_security_model(model_name: str, num_labels: int, lora_config: di
         model_name,
         num_labels=num_labels,  # Binary: 0=safe, 1=jailbreak
         torch_dtype=torch.float32,  # Fixed: was dtype=torch.float16 causing grad_norm=nan
+        revision=revision,
     )
 
     # Create LoRA configuration for sequence classification
@@ -460,7 +479,52 @@ def create_lora_security_model(model_name: str, num_labels: int, lora_config: di
     return lora_model, tokenizer
 
 
-def tokenize_security_data(data, tokenizer, max_length=512):
+MAX_SEQUENCE_LENGTH = 512
+
+
+def measure_validation(model, tokenizer, val_data, batch_size: int, max_length: int):
+    """Score the validation split batch by batch, the way serving would.
+
+    Returns the labels, predictions, confidences, per row latencies and the peak
+    memory of the pass, which is what the evaluation manifest has to carry.
+    """
+    model.eval()
+    device = next(model.parameters()).device
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
+
+    y_true: list[int] = []
+    y_pred: list[int] = []
+    confidences: list[float] = []
+    latencies_ms: list[float] = []
+    for start in range(0, len(val_data), batch_size):
+        batch = val_data[start : start + batch_size]
+        encodings = tokenizer(
+            [row["text"] for row in batch],
+            truncation=True,
+            padding=True,
+            max_length=max_length,
+            return_tensors="pt",
+        ).to(device)
+        started = time.perf_counter()
+        with torch.no_grad():
+            logits = model(**encodings).logits
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        probabilities = torch.softmax(logits.float(), dim=-1)
+        top = probabilities.max(dim=-1)
+        y_true.extend(int(row["label"]) for row in batch)
+        y_pred.extend(int(index) for index in top.indices.tolist())
+        confidences.extend(float(value) for value in top.values.tolist())
+        latencies_ms.extend([elapsed_ms / len(batch)] * len(batch))
+
+    if device.type == "cuda":
+        peak_memory_mb = torch.cuda.max_memory_allocated() / (1024 * 1024)
+    else:
+        peak_memory_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    return y_true, y_pred, confidences, latencies_ms, peak_memory_mb, device
+
+
+def tokenize_security_data(data, tokenizer, max_length=MAX_SEQUENCE_LENGTH):
     """Tokenize security detection data."""
     texts = [item["text"] for item in data]
     labels = [item["label"] for item in data]
@@ -488,9 +552,14 @@ def main(
     learning_rate: float = 3e-4,  # LoRA requires higher LR than full fine-tuning (PEFT LoRA.ipynb official example)
     max_samples: int = 1000,
     output_dir: str | None = None,
+    seed: int = 42,
+    manifest_dir: str | None = None,
 ):
     """Main training function for LoRA security detection."""
     logger.info("Starting Enhanced LoRA Security Detection Training")
+
+    # Seed before any sampling so the recorded seed actually describes the run.
+    set_seed(seed)
 
     _device, _ = set_gpu_device(gpu_id=None, auto_select=True)
     clear_gpu_memory()
@@ -507,14 +576,23 @@ def main(
         logger.error(f"Failed to create LoRA config: {e}")
         raise
 
-    sample_data, label_to_id, id_to_label = create_jailbreak_dataset(max_samples)
+    # Pin every upstream before anything loads, so the manifests describe the
+    # bytes this run read rather than whatever the refs point at afterwards.
+    pins = resolve_training_pins(base_model_repo=model_path)
+
+    sample_data, label_to_id, id_to_label = create_jailbreak_dataset(
+        max_samples, dataset_revisions=pins["datasets"]
+    )
     train_data, val_data = split_training_data(sample_data)
     logger.info(f"Training samples: {len(train_data)}")
     logger.info(f"Validation samples: {len(val_data)}")
     logger.info(f"Categories: {len(label_to_id)}")
 
     model, tokenizer = create_lora_security_model(
-        model_path, len(label_to_id), lora_config
+        model_path,
+        len(label_to_id),
+        lora_config,
+        revision=pins["base_model"]["revision"],
     )
     train_dataset = tokenize_security_data(train_data, tokenizer)
     val_dataset = tokenize_security_data(val_data, tokenizer)
@@ -536,11 +614,56 @@ def main(
 
     logger.info("Starting training...")
     trainer.train()
-    save_training_artifacts(
-        output_dir, model, tokenizer, label_to_id, id_to_label, lora_config, logger
+    manifests = save_training_artifacts(
+        output_dir,
+        model,
+        tokenizer,
+        label_to_id,
+        id_to_label,
+        lora_config,
+        logger,
+        model_name=model_name,
+        base_model_repo=model_path,
+        seed=seed,
+        training_args=training_args,
+        max_samples=max_samples,
+        train_data=train_data,
+        val_data=val_data,
+        pins=pins,
+        manifest_dir=manifest_dir,
     )
     eval_results = trainer.evaluate()
     log_training_summary(eval_results, output_dir, model_path, logger)
+
+    y_true, y_pred, confidences, latencies_ms, peak_memory_mb, device = (
+        measure_validation(
+            model,
+            tokenizer,
+            val_data,
+            training_args.per_device_eval_batch_size,
+            MAX_SEQUENCE_LENGTH,
+        )
+    )
+    emit_evaluation_manifest(
+        manifest_dir=manifests["artifact"].parent,
+        artifact_manifest_path=manifests["artifact"],
+        dataset_manifest_path=manifests["dataset"],
+        label_to_id=label_to_id,
+        seed=seed,
+        batch_size=training_args.per_device_eval_batch_size,
+        max_length=MAX_SEQUENCE_LENGTH,
+        device=device.type,
+        device_name=(
+            torch.cuda.get_device_name(device) if device.type == "cuda" else None
+        ),
+        sample_limit=max_samples,
+        y_true=y_true,
+        y_pred=y_pred,
+        confidences=confidences,
+        latencies_ms=latencies_ms,
+        peak_memory_mb=peak_memory_mb,
+        logger=logger,
+    )
 
 
 def merge_lora_adapter_to_full_model(
@@ -733,6 +856,18 @@ if __name__ == "__main__":
         help="Maximum samples from jailbreak datasets",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed recorded in the run manifest",
+    )
+    parser.add_argument(
+        "--manifest-dir",
+        type=str,
+        default=None,
+        help="Directory for provenance manifests (default: <output-dir>/manifests)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default=None,
@@ -758,6 +893,8 @@ if __name__ == "__main__":
             learning_rate=args.learning_rate,
             max_samples=args.max_samples,
             output_dir=args.output_dir,
+            seed=args.seed,
+            manifest_dir=args.manifest_dir,
         )
     elif args.mode == "test":
         demo_inference(args.model_path)

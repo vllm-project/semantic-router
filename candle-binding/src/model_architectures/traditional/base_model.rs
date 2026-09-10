@@ -4,6 +4,9 @@
 //! in the dual-path architecture.
 
 use crate::core::{ModelErrorType, UnifiedError};
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, prepare_padding_mask, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
 use crate::model_architectures::traits::TraditionalModel;
 use crate::model_error;
 use candle_core::{DType, Device, IndexOp, Module, Result, Tensor};
@@ -251,7 +254,7 @@ impl ModelEncoder {
         let mut layers = Vec::with_capacity(config.num_hidden_layers);
 
         for i in 0..config.num_hidden_layers {
-            let layer = TransformerLayer::new(config, vb.pp(&format!("layer.{}", i)), device)?;
+            let layer = TransformerLayer::new(config, vb.pp(format!("layer.{}", i)), device)?;
             layers.push(layer);
         }
 
@@ -351,7 +354,6 @@ pub struct SelfAttention {
     key: candle_nn::Linear,
     value: candle_nn::Linear,
     output: candle_nn::Linear,
-    dropout: candle_nn::Dropout,
     config: BaseModelConfig,
 }
 
@@ -362,14 +364,12 @@ impl SelfAttention {
         let key = candle_nn::linear(hidden_size, hidden_size, vb.pp("self.key"))?;
         let value = candle_nn::linear(hidden_size, hidden_size, vb.pp("self.value"))?;
         let output = candle_nn::linear(hidden_size, hidden_size, vb.pp("output.dense"))?;
-        let dropout = candle_nn::Dropout::new(config.attention_probs_dropout_prob as f32);
 
         Ok(Self {
             query,
             key,
             value,
             output,
-            dropout,
             config: config.clone(),
         })
     }
@@ -476,38 +476,23 @@ impl SelfAttention {
         attention_mask: &Tensor,
         attention_head_size: usize,
     ) -> Result<Tensor> {
-        // Scaled dot-product attention
-        let attention_scores = query_layer.matmul(&key_layer.transpose(2, 3)?)?;
-        let attention_scores = attention_scores.div(&Tensor::new(
-            (attention_head_size as f32).sqrt(),
-            query_layer.device(),
-        )?)?;
-
-        // Apply attention mask
-        let attention_scores = if attention_mask.rank() > 0 {
-            // Apply attention mask using where_cond (candle alternative to masked_fill)
-            let mask = attention_mask.unsqueeze(1)?.unsqueeze(2)?;
-            let mask = mask.expand(attention_scores.shape())?;
-            let zero_tensor = Tensor::zeros_like(&mask)?;
-            let neg_inf_tensor = Tensor::full(
-                f32::NEG_INFINITY,
-                attention_scores.shape(),
-                attention_scores.device(),
-            )?;
-
-            // Use where_cond: where mask==0, use neg_inf, otherwise use original scores
-            let mask_condition = mask.eq(&zero_tensor)?;
-            mask_condition.where_cond(&neg_inf_tensor, &attention_scores)?
+        // A rank-0 mask means "no mask"; otherwise the `(b, seq)` 0/1 mask becomes
+        // the `(b, 1, 1, seq)` additive form the shared kernel broadcasts over
+        // query positions. The kernel walks the query dimension in blocks so the
+        // `(b, heads, seq, seq)` score matrix is never materialized.
+        let pad_mask = if attention_mask.rank() > 0 {
+            Some(prepare_padding_mask(attention_mask, query_layer.dtype())?)
         } else {
-            attention_scores
+            None
         };
-
-        // Softmax
-        let attention_probs = candle_nn::ops::softmax(&attention_scores, candle_core::D::Minus1)?;
-        let attention_probs = self.dropout.forward(&attention_probs, false)?;
-
-        // Apply attention to values
-        attention_probs.matmul(value_layer)
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: (attention_head_size as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        chunked_sdpa(query_layer, key_layer, value_layer, pad_mask.as_ref(), &cfg)
     }
 
     /// Compute attention using Flash Attention 2 (when feature is enabled)

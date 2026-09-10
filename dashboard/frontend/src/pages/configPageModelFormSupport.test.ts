@@ -6,7 +6,7 @@ import {
   buildProviderModelPayload,
   modelReasoningFormData,
   normalizeModelBackendRefs,
-  normalizeModelEvaluations,
+  normalizeEvaluationRecords,
   normalizeModelPricing,
 } from './configPageModelFormSupport'
 import { newModelFormData } from './configPageModelsSectionSupport'
@@ -158,11 +158,12 @@ describe('model form catalog and reasoning payloads', () => {
   })
 })
 
-describe('model form evaluations', () => {
+describe('evaluation records', () => {
   it('normalizes open benchmark metrics without imposing a fixed benchmark schema', () => {
     expect(
-      normalizeModelEvaluations([
+      normalizeEvaluationRecords([
         {
+          model: ' private-reasoner ',
           benchmark: 'acme/support@1',
           benchmark_profile: ' production-standard ',
           reasoning_effort: ' high ',
@@ -172,6 +173,7 @@ describe('model form evaluations', () => {
       ]),
     ).toEqual([
       {
+        model: 'private-reasoner',
         benchmark: 'acme/support@1',
         benchmark_profile: 'production-standard',
         reasoning_effort: 'high',

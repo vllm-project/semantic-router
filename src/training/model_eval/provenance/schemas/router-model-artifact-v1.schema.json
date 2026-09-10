@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-project.github.io/semantic-router/schemas/router-model-artifact-v1.schema.json",
+  "title": "Router Model artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "id",
+    "task",
+    "identity",
+    "files",
+    "label_mapping",
+    "runtime"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "v1"
+    },
+    "kind": {
+      "const": "artifact"
+    },
+    "id": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/manifestId"
+    },
+    "task": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/task"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "identity": {
+      "description": "Immutable artifact identity consumed by runtime qualification and model cards.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo",
+        "revision",
+        "digest"
+      ],
+      "properties": {
+        "repo": {
+          "$ref": "router-model-common-v1.schema.json#/$defs/repoId"
+        },
+        "revision": {
+          "$ref": "router-model-common-v1.schema.json#/$defs/revision"
+        },
+        "digest": {
+          "description": "Digest over the sorted (path, digest) file list. Recomputed by the validator.",
+          "$ref": "router-model-common-v1.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "run_ref": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/runRef"
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "size_bytes",
+          "digest"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "digest": {
+            "$ref": "router-model-common-v1.schema.json#/$defs/digest"
+          }
+        }
+      }
+    },
+    "label_mapping": {
+      "$ref": "router-model-common-v1.schema.json#/$defs/labelMapping"
+    },
+    "runtime": {
+      "description": "Facts a runtime qualification step must be able to check without loading weights.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "architecture",
+        "max_position_embeddings",
+        "num_labels"
+      ],
+      "properties": {
+        "architecture": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_position_embeddings": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "num_labels": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "torch_dtype": {
+          "type": "string",
+          "minLength": 1
+        },
+        "served_paths": {
+          "description": "Config paths that load this artifact, e.g. models/mmbert32k-jailbreak-detector-merged.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "tokenizer_class": {
+          "description": "Tokenizer class the artifact declares. A class only newer runtimes know makes the artifact unloadable on older ones.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

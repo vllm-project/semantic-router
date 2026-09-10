@@ -1,5 +1,6 @@
 """Algorithm configuration models for multi-model orchestration."""
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -366,15 +367,79 @@ class MultiFactorSLOConfig(BaseModel):
     max_inflight: int | None = Field(default=None, ge=0)
 
 
+class QualityEvidenceConfig(BaseModel):
+    """Versioned catalog evidence used as the multi-factor quality signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    index: str = Field(min_length=1)
+    on_missing: Literal["exclude", "disable_quality"] = "exclude"
+    min_coverage: float | None = Field(default=None, ge=0, le=1)
+    min_score: float | None = None
+
+    @model_validator(mode="after")
+    def validate_index(self):
+        if self.index != self.index.strip():
+            raise ValueError("index cannot have surrounding whitespace")
+        if self.min_score is not None and not math.isfinite(self.min_score):
+            raise ValueError("min_score must be finite")
+        if self.min_score is not None and self.on_missing == "disable_quality":
+            raise ValueError("min_score requires on_missing=exclude")
+        return self
+
+
+class MultiFactorPriorityConfig(BaseModel):
+    """One ordered factor in a lexicographic routing objective."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    factor: Literal["quality", "latency", "cost", "load"]
+    tolerance: float = Field(default=0, ge=0, le=1)
+
+
+class MultiFactorObjectiveConfig(BaseModel):
+    """Weighted balance or ordered factor comparison."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal["weighted", "lexicographic"] = "weighted"
+    priorities: list[MultiFactorPriorityConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_strategy(self):
+        if self.strategy == "weighted" and self.priorities:
+            raise ValueError("priorities require strategy=lexicographic")
+        if self.strategy == "lexicographic" and not self.priorities:
+            raise ValueError("lexicographic objective requires priorities")
+        factors = [priority.factor for priority in self.priorities]
+        if len(factors) != len(set(factors)):
+            raise ValueError("objective priorities cannot repeat a factor")
+        return self
+
+
 class MultiFactorSelectionConfig(BaseModel):
     """Configuration for the canonical multi_factor selector."""
 
     model_config = ConfigDict(extra="forbid")
 
+    objective: MultiFactorObjectiveConfig | None = None
     weights: MultiFactorWeightsConfig | None = None
     slo: MultiFactorSLOConfig | None = None
+    quality: QualityEvidenceConfig | None = None
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
-    on_no_candidates: str | None = "cheapest"
+    on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
+
+    @model_validator(mode="after")
+    def validate_objective(self):
+        if (
+            self.objective is not None
+            and self.objective.strategy == "lexicographic"
+            and self.weights is not None
+        ):
+            raise ValueError(
+                "weights cannot be combined with a lexicographic objective"
+            )
+        return self
 
 
 class PromptSelectionConfig(BaseModel):

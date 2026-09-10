@@ -68,6 +68,20 @@ providers:
           protocol: http
           weight: 1
 
+evaluation:
+  records:
+    - model: qwen/qwen3.5-rocm
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.72
+    - model: google/gemini-3.1-pro
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: openai/gpt5.4
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: local/omni
@@ -77,30 +91,18 @@ routing:
       context_window_size: 131072
       description: Cheap default lane for standard follow-ups and lightweight clarification.
       capabilities: [cheap_followup, concise_rewrite, general_chat]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.72
       modality: text
       tags: [tier:cheap, purpose:default_feedback]
     - name: google/gemini-3.1-pro
       context_window_size: 262144
       description: Mid-cost recovery lane for repeated dissatisfaction, debugging, and answer repair.
       capabilities: [answer_repair, debugging, reasoning]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.88
       modality: text
       tags: [tier:repair, purpose:feedback_recovery]
     - name: openai/gpt5.4
       context_window_size: 262144
       description: Premium lane reserved for verified or high-stakes dissatisfaction recovery.
       capabilities: [verified_reasoning, evidence_synthesis, high_stakes]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [tier:verified, purpose:feedback_recovery]
 

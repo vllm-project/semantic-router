@@ -62,7 +62,8 @@ routing: {}
 
 The Router creates a sparse local Model Card for `local-chat`. Add a matching
 `routing.modelCards` entry only when routing needs metadata such as context
-window, capabilities, tags, LoRAs, or operator evaluations.
+window, capabilities, tags, or LoRAs. Add benchmark measurements independently
+under top-level `evaluation.records[]`.
 
 ## Configure Models in the Dashboard
 
