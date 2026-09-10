@@ -221,9 +221,9 @@ func (s *RedisStore) collectIndexedPage(ctx context.Context, conversationID stri
 // prune can unindex a payload one of them just recreated. On this path that
 // costs at most one conversationIndexProofMaxTTL of invisibility before a
 // re-scan repairs it, but cascade delete cannot absorb the same race and the
-// rule is kept uniform rather than split by caller. Until finalization the
-// remedy for a blank member is upgrade, not removal — which is why the scans
-// promote every legacy payload they find.
+// rule is kept uniform rather than split by caller. Until finalization a blank
+// member remains readable but neither removable nor promotable; the
+// operator-authorized finalization sweep resolves it after old writers drain.
 func evaluateIndexedResponse(
 	conversationID string,
 	witness responseGenerationWitness,

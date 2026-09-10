@@ -52,14 +52,15 @@ tls_enabled: false
 # sr:response:{response_id}                         → flat JSON StoredResponse (source of truth).
 #                                                      New writes add an internal UUID-v4 field,
 #                                                      _vsr_generation. Legacy JSON without it is
-#                                                      readable, and is upgraded in place — under
-#                                                      its own unchanged content and remaining
-#                                                      TTL — by both legacy scans and by cascade
-#                                                      delete, so pre-upgrade records become
-#                                                      prunable and deletable instead of pinning
-#                                                      their conversation forever. A payload that
-#                                                      still lacks a generation is never deleted
-#                                                      by CAS; it is upgraded first.
+#                                                      readable. Request-path legacy scans leave
+#                                                      it untouched while index-unaware writers
+#                                                      may still exist. The operator-authorized
+#                                                      finalization sweep upgrades it in place —
+#                                                      preserving content and remaining TTL — and
+#                                                      a post-finalization cascade can upgrade any
+#                                                      residual legacy payload on demand. A
+#                                                      payload that still lacks a generation is
+#                                                      never deleted by CAS; it is upgraded first.
 # sr:conversation:{conv_id}                         → JSON blob of StoredConversation.
 # sr:conversation-index:{base64url(conv_id)}        → sorted set of raw response IDs, scored by
 #                                                      created_at. The escaped brace-delimited

@@ -193,9 +193,9 @@ func TestRedisDeleteConversationCascadeFailureLeavesConversation(t *testing.T) {
 // TestRedisDeleteConversationCascadeLegacyUnindexed covers a cascade delete
 // against a conversation whose responses were never indexed — pre-#2814
 // legacy data, or a write from an indexing-unaware pod mid rolling upgrade.
-// Refusing these outright made them permanently undeletable, so the cascade
-// now upgrades each legacy payload in place and deletes it through the same
-// generation CAS as everything else.
+// The request fails closed while those old writers may still exist. After the
+// operator-authorized finalization sweep, the upgraded payload is deleted
+// through the same generation CAS as everything else.
 func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -213,9 +213,14 @@ func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 	require.Empty(t, conversationIndexMembers(t, store, convID),
 		"precondition: no index should exist yet for legacy data")
 
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not finalized")
+	_, err = store.FinalizeConversationIndex(ctx)
+	require.NoError(t, err)
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 
-	_, err := store.GetResponse(ctx, "resp_cascade_legacy")
+	_, err = store.GetResponse(ctx, "resp_cascade_legacy")
 	assert.ErrorIs(t, err, ErrNotFound, "an upgraded legacy payload must be cascade-deletable")
 	_, err = store.GetConversation(ctx, convID)
 	assert.ErrorIs(t, err, ErrNotFound)
@@ -228,8 +233,9 @@ func TestRedisDeleteConversationCascadeLegacyUnindexed(t *testing.T) {
 // counterpart to TestRedisListResponsesByConversationPartiallyMigrated: a
 // conversation whose index exists (from an ordinary post-upgrade write) but
 // still has an older, unindexed legacy response sitting alongside it. The
-// backfill discovers the legacy response, upgrades it, and the cascade drains
-// both records in the same bounded batch.
+// request-path backfill discovers the legacy response without promoting it,
+// so cascade fails closed until finalization drains old writers and upgrades
+// the payload. A retry then drains both records.
 func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
@@ -250,9 +256,14 @@ func TestRedisDeleteConversationCascadePartiallyMigrated(t *testing.T) {
 	require.Zero(t, exists(t, store, store.conversationIndexMigratedKey(convID)),
 		"precondition: no backfill has run yet, despite the index already existing")
 
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not finalized")
+	_, err = store.FinalizeConversationIndex(ctx)
+	require.NoError(t, err)
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 
-	_, err := store.GetResponse(ctx, "resp_old")
+	_, err = store.GetResponse(ctx, "resp_old")
 	assert.ErrorIs(t, err, ErrNotFound, "the upgraded legacy response must be deleted too")
 	_, err = store.GetResponse(ctx, "resp_new")
 	assert.ErrorIs(t, err, ErrNotFound)

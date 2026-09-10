@@ -154,12 +154,12 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an offsetting
 // range), atomically pairing each member with its sidecar generation. Payload
 // deletion and later ZSET/HASH cleanup are both conditional on that observed
-// generation. A legacy candidate whose payload still exists is upgraded in
-// place and then deleted through the same generation CAS as everything else
-// (deleteConversationResponseBatch), so pre-upgrade responses drain rather
-// than pinning the conversation forever. A legacy membership whose payload is
-// already gone can only be dropped on the strength of its blankness, which is
-// safe once the store is finalized and fails closed before then.
+// generation. Before finalization, a live legacy candidate fails closed: an
+// index-unaware writer could otherwise replace its promoted payload while
+// leaving the minted sidecar stale. Once finalized, such writers are gone, so
+// a residual legacy payload is upgraded in place and then deleted through the
+// ordinary generation CAS on a later round. A legacy membership whose payload
+// is already gone is governed by the same finalization gate.
 // If a batch reports an unresolved response, this stops instead of silently
 // reporting success. Already-resolved members are gone; a stale witness left
 // by a cleanup failure remains a safe retry anchor.
@@ -178,53 +178,33 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 		return err
 	}
 
-	// Read once, before the loop: whether blank-witness memberships may be
-	// cleaned up at all. The completion record only ever goes from absent to
-	// permanently present (and is process-cached), so one observation is as
-	// good as re-reading it every round — and a cascade that changed its mind
-	// halfway would be harder to reason about than one that does not.
-	allowBlankCleanup, err := s.conversationIndexFinalized(ctx)
+	// Read once, before the loop: whether legacy payloads and blank-witness
+	// memberships may be cleaned up at all. The completion record only ever
+	// goes from absent to permanently present (and is process-cached), so one
+	// observation is as good as re-reading it every round — and a cascade that
+	// changed its mind halfway would be harder to reason about than one that
+	// does not.
+	allowLegacyCleanup, err := s.conversationIndexFinalized(ctx)
 	if err != nil {
 		return err
 	}
 
 	raced := 0
 	for {
-		candidates, err := s.readCascadeCandidates(ctx, conversationID)
+		state, err := s.runConversationCascadeIteration(ctx, conversationID, allowLegacyCleanup)
 		if err != nil {
-			return fmt.Errorf("failed to list responses for deletion: %w", err)
+			return err
 		}
-
-		if len(candidates) > 0 {
-			resolved, batchErr := s.deleteConversationResponseBatch(ctx, conversationID, candidates, allowBlankCleanup)
-			if batchErr != nil {
-				return batchErr
-			}
-			if resolved == 0 {
-				// Every candidate was overtaken by a concurrent writer without
-				// any of them failing outright. Counted as a race round so
-				// termination is guaranteed structurally rather than argued
-				// from which branches happen to make progress.
-				raced++
-				if raced > conversationIndexCascadeMaxRaceRounds {
-					return fmt.Errorf("conversation %s kept receiving responses during cascade delete after %d attempts; retry",
-						conversationID, raced)
-				}
-			}
+		if state == cascadeIterationComplete {
+			break
+		}
+		if state == cascadeIterationAdvanced {
 			continue
 		}
 
-		emptied, deleteErr := s.deleteEmptyConversationIndex(ctx, conversationID)
-		if deleteErr != nil {
-			return deleteErr
-		}
-		if emptied {
-			break
-		}
-
-		// A write committed after the empty read above. Counted separately
-		// from ordinary batch progress, so draining a large conversation is
-		// never mistaken for losing this race.
+		// Either a non-removing batch (for example, a witness repair) or a
+		// write committed after the empty candidate read. Both consume the
+		// same bounded race budget.
 		raced++
 		if raced > conversationIndexCascadeMaxRaceRounds {
 			return fmt.Errorf("conversation %s kept receiving responses during cascade delete after %d attempts; retry",
@@ -239,6 +219,66 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 	}
 
 	return nil
+}
+
+type cascadeIterationState uint8
+
+const (
+	cascadeIterationAdvanced cascadeIterationState = iota
+	cascadeIterationStalled
+	cascadeIterationComplete
+)
+
+// runConversationCascadeIteration executes one bounded state-machine step:
+// drain a non-empty candidate batch, or prove and remove an empty index. It
+// keeps the public orchestrator small while preserving the distinction between
+// irreversible progress and a race that must consume the retry budget.
+func (s *RedisStore) runConversationCascadeIteration(
+	ctx context.Context,
+	conversationID string,
+	allowLegacyCleanup bool,
+) (cascadeIterationState, error) {
+	candidates, err := s.readCascadeCandidates(ctx, conversationID)
+	if err != nil {
+		return cascadeIterationStalled, fmt.Errorf("failed to list responses for deletion: %w", err)
+	}
+	if len(candidates) > 0 {
+		stalled, err := s.drainConversationResponseBatch(ctx, conversationID, candidates, allowLegacyCleanup)
+		if err != nil {
+			return cascadeIterationStalled, err
+		}
+		if stalled {
+			return cascadeIterationStalled, nil
+		}
+		return cascadeIterationAdvanced, nil
+	}
+
+	emptied, err := s.deleteEmptyConversationIndex(ctx, conversationID)
+	if err != nil {
+		return cascadeIterationStalled, err
+	}
+	if emptied {
+		return cascadeIterationComplete, nil
+	}
+	return cascadeIterationStalled, nil
+}
+
+// drainConversationResponseBatch reports whether a non-empty candidate batch
+// failed to make irreversible progress. Membership removal is real drainage;
+// a post-finalization promotion is also monotone because old writers have been
+// drained. Witness repair is deliberately stalled: a hot writer can invalidate
+// it repeatedly, so it must consume the outer loop's bounded race budget.
+func (s *RedisStore) drainConversationResponseBatch(
+	ctx context.Context,
+	conversationID string,
+	candidates []cascadeCandidate,
+	allowLegacyCleanup bool,
+) (bool, error) {
+	progress, err := s.deleteConversationResponseBatch(ctx, conversationID, candidates, allowLegacyCleanup)
+	if err != nil {
+		return false, err
+	}
+	return progress.membershipsRemoved == 0 && progress.payloadsPromoted == 0, nil
 }
 
 // ensureConversationIndexResolved backfills a conversation's index before a
