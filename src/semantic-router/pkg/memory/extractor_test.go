@@ -314,7 +314,7 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	}
 
 	// 3rd turn triggers session chunk (stride=3)
-	storedCount, err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"Tell me about Go concurrency.",
 		"Go uses goroutines and channels for concurrency.",
@@ -354,7 +354,7 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 
 	var history []openai.ChatCompletionMessageParamUnion
 	for i, turn := range turns {
-		_, err := extractor.ProcessResponseWithHistory(
+		_, err := extractor.ProcessResponseWithHistoryCount(
 			ctx, "s1", "user1", turn.user, turn.assistant, history,
 		)
 		require.NoError(t, err, "turn %d", i+1)
@@ -388,7 +388,7 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 		sdkAssistantMessage("Hi there!"),
 	}
 
-	storedCount, err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language created by Google.",
@@ -409,7 +409,7 @@ func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
 	extractor := NewMemoryChunkStore(store)
 	ctx := context.Background()
 
-	storedCount, err := extractor.ProcessResponseWithHistory(
+	storedCount, err := extractor.ProcessResponseWithHistoryCount(
 		ctx, "session1", "user1",
 		"What is Go?",
 		"Go is a programming language.",
@@ -495,7 +495,7 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			ctx := context.Background()
 
 			beforeCount, beforeSum := snapshot(t)
-			storedCount, err := extractor.ProcessResponseWithHistory(
+			storedCount, err := extractor.ProcessResponseWithHistoryCount(
 				ctx, "session1", "user1",
 				tt.user, tt.assistant, tt.history,
 			)

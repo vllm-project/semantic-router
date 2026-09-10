@@ -174,6 +174,34 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         self.assertEqual(receipt["reason"], "auto_store_off", receipt)
         self.assertEqual(receipt["metadata"].get("fail_open"), "false", receipt)
 
+    def test_04_oversized_history_skips_persistence_and_delivers_response(self):
+        """The 256-message snapshot bound sheds persistence without truncating history."""
+        response = requests.post(
+            self.responses_url,
+            json={
+                "model": "MoM",
+                "input": [
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": f"{RECEIPT_MARKER} preference {i}",
+                    }
+                    for i in range(257)
+                ],
+                "auto_store": True,
+            },
+            headers={"x-authz-user-id": self.test_user},
+            timeout=self.timeout,
+        )
+        self.assertEqual(response.status_code, HTTP_OK, response.text)
+        result = response.json()
+        self.assertTrue(self._extract_output_text(result))
+        result["_replay_id"] = response.headers.get("x-vsr-replay-id", "")
+        receipt = self._wait_for_terminal_receipt(result)
+        self.assertEqual(receipt["verdict"], "skipped", receipt)
+        self.assertEqual(receipt["reason"], "history_too_large", receipt)
+        self.assertEqual(receipt["metadata"].get("fail_open"), "true", receipt)
+
     def test_02_store_failure_keeps_response_fail_open(self):
         """A dead backend returns model output and a request-correlated failure receipt."""
         self.print_test_header(
