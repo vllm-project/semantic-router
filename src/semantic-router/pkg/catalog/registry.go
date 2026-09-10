@@ -3,6 +3,7 @@ package catalog
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 )
@@ -79,8 +80,11 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		registry.indices[definition.ID] = definition
 	}
 	for _, result := range document.IndexResults {
-		if result.Status != "available" || result.Score == nil {
-			return nil, fmt.Errorf("generated model catalog contains a placeholder index result")
+		if !validIndexResultState(result) {
+			return nil, fmt.Errorf("generated model catalog contains an invalid index result")
+		}
+		if result.Status != "available" {
+			continue
 		}
 		if registry.indexResults[result.Model] == nil {
 			registry.indexResults[result.Model] = map[string]map[string]IndexResult{}
@@ -91,6 +95,25 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		registry.indexResults[result.Model][result.ReasoningEffort][result.Index] = result
 	}
 	return registry, nil
+}
+
+func validIndexResultState(result IndexResult) bool {
+	validCoverage := !math.IsNaN(result.Coverage) && !math.IsInf(result.Coverage, 0) &&
+		result.Coverage >= 0 && result.Coverage <= 1
+	if !validCoverage {
+		return false
+	}
+	switch result.Status {
+	case "available":
+		return result.Score != nil && !math.IsNaN(*result.Score) && !math.IsInf(*result.Score, 0) &&
+			result.Coverage > 0
+	case "partial":
+		return result.Score == nil && result.Coverage > 0 && result.Coverage < 1
+	case "missing":
+		return result.Score == nil && result.Coverage == 0
+	default:
+		return false
+	}
 }
 
 func (registry *Registry) Digest() string { return registry.digest }
@@ -284,6 +307,9 @@ func cloneIndex(value IndexDefinition) IndexDefinition {
 	value.Domains = cloneMap(value.Domains)
 	value.Components = append([]IndexComponent(nil), value.Components...)
 	for index := range value.Components {
+		value.Components[index].BenchmarkProfiles = append(
+			[]string(nil), value.Components[index].BenchmarkProfiles...,
+		)
 		value.Components[index].Normalization = cloneNormalization(value.Components[index].Normalization)
 	}
 	return value
@@ -311,6 +337,9 @@ func cloneIndexResult(value IndexResult) IndexResult {
 	value.Score = cloneFloatPointer(value.Score)
 	value.Components = append([]IndexComponentResult(nil), value.Components...)
 	for index := range value.Components {
+		value.Components[index].BenchmarkProfiles = append(
+			[]string(nil), value.Components[index].BenchmarkProfiles...,
+		)
 		value.Components[index].Value = cloneFloatPointer(value.Components[index].Value)
 		value.Components[index].Normalized = cloneFloatPointer(value.Components[index].Normalized)
 	}

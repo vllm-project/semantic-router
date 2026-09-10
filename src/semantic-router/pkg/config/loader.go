@@ -159,6 +159,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		normalizeResponseCacheAliases,
 		rejectDeprecatedUserConfigFields,
+		rejectRemovedEvaluationFields,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
@@ -171,6 +172,28 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		}
 	}
 	return nil
+}
+
+func rejectRemovedEvaluationFields(raw map[string]interface{}) error {
+	removed := make([]string, 0)
+	if _, ok := raw["evaluation_catalog"]; ok {
+		removed = append(removed, "evaluation_catalog")
+	}
+	routing := nestedStringMap(raw["routing"])
+	if cards, ok := routing["modelCards"].([]interface{}); ok {
+		for index, rawCard := range cards {
+			if _, ok := nestedStringMap(rawCard)["evaluations"]; ok {
+				removed = append(removed, fmt.Sprintf("routing.modelCards[%d].evaluations", index))
+			}
+		}
+	}
+	if len(removed) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"removed config fields are no longer supported: %s; move benchmark definitions, indices, and model-linked records under evaluation",
+		strings.Join(removed, ", "),
+	)
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
@@ -532,7 +555,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use canonical v0.3 version/listeners/providers/routing/global; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3 providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy; %s; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3",
 		detail,
 	)
 }
@@ -548,6 +571,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	applyBatchConcurrencyMigration(cfg)
 	if err := validateConfigStructure(cfg); err != nil {
 		logging.ComponentDebugEvent("config", "config_validation_failed", map[string]interface{}{
 			"error": err.Error(),
@@ -717,11 +741,14 @@ func removedStructureFields(raw map[string]interface{}) []string {
 
 func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
-		"version":   true,
-		"listeners": true,
-		"providers": true,
-		"routing":   true,
-		"global":    true,
+		"version":     true,
+		"listeners":   true,
+		"providers":   true,
+		"evaluation":  true,
+		"routing":     true,
+		"entrypoints": true,
+		"recipes":     true,
+		"global":      true,
 	}
 
 	fields := make([]string, 0)

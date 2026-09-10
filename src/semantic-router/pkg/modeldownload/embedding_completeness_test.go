@@ -36,12 +36,20 @@ func findSpecByPath(specs []ModelSpec, localPath string) (ModelSpec, bool) {
 	return ModelSpec{}, false
 }
 
+func requireCandleEmbeddingRuntime(t *testing.T) {
+	t.Helper()
+	if compiledEmbeddingRuntime != "candle" {
+		t.Skip("Candle-specific contract")
+	}
+}
+
 // TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer guards #2172:
 // the candle embedding runtime loads the model from model.safetensors + tokenizer.json,
 // so those must be part of the embedding model's completeness contract. Otherwise a dir
 // holding only config.json + onnx/ (the state shipped in the image) passes the
 // nested-onnx weight heuristic and the safetensors/tokenizer download is never triggered.
 func TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newEmbeddingOnlyConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -83,6 +91,7 @@ func TestBuildModelSpecsSkipsEmbeddingModelsForRemoteBackend(t *testing.T) {
 // an ONNX-only embedding directory (config.json + nested onnx weights, no safetensors /
 // tokenizer.json) must be reported as missing so the full snapshot is re-downloaded.
 func TestOnnxOnlyEmbeddingDirReportedIncomplete(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newEmbeddingOnlyConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -111,6 +120,7 @@ func TestOnnxOnlyEmbeddingDirReportedIncomplete(t *testing.T) {
 // TestFullEmbeddingDirReportedComplete is the control: once the safetensors weights and
 // tokenizer are present, the embedding model is complete and is not re-downloaded.
 func TestFullEmbeddingDirReportedComplete(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newEmbeddingOnlyConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -171,6 +181,7 @@ func newCandleEmbeddingConfig() *config.RouterConfig {
 // files its runtime hard-loads so partial downloads self-heal. Gemma additionally
 // hard-loads the 2_Dense/3_Dense bottleneck weights.
 func TestBuildModelSpecsRequiresCandleRuntimeFilesPerModel(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -206,6 +217,7 @@ func TestBuildModelSpecsRequiresCandleRuntimeFilesPerModel(t *testing.T) {
 // qwen3 and multimodal paths: an ONNX-only directory must read as incomplete so the full
 // snapshot is re-downloaded instead of crash-looping at classifier init (#2531).
 func TestOnnxOnlyCandleEmbeddingDirsReportedIncomplete(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -235,6 +247,7 @@ func TestOnnxOnlyCandleEmbeddingDirsReportedIncomplete(t *testing.T) {
 // #2531: root weights and tokenizer alone are not enough, the dense-bottleneck weights the
 // runtime hard-loads must be present before the model reads as complete.
 func TestGemmaDirWithoutDenseWeightsReportedIncomplete(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)

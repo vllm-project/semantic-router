@@ -1,5 +1,8 @@
 version: v0.3
 
+# Optional operator-owned benchmark definitions, versioned index DAGs, and
+# model-linked measurements live together under evaluation.
+
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -128,6 +131,24 @@ providers:
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
 
+evaluation:
+  records:
+    - model: qwen3-8b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.83
+    - model: qwen3-32b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.96
+    - model: llava-omni
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: sdxl-image
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.79
 routing:
   strategy: priority
   modelCards:
@@ -155,10 +176,6 @@ routing:
       modalities:
         input: [text]
         output: [text]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.83
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
@@ -169,10 +186,6 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.96
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -180,10 +193,6 @@ routing:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.88
       modality: omni
       tags: [multimodal, omni]
     - name: sdxl-image
@@ -191,10 +200,6 @@ routing:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.79
       modality: diffusion
       tags: [image, diffusion]
 
@@ -1431,6 +1436,13 @@ routing:
       algorithm:
         type: multi_factor
         multi_factor:
+          objective:
+            strategy: weighted
+          quality:
+            index: vllm-sr/coding@1.0.0
+            on_missing: exclude
+            min_coverage: 1.0
+            min_score: 0.0
           weights:
             quality: 0.4
             latency: 0.2
@@ -1755,7 +1767,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
         max_concurrency: 8
         metrics:
           sample_rate: 1.0
@@ -2242,8 +2253,9 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # The gate is validated here but not yet wired into the request path;
-    # omitting admission means no gate and preserves current behavior.
+    # A shed inference surfaces as a classify error and follows the same
+    # on_error / on_unknown policy as any other inference failure.
+    # Omitting admission means no gate and preserves current behavior.
     admission:
       prompt_guard:
         max_concurrency: 4
