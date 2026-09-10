@@ -121,11 +121,33 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // prefix, but each successful removal is permanent and therefore amortized.
 // If candidates repeatedly survive their conditional cleanup, this returns
 // ErrIndexContended rather than spinning or presenting an ambiguous short
-// page. Blank-witness tombstones remain deliberately non-prunable before
-// finalization: proof expiry does not remove them, so they can continue to
-// underfill a page until the operator completes finalization. Walking past
-// that migration-boundary state needs an API-visible continuation and is out
-// of scope for this generation-safe cleanup path.
+// page.
+//
+// A window may also hold members that are unreadable yet must be left alone:
+// before finalization a blank-witness membership whose payload is gone is
+// deliberately non-prunable, and proof expiry never clears it, because a
+// rescan adds live members but removes nothing. Such a window yields no
+// responses and no prune candidates, which reported as an empty terminal page
+// and hid every retained response behind it.
+//
+// Those members are reached by *widening* the window from the caller's own
+// anchor, never by re-anchoring onto one of them. A response ID is not a
+// stable index position: an ordinary StoreResponse of a response whose payload
+// had expired re-scores its membership through conversationIndexAddScript's
+// unqualified ZADD, so an anchor placed on a blocked member follows that member
+// to its new rank and can carry the next window past live responses that never
+// moved. Re-resolving the anchor server-side does not help — ZRANK faithfully
+// returns the new incarnation's position. Only the caller's own anchor, which
+// this loop never rewrites, is immune.
+//
+// Widening is capped at listIndexScanMaxStride, so the walk costs at most
+// log2(listIndexScanMaxStride/Limit) bounded reads. A run of blocked members
+// too long to see past reports ErrIndexTraversalBlocked — never exhaustion.
+//
+// An underfilled page may only be returned once it is *proven* complete: the
+// window must have come back with fewer members than the rank span it covered,
+// which is the one observation that shows nothing lies beyond it. A full window
+// that underfills the page is evidence of the opposite, and widens instead.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
 	// Blank-witness memberships may only be cleaned up once the store is
 	// finalized — the same rule cascade delete follows, for the same reason:
@@ -141,6 +163,8 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 	stride := opts.Limit
 	contendedRounds := 0
 	for {
+		// opts, never a rewritten anchor: the window origin is fixed for the
+		// life of the call and only its width changes.
 		page, collectErr := s.collectIndexedPage(ctx, conversationID, opts, stride, allowBlankCleanup)
 
 		if responses, complete := selectCompleteIndexedPage(conversationID, opts, page, collectErr); complete {
@@ -149,24 +173,73 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		if collectErr != nil {
 			return nil, collectErr
 		}
-		if page.pruneCandidates == 0 {
-			return page.responses, nil
+
+		// Either the caller's cursor is not a current member or nothing lies
+		// in the requested direction. Both are the documented empty page.
+		if page.window.resolution != listWindowReady {
+			return nil, nil
 		}
 
-		if page.membershipsRemoved == 0 {
-			contendedRounds++
-			if contendedRounds >= listIndexMaxContentionRounds {
-				return nil, fmt.Errorf("%w: conversation %s did not advance after %d cleanup attempts",
-					ErrIndexContended, conversationID, contendedRounds)
+		// Stale memberships are resolved before exhaustion is consulted. A
+		// window can be short and still owe the caller another look: a
+		// membership recreated between this page's payload read and its
+		// conditional prune is only observed by re-reading the same window.
+		if page.pruneCandidates > 0 {
+			if page.membershipsRemoved == 0 {
+				contendedRounds++
+				if contendedRounds >= listIndexMaxContentionRounds {
+					return nil, fmt.Errorf("%w: conversation %s did not advance after %d cleanup attempts",
+						ErrIndexContended, conversationID, contendedRounds)
+				}
+				continue
+			}
+			contendedRounds = 0
+			if len(page.responses) == 0 {
+				stride = growListStride(stride)
 			}
 			continue
 		}
 
-		contendedRounds = 0
-		if len(page.responses) == 0 && stride < listIndexScanMaxStride {
-			stride = min(stride*2, listIndexScanMaxStride)
+		// Fewer members than ranks covered: nothing lies beyond this window, so
+		// whatever it yielded is the whole remainder. This is the only proof
+		// that lets an underfilled page be returned rather than widened.
+		if page.membersRead < page.window.width {
+			return page.responses, nil
 		}
+
+		// A full window that still underfills the page is holding members this
+		// read may not remove and cannot return. Only a wider one reaches past
+		// them, and the width is bounded.
+		if stride >= listIndexScanMaxStride {
+			return nil, blockedTraversalError(conversationID, stride, page.readFailures)
+		}
+		stride = growListStride(stride)
 	}
+}
+
+// growListStride widens the next bounded window after one that returned no
+// responses, so a long dead or blocked run costs round trips proportional to
+// listIndexScanMaxStride rather than to the caller's Limit.
+func growListStride(stride int) int {
+	if stride >= listIndexScanMaxStride {
+		return stride
+	}
+	return min(stride*2, listIndexScanMaxStride)
+}
+
+// blockedTraversalError reports a run of unreadable-but-unremovable members
+// longer than the widest bounded window may see past. readFailures separates
+// the two causes an operator would act on differently: blank-witness
+// memberships waiting on finalization, and payloads Redis would not serve.
+func blockedTraversalError(conversationID string, width, readFailures int) error {
+	if readFailures > 0 {
+		return fmt.Errorf(
+			"%w: conversation %s left %d indexed payload(s) unreadable across a %d-member window; check Redis health before retrying",
+			ErrIndexTraversalBlocked, conversationID, readFailures, width)
+	}
+	return fmt.Errorf(
+		"%w: conversation %s still holds unreadable memberships this read may not remove across a %d-member window; run FinalizeConversationIndex to clear them",
+		ErrIndexTraversalBlocked, conversationID, width)
 }
 
 // selectCompleteIndexedPage limits an oversized cleanup snapshot to the
@@ -207,6 +280,18 @@ type collectedIndexedPage struct {
 	responses          []*responseapi.StoredResponse
 	pruneCandidates    int
 	membershipsRemoved int
+
+	// membersRead is how many index members the window actually returned.
+	// Compared against window.width it is what proves directional exhaustion.
+	membersRead int
+
+	// readFailures counts members whose payload could not be read at all, as
+	// distinct from being proven absent. Reported only for diagnosis: a
+	// widening window from a fixed anchor re-reads them, so they are never
+	// stepped over.
+	readFailures int
+
+	window listWindowRead
 }
 
 // collectIndexedPage reads one windowSize-bounded window, resolves its
@@ -223,12 +308,12 @@ func (s *RedisStore) collectIndexedPage(
 	windowSize int,
 	allowBlankCleanup bool,
 ) (collectedIndexedPage, error) {
-	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts, windowSize)
+	witnesses, window, err := s.listIndexedResponseIDs(ctx, conversationID, opts, windowSize)
 	if err != nil {
-		return collectedIndexedPage{}, err
+		return collectedIndexedPage{window: window}, err
 	}
 	if len(witnesses) == 0 {
-		return collectedIndexedPage{}, nil
+		return collectedIndexedPage{window: window}, nil
 	}
 
 	responseIDs := make([]string, len(witnesses))
@@ -239,11 +324,15 @@ func (s *RedisStore) collectIndexedPage(
 
 	responses := make([]*responseapi.StoredResponse, 0, len(results))
 	toPrune := make([]responseGenerationWitness, 0, len(results))
+	readFailures := 0
 	for i, result := range results {
 		witness := witnesses[i]
-		response, prune := evaluateIndexedResponse(conversationID, witness, result, allowBlankCleanup)
+		response, prune, readFailed := evaluateIndexedResponse(conversationID, witness, result, allowBlankCleanup)
 		if prune {
 			toPrune = append(toPrune, witness)
+		}
+		if readFailed {
+			readFailures++
 		}
 		if response != nil {
 			responses = append(responses, response)
@@ -253,6 +342,9 @@ func (s *RedisStore) collectIndexedPage(
 	page := collectedIndexedPage{
 		responses:       responses,
 		pruneCandidates: len(toPrune),
+		membersRead:     len(witnesses),
+		readFailures:    readFailures,
+		window:          window,
 	}
 	page.membershipsRemoved, err = s.unindexResponseGenerations(ctx, conversationID, toPrune...)
 	if err != nil {
@@ -290,31 +382,36 @@ func (s *RedisStore) collectIndexedPage(
 // rule is kept uniform rather than split by caller. Until finalization a blank
 // member remains readable but neither removable nor promotable; the
 // operator-authorized finalization sweep resolves it after old writers drain.
+// readFailed distinguishes a payload this page could not read from one it read
+// and found unusable. A Redis failure says nothing about whether the response
+// is still there, so a traversal must stop rather than step over it; a payload
+// that decoded badly was genuinely observed and can never be returned, so
+// skipping it costs nothing a retry would recover.
 func evaluateIndexedResponse(
 	conversationID string,
 	witness responseGenerationWitness,
 	result responsePayloadResult,
 	allowBlankCleanup bool,
-) (*responseapi.StoredResponse, bool) {
+) (response *responseapi.StoredResponse, prune bool, readFailed bool) {
 	prunable := witness.generation != "" || allowBlankCleanup
 
 	if errors.Is(result.err, redis.Nil) {
-		return nil, prunable
+		return nil, prunable, false
 	}
 	if result.err != nil {
 		logging.Warnf("RedisStore: failed to get response %s: %v", witness.responseID, result.err)
-		return nil, false
+		return nil, false, true
 	}
 
 	record, err := decodeResponseRecord(result.raw)
 	if err != nil {
 		logging.Warnf("RedisStore: failed to parse response %s: %v", witness.responseID, err)
-		return nil, false
+		return nil, false, false
 	}
 	if record.response.ConversationID != conversationID {
-		return nil, prunable
+		return nil, prunable, false
 	}
-	return record.response, false
+	return record.response, false, false
 }
 
 func responseKeys(store *RedisStore, responseIDs []string) []string {
@@ -385,20 +482,53 @@ func (s *RedisStore) listIndexedResponseIDs(
 	conversationID string,
 	normalized normalizedListOptions,
 	windowSize int,
-) ([]responseGenerationWitness, error) {
+) ([]responseGenerationWitness, listWindowRead, error) {
 	indexKey := s.conversationIndexKey(conversationID)
 	ascending := normalized.Order == "asc"
 
-	start, end, ok, err := s.resolveListWindow(ctx, indexKey, ascending, normalized, windowSize)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
+	start, end, resolution, err := s.resolveListWindow(ctx, indexKey, ascending, normalized, windowSize)
+	if err != nil || resolution != listWindowReady {
+		return nil, listWindowRead{resolution: resolution}, err
 	}
 
-	return s.readIndexRange(ctx, conversationID, ascending, start, end)
+	window := listWindowRead{resolution: resolution, width: int(end - start + 1)}
+	witnesses, err := s.readIndexRange(ctx, conversationID, ascending, start, end)
+	return witnesses, window, err
 }
+
+// listWindowRead describes the bounded window one read actually covered: how
+// it resolved, and how many ranks it spanned.
+//
+// The span is load-bearing rather than incidental. It is not always the
+// requested stride — a Before window clamps at rank 0 — so comparing members
+// returned against the stride would misread a clamped window as a short one.
+// Compared against the span, a short result is exactly the proof that nothing
+// lies beyond the window, which is the only condition under which an
+// underfilled page may be returned instead of widened.
+type listWindowRead struct {
+	resolution listWindowResolution
+	width      int
+}
+
+// listWindowResolution says why resolveListWindow did or did not produce a
+// rank window. The states are kept distinct because an exhausted index and an
+// unresolvable cursor both used to arrive as "no members", and the listing
+// loop has to tell them apart before an empty result may be reported as
+// end-of-list.
+type listWindowResolution uint8
+
+const (
+	// listWindowReady means [start, end] is a real window to read.
+	listWindowReady listWindowResolution = iota
+	// listWindowEmpty means the index holds nothing further in this direction.
+	listWindowEmpty
+	// listWindowCursorMissing means the cursor response ID is not a current
+	// member. The listing loop only ever passes the caller's own After/Before,
+	// so this is the documented empty page rather than a lost traversal
+	// anchor — it is kept distinct from listWindowEmpty because the two are
+	// different facts about the index, not because they are handled apart.
+	listWindowCursorMissing
+)
 
 // rankInIndex resolves a cursor response ID's rank in the given order (asc:
 // ZRANK, desc: ZREVRANK). ok=false, not an error, means the cursor is not a
@@ -432,20 +562,26 @@ func (s *RedisStore) resolveListWindow(
 	ascending bool,
 	normalized normalizedListOptions,
 	windowSize int,
-) (start, end int64, ok bool, err error) {
+) (start, end int64, resolution listWindowResolution, err error) {
 	limit := int64(windowSize)
 
 	switch {
 	case normalized.After != "":
 		r, found, rankErr := s.rankInIndex(ctx, indexKey, ascending, normalized.After)
-		if rankErr != nil || !found {
-			return 0, 0, false, rankErr
+		if rankErr != nil {
+			return 0, 0, listWindowEmpty, rankErr
+		}
+		if !found {
+			return 0, 0, listWindowCursorMissing, nil
 		}
 		start, end = r+1, r+limit
 	case normalized.Before != "":
 		r, found, rankErr := s.rankInIndex(ctx, indexKey, ascending, normalized.Before)
-		if rankErr != nil || !found {
-			return 0, 0, false, rankErr
+		if rankErr != nil {
+			return 0, 0, listWindowEmpty, rankErr
+		}
+		if !found {
+			return 0, 0, listWindowCursorMissing, nil
 		}
 		end = r - 1
 		start = max(0, end-limit+1)
@@ -454,10 +590,10 @@ func (s *RedisStore) resolveListWindow(
 	}
 
 	if end < start {
-		return 0, 0, false, nil
+		return 0, 0, listWindowEmpty, nil
 	}
 
-	return start, end, true, nil
+	return start, end, listWindowReady, nil
 }
 
 // readIndexRange reads one inclusive rank window [start, end] in the given

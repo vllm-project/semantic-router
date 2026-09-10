@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -204,4 +205,174 @@ func TestListReturnsContentionErrorInsteadOfAmbiguousPartialPage(t *testing.T) {
 	assert.EqualValues(t, listIndexMaxContentionRounds, hook.fired.Load())
 	assert.Equal(t, []string{liveID, staleID}, conversationIndexMembers(t, store, conversationID),
 		"the contended membership remains a retry anchor")
+}
+
+// TestListWalksPastBlockedLegacyTombstonesBeforeFinalization is the
+// pre-finalization regression. A blank-witness member whose payload is gone is
+// deliberately non-prunable until an operator finalizes, and proof expiry never
+// clears it: a rescan adds live members but removes nothing. A full window of
+// them therefore yielded no responses and no prune candidates, which the loop
+// reported as an empty successful page — terminal to any ordinary paginator,
+// with every retained response sitting behind it.
+//
+// The traversal must step over them without removing them, so both halves are
+// asserted: the live response comes back, and every tombstone is still a member.
+func TestListWalksPastBlockedLegacyTombstonesBeforeFinalization(t *testing.T) {
+	const limit = 3
+
+	for _, tombstones := range []int{limit, 2 * limit} {
+		t.Run(fmt.Sprintf("%d blocked tombstones", tombstones), func(t *testing.T) {
+			store := newConversationIndexStore(t)
+			ctx := context.Background()
+			conversationID := fmt.Sprintf("conv_blocked_legacy_%d", tombstones)
+			liveID := fmt.Sprintf("resp_blocked_legacy_live_%d", tombstones)
+
+			now := time.Now().Unix()
+			blocked := seedLegacyIndexMembers(t, store, conversationID, "resp_blocked_legacy", tombstones, now)
+			require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+				ID: liveID, ConversationID: conversationID, Status: "completed",
+				CreatedAt: now + int64(tombstones),
+			}))
+			require.Zero(t, exists(t, store, store.conversationIndexCompletionKey()),
+				"precondition: the store must not be finalized")
+			require.Equal(t, append(append([]string{}, blocked...), liveID),
+				conversationIndexMembers(t, store, conversationID),
+				"precondition: every tombstone sorts ahead of the live response")
+
+			responses, err := store.ListResponsesByConversation(ctx, conversationID,
+				ListOptions{Order: "asc", Limit: limit})
+			require.NoError(t, err)
+			assert.Equal(t, []string{liveID}, responseIDsOf(responses),
+				"the page must reach the live response behind the blocked tombstones")
+
+			assert.Equal(t, append(append([]string{}, blocked...), liveID),
+				conversationIndexMembers(t, store, conversationID),
+				"stepping over a blocked member must never remove it before finalization")
+		})
+	}
+}
+
+// TestListReportsBlockedTraversalBudgetExhausted pins the other half of the
+// contract: the walk is bounded, and spending the budget reports an explicit
+// retryable error rather than the empty page the traversal exists to prevent.
+// At Limit 1 the widening strides sum to 255 members over the budget, so a
+// longer blocked run cannot be crossed in one call.
+func TestListReportsBlockedTraversalBudgetExhausted(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const conversationID = "conv_blocked_budget"
+	const liveID = "resp_blocked_budget_live"
+
+	now := time.Now().Unix()
+	blocked := seedLegacyIndexMembers(t, store, conversationID, "resp_blocked_budget", 300, now)
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: liveID, ConversationID: conversationID, Status: "completed", CreatedAt: now + 1000,
+	}))
+
+	responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{Order: "asc", Limit: 1})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrIndexTraversalBlocked)
+	assert.Empty(t, responses, "a budget-exhausted traversal must not answer with a page at all")
+	assert.Len(t, conversationIndexMembers(t, store, conversationID), len(blocked)+1,
+		"a blocked traversal removes nothing")
+}
+
+// TestListFillsPageAcrossMixedBlockedWindow covers a full window that
+// underfills the page. With Limit 3 over [blocked, blocked, live-A] the first
+// window is full, so its single response is no evidence that the conversation
+// ended — live-B and live-C sit in the very next ranks. Returning that short
+// page let a paginator testing len(page) < Limit stop and hide them.
+//
+// Only a window that comes back shorter than the ranks it covered proves
+// exhaustion; a full one must widen instead.
+func TestListFillsPageAcrossMixedBlockedWindow(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const conversationID = "conv_mixed_blocked_window"
+	const limit = 3
+
+	now := time.Now().Unix()
+	blocked := seedLegacyIndexMembers(t, store, conversationID, "resp_mixed_blocked", 2, now)
+	live := make([]string, 3)
+	for i := range live {
+		live[i] = fmt.Sprintf("resp_mixed_live_%d", i)
+		require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+			ID: live[i], ConversationID: conversationID, Status: "completed",
+			CreatedAt: now + int64(len(blocked)+i),
+		}))
+	}
+	require.Zero(t, exists(t, store, store.conversationIndexCompletionKey()),
+		"precondition: the store must not be finalized, so the blank members stay blocked")
+	require.Equal(t, append(append([]string{}, blocked...), live...),
+		conversationIndexMembers(t, store, conversationID),
+		"precondition: the first Limit-wide window must be blocked, blocked, live")
+
+	responses, err := store.ListResponsesByConversation(ctx, conversationID,
+		ListOptions{Order: "asc", Limit: limit})
+	require.NoError(t, err)
+	assert.Equal(t, live, responseIDsOf(responses),
+		"a full window that underfills the page must widen, not return early")
+
+	assert.Equal(t, append(append([]string{}, blocked...), live...),
+		conversationIndexMembers(t, store, conversationID),
+		"widening past a blocked member must never remove it before finalization")
+}
+
+// TestListWideningSurvivesBlockedMemberRecreation pins why the traversal
+// widens from the caller's anchor instead of re-anchoring onto a member it
+// stepped over.
+//
+// A response ID is not a stable index position. Here the blocked member is
+// recreated by an ordinary StoreResponse while the page is being built, and
+// conversationIndexAddScript's unqualified ZADD re-scores its membership past
+// the live response that never moved. An anchor placed on that member would
+// follow it — ZRANK returns the new incarnation's rank — and the next window
+// would begin after the live response, reporting an empty page while a
+// retained response sat in the index. A fixed anchor cannot be carried
+// anywhere, so widening simply re-reads both.
+func TestListWideningSurvivesBlockedMemberRecreation(t *testing.T) {
+	store := newConversationIndexStore(t)
+	writer := newConcurrentRedisStore(t, store)
+	ctx := context.Background()
+
+	const conversationID = "conv_blocked_recreated"
+	const blockedID = "resp_blocked_recreated"
+	const liveID = "resp_blocked_recreated_live"
+
+	now := time.Now().Unix()
+	seedLegacyIndexMember(t, store, conversationID, blockedID, now)
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: liveID, ConversationID: conversationID, Status: "completed", CreatedAt: now + 1,
+	}))
+	require.Equal(t, []string{blockedID, liveID}, conversationIndexMembers(t, store, conversationID),
+		"precondition: the blocked member sorts ahead of the retained response")
+
+	// Recreated with a later created_at, so its membership is re-scored past
+	// the live response rather than staying where the reader observed it.
+	var injectedErr error
+	hook := &commandInterleavingHook{
+		pipeline: true,
+		match: func(cmd redis.Cmder) bool {
+			return commandReadsKey(cmd, store.buildKey(ResponseKeyPrefix+blockedID))
+		},
+		inject: func() {
+			injectedErr = writer.StoreResponse(context.Background(), &responseapi.StoredResponse{
+				ID: blockedID, ConversationID: conversationID, Status: "recreated", CreatedAt: now + 2,
+			})
+		},
+	}
+	store.client.AddHook(hook)
+
+	responses, err := store.ListResponsesByConversation(ctx, conversationID,
+		ListOptions{Order: "asc", Limit: 1})
+	require.NoError(t, err)
+	require.NoError(t, injectedErr)
+	assert.True(t, hook.fired.Load(), "the recreation must land while the first window is being resolved")
+	assert.Equal(t, []string{liveID}, responseIDsOf(responses),
+		"a re-scored blocked member must not carry the window past a response that never moved")
+
+	assert.Equal(t, []string{liveID, blockedID}, conversationIndexMembers(t, store, conversationID),
+		"precondition check: the recreation really did move the member past the live response")
 }
