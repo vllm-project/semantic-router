@@ -922,6 +922,68 @@ class ModelCatalogValidationTests(unittest.TestCase):
             ],
         )
 
+    def test_partial_index_components_remain_unscored(self) -> None:
+        resources = {
+            "models": [{"id": "example/model", "kind": "physical"}],
+            "reasoning_families": [],
+            "benchmarks": [
+                {
+                    "id": "example/one@1.0.0",
+                    "domain": "reasoning",
+                    "default_profile": "standard",
+                    "profiles": [{"id": "standard"}],
+                    "metrics": [{"id": "score"}],
+                },
+                {
+                    "id": "example/two@1.0.0",
+                    "domain": "reasoning",
+                    "default_profile": "standard",
+                    "profiles": [{"id": "standard"}],
+                    "metrics": [{"id": "score"}],
+                },
+            ],
+            "evaluations": [
+                {
+                    "id": "example/run@1.0.0",
+                    "model": "example/model",
+                    "benchmark": "example/one@1.0.0",
+                    "benchmark_profile": "standard",
+                    "reasoning_effort": "default",
+                    "status": "available",
+                    "metrics": {"score": 0.8},
+                    "evidence": {"provenance": "operator"},
+                }
+            ],
+            "indices": [
+                {
+                    "id": "example/index@1.0.0",
+                    "scale": [0, 100],
+                    "missing": {"policy": "require_all"},
+                    "components": [
+                        {
+                            "benchmark": "example/one@1.0.0",
+                            "metric": "score",
+                            "benchmark_profile": "standard",
+                            "weight": 0.5,
+                            "normalization": {"type": "identity"},
+                        },
+                        {
+                            "benchmark": "example/two@1.0.0",
+                            "metric": "score",
+                            "benchmark_profile": "standard",
+                            "weight": 0.5,
+                            "normalization": {"type": "identity"},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        result = catalog._index_results(resources)[0]
+        self.assertEqual(result["status"], "partial")
+        self.assertIsNone(result["score"])
+        self.assertEqual(result["coverage"], 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

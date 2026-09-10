@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -72,7 +73,7 @@ func TestFactCheckClassifier_EmptyText(t *testing.T) {
 		t.Fatalf("Failed to initialize classifier: %v", err)
 	}
 
-	result, err := classifier.Classify("")
+	result, err := classifier.Classify(context.Background(), "")
 	if err != nil {
 		t.Errorf("Unexpected error for empty text: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestFactCheckClassifier_FactCheckNeeded(t *testing.T) {
 
 	t.Log("Testing prompts that should need fact-checking:")
 	for _, prompt := range factCheckPrompts {
-		result, err := classifier.Classify(prompt)
+		result, err := classifier.Classify(context.Background(), prompt)
 		if err != nil {
 			t.Errorf("Classification failed for '%s': %v", prompt, err)
 			continue
@@ -183,7 +184,7 @@ func TestFactCheckClassifier_NoFactCheckNeeded(t *testing.T) {
 
 	t.Log("Testing prompts that should NOT need fact-checking:")
 	for _, prompt := range noFactCheckPrompts {
-		result, err := classifier.Classify(prompt)
+		result, err := classifier.Classify(context.Background(), prompt)
 		if err != nil {
 			t.Errorf("Classification failed for '%s': %v", prompt, err)
 			continue
@@ -246,7 +247,7 @@ func TestFactCheckClassifier_OpenAIPipeline(t *testing.T) {
 	// Simulate OpenAI-style user message
 	userMessage := "What is the current population of China and how has it changed since 2000?"
 
-	result, err := classifier.Classify(userMessage)
+	result, err := classifier.Classify(context.Background(), userMessage)
 	if err != nil {
 		t.Fatalf("Classification failed: %v", err)
 	}
@@ -285,7 +286,7 @@ func TestFactCheckClassifier_Threshold(t *testing.T) {
 	}
 
 	prompt := "When was the first iPhone released?"
-	result, err := classifier.Classify(prompt)
+	result, err := classifier.Classify(context.Background(), prompt)
 	if err != nil {
 		t.Fatalf("Classification failed: %v", err)
 	}

@@ -75,36 +75,38 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: gemini-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+    - model: gpt-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+    - model: opus-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
 routing:
   modelCards:
     - name: gemini-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad reasoning and final ReMoM synthesis.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, role:synthesis]
     - name: gpt-worker
       context_window_size: 1048576
       description: OpenRouter worker for frontier reasoning.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, role:worker]
     - name: opus-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon reasoning.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, role:worker]
 

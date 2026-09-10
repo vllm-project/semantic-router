@@ -72,6 +72,27 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 	})
 }
 
+func TestTextWindows(t *testing.T) {
+	modelPath := getModelPath(t)
+	if err := InitMmBertEmbeddingModel(modelPath, true); err != nil {
+		t.Fatalf("Failed to initialize model: %v", err)
+	}
+
+	text := "one two three four five"
+	windows, err := TextWindows(text, 4)
+	if err != nil {
+		t.Fatalf("Failed to window text: %v", err)
+	}
+	if len(windows) < 2 {
+		t.Fatalf("Expected overlapping windows, got %v", windows)
+	}
+	for _, window := range windows {
+		if window.Start < 0 || window.End <= window.Start || window.End > len(text) {
+			t.Fatalf("Invalid byte range: %+v", window)
+		}
+	}
+}
+
 // TestGetEmbedding2DMatryoshka tests the 2D Matryoshka embedding generation
 //
 //nolint:gocognit,cyclop,funlen // This legacy integration test keeps related model-backed cases together.

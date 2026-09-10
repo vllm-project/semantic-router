@@ -3,6 +3,11 @@ import { useMemo, useState } from 'react'
 import useBuiltInModelCatalog from '../hooks/useBuiltInModelCatalog'
 import type { ConnectedModelInput } from './ConfigPageConnectModelsDialog'
 import {
+  buildEvaluationRecordsConfig,
+  evaluationRecordsFields,
+  evaluationRecordsFormData,
+} from './configPageEvaluationRecordsSupport'
+import {
   buildAddedModelConfig,
   buildConnectedModelsConfig,
   buildDeletedModelsConfig,
@@ -201,11 +206,30 @@ function useReasoningFamilyInventory(props: ConfigPageModelsSectionProps) {
   return { search, setSearch, rows, view }
 }
 
+function useEvaluationRecordInventory(props: ConfigPageModelsSectionProps) {
+  const records = props.config?.evaluation?.records ?? []
+  const manage = () => {
+    if (!props.config) return
+    props.openEditModal(
+      'Evaluation Records',
+      evaluationRecordsFormData(props.config),
+      evaluationRecordsFields,
+      async (data) => {
+        if (!props.config) return
+        await props.saveConfig(buildEvaluationRecordsConfig(props.config, data.records))
+      },
+      'edit',
+    )
+  }
+  return { records, manage }
+}
+
 export function useConfigPageModelsSectionController(props: ConfigPageModelsSectionProps) {
   const filters = useModelInventoryFilters(props)
   const forms = useModelFormActions(props)
   const deletion = useModelDeletion(props, filters.referenceCounts)
   const reasoning = useReasoningFamilyInventory(props)
+  const evaluations = useEvaluationRecordInventory(props)
   const [connectOpen, setConnectOpen] = useState(false)
   const liveVerification = useModelLiveVerification(props.config)
   const { catalog, error: catalogError } = useBuiltInModelCatalog()
@@ -222,6 +246,7 @@ export function useConfigPageModelsSectionController(props: ConfigPageModelsSect
     forms,
     deletion,
     reasoning,
+    evaluations,
     connect: { open: connectOpen, setOpen: setConnectOpen, catalog, catalogError },
     liveVerification,
     toggleExpand,
