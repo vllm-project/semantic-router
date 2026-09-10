@@ -48,6 +48,16 @@ TRACKED_PACKAGES = (
     "numpy",
     "scikit-learn",
 )
+# What an artifact is made of, including the pytorch_model.bin shards a
+# checkpoint without safetensors ships. The manifest that hashes an artifact and
+# the download that fetches it read the same tuple.
+ARTIFACT_INCLUDE_GLOBS = (
+    "*.json",
+    "*.safetensors",
+    "*.bin",
+    "*.txt",
+    "*.model",
+)
 
 
 class ProvenanceError(RuntimeError):
@@ -203,13 +213,7 @@ def build_artifact_manifest(
     torch_dtype: str | None = None,
     tokenizer_class: str | None = None,
     served_paths: Sequence[str] = (),
-    include_globs: Sequence[str] = (
-        "*.json",
-        "*.safetensors",
-        "*.bin",
-        "*.txt",
-        "*.model",
-    ),
+    include_globs: Sequence[str] = ARTIFACT_INCLUDE_GLOBS,
     description: str | None = None,
 ) -> dict[str, Any]:
     """Hash the artifact on disk into a manifest whose identity is reproducible."""

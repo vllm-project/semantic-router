@@ -15,10 +15,8 @@ from typing import Any
 
 from artifact_inventory import ServedArtifact
 from provenance.crossref import verify_artifact_bytes
-from provenance.emit import resolve_hf_revision
+from provenance.emit import ARTIFACT_INCLUDE_GLOBS, resolve_hf_revision
 from provenance.manifest import load_manifest
-
-ARTIFACT_PATTERNS = ["*.json", "*.safetensors", "*.txt", "*.model"]
 
 logger = logging.getLogger("QualityBaseline")
 
@@ -92,7 +90,7 @@ def resolve_measured_artifact(
         return _verified(measured)
 
     repo = args.artifact_repo or served.hf_repo
-    patterns = ARTIFACT_PATTERNS
+    patterns = list(ARTIFACT_INCLUDE_GLOBS)
     if referenced is not None:
         identity = referenced["identity"]
         if args.artifact_repo is not None and args.artifact_repo != identity["repo"]:

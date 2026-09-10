@@ -1,6 +1,7 @@
 """Tests for the bytes a quality baseline run measures (#3197)."""
 
 import argparse
+import fnmatch
 import pathlib
 import sys
 
@@ -144,6 +145,53 @@ def test_downloaded_bytes_that_are_not_the_referenced_artifact_are_refused(
 
     with pytest.raises(BaselineError, match="cannot be measured under that identity"):
         resolve(manifest)
+
+
+def snapshot_matching(source, destination, patterns):
+    """Copy the files an allow_patterns download would fetch.
+
+    The Hub filters a repository by fnmatch before anything is transferred, so
+    a fake that filters the same way answers the question the real download
+    answers: is the closure the run asks for complete.
+    """
+    destination.mkdir()
+    for path in sorted(source.iterdir()):
+        if any(fnmatch.fnmatch(path.name, pattern) for pattern in patterns):
+            (destination / path.name).write_bytes(path.read_bytes())
+    return destination
+
+
+def test_a_bin_only_artifact_is_downloaded_with_its_weight_shards(
+    tmp_path, monkeypatch
+):
+    """A checkpoint without safetensors still has to arrive whole.
+
+    Transformers resolves sharded pytorch_model.bin weights through their index,
+    so fetching the index without the shards leaves the run with a directory it
+    cannot load.
+    """
+    repository = artifact_dir(tmp_path, "repository")
+    (repository / "pytorch_model.bin.index.json").write_bytes(b"{}")
+    (repository / "pytorch_model-00001-of-00002.bin").write_bytes(b"first shard")
+    (repository / "pytorch_model-00002-of-00002.bin").write_bytes(b"second shard")
+
+    monkeypatch.setattr(
+        baseline_artifact,
+        "download_artifact",
+        lambda repo, revision, patterns: snapshot_matching(
+            repository, tmp_path / "snapshot", patterns
+        ),
+    )
+    monkeypatch.setattr(baseline_artifact, "resolve_hf_revision", lambda repo: REVISION)
+
+    measured = resolve(None, artifact_repo=REPO)
+
+    assert sorted(path.name for path in measured.model_dir.iterdir()) == [
+        "config.json",
+        "pytorch_model-00001-of-00002.bin",
+        "pytorch_model-00002-of-00002.bin",
+        "pytorch_model.bin.index.json",
+    ]
 
 
 def test_a_candidate_repo_the_manifest_does_not_describe_is_refused(tmp_path):
