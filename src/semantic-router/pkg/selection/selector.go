@@ -181,6 +181,12 @@ type SelectionContext struct {
 	// that opt into session-aware candidate policy evaluation.
 	CandidateIterations []config.CandidateIterationConfig
 
+	// InputTokens is the request-context token estimate available before model
+	// selection. ExpectedOutputTokens is the caller's output budget when present.
+	// Cost-aware selectors use both to compare request-shaped estimated cost.
+	InputTokens          int
+	ExpectedOutputTokens int
+
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
 	CostWeight float64

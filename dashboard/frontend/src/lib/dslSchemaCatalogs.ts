@@ -39,6 +39,7 @@ export const PLUGIN_TYPES = [
   'response_jailbreak',
   'context_compression',
   'prompt_cache',
+  'shadow_dispatch',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -56,6 +57,7 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
   context_compression: 'Compress large tool outputs before provider dispatch',
   prompt_cache: 'Add bounded Anthropic prompt-cache markers after route selection',
+  shadow_dispatch: 'Send a bounded, sampled copy of the request to a secondary model without affecting the live response',
 }
 
 export const BACKEND_TYPES = [

@@ -84,7 +84,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	}
 	time.Sleep(3 * time.Second)
 
-	recordID, err := fetchFirstReplayRecordID(apiSession, opts.Verbose)
+	recordID, err := fetchFirstReplayRecordID(apiSession, "/v1/router_replay?limit=1", opts.Verbose)
 	if err != nil {
 		return "", err
 	}
@@ -112,10 +112,10 @@ type replayRecordSummary struct {
 	TurnIndex int    `json:"turn_index"`
 }
 
-// fetchFirstReplayRecordID calls GET /v1/router_replay?limit=1 and returns the
-// first record's ID. When verbose is true, prints the full JSON response.
-func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, verbose bool) (string, error) {
-	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay?limit=1")
+// fetchFirstReplayRecordID returns the first record ID from a Replay list target.
+// When verbose is true, it prints the full JSON response.
+func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, requestTarget string, verbose bool) (string, error) {
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, requestTarget)
 	if err != nil {
 		return "", fmt.Errorf("GET /v1/router_replay failed: %w", err)
 	}
@@ -316,10 +316,21 @@ func doRouterReplayManagementGET(
 	managementSession *fixtures.ServiceSession,
 	requestTarget string,
 ) (*fixtures.HTTPResponse, error) {
+	return doRouterReplayManagementGETAs(ctx, managementSession, requestTarget, routerReplayManagementToken)
+}
+
+// doRouterReplayManagementGETAs issues a management GET with an explicit
+// bearer token, so a case can pick the role its assertions need.
+func doRouterReplayManagementGETAs(
+	ctx context.Context,
+	managementSession *fixtures.ServiceSession,
+	requestTarget string,
+	token string,
+) (*fixtures.HTTPResponse, error) {
 	return fixtures.DoGETRequestWithHeaders(
 		ctx,
 		managementSession.HTTPClient(30*time.Second),
 		managementSession.BaseURL()+requestTarget,
-		map[string]string{"Authorization": "Bearer " + routerReplayManagementToken},
+		map[string]string{"Authorization": "Bearer " + token},
 	)
 }

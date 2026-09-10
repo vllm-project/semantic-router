@@ -26,6 +26,9 @@ var (
 	ErrSelectionResultRequired   = errors.New("selection result is required")
 	ErrSelectedModelRequired     = errors.New("selected model is required")
 	ErrSelectedModelNotCandidate = errors.New("selected model must reference a candidate model")
+	// ErrNoEligibleCandidates identifies an intentional fail-closed policy
+	// result. Callers must not turn it into a best-effort model fallback.
+	ErrNoEligibleCandidates = errors.New("selection policy rejected all candidates")
 )
 
 // ValidateSelectionResult checks the common public selector output contract.

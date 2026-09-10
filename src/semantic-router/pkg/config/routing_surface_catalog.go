@@ -36,6 +36,7 @@ const (
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
 	DecisionPluginPromptCache        = "prompt_cache"
+	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
 var supportedSignalTypes = []string{
@@ -73,6 +74,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
+	DecisionPluginShadowDispatch,
 	DecisionPluginResponseCache,
 	DecisionPluginPromptCache,
 	DecisionPluginSystemPrompt,

@@ -56,6 +56,9 @@ def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
         "providers": providers,
         "routing": routing,
     }
+    for key in ("evaluation", "evaluation_catalog"):
+        if key in source:
+            canonical[key] = deepcopy(source[key])
     for key in ("entrypoints", "recipes"):
         if key in source:
             canonical[key] = deepcopy(source[key])

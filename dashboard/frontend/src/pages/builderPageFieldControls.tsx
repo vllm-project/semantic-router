@@ -169,6 +169,7 @@ export const FieldEditor: React.FC<{
             type="number"
             step="any"
             min={schema.min}
+            max={schema.max}
             value={value !== undefined && value !== null ? String(value) : ""}
             onChange={(e) => {
               const v = e.target.value;

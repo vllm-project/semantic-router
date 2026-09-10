@@ -1,7 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -183,7 +183,8 @@ export interface ModelReasoningConfig {
   disabled?: string
 }
 
-export interface ModelEvaluationConfig {
+export interface EvaluationRecordConfig {
+  model: string
   benchmark: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -253,7 +254,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -350,7 +350,6 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   card_override?: RoutingModelCard
   modality?: string
   pricing?: {
@@ -431,7 +430,6 @@ export interface MemoryConfig {
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
-  quality_scoring?: MemoryQualityScoringConfig
   reflection?: MemoryReflectionConfig
 }
 
@@ -869,12 +867,6 @@ export interface DecisionPluginConfiguration {
   [key: string]: unknown
 }
 
-export interface MemoryQualityScoringConfig {
-  initial_strength_days?: number
-  prune_threshold?: number
-  max_memories_per_user?: number
-}
-
 export interface MemoryReflectionConfig {
   enabled?: boolean
   algorithm?: string
@@ -939,56 +931,19 @@ export interface VectorStoreMilvusSearchConfig {
   consistency_level?: string
 }
 
-export interface VectorStoreMilvusConnectionPoolConfig {
-  max_connections?: number
-  max_idle_connections?: number
-  acquire_timeout?: number
-}
-
-export interface VectorStoreMilvusBatchConfig {
-  insert_batch_size?: number
-  timeout?: number
-}
-
-export interface VectorStoreMilvusPerformanceConfig {
-  connection_pool?: VectorStoreMilvusConnectionPoolConfig
-  batch?: VectorStoreMilvusBatchConfig
-}
-
-export interface VectorStoreMilvusTTLConfig {
-  enabled?: boolean
-  timestamp_field?: string
-  cleanup_interval?: number
-}
-
-export interface VectorStoreMilvusCompactionConfig {
-  enabled?: boolean
-  interval?: number
-}
-
-export interface VectorStoreMilvusDataManagementConfig {
-  ttl?: VectorStoreMilvusTTLConfig
-  compaction?: VectorStoreMilvusCompactionConfig
-}
-
 export interface VectorStoreMilvusLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface VectorStoreMilvusDevelopmentConfig {
   drop_collection_on_startup?: boolean
   auto_create_collection?: boolean
-  verbose_errors?: boolean
 }
 
 export interface VectorStoreMilvusConfig {
   connection?: VectorStoreMilvusConnectionConfig
   collection?: VectorStoreMilvusCollectionConfig
   search?: VectorStoreMilvusSearchConfig
-  performance?: VectorStoreMilvusPerformanceConfig
-  data_management?: VectorStoreMilvusDataManagementConfig
   logging?: VectorStoreMilvusLoggingConfig
   development?: VectorStoreMilvusDevelopmentConfig
 }
@@ -1035,13 +990,10 @@ export interface SemanticCacheRedisSearchConfig {
 export interface SemanticCacheRedisDevelopmentConfig {
   drop_index_on_startup?: boolean
   auto_create_index?: boolean
-  verbose_errors?: boolean
 }
 
 export interface SemanticCacheRedisLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface SemanticCacheRedisConfig {
@@ -1293,6 +1245,11 @@ export interface ConfigData {
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
+  evaluation?: {
+    benchmarks?: CatalogBenchmark[]
+    indices?: CatalogIndex[]
+    records?: EvaluationRecordConfig[]
+  }
   routing?: RoutingConfig
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]

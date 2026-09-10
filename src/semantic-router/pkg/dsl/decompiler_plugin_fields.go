@@ -14,6 +14,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"context_compression": pluginFieldsStructuredConfiguration,
 	"prompt_cache":        pluginFieldsStructuredConfiguration,
 	"router_replay":       pluginFieldsRouterReplay,
+	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
 	"fast_response":       pluginFieldsFastResponse,

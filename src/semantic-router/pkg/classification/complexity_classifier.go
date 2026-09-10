@@ -32,6 +32,22 @@ type ComplexityClassifier struct {
 	hasImageCandidates bool   // True if any rule uses image_candidates
 	prototypeCfg       config.PrototypeScoringConfig
 	provider           embedding.Provider
+
+	// boundaries holds each rule's resolved cut points, keyed by rule name.
+	// Resolving at construction means a malformed pair fails at startup rather
+	// than on every request, and keeps the per-request path allocation-free.
+	boundaries map[string]config.ComplexityBoundaries
+}
+
+// boundariesFor returns a rule's resolved boundaries, falling back to the
+// symmetric reading of its threshold for a classifier built without the
+// resolved map (a direct construction in a test, say).
+func (c *ComplexityClassifier) boundariesFor(rule config.ComplexityRule) config.ComplexityBoundaries {
+	if bounds, ok := c.boundaries[rule.Name]; ok {
+		return bounds
+	}
+	threshold := float64(rule.Threshold)
+	return config.ComplexityBoundaries{HardAt: threshold, EasyAt: -threshold, HigherIsHarder: true}
 }
 
 type ComplexityRuleResult struct {
@@ -43,9 +59,21 @@ type ComplexityRuleResult struct {
 	ImageHardScore float64
 	ImageEasyScore float64
 	ImageMargin    float64
-	FusedMargin    float64
-	Confidence     float64
-	SignalSource   string
+	// FusedMargin is the number the verdict was read from. On the local path
+	// it is the fused text/image margin, signed and centred on zero. On the
+	// score.v1 path it carries the remote score in the model's own units; see
+	// publishComplexityValues for how each is keyed when published.
+	FusedMargin  float64
+	Confidence   float64
+	SignalSource string
+	// ConfidenceReported distinguishes a real confidence from the absence of
+	// one. The local path and label_distribution.v1 both report one; score.v1
+	// deliberately does not, because a score just short of a boundary is the
+	// least certain position rather than a strong one. The publisher leaves
+	// SignalConfidences untouched when this is false, so the decision engine
+	// falls back to its structural default and marks the pool unscored - the
+	// same treatment keyword, language and pii already get.
+	ConfidenceReported bool
 }
 
 // NewComplexityClassifier creates a new ComplexityClassifier with precomputed candidate embeddings.
@@ -78,6 +106,15 @@ func NewComplexityClassifier(
 		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 		provider:                provider,
+	}
+
+	c.boundaries = make(map[string]config.ComplexityBoundaries, len(rules))
+	for _, rule := range rules {
+		bounds, err := rule.EffectiveBoundaries()
+		if err != nil {
+			return nil, err
+		}
+		c.boundaries[rule.Name] = bounds
 	}
 
 	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{

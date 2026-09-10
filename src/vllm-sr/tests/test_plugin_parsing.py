@@ -71,6 +71,7 @@ class TestPluginTypeValidation:
             PluginType.TOOLS.value,
             PluginType.TOOL_SELECTION.value,
             PluginType.PROMPT_CACHE.value,
+            PluginType.SHADOW_DISPATCH.value,
         ]
 
         for plugin_type in valid_types:

@@ -303,8 +303,9 @@ type Decision struct {
 
 // SignalCombination defines how to combine multiple signals
 type SignalCombination struct {
-	// Operator defines the logical operator for combining conditions (AND/OR/NOT)
-	// NOT uses NOR semantics: matches only when none of the conditions match.
+	// Operator defines the logical operator for combining conditions (AND/OR/NOT).
+	// NOT is strictly unary: it takes exactly one child condition and negates its result.
+	// Compose NOR/NAND by nesting NOT around OR/AND.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
@@ -374,7 +375,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;prompt_cache;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;prompt_cache;rag;request_params;response-cache;response_cache;response_jailbreak;router_replay;semantic-cache;semantic_cache;shadow_dispatch;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

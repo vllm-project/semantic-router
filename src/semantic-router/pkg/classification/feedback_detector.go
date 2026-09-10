@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"sync"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -40,7 +42,15 @@ type FeedbackDetector struct {
 	mapping      *FeedbackMapping
 	initialized  bool
 	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	gate         admission.Admissioner
 	mu           sync.RWMutex
+}
+
+// SetAdmissioner installs the deployment's admission gate for model inference.
+func (d *FeedbackDetector) SetAdmissioner(gate admission.Admissioner) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.gate = gate
 }
 
 // NewFeedbackDetector creates a new feedback detector
@@ -78,6 +88,9 @@ func (d *FeedbackDetector) loadMapping(path string) error {
 	}
 	if len(idxToLabel) == 0 {
 		return fmt.Errorf("feedback mapping %s declares no labels", path)
+	}
+	if err := ValidateLabelMappingAgainstModelConfig(path, d.config.ModelID, idxToLabel); err != nil {
+		return err
 	}
 	d.mapping = &FeedbackMapping{
 		LabelToIdx: make(map[string]int, len(labelToIdx)),
@@ -161,7 +174,7 @@ func (d *FeedbackDetector) Initialize() error {
 }
 
 // Classify determines user feedback type from follow-up message using the ML model
-func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
+func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*FeedbackResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -177,13 +190,12 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		}, nil
 	}
 
-	var result candle.ClassResult
-	var err error
-	if d.useMmBERT32K {
-		result, err = candle.ClassifyMmBert32KFeedback(text)
-	} else {
-		result, err = candle.ClassifyFeedbackText(text)
-	}
+	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResult, error) {
+		if d.useMmBERT32K {
+			return candle.ClassifyMmBert32KFeedback(text)
+		}
+		return candle.ClassifyFeedbackText(text)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}

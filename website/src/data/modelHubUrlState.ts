@@ -4,28 +4,22 @@ import {
   type ModelHubDirectoryFilters,
 } from './modelHubDirectorySupport'
 
-export interface ModelHubBenchmarkUrlState {
-  filter: string
-  query: string
-  publisher: string
-}
+export type ModelHubArenaScope = 'all' | 'open' | 'virtual'
+export type ModelHubArenaLayer = 'overall' | 'capabilities' | 'benchmarks'
 
 export interface ModelHubUrlState {
   filters: ModelHubDirectoryFilters
   view: ModelView
   page: number
-  benchmark: ModelHubBenchmarkUrlState
+  arenaScope: ModelHubArenaScope
+  arenaLayer: ModelHubArenaLayer
+  arenaCapability: string
+  arenaBenchmark: string
   selectedModelID: string | null
 }
 
 const DEFAULT_VIEW: ModelView = 'list'
 const DEFAULT_PAGE = 1
-const DEFAULT_BENCHMARK: ModelHubBenchmarkUrlState = {
-  filter: 'all',
-  query: '',
-  publisher: 'all',
-}
-
 const filterParameters: Record<keyof ModelHubDirectoryFilters, string> = {
   search: 'q',
   kind: 'kind',
@@ -41,9 +35,14 @@ const knownParameters = [
   ...Object.values(filterParameters),
   'view',
   'page',
+  // Removed standalone Benchmark Explorer parameters are stripped when an old URL is updated.
   'benchmark',
   'benchmark_q',
   'benchmark_creator',
+  'arena',
+  'arena_layer',
+  'arena_capability',
+  'arena_benchmark',
   'model',
 ]
 
@@ -90,11 +89,18 @@ export function parseModelHubUrlState(search: string): ModelHubUrlState {
     },
     view: oneOf(parameters.get('view'), ['list', 'table'] as const, DEFAULT_VIEW),
     page: positivePage(parameters.get('page')),
-    benchmark: {
-      filter: parameters.get('benchmark') || DEFAULT_BENCHMARK.filter,
-      query: parameters.get('benchmark_q') ?? DEFAULT_BENCHMARK.query,
-      publisher: parameters.get('benchmark_creator') || DEFAULT_BENCHMARK.publisher,
-    },
+    arenaScope: oneOf(
+      parameters.get('arena'),
+      ['all', 'open', 'virtual'] as const,
+      'all',
+    ),
+    arenaLayer: oneOf(
+      parameters.get('arena_layer'),
+      ['overall', 'capabilities', 'benchmarks'] as const,
+      'overall',
+    ),
+    arenaCapability: parameters.get('arena_capability') || '',
+    arenaBenchmark: parameters.get('arena_benchmark') || '',
     selectedModelID: parameters.get('model') || null,
   }
 }
@@ -124,19 +130,10 @@ export function serializeModelHubUrlState(
   })
   setWhenDifferent(parameters, 'view', state.view, DEFAULT_VIEW)
   if (state.page !== DEFAULT_PAGE) parameters.set('page', String(state.page))
-  setWhenDifferent(
-    parameters,
-    'benchmark',
-    state.benchmark.filter,
-    DEFAULT_BENCHMARK.filter,
-  )
-  setWhenDifferent(parameters, 'benchmark_q', state.benchmark.query, DEFAULT_BENCHMARK.query)
-  setWhenDifferent(
-    parameters,
-    'benchmark_creator',
-    state.benchmark.publisher,
-    DEFAULT_BENCHMARK.publisher,
-  )
+  setWhenDifferent(parameters, 'arena', state.arenaScope, 'all')
+  setWhenDifferent(parameters, 'arena_layer', state.arenaLayer, 'overall')
+  setWhenDifferent(parameters, 'arena_capability', state.arenaCapability, '')
+  setWhenDifferent(parameters, 'arena_benchmark', state.arenaBenchmark, '')
   if (state.selectedModelID) parameters.set('model', state.selectedModelID)
 
   const serialized = parameters.toString()

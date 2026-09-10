@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -33,6 +34,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "DECISION_UNRESOLVED", err.Error())
 		return
 	}
+	if errors.Is(err, admission.ErrQueueFull) {
+		s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())
+		return
+	}
 	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
 }
 
@@ -45,7 +50,7 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 	}
 
 	// Use signal-driven classification (always uses signal-driven architecture)
-	response, err := s.classificationSvc.ClassifyIntent(req)
+	response, err := s.classificationSvc.ClassifyIntent(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
 		return
@@ -72,7 +77,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 		req.Options.Trace = true
 	}
 
-	response, err := s.classificationSvc.ClassifyIntentForEval(req)
+	response, err := s.classificationSvc.ClassifyIntentForEval(r.Context(), req)
 	if err != nil {
 		if response != nil {
 			s.writeJSONResponse(w, http.StatusServiceUnavailable, response)
@@ -93,7 +98,7 @@ func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *h
 		return
 	}
 
-	response, err := s.classificationSvc.DetectPII(req)
+	response, err := s.classificationSvc.DetectPII(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
 		return
@@ -181,6 +186,13 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 		return BatchClassificationRequest{}, false
 	}
 
+	if maxBatchSize := s.maxBatchSize(); maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
+		metrics.RecordBatchClassificationError("unified", "batch_too_large")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
+			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+		return BatchClassificationRequest{}, false
+	}
+
 	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
@@ -188,6 +200,14 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 	}
 
 	return req, true
+}
+
+func (s *ClassificationAPIServer) maxBatchSize() int {
+	cfg := s.currentConfig()
+	if cfg == nil {
+		return 0
+	}
+	return cfg.API.BatchClassification.MaxBatchSize
 }
 
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {
@@ -357,7 +377,7 @@ func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseW
 		return
 	}
 
-	response, err := s.classificationSvc.ClassifyFactCheck(req)
+	response, err := s.classificationSvc.ClassifyFactCheck(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
 		return
@@ -374,7 +394,7 @@ func (s *ClassificationAPIServer) handleUserFeedbackClassification(w http.Respon
 		return
 	}
 
-	response, err := s.classificationSvc.ClassifyUserFeedback(req)
+	response, err := s.classificationSvc.ClassifyUserFeedback(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
 		return

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -100,7 +101,7 @@ func (d *HallucinationDetector) IsNLIInitialized() bool {
 
 // ClassifyNLI classifies the relationship between premise and hypothesis.
 // Returns: ENTAILMENT (supports), NEUTRAL (can't verify), CONTRADICTION (conflicts).
-func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
+func (d *HallucinationDetector) ClassifyNLI(ctx context.Context, premise, hypothesis string) (*NLIResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -108,7 +109,7 @@ func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIRes
 		return nil, fmt.Errorf("NLI model not initialized")
 	}
 
-	candleResult, err := candle.ClassifyNLI(premise, hypothesis)
+	candleResult, err := admitNLI(ctx, d.explainerGate, candle.ClassifyNLI, premise, hypothesis)
 	if err != nil {
 		return nil, fmt.Errorf("NLI classification error: %w", err)
 	}
@@ -123,9 +124,38 @@ func (d *HallucinationDetector) ClassifyNLI(premise, hypothesis string) (*NLIRes
 	}, nil
 }
 
+// detectHallucinationsWithNLIInChunks scans a long answer the way
+// detectHallucinationsInChunks does, because the NLI entry point windows only
+// its premise and truncates the answer the same way.
+func detectHallucinationsWithNLIInChunks(context, question, answer string, threshold float32) (*candle.EnhancedHallucinationDetectionResult, error) {
+	chunks := hallucinationAnswerChunks(answer)
+	if len(chunks) <= 1 {
+		return candle.DetectHallucinationsWithNLI(context, question, answer, threshold)
+	}
+
+	merged := &candle.EnhancedHallucinationDetectionResult{Confidence: 1}
+	seen := make(map[string]struct{})
+	for _, chunk := range chunks {
+		result, err := candle.DetectHallucinationsWithNLI(context, question, chunk, threshold)
+		if err != nil {
+			return nil, err
+		}
+		merged.Confidence = mergeChunkConfidence(merged.HasHallucination, merged.Confidence, result.HasHallucination, result.Confidence)
+		merged.HasHallucination = merged.HasHallucination || result.HasHallucination
+		for _, span := range result.Spans {
+			if _, duplicate := seen[span.Text]; duplicate {
+				continue
+			}
+			seen[span.Text] = struct{}{}
+			merged.Spans = append(merged.Spans, span)
+		}
+	}
+	return merged, nil
+}
+
 // DetectWithNLI detects hallucinations and provides NLI-based explanations.
 // It combines token-level hallucination detection with NLI classification.
-func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) (*EnhancedHallucinationResult, error) {
+func (d *HallucinationDetector) DetectWithNLI(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -141,13 +171,17 @@ func (d *HallucinationDetector) DetectWithNLI(context, question, answer string) 
 		}, nil
 	}
 
-	if context == "" {
+	if contextText == "" {
 		return nil, fmt.Errorf("context is required for hallucination detection")
 	}
 
 	hallucinationThreshold := d.hallucinationThreshold()
 	nliThreshold := d.nliThreshold()
-	candleResult, err := candle.DetectHallucinationsWithNLI(context, question, answer, hallucinationThreshold)
+	candleResult, err := admitModelInference(ctx, d.gate, admissionDeploymentHallucinationDetector, func() (*candle.EnhancedHallucinationDetectionResult, error) {
+		return admitModelInference(ctx, d.explainerGate, admissionDeploymentHallucinationExplainer, func() (*candle.EnhancedHallucinationDetectionResult, error) {
+			return detectHallucinationsWithNLIInChunks(contextText, question, answer, hallucinationThreshold)
+		})
+	})
 	if err != nil {
 		return nil, fmt.Errorf("enhanced hallucination detection error: %w", err)
 	}

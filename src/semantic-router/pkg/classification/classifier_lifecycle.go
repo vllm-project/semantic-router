@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -20,6 +21,16 @@ func BuildClassifier(
 	piiMapping *PIIMapping,
 	jailbreakMapping *JailbreakMapping,
 ) (*Classifier, error) {
+	return buildClassifierWithAdmission(cfg, categoryMapping, piiMapping, jailbreakMapping, nil)
+}
+
+func buildClassifierWithAdmission(
+	cfg *config.RouterConfig,
+	categoryMapping *CategoryMapping,
+	piiMapping *PIIMapping,
+	jailbreakMapping *JailbreakMapping,
+	admissionRegistry *admission.Registry,
+) (*Classifier, error) {
 	if err := config.ValidateCategoryModelBackend(cfg); err != nil {
 		return nil, err
 	}
@@ -28,10 +39,14 @@ func BuildClassifier(
 		return nil, err
 	}
 	piiInitializer, piiInference := buildPIIDependencies(cfg)
-	builder := newClassifierOptionBuilder(cfg, []option{
+	initialOptions := []option{
 		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
 		withPII(piiMapping, piiInitializer, piiInference),
-	})
+	}
+	if admissionRegistry != nil {
+		initialOptions = append(initialOptions, withAdmissionRegistry(admissionRegistry))
+	}
+	builder := newClassifierOptionBuilder(cfg, initialOptions)
 	options, err := builder.build(categoryMapping)
 	if err != nil {
 		return nil, err
@@ -149,6 +164,8 @@ func (c *Classifier) Close() error {
 
 	closeResource("MCP category classifier", c.mcpCategoryInitializer)
 	closeResource("jailbreak classifier", c.jailbreakInference)
+	closeResource("complexity score backend", c.complexityScoreBackend)
+	closeResource("complexity label backend", c.complexityLabelBackend)
 	genericNames := make([]string, 0, len(c.genericClassifiers))
 	for name := range c.genericClassifiers {
 		genericNames = append(genericNames, name)

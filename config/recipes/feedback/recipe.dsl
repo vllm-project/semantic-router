@@ -113,7 +113,6 @@ MODEL google/gemini-3.1-pro {
   description: "Mid-cost recovery lane for repeated dissatisfaction, debugging, and answer repair."
   capabilities: ["answer_repair", "debugging", "reasoning"]
   tags: ["tier:repair", "purpose:feedback_recovery"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.88 } }]
   modality: "text"
 }
 
@@ -127,7 +126,6 @@ MODEL openai/gpt5.4 {
   description: "Premium lane reserved for verified or high-stakes dissatisfaction recovery."
   capabilities: ["verified_reasoning", "evidence_synthesis", "high_stakes"]
   tags: ["tier:verified", "purpose:feedback_recovery"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.94 } }]
   modality: "text"
 }
 
@@ -136,7 +134,6 @@ MODEL qwen/qwen3.5-rocm {
   description: "Cheap default lane for standard follow-ups and lightweight clarification."
   capabilities: ["cheap_followup", "concise_rewrite", "general_chat"]
   tags: ["tier:cheap", "purpose:default_feedback"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.72 } }]
   modality: "text"
 }
 
