@@ -45,6 +45,7 @@ type queuedOutcome struct {
 	recorder *Recorder
 	id       string
 	outcome  Outcome
+	terminal *OutcomeReservation
 }
 
 type outcomeQueue struct {
@@ -52,6 +53,8 @@ type outcomeQueue struct {
 	started   bool
 	closed    bool
 	events    chan queuedOutcome
+	reserved  chan queuedOutcome
+	attempts  int
 	done      chan struct{}
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -67,7 +70,8 @@ func newOutcomeQueue(capacity int, grace time.Duration) *outcomeQueue {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &outcomeQueue{
 		events: make(chan queuedOutcome, capacity), done: make(chan struct{}),
-		ctx: ctx, cancel: cancel, grace: grace,
+		reserved: make(chan queuedOutcome, 2*capacity),
+		ctx:      ctx, cancel: cancel, grace: grace,
 	}
 }
 
@@ -77,10 +81,7 @@ func (q *outcomeQueue) submit(event queuedOutcome) bool {
 	if q.closed {
 		return false
 	}
-	if !q.started {
-		q.started = true
-		go q.run()
-	}
+	q.startLocked()
 	select {
 	case q.events <- event:
 		return true
@@ -91,12 +92,31 @@ func (q *outcomeQueue) submit(event queuedOutcome) bool {
 
 func (q *outcomeQueue) run() {
 	defer close(q.done)
-	for event := range q.events {
+	events, reserved := q.events, q.reserved
+	for events != nil || reserved != nil {
+		var event queuedOutcome
+		select {
+		case next, ok := <-events:
+			if !ok {
+				events = nil
+				continue
+			}
+			event = next
+		case next, ok := <-reserved:
+			if !ok {
+				reserved = nil
+				continue
+			}
+			event = next
+		}
 		if q.ctx.Err() != nil {
 			metrics.RecordPluginExecution("router_replay_outcome", "", "dropped", 0)
-			continue
+		} else {
+			q.write(event)
 		}
-		q.write(event)
+		if event.terminal != nil {
+			event.terminal.release()
+		}
 	}
 }
 
@@ -120,6 +140,9 @@ func (q *outcomeQueue) close() error {
 		q.mu.Lock()
 		q.closed = true
 		close(q.events)
+		if q.attempts == 0 {
+			close(q.reserved)
+		}
 		if !q.started {
 			close(q.done)
 		}

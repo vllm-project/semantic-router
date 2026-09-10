@@ -195,3 +195,65 @@ func TestMemoryReceipts_SlowScheduledReceiptDoesNotOccupyPersistenceWorker(t *te
 	assert.Equal(t, "scheduled", record.Outcomes[0].Verdict)
 	assert.Equal(t, "completed", record.Outcomes[1].Verdict)
 }
+
+func TestMemoryReceipts_AcceptedTerminalSurvivesSaturation(t *testing.T) {
+	for _, verdict := range []string{"completed", "timeout"} {
+		t.Run(verdict, func(t *testing.T) {
+			backend := &slowReceiptStore{Storage: store.NewMemoryStore(10, 0), entered: make(chan struct{}, 1), release: make(chan struct{})}
+			recorder := routerreplay.NewRecorder(backend)
+			_, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: verdict})
+			require.NoError(t, err)
+			runner := memory.NewPersistenceRunner(100*time.Millisecond, 1, 1)
+			workRelease := make(chan struct{})
+			var workOnce, replayOnce sync.Once
+			releaseWork := func() { workOnce.Do(func() { close(workRelease) }) }
+			releaseReplay := func() { replayOnce.Do(func() { close(backend.release) }) }
+			t.Cleanup(func() {
+				releaseWork()
+				releaseReplay()
+				assert.NoError(t, runner.RetireAndWait(time.Second))
+				assert.NoError(t, recorder.DrainOutcomes())
+			})
+			started := make(chan struct{})
+			runner.Submit(context.Background(), memory.PersistenceJob{
+				Run: func(context.Context) (memory.PersistenceOutcome, error) {
+					close(started)
+					<-workRelease
+					return memory.PersistenceOutcome{}, nil
+				}, Report: func(string, string, bool, error) {},
+			})
+			requireReceiptSignal(t, started)
+			router := &OpenAIRouter{
+				Config:          &config.RouterConfig{Memory: config.MemoryConfig{AutoStore: true}},
+				MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}), memoryPersistence: runner, ReplayRecorder: recorder,
+			}
+			ctx := persistenceRegressionContext("reserved-" + verdict)
+			ctx.RouterReplayID = verdict
+			terminalMetric := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", "reserved-"+verdict, verdict)
+			before := testutil.ToFloat64(terminalMetric)
+			router.scheduleResponseMemoryStoreText(ctx, "Deploy a regional cluster and use a load balancer for the service.")
+			requireReceiptSignal(t, backend.entered)
+			for i := 0; i < routerreplay.DefaultOutcomeQueueCapacity; i++ {
+				require.True(t, recorder.TryAppendOutcome(verdict, routerreplay.Outcome{Verdict: "ordinary"}))
+			}
+			require.False(t, recorder.TryAppendOutcome(verdict, routerreplay.Outcome{}))
+			if verdict == "completed" {
+				releaseWork()
+			}
+			require.Eventually(t, func() bool { return testutil.ToFloat64(terminalMetric) == before+1 }, time.Second, time.Millisecond)
+			releaseWork()
+			require.NoError(t, runner.RetireAndWait(time.Second))
+			releaseReplay()
+			require.NoError(t, recorder.DrainOutcomes())
+			record, found := recorder.GetRecord(verdict)
+			require.True(t, found)
+			var receipts []string
+			for _, outcome := range record.Outcomes {
+				if outcome.Metadata["kind"] == "memory_persistence_receipt" {
+					receipts = append(receipts, outcome.Verdict)
+				}
+			}
+			assert.Equal(t, []string{"scheduled", verdict}, receipts)
+		})
+	}
+}

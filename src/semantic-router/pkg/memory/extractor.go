@@ -200,11 +200,19 @@ func (e *MemoryExtractor) ProcessResponse(
 	userMessage string,
 	assistantResponse string,
 ) error {
-	_, err := e.ProcessResponseWithHistory(ctx, sessionID, userID, userMessage, assistantResponse, nil)
+	return e.ProcessResponseWithHistory(ctx, sessionID, userID, userMessage, assistantResponse, nil)
+}
+
+// ProcessResponseWithHistory preserves the error-only API for existing callers.
+func (e *MemoryExtractor) ProcessResponseWithHistory(
+	ctx context.Context, sessionID, userID, userMessage, assistantResponse string,
+	history []openai.ChatCompletionMessageParamUnion,
+) error {
+	_, err := e.ProcessResponseWithHistoryCount(ctx, sessionID, userID, userMessage, assistantResponse, history)
 	return err
 }
 
-// ProcessResponseWithHistory stores the current conversation turn directly in
+// ProcessResponseWithHistoryCount stores the current conversation turn directly in
 // the vector store (Q: ... / A: ...) and, every N turns, a session-level
 // rolling window chunk that concatenates recent turns for multi-hop retrieval.
 //
@@ -217,7 +225,7 @@ func (e *MemoryExtractor) ProcessResponse(
 // the session window trigger.
 // The returned count is the number of chunks successfully stored. A write failure
 // is returned even if an earlier chunk succeeded; successful writes are not rolled back.
-func (e *MemoryExtractor) ProcessResponseWithHistory(
+func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 	ctx context.Context,
 	_ string, // sessionID (unused, kept for interface compatibility)
 	userID string,

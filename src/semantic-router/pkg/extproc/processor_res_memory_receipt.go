@@ -16,6 +16,15 @@ type memoryPersistenceReceipt struct {
 	decisionKey string
 	replayID    string
 	recorder    *routerreplay.Recorder
+	reservation *routerreplay.OutcomeReservation
+}
+
+func (receipt *memoryPersistenceReceipt) reserve() bool {
+	if receipt.replayID == "" || receipt.recorder == nil {
+		return true
+	}
+	receipt.reservation = receipt.recorder.TryReserveOutcome(receipt.replayID)
+	return receipt.reservation != nil
 }
 
 func (r *OpenAIRouter) snapshotMemoryPersistenceReceipt(ctx *RequestContext) memoryPersistenceReceipt {
@@ -81,7 +90,7 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 	if status == "scheduled" {
 		phase = "scheduled"
 	}
-	if !recorder.TryAppendOutcome(receipt.replayID, routerreplay.Outcome{
+	outcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
 		Source:    "router",
 		Target:    "router",
@@ -93,7 +102,16 @@ func (receipt memoryPersistenceReceipt) appendReplayOutcome(
 			"phase":     phase,
 			"fail_open": fmt.Sprintf("%t", failOpen),
 		},
-	}) {
+	}
+	if receipt.reservation != nil {
+		if phase == "scheduled" {
+			receipt.reservation.Scheduled(outcome)
+		} else {
+			receipt.reservation.Finish(outcome)
+		}
+		return
+	}
+	if !recorder.TryAppendOutcome(receipt.replayID, outcome) {
 		metrics.RecordPluginExecution("memory_persistence_receipt", receipt.decisionKey, "dropped", 0)
 	}
 }

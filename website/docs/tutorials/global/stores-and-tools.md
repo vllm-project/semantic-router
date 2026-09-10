@@ -135,42 +135,41 @@ non-positive value uses the 1 MiB default.
 
 #### Write path bounds
 
-Memory is written after the response is sent, so a slow store never delays an
-answer. `persistence` bounds that background work:
+Response handling does not wait for Memory persistence to complete. Identity
+checks and capacity reservation precede bounded history snapshots; encoding and
+writes run in the background. Other response-path Replay operations remain
+synchronous.
 
-```yaml
-global:
-  stores:
-    memory:
-      persistence:
-        timeout_seconds: 30
-        concurrency: 8
-        queue: 64
-        shutdown_grace_seconds: 5
-```
+Configure `global.stores.memory.persistence`:
 
 | Field | Meaning | Default |
 | --- | --- | --- |
-| `timeout_seconds` | Bounds queue wait, extraction, and writing from acceptance, reporting one terminal timeout | 30 |
-| `concurrency` | Writes running at once | 8 |
-| `queue` | Writes waiting for a worker | 64 |
-| `shutdown_grace_seconds` | Time a reload or shutdown allows queued and in-flight writes to finish before cancelling them | 5 |
+| `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing | 30 |
+| `concurrency` | Worker slots, including preparation and writes | 8 |
+| `queue` | Reserved attempts waiting for a worker | 64 |
+| `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation | 5 |
 
 Omit a field or set it to `0` to take the default.
 
-Queued attempts report timeout or shutdown cancellation without waiting for a
-worker and do not execute after cancellation. Native embedding calls cannot be
-interrupted, so timed-out work retains its worker slot and resources until it
-exits; shutdown defers cleanup while work remains active. Cancellation does not
-undo writes already accepted by a backend.
+History is limited to 256 messages/items across request and retained Responses
+history, 1 MiB of payload, 4096 structural nodes, and 32 nested content levels.
+Exceeding a limit skips persistence with `skipped` / `history_too_large` and
+`fail_open=true`, preserving the model response without truncating history.
+Missing user identity skips preparation. Background contexts retain only span
+context and tracestate.
 
-When every worker is busy and the queue is full, a new write is **dropped**
-rather than held or blocked, so a slow backend cannot grow unbounded state.
-Dropped writes are reported as `rejected` / `queue_full`, and writes arriving
-after a reload retired the pool as `rejected` / `shutting_down`; both are logged
-with their request ID. Track them with
-`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`
-and raise `concurrency` before `queue`.
+For requests with a Router Replay record, accepted attempts reserve capacity for
+`scheduled` and one terminal receipt, protecting both from queue saturation.
+Storage errors, shutdown drain expiry, or process crashes can still lose receipts.
+Exhausted persistence or receipt capacity rejects new writes with `queue_full` or
+`receipt_queue_full`; retired pools use `shutting_down`. These remain fail-open
+and are logged by request ID. Monitor
+`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`.
+
+Timeout and cancellation report one terminal outcome even while queued; cancelled
+jobs do not start. Native embedding calls cannot be interrupted, so active work
+retains its worker slot and resources until exit. Cancellation does not undo
+writes already accepted by a backend.
 
 ### Vector Store
 

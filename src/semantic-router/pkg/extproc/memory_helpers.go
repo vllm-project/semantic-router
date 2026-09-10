@@ -55,11 +55,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 
 	// Require userID - without it, memory would be orphaned (unretrievable)
 	if userID == "" {
-		if state := ctx.ResponseObjectState; state != nil && state.ConversationHistory != nil {
-			history = convertStoredResponsesToMessages(state.ConversationHistory)
-		}
-		history = append(history, cloneSemanticMessages(ctx.SemanticRequest.Messages)...)
-		return "", "", history, fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"userID is required for memory extraction but the authenticated tenant has no user identity",
 		)
 	}
@@ -151,6 +147,9 @@ func deriveSessionIDFromRequestID(ctx *RequestContext) string {
 func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []llmprotocol.Message {
 	var messages []llmprotocol.Message
 	for _, stored := range storedResponses {
+		if stored == nil {
+			continue
+		}
 		messages = appendInputMessages(messages, stored.Input)
 		messages = appendOutputMessages(messages, stored.OutputText, stored.Output)
 	}

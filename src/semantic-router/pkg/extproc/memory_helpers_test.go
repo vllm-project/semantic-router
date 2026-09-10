@@ -60,7 +60,7 @@ func TestExtractMemoryInfoRejectsMissingAuthenticatedUser(t *testing.T) {
 	ctx := &RequestContext{SemanticRequest: &llmprotocol.Request{Generation: 1, Messages: []llmprotocol.Message{
 		neutralTextMessage(llmprotocol.RoleUser, "hello"),
 	}}}
-	if _, _, history, err := extractMemoryInfo(ctx); err == nil || len(history) != 1 {
+	if _, _, history, err := extractMemoryInfo(ctx); err == nil || len(history) != 0 {
 		t.Fatalf("history=%+v err=%v", history, err)
 	}
 }

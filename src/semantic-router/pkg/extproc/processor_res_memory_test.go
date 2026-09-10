@@ -283,11 +283,8 @@ func TestScheduleResponseMemoryStore_RejectedWriteIsItsOwnMetricStatus(t *testin
 		MemoryExtractor:   memory.NewMemoryChunkStore(&noopMemoryStore{}),
 		memoryPersistence: runner,
 	}
-	reqCtx := &RequestContext{
-		RequestID:               "req-memory-persistence-rejected",
-		VSRSelectedDecisionName: "balance",
-		TraceContext:            context.Background(),
-	}
+	reqCtx := persistenceRegressionContext("balance")
+	reqCtx.RequestID = "req-memory-persistence-rejected"
 
 	rejected := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", "balance", "rejected")
 	skipped := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", "balance", "skipped")

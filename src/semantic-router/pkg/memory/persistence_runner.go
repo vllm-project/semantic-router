@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -36,6 +38,7 @@ type queuedJob struct {
 	ctx           context.Context
 	job           PersistenceJob
 	scheduledDone chan struct{}
+	preparedDone  chan struct{}
 	finish        func()
 }
 
@@ -102,14 +105,24 @@ func reportSafely(job PersistenceJob, status, reason string, failOpen bool, caus
 }
 
 func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob) {
+	if reservation := r.TryReserve(traceCtx, job.Report); reservation != nil {
+		reservation.Start(job.Run)
+	}
+}
+
+// TryReserve admits preparation before request-owned data is copied. A reserved
+// job occupies queue/worker capacity until Start or Abort publishes its work.
+// Callers must defer Abort so preparation failures cannot strand the reservation.
+func (r *PersistenceRunner) TryReserve(traceCtx context.Context, report func(string, string, bool, error)) *PersistenceReservation {
+	job := PersistenceJob{Report: report}
 	r.mu.Lock()
 	if r.retired {
 		r.mu.Unlock()
 		reportSafely(job, "rejected", "shutting_down", true, nil)
-		return
+		return nil
 	}
 
-	queued := &queuedJob{job: job, scheduledDone: make(chan struct{})}
+	queued := &queuedJob{job: job, scheduledDone: make(chan struct{}), preparedDone: make(chan struct{})}
 	select {
 	case r.jobs <- queued:
 		// Start the deadline and cancellation reporter at acceptance, so queued
@@ -118,22 +131,49 @@ func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob)
 		r.mu.Unlock()
 		reportSafely(job, "scheduled", "queue_accepted", false, nil)
 		close(queued.scheduledDone)
+		return &PersistenceReservation{queued: queued}
 	default:
 		r.mu.Unlock()
 		reportSafely(job, "rejected", "queue_full", true, nil)
+		return nil
 	}
+}
+
+type PersistenceReservation struct {
+	queued *queuedJob
+	once   sync.Once
+}
+
+func (r *PersistenceReservation) Context() context.Context { return r.queued.ctx }
+
+func (r *PersistenceReservation) Start(run func(context.Context) (PersistenceOutcome, error)) {
+	r.once.Do(func() {
+		r.queued.job.Run = run
+		close(r.queued.preparedDone)
+	})
+}
+
+// Abort is harmless after Start. Until either is called, even a timed-out
+// preparation retains capacity and generation resources.
+func (r *PersistenceReservation) Abort(outcome PersistenceOutcome, err error) {
+	r.Start(func(context.Context) (PersistenceOutcome, error) { return outcome, err })
 }
 
 func (r *PersistenceRunner) worker() {
 	defer r.workers.Done()
 	for queued := range r.jobs {
 		<-queued.scheduledDone
+		<-queued.preparedDone
 		r.run(queued)
 	}
 }
 
 func (r *PersistenceRunner) prepareJob(traceCtx context.Context, queued *queuedJob) {
-	jobCtx, cancel := context.WithTimeout(context.WithoutCancel(traceCtx), r.timeout)
+	detached := context.Background()
+	if traceCtx != nil {
+		detached = trace.ContextWithSpanContext(detached, trace.SpanContextFromContext(traceCtx))
+	}
+	jobCtx, cancel := context.WithTimeout(detached, r.timeout)
 	stop := context.AfterFunc(r.baseCtx, cancel)
 	if r.baseCtx.Err() != nil {
 		cancel()

@@ -31,13 +31,13 @@ func TestExtractionCancellationPreventsSessionWrite(t *testing.T) {
 		openai.UserMessage("How does it handle concurrent requests?"),
 		openai.AssistantMessage("It provides goroutines and channels."),
 	}
-	count, err := extractor.ProcessResponseWithHistory(ctx, "session", "user",
+	count, err := extractor.ProcessResponseWithHistoryCount(ctx, "session", "user",
 		"Explain how Go concurrency works in backend services.",
 		"Goroutines let backend services handle concurrent requests efficiently.", history)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, count, "preserve the already accepted turn")
 	require.Equal(t, 1, backend.writes, "do not start another write after cancellation")
-	count, err = extractor.ProcessResponseWithHistory(ctx, "session", "user", "retry", "response", history)
+	count, err = extractor.ProcessResponseWithHistoryCount(ctx, "session", "user", "retry", "response", history)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Zero(t, count)
 	require.Equal(t, 1, backend.writes)

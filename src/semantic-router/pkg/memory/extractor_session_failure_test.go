@@ -44,7 +44,7 @@ func TestProcessResponseWithHistory_SessionFailurePreservesSuccessfulWrites(t *t
 				sdkAssistantMessage("It provides goroutines and channels."),
 			}
 
-			count, err := extractor.ProcessResponseWithHistory(context.Background(), "session", "user",
+			count, err := extractor.ProcessResponseWithHistoryCount(context.Background(), "session", "user",
 				tc.user, "Goroutines let backend services handle concurrent requests efficiently.", history)
 
 			require.ErrorIs(t, err, cause)

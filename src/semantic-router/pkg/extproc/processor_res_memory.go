@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
 func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
@@ -53,56 +54,73 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		return
 	}
 
-	// Snapshot request-owned state before dispatch. extractMemoryInfo deep-copies
-	// history; protocol encoding and parsing remain in the worker.
+	// Reject missing identity before inspecting or copying conversation content.
+	if ctx.SemanticRequest == nil || len(ctx.SemanticRequest.Messages) == 0 || extractUserID(ctx) == "" {
+		r.recordMemoryPersistenceOutcome(ctx, "skipped", "memory_info_unavailable", false, nil)
+		return
+	}
+	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
+	if !receipt.reserve() {
+		receipt.record("rejected", "receipt_queue_full", true, nil)
+		return
+	}
+	reservation := r.memoryPersistence.TryReserve(ctx.TraceContext, receipt.record)
+	if reservation == nil {
+		return
+	}
+	defer reservation.Abort(memory.PersistenceOutcome{Status: "extraction_failed", Reason: "snapshot_failed", FailOpen: true}, nil)
+	var retained []*responseapi.StoredResponse
+	if ctx.ResponseObjectState != nil {
+		retained = ctx.ResponseObjectState.ConversationHistory
+	}
+	if err := validateMemoryHistoryBudget(reservation.Context(), ctx.SemanticRequest.Messages, retained); err != nil {
+		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "history_too_large", FailOpen: true}, err)
+		return
+	}
+	// Snapshot while the request still owns its mutable state. Preparation is
+	// admitted and bounded; protocol encoding remains in the worker.
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	sessionID, userID, history, infoErr := extractMemoryInfo(ctx)
+	if infoErr != nil {
+		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "memory_info_unavailable"}, infoErr)
+		return
+	}
 	historyCount := len(history)
 	extractor := r.MemoryExtractor
-	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
-	r.memoryPersistence.Submit(ctx.TraceContext, memory.PersistenceJob{
-		Run: func(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-			if infoErr != nil {
-				return memory.PersistenceOutcome{
-					Status: "skipped",
-					Reason: "memory_info_unavailable",
-				}, infoErr
-			}
-			extractorHistory, historyErr := r.memoryHistoryForExtractor(history)
-			if historyErr != nil {
-				return memory.PersistenceOutcome{
-					Status:   "extraction_failed",
-					Reason:   "history_encode_error",
-					FailOpen: true,
-				}, historyErr
-			}
+	reservation.Start(func(jobCtx context.Context) (memory.PersistenceOutcome, error) {
+		extractorHistory, historyErr := r.memoryHistoryForExtractor(history)
+		if historyErr != nil {
+			return memory.PersistenceOutcome{
+				Status:   "extraction_failed",
+				Reason:   "history_encode_error",
+				FailOpen: true,
+			}, historyErr
+		}
 
-			logging.Infof(
-				"Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
-				sessionID,
-				userID,
-				len(currentUserMessage),
-				len(currentAssistantResponse),
-				historyCount,
-			)
+		logging.Infof(
+			"Memory store: sessionID=%s, userID=%s, userMsg=%d chars, assistantMsg=%d chars, history=%d msgs",
+			sessionID,
+			userID,
+			len(currentUserMessage),
+			len(currentAssistantResponse),
+			historyCount,
+		)
 
-			storedCount, err := extractor.ProcessResponseWithHistory(
-				jobCtx,
-				sessionID,
-				userID,
-				currentUserMessage,
-				currentAssistantResponse,
-				extractorHistory,
-			)
-			if err != nil {
-				return memory.PersistenceOutcome{}, err
-			}
-			if storedCount == 0 {
-				return memory.PersistenceOutcome{Status: "skipped", Reason: "no_write"}, nil
-			}
-			return memory.PersistenceOutcome{}, nil
-		},
-		Report: receipt.record,
+		storedCount, err := extractor.ProcessResponseWithHistoryCount(
+			jobCtx,
+			sessionID,
+			userID,
+			currentUserMessage,
+			currentAssistantResponse,
+			extractorHistory,
+		)
+		if err != nil {
+			return memory.PersistenceOutcome{}, err
+		}
+		if storedCount == 0 {
+			return memory.PersistenceOutcome{Status: "skipped", Reason: "no_write"}, nil
+		}
+		return memory.PersistenceOutcome{}, nil
 	})
 }
 
