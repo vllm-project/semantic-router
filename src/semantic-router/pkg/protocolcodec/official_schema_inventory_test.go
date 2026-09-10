@@ -31,7 +31,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -90,7 +90,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
 			transport:  fields("stream_options"),
 		},
 		{

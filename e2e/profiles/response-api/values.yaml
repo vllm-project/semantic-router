@@ -8,19 +8,38 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: openai/gpt-oss-20b
+      model: openai/gpt-oss-20b
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
           - name: test-endpoint
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
       - name: mock/native-responses
         api_format: responses
         backend_refs:
           - name: test-endpoint
+            provider: vllm
             endpoint: mock-vllm.default.svc.cluster.local:8000
             weight: 1
+      # Built-in catalog coverage: the card supplies the provider-native model ID,
+      # reasoning family, pricing, limits, capabilities, and presentation.
+      - name: astra-chat
+        catalog: openai/gpt-6-astra
+        backend_refs:
+          - name: mock-openai
+            provider: openai
+            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            api_key_env: VSR_E2E_OPENAI_API_KEY
+      - name: astra-responses
+        catalog: openai/gpt-6-astra
+        api_format: responses
+        backend_refs:
+          - name: mock-openai
+            provider: openai
+            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            api_key_env: VSR_E2E_OPENAI_API_KEY
   routing:
     decisions:
       - name: default_decision
@@ -128,3 +147,7 @@ resources:
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false
+
+extraEnv:
+  - name: VSR_E2E_OPENAI_API_KEY
+    value: astra-fixture-key

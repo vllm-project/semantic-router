@@ -29,6 +29,16 @@ type EnhancedHallucinationSpan struct {
 	Explanation             string  `json:"explanation"` // Human-readable explanation
 }
 
+// ResponseHallucinationEvidence is the detector output behind the
+// hallucination signal: the verdict, its confidence, and the spans it rests
+// on, with NLI explanations when the rule asked for them.
+type ResponseHallucinationEvidence struct {
+	Detected   bool
+	Confidence float32
+	Spans      []string
+	Enhanced   *EnhancedHallucinationInfo
+}
+
 // EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
 type EnhancedHallucinationInfo struct {
 	Confidence float32                     `json:"confidence"`
@@ -126,6 +136,8 @@ type RequestContext struct {
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
+	VSRLooperDiagnostics            *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
@@ -191,8 +203,23 @@ type RequestContext struct {
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
-	VSRDecisionDiagnostics    decision.EvaluationDiagnostics
-	VSRProjectionTrace        *projectiontrace.Trace
+	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
+	// matched. Populated after the model answers, unlike every VSRMatched*
+	// above it.
+	VSRMatchedResponseJailbreak []string
+	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
+	// response-stage signal was computed from, kept so the plugin does not have
+	// to re-derive them from the per-rule confidences.
+	VSRResponseJailbreakType string
+	VSRResponseJailbreakRisk float32
+	// VSRMatchedHallucination holds hallucination rules that matched once the
+	// model answered. VSRHallucinationEvidence is what the observation was
+	// computed from, kept for the plugin that consumes it and for Router
+	// Replay; it is nil when the rule was not evaluated for this request.
+	VSRMatchedHallucination  []string
+	VSRHallucinationEvidence *ResponseHallucinationEvidence
+	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
+	VSRProjectionTrace       *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
@@ -234,6 +261,10 @@ type RequestContext struct {
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
+
+	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
+	// configuration, or nil when the selected decision declares none.
+	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
 
 	// Looper context
 	LooperRequest   bool // True only for token-authenticated in-process looper requests

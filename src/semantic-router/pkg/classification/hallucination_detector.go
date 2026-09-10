@@ -18,6 +18,67 @@ type HallucinationResult struct {
 	SupportedSpans        []string `json:"supported_spans,omitempty"`   // Text spans grounded in context
 }
 
+const (
+	// The detector scores at most 512 tokens and windows only the context, so an
+	// answer longer than that window is truncated and its tail is never scored.
+	// A long answer is scanned in bounded overlapping chunks instead, the way the
+	// response jailbreak path scans a long body. The budget leaves the rest of
+	// the window for the context and the question.
+	hallucinationAnswerChunkBudget  = 256 * 4
+	hallucinationAnswerOverlapRunes = 64
+)
+
+// hallucinationAnswerChunks returns the pieces of an answer to score. An answer
+// that fits the window yields one chunk, which is the single call the detector
+// made before.
+func hallucinationAnswerChunks(answer string) []string {
+	return securitySignalChunks(answer, hallucinationAnswerChunkBudget, hallucinationAnswerOverlapRunes)
+}
+
+// detectHallucinationsInChunks scores every part of the answer against the same
+// context. A hallucination in any chunk is a hallucination in the answer, the
+// reported confidence is that of the strongest chunk that found one, and a clean
+// answer reports its least confident chunk. Chunks overlap, so spans that repeat
+// are kept once.
+func detectHallucinationsInChunks(context, question, answer string, threshold float32) (*candle.HallucinationDetectionResult, error) {
+	chunks := hallucinationAnswerChunks(answer)
+	if len(chunks) <= 1 {
+		return candle.DetectHallucinations(context, question, answer, threshold)
+	}
+
+	merged := &candle.HallucinationDetectionResult{Confidence: 1}
+	seen := make(map[string]struct{})
+	for _, chunk := range chunks {
+		result, err := candle.DetectHallucinations(context, question, chunk, threshold)
+		if err != nil {
+			return nil, err
+		}
+		merged.Confidence = mergeChunkConfidence(merged.HasHallucination, merged.Confidence, result.HasHallucination, result.Confidence)
+		merged.HasHallucination = merged.HasHallucination || result.HasHallucination
+		for _, span := range result.Spans {
+			if _, duplicate := seen[span.Text]; duplicate {
+				continue
+			}
+			seen[span.Text] = struct{}{}
+			merged.Spans = append(merged.Spans, span)
+		}
+	}
+	return merged, nil
+}
+
+// mergeChunkConfidence folds one chunk verdict into the answer verdict: the
+// highest confidence among the chunks that reported a hallucination, or the
+// lowest among the chunks that reported none.
+func mergeChunkConfidence(merged bool, mergedConfidence float32, chunk bool, chunkConfidence float32) float32 {
+	switch {
+	case chunk && (!merged || chunkConfidence > mergedConfidence):
+		return chunkConfidence
+	case !chunk && !merged && chunkConfidence < mergedConfidence:
+		return chunkConfidence
+	}
+	return mergedConfidence
+}
+
 // HallucinationDetector handles hallucination detection
 // It checks if an LLM answer contains claims that are not supported by the provided context
 type HallucinationDetector struct {
@@ -100,7 +161,7 @@ func (d *HallucinationDetector) Detect(context, question, answer string) (*Hallu
 	// Call hallucination detection via candle bindings with threshold
 	// Threshold is applied at token level in Rust - only tokens with confidence >= threshold
 	// are considered hallucinated and included in spans
-	candleResult, err := candle.DetectHallucinations(context, question, answer, threshold)
+	candleResult, err := detectHallucinationsInChunks(context, question, answer, threshold)
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection error: %w", err)
 	}

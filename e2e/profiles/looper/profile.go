@@ -58,7 +58,13 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 // GetTestCases returns the focused Looper contract tests.
-func (p *Profile) GetTestCases() []string { return []string{"looper-ratings-happy-path"} }
+func (p *Profile) GetTestCases() []string {
+	return []string{
+		"looper-ratings-happy-path",
+		"looper-fusion-usable-quorum",
+		"looper-confidence-telemetry",
+	}
+}
 
 // GetServiceConfig returns the shared gateway service configuration.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig { return p.stack.ServiceConfig() }

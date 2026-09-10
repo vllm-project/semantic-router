@@ -82,12 +82,13 @@ class _CatalogHeader:
     channel: str
     default_model: str
     enabled_models: tuple[str, ...]
+    default_intelligence_index: str
     compatibility: dict[str, Any]
     assets: dict[str, dict[str, str]]
 
 
 def available_catalog_versions() -> tuple[str, ...]:
-    root = resources.files("cli.model_assets")
+    root = _model_assets_root()
     versions = {
         item.name
         for item in root.iterdir()
@@ -137,6 +138,7 @@ def load_model_catalog(
         channel=header.channel,
         default_model=header.default_model,
         enabled_models=header.enabled_models,
+        default_intelligence_index=header.default_intelligence_index,
         assets=header.assets,
         models=models,
     )
@@ -146,9 +148,7 @@ def _load_catalog_document(version: str) -> tuple[str, dict[str, Any]]:
     version = version.strip()
     if not _CATALOG_RESOURCE_VERSION.fullmatch(version):
         raise ModelCatalogError("catalog version is invalid")
-    catalog_resource = resources.files("cli.model_assets").joinpath(
-        version, "catalog.yaml"
-    )
+    catalog_resource = _model_assets_root().joinpath(version, "catalog.yaml")
     if not catalog_resource.is_file():
         raise ModelCatalogError(f"built-in catalog version is not installed: {version}")
     try:
@@ -178,6 +178,9 @@ def _parse_catalog_header(
     _reject_unknown_keys(defaults, _DEFAULT_KEYS, "defaults")
     default_model = _required_public_model_id(defaults, "model")
     enabled_models = _unique_model_ids(defaults.get("enabled"), "defaults.enabled")
+    default_intelligence_index = str(defaults.get("intelligence_index") or "").strip()
+    if not default_intelligence_index:
+        raise ModelCatalogError("catalog default intelligence index is required")
     if default_model not in enabled_models:
         raise ModelCatalogError("catalog default model must be enabled by default")
     catalog_compatibility = _required_mapping(document, "compatibility")
@@ -189,6 +192,7 @@ def _parse_catalog_header(
         channel=channel,
         default_model=default_model,
         enabled_models=enabled_models,
+        default_intelligence_index=default_intelligence_index,
         compatibility=catalog_compatibility,
         assets=_parse_assets(document.get("assets"), resource_version),
     )
@@ -205,12 +209,18 @@ def _parse_catalog_models(
     raw_models = document.get("models")
     if not isinstance(raw_models, list) or not raw_models:
         raise ModelCatalogError("built-in model catalog has no models")
+    protocols = _parse_catalog_protocols(document.get("protocols"))
     models: list[CatalogModel] = []
     seen: set[str] = set()
     seen_entrypoints: set[str] = set()
     for raw in raw_models:
         if not isinstance(raw, dict):
             raise ModelCatalogError("catalog model entry is invalid")
+        kind = _required_enum(raw, "kind", SUPPORTED_MODEL_KINDS)
+        # Physical model cards share the package snapshot but are not CLI
+        # virtual-model bundles and therefore have no recipe asset to load.
+        if kind != "virtual":
+            continue
         _reject_unknown_keys(raw, _MODEL_KEYS, "model")
         model_id = _required_public_model_id(raw, "id")
         if model_id in seen:
@@ -231,6 +241,7 @@ def _parse_catalog_models(
             model_id,
             asset=asset,
             entrypoint=entrypoint,
+            protocols=protocols,
             verification=verification,
             resource_version=resource_version,
             header=header,
@@ -247,6 +258,7 @@ def _parse_catalog_model(
     *,
     asset: str,
     entrypoint: str,
+    protocols: tuple[str, ...],
     verification: dict[str, str],
     resource_version: str,
     header: _CatalogHeader,
@@ -269,16 +281,14 @@ def _parse_catalog_model(
         id=model_id,
         display_name=_required_string(raw, "display_name"),
         description=_required_string(raw, "description"),
-        kind=_required_enum(raw, "kind", SUPPORTED_MODEL_KINDS),
+        kind="virtual",
         family=_required_slug(raw, "family"),
         generation=_required_positive_int(raw, "generation"),
         policy_version=_required_semver(raw, "policy_version"),
         asset=asset,
         entrypoint=entrypoint,
         recipe=recipe,
-        protocols=_unique_enum_strings(
-            raw.get("protocols"), f"{model_id}.protocols", SUPPORTED_PROTOCOLS
-        ),
+        protocols=protocols,
         traits=_unique_slugs(raw.get("traits"), f"{model_id}.traits"),
         roles=roles,
         verification=verification,
@@ -291,6 +301,19 @@ def _parse_catalog_model(
         enabled_by_default=model_id in header.enabled_models,
         default=model_id == header.default_model,
     )
+
+
+def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
+    """Project v2 protocol definitions onto the CLI virtual-model contract."""
+
+    if not isinstance(value, list) or not value:
+        raise ModelCatalogError("built-in catalog has no protocols")
+    protocol_ids: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ModelCatalogError("catalog protocol entry is invalid")
+        protocol_ids.append(_required_string(item, "id"))
+    return _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
 
 
 def _parse_model_verification(
@@ -368,7 +391,7 @@ def catalog_model_to_dict(model: CatalogModel) -> dict[str, Any]:
 
 
 def _load_asset_yaml(version: str, asset: dict[str, str]) -> dict[str, Any]:
-    bundle = resources.files("cli.model_assets").joinpath(version, asset["bundle"])
+    bundle = _model_assets_root().joinpath(version, asset["bundle"])
     try:
         digest = model_bundle_digest(bundle)
     except ValueError as error:
@@ -396,7 +419,7 @@ def _parse_assets(value: Any, version: str) -> dict[str, dict[str, str]]:
             raise ModelCatalogError("catalog asset identity is invalid")
         if Path(bundle).name != bundle:
             raise ModelCatalogError("catalog asset path is invalid")
-        resource = resources.files("cli.model_assets").joinpath(version, bundle)
+        resource = _model_assets_root().joinpath(version, bundle)
         try:
             actual = model_bundle_digest(resource)
         except ValueError as error:
@@ -405,3 +428,37 @@ def _parse_assets(value: Any, version: str) -> dict[str, dict[str, str]]:
             raise ModelCatalogError(f"catalog asset digest drifted: {bundle}")
         assets[asset_id] = {"bundle": bundle, "sha256": digest}
     return assets
+
+
+def _model_assets_root():
+    """Resolve installed package data, or the canonical source tree in development."""
+
+    packaged = resources.files("cli.model_assets")
+    try:
+        packaged_path = Path(str(packaged)).resolve()
+    except (OSError, TypeError, ValueError):
+        packaged_path = None
+    module_directory = Path(__file__).resolve().parent
+    for repository_root in module_directory.parents:
+        source_package = repository_root / "src" / "vllm-sr" / "cli"
+        repository_assets = repository_root / "config" / "recipes" / "built-in"
+        try:
+            is_source_checkout = source_package.resolve() == module_directory
+        except OSError:
+            is_source_checkout = False
+        if (
+            is_source_checkout
+            and repository_assets.is_dir()
+            and packaged_path is not None
+            and repository_root in packaged_path.parents
+        ):
+            return repository_assets
+
+    if any(
+        item.is_dir()
+        and _CATALOG_RESOURCE_VERSION.fullmatch(item.name)
+        and item.joinpath("catalog.yaml").is_file()
+        for item in packaged.iterdir()
+    ):
+        return packaged
+    return packaged
