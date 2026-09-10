@@ -1,6 +1,9 @@
 package extproc
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -238,6 +241,49 @@ func TestHandleRequestHeadersDerivesConfiguredMixedCaseIdentity(t *testing.T) {
 		if !containsStringForTest(removed, name) {
 			t.Fatalf("identity header %q was not scheduled for upstream removal: %#v", name, removed)
 		}
+	}
+}
+
+func TestMaintainedAuthzRBACConfigsDeriveTrustedIdentity(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "..", "..", "..", ".."))
+
+	for _, rel := range []string{
+		filepath.Join("e2e", "config", "config.authz-rbac-demo.yaml"),
+		filepath.Join("e2e", "config", "config.authz-rbac.yaml"),
+	} {
+		t.Run(rel, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(repoRoot, rel))
+			if err != nil {
+				t.Fatalf("read maintained RBAC config: %v", err)
+			}
+			cfg, err := config.ParseYAMLBytes(data)
+			if err != nil {
+				t.Fatalf("parse maintained RBAC config: %v", err)
+			}
+			if !cfg.Authz.HasExternalAuthProvider() {
+				t.Fatal("maintained RBAC config must declare an external header-injection provider")
+			}
+
+			router := &OpenAIRouter{Config: cfg}
+			ctx := &RequestContext{Headers: map[string]string{
+				cfg.Authz.Identity.GetUserIDHeader():     "alice",
+				cfg.Authz.Identity.GetUserGroupsHeader(): "platform-admins, premium-tier",
+			}}
+			router.deriveTrustedIdentity(ctx)
+
+			if ctx.TrustedIdentity.UserID != "alice" {
+				t.Fatalf("trusted user id = %q, want alice", ctx.TrustedIdentity.UserID)
+			}
+			if len(ctx.TrustedIdentity.Groups) != 2 ||
+				ctx.TrustedIdentity.Groups[0] != "platform-admins" ||
+				ctx.TrustedIdentity.Groups[1] != "premium-tier" {
+				t.Fatalf("trusted groups = %#v, want [platform-admins premium-tier]", ctx.TrustedIdentity.Groups)
+			}
+		})
 	}
 }
 
