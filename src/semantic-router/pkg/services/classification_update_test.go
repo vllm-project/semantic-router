@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -114,7 +115,7 @@ func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range 20 {
-				_, _ = service.ClassifyIntentForEval(IntentRequest{Text: "hello"})
+				_, _ = service.ClassifyIntentForEval(context.Background(), IntentRequest{Text: "hello"})
 			}
 		}()
 		go func() {
@@ -197,7 +198,7 @@ func TestUpdateConfigDoesNotWaitForRemoteClassification(t *testing.T) {
 	classifyDone := make(chan struct{})
 	go func() {
 		defer close(classifyDone)
-		_, _ = service.ClassifyIntent(IntentRequest{Text: "classify me"})
+		_, _ = service.ClassifyIntent(context.Background(), IntentRequest{Text: "classify me"})
 	}()
 	select {
 	case <-started:

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -132,7 +133,7 @@ func TestHallucinationDetector_InitializationRequired(t *testing.T) {
 	}
 
 	// Should fail if not initialized
-	_, err = detector.Detect("context", "question", "answer")
+	_, err = detector.Detect(context.Background(), "context", "question", "answer")
 	if err == nil {
 		t.Error("Expected error when detecting without initialization")
 	}
@@ -159,7 +160,7 @@ func TestHallucinationDetector_ContextRequired(t *testing.T) {
 	}
 
 	// Should fail with empty context
-	_, err = detector.Detect("", "What is X?", "X is Y")
+	_, err = detector.Detect(context.Background(), "", "What is X?", "X is Y")
 	if err == nil {
 		t.Error("Expected error for empty context")
 	}
@@ -185,7 +186,7 @@ func TestHallucinationDetector_EmptyAnswerOK(t *testing.T) {
 		t.Fatalf("Failed to initialize: %v", err)
 	}
 
-	result, err := detector.Detect("Some context", "Question?", "")
+	result, err := detector.Detect(context.Background(), "Some context", "Question?", "")
 	if err != nil {
 		t.Errorf("Unexpected error for empty answer: %v", err)
 	}
@@ -268,12 +269,12 @@ func TestHallucinationDetector_OpenAIPipeline_GroundedResponse(t *testing.T) {
 	}
 
 	// 7. Detect hallucination
-	result, err := detector.Detect(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.Detect(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
 
-	// 8. Verify result - should NOT be hallucination (grounded in context)
+	// 8. Verify result - should NOT be hallucination (grounded in contextText)
 	t.Logf("Grounded response test:")
 	t.Logf("  Context: %s", toolContext[:min(100, len(toolContext))]+"...")
 	t.Logf("  Question: %s", userQuestion)
@@ -359,7 +360,7 @@ func TestHallucinationDetector_OpenAIPipeline_HallucinatedResponse(t *testing.T)
 	}
 
 	// 7. Detect hallucination
-	result, err := detector.Detect(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.Detect(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
@@ -449,7 +450,7 @@ func TestHallucinationDetector_OpenAIPipeline_MultipleToolResults(t *testing.T) 
 	}
 
 	// 7. Detect hallucination
-	result, err := detector.Detect(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.Detect(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
@@ -668,7 +669,7 @@ func TestHallucinationDetector_NLIClassification(t *testing.T) {
 	}
 
 	// Test entailment: premise supports hypothesis
-	result, err := detector.ClassifyNLI(
+	result, err := detector.ClassifyNLI(context.Background(),
 		"The Eiffel Tower is located in Paris, France.",
 		"The Eiffel Tower is in France.",
 	)
@@ -681,7 +682,7 @@ func TestHallucinationDetector_NLIClassification(t *testing.T) {
 	}
 
 	// Test contradiction: premise contradicts hypothesis
-	result, err = detector.ClassifyNLI(
+	result, err = detector.ClassifyNLI(context.Background(),
 		"The Eiffel Tower was built between 1887 and 1889.",
 		"The Eiffel Tower was built in 1950.",
 	)
@@ -694,7 +695,7 @@ func TestHallucinationDetector_NLIClassification(t *testing.T) {
 	}
 
 	// Test neutral: premise doesn't address hypothesis
-	result, err = detector.ClassifyNLI(
+	result, err = detector.ClassifyNLI(context.Background(),
 		"The Eiffel Tower is 330 meters tall.",
 		"The Eiffel Tower is very popular with tourists.",
 	)
@@ -739,11 +740,11 @@ func TestHallucinationDetector_EnhancedDetection(t *testing.T) {
 	}
 
 	// Test with hallucinated response
-	context := "The Eiffel Tower was constructed from 1887 to 1889. It is located in Paris, France and is 330 metres tall."
+	contextText := "The Eiffel Tower was constructed from 1887 to 1889. It is located in Paris, France and is 330 metres tall."
 	question := "When was the Eiffel Tower built?"
 	answer := "The Eiffel Tower was built in 1950 and stands at 500 meters tall."
 
-	result, err := detector.DetectWithNLI(context, question, answer)
+	result, err := detector.DetectWithNLI(context.Background(), contextText, question, answer)
 	if err != nil {
 		t.Fatalf("Enhanced detection failed: %v", err)
 	}
@@ -775,7 +776,7 @@ func TestHallucinationDetector_EnhancedDetection(t *testing.T) {
 // potential false positives from the hallucination detector by showing ENTAILMENT for flagged spans.
 //
 // Scenario: The hallucination detector might flag paraphrased content as "hallucination" because the
-// exact words don't appear in context, but NLI can recognize semantic equivalence.
+// exact words don't appear in contextText, but NLI can recognize semantic equivalence.
 func TestHallucinationDetector_NLI_FiltersFalsePositives(t *testing.T) {
 	skipIfNoModel(t)
 	skipIfNoNLIModel(t)
@@ -790,18 +791,18 @@ func TestHallucinationDetector_NLI_FiltersFalsePositives(t *testing.T) {
 
 	// Case 1: Paraphrased but semantically correct answer
 	// The answer uses different words but means the same thing
-	context := "The Great Wall of China is approximately 21,196 kilometers long. It was built over many centuries, with construction beginning in the 7th century BC."
+	contextText := "The Great Wall of China is approximately 21,196 kilometers long. It was built over many centuries, with construction beginning in the 7th century BC."
 	question := "How long is the Great Wall of China?"
 	answer := "The Great Wall stretches for about 21,000 km." // Paraphrased, rounded number
 
 	t.Log("Test Case 1: Paraphrased answer (semantically correct)")
-	t.Logf("  Context: %s", context)
+	t.Logf("  Context: %s", contextText)
 	t.Logf("  Question: %s", question)
 	t.Logf("  Answer: %s", answer)
 	t.Log("")
 
 	// First, check what hallucination detector alone says
-	ldResult, err := detector.Detect(context, question, answer)
+	ldResult, err := detector.Detect(context.Background(), contextText, question, answer)
 	if err != nil {
 		t.Fatalf("Hallucination detection failed: %v", err)
 	}
@@ -811,7 +812,7 @@ func TestHallucinationDetector_NLI_FiltersFalsePositives(t *testing.T) {
 	t.Logf("    Flagged spans: %v", ldResult.UnsupportedSpans)
 
 	// Now check with NLI enhancement
-	enhancedResult, err := detector.DetectWithNLI(context, question, answer)
+	enhancedResult, err := detector.DetectWithNLI(context.Background(), contextText, question, answer)
 	if err != nil {
 		t.Fatalf("Enhanced detection failed: %v", err)
 	}
@@ -842,7 +843,7 @@ func TestHallucinationDetector_NLI_FiltersFalsePositives(t *testing.T) {
 	t.Logf("  Context: %s", context2)
 	t.Logf("  Answer: %s", answer2)
 
-	enhancedResult2, err := detector.DetectWithNLI(context2, question2, answer2)
+	enhancedResult2, err := detector.DetectWithNLI(context.Background(), context2, question2, answer2)
 	if err != nil {
 		t.Fatalf("Enhanced detection failed: %v", err)
 	}
@@ -879,7 +880,7 @@ func TestHallucinationDetector_NLI_ProvidesExplainability(t *testing.T) {
 	t.Log("NLI tells you WHY it's wrong (contradiction vs. unverifiable).")
 	t.Log("")
 
-	context := "Albert Einstein was born on March 14, 1879 in Ulm, Germany. He developed the theory of relativity and won the Nobel Prize in Physics in 1921."
+	contextText := "Albert Einstein was born on March 14, 1879 in Ulm, Germany. He developed the theory of relativity and won the Nobel Prize in Physics in 1921."
 
 	// Test different types of hallucinations
 	testCases := []struct {
@@ -919,7 +920,7 @@ func TestHallucinationDetector_NLI_ProvidesExplainability(t *testing.T) {
 		t.Logf("  Expected: %s (%s)", tc.expectedNLI, tc.explanation)
 		t.Log("")
 
-		result, err := detector.DetectWithNLI(context, tc.question, tc.answer)
+		result, err := detector.DetectWithNLI(context.Background(), contextText, tc.question, tc.answer)
 		if err != nil {
 			t.Logf("  Error: %v", err)
 			continue
@@ -980,7 +981,7 @@ func TestHallucinationDetector_CombinedSignalsMoreReliable(t *testing.T) {
 	t.Log("  - NLI catches: semantic contradictions, verifies paraphrases")
 	t.Log("")
 
-	context := "The Amazon River is approximately 6,400 kilometers long, making it the second longest river in the world after the Nile. It flows through South America."
+	contextText := "The Amazon River is approximately 6,400 kilometers long, making it the second longest river in the world after the Nile. It flows through South America."
 
 	// Test cases showing how combined approach works better
 	testCases := []struct {
@@ -1016,7 +1017,7 @@ func TestHallucinationDetector_CombinedSignalsMoreReliable(t *testing.T) {
 			answer:                 "The Amazon River is 6,400 km long and home to pink dolphins.",
 			hallucinationDetectExp: "May flag 'pink dolphins'",
 			nliExp:                 "Should say NEUTRAL",
-			combinedVerdict:        "UNVERIFIABLE - true but not in context, may be OK depending on use case",
+			combinedVerdict:        "UNVERIFIABLE - true but not in contextText, may be OK depending on use case",
 		},
 	}
 
@@ -1029,12 +1030,12 @@ func TestHallucinationDetector_CombinedSignalsMoreReliable(t *testing.T) {
 		t.Log("")
 
 		// Run hallucination detection alone
-		ldResult, _ := detector.Detect(context, "Tell me about the Amazon River", tc.answer)
+		ldResult, _ := detector.Detect(context.Background(), contextText, "Tell me about the Amazon River", tc.answer)
 		t.Logf("  Hallucination detector alone: hallucination=%v, confidence=%.2f",
 			ldResult.HallucinationDetected, ldResult.Confidence)
 
 		// Run combined approach
-		combined, _ := detector.DetectWithNLI(context, "Tell me about the Amazon River", tc.answer)
+		combined, _ := detector.DetectWithNLI(context.Background(), contextText, "Tell me about the Amazon River", tc.answer)
 		t.Logf("  Combined result: hallucination=%v, confidence=%.2f",
 			combined.HallucinationDetected, combined.Confidence)
 
@@ -1064,7 +1065,7 @@ func TestHallucinationDetector_CombinedSignalsMoreReliable(t *testing.T) {
 			} else if entailments > 0 && contradictions == 0 {
 				t.Log("  >>> DECISION: Likely FALSE POSITIVE (NLI says content is supported)")
 			} else if neutrals > 0 && contradictions == 0 {
-				t.Log("  >>> DECISION: UNVERIFIABLE (content not in context, may be OK)")
+				t.Log("  >>> DECISION: UNVERIFIABLE (content not in contextText, may be OK)")
 			}
 		} else if ldResult.HallucinationDetected {
 			t.Log("  >>> NOTE: Hallucination detector flagged but no spans for NLI analysis")

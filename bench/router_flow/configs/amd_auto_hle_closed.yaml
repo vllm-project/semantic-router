@@ -57,26 +57,28 @@ providers:
           api_key_env: OPENROUTER_API_KEY
           weight: 1
 
+evaluation:
+  records:
+    - model: opus48-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini31-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: opus48-worker
       context_window_size: 1000000
       description: Closed-model HLE worker for high-confidence reasoning and disagreement checks.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:worker, pool:closed]
     - name: gemini31-worker
       context_window_size: 1000000
       description: Closed-model HLE worker and synthesis/judge model.
       capabilities: [chat, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:hle, role:synthesis, pool:closed]
 

@@ -8,6 +8,9 @@
     - id: published-standard
       display_name: Published standard
       description: Vendor-published MMLU-Pro result using the source's documented standard setup.
+    - id: independent-standard
+      display_name: Independent standard run
+      description: Independently measured MMLU-Pro accuracy with the exact model variant and reasoning effort retained on the evaluation record.
     - id: medmarks-v1-three-order-average
       display_name: Medmarks v1 three-order average
       description: Accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds for the health subset.
@@ -64,7 +67,6 @@
 - id: swe-bench/verified@1.0.0
   display_name: SWE-bench Verified
   domain: software_engineering
-  tags: [core]
   source: https://github.com/SWE-bench/SWE-bench
   default_profile: published-agent
   profiles:
@@ -603,12 +605,19 @@
 - id: livecodebench/livecodebench@6.0.0
   display_name: LiveCodeBench v6
   domain: competitive_programming
+  tags: [core]
   source: https://github.com/LiveCodeBench/LiveCodeBench
   default_profile: code-generation-pass-at-1
   profiles:
     - id: code-generation-pass-at-1
       display_name: Code generation pass@1
       description: Pass@1 on the LiveCodeBench v6 code-generation split with the inference budget retained on the record.
+    - id: published-code-generation
+      display_name: Published code generation
+      description: Source-published LiveCodeBench v6 code-generation pass@1 with the inference budget retained on the evaluation record.
+    - id: independent-code-generation
+      display_name: Independent code generation
+      description: Independently measured LiveCodeBench v6 code-generation pass@1 for the exact model and reasoning effort.
   metrics:
     - id: pass_at_1
       unit: proportion
