@@ -150,6 +150,49 @@ func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext
 	}
 }
 
+func TestSelectionEvidenceReasoningReachesRouteDiagnostics(t *testing.T) {
+	const reasoning = "multi_factor; intelligence{index=vllm-sr/intelligence@1.0.0 effort=high score=75.00 coverage=100%}"
+	registry := selection.NewRegistry()
+	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
+		SelectedModel: "model-b", Score: 0.5, Method: selection.MethodStatic,
+		Tier: selection.TierSupported, Reasoning: reasoning,
+	}})
+	router := &OpenAIRouter{ModelSelector: registry}
+	requestContext := &RequestContext{}
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+	}, nil, requestContext)
+	if err != nil || selected == nil || selected.Model != "model-b" {
+		t.Fatalf("selection = %#v, %v", selected, err)
+	}
+	diagnostics := buildReplayRouteDiagnostics(requestContext, "auto", selected.Model, "test", 0, 0)
+	if diagnostics.SelectionReasoning != reasoning {
+		t.Fatalf("selection reasoning = %q", diagnostics.SelectionReasoning)
+	}
+}
+
+func TestSelectionResultPreservesSelectedCandidateEffort(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}
+	registry := selection.NewRegistry()
+	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
+		SelectedModel: "model", SelectedCandidate: &candidates[1],
+		Method: selection.MethodStatic, Tier: selection.TierSupported,
+	}})
+	router := &OpenAIRouter{ModelSelector: registry}
+	selected, _, err := router.selectModelFromCandidates(&selection.SelectionContext{
+		CandidateModels: candidates,
+	}, nil, &RequestContext{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected == nil || selected.ReasoningEffort != "high" {
+		t.Fatalf("selected candidate = %+v, want high effort", selected)
+	}
+}
+
 func TestPromptSelectionDoesNotResolveBaseModelThroughLoRAAlias(t *testing.T) {
 	candidates := []config.ModelRef{
 		{Model: "model-b", LoRAName: "model-a"},

@@ -73,6 +73,7 @@ Selection algorithms return one candidate model.
 | `multi_factor` | supported | Balance quality, latency, cost, and load with optional SLO filters | Model metadata and live local metrics | [Multi Factor](./selection/multi-factor) |
 | `hybrid` | supported | Blend several selector scores | Component selector inputs | [Hybrid](./selection/hybrid) |
 | `automix` | experimental | Optimize an estimated cost-quality value | Candidate pricing and quality metadata | [AutoMix](./selection/automix) |
+| `gmtrouter` | experimental | Personalize an intelligence-seeded model rank | Model evidence and user feedback | [GMT Router](./selection/gmtrouter) |
 | `prompt` | experimental | Let a bounded helper model choose from declared candidates | OpenAI-compatible helper model and Looper endpoint | [Prompt](./selection/prompt) |
 | `knn` | experimental | Follow similar labeled examples | Trained selector artifact and embeddings | [KNN](./selection/knn) |
 | `kmeans` | experimental | Route through learned traffic clusters | Trained selector artifact and embeddings | [KMeans](./selection/kmeans) |
