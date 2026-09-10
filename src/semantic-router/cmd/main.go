@@ -106,7 +106,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		return recordStartupError(startupWriter, "create ExtProc server", err)
 	}
 
-	if err := warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
+	if err = warmupRouterRuntime(ctx, routerServer, embeddingRuntime); err != nil {
 		return recordStartupError(startupWriter, "warm up router runtime", err)
 	}
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
