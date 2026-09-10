@@ -497,17 +497,21 @@ func selectThreshold(rule string, positive map[string]bool, fixtures []fixtureRe
 		}
 		return evaluateThreshold(midpoint, rule, positive, fixtures)
 	}
-	// Non-separable: score every band between consecutive fixture scores at its
-	// midpoint. Ties on F1 go to the wider band, measured by that band's own
-	// width (not the global margin, which is dominated by the overlap and can
-	// prefer a narrow band). A remaining tie keeps the lower band.
-	var best thresholdResult
-	bestWidth := -1.0
+	// Non-separable: the lowest sweep value is the boundary candidate (it is
+	// the only threshold that admits a fixture scoring exactly at the floor,
+	// and the only candidate at all when every fixture shares one score), then
+	// every band between consecutive fixture scores at its midpoint. Ties on
+	// F1 go to the wider band, measured by that band's own width (the global
+	// margin is dominated by the overlap and can prefer a narrow band); the
+	// boundary has width zero so it wins only on F1. A remaining tie keeps
+	// the lower band.
+	best := evaluateThreshold(sweep[0].Threshold, rule, positive, fixtures)
+	bestWidth := 0.0
 	for i := 1; i < len(sweep); i++ {
 		// Band (sweep[i-1].Threshold, sweep[i].Threshold]: same matrix as sweep[i].
 		width := sweep[i].Threshold - sweep[i-1].Threshold
 		candidate := evaluateThreshold(sweep[i-1].Threshold+width/2, rule, positive, fixtures)
-		if bestWidth < 0 || candidate.F1 > best.F1 || candidate.F1 == best.F1 && width > bestWidth {
+		if better, tie := compareF1(candidate, best); better || tie && width > bestWidth {
 			best, bestWidth = candidate, width
 		}
 	}
@@ -515,6 +519,24 @@ func selectThreshold(rule string, positive map[string]bool, fixtures []fixtureRe
 		return rounded
 	}
 	return best
+}
+
+// compareF1 orders two results by F1 computed exactly from the integer
+// confusion counts, F1 = 2TP / (2TP + FP + FN), via cross-multiplication.
+// The float F1 stored on the result goes through precision and recall and can
+// differ in the last bit for mathematically equal values, which would defeat
+// the tie-break. A zero denominator (no positives and no predictions) is F1 0.
+func compareF1(a, b thresholdResult) (better, tie bool) {
+	numA, denA := 2*a.TP, 2*a.TP+a.FP+a.FN
+	numB, denB := 2*b.TP, 2*b.TP+b.FP+b.FN
+	if denA == 0 {
+		numA, denA = 0, 1
+	}
+	if denB == 0 {
+		numB, denB = 0, 1
+	}
+	left, right := numA*denB, numB*denA
+	return left > right, left == right
 }
 
 func roundTwoPlaces(value float64) float64 {

@@ -86,3 +86,61 @@ func TestCalibrateRule_SweepIgnoresShippedThreshold(t *testing.T) {
 			a.Selected.Threshold, len(a.Sweep), b.Selected.Threshold, len(b.Sweep))
 	}
 }
+
+// Two bands with different confusion matrices but the same mathematical F1
+// (1/3 each). Through precision and recall the floats differ in the last bit,
+// so a float comparison never reaches the width tie-break and picks the
+// narrow (0, 0.1] band; the rational comparison must pick (0.15, 0.7].
+func TestSelectThreshold_TieUsesExactF1(t *testing.T) {
+	fixtures, positive := scoredFixtures(map[string]float64{
+		"p1": 0.1, "p2": 0.7,
+		"n1": 0.11, "n2": 0.12, "n3": 0.13, "n4": 0.14, "n5": 0.15, "n6": 0.8, "n7": 0.85, "n8": 0.9,
+	}, "p1", "p2")
+	report := calibrate(t, fixtures, positive)
+
+	// The wider band is (0.15, 0.7]; its midpoint 0.425 rounds to 0.42, which
+	// yields the same matrix and is therefore what the selector reports.
+	if got := report.Selected.Threshold; got <= 0.15 || got > 0.7 {
+		t.Fatalf("selected threshold = %.4f, want a value inside the wider equal-F1 band (0.15, 0.7]", got)
+	}
+	if report.Selected.TP != 1 || report.Selected.FP != 3 || report.Selected.FN != 1 {
+		t.Fatalf("selected matrix = TP %d FP %d FN %d, want 1/3/1", report.Selected.TP, report.Selected.FP, report.Selected.FN)
+	}
+}
+
+// A positive scoring exactly at the floor is only admitted by the boundary
+// threshold itself; the band midpoints all miss it.
+func TestSelectThreshold_ZeroScoredPositiveUsesBoundary(t *testing.T) {
+	fixtures, positive := scoredFixtures(map[string]float64{"p1": 0, "n1": 0.5}, "p1")
+	report := calibrate(t, fixtures, positive)
+
+	if report.Selected.Threshold != 0 || report.Selected.TP != 1 || report.Selected.FP != 1 {
+		t.Fatalf("selected = %+v, want threshold 0 with TP 1 FP 1", report.Selected)
+	}
+}
+
+// One distinct score means a one-value sweep; the reported matrix must be the
+// evaluation of that threshold, not an empty result.
+func TestSelectThreshold_SingletonSweepIsEvaluated(t *testing.T) {
+	fixtures, positive := scoredFixtures(map[string]float64{"p1": 0, "n1": 0}, "p1")
+	report := calibrate(t, fixtures, positive)
+
+	if len(report.Sweep) != 1 {
+		t.Fatalf("sweep has %d entries, want 1", len(report.Sweep))
+	}
+	if report.Selected.Threshold != 0 || report.Selected.TP != 1 || report.Selected.FP != 1 {
+		t.Fatalf("selected = %+v, want threshold 0 with TP 1 FP 1", report.Selected)
+	}
+}
+
+// A negative score sits below the boundary; the boundary candidate is the
+// lowest sweep value, so it admits the fixture instead of reporting F1 0
+// from a band midpoint that misses it.
+func TestSelectThreshold_NegativeScoreBoundary(t *testing.T) {
+	fixtures, positive := scoredFixtures(map[string]float64{"p1": -0.2, "n1": 0.5}, "p1")
+	report := calibrate(t, fixtures, positive)
+
+	if report.Selected.Threshold != -0.2 || report.Selected.TP != 1 || report.Selected.FP != 1 {
+		t.Fatalf("selected = %+v, want the boundary threshold -0.2 with TP 1 FP 1", report.Selected)
+	}
+}
