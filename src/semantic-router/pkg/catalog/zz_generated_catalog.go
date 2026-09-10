@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:14c4e1585df59f163d0a8b619c6c68c6e657121cd0c02c2f08c8bb12d063d348"
+const builtInCatalogDigest = "sha256:10ffb86997a8e03a7ccc0e379795c2132a3ebd0588888728736a341511b71f90"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -43899,6 +43899,44 @@ const builtInCatalogJSON = `{
             "source": "https://openrouter.ai/api/v1/models",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "openai/gpt-6-astra",
+          "id": "openai/gpt-6-astra",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 12.5,
+            "cached_input_per_1m": 1.0,
+            "completion_per_1m": 50.0,
+            "currency": "USD",
+            "prompt_per_1m": 10.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "reasoning_efforts_by_protocol": {
+            "openai/chat-completions@1": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/openai/gpt-6-astra",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
           }
         }
       ],

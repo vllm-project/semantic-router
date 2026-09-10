@@ -77,8 +77,19 @@ impl Qwen3GuardModel {
         Ok(())
     }
 
+    /// Prefill every suffix token but the last on top of the restored prefix.
+    /// `generate_cached_suffix_tokens` feeds the last suffix token as its first
+    /// decode step, so the KV cache must hold exactly the tokens before it.
+    /// Prefilling the whole suffix and then re-feeding its last token would leave
+    /// a duplicate key: the cache would run one entry ahead of the logical
+    /// position, and the causal range at `q_offset` would skip the token just
+    /// appended and attend the stale duplicate instead.
     fn process_cached_suffix(&mut self, tokens: &[u32], prefix_len: usize) -> UnifiedResult<()> {
-        let suffix_tensor = Tensor::new(tokens, &self.device)
+        let prefill = &tokens[..tokens.len().saturating_sub(1)];
+        if prefill.is_empty() {
+            return Ok(());
+        }
+        let suffix_tensor = Tensor::new(prefill, &self.device)
             .map_err(|e| UnifiedError::Processing {
                 operation: "create suffix tensor".to_string(),
                 source: e.to_string(),

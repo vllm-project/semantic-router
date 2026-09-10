@@ -235,8 +235,9 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	reqCtx.VSRSelectedModel = resp.Model
 	reqCtx.VSRSelectionMethod = resp.AlgorithmType
 
-	// Capture router replay information if enabled
-	// ModelsUsed is the execution trace; resp.Model is the final response model.
+	// Capture router replay information if enabled. Detailed attempts remain in
+	// Replay; the public response surface keeps only aggregate Looper headers.
+	reqCtx.VSRLooperDiagnostics = looperReplayDiagnostics(resp.ExecutionTrace)
 	r.startRouterReplay(reqCtx, originalModel, resp.Model, decision.Name)
 	r.updateLooperReplayUsage(reqCtx, resp.Usage)
 	if resp.Usage.PromptTokens > 0 || resp.Usage.CompletionTokens > 0 {

@@ -43894,6 +43894,44 @@
             "status": "claimed",
             "verified_at": "2026-09-05"
           }
+        },
+        {
+          "catalog": "openai/gpt-6-astra",
+          "id": "openai/gpt-6-astra",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 12.5,
+            "cached_input_per_1m": 1.0,
+            "completion_per_1m": 50.0,
+            "currency": "USD",
+            "prompt_per_1m": 10.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "reasoning_efforts_by_protocol": {
+            "openai/chat-completions@1": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/openai/gpt-6-astra",
+            "status": "claimed",
+            "verified_at": "2026-09-08"
+          }
         }
       ],
       "presentation": {

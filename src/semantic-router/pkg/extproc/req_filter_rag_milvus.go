@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -48,8 +47,9 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 		topK = *ragConfig.TopK
 	}
 
-	// Generate embedding for query
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	// Generate one embedding per window of the query, so a long query is not
+	// searched by its opening alone.
+	queryEmbeddings, err := ragQueryEmbeddings(query)
 	if err != nil {
 		// Log full error internally but don't expose it to avoid information disclosure
 		logging.Errorf("Failed to generate embedding for RAG query: %v", err)
@@ -86,21 +86,26 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 	// Use MilvusCache SearchDocuments method
 	// Pass empty strings/0 for vector field config to use cache defaults
 	// If RAG collection has different config, these can be added to MilvusRAGConfig
-	contextParts, scores, err := milvusCache.SearchDocuments(
-		traceCtx,
-		collectionName,
-		queryEmbedding,
-		threshold,
-		topK,
-		filterExpr,
-		contentField,
-		"", // vectorFieldName - use cache default
-		"", // metricType - use cache default
-		0,  // ef - use cache default
-	)
-	if err != nil {
-		return "", fmt.Errorf("milvus search failed: %w", err)
+	var hits ragHits
+	for _, queryEmbedding := range queryEmbeddings {
+		windowParts, windowScores, searchErr := milvusCache.SearchDocuments(
+			traceCtx,
+			collectionName,
+			queryEmbedding,
+			threshold,
+			topK,
+			filterExpr,
+			contentField,
+			"", // vectorFieldName - use cache default
+			"", // metricType - use cache default
+			0,  // ef - use cache default
+		)
+		if searchErr != nil {
+			return "", fmt.Errorf("milvus search failed: %w", searchErr)
+		}
+		hits.add(windowParts, windowScores)
 	}
+	contextParts, scores := hits.top(topK)
 
 	if len(contextParts) == 0 {
 		return "", fmt.Errorf("no results above similarity threshold %.3f", threshold)
