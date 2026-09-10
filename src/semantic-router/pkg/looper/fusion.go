@@ -121,7 +121,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
 	// model calls, so usage is summed from the full panel (the real cost paid).
-	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panel.responses)
+	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(ctx, req, cfg, panel.responses)
 	if err != nil {
 		return nil, err
 	}

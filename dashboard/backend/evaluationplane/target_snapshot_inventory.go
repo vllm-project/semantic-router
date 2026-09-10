@@ -20,10 +20,11 @@ type mixtureModelInventory struct {
 }
 
 func collectMixtureModelInventory(
+	cfg *routerconfig.RouterConfig,
 	canonical routerconfig.CanonicalConfig,
 	recipe *routerconfig.RoutingRecipe,
 ) mixtureModelInventory {
-	baseByEffective, bindingsValid := effectiveModelBaseIndex(canonical.Routing.ModelCards)
+	baseByEffective, bindingsValid := effectiveModelBaseIndex(cfg.ModelConfig)
 	inventory := mixtureModelInventory{
 		poolModels:     make(map[string]mixtureModelBinding),
 		decisionModels: make([][]string, len(recipe.Profile.Decisions)),
@@ -95,21 +96,21 @@ func addMixturePromptSupport(
 	}
 }
 
-func effectiveModelBaseIndex(cards []routerconfig.RoutingModel) (map[string]string, bool) {
-	result := make(map[string]string, len(cards))
+func effectiveModelBaseIndex(models map[string]routerconfig.ModelParams) (map[string]string, bool) {
+	result := make(map[string]string, len(models))
 	adapterBases := make(map[string]string)
 	valid := true
-	for _, card := range cards {
-		name := strings.TrimSpace(card.Name)
+	for model := range models {
+		name := strings.TrimSpace(model)
 		if name == "" {
 			valid = false
 			continue
 		}
 		result[name] = name
 	}
-	for _, card := range cards {
-		base := strings.TrimSpace(card.Name)
-		for _, adapter := range card.LoRAs {
+	for model, params := range models {
+		base := strings.TrimSpace(model)
+		for _, adapter := range params.LoRAs {
 			effective := strings.TrimSpace(adapter.Name)
 			if effective == "" || base == "" {
 				valid = false

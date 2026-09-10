@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 
@@ -226,6 +227,11 @@ func (c *Client) callModel(
 		"logprobs":  logprobsEnabled,
 	})
 
+	// Capture first-byte timing for an active Looper attempt without wrapping
+	// response bodies or changing transport behavior.
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GotFirstResponseByte: func() { recordAttemptFirstByte(ctx) },
+	})
 	start := time.Now()
 	headers := c.requestHeaders(ctx, iteration, decisionName, fusionDepth, accessKey)
 	var respBody []byte

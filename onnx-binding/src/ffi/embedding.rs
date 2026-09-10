@@ -5,7 +5,7 @@
 
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, EmbeddingResult,
-    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch,
+    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch, TextWindowsResult,
 };
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
 use parking_lot::Mutex;
@@ -33,6 +33,7 @@ static GLOBAL_MMBERT_MODEL: OnceLock<Mutex<MmBertEmbeddingModel>> = OnceLock::ne
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
     if model_path.is_null() {
@@ -78,6 +79,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
 }
 
 /// Check if mmBERT model is initialized
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn is_mmbert_model_initialized() -> bool {
     GLOBAL_MMBERT_MODEL.get().is_some()
@@ -113,6 +115,7 @@ fn create_error_result() -> EmbeddingResult {
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
@@ -203,6 +206,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResult) -> i32 {
     get_embedding_2d_matryoshka(text, 0, 0, result)
@@ -217,6 +221,7 @@ pub extern "C" fn get_embedding(text: *const c_char, result: *mut EmbeddingResul
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_with_dim(
     text: *const c_char,
@@ -241,6 +246,7 @@ pub extern "C" fn get_embedding_with_dim(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embeddings_batch(
     texts: *const *const c_char,
@@ -306,18 +312,18 @@ pub extern "C" fn get_embeddings_batch(
             let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
             let per_text_time = processing_time_ms / num_texts as f32;
 
-            for i in 0..num_texts as usize {
+            for (i, text_str) in text_strs.iter().enumerate() {
                 let embedding = embeddings.row(i).to_vec();
                 let length = embedding.len() as i32;
                 let data = Box::into_raw(embedding.into_boxed_slice()) as *mut f32;
 
                 unsafe {
-                    *results.offset(i as isize) = EmbeddingResult {
+                    *results.add(i) = EmbeddingResult {
                         data,
                         length,
                         error: false,
                         model_type: 0, // mmbert
-                        sequence_length: text_strs[i].split_whitespace().count() as i32,
+                        sequence_length: text_str.split_whitespace().count() as i32,
                         processing_time_ms: per_text_time,
                     };
                 }
@@ -330,7 +336,7 @@ pub extern "C" fn get_embeddings_batch(
             // Set error for all results
             for i in 0..num_texts as usize {
                 unsafe {
-                    *results.offset(i as isize) = create_error_result();
+                    *results.add(i) = create_error_result();
                 }
             }
             -1
@@ -353,6 +359,7 @@ pub extern "C" fn get_embeddings_batch(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
@@ -435,6 +442,7 @@ pub extern "C" fn calculate_embedding_similarity(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_similarity_batch(
     query: *const c_char,
@@ -610,6 +618,7 @@ pub extern "C" fn calculate_similarity_batch(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResult) -> i32 {
     if result.is_null() {
@@ -686,6 +695,7 @@ pub extern "C" fn get_embedding_models_info(result: *mut EmbeddingModelsInfoResu
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
     if result.is_null() {
@@ -723,6 +733,7 @@ pub extern "C" fn get_matryoshka_info(result: *mut MatryoshkaInfo) -> i32 {
 }
 
 /// Free MatryoshkaInfo
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
     if info.is_null() {
@@ -738,4 +749,156 @@ pub extern "C" fn free_matryoshka_info(info: *mut MatryoshkaInfo) {
             let _ = CString::from_raw(info_ref.layers);
         }
     }
+}
+
+fn tokens_exceed_window(
+    tokenizer: &tokenizers::Tokenizer,
+    text: &str,
+    window: usize,
+) -> Result<bool, String> {
+    use tokenizers::{TruncationDirection, TruncationParams, TruncationStrategy};
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: window + 1,
+            strategy: TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: TruncationDirection::Right,
+        }))
+        .map_err(|e| e.to_string())?;
+    let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+    Ok(encoding.get_ids().len() > window)
+}
+
+/// Report whether `text` tokenizes past the context window of the loaded
+/// embedding model named by `model_type`. Every model type other than
+/// `multimodal` embeds through mmBERT, matching `get_embedding_with_model_type`.
+///
+/// # Returns
+/// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
+/// loaded or the input is invalid
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn embedding_text_exceeds_window(
+    text: *const c_char,
+    model_type: *const c_char,
+) -> i32 {
+    if text.is_null() || model_type.is_null() {
+        return -1;
+    }
+    let (text, model_type) = unsafe {
+        match (
+            CStr::from_ptr(text).to_str(),
+            CStr::from_ptr(model_type).to_str(),
+        ) {
+            (Ok(t), Ok(m)) => (t, m),
+            _ => return -1,
+        }
+    };
+    let exceeds = if model_type == "multimodal" {
+        let Some(model) = crate::ffi::multimodal::GLOBAL_MULTIMODAL.get() else {
+            return -1;
+        };
+        tokens_exceed_window(model.tokenizer(), text, model.config().max_seq_len)
+    } else {
+        let Some(model_lock) = GLOBAL_MMBERT_MODEL.get() else {
+            return -1;
+        };
+        let model = model_lock.lock();
+        tokens_exceed_window(
+            model.tokenizer(),
+            text,
+            model.config().max_position_embeddings,
+        )
+    };
+    match exceeds {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
+}
+
+/// Split `text` into overlapping byte ranges that each fit the loaded mmBERT
+/// embedding model. Every range reserves space for the tokenizer's two special
+/// tokens and overlaps its neighbor by half a window.
+///
+/// # Safety
+/// - `text` must point to a valid null-terminated string.
+/// - The returned result must be released with [`free_text_windows`].
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn get_text_windows(text: *const c_char, max_length: i32) -> TextWindowsResult {
+    if text.is_null() {
+        return TextWindowsResult::default();
+    }
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(text) => text,
+            Err(_) => return TextWindowsResult::default(),
+        }
+    };
+    let Some(model_lock) = GLOBAL_MMBERT_MODEL.get() else {
+        return TextWindowsResult::default();
+    };
+    let model = model_lock.lock();
+    let window = if max_length > 0 {
+        max_length as usize
+    } else {
+        model.config().max_position_embeddings
+    };
+    let mut tokenizer = model.tokenizer().clone();
+    if tokenizer.with_truncation(None).is_err() {
+        return TextWindowsResult::default();
+    }
+    let encoding = match tokenizer.encode(text, false) {
+        Ok(encoding) => encoding,
+        Err(_) => return TextWindowsResult::default(),
+    };
+    let offsets: Vec<(usize, usize)> = encoding
+        .get_offsets()
+        .iter()
+        .copied()
+        .filter(|(start, end)| end > start)
+        .collect();
+    let budget = window.saturating_sub(2).max(1);
+    let ranges =
+        crate::core::tokenization_window::window_ranges(&offsets, budget, budget.div_ceil(2));
+    let mut flat = Vec::with_capacity(ranges.len() * 2);
+    for (start, end) in ranges {
+        let (Ok(start), Ok(end)) = (i32::try_from(start), i32::try_from(end)) else {
+            return TextWindowsResult::default();
+        };
+        flat.push(start);
+        flat.push(end);
+    }
+    let Ok(window_count) = i32::try_from(flat.len() / 2) else {
+        return TextWindowsResult::default();
+    };
+    if flat.is_empty() {
+        return TextWindowsResult {
+            offsets: std::ptr::null_mut(),
+            window_count,
+            error: false,
+        };
+    }
+    let offsets = Box::into_raw(flat.into_boxed_slice()) as *mut i32;
+    TextWindowsResult {
+        offsets,
+        window_count,
+        error: false,
+    }
+}
+
+/// Release byte ranges returned by [`get_text_windows`].
+///
+/// # Safety
+/// - `result` must come from [`get_text_windows`] and must not be freed twice.
+#[no_mangle]
+pub unsafe extern "C" fn free_text_windows(result: TextWindowsResult) {
+    if result.offsets.is_null() || result.window_count <= 0 {
+        return;
+    }
+    let length = result.window_count as usize * 2;
+    let offsets = std::ptr::slice_from_raw_parts_mut(result.offsets, length);
+    let _ = unsafe { Box::from_raw(offsets) };
 }

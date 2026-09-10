@@ -306,7 +306,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
           max_concurrency: 8
           metrics:
             enabled: true
@@ -670,7 +669,6 @@ dependencies:
       development:
         dropIndexOnStartup: false
         autoCreateIndex: true
-        verboseErrors: true
     milvus:
       enabled: false
       host: ""
@@ -700,7 +698,6 @@ dependencies:
       development:
         dropCollectionOnStartup: false
         autoCreateCollection: true
-        verboseErrors: true
   responseApi:
     redis:
       enabled: false

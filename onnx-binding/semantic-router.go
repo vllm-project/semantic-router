@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -104,6 +110,9 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -476,6 +485,61 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 		// ONNX binding uses mmBERT path for all non-multimodal requests.
 		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
 	}
+}
+
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
+	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns overlapping byte ranges that cover all tokens in text.
+// A non-positive maxLength uses the loaded model's configured sequence limit.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !IsMmBertModelInitialized() {
+		return nil, errors.New("mmBERT embedding model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if bool(result.error) {
+		return nil, errors.New("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := range windows {
+		windows[i] = TextWindow{
+			Start: int(offsets[i*2]),
+			End:   int(offsets[i*2+1]),
+		}
+	}
+	return windows, nil
 }
 
 // ============================================================================

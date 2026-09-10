@@ -28,7 +28,7 @@ import (
 )
 
 type modelConnector interface {
-	DoWithHeaders(context.Context, connector.Operation, []byte, http.Header) ([]byte, error)
+	DoRequest(context.Context, connector.Operation, connector.Request) (connector.Result, error)
 	Close() error
 }
 
@@ -72,11 +72,18 @@ func (c *Client) callModelThroughConnector(
 	body []byte,
 	headers http.Header,
 ) ([]byte, error) {
-	responseBody, err := c.connector.DoWithHeaders(ctx, chatCompletionOperation, body, headers)
+	requestHeaders := make(map[string]string, len(headers))
+	for name := range headers {
+		requestHeaders[name] = headers.Get(name)
+	}
+	result, err := c.connector.DoRequest(ctx, chatCompletionOperation, connector.Request{
+		Body:    body,
+		Headers: requestHeaders,
+	})
 	if err != nil {
 		return nil, formatLooperConnectorError(err)
 	}
-	return responseBody, nil
+	return result.Body, nil
 }
 
 func formatLooperConnectorError(err error) error {

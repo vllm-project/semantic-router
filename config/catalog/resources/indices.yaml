@@ -1,41 +1,106 @@
-- id: vllm-sr/intelligence@1.0.0
-  display_name: vLLM-SR Published Intelligence Index
-  description: Directional composite of five public benchmarks reported by primary model sources.
-  methodology: https://github.com/vllm-project/semantic-router/blob/main/website/docs/proposals/unified-model-catalog-and-evaluation-index.md
+- id: vllm-sr/general@1.0.0
+  display_name: General
+  description: Broad knowledge and reasoning measured by MMLU-Pro.
+  methodology: https://vllm-sr.ai/docs/benchmarking/open-intelligence-index
   aggregation: weighted_mean
   scale: [0, 100]
   missing:
-    policy: require_coverage
-    minimum: 0.6
+    policy: require_all
   domains:
-    general_reasoning: 0.20
-    scientific_reasoning: 0.20
-    frontier_reasoning: 0.20
-    software_engineering: 0.20
-    agentic_systems: 0.20
+    general_reasoning: 1.0
   components:
     - benchmark: tiger-ai-lab/mmlu-pro@1.0.0
       metric: accuracy
-      benchmark_profile: published-standard
-      weight: 0.20
+      benchmark_profiles: [independent-standard, published-standard]
+      weight: 1.0
       normalization: {type: identity}
+
+- id: vllm-sr/reasoning@1.0.0
+  display_name: Reasoning
+  description: Scientific and frontier reasoning measured by GPQA Diamond and Humanity's Last Exam.
+  methodology: https://vllm-sr.ai/docs/benchmarking/open-intelligence-index
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_all
+  domains:
+    scientific_reasoning: 0.50
+    frontier_reasoning: 0.50
+  components:
     - benchmark: idavidrein/gpqa-diamond@1.0.0
       metric: accuracy
-      benchmark_profile: published-standard
-      weight: 0.20
+      benchmark_profiles: [independent-standard, published-standard]
+      weight: 0.50
       normalization: {type: identity}
     - benchmark: cais/humanitys-last-exam@1.0.0
       metric: accuracy
-      benchmark_profile: no-tools
-      weight: 0.20
+      benchmark_profiles: [independent-standard, no-tools]
+      weight: 0.50
       normalization: {type: identity}
-    - benchmark: swe-bench/verified@1.0.0
-      metric: resolved
-      benchmark_profile: published-agent
-      weight: 0.20
+
+- id: vllm-sr/coding@1.0.0
+  display_name: Coding
+  description: Competitive and scientific coding measured by LiveCodeBench and SciCode.
+  methodology: https://vllm-sr.ai/docs/benchmarking/open-intelligence-index
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_all
+  domains:
+    competitive_programming: 0.50
+    scientific_coding: 0.50
+  components:
+    - benchmark: livecodebench/livecodebench@6.0.0
+      metric: pass_at_1
+      benchmark_profiles: [independent-code-generation, published-code-generation]
+      weight: 0.50
       normalization: {type: identity}
+    - benchmark: scicode-bench/scicode@1.0.0
+      metric: score
+      benchmark_profiles: [independent-test-288, published-standard]
+      weight: 0.50
+      normalization: {type: identity}
+
+- id: vllm-sr/agentic@1.0.0
+  display_name: Agentic
+  description: Multi-step tool execution measured by Terminal-Bench 2.1.
+  methodology: https://vllm-sr.ai/docs/benchmarking/open-intelligence-index
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_all
+  domains:
+    agentic_systems: 1.0
+  components:
     - benchmark: harbor/terminal-bench@2.1.0
       metric: resolved
-      benchmark_profile: published-agent
+      benchmark_profiles: [independent-agent, published-agent]
+      weight: 1.0
+      normalization: {type: identity}
+
+- id: vllm-sr/intelligence@1.0.0
+  display_name: vLLM-SR Intelligence Index
+  description: Complete-case composite of General, Reasoning, Coding, and Agentic capabilities.
+  methodology: https://vllm-sr.ai/docs/benchmarking/open-intelligence-index
+  aggregation: weighted_mean
+  scale: [0, 100]
+  missing:
+    policy: require_all
+  domains:
+    general: 0.20
+    reasoning: 0.40
+    coding: 0.20
+    agentic: 0.20
+  components:
+    - index: vllm-sr/general@1.0.0
+      weight: 0.20
+      normalization: {type: identity}
+    - index: vllm-sr/reasoning@1.0.0
+      weight: 0.40
+      normalization: {type: identity}
+    - index: vllm-sr/coding@1.0.0
+      weight: 0.20
+      normalization: {type: identity}
+    - index: vllm-sr/agentic@1.0.0
       weight: 0.20
       normalization: {type: identity}

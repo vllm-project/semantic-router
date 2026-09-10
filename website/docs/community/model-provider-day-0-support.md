@@ -320,8 +320,8 @@ Custom cards may also declare optional `publisher`, `presentation`, and
 a complete effective card without adding a repository resource; none of these
 fields stores credentials.
 
-For a private model, omit `catalog`. Its alias is its local card identity, and
-both reasoning and evaluations remain optional:
+For a private model, omit `catalog`. Its alias is its local card identity;
+reasoning and model-linked evaluation records remain optional:
 
 ```yaml
 providers:
@@ -337,21 +337,24 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000/v1
 
+evaluation:
+  records:
+    - model: private-reasoner
+      benchmark: organization/private-eval@1.0.0
+      benchmark_profile: published-standard
+      reasoning_effort: high
+      metrics:
+        pass_rate: 0.82
+
 routing:
   modelCards:
     - name: private-reasoner
       context_window_size: 131072
       capabilities: [chat, tools, reasoning]
-      evaluations:
-        - benchmark: organization/private-eval@1.0.0
-          benchmark_profile: published-standard
-          reasoning_effort: high
-          metrics:
-            pass_rate: 0.82
 ```
 
-User-authored evaluations intentionally have a small surface: `benchmark` and
-`metrics`, plus optional `benchmark_profile`, `reasoning_effort`, `source`,
+User-authored records intentionally have a small surface: `model`, `benchmark`,
+and `metrics`, plus optional `benchmark_profile`, `reasoning_effort`, `source`,
 `measured_at`, and scalar `metadata`. Omit `benchmark_profile` to use a known
 benchmark's default profile; set `reasoning_effort` when the measurement came
 from a specific model effort. Catalog records retain richer evidence and

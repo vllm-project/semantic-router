@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // setInternalRequestHeaders attaches authenticated routing context for the
@@ -47,6 +48,11 @@ func (c *Client) requestHeaders(
 	header := make(http.Header, len(c.headers)+5)
 	header.Set("Content-Type", "application/json")
 	for name, value := range c.headers {
+		header.Set(name, value)
+	}
+	traceHeaders := make(map[string]string)
+	tracing.InjectTraceContext(ctx, traceHeaders)
+	for name, value := range traceHeaders {
 		header.Set(name, value)
 	}
 	if accessKey != "" {
