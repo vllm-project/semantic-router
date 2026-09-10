@@ -56,7 +56,10 @@ const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
 }
 
 export function resolveCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
-  return CAPABILITY_PLUGIN_FIELD_SCHEMAS[pluginType] ?? getCapabilityPluginFieldSchema(pluginType)
+  if (Object.prototype.hasOwnProperty.call(CAPABILITY_PLUGIN_FIELD_SCHEMAS, pluginType)) {
+    return CAPABILITY_PLUGIN_FIELD_SCHEMAS[pluginType]
+  }
+  return getCapabilityPluginFieldSchema(pluginType)
 }
 
 export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
