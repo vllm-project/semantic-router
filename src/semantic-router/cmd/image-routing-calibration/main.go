@@ -90,6 +90,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -223,6 +224,9 @@ func main() {
 	}
 
 	rules := loadRules(*rulesPath)
+	if err := validateRules(rules); err != nil {
+		fatal("rules: %v", err)
+	}
 	set := loadSet(*casesPath, rules)
 	fixtures := enumerateFixtures(*fixtureRoot, set)
 	if err := candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
@@ -488,19 +492,64 @@ func scoreFixture(classifier *classification.EmbeddingClassifier, root, path str
 	if err != nil {
 		fatal("score fixture %q: %v", resolved, err)
 	}
-	report := fixtureReport{Path: path, SHA256: fileSHA(resolved), Scores: map[string]float64{}}
+	report := fixtureReport{Path: path, SHA256: fileSHA(resolved)}
 	for _, label := range set.Positives {
 		if label.ImageFile == path && !contains(report.PositiveFor, label.SignalName) {
 			report.PositiveFor = append(report.PositiveFor, label.SignalName)
 		}
 	}
-	for _, rule := range rules {
-		report.Scores[rule.Name] = 0
+	scores, err := collectScores(rules, result.Scores)
+	if err != nil {
+		fatal("score fixture %q: %v", path, err)
 	}
-	for _, score := range result.Scores {
-		report.Scores[score.Name] = score.Score
-	}
+	report.Scores = scores
 	return report
+}
+
+// validateRules refuses a rule set the calibration cannot score honestly:
+// every rule must be an image-modality rule with candidates, otherwise the
+// classifier silently skips it and the tool would have nothing to calibrate.
+func validateRules(rules []config.EmbeddingRule) error {
+	for _, rule := range rules {
+		if modality := rule.EffectiveQueryModality(); modality != config.QueryModalityImage {
+			return fmt.Errorf("rule %q has query_modality %q; only image rules can be calibrated here", rule.Name, modality)
+		}
+		if len(rule.Candidates) == 0 {
+			return fmt.Errorf("rule %q has no candidates", rule.Name)
+		}
+	}
+	return nil
+}
+
+// collectScores turns the classifier's result into one finite score per
+// loaded rule. A rule the classifier did not score (empty prototype bank,
+// skipped modality) must fail the run rather than count as 0, which would
+// look like a confident negative; duplicates and unknown names are rejected
+// for the same reason.
+func collectScores(rules []config.EmbeddingRule, scored []classification.EmbeddingRuleScore) (map[string]float64, error) {
+	known := map[string]bool{}
+	for _, rule := range rules {
+		known[rule.Name] = true
+	}
+	scores := make(map[string]float64, len(rules))
+	for _, score := range scored {
+		if !known[score.Name] {
+			return nil, fmt.Errorf("classifier returned a score for unknown rule %q", score.Name)
+		}
+		if _, dup := scores[score.Name]; dup {
+			return nil, fmt.Errorf("classifier returned two scores for rule %q", score.Name)
+		}
+		if math.IsNaN(score.Score) || math.IsInf(score.Score, 0) {
+			return nil, fmt.Errorf("rule %q scored a non-finite value %v", score.Name, score.Score)
+		}
+		scores[score.Name] = score.Score
+	}
+	for _, rule := range rules {
+		if _, ok := scores[rule.Name]; !ok {
+			return nil, fmt.Errorf("classifier returned no score for rule %q", rule.Name)
+		}
+	}
+	return scores, nil
 }
 
 func calibrateRule(rule config.EmbeddingRule, fixtures []fixtureReport) ruleReport {

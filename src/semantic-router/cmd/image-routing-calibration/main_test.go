@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -195,6 +196,55 @@ func TestParseSet_RejectsUnreviewedShapes(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if err := parseTestSet(t, manifest); err == nil {
 				t.Fatalf("manifest accepted: %s", manifest)
+			}
+		})
+	}
+}
+
+// A rule the classifier did not score must fail the run, not become a 0 that
+// reads as a confident negative; the same goes for duplicate, unknown, and
+// non-finite scores.
+func TestCollectScores_RequiresOneFiniteScorePerRule(t *testing.T) {
+	rules := []config.EmbeddingRule{{Name: "a"}, {Name: "b"}}
+	score := func(name string, value float64) classification.EmbeddingRuleScore {
+		return classification.EmbeddingRuleScore{Name: name, Score: value}
+	}
+	got, err := collectScores(rules, []classification.EmbeddingRuleScore{score("a", 0.4), score("b", 0.1)})
+	if err != nil || got["a"] != 0.4 || got["b"] != 0.1 {
+		t.Fatalf("complete result rejected: %v %v", got, err)
+	}
+	cases := map[string][]classification.EmbeddingRuleScore{
+		"missing rule":   {score("a", 0.4)},
+		"duplicate rule": {score("a", 0.4), score("a", 0.5), score("b", 0.1)},
+		"unknown rule":   {score("a", 0.4), score("b", 0.1), score("c", 0.2)},
+		"nan":            {score("a", math.NaN()), score("b", 0.1)},
+		"inf":            {score("a", math.Inf(1)), score("b", 0.1)},
+	}
+	for name, scored := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := collectScores(rules, scored); err == nil {
+				t.Fatalf("accepted %v", scored)
+			}
+		})
+	}
+}
+
+// Only image-modality rules with candidates can be scored; anything else the
+// classifier skips, and the calibration must refuse it up front.
+func TestValidateRules_RejectsUnscorableRules(t *testing.T) {
+	good := config.EmbeddingRule{Name: "img", QueryModality: config.QueryModalityImage, Candidates: []string{"a photo"}}
+	if err := validateRules([]config.EmbeddingRule{good}); err != nil {
+		t.Fatalf("image rule rejected: %v", err)
+	}
+	cases := map[string]config.EmbeddingRule{
+		"text modality":    {Name: "txt", QueryModality: config.QueryModalityText, Candidates: []string{"a"}},
+		"default modality": {Name: "def", Candidates: []string{"a"}},
+		"no candidates":    {Name: "empty", QueryModality: config.QueryModalityImage},
+	}
+	for name, rule := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := validateRules([]config.EmbeddingRule{good, rule}); err == nil {
+				t.Fatalf("rule %+v accepted", rule)
 			}
 		})
 	}
