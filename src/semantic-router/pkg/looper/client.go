@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
@@ -188,6 +190,12 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		"logprobs":  logprobsEnabled,
 	})
 
+	// Capture first-byte timing for an active Looper attempt without wrapping
+	// response bodies or changing transport behavior.
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		GotFirstResponseByte: func() { recordAttemptFirstByte(ctx) },
+	})
+
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -198,6 +206,11 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	httpReq.Header.Set("Content-Type", "application/json")
 	for k, v := range c.headers {
 		httpReq.Header.Set(k, v)
+	}
+	traceHeaders := make(map[string]string)
+	tracing.InjectTraceContext(ctx, traceHeaders)
+	for key, value := range traceHeaders {
+		httpReq.Header.Set(key, value)
 	}
 
 	// Set Authorization header if access key is provided

@@ -96,7 +96,10 @@ rejections stay diagnosable.
 
 Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
-thresholds must be calibrated for the configured embedding model, and routes
+thresholds must be calibrated for the configured embedding model. A query longer
+than the embedding model's context window (512 tokens for the default `bert`
+model) is not cached, because a truncated embedding would match every query
+sharing that prefix. Routes
 with personalized RAG or memory should not reuse pre-enrichment responses
 without an explicit policy. See complete examples:
 [`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)

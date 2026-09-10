@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -55,23 +54,28 @@ func (r *OpenAIRouter) retrieveFromQdrant(traceCtx context.Context, ctx *Request
 		topK = *ragConfig.TopK
 	}
 
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0)
+	queryEmbeddings, err := ragQueryEmbeddings(query)
 	if err != nil {
 		logging.Errorf("Failed to generate embedding for Qdrant RAG query: %v", err)
 		return "", fmt.Errorf("failed to generate embedding")
 	}
 
-	contextParts, scores, err := qdrantCache.SearchCollection(
-		traceCtx,
-		collectionName,
-		queryEmbedding,
-		threshold,
-		topK,
-		contentField,
-	)
-	if err != nil {
-		return "", fmt.Errorf("qdrant search failed: %w", err)
+	var hits ragHits
+	for _, queryEmbedding := range queryEmbeddings {
+		windowParts, windowScores, searchErr := qdrantCache.SearchCollection(
+			traceCtx,
+			collectionName,
+			queryEmbedding,
+			threshold,
+			topK,
+			contentField,
+		)
+		if searchErr != nil {
+			return "", fmt.Errorf("qdrant search failed: %w", searchErr)
+		}
+		hits.add(windowParts, windowScores)
 	}
+	contextParts, scores := hits.top(topK)
 
 	if len(contextParts) == 0 {
 		return "", fmt.Errorf("no results above similarity threshold %.3f", threshold)
