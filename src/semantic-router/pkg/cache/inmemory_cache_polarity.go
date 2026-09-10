@@ -15,16 +15,17 @@ import (
 type polarityNLIVerdict struct {
 	Reject        bool
 	Contradiction float32
-	// Skipped means the verifier was unavailable or failed; the caller fails
-	// open and serves the candidate.
+	// Skipped means the verifier was unavailable or failed; the caller treats
+	// the unverified semantic candidate as a cache miss.
 	Skipped bool
 }
 
 // applyPolarityNLI runs the NLI tier on the winning candidate when the tier is
 // enabled. It returns handled=true with the lookup outcome when the candidate
-// must not be served — the request was cancelled, or the queries contradict —
-// and handled=false when the caller should serve it. A rejection is a
-// caller-visible miss that still reports the rejected score
+// must not be served: the request was cancelled, the verifier could not verify
+// the candidate, or the queries contradict. It returns handled=false when the
+// caller should serve the candidate. An unverified or rejected candidate is a
+// caller-visible miss that still reports the candidate score
 // (LookupResult.Similarity) so near-threshold rejections stay diagnosable.
 func (c *InMemoryCache) applyPolarityNLI(
 	ctx context.Context,
@@ -41,6 +42,14 @@ func (c *InMemoryCache) applyPolarityNLI(
 		return LookupResult{}, true, err
 	}
 	verdict := c.verifyPolarityNLI(ctx, model, bestEntry.Query, query)
+	if err := ctxErr(ctx); err != nil {
+		metrics.RecordCacheOperation("memory", "find_similar", "canceled", time.Since(start).Seconds())
+		return LookupResult{}, true, err
+	}
+	if verdict.Skipped {
+		c.recordPolaritySkippedMiss(start, bestSimilarity)
+		return LookupResult{Similarity: bestSimilarity}, true, nil
+	}
 	if !verdict.Reject {
 		return LookupResult{}, false, nil
 	}
@@ -48,9 +57,9 @@ func (c *InMemoryCache) applyPolarityNLI(
 	return LookupResult{Similarity: bestSimilarity}, true, nil
 }
 
-// verifyPolarityNLI runs the NLI tier on the winning candidate. It fails open:
-// a missing or failing verifier serves the threshold-verified hit and records
-// the skip, so a model hiccup never turns into a cache outage.
+// verifyPolarityNLI runs the NLI tier on the winning candidate. A missing or
+// failing verifier records a skip; the caller degrades that unverified semantic
+// hit to a cache miss so the request can continue to the model backend.
 func (c *InMemoryCache) verifyPolarityNLI(ctx context.Context, model, cachedQuery, incomingQuery string) polarityNLIVerdict {
 	start := time.Now()
 	verifier := loadPolarityVerifier()
@@ -61,6 +70,11 @@ func (c *InMemoryCache) verifyPolarityNLI(ctx context.Context, model, cachedQuer
 
 	contradiction, err := verifier(ctx, cachedQuery, incomingQuery)
 	if err != nil {
+		// Cancellation belongs to the lookup lifecycle, not verifier health. The
+		// caller observes ctx.Err() after this function returns.
+		if ctxErr(ctx) != nil {
+			return polarityNLIVerdict{}
+		}
 		metrics.RecordCacheOperation("memory", "polarity_nli", "error", time.Since(start).Seconds())
 		c.recordPolarityNLISkipped(model, err.Error())
 		return polarityNLIVerdict{Skipped: true}
@@ -76,12 +90,20 @@ func (c *InMemoryCache) verifyPolarityNLI(ctx context.Context, model, cachedQuer
 
 func (c *InMemoryCache) recordPolarityNLISkipped(model, reason string) {
 	logging.ComponentWarnEvent("cache", "cache_polarity_nli_skipped", map[string]interface{}{
-		"backend":   "memory",
-		"tier":      polarityGuardTierNLI,
-		"model":     model,
-		"reason":    reason,
-		"fail_open": true,
+		"backend":    "memory",
+		"tier":       polarityGuardTierNLI,
+		"model":      model,
+		"reason":     reason,
+		"cache_miss": true,
 	})
+}
+
+// recordPolaritySkippedMiss keeps verifier failures out of the contradiction
+// metrics while preserving the normal cache-miss accounting used by callers.
+func (c *InMemoryCache) recordPolaritySkippedMiss(start time.Time, similarity float32) {
+	atomic.AddInt64(&c.missCount, 1)
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: POLARITY VERIFICATION SKIPPED - similarity=%.4f; treating as miss", similarity)
+	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 }
 
 // recordPolarityReject preserves caller-visible miss semantics while emitting an
