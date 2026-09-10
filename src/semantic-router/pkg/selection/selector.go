@@ -241,6 +241,10 @@ type SelectionResult struct {
 	// SelectedModel is the name of the selected model
 	SelectedModel string
 
+	// SelectedCandidate preserves the exact winning ModelRef when a model appears
+	// more than once with different candidate-level settings.
+	SelectedCandidate *config.ModelRef
+
 	// LoRAName is the LoRA adapter name to use (if applicable)
 	LoRAName string
 
@@ -259,7 +263,8 @@ type SelectionResult struct {
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
 
-	// AllScores maps each candidate model to its computed score
+	// AllScores maps each candidate to its computed score. Unique models use the
+	// model name; duplicate refs include candidate index and effort in the key.
 	AllScores map[string]float64
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.

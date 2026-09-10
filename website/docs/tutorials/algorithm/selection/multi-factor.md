@@ -14,7 +14,9 @@ weighted or lexicographic objective.
 | Load | Current in-flight requests in this Router process | Lower is better |
 
 Quality is resolved for the candidate's exact reasoning effort. A score from a
-different effort is never borrowed.
+different effort is never borrowed. Coverage is not part of the objective; when
+both the final objective value and intelligence score tie, higher coverage is
+the deterministic tie-breaker.
 
 ## What Problem Does It Solve?
 
@@ -128,6 +130,8 @@ quality:
 - `exclude` removes a candidate without qualifying exact-effort evidence.
 - `disable_quality` keeps the pool, but one missing candidate disables quality
   for the entire comparison. It never changes weights for only one model.
+- Selection diagnostics report the chosen intelligence score and coverage, or
+  mark intelligence evidence unavailable; missing evidence is not shown as zero.
 
 See [Open Intelligence Index](../../../benchmarking/open-intelligence-index) for
 the built-in hierarchy and [Custom evaluations](../../../benchmarking/custom-evaluations)
