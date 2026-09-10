@@ -31,10 +31,27 @@ func (registry *Registry) ResolveOperationPath(providerID, protocolID, operation
 	if err != nil {
 		return "", err
 	}
+	if override, ok := provider.OperationOverrides[operationKey]; ok && override.Path != "" {
+		if override.AbsolutePath {
+			return override.Path, nil
+		}
+		return joinBasePath(basePath, override.Path), nil
+	}
 	if override := provider.PathOverrides[operationKey]; override != "" {
 		return joinBasePath(basePath, override), nil
 	}
 	return joinProtocolOperationPath(basePath, protocol.DefaultBasePath, operationPath), nil
+}
+
+// OperationOverride returns the per-operation wire override a provider declares
+// for one protocol operation, if any.
+func (registry *Registry) OperationOverride(providerID, protocolID, operationID string) (OperationOverride, bool) {
+	provider, ok := registry.Provider(providerID)
+	if !ok {
+		return OperationOverride{}, false
+	}
+	override, ok := provider.OperationOverrides[protocolID+"#"+operationID]
+	return override, ok
 }
 
 // ResolveProtocolOperationPath returns the canonical wire path declared by a

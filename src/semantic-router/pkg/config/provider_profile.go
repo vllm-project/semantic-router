@@ -182,7 +182,11 @@ func (profile *ProviderProfile) ResolveCreatePath(protocolID string) (string, er
 	if profile.hasCustomChatPath(protocolID) {
 		path = profile.ChatPath
 	}
-	return profile.appendAPIVersion(path, definition.APIVersionQuery), nil
+	apiVersionQuery := definition.APIVersionQuery
+	if override, ok := registry.OperationOverride(definition.ID, protocolID, "create"); ok && override.SuppressAPIVersion {
+		apiVersionQuery = false
+	}
+	return profile.appendAPIVersion(path, apiVersionQuery), nil
 }
 
 func (profile *ProviderProfile) resolveProtocolID(requested, defaultProtocol string) string {

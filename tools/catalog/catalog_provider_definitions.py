@@ -23,6 +23,7 @@ PROVIDER_FIELDS = {
     "default_protocol",
     "supported_operations",
     "path_overrides",
+    "operation_overrides",
     "default_headers",
     "reasoning_transport",
     "api_version_query",
@@ -182,6 +183,43 @@ def _validate_provider_operations(
                 f"{path}.path_overrides[{operation!r}] must be an absolute path "
                 "without whitespace or controls"
             )
+    _validate_provider_operation_overrides(item, path, supported)
+
+
+def _validate_provider_operation_overrides(
+    item: dict[str, Any], path: str, supported: list[str]
+) -> None:
+    overrides = item.get("operation_overrides", {})
+    if not isinstance(overrides, dict):
+        raise CatalogBuildError(f"{path}.operation_overrides must be a mapping")
+    if any(operation not in supported for operation in overrides):
+        raise CatalogBuildError(
+            f"{path}.operation_overrides references an unknown operation"
+        )
+    for operation, override in overrides.items():
+        label = f"{path}.operation_overrides[{operation!r}]"
+        if not isinstance(override, dict):
+            raise CatalogBuildError(f"{label} must be a mapping")
+        unknown = set(override) - {"path", "absolute_path", "suppress_api_version"}
+        if unknown:
+            raise CatalogBuildError(
+                f"{label} has unknown fields: {', '.join(sorted(unknown))}"
+            )
+        override_path = override.get("path")
+        if (
+            not isinstance(override_path, str)
+            or not override_path.startswith("/")
+            or any(
+                ord(character) <= ASCII_SPACE or ord(character) == ASCII_DELETE
+                for character in override_path
+            )
+        ):
+            raise CatalogBuildError(
+                f"{label}.path must be an absolute path without whitespace or controls"
+            )
+        for flag in ("absolute_path", "suppress_api_version"):
+            if flag in override and not isinstance(override[flag], bool):
+                raise CatalogBuildError(f"{label}.{flag} must be a boolean")
 
 
 def _validate_provider_headers(

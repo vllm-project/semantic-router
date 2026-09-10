@@ -14,15 +14,16 @@ import (
 )
 
 type catalogReasoningWireCase struct {
-	name          string
-	catalog       string
-	provider      string
-	apiFormat     string
-	enabled       bool
-	mode          string
-	effort        string
-	wantTransport modelcatalog.ReasoningTransport
-	wantControls  map[string]interface{}
+	name            string
+	catalog         string
+	provider        string
+	providerModelID string
+	apiFormat       string
+	enabled         bool
+	mode            string
+	effort          string
+	wantTransport   modelcatalog.ReasoningTransport
+	wantControls    map[string]interface{}
 }
 
 // TestBuiltInCatalogReasoningWireContracts crosses the complete maintained
@@ -32,6 +33,19 @@ type catalogReasoningWireCase struct {
 // runtime adapter from drifting independently.
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
+		{
+			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Azure Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			apiFormat:       config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
 		{
 			name: "OpenAI Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "openai",
 			enabled: true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
@@ -244,7 +258,7 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 	t.Helper()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, profile := renderCatalogReasoningWire(t, test.catalog, test.provider, test.apiFormat, test.enabled, test.mode, test.effort)
+			request, profile := renderCatalogReasoningWire(t, test)
 			transport, err := profile.ResolveReasoningTransport()
 			require.NoError(t, err)
 			assert.Equal(t, test.wantTransport, transport)
@@ -255,17 +269,22 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 
 func renderCatalogReasoningWire(
 	t *testing.T,
-	catalogID string,
-	providerID string,
-	apiFormat string,
-	enabled bool,
-	mode string,
-	effort string,
+	test catalogReasoningWireCase,
 ) (map[string]interface{}, config.ProviderProfile) {
 	t.Helper()
+	catalogID := test.catalog
+	providerID := test.provider
+	apiFormat := test.apiFormat
+	enabled := test.enabled
+	mode := test.mode
+	effort := test.effort
 	apiFormatLine := ""
 	if apiFormat != "" {
 		apiFormatLine = fmt.Sprintf("      api_format: %s\n", apiFormat)
+	}
+	providerModelIDLine := ""
+	if test.providerModelID != "" {
+		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
 version: v0.3
@@ -273,13 +292,13 @@ providers:
   models:
     - name: routed
       catalog: %s
-%s      backend_refs:
+%s%s      backend_refs:
         - name: primary
           provider: %s
           endpoint: 127.0.0.1:8000
           protocol: http
 routing: {}
-`, catalogID, apiFormatLine, providerID)))
+`, catalogID, apiFormatLine, providerModelIDLine, providerID)))
 	require.NoError(t, err)
 
 	decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
@@ -332,4 +351,58 @@ func providerReasoningControls(request map[string]interface{}) map[string]interf
 		}
 	}
 	return controls
+}
+
+// TestAzureOpenAIResponsesProviderBoundary pins the Azure wire contract for the
+// v1 Responses route. Azure roots that route at the host and carries the
+// deployment name in the body, so it must not reuse the deployment-scoped base
+// URL or the api-version query that Chat Completions still needs.
+func TestAzureOpenAIResponsesProviderBoundary(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  models:
+    - name: routed
+      catalog: openai/gpt-6-astra
+      api_format: responses
+      provider_model_id: astra-prod
+      backend_refs:
+        - name: primary
+          provider: azure-openai
+          endpoint: 127.0.0.1:8000
+          protocol: http
+routing: {}
+`))
+	require.NoError(t, err)
+
+	params := cfg.ModelConfig["routed"]
+	require.Len(t, params.PreferredEndpoints, 1)
+	profile := cfg.ProviderProfiles[params.PreferredEndpoints[0]]
+	profile.BaseURL = "https://myresource.openai.azure.com/openai/deployments/astra-prod"
+	profile.APIVersion = "2026-09-03"
+
+	responsesPath, err := profile.ResolveCreatePath("openai/responses@1")
+	require.NoError(t, err)
+	assert.Equal(t, "/openai/v1/responses", responsesPath)
+	assert.NotContains(t, responsesPath, "api-version")
+	assert.NotContains(t, responsesPath, "/deployments/")
+
+	chatPath, err := profile.ResolveCreatePath("openai/chat-completions@1")
+	require.NoError(t, err)
+	assert.Equal(
+		t,
+		"/openai/deployments/astra-prod/chat/completions?api-version=2026-09-03",
+		chatPath,
+	)
+
+	registry, err := modelcatalog.BuiltIn()
+	require.NoError(t, err)
+	definition, ok := registry.Provider("azure-openai")
+	require.True(t, ok)
+	assert.Equal(t, "api-key", definition.Auth.Header)
+	assert.Empty(t, definition.Auth.Prefix)
+
+	// The router emits the logical name and the gateway rewrites it to the
+	// provider model ID, so the deployment name has to survive in the config.
+	assert.Equal(t, "astra-prod", params.ExternalModelIDs["azure-openai"])
 }
