@@ -25,6 +25,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
+	captureOriginalContextHistory(ctx)
 	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
 	if snapshot.Stream {
 		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
@@ -194,7 +195,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	if compressionErr := r.applySemanticContextCompression(ctx, request); compressionErr != nil {
+	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}
 	return request, nil, nil
