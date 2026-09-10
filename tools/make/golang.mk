@@ -8,11 +8,11 @@ CONTROLLER_GEN_VERSION ?= v0.20.0
 
 config-schema-generate: ## Generate canonical Router config contracts for all consumers
 	@$(LOG_TARGET)
-	@cd src/semantic-router && go run ./cmd/configschema --repository-root ../..
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../..
 
 config-schema-check: ## Check that generated Router config contracts match Go source
 	@$(LOG_TARGET)
-	@cd src/semantic-router && go run ./cmd/configschema --repository-root ../.. --check
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../.. --check
 
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)

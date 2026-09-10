@@ -5,6 +5,7 @@ import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import {
   configSchemaFields,
+  configSchemaStructure,
   filterConfigSchemaIndex,
   focusedSchemaTitle,
   type ConfigSchemaIndex,
@@ -99,6 +100,7 @@ const ConfigSchemaReferencePage: React.FC = () => {
     [index, query],
   )
   const fields = useMemo(() => (detail ? configSchemaFields(detail) : []), [detail])
+  const structure = useMemo(() => (detail ? configSchemaStructure(detail) : null), [detail])
   const selectSection = (path: string) => setSearchParams({ section: path })
   const selectSurface = (kind: string, name: string) =>
     setSearchParams({ surface: `${kind}:${name}` })
@@ -247,31 +249,48 @@ const ConfigSchemaReferencePage: React.FC = () => {
                   <p>{detail['x-vllm-sr-surface']?.description || detail.description}</p>
                 ) : null}
               </header>
-              {fields.length ? (
-                <div className={styles.fields}>
-                  {fields.map((field) => (
-                    <section className={styles.field} key={field.name}>
-                      <div className={styles.fieldHeading}>
-                        <code>{field.name}</code>
-                        <span>{field.type}</span>
-                        {field.required ? <b>required</b> : null}
-                      </div>
-                      {field.description ? <p>{field.description}</p> : null}
-                      {field.details.length ? (
-                        <div className={styles.fieldDetails}>
-                          {field.details.map((value) => (
-                            <code key={value}>{value}</code>
-                          ))}
-                        </div>
-                      ) : null}
-                    </section>
-                  ))}
+              {structure ? (
+                <div className={styles.structure}>
+                  <div>
+                    <span>Shape</span>
+                    <strong>{structure.type}</strong>
+                  </div>
+                  <p>{structure.description}</p>
                 </div>
+              ) : null}
+              {fields.length ? (
+                <>
+                  <div className={styles.fieldsHeading}>
+                    <h3>{structure?.fieldsLabel || 'Fields'}</h3>
+                    <span>{fields.length}</span>
+                  </div>
+                  <div className={styles.fields}>
+                    {fields.map((field) => (
+                      <section className={styles.field} key={field.name}>
+                        <div className={styles.fieldHeading}>
+                          <code>{field.name}</code>
+                          <span>{field.type}</span>
+                          {field.required ? <b>required</b> : null}
+                        </div>
+                        {field.description ? <p>{field.description}</p> : null}
+                        {field.details.length ? (
+                          <div className={styles.fieldDetails}>
+                            {field.details.map((value) => (
+                              <code key={value}>{value}</code>
+                            ))}
+                          </div>
+                        ) : null}
+                      </section>
+                    ))}
+                  </div>
+                </>
               ) : (
-                <div className={styles.emptyFields}>This surface has no configurable fields.</div>
+                <div className={styles.emptyFields}>
+                  This object has no configurable parameters.
+                </div>
               )}
               <details className={styles.rawDetail}>
-                <summary>Focused JSON Schema</summary>
+                <summary>View raw schema</summary>
                 <pre>{JSON.stringify(detail, null, 2)}</pre>
               </details>
             </>

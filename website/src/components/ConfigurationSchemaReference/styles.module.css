@@ -141,6 +141,52 @@
   font-size: 0.82rem;
 }
 
+.shape {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.9rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.shape span,
+.fieldsHeading span {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.shape code {
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.shape small {
+  margin-left: auto;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.7rem;
+}
+
+.fieldsHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.5rem;
+}
+
+.fieldsHeading h4 {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .fields {
   display: grid;
   gap: 0.55rem;
@@ -184,6 +230,15 @@
   text-align: center;
 }
 
+.emptyFields {
+  padding: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.75rem;
+  text-align: center;
+  border: 1px dashed var(--ifm-color-emphasis-300);
+  border-radius: 7px;
+}
+
 .empty strong {
   color: var(--ifm-font-color-base);
 }
@@ -210,5 +265,15 @@
 
   .detail {
     min-height: 360px;
+  }
+
+  .shape {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .shape small {
+    width: 100%;
+    margin-left: 0;
   }
 }

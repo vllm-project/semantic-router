@@ -98,6 +98,7 @@ domains:
     paths:
       - src/semantic-router/**
       - config/**
+      - tools/configschema/**
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - go.mod
       - go.sum

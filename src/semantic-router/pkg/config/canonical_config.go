@@ -14,14 +14,22 @@ const CanonicalConfigVersion = "v0.3"
 
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version     string                `yaml:"version,omitempty"`
-	Listeners   []Listener            `yaml:"listeners,omitempty"`
-	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
-	Evaluation  *CanonicalEvaluation  `yaml:"evaluation,omitempty"`
-	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	// Version selects the canonical configuration contract understood by the Router.
+	Version string `yaml:"version,omitempty"`
+	// Listeners expose named public request entry points through Envoy.
+	Listeners []Listener `yaml:"listeners,omitempty"`
+	// Providers define model endpoints, credentials, and provider defaults.
+	Providers CanonicalProviders `yaml:"providers,omitempty"`
+	// Evaluation defines operator-owned benchmarks, indices, and model measurements.
+	Evaluation *CanonicalEvaluation `yaml:"evaluation,omitempty"`
+	// Routing contains model cards, signals, projections, decisions, and routing strategy.
+	Routing CanonicalRouting `yaml:"routing,omitempty"`
+	// Entrypoints map public model names to isolated routing recipes.
 	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
-	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
+	// Recipes package the routing policy and plugins used by an entrypoint.
+	Recipes []CanonicalRecipe `yaml:"recipes,omitempty"`
+	// Global contains shared Router services, model assets, learning, and protection settings.
+	Global *CanonicalGlobal `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }

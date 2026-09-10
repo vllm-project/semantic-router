@@ -162,6 +162,6 @@ JSON copy. Packaging stages the canonical artifact into wheels and container
 images without writing generated files back into the worktree. CI fails when
 the canonical artifact or adapter is stale.
 
-`setup.mode` is represented by the product document contract but remains
-control-plane metadata. The Dashboard removes it at activation; active Router
-documents and calls to `/config/router/validate` must not include it.
+`setup.mode` is bootstrap-only Dashboard control-plane metadata, so it is not
+published by the Router schema. The Dashboard removes it at activation; active
+Router documents and calls to `/config/router/validate` must not include it.

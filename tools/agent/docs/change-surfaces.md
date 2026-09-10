@@ -11,7 +11,8 @@ This document defines the project-level surfaces used by skills, reports, and va
   Dashboard frontend imports it directly. Do not maintain a parallel field or
   discriminator inventory.
 - Typical paths: `src/semantic-router/pkg/config/**`,
-  `src/semantic-router/pkg/configschema/**`, `config/**/*.yaml`
+  `src/semantic-router/pkg/configschema/**`, `tools/configschema/**`,
+  `config/**/*.yaml`
 - Task rules: `router-core`, `repo-docs`
 
 ## `signal_runtime`

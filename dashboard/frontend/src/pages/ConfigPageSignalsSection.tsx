@@ -239,10 +239,19 @@ export default function ConfigPageSignalsSection({
       },
     }
     const fields: FieldConfig<SignalFormState>[] = [
-      { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'my_signal' },
+      {
+        name: 'name',
+        label: 'Name',
+        section: 'Identity',
+        fullWidth: true,
+        type: 'text',
+        required: true,
+        placeholder: 'my_signal',
+      },
       {
         name: 'definition',
         label: 'Configuration',
+        section: 'Definition',
         type: 'custom',
         required: true,
         description: 'Fields are driven by the same canonical signal schema used by Builder.',
@@ -300,7 +309,7 @@ export default function ConfigPageSignalsSection({
   const handleViewSignal = (signal: ManagedSignal) => {
     const sections: ViewSection[] = [
       {
-        title: 'Basic Information',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: signal.name },
           { label: 'Type', value: `${signal.type} (${signal.canonicalType})` },
@@ -308,7 +317,7 @@ export default function ConfigPageSignalsSection({
         ],
       },
       {
-        title: 'Complete Configuration',
+        title: 'Definition',
         fields: [
           {
             label: 'Fields',

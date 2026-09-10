@@ -50,6 +50,12 @@ export interface ConfigSchemaField {
   details: string[]
 }
 
+export interface ConfigSchemaStructure {
+  type: string
+  fieldsLabel: string
+  description: string
+}
+
 interface FilteredConfigSchemaIndex {
   sections: ConfigSchemaIndexSection[]
   surfaces: Record<string, ConfigSchemaSurfaceIndex>
@@ -79,23 +85,60 @@ export function filterConfigSchemaIndex(
 
 export function configSchemaFields(document: ConfigSchemaNode): ConfigSchemaField[] {
   const root = concreteNode(document, document)
-  const required = new Set(root.required ?? [])
-  return Object.entries(root.properties ?? {}).map(([name, node]) => {
-    const concrete = concreteNode(document, node)
-    const details: string[] = []
-    if (concrete.const !== undefined) details.push(`fixed: ${formatValue(concrete.const)}`)
-    if (concrete.default !== undefined) details.push(`default: ${formatValue(concrete.default)}`)
-    if (concrete.enum?.length) details.push(`values: ${concrete.enum.map(formatValue).join(', ')}`)
-    if (concrete.minimum !== undefined) details.push(`min: ${concrete.minimum}`)
-    if (concrete.maximum !== undefined) details.push(`max: ${concrete.maximum}`)
+  const fieldRoot = root.type === 'array' && root.items ? concreteNode(document, root.items) : root
+  const properties = Object.entries(fieldRoot.properties ?? {})
+  if (properties.length === 0) {
+    if (fieldRoot.type === 'object' || (!fieldRoot.type && fieldRoot.const === undefined)) return []
+    return [fieldFromNode(document, root.type === 'array' ? 'item' : 'value', fieldRoot, true)]
+  }
+
+  const required = new Set(fieldRoot.required ?? [])
+  return properties.map(([name, node]) => fieldFromNode(document, name, node, required.has(name)))
+}
+
+export function configSchemaStructure(document: ConfigSchemaNode): ConfigSchemaStructure {
+  const root = concreteNode(document, document)
+  if (root.type === 'array') {
     return {
-      name,
-      type: schemaType(document, node),
-      required: required.has(name),
-      description: concrete.description,
-      details,
+      type: schemaType(document, root),
+      fieldsLabel: 'Item fields',
+      description: 'Each list item uses the fields shown below.',
     }
-  })
+  }
+  if (root.type === 'object' || root.properties) {
+    return {
+      type: 'object',
+      fieldsLabel: 'Fields',
+      description: 'This object accepts the fields shown below.',
+    }
+  }
+  return {
+    type: schemaType(document, root),
+    fieldsLabel: 'Value',
+    description: 'This section is a single configuration value.',
+  }
+}
+
+function fieldFromNode(
+  document: ConfigSchemaNode,
+  name: string,
+  node: ConfigSchemaNode,
+  required: boolean,
+): ConfigSchemaField {
+  const concrete = concreteNode(document, node)
+  const details: string[] = []
+  if (concrete.const !== undefined) details.push(`fixed: ${formatValue(concrete.const)}`)
+  if (concrete.default !== undefined) details.push(`default: ${formatValue(concrete.default)}`)
+  if (concrete.enum?.length) details.push(`values: ${concrete.enum.map(formatValue).join(', ')}`)
+  if (concrete.minimum !== undefined) details.push(`min: ${concrete.minimum}`)
+  if (concrete.maximum !== undefined) details.push(`max: ${concrete.maximum}`)
+  return {
+    name,
+    type: schemaType(document, node),
+    required,
+    description: concrete.description,
+    details,
+  }
 }
 
 export function schemaType(document: ConfigSchemaNode, node: ConfigSchemaNode): string {

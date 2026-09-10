@@ -1136,15 +1136,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "CanonicalSetup": {
-      "properties": {
-        "mode": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "CanonicalSignals": {
       "properties": {
         "keywords": {
@@ -6607,9 +6598,6 @@
     },
     "global": {
       "$ref": "#/$defs/CanonicalGlobal"
-    },
-    "setup": {
-      "$ref": "#/$defs/CanonicalSetup"
     }
   },
   "additionalProperties": false,

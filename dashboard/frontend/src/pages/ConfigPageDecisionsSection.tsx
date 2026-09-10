@@ -142,7 +142,7 @@ export default function ConfigPageDecisionsSection({
   const handleViewDecision = (decision: DecisionRow) => {
     const sections: ViewSection[] = [
       {
-        title: 'Basic Information',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: decision.name },
           { label: 'Priority', value: `P${decision.priority}` },
@@ -151,18 +151,13 @@ export default function ConfigPageDecisionsSection({
         ],
       },
       {
-        title: 'Rules',
+        title: 'Routing policy',
         fields: [
           {
             label: 'Rule Tree',
             value: <ConfigPageDecisionRulesEditor value={decision.rules || {}} readOnly />,
             fullWidth: true,
           },
-        ],
-      },
-      {
-        title: 'Models',
-        fields: [
           {
             label: 'Model References',
             value: decision.modelRefs?.length ? (
@@ -174,12 +169,23 @@ export default function ConfigPageDecisionsSection({
             ),
             fullWidth: true,
           },
+          {
+            label: 'Direct Action',
+            value: (
+              <ConfigPageSchemaFieldsEditor
+                schema={DECISION_ACTION_SCHEMA}
+                value={decision.action || {}}
+                readOnly
+              />
+            ),
+            fullWidth: true,
+          },
         ],
       },
     ]
 
     sections.push({
-      title: 'Selection & Learning',
+      title: 'Selection & runtime',
       fields: [
         {
           label: 'Algorithm',
@@ -197,11 +203,35 @@ export default function ConfigPageDecisionsSection({
           ),
           fullWidth: true,
         },
+        ...(decision.plugins?.length
+          ? [
+              {
+                label: 'Plugins',
+                value: (
+                  <div className={decisionStyles.viewStack}>
+                    {decision.plugins.map((plugin, i) => (
+                      <article key={`${plugin.type}-${i}`} className={decisionStyles.viewCard}>
+                        <div className={decisionStyles.viewHeading}>
+                          <span className={decisionStyles.viewTitle}>{plugin.type}</span>
+                        </div>
+                        <ConfigPageSchemaFieldsEditor
+                          schema={getPluginFieldSchema(plugin.type)}
+                          value={plugin.configuration || {}}
+                          readOnly
+                        />
+                      </article>
+                    ))}
+                  </div>
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
       ],
     })
 
     sections.push({
-      title: 'Output & Declarative Behavior',
+      title: 'Output behavior',
       fields: [
         { label: 'Output Contract', value: decision.output_contract || 'Not set', fullWidth: true },
         {
@@ -210,17 +240,6 @@ export default function ConfigPageDecisionsSection({
             <ConfigPageSchemaFieldsEditor
               schema={DECISION_OUTPUT_CONTRACT_SCHEMA}
               value={decision.output_contract_spec || {}}
-              readOnly
-            />
-          ),
-          fullWidth: true,
-        },
-        {
-          label: 'Action',
-          value: (
-            <ConfigPageSchemaFieldsEditor
-              schema={DECISION_ACTION_SCHEMA}
-              value={decision.action || {}}
               readOnly
             />
           ),
@@ -243,34 +262,6 @@ export default function ConfigPageDecisionsSection({
         },
       ],
     })
-
-    if (decision.plugins && decision.plugins.length > 0) {
-      sections.push({
-        title: 'Plugins',
-        fields: [
-          {
-            label: 'Configured Plugins',
-            value: (
-              <div className={decisionStyles.viewStack}>
-                {decision.plugins.map((plugin, i) => (
-                  <article key={`${plugin.type}-${i}`} className={decisionStyles.viewCard}>
-                    <div className={decisionStyles.viewHeading}>
-                      <span className={decisionStyles.viewTitle}>{plugin.type}</span>
-                    </div>
-                    <ConfigPageSchemaFieldsEditor
-                      schema={getPluginFieldSchema(plugin.type)}
-                      value={plugin.configuration || {}}
-                      readOnly
-                    />
-                  </article>
-                ))}
-              </div>
-            ),
-            fullWidth: true,
-          },
-        ],
-      })
-    }
 
     openViewModal(`Decision: ${decision.name}`, sections, () => handleEditDecision(decision))
   }
@@ -346,19 +337,16 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'name',
         label: 'Name',
+        section: 'Identity',
+        fullWidth: true,
         type: 'text',
         required: true,
         placeholder: 'Enter a unique decision name',
       },
       {
-        name: 'description',
-        label: 'Description',
-        type: 'textarea',
-        placeholder: 'What does this decision route?',
-      },
-      {
         name: 'priority',
         label: 'Priority',
+        section: 'Identity',
         type: 'number',
         min: 0,
         placeholder: '1',
@@ -366,19 +354,22 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'tier',
         label: 'Tier',
+        section: 'Identity',
         type: 'number',
         min: 0,
         description: 'Optional decision tier used by tier-scoped learning and selection.',
       },
       {
-        name: 'output_contract',
-        label: 'Output Contract',
+        name: 'description',
+        label: 'Description',
+        section: 'Identity',
         type: 'textarea',
-        description: 'Optional model-facing output instructions.',
+        placeholder: 'What does this decision route?',
       },
       {
         name: 'rules',
         label: 'Rule Tree',
+        section: 'Routing policy',
         type: 'custom',
         description:
           'Configure an unconditional route or a recursive AND, OR, and NOT tree with predicates and classifier failure policy.',
@@ -392,6 +383,7 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'modelRefs',
         label: 'Model References',
+        section: 'Routing policy',
         type: 'custom',
         description: 'Set target models and whether to enable reasoning.',
         customRender: (value, onChange) => (
@@ -404,20 +396,9 @@ export default function ConfigPageDecisionsSection({
         ),
       },
       {
-        name: 'plugins',
-        label: 'Plugins',
-        type: 'custom',
-        description: 'Optional plugins applied to this decision.',
-        customRender: (value, onChange) => (
-          <ConfigPageDecisionPluginsEditor
-            value={Array.isArray(value) ? (value as DecisionFormState['plugins']) : []}
-            onChange={(nextValue) => onChange(nextValue)}
-          />
-        ),
-      },
-      {
         name: 'action',
         label: 'Direct Action',
+        section: 'Routing policy',
         type: 'custom',
         description: 'An explicit route action used instead of candidate ranking.',
         customRender: (value, onChange) => (
@@ -431,6 +412,7 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'algorithm',
         label: 'Selection Algorithm',
+        section: 'Selection & runtime',
         type: 'custom',
         description: 'How this decision selects or combines multiple candidate models.',
         customRender: (value, onChange) => (
@@ -440,6 +422,7 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'adaptations',
         label: 'Learning & Protection',
+        section: 'Selection & runtime',
         type: 'custom',
         description: 'Decision-level overrides for online adaptation and model-switch protection.',
         customRender: (value, onChange) => (
@@ -451,8 +434,29 @@ export default function ConfigPageDecisionsSection({
         ),
       },
       {
+        name: 'plugins',
+        label: 'Plugins',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description: 'Optional plugins applied to this decision.',
+        customRender: (value, onChange) => (
+          <ConfigPageDecisionPluginsEditor
+            value={Array.isArray(value) ? (value as DecisionFormState['plugins']) : []}
+            onChange={(nextValue) => onChange(nextValue)}
+          />
+        ),
+      },
+      {
+        name: 'output_contract',
+        label: 'Output Contract',
+        section: 'Output behavior',
+        type: 'textarea',
+        description: 'Optional model-facing output instructions.',
+      },
+      {
         name: 'output_contract_spec',
         label: 'Output Contract Specification',
+        section: 'Output behavior',
         type: 'custom',
         description: 'Typed extraction, normalization, rendering, and post-processing behavior.',
         customRender: (value, onChange) => (
@@ -466,6 +470,7 @@ export default function ConfigPageDecisionsSection({
       {
         name: 'declarative',
         label: 'Declarative Extensions',
+        section: 'Output behavior',
         type: 'custom',
         description: 'Candidate iteration, emitted directives, and bounded annotations.',
         customRender: (value, onChange) => (

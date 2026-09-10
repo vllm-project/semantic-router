@@ -79,10 +79,13 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"version", "listeners", "providers", "evaluation", "routing", "entrypoints", "recipes", "global", "setup"} {
+	for _, field := range []string{"version", "listeners", "providers", "evaluation", "routing", "entrypoints", "recipes", "global"} {
 		if _, ok := document.Properties[field]; !ok {
 			t.Errorf("root schema is missing %q", field)
 		}
+	}
+	if _, ok := document.Properties["setup"]; ok {
+		t.Error("steady-state Router schema must not publish transient Dashboard setup state")
 	}
 	if document.Extension.ContractVersion != ContractVersion {
 		t.Fatalf("contract version = %q", document.Extension.ContractVersion)

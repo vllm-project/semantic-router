@@ -38,6 +38,8 @@ interface SchemaDocument extends SchemaNode {
   }
 }
 
+type SchemaFieldEntry = [name: string, node: SchemaNode]
+
 const document = routerConfigSchema as unknown as SchemaDocument
 
 function resolve(node: SchemaNode): SchemaNode {
@@ -66,6 +68,26 @@ function nodeType(node: SchemaNode): string {
 function displayName(value: string): string {
   const words = value.replaceAll('_', ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+function fieldRoot(node: SchemaNode): SchemaNode {
+  const selected = concrete(node)
+  return selected.type === 'array' && selected.items ? concrete(selected.items) : selected
+}
+
+function fieldEntries(node: SchemaNode): SchemaFieldEntry[] {
+  const selected = concrete(node)
+  const root = fieldRoot(node)
+  const properties = Object.entries(root.properties ?? {})
+  if (properties.length || root.type === 'object') return properties
+  return [[selected.type === 'array' ? 'item' : 'value', root]]
+}
+
+function fieldsLabel(node: SchemaNode): string {
+  const selected = concrete(node)
+  if (selected.type === 'array') return 'Item fields'
+  if (fieldRoot(node).type === 'object') return 'Fields'
+  return 'Value'
 }
 
 const catalogs = [
@@ -132,7 +154,9 @@ export default function ConfigurationSchemaReference() {
     [normalized],
   )
   const selected = selectedNode ? concrete(selectedNode) : null
-  const required = new Set(selected?.required ?? [])
+  const selectedRoot = selectedNode ? fieldRoot(selectedNode) : null
+  const selectedFields = selectedNode ? fieldEntries(selectedNode) : []
+  const required = new Set(selectedRoot?.required ?? [])
 
   return (
     <div className={styles.reference}>
@@ -207,33 +231,61 @@ export default function ConfigurationSchemaReference() {
           {selected
             ? (
                 <>
-                  <h3>{selected.title || 'Schema fields'}</h3>
-                  {selected.description ? <p>{selected.description}</p> : null}
-                  <div className={styles.fields}>
-                    {Object.entries(selected.properties ?? {}).map(
-                      ([name, node]) => {
-                        const field = concrete(node)
-                        return (
-                          <section key={name}>
-                            <header>
-                              <code>{name}</code>
-                              <span>{nodeType(node)}</span>
-                              {required.has(name) ? <b>required</b> : null}
-                            </header>
-                            {field.description ? <p>{field.description}</p> : null}
-                            {field.enum?.length
-                              ? (
-                                  <small>
-                                    Values:
-                                    {field.enum.join(', ')}
-                                  </small>
-                                )
-                              : null}
-                          </section>
-                        )
-                      },
-                    )}
+                  <h3>{selected.title || selectedRoot?.title || 'Schema fields'}</h3>
+                  {selected.description || selectedRoot?.description
+                    ? <p>{selected.description || selectedRoot?.description}</p>
+                    : null}
+                  <div className={styles.shape}>
+                    <span>Shape</span>
+                    <code>{nodeType(selected)}</code>
+                    <small>
+                      {selected.type === 'array'
+                        ? 'Each list item uses the fields below.'
+                        : selectedRoot?.type === 'object'
+                          ? 'This object accepts the fields below.'
+                          : 'This section is a single value.'}
+                    </small>
                   </div>
+                  <div className={styles.fieldsHeading}>
+                    <h4>{fieldsLabel(selected)}</h4>
+                    <span>{selectedFields.length}</span>
+                  </div>
+                  {selectedFields.length
+                    ? (
+                        <div className={styles.fields}>
+                          {selectedFields.map(([name, node]) => {
+                            const field = concrete(node)
+                            const isSynthetic = name === 'value' || name === 'item'
+                            return (
+                              <section key={name}>
+                                <header>
+                                  <code>{name}</code>
+                                  <span>{nodeType(node)}</span>
+                                  {required.has(name) || isSynthetic ? <b>required</b> : null}
+                                </header>
+                                {field.description ? <p>{field.description}</p> : null}
+                                {field.enum?.length
+                                  ? (
+                                      <small>
+                                        Values:
+                                        {field.enum.join(', ')}
+                                      </small>
+                                    )
+                                  : null}
+                                {field.const !== undefined
+                                  ? (
+                                      <small>
+                                        Fixed:
+                                        {String(field.const)}
+                                      </small>
+                                    )
+                                  : null}
+                              </section>
+                            )
+                          })}
+                        </div>
+                      )
+                    : <div className={styles.emptyFields}>No configurable fields.</div>}
                 </>
               )
             : (

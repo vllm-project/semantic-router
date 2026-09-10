@@ -35,12 +35,16 @@ export default function ConfigPageSchemaFieldsEditor({
   readOnly = false,
 }: ConfigPageSchemaFieldsEditorProps) {
   const knownKeys = new Set(schema.map((field) => field.key))
+  const visibleSchema = readOnly
+    ? schema.filter((field) => Object.prototype.hasOwnProperty.call(value, field.key))
+    : schema
   const unknownEntries = Object.entries(value).filter(([key]) => !knownKeys.has(key))
+  const isEmpty = visibleSchema.length === 0 && unknownEntries.length === 0
 
   return (
     <fieldset className={styles.fieldset} disabled={readOnly}>
       <div className={styles.fields}>
-        {schema.map((field) => (
+        {visibleSchema.map((field) => (
           <div
             key={field.key}
             className={COMPOUND_TYPES.has(field.type) ? styles.wide : styles.field}
@@ -75,6 +79,7 @@ export default function ConfigPageSchemaFieldsEditor({
             ))}
           </section>
         ) : null}
+        {isEmpty ? <p className={styles.empty}>No fields configured.</p> : null}
       </div>
     </fieldset>
   )

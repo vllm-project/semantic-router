@@ -59,6 +59,38 @@ func TestRenderFocusedViewsIncludeOnlyReferencedDefinitions(t *testing.T) {
 	}
 }
 
+func TestRenderTopLevelCollectionAndScalarSections(t *testing.T) {
+	for _, path := range []string{"listeners", "entrypoints", "recipes"} {
+		section, err := Render(ViewOptions{View: ViewSection, Path: path})
+		if err != nil {
+			t.Fatalf("render %s section: %v", path, err)
+		}
+		var document map[string]any
+		if err := json.Unmarshal(section.Body, &document); err != nil {
+			t.Fatalf("decode %s section: %v", path, err)
+		}
+		if document["type"] != "array" || document["items"] == nil {
+			t.Fatalf("%s section does not describe array items: %#v", path, document)
+		}
+		definitions, ok := document["$defs"].(map[string]any)
+		if !ok || len(definitions) == 0 {
+			t.Fatalf("%s section is missing its item definitions", path)
+		}
+	}
+
+	version, err := Render(ViewOptions{View: ViewSection, Path: "version"})
+	if err != nil {
+		t.Fatalf("render version section: %v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(version.Body, &document); err != nil {
+		t.Fatalf("decode version section: %v", err)
+	}
+	if document["type"] != "string" || document["const"] != ConfigVersion {
+		t.Fatalf("version section does not publish its fixed scalar value: %#v", document)
+	}
+}
+
 func TestRenderRejectsUnknownViews(t *testing.T) {
 	for _, options := range []ViewOptions{
 		{View: "everything"},

@@ -68,6 +68,8 @@ function withGeneratedProjectionFields<TForm extends object>(
     .map<FieldConfig<TForm>>((field) => ({
       name: field.key,
       label: field.label,
+      section: 'Advanced',
+      fullWidth: true,
       required: field.required,
       description: field.description,
       type: 'custom',
@@ -177,10 +179,11 @@ export default function ConfigPageProjectionsSection({
   const partitionFields = withGeneratedProjectionFields<ProjectionPartitionFormState>(
     'partitions',
     [
-      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
       {
         name: 'semantics',
         label: 'Semantics',
+        section: 'Identity',
         type: 'select',
         required: true,
         options: ['exclusive', 'softmax_exclusive'],
@@ -188,6 +191,7 @@ export default function ConfigPageProjectionsSection({
       {
         name: 'members',
         label: 'Members',
+        section: 'Definition',
         type: 'custom',
         required: true,
         description: 'Declared domain or embedding signals coordinated by this partition.',
@@ -198,6 +202,7 @@ export default function ConfigPageProjectionsSection({
       {
         name: 'temperature',
         label: 'Temperature',
+        section: 'Identity',
         type: 'number',
         step: 0.01,
         shouldHide: (data) => data.semantics !== 'softmax_exclusive',
@@ -205,6 +210,7 @@ export default function ConfigPageProjectionsSection({
       {
         name: 'default',
         label: 'Default',
+        section: 'Identity',
         type: 'text',
         description: 'Fallback member name used when no member wins.',
       },
@@ -212,10 +218,11 @@ export default function ConfigPageProjectionsSection({
   )
 
   const scoreFields = withGeneratedProjectionFields<ProjectionScoreFormState>('scores', [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['weighted_sum'],
@@ -223,6 +230,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'inputs',
       label: 'Inputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
       description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
@@ -233,10 +241,11 @@ export default function ConfigPageProjectionsSection({
   ])
 
   const mappingFields = withGeneratedProjectionFields<ProjectionMappingFormState>('mappings', [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
     {
       name: 'source',
       label: 'Source Score',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: scoreOptions.length > 0 ? scoreOptions : [''],
@@ -245,6 +254,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'method',
       label: 'Method',
+      section: 'Identity',
       type: 'select',
       required: true,
       options: ['threshold_bands', 'multi_emit'],
@@ -252,6 +262,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'calibration',
       label: 'Calibration',
+      section: 'Definition',
       type: 'custom',
       description: 'Optional confidence calibration applied to output bands.',
       customRender: (value, onChange) => (
@@ -261,6 +272,7 @@ export default function ConfigPageProjectionsSection({
     {
       name: 'outputs',
       label: 'Outputs',
+      section: 'Definition',
       type: 'custom',
       required: true,
       description: 'Named routing bands and their lower or upper threshold bounds.',
@@ -354,12 +366,17 @@ export default function ConfigPageProjectionsSection({
   const handleViewPartition = (partition: ProjectionPartition) => {
     const sections: ViewSection[] = [
       {
-        title: 'Partition',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: partition.name },
           { label: 'Semantics', value: partition.semantics },
           { label: 'Temperature', value: partition.temperature ?? 'N/A' },
           { label: 'Default', value: partition.default || 'N/A' },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Members',
             value: <ProjectionMembersEditor value={partition.members || []} readOnly />,
@@ -443,10 +460,15 @@ export default function ConfigPageProjectionsSection({
   const handleViewScore = (score: ProjectionScore) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Score',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: score.name },
           { label: 'Method', value: score.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Inputs',
             value: <ProjectionInputsEditor value={score.inputs || []} readOnly />,
@@ -576,11 +598,16 @@ export default function ConfigPageProjectionsSection({
   const handleViewMapping = (mapping: ProjectionMapping) => {
     const sections: ViewSection[] = [
       {
-        title: 'Projection Mapping',
+        title: 'Identity',
         fields: [
           { label: 'Name', value: mapping.name },
           { label: 'Source', value: mapping.source },
           { label: 'Method', value: mapping.method },
+        ],
+      },
+      {
+        title: 'Definition',
+        fields: [
           {
             label: 'Calibration',
             value: mapping.calibration ? (

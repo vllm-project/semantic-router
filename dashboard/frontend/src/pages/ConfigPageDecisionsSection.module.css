@@ -83,11 +83,6 @@
   font-weight: 600;
 }
 
-.editorCheckbox input {
-  width: 1rem;
-  height: 1rem;
-}
-
 .editorButtonSecondary {
   width: fit-content;
   padding: 0.55rem 0.8rem;

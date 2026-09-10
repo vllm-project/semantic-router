@@ -64,7 +64,7 @@ describe('generated Dashboard routing contract', () => {
     }
   })
 
-  it('includes the product setup surface in the canonical document', () => {
-    expect(ROUTER_CONFIG_SCHEMA.properties).toHaveProperty('setup')
+  it('keeps transient Dashboard setup state out of the Router contract', () => {
+    expect(ROUTER_CONFIG_SCHEMA.properties).not.toHaveProperty('setup')
   })
 })

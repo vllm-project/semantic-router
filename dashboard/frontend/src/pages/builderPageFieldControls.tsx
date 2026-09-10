@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 
 import type { FieldSchema } from '@/lib/dslMutations'
+import ProductCheckbox from '@/components/ProductCheckbox'
 
 import styles from './BuilderPage.module.css'
 import { JsonFieldEditor } from './builderPageJsonFieldEditor'
@@ -163,24 +164,18 @@ export const FieldEditor: React.FC<{
     case 'boolean':
       return (
         <div className={styles.fieldGroup}>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-            }}
-          >
-            <input
-              type="checkbox"
+          <span className={styles.fieldLabel}>{schema.label}</span>
+          <label className={styles.booleanControl}>
+            <ProductCheckbox
               checked={!!value}
               onChange={(e) => onChange(e.target.checked)}
-              style={{ accentColor: 'var(--color-primary)' }}
+              aria-label={schema.label}
             />
-            <span className={styles.fieldLabel} style={{ textTransform: 'none' }}>
-              {schema.label}
-            </span>
+            <span>{value ? 'Enabled' : 'Disabled'}</span>
           </label>
+          {schema.description ? (
+            <span className={styles.fieldDescription}>{schema.description}</span>
+          ) : null}
         </div>
       )
     case 'select':

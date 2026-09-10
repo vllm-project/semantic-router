@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   configSchemaFields,
+  configSchemaStructure,
   filterConfigSchemaIndex,
   focusedSchemaTitle,
   type ConfigSchemaIndex,
@@ -69,5 +70,54 @@ describe('config schema reference support', () => {
         details: ['default: 100'],
       },
     ])
+  })
+
+  it('describes scalar sections and array item fields instead of treating them as empty objects', () => {
+    const version: ConfigSchemaNode = {
+      type: 'string',
+      const: 'v0.3',
+      'x-vllm-sr-view': { view: 'section', path: 'version' },
+    }
+    expect(configSchemaStructure(version)).toEqual({
+      type: 'string',
+      fieldsLabel: 'Value',
+      description: 'This section is a single configuration value.',
+    })
+    expect(configSchemaFields(version)).toEqual([
+      {
+        name: 'value',
+        type: 'string',
+        required: true,
+        description: undefined,
+        details: ['fixed: v0.3'],
+      },
+    ])
+
+    const listeners: ConfigSchemaNode = {
+      type: 'array',
+      items: { $ref: '#/$defs/Listener' },
+      $defs: {
+        Listener: {
+          type: 'object',
+          required: ['name', 'port'],
+          properties: {
+            name: { type: 'string', description: 'Stable listener name.' },
+            port: { type: 'integer', minimum: 1 },
+          },
+        },
+      },
+      'x-vllm-sr-view': { view: 'section', path: 'listeners' },
+    }
+    expect(configSchemaStructure(listeners)).toEqual({
+      type: 'array<object>',
+      fieldsLabel: 'Item fields',
+      description: 'Each list item uses the fields shown below.',
+    })
+    expect(configSchemaFields(listeners).map(({ name, required }) => ({ name, required }))).toEqual(
+      [
+        { name: 'name', required: true },
+        { name: 'port', required: true },
+      ],
+    )
   })
 })
