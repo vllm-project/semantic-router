@@ -86,7 +86,11 @@ func (r *OpenAIRouter) createLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (looper.Looper, error) {
-	l, err := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
+	l, err := looper.FactoryWithClient(
+		&r.Config.Looper,
+		decision.Algorithm.Type,
+		r.looperModelClient(),
+	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
 			"request_id": reqCtx.RequestID,
@@ -96,6 +100,13 @@ func (r *OpenAIRouter) createLooper(
 		})
 	}
 	return l, err
+}
+
+func (r *OpenAIRouter) looperModelClient() *looper.Client {
+	if r.looperClient != nil {
+		return r.looperClient
+	}
+	return looper.NewClient(&r.Config.Looper)
 }
 
 // handleLooperExecution executes the looper for multi-model decisions
