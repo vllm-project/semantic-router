@@ -4,9 +4,11 @@ description: Frontier models hosted and governed inside your Snowflake perimeter
 category: model_api
 support_tier: native
 # No default_base_url: the host is account-specific. Operators configure
-# ProviderInstance.base_url as https://<account>.snowflakecomputing.com/api/v2/cortex
-# (precedent: azure-openai). The protocol default_base_path /v1 resolves against
-# that root: /api/v2/cortex/v1/chat/completions and /api/v2/cortex/v1/messages.
+# ProviderInstance.base_url as https://<account>.snowflakecomputing.com/api/v2/cortex/v1
+# (precedent: azure-openai). The resolver strips a protocol's /v1 prefix whenever a
+# base path is configured, so the operator base URL must include /api/v2/cortex/v1
+# for requests to resolve to /api/v2/cortex/v1/chat/completions and
+# /api/v2/cortex/v1/messages.
 protocols:
 - openai/chat-completions@1
 - anthropic/messages@1
