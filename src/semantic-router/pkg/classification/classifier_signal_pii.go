@@ -106,7 +106,8 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		return
 	}
 
-	if piiRuleHasInferenceError(ruleContents, piiCache) {
+	inferenceFailed := piiRuleHasInferenceError(ruleContents, piiCache)
+	if inferenceFailed {
 		// The failure is recorded visibly either way; on_error below decides
 		// whether the rule also fails closed for the content never scored.
 		recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, piiEvaluationFailedCode)
@@ -114,11 +115,19 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 
 	entityTypes, failed := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
+	errorDrivenMatch := false
 	if failed && c.Config.PIIModel.IsBlock() {
 		// Part of the content was never scored (backend error or a declared
 		// truncation). Under on_error: block that is not a clean result.
 		logging.Errorf("[Signal Computation] PII rule %q: content not fully classified; failing closed", rule.Name)
 		deniedEntities = append(deniedEntities, PIIClassificationErrorType)
+		errorDrivenMatch = true
+		if !inferenceFailed {
+			// A declared truncation is not an inference error, but under block
+			// it still leaves the rule not fully evaluated, and the decision
+			// engine reads unknown from the pair (error, error-driven match).
+			recordSignalRuleErrors(results, mu, config.SignalTypePII, []string{rule.Name}, piiEvaluationFailedCode)
+		}
 	}
 
 	if len(deniedEntities) > 0 {
@@ -130,6 +139,16 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		mu.Lock()
 		results.MatchedPIIRules = append(results.MatchedPIIRules, rule.Name)
 		results.PIIDetected = true
+		if errorDrivenMatch {
+			// Same signal the jailbreak path raises: a match that exists only
+			// because classification failed must not read as a real detection.
+			// decision.evalLeaf turns error plus error-driven match into
+			// unknown, so unknown_policy decides instead of the match.
+			if results.SignalErrorMatches == nil {
+				results.SignalErrorMatches = make(map[string]bool)
+			}
+			results.SignalErrorMatches[signalConfidenceKey(config.SignalTypePII, rule.Name)] = true
+		}
 		for _, e := range deniedEntities {
 			if !slices.Contains(results.PIIEntities, e) {
 				results.PIIEntities = append(results.PIIEntities, e)

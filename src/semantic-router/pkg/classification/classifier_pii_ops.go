@@ -28,7 +28,13 @@ func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, 
 	// Use ModernBERT PII token classifier for entity detection
 	tokenResult, err := c.piiInference.ClassifyTokens(ctx, text)
 	if err != nil {
-		return nil, fmt.Errorf("PII token classification error: %w", err)
+		// Same policy as the routing signal and scanPIIChunks: a declared
+		// truncation carries valid spans for the part the provider saw, and
+		// classifier.pii.on_error decides what the unseen remainder means.
+		if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
+			return nil, fmt.Errorf("PII token classification error: %w", err)
+		}
+		logging.Warnf("PII classification: provider truncated its input; reporting the types it did return")
 	}
 
 	if len(tokenResult.Entities) > 0 {
@@ -112,7 +118,14 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 	for _, span := range piiSignalChunkSpans(text) {
 		tokenResult, err := c.piiInference.ClassifyTokens(ctx, span.Text)
 		if err != nil {
-			return nil, fmt.Errorf("PII token classification error: %w", err)
+			// A declared truncation carries valid spans for the part the
+			// provider saw. classifier.pii.on_error decides what the unseen
+			// remainder means here too: block refuses the whole scan, allow
+			// reports what was found. Any other error is fatal either way.
+			if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
+				return nil, fmt.Errorf("PII token classification error: %w", err)
+			}
+			logging.Warnf("PII scan: provider truncated its input; reporting the spans it did return")
 		}
 
 		classified += len(tokenResult.Entities)
@@ -230,10 +243,15 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, cont
 		// Use ModernBERT PII token classifier for detailed analysis
 		tokenResult, err := c.piiInference.ClassifyTokens(ctx, content)
 		if err != nil {
-			logging.Errorf("Error analyzing content %d: %v", i, err)
-			failedCount++
-			lastErr = err
-			continue
+			// As in scanPIIChunks: a truncation still carries valid spans, and
+			// on_error decides whether the unseen remainder voids them.
+			if !errors.Is(err, ErrTokenSpansTruncated) || c.Config.PIIModel.IsBlock() {
+				logging.Errorf("Error analyzing content %d: %v", i, err)
+				failedCount++
+				lastErr = err
+				continue
+			}
+			logging.Warnf("PII analysis of content %d: provider truncated its input; keeping the spans it did return", i)
 		}
 
 		// Convert token entities to PII detections

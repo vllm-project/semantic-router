@@ -102,3 +102,53 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 		})
 	}
 }
+
+// A PII rule that matched only because classification failed must be
+// distinguishable from a real detection, the same way the jailbreak signal
+// marks its error-driven matches. decision.evalLeaf reads the pair (recorded
+// signal error, error-driven match) as unknown, so a decision with an
+// unknown_policy can decide instead of treating the match as a detection.
+func TestPIIFailClosedMatchIsMarkedAsErrorDriven(t *testing.T) {
+	const text = "my contact is alice@corp.example"
+	email := piiEntity("EMAIL", "alice@corp.example", 14, 32, 0.99)
+
+	for _, tc := range []struct {
+		name            string
+		entities        []candle_binding.TokenEntity
+		err             error
+		wantErrorDriven bool
+	}{
+		{"backend error under block", nil, errors.New("connection refused"), true},
+		{"declared truncation under block", nil, ErrTokenSpansTruncated, true},
+		{"real detection is not error driven", []candle_binding.TokenEntity{email}, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			classifier, _, mockModel := newTestPIIClassifier()
+			classifier.Config.PIIModel.OnError = config.OnErrorBlock
+			classifier.Config.PIIRules = []config.PIIRule{{Name: "no_pii", Threshold: 0.7}}
+			mockModel.setMockResponse(text, tc.entities, tc.err)
+
+			results := &SignalResults{
+				Metrics:           &SignalMetricsCollection{},
+				SignalConfidences: make(map[string]float64),
+				SignalValues:      make(map[string]float64),
+				SignalErrors:      make(map[string]string),
+			}
+			var mu sync.Mutex
+			classifier.evaluatePIISignal(context.Background(), results, &mu, text, nil)
+
+			if !results.PIIDetected {
+				t.Fatalf("rule did not match at all: entities=%v", results.PIIEntities)
+			}
+			key := signalConfidenceKey(config.SignalTypePII, "no_pii")
+			if got := results.SignalErrorMatches[key]; got != tc.wantErrorDriven {
+				t.Fatalf("SignalErrorMatches[%q] = %v, want %v", key, got, tc.wantErrorDriven)
+			}
+			// The decision engine reads unknown from the pair, so the error
+			// must be recorded too, not only the match.
+			if tc.wantErrorDriven && results.SignalErrors[key] == "" {
+				t.Fatalf("SignalErrors[%q] is empty; an error-driven match reads as a real detection", key)
+			}
+		})
+	}
+}

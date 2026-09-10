@@ -18,7 +18,8 @@ import (
 // cases plant a marker in each place a provider could echo it and assert the
 // returned error carries only structural metadata.
 func TestTokenSpansErrorsCarryNoProviderOrInputText(t *testing.T) {
-	const secret = "SECRET-4711-ssn-987-65-4320"
+	// A marker that stands in for user content a provider might echo back.
+	const secret = "MARKER-4711-ssn-987-65-4320" //nolint:gosec // G101: a test marker, not a credential
 	input := "call me, my number is " + secret + " thanks"
 
 	cases := []struct {
