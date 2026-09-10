@@ -497,13 +497,18 @@ func selectThreshold(rule string, positive map[string]bool, fixtures []fixtureRe
 		}
 		return evaluateThreshold(midpoint, rule, positive, fixtures)
 	}
-	best := sweep[0]
+	// Non-separable: score every band between consecutive fixture scores at its
+	// midpoint. Ties on F1 go to the wider band, measured by that band's own
+	// width (not the global margin, which is dominated by the overlap and can
+	// prefer a narrow band). A remaining tie keeps the lower band.
+	var best thresholdResult
+	bestWidth := -1.0
 	for i := 1; i < len(sweep); i++ {
 		// Band (sweep[i-1].Threshold, sweep[i].Threshold]: same matrix as sweep[i].
-		bandMid := (sweep[i-1].Threshold + sweep[i].Threshold) / 2
-		candidate := evaluateThreshold(bandMid, rule, positive, fixtures)
-		if candidate.F1 > best.F1 || candidate.F1 == best.F1 && candidate.Margin > best.Margin {
-			best = candidate
+		width := sweep[i].Threshold - sweep[i-1].Threshold
+		candidate := evaluateThreshold(sweep[i-1].Threshold+width/2, rule, positive, fixtures)
+		if bestWidth < 0 || candidate.F1 > best.F1 || candidate.F1 == best.F1 && width > bestWidth {
+			best, bestWidth = candidate, width
 		}
 	}
 	if rounded := evaluateThreshold(roundTwoPlaces(best.Threshold), rule, positive, fixtures); sameMatrix(rounded, best) {
