@@ -51,7 +51,7 @@ describe('capability plugin field schemas', () => {
   })
 
   it('exposes the prompt cache marker contract', () => {
-    const fields = getCapabilityPluginFieldSchema('prompt_cache')
+    const fields = resolveCapabilityPluginFieldSchema('prompt_cache')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
       'ttl',
@@ -61,6 +61,6 @@ describe('capability plugin field schemas', () => {
   })
 
   it.each(['constructor', 'toString', '__proto__'])('rejects prototype key %s', (pluginType) => {
-    expect(getCapabilityPluginFieldSchema(pluginType)).toBeNull()
+    expect(resolveCapabilityPluginFieldSchema(pluginType)).toBeNull()
   })
 })
