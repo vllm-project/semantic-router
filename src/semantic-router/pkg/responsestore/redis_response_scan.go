@@ -228,6 +228,9 @@ func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadRes
 		}
 		return nil, fmt.Errorf("failed to read response at key %s during scan: %w", key, result.err)
 	}
+	if result.ttlErr != nil {
+		return nil, fmt.Errorf("failed to read response lifetime at key %s during scan: %w", key, result.ttlErr)
+	}
 
 	record, err := decodeResponseRecord(result.raw)
 	if err != nil {

@@ -19,11 +19,14 @@ import (
 // ttlMillis follows Redis's PTTL convention (-1 never expires, -2 no such
 // key) and is only meaningful when the result came from
 // fetchResponsePayloadsAndTTLsPipelined; the GET-only helper leaves it at
-// unknownPayloadTTL.
+// unknownPayloadTTL. ttlErr is deliberately independent of err: a payload GET
+// may succeed while its PTTL fails, and callers that build a durable index
+// must reject that incomplete lifetime observation.
 type responsePayloadResult struct {
 	key       string
 	raw       []byte
 	ttlMillis int64
+	ttlErr    error
 	err       error
 }
 
@@ -75,7 +78,7 @@ func fetchResponsePayloads(ctx context.Context, client redis.UniversalClient, ke
 	for i, cmd := range cmds {
 		results[i].raw, results[i].err = cmd.Bytes()
 		if withTTL {
-			results[i].ttlMillis = decodePayloadTTL(ttlCmds[i])
+			results[i].ttlMillis, results[i].ttlErr = decodePayloadTTL(ttlCmds[i])
 		}
 	}
 	return results
@@ -84,21 +87,21 @@ func fetchResponsePayloads(ctx context.Context, client redis.UniversalClient, ke
 // decodePayloadTTL turns go-redis's PTTL reply into raw milliseconds. go-redis
 // reports the two sentinels as negative durations, which Duration.Milliseconds
 // would otherwise round to 0 — indistinguishable from "expires right now" —
-// so they are mapped back explicitly. A failed PTTL is treated as unknown
-// rather than fatal: it only costs a shorter index lifetime, and the payload
-// read itself is what the scan is really after.
-func decodePayloadTTL(cmd *redis.DurationCmd) int64 {
+// so they are mapped back explicitly. A failed PTTL is not a lifetime: callers
+// must keep its error distinct from Redis's successful "key is gone" reply so
+// they cannot certify an index that may expire before a retained payload.
+func decodePayloadTTL(cmd *redis.DurationCmd) (int64, error) {
 	ttl, err := cmd.Result()
 	if err != nil {
-		return unknownPayloadTTL
+		return unknownPayloadTTL, err
 	}
 	switch {
 	case ttl == -1:
-		return -1
+		return -1, nil
 	case ttl < 0:
-		return unknownPayloadTTL
+		return unknownPayloadTTL, nil
 	default:
-		return ttl.Milliseconds()
+		return ttl.Milliseconds(), nil
 	}
 }
 
@@ -126,6 +129,9 @@ func (s *RedisStore) getResponseWithLifetime(ctx context.Context, responseID str
 			return responseRecord{}, 0, ErrNotFound
 		}
 		return responseRecord{}, 0, fmt.Errorf("failed to get response from Redis: %w", result.err)
+	}
+	if result.ttlErr != nil {
+		return responseRecord{}, 0, fmt.Errorf("failed to get response lifetime from Redis: %w", result.ttlErr)
 	}
 
 	record, err := decodeResponseRecord(result.raw)

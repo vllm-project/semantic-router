@@ -61,6 +61,60 @@ func (h *beforeCommandHook) ProcessPipelineHook(next redis.ProcessPipelineHook) 
 	return next
 }
 
+// commandFailureHook injects err, at most once, in place of one specific
+// single-key command (matched by name and its first key argument) — a
+// one-shot transient failure, not a permanent block, since a hook installed
+// for the rest of a test's life would also intercept that test's own later
+// verification reads/writes against the same key. Covers both the
+// non-pipelined path (ProcessHook: the real command is never even sent,
+// since injecting a synthetic failure alongside a real write actually
+// happening would make assertions about the resulting state meaningless)
+// and the pipelined path (ProcessPipelineHook: the pipeline still runs for
+// real — go-redis has no per-command skip within one Exec — and only the
+// matched command's own result is overwritten afterward).
+type commandFailureHook struct {
+	name string
+	key  string
+	err  error
+	used atomic.Bool
+}
+
+func (h *commandFailureHook) matches(cmd redis.Cmder) bool {
+	if cmd.Name() != h.name {
+		return false
+	}
+	args := cmd.Args()
+	if len(args) < 2 {
+		return false
+	}
+	key, ok := args[1].(string)
+	return ok && key == h.key && h.used.CompareAndSwap(false, true)
+}
+
+func (h *commandFailureHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (h *commandFailureHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if h.matches(cmd) {
+			cmd.SetErr(h.err)
+			return h.err
+		}
+		return next(ctx, cmd)
+	}
+}
+
+func (h *commandFailureHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		err := next(ctx, cmds)
+		for _, cmd := range cmds {
+			if h.matches(cmd) {
+				cmd.SetErr(h.err)
+			}
+		}
+		return err
+	}
+}
+
 // conversationIndexMembers reads the index directly, so tests can assert on it
 // and not only on what a listing happens to return.
 func conversationIndexMembers(t *testing.T, store *RedisStore, conversationID string) []string {
@@ -166,6 +220,20 @@ func directSetResponsePayloadWithTTL(t *testing.T, store *RedisStore, response *
 
 	key := store.buildKey(ResponseKeyPrefix + response.ID)
 	require.NoError(t, store.client.Set(context.Background(), key, data, ttl).Err())
+}
+
+// directSetGeneratedResponsePayloadWithTTL writes the current generated
+// payload format straight to Redis while deliberately bypassing its
+// conversation index. Finalization tests use this when legacy promotion must
+// not provide a second, atomic lifetime observation that masks a failed
+// pipelined PTTL.
+func directSetGeneratedResponsePayloadWithTTL(t *testing.T, store *RedisStore, response *responseapi.StoredResponse, ttl time.Duration) string {
+	t.Helper()
+
+	data, generation := mustMarshalGeneratedResponse(t, response)
+	key := store.buildKey(ResponseKeyPrefix + response.ID)
+	require.NoError(t, store.client.Set(context.Background(), key, data, ttl).Err())
+	return generation
 }
 
 // exists reports whether a raw Redis key exists, for asserting on marker/
