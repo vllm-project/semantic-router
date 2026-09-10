@@ -1,5 +1,6 @@
 """Validate normalized evidence and its links to a frozen experiment plan."""
 
+from .plan import validate_plan
 from .validation import (
     fields,
     indexed,
@@ -18,6 +19,35 @@ def _usage(usage):
     for key, value in usage.items():
         number(value, "usage." + key, integer=True, nullable=True)
     # Preserve provider total: some backends account for additional token classes.
+    if all(value is not None for value in usage.values()):
+        require(
+            usage["total_tokens"]
+            >= usage["prompt_tokens"] + usage["completion_tokens"],
+            "total_tokens below known prompt plus completion tokens",
+        )
+
+
+def _call_role(call, arm):
+    params = arm["parameters"]
+    if arm["algorithm"] == "fusion":
+        roles = {
+            "generate": params["panel_model_ids"],
+            "judge": [params["judge_model_id"]],
+            "synthesize": [params["synthesis_model_id"]],
+        }
+    else:
+        stages = {
+            "direct": ("generate",),
+            "confidence": ("generate", "verify"),
+            "remom": ("generate", "synthesize"),
+        }[arm["algorithm"]]
+        roles = dict.fromkeys(stages, arm["model_ids"])
+    string(call["stage"], "call.stage")
+    require(call["stage"] in roles, "unsupported stage for arm algorithm")
+    require(
+        call["model_id"] in roles[call["stage"]],
+        "call model outside declared stage role",
+    )
 
 
 def _coordinates(record, cells, item_ids, experiment_id):
@@ -35,12 +65,8 @@ def _call(call, cells, arms):
         "latency_ms raw_output_path error cache_id",
         "call",
     )
-    require(
-        call["stage"] in ("generate", "verify", "select", "judge", "synthesize"),
-        "call stage",
-    )
     arm = arms[cells[call["cell_id"]]["arm_id"]]
-    require(call["model_id"] in arm["model_ids"], "call model outside arm")
+    _call_role(call, arm)
     number(call["attempt"], "attempt", minimum=1, integer=True)
     require(call["status"] in ("success", "error", "cached"), "call status")
     _usage(call["usage"])
@@ -123,6 +149,7 @@ def _result(result, calls, scorer_id):
 
 def validate_records(bundle, plan):
     """Require one terminal result for every planned (cell, item) pair."""
+    validate_plan(plan)
     fields(
         bundle, "schema_version experiment_id evidence_kind calls results", "records"
     )

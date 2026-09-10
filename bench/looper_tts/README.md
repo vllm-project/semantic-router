@@ -12,7 +12,7 @@ Only Python 3.8+ and the standard library are required:
 ```bash
 python -m bench.looper_tts validate --config bench/looper_tts/testdata/synthetic.json
 python -m bench.looper_tts plan --config bench/looper_tts/testdata/synthetic.json --code-revision <evaluated-revision> --output /tmp/looper-tts-plan
-python -m unittest bench.looper_tts.test_contracts -v
+python -m unittest bench.looper_tts.test_contracts bench.looper_tts.test_evidence_integrity -v
 ```
 
 Replace `<evaluated-revision>` with the exact evaluated code revision; the
@@ -73,6 +73,13 @@ the package's top-level Python source, including its contract tests. Commands
 and output paths are recorded but excluded from experiment identity. There is
 no timestamp, so identical inputs and source generate identical plans.
 
+Evidence validation first revalidates the saved config, config digest, experiment
+identity and complete matrix, including cell IDs and item lists. The saved planner
+digest participates in identity; it is not replaced by the current checkout's
+digest. These checks establish internal consistency, not authenticity: a trusted
+external experiment ID is still needed to detect replacement of an entire plan
+and its evidence with a newly hashed experiment.
+
 ## Evidence contract for future executors
 
 `validate_records(bundle, plan)` validates a complete normalized JSON bundle:
@@ -85,7 +92,16 @@ no timestamp, so identical inputs and source generate identical plans.
   normalized score, scorer ID, call references, candidate scores, optional panel
   digest, budget status and error.
 
-Call stages are `generate`, `verify`, `select`, `judge`, `synthesize`; statuses
+Allowed stages and models are bound to the declared algorithm:
+
+| Algorithm | Stage and model roles |
+| --- | --- |
+| Direct | `generate` using its single model |
+| Confidence | `generate` or `verify` using its declared model pool |
+| ReMoM | `generate` or `synthesize` using its declared model pool |
+| Fusion | `generate` using panel models, `judge` using the judge model, `synthesize` using the synthesis model |
+
+`select` has no declared model role in this version and is rejected. Call statuses
 are `success`, `error`, `cached`. Result statuses are `success`, `error`,
 `budget_exhausted`. A successful result may remain ungraded (`score: null`).
 Scores are normalized to [0, 1]; benchmark-native outputs remain in raw artifacts.
@@ -99,6 +115,8 @@ can have no calls. Retries are separate call records with their attempt number.
 
 Unknown usage, prices, latency and ungraded scores use JSON `null`, never zero.
 Provider total tokens are preserved, not silently recomputed from input/output.
+When all three usage fields are known, the total must be at least the sum of
+prompt and completion tokens; additional provider token classes remain valid.
 Cached calls retain original candidate usage and a cache artifact SHA-256 but
 have null live latency. Cache identity is distinct from the optional whole-panel
 digest. Runtime writers must save raw artifacts; this structural validator does
