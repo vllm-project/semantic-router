@@ -134,7 +134,7 @@ func TestHTTPTokenClassifierModelIdentity(t *testing.T) {
 		{"matching model", map[string]any{"spans": []any{span}, "model": "pii-spans"}, ""},
 		{"model omitted", map[string]any{"spans": []any{span}}, ""},
 		{"bare list carries no model", []any{span}, ""},
-		{"different model", map[string]any{"spans": []any{span}, "model": "some-other-model"}, "names model"},
+		{"different model", map[string]any{"spans": []any{span}, "model": "some-other-model"}, "names a different model"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

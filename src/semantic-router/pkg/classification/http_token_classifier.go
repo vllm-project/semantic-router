@@ -155,7 +155,9 @@ func (h *HTTPTokenClassifierInference) checkModelIdentity(model string) error {
 	if model == "" || h.model == "" || model == h.model {
 		return nil
 	}
-	return fmt.Errorf("token_spans response names model %q, backend is configured for %q", model, h.model)
+	// The response's model name is provider text and is not echoed; the
+	// configured name is ours and is.
+	return fmt.Errorf("token_spans response names a different model (%d bytes) than the configured %q", len(model), h.model)
 }
 
 // decodeTokenSpansResponse accepts either a bare JSON list of spans, which is
@@ -185,7 +187,9 @@ func decodeTokenSpansResponse(body []byte) ([]tokenSpanWire, *int, string, error
 		return nil, nil, "", fmt.Errorf("failed to parse token_spans response: %w", err)
 	}
 	if isPresentJSON(env.Error) {
-		return nil, nil, "", fmt.Errorf("token_spans provider reported an error: %s", bytes.TrimSpace(env.Error))
+		// Never interpolate the provider's error payload: it routinely echoes
+		// the text it was asked to classify, and this error reaches logs.
+		return nil, nil, "", fmt.Errorf("token_spans provider reported an error (%d bytes, not logged)", len(bytes.TrimSpace(env.Error)))
 	}
 	if !isPresentJSON(env.Spans) {
 		return nil, nil, "", fmt.Errorf("token_spans response has no spans array")
@@ -305,7 +309,7 @@ func alignTokenSpan(i int, sp tokenSpanWire, input spanInput, known, outside map
 // entity, and the native backend never emits it as a span.
 func spanLabel(i int, sp tokenSpanWire, known, outside map[string]struct{}) (string, error) {
 	if sp.Label != "" && sp.EntityGroup != "" && stripBIOPrefix(sp.Label) != stripBIOPrefix(sp.EntityGroup) {
-		return "", fmt.Errorf("token_spans span %d has conflicting label %q and entity_group %q", i, sp.Label, sp.EntityGroup)
+		return "", fmt.Errorf("token_spans span %d has conflicting label and entity_group", i)
 	}
 	label := sp.Label
 	if label == "" {
@@ -319,7 +323,8 @@ func spanLabel(i int, sp tokenSpanWire, known, outside map[string]struct{}) (str
 		return "", fmt.Errorf("token_spans span %d carries the outside label %q; providers send entity spans only", i, label)
 	}
 	if _, ok := known[label]; !ok {
-		return "", fmt.Errorf("token_spans span %d label %q is not in the configured PII mapping", i, label)
+		// An unknown label is provider text; report its size, not its value.
+		return "", fmt.Errorf("token_spans span %d label (%d bytes) is not in the configured PII mapping", i, len(label))
 	}
 	return label, nil
 }
@@ -344,7 +349,7 @@ func spanBounds(i int, label string, sp tokenSpanWire, input spanInput, truncate
 // a mismatch is how an off-by-one in the offset unit shows up.
 func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end int) (string, error) {
 	if sp.Text != nil && sp.Word != nil && *sp.Text != *sp.Word {
-		return "", fmt.Errorf("token_spans span %d (%s) has conflicting text %q and word %q", i, label, *sp.Text, *sp.Word)
+		return "", fmt.Errorf("token_spans span %d (%s) has conflicting text (%d code points) and word (%d code points)", i, label, len([]rune(*sp.Text)), len([]rune(*sp.Word)))
 	}
 	var text string
 	switch {
@@ -356,7 +361,9 @@ func spanText(i int, label string, sp tokenSpanWire, input spanInput, start, end
 		return "", fmt.Errorf("token_spans span %d (%s) is missing text", i, label)
 	}
 	if got := string(input.runes[start:end]); got != text {
-		return "", fmt.Errorf("token_spans span %d (%s) text %q does not match input [%d,%d) %q; check the offset unit", i, label, text, start, end, got)
+		// Neither the span text nor the input slice is echoed: both are user
+		// content, and this error reaches logs.
+		return "", fmt.Errorf("token_spans span %d (%s) text (%d code points) does not match input [%d,%d) (%d code points); check the offset unit", i, label, len([]rune(text)), start, end, len([]rune(got)))
 	}
 	return text, nil
 }
