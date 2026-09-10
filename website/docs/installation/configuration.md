@@ -12,6 +12,7 @@ Helm, and Operator. The top-level structure is:
 version:
 listeners:
 providers:
+evaluation:
 routing:
 entrypoints:
 recipes:
@@ -30,6 +31,7 @@ or runtime behavior that differs from the built-in defaults.
 | `version` | Canonical schema version. Use `v0.3`. |
 | `listeners` | Public Router listeners and timeouts. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
+| `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
 | `entrypoints` | Public virtual model aliases mapped to named recipes. |
 | `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
@@ -43,6 +45,58 @@ Keep these boundaries clear:
 - algorithms choose or coordinate candidate models;
 - plugins add behavior at route-specific hook points; and
 - providers bind logical model names to inference endpoints.
+
+Provider pricing belongs beside each concrete model under
+`providers.models[].pricing`. It accepts an optional uppercase three-letter
+`currency` plus non-negative `prompt_per_1m`, `completion_per_1m`,
+`cached_input_per_1m`, and `cache_write_per_1m` rates. Routing model cards do not
+repeat deployment prices or credentials.
+
+Evaluation measurements belong in `evaluation.records[]` and reference a
+canonical Model Card identity through `model`. Built-in benchmark IDs work
+directly; define new benchmark semantics and indices beside the records under
+`evaluation`. See [Custom evaluations](../benchmarking/custom-evaluations).
+
+Use [Protocol Compatibility](protocol-compatibility) to choose the model's
+backend `api_format`. Then see
+[Backend Target Compatibility](backend-target-compatibility) before moving its
+bindings between Docker, Helm, the Operator, and Dashboard workflows. The
+target matrix distinguishes canonical pass-through from Kubernetes discovery
+and records which URL, path, weight, and provider fields each surface
+preserves.
+
+Router-wide debugging surfaces stay closed by default.
+`global.services.observability.profiling` serves Go `pprof` endpoints, and only
+when it is explicitly enabled; it then binds `127.0.0.1:6060` so profiles never
+reach a routable interface without an explicit `bind` change. The switch is read
+once at startup, so changing it requires a Router restart. See
+[API and Observability](../tutorials/global/api-and-observability).
+
+Built-in category/domain classification uses the local `variant` selector when
+no remote backend is configured. To call a named external classifier, attach a
+`backend` under `global.model_catalog.modules.classifier.domain` and resolve
+its `model` from `global.model_catalog.external[]` with
+`model_role: classification`. The shared backend fields are `protocol`,
+`contract`, `model`, and optional `deadline_ms`; category
+currently supports `http_classify` with the full `label_distribution.v1`
+response contract. Omit `backend` to retain local behavior. The deprecated
+`use_modernbert` and `use_mmbert_32k` keys remain readable, while generated
+canonical configuration uses `variant: candle`, `variant: modernbert`, or
+`variant: mmbert32k`.
+
+Complexity attaches the same block under
+`global.model_catalog.modules.complexity`, beside `prototype_scoring`. It reads
+two contracts, so `contract` cannot be defaulted and must be stated:
+`score.v1` for a regression model, where each rule turns the score into a
+verdict through its own `hard_above`/`easy_below` boundaries (or
+`hard_below`/`easy_above` for a score that falls as difficulty rises), and
+`label_distribution.v1` for a model that returns `hard`/`easy`/`medium`
+directly. `threshold` remains the symmetric shorthand for the local signed
+margin. `score.v1` reports no confidence, so decisions gated on those rules
+rank on the engine's structural default; the Router warns at startup. The
+remote call is visible through `llm_remote_connector_*` and
+`llm_complexity_*` metrics, and a scorer failure is recorded on every
+complexity rule's signal errors rather than dropped.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -63,14 +117,16 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `routing.signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
-| `classifier` — learned signal | `classifier` exposes reusable label scores from a local native sequence classifier or a configured external LLM. | [`config/fragments/signal/classifier/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/classifier/) | [Guide](../tutorials/signal/learned/classifier) |
+| `classifier` — learned signal | `classifier` exposes reusable label scores from a local native sequence classifier, a remote sequence classifier, or a configured external LLM. | [`config/fragments/signal/classifier/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/classifier/) | [Guide](../tutorials/signal/learned/classifier) |
 | `complexity` — learned signal | `complexity` estimates whether a request is `easy`, `medium`, or `hard` by comparing it with configured example sets. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/learned/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
-| `conversation` — heuristic signal | `conversation` routes on the structure of a chat, such as message count, developer instructions, available tools, or an active tool loop. | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [Guide](../tutorials/signal/heuristic/conversation) |
+| `conversation` — heuristic signal | `conversation` routes on chat structure and protocol facts, such as message count, developer instructions, available tools, explicit tool-use constraints, or an active tool loop. | [`config/fragments/signal/conversation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/conversation/) | [Guide](../tutorials/signal/heuristic/conversation) |
 | `domain` — learned signal | `domain` classifies the request topic family. | [`config/fragments/signal/domain/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/domain/) | [Guide](../tutorials/signal/learned/domain) |
 | `embedding` — learned signal | `embedding` matches requests by semantic similarity to representative examples. | [`config/fragments/signal/embedding/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/embedding/) | [Guide](../tutorials/signal/learned/embedding) |
 | `event` — heuristic signal | `event` routes structured event-like requests by event type, severity, urgency, or domain-specific action code. | [`config/fragments/signal/event/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/event/) | [Guide](../tutorials/signal/heuristic/event) |
 | `fact-check` — learned signal | `fact-check` decides whether a prompt should be treated as evidence-sensitive traffic. | [`config/fragments/signal/fact-check/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/fact-check/) | [Guide](../tutorials/signal/learned/fact-check) |
+| `hallucination` — learned signal | `hallucination` checks the model's answer against the grounding context the request carried, such as tool results or retrieved documents, and reports the claims that context does not support. | [`config/fragments/signal/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/hallucination/) | [Guide](../tutorials/signal/learned/hallucination) |
+| `input-modality` — heuristic signal | `input_modality` deterministically matches which kinds of input — `text`, `image`, `audio`, or `video` — are present in the parsed request. | [`config/fragments/signal/input-modality/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/input-modality/) | [Guide](../tutorials/signal/heuristic/input-modality) |
 | `jailbreak` — learned signal | `jailbreak` detects prompt-injection and jailbreak attempts before the Router commits to a route. | [`config/fragments/signal/jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/jailbreak/) | [Guide](../tutorials/signal/learned/jailbreak) |
 | `kb` — learned signal | `kb` binds routing signals to the output of a named knowledge base instance. | [`config/fragments/signal/kb/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/kb/) | [Guide](../tutorials/signal/learned/kb) |
 | `keyword` — heuristic signal | `keyword` matches explicit words and phrases in the request. | [`config/fragments/signal/keyword/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/keyword/) | [Guide](../tutorials/signal/heuristic/keyword) |
@@ -93,7 +149,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `knn` — selection algorithm | `knn` chooses a candidate from the models that performed well on the most similar recorded requests. | [`config/fragments/algorithm/selection/knn.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/knn.yaml) | [Guide](../tutorials/algorithm/selection/knn) |
 | `latency-aware` — selection algorithm | `latency_aware` ranks eligible candidates using observed TTFT and TPOT percentiles and selects the lowest relative-latency score. | [`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml) | [Guide](../tutorials/algorithm/selection/latency-aware) |
 | `mlp` — selection algorithm | `mlp` runs a trained neural classifier on CPU to map a request to a candidate model. | [`config/fragments/algorithm/selection/mlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/mlp.yaml) | [Guide](../tutorials/algorithm/selection/mlp) |
-| `multi-factor` — selection algorithm | `multi_factor` ranks candidates by a configurable combination of quality, latency, cost, and load, then rejects any candidate that violates a hard limit. | [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml) | [Guide](../tutorials/algorithm/selection/multi-factor) |
+| `multi-factor` — selection algorithm | `multi_factor` chooses one candidate from quality, latency, cost, and load. | [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml) | [Guide](../tutorials/algorithm/selection/multi-factor) |
 | `prompt` — selection algorithm | `prompt` uses a concrete helper model to select exactly one model from the matched decision's `modelRefs`. | [`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml) | [Guide](../tutorials/algorithm/selection/prompt) |
 | `router-dc` — selection algorithm | `router_dc` embeds the request and each model description, then selects the candidate with the strongest semantic similarity. | [`config/fragments/algorithm/selection/router-dc.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/router-dc.yaml) | [Guide](../tutorials/algorithm/selection/router-dc) |
 | `static` — selection algorithm | `static` provides deterministic model choice without metrics or learned state. | [`config/fragments/algorithm/selection/static.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/static.yaml) | [Guide](../tutorials/algorithm/selection/static) |
@@ -118,13 +174,13 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
 | `hallucination` — route plugin | `hallucination` is a route-local plugin for fact-checking and response-quality screening after the decision already matched. | [`config/fragments/plugin/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/hallucination/) | [Guide](../tutorials/plugin/hallucination) |
 | `header-mutation` — route plugin | `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers. | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [Guide](../tutorials/plugin/header-mutation) |
-| `image-gen` — route plugin | `image_gen` is a route-local plugin for handing a matched route off to an image-generation backend. | [`config/fragments/plugin/image-gen/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/image-gen/) | [Guide](../tutorials/plugin/image-gen) |
 | `memory` — route plugin | `memory` is a route-local plugin for retrieving and storing conversation memory. | [`config/fragments/plugin/memory/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/memory/) | [Guide](../tutorials/plugin/memory) |
 | `rag` — route plugin | `rag` retrieves external context for a matched route before generation. | [`config/fragments/plugin/rag/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/rag/) | [Guide](../tutorials/plugin/rag) |
 | `request-params` — route plugin | `request_params` is a route-local plugin that validates and trims OpenAI Chat Completions request bodies before they are forwarded to backends. | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [Guide](../tutorials/plugin/request-params) |
 | `response-cache` — route plugin | `response_cache` is the route-local plugin for reusing exact or semantically compatible prior responses. | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [Guide](../tutorials/plugin/response-cache) |
 | `response-jailbreak` — route plugin | `response_jailbreak` is a route-local plugin for screening the model response before it is returned. | [`config/fragments/plugin/response-jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-jailbreak/) | [Guide](../tutorials/plugin/response-jailbreak) |
 | `router-replay` — route plugin | `router_replay` is a route-local plugin for overriding replay/debug capture on one route. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
+| `shadow-dispatch` — route plugin | `shadow_dispatch` is a route-local plugin that sends a bounded, sampled copy of the approved request to a secondary model and records the outcome without changing or delaying the primary response. | [`config/fragments/plugin/shadow-dispatch/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/shadow-dispatch/) | [Guide](../tutorials/plugin/shadow-dispatch) |
 | `system-prompt` — route plugin | `system_prompt` is a route-local plugin for inserting or modifying the system prompt on matched traffic. | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [Guide](../tutorials/plugin/system-prompt) |
 | `tool-selection` — route plugin | `tool_selection` is a decision plugin that controls how tools are chosen for a matched route. | [`config/fragments/plugin/tool-selection/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tool-selection/) | [Guide](../tutorials/plugin/tool-selection) |
 | `tools` — route plugin | `tools` is a route-local plugin for tool filtering and semantic tool selection. | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [Guide](../tutorials/plugin/tools) |
@@ -144,7 +200,7 @@ listeners:
 
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: my-served-model
@@ -152,6 +208,7 @@ providers:
         - name: primary
           endpoint: host.docker.internal:8000
           protocol: http
+          provider: vllm
 
 routing:
   strategy: priority
@@ -183,6 +240,39 @@ global:
         enabled: true
 ```
 
+### Model configuration
+
+Models can inherit identity and reasoning from the built-in catalog or define a
+private model locally. This catalog-backed example lets the selected Provider
+mapping supply the native model ID, protocol, reasoning transport, and request
+path:
+
+```yaml
+providers:
+  defaults:
+    model: production
+    reasoning_effort: medium
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
+      backend_refs:
+        - provider: openai
+          api_key_env: OPENAI_API_KEY
+```
+
+The `name` remains the local Router alias. A private or newly released model
+omits `catalog` and can optionally define a Model Card and reasoning contract
+under that alias. Start with [Configure models](model-configuration), then use
+[Model configuration patterns](model-configuration-patterns) to compare the
+catalog, custom, reasoning, Provider, and replica combinations. The
+[Model and provider Day-0 guide](../community/model-provider-day-0-support.md)
+is for contributors adding reusable support to the repository catalog.
+
+Classifier backend failures remain `Unknown` while the complete boolean tree
+is evaluated. Set `rules.on_unknown` to `no_match`, `match`, or `fail_request`
+to resolve an undetermined terminal result. Omitting it preserves the existing
+classifier-family error behavior.
+
 Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
 recipe signals, decisions, route plugins, cache, learning, and session routing.
@@ -197,6 +287,12 @@ vllm-sr serve --config config.yaml
 Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
 settings before the Router starts.
+
+For portable model-free Recipes, set
+`routing.decisions[].algorithm.minimum_candidates` to the smallest pool that
+preserves the decision's intended behavior. Empty built-in assets remain
+valid, while a published Entrypoint is rejected if its concrete assignments do
+not meet the declared cardinality.
 
 ## Environment references and secrets
 
@@ -225,11 +321,14 @@ its signal, projection, decision, algorithm, plugin, cache, replay, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
+Set `max_response_bytes` on external LLM classifier entries and the MCP
+classifier module to cap one upstream classifier response.
+
 In the schema, `entrypoints[].model_names` lists the public aliases,
 `entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
 that recipe's policy.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
+If no decision matches, the recipe uses `providers.defaults.model`.
 The virtual entrypoint name never reaches a backend.
 
 See

@@ -15,7 +15,7 @@ function buildInstallScriptUrl(siteUrl: string, baseUrl: string): string {
 export default function InstallQuickStartSection(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
   const installScriptUrl = buildInstallScriptUrl(siteConfig.url, siteConfig.baseUrl)
-  const installCommand = `curl -fsSL ${installScriptUrl} | bash`
+  const installCommand = `curl -fsSL ${installScriptUrl} | bash -s -- --channel dev`
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle')
 
   useEffect(() => {

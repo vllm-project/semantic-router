@@ -1,69 +1,71 @@
-"""Finalize immutable evidence files and public reports for one run."""
+"""Finalize immutable evidence files and one server-sealable worker draft."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 
-from cli.evaluation.bundle import checksum_bytes, public_artifacts
+from cli.evaluation.bundle import (
+    ReportBundleWriter,
+    checksum_bytes,
+    failure_summary,
+    private_receipt_names,
+    public_artifacts,
+    public_receipt_names,
+)
 from cli.evaluation.canonical import digest_value
-from cli.evaluation.capacity_profile import build_capacity_profile
+from cli.evaluation.capacity_profile import CapacityProfile
+from cli.evaluation.case_plan import planned_case_ids_by_track
 from cli.evaluation.constants import SCHEMA_VERSION
-from cli.evaluation.contracts import ArtifactRef, ResolvedRunSnapshot, RunManifest
+from cli.evaluation.contract_primitives import ArtifactRef
+from cli.evaluation.contracts import ResolvedRunSnapshot, RunManifest
 from cli.evaluation.evidence import ExecutionRecord, RoutingDiagnostic
-from cli.evaluation.fixtures import FixtureInputs
-from cli.evaluation.normalized_suite_executor import NormalizedSuiteInputs
+from cli.evaluation.execution_contract import (
+    EvaluationInputs,
+    NormalizedSuiteIdentities,
+    PublishedLineage,
+)
+from cli.evaluation.executor_contracts import ExecutorContract
 from cli.evaluation.report_builder import (
-    build_report,
-    render_html,
-    render_markdown,
+    build_worker_report_draft,
     select_report_metrics,
 )
 from cli.evaluation.reporting import (
     EvaluationGate,
     EvaluationMetric,
     EvaluationProvenance,
-    EvaluationReport,
-    EvaluationRun,
 )
-from cli.evaluation.store import LocalArtifactStore
-
-
-def _failure_summary(records: list[ExecutionRecord]) -> dict[str, object]:
-    """Aggregate failures without exposing case identity or grading-derived fields."""
-
-    tracks: dict[str, dict[str, int]] = {}
-    for record in records:
-        counts = tracks.setdefault(
-            record.track_id,
-            {"succeeded": 0, "failed": 0, "unavailable": 0},
-        )
-        counts[record.status] += 1
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "total_records": len(records),
-        "failed": sum(record.status == "failed" for record in records),
-        "unavailable": sum(record.status == "unavailable" for record in records),
-        "by_track": [
-            {"track_id": track_id, **tracks[track_id]} for track_id in sorted(tracks)
-        ],
-    }
+from cli.evaluation.store import ArtifactStore
+from cli.evaluation.worker_report import WorkerReportDraft, WorkerRunState
 
 
 def _provenance(
     manifest: RunManifest,
     resolved: ResolvedRunSnapshot,
     completed_at: datetime,
-    benchmark_revisions: dict[str, str],
+    benchmark_revisions: Mapping[str, str],
 ) -> EvaluationProvenance:
+    mixture = manifest.target.mixture
     return EvaluationProvenance(
+        schema_version=SCHEMA_VERSION,
         generated_at=completed_at,
         code_revision=manifest.code_revision,
         benchmark_revisions=benchmark_revisions,
         workload_snapshot_digest=digest_value(resolved.workload),
-        policy_snapshot_digest=digest_value(resolved.policy),
-        binding_snapshot_digest=digest_value(resolved.binding),
-        pool_snapshot_digest=digest_value(
-            {"pool": resolved.pool, "arms": resolved.arms}
+        policy_snapshot_digest=(
+            mixture.recipe_digest
+            if mixture is not None
+            else digest_value(resolved.policy)
+        ),
+        binding_snapshot_digest=(
+            mixture.binding_digest
+            if mixture is not None
+            else digest_value(resolved.binding)
+        ),
+        pool_snapshot_digest=(
+            mixture.pool_digest
+            if mixture is not None
+            else digest_value({"pool": resolved.pool, "arms": resolved.arms})
         ),
         environment_snapshot_digest=digest_value(resolved.environment),
         target_id=manifest.target.id,
@@ -74,44 +76,46 @@ def _provenance(
 
 def _core_artifacts(
     manifest: RunManifest,
-    store: LocalArtifactStore,
+    transaction: ReportBundleWriter,
     manifest_ref: ArtifactRef,
-    inputs: FixtureInputs | NormalizedSuiteInputs,
+    inputs: EvaluationInputs,
     records: list[ExecutionRecord],
     resolved: ResolvedRunSnapshot,
     metrics: list[EvaluationMetric],
     gates: list[EvaluationGate],
     provenance: EvaluationProvenance,
-    private_lineage: dict[str, object] | None,
+    private_identity_map: NormalizedSuiteIdentities | None,
 ) -> list[tuple[str, ArtifactRef]]:
-    lineage: object = resolved
-    if private_lineage is not None:
-        lineage = {
-            "resolved_snapshot": resolved,
-            "normalized_suite_aliases": private_lineage,
-        }
+    lineage = PublishedLineage(
+        schema_version=SCHEMA_VERSION,
+        resolved_snapshot=resolved,
+        normalized_suite_identities=private_identity_map,
+    )
+    lineage_value = lineage.model_dump(mode="json", exclude_none=True)
+    lineage_value.setdefault("normalized_suite_identities", None)
+    resolved_value = resolved.model_dump(mode="json", exclude_none=True)
+    resolved_value.setdefault("fixture_ref", None)
+    lineage_value["resolved_snapshot"] = resolved_value
     return [
         ("run-manifest.json", manifest_ref),
         (
             "cases.jsonl",
-            store.write_run_jsonl(manifest.run_id, "cases.jsonl", inputs.visible.cases),
+            transaction.write_jsonl("cases.jsonl", inputs.visible.cases),
         ),
         (
             "records.jsonl",
-            store.write_run_jsonl(manifest.run_id, "records.jsonl", records),
+            transaction.write_jsonl("records.jsonl", records),
         ),
         (
             "grading-cases.jsonl",
-            store.write_run_jsonl(
-                manifest.run_id,
+            transaction.write_jsonl(
                 "grading-cases.jsonl",
                 inputs.grading.cases,
             ),
         ),
         (
             "metrics.json",
-            store.write_run_json(
-                manifest.run_id,
+            transaction.write_json(
                 "metrics.json",
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -124,8 +128,7 @@ def _core_artifacts(
         ),
         (
             "gates.json",
-            store.write_run_json(
-                manifest.run_id,
+            transaction.write_json(
                 "gates.json",
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -138,26 +141,17 @@ def _core_artifacts(
         ),
         (
             "lineage.json",
-            store.write_run_json(manifest.run_id, "lineage.json", lineage),
+            transaction.write_json("lineage.json", lineage_value),
         ),
         (
             "provenance.json",
-            store.write_run_json(manifest.run_id, "provenance.json", provenance),
-        ),
-        (
-            "failure-cases.jsonl",
-            store.write_run_jsonl(
-                manifest.run_id,
-                "failure-cases.jsonl",
-                [row for row in records if row.status == "failed"],
-            ),
+            transaction.write_json("provenance.json", provenance),
         ),
         (
             "failure-summary.json",
-            store.write_run_json(
-                manifest.run_id,
+            transaction.write_json(
                 "failure-summary.json",
-                _failure_summary(records),
+                failure_summary(records),
             ),
         ),
     ]
@@ -165,9 +159,10 @@ def _core_artifacts(
 
 def _live_artifacts(
     manifest: RunManifest,
-    store: LocalArtifactStore,
+    transaction: ReportBundleWriter,
     records: list[ExecutionRecord],
     routing_traces: tuple[RoutingDiagnostic, ...],
+    capacity_profile: CapacityProfile | None,
 ) -> list[tuple[str, ArtifactRef]]:
     if manifest.mode != "live":
         return []
@@ -176,20 +171,19 @@ def _live_artifacts(
         rows.append(
             (
                 "routing-traces.jsonl",
-                store.write_run_jsonl(
-                    manifest.run_id, "routing-traces.jsonl", routing_traces
-                ),
+                transaction.write_jsonl("routing-traces.jsonl", routing_traces),
             )
         )
     capacity_rows = [row for row in records if row.track_id == "capacity"]
-    if capacity_rows:
+    if capacity_rows and capacity_profile is None:
+        raise ValueError("live capacity records require a typed SLO profile")
+    if capacity_profile is not None:
         rows.append(
             (
                 "capacity-profile.json",
-                store.write_run_json(
-                    manifest.run_id,
+                transaction.write_json(
                     "capacity-profile.json",
-                    build_capacity_profile(capacity_rows),
+                    capacity_profile.model_dump(mode="json", exclude_none=False),
                 ),
             )
         )
@@ -199,83 +193,89 @@ def _live_artifacts(
 def finalize_report_bundle(
     *,
     manifest: RunManifest,
-    store: LocalArtifactStore,
+    executor: ExecutorContract,
+    store: ArtifactStore,
     manifest_ref: ArtifactRef,
-    inputs: FixtureInputs | NormalizedSuiteInputs,
+    inputs: EvaluationInputs,
     records: list[ExecutionRecord],
     resolved: ResolvedRunSnapshot,
     metrics: list[EvaluationMetric],
     gates: list[EvaluationGate],
     routing_traces: tuple[RoutingDiagnostic, ...],
-    run: EvaluationRun,
+    capacity_profile: CapacityProfile | None,
+    run: WorkerRunState,
     completed_at: datetime,
-    benchmark_revisions: dict[str, str],
-    private_lineage: dict[str, object] | None = None,
-) -> EvaluationReport:
-    """Write the non-self-referential bundle, then its canonical report."""
+    benchmark_revisions: Mapping[str, str],
+    private_identity_map: NormalizedSuiteIdentities | None = None,
+) -> WorkerReportDraft:
+    """Write the exact report.json draft accepted by the Dashboard worker envelope."""
 
     selected_metrics = select_report_metrics(manifest, metrics)
     provenance = _provenance(manifest, resolved, completed_at, benchmark_revisions)
-    artifact_rows = _core_artifacts(
-        manifest,
-        store,
-        manifest_ref,
-        inputs,
-        records,
-        resolved,
-        selected_metrics,
-        gates,
-        provenance,
-        private_lineage,
-    )
-    artifact_rows.extend(_live_artifacts(manifest, store, records, routing_traces))
-    multimodal_cases = sum(case.modality != "text" for case in inputs.visible.cases)
-    report_options = {
-        "manifest": manifest,
-        "run": run,
-        "records": records,
-        "metrics": selected_metrics,
-        "gates": gates,
-        "provenance": provenance,
-        "total_cases": len(inputs.visible.cases),
-        "multimodal_cases": multimodal_cases,
-    }
-    draft = build_report(
-        **report_options,
-        artifacts=public_artifacts(artifact_rows),
-    )
-    markdown_ref = store.write_run_bytes(
-        manifest.run_id, "report.md", render_markdown(draft).encode()
-    )
-    html_ref = store.write_run_bytes(
-        manifest.run_id, "report.html", render_html(draft).encode()
-    )
-    artifact_rows.extend((("report.md", markdown_ref), ("report.html", html_ref)))
-    public_checksum_rows = [
-        (artifact.name, ref)
-        for artifact in public_artifacts(artifact_rows)
-        for name, ref in artifact_rows
-        if name == artifact.name
-    ]
-    checksum_ref = store.write_run_bytes(
-        manifest.run_id,
-        "checksums.sha256",
-        checksum_bytes(public_checksum_rows),
-    )
-    artifact_rows.append(("checksums.sha256", checksum_ref))
-    private_checksum_ref = store.write_run_bytes(
-        manifest.run_id,
-        "private-checksums.sha256",
-        checksum_bytes(artifact_rows),
-    )
-    artifact_rows.append(("private-checksums.sha256", private_checksum_ref))
-    report = build_report(
-        **report_options,
-        artifacts=public_artifacts(artifact_rows),
-    )
-    store.write_run_json(
-        manifest.run_id,
-        "report.json",
-        report.model_dump(mode="json", exclude_none=False),
-    )
+    with store.report_bundle_transaction(manifest) as transaction:
+        artifact_rows = _core_artifacts(
+            manifest,
+            transaction,
+            manifest_ref,
+            inputs,
+            records,
+            resolved,
+            selected_metrics,
+            gates,
+            provenance,
+            private_identity_map,
+        )
+        artifact_rows.extend(
+            _live_artifacts(
+                manifest,
+                transaction,
+                records,
+                routing_traces,
+                capacity_profile,
+            )
+        )
+        planned_case_ids = planned_case_ids_by_track(
+            inputs.visible,
+            manifest.track_ids,
+        )
+        report_options = {
+            "manifest": manifest,
+            "executor": executor,
+            "run": run,
+            "records": records,
+            "metrics": selected_metrics,
+            "gates": gates,
+            "provenance": provenance,
+            "planned_case_ids": planned_case_ids,
+        }
+        artifact_references = dict(artifact_rows)
+        public_checksum_rows = [
+            (name, artifact_references[name])
+            for name in public_receipt_names(artifact_references)
+        ]
+        checksum_ref = transaction.write_bytes(
+            "checksums.sha256",
+            checksum_bytes(public_checksum_rows),
+        )
+        artifact_rows.append(("checksums.sha256", checksum_ref))
+        artifact_references["checksums.sha256"] = checksum_ref
+        private_checksum_ref = transaction.write_bytes(
+            "private-checksums.sha256",
+            checksum_bytes(
+                [
+                    (name, artifact_references[name])
+                    for name in private_receipt_names(artifact_references)
+                ]
+            ),
+        )
+        artifact_rows.append(("private-checksums.sha256", private_checksum_ref))
+        report = build_worker_report_draft(
+            **report_options,
+            artifacts=public_artifacts(artifact_rows),
+        )
+        transaction.write_json(
+            "report.json",
+            report.model_dump(mode="json", exclude_none=False),
+        )
+        transaction.commit()
     return report

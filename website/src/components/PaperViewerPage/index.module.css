@@ -101,10 +101,11 @@
     border-color 0.15s;
 }
 
-.pageBtn:hover:not(:disabled) {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+.pageBtn:hover:not(:disabled),
+.pageBtn:focus-visible:not(:disabled) {
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
+  border-color: var(--site-hover-border-strong);
 }
 
 .pageBtn:disabled {

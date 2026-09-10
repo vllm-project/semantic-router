@@ -1,8 +1,8 @@
 algorithm:
   type: confidence
+  minimum_candidates: 2
   confidence:
     confidence_method: hybrid
     threshold: 0.72
     escalation_order: small_to_large
     on_error: skip
-

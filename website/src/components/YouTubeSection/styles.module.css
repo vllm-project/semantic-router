@@ -18,7 +18,7 @@
   font-weight: var(--site-font-weight-semibold);
   line-height: 1.18;
   letter-spacing: -0.025em;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .heading p {
@@ -203,8 +203,8 @@
 }
 
 .videoCard:hover {
-  border-color: var(--site-border);
-  background: var(--site-surface);
+  border-color: var(--site-hover-border);
+  background: var(--site-hover-chrome-bg);
 }
 
 .videoCardActive {

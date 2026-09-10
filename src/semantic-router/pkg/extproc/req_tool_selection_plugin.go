@@ -5,9 +5,9 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -57,7 +57,7 @@ func effectivePluginToolTopK(plugin *config.ToolSelectionPluginConfig, global in
 }
 
 func (r *OpenAIRouter) runToolSelectionPluginAdd(
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 	classificationText, historySummary string,
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
@@ -66,7 +66,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 ) error {
 	db, forceDirectEmbedding, err := r.toolDatabaseForSelectionPlugin(ts)
 	if err != nil {
-		return r.handleToolSelectionError(openAIRequest, response, ctx, err, r.effectiveToolSelectionFallback(ts))
+		return r.handleToolSelectionError(request, response, ctx, err, r.effectiveToolSelectionFallback(ts))
 	}
 	if db == nil || !db.IsEnabled() {
 		logging.Infof("[tool_selection] add mode skipped: database disabled or unloaded")
@@ -87,7 +87,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 	}
 
 	selectedTools, strategyOut, confidence, latency, toolErr := r.findToolsForQueryExt(
-		openAIRequest,
+		request,
 		classificationText,
 		historySummary,
 		ctx,
@@ -103,17 +103,17 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 	metrics.RecordToolsRetrieval(strategyOut, latency.Seconds())
 
 	if toolErr != nil {
-		return r.handleToolSelectionError(openAIRequest, response, ctx, toolErr, r.effectiveToolSelectionFallback(ts))
+		return r.handleToolSelectionError(request, response, ctx, toolErr, r.effectiveToolSelectionFallback(ts))
 	}
 
-	if err := r.applySelectedTools(openAIRequest, selectedTools, strategyOut, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
+	if err := r.applySelectedTools(request, selectedTools, strategyOut, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
 		return err
 	}
-	return r.updateRequestWithTools(openAIRequest, response, ctx)
+	return commitToolSelection(request, ctx)
 }
 
 func (r *OpenAIRouter) runToolSelectionPluginFilter(
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 	classificationText string,
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
@@ -131,7 +131,7 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	filtered, confidence, ferr := filterRequestToolsAgainstQuerySemantic(
 		ctx.embeddingContext(),
 		classificationText,
-		openAIRequest.Tools,
+		request.Tools,
 		r.toolEmbedder,
 		thresh,
 		ts.PreserveCount,
@@ -143,11 +143,11 @@ func (r *OpenAIRouter) runToolSelectionPluginFilter(
 	metrics.RecordToolsRetrieval(strategyLabel, latency.Seconds())
 
 	if ferr != nil {
-		return r.handleToolSelectionError(openAIRequest, response, ctx, ferr, r.effectiveToolSelectionFallback(ts))
+		return r.handleToolSelectionError(request, response, ctx, ferr, r.effectiveToolSelectionFallback(ts))
 	}
 
-	if err := r.applySelectedTools(openAIRequest, filtered, strategyLabel, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
+	if err := r.applySelectedTools(request, filtered, strategyLabel, confidence, latency, classificationText, ts.FallbackToEmpty); err != nil {
 		return err
 	}
-	return r.updateRequestWithTools(openAIRequest, response, ctx)
+	return commitToolSelection(request, ctx)
 }

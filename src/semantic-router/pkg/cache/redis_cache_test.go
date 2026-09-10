@@ -4,6 +4,7 @@ package cache
 
 import (
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -38,7 +39,7 @@ func TestRedisExtractSearchResultUsesConfiguredMetric(t *testing.T) {
 			cfg.Index.IndexType = "HNSW"
 
 			cache := &RedisCache{config: cfg}
-			similarity, responseBody, ok := cache.extractSearchResult(redis.Document{
+			similarity, responseBody, _, _, ok := cache.extractSearchResult(redis.Document{
 				Fields: map[string]string{
 					"vector_distance": distance,
 					"response_body":   `{"result":"ok"}`,
@@ -98,19 +99,35 @@ func TestRedisExtractSearchResultMissingDistance(t *testing.T) {
 	cache := &RedisCache{config: cfg}
 
 	t.Run("no vector_distance field", func(t *testing.T) {
-		_, _, ok := cache.extractSearchResult(redis.Document{
+		_, _, _, _, ok := cache.extractSearchResult(redis.Document{
 			Fields: map[string]string{"response_body": `{"result":"ok"}`},
 		})
 		assert.False(t, ok)
 	})
 
 	t.Run("empty response_body", func(t *testing.T) {
-		similarity, responseBody, ok := cache.extractSearchResult(redis.Document{
+		similarity, responseBody, _, _, ok := cache.extractSearchResult(redis.Document{
 			Fields: map[string]string{"vector_distance": "0.0"},
 		})
 		assert.False(t, ok)
 		assert.Nil(t, responseBody)
 		assert.InDelta(t, float32(1.0), similarity, 0.001,
 			"the similarity is still reported so the caller can log it")
+	})
+
+	t.Run("timestamp and ttl_seconds parsed", func(t *testing.T) {
+		similarity, responseBody, storedAt, expiresAt, ok := cache.extractSearchResult(redis.Document{
+			Fields: map[string]string{
+				"vector_distance": "0.0",
+				"response_body":   `{"result":"ok"}`,
+				"timestamp":       "1700000000",
+				"ttl_seconds":     "3600",
+			},
+		})
+		assert.True(t, ok)
+		assert.JSONEq(t, `{"result":"ok"}`, string(responseBody))
+		assert.InDelta(t, float32(1.0), similarity, 0.001)
+		assert.Equal(t, time.Unix(1700000000, 0), storedAt)
+		assert.Equal(t, time.Unix(1700003600, 0), expiresAt)
 	})
 }

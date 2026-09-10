@@ -8,10 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // countingEmbeddingProvider is a deterministic fake provider that records how it
@@ -310,22 +308,19 @@ func TestToolEmbedderKeyDistinguishesModelIdentity(t *testing.T) {
 }
 
 // requestToolsFor builds request tools whose embedding text matches toolTextsFor.
-func requestToolsFor(n int) []openai.ChatCompletionToolParam {
-	requestTools := make([]openai.ChatCompletionToolParam, n)
+func requestToolsFor(n int) []llmprotocol.Tool {
+	requestTools := make([]llmprotocol.Tool, n)
 	for i := range requestTools {
-		requestTools[i] = openai.ChatCompletionToolParam{
-			Type: "function",
-			Function: openai.FunctionDefinitionParam{
-				Name:        fmt.Sprintf("tool_%d", i),
-				Description: param.NewOpt(fmt.Sprintf("does job number %d", i)),
-			},
+		requestTools[i] = llmprotocol.Tool{
+			Name:        fmt.Sprintf("tool_%d", i),
+			Description: fmt.Sprintf("does job number %d", i),
 		}
 	}
 	return requestTools
 }
 
 // perToolScores recomputes the dot products the filter ranks on, in request order.
-func perToolScores(t *testing.T, emb *cachedToolEmbedder, query string, requestTools []openai.ChatCompletionToolParam) []float32 {
+func perToolScores(t *testing.T, emb *cachedToolEmbedder, query string, requestTools []llmprotocol.Tool) []float32 {
 	t.Helper()
 	toolTexts := make([]string, len(requestTools))
 	for i, tool := range requestTools {
@@ -344,7 +339,7 @@ func perToolScores(t *testing.T, emb *cachedToolEmbedder, query string, requestT
 
 // runSemanticFilter runs the filter under the equivalence tests' fixed
 // threshold/preserve settings, failing the test on error.
-func runSemanticFilter(t *testing.T, label, query string, requestTools []openai.ChatCompletionToolParam, emb *cachedToolEmbedder) ([]openai.ChatCompletionToolParam, float32) {
+func runSemanticFilter(t *testing.T, label, query string, requestTools []llmprotocol.Tool, emb *cachedToolEmbedder) ([]llmprotocol.Tool, float32) {
 	t.Helper()
 	kept, score, err := filterRequestToolsAgainstQuerySemantic(context.Background(), query, requestTools, emb, 0.4, 3)
 	if err != nil {
@@ -355,7 +350,7 @@ func runSemanticFilter(t *testing.T, label, query string, requestTools []openai.
 
 // assertSameRanking fails unless got ranks exactly like want (same max score,
 // same kept tools in the same order).
-func assertSameRanking(t *testing.T, label string, gotKept, wantKept []openai.ChatCompletionToolParam, gotScore, wantScore float32) {
+func assertSameRanking(t *testing.T, label string, gotKept, wantKept []llmprotocol.Tool, gotScore, wantScore float32) {
 	t.Helper()
 	if gotScore != wantScore {
 		t.Fatalf("%s: max score changed: got=%v want=%v", label, gotScore, wantScore)
@@ -364,8 +359,8 @@ func assertSameRanking(t *testing.T, label string, gotKept, wantKept []openai.Ch
 		t.Fatalf("%s: kept tool count changed: got=%d want=%d", label, len(gotKept), len(wantKept))
 	}
 	for i := range wantKept {
-		if gotKept[i].Function.Name != wantKept[i].Function.Name {
-			t.Fatalf("%s: kept tool %d changed: got=%q want=%q", label, i, gotKept[i].Function.Name, wantKept[i].Function.Name)
+		if gotKept[i].Name != wantKept[i].Name {
+			t.Fatalf("%s: kept tool %d changed: got=%q want=%q", label, i, gotKept[i].Name, wantKept[i].Name)
 		}
 	}
 }

@@ -13,12 +13,13 @@ const (
 
 // EmbeddingEndpointConfig defines an external embedding provider endpoint.
 type EmbeddingEndpointConfig struct {
-	BaseURL        string `yaml:"base_url,omitempty"`
-	Model          string `yaml:"model,omitempty"`
-	APIKeyEnv      string `yaml:"api_key_env,omitempty"`
-	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
-	MaxRetries     int    `yaml:"max_retries,omitempty"`
-	Dimensions     int    `yaml:"dimensions,omitempty"`
+	BaseURL          string `yaml:"base_url,omitempty"`
+	Model            string `yaml:"model,omitempty"`
+	APIKeyEnv        string `yaml:"api_key_env,omitempty"`
+	TimeoutSeconds   int    `yaml:"timeout_seconds,omitempty"`
+	MaxRetries       int    `yaml:"max_retries,omitempty"`
+	MaxResponseBytes int64  `yaml:"max_response_bytes,omitempty"`
+	Dimensions       int    `yaml:"dimensions,omitempty"`
 }
 
 func (e EmbeddingModels) EmbeddingBackend() string {

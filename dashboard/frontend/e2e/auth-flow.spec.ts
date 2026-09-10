@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { mockAuthenticatedAppShell, mockAuthenticatedSession, TEST_CSRF_TOKEN } from './support/auth'
+import {
+  dashboardSettingsResponse,
+  mockAuthenticatedAppShell,
+  mockAuthenticatedSession,
+  TEST_CSRF_TOKEN,
+} from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const baseSetupState = {
@@ -228,12 +233,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: false,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse()),
       })
     })
 
@@ -375,12 +375,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: false,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse()),
       })
     })
 
@@ -519,12 +514,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: false,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse()),
       })
     })
 
@@ -637,12 +627,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: false,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse()),
       })
     })
 
@@ -707,12 +692,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: false,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse()),
       })
     })
 
@@ -780,12 +760,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          readonlyMode: false,
-          setupMode: true,
-          platform: '',
-          envoyUrl: '',
-        }),
+        body: JSON.stringify(dashboardSettingsResponse({ setupMode: true })),
       })
     })
 
@@ -806,6 +781,8 @@ test.describe('Dashboard auth flow', () => {
       },
       settings: {
         readonlyMode: true,
+        serverReadonly: true,
+        runtimeConfigWritable: false,
         setupMode: false,
         platform: '',
         envoyUrl: '',

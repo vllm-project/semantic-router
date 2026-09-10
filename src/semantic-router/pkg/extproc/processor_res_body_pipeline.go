@@ -7,110 +7,111 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	responseBody []byte,
 	ctx *RequestContext,
 	completionLatency time.Duration,
-	initialBodyTransformed bool,
 ) *ext_proc.ProcessingResponse {
-	usage := mergeProviderResponseUsage(
-		ctx,
-		parseResponseUsage(responseBody, ctx.RequestModel),
-	)
+	usage := invalidResponseTerminalUsage("authoritative_usage_missing")
+	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
+	if err != nil {
+		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
+		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"backend_format": ctx.TargetFormat,
+			"client_format":  ctx.SourceFormat,
+			"error":          err.Error(),
+		})
+		return r.createErrorResponse(502, "The selected model returned an invalid response")
+	}
+	clientBody := responseBody
+	rewriteClientBody := requiresClientResponseRewrite(ctx)
+	if rewriteClientBody {
+		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
+		if err != nil {
+			return r.createErrorResponse(502, "The selected model returned an incompatible response")
+		}
+	}
+	usage = r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
-	r.updateResponseCache(ctx, responseBody)
 
-	finalBody, clientTransformed := r.translateResponseBodyForClient(ctx, responseBody)
-	bodyMutation, headerMutation := buildInitialResponseMutations(
-		finalBody,
-		initialBodyTransformed || clientTransformed,
-	)
+	r.updateResponseCache(ctx, clientBody)
 
-	if jailbreakResponse := r.performResponseJailbreakDetection(ctx, responseBody); jailbreakResponse != nil {
+	// The response-stage signal is scored from the declared rules before any
+	// plugin runs, so the observation exists whether or not the selected
+	// decision carries a plugin; the plugins below then consume it.
+	assistantContent := semanticAssistantContent(semanticResponse)
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+
+	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
+	// Recorded before a block returns, so a blocked response leaves the same
+	// evidence in Router Replay as a delivered one.
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
+	if jailbreakResponse != nil {
 		return jailbreakResponse
 	}
-	if hallucinationResponse := r.performHallucinationDetection(ctx, responseBody); hallucinationResponse != nil {
+	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
 		return hallucinationResponse
 	}
 
-	r.scheduleResponseMemoryStore(ctx, responseBody)
+	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.markUnverifiedFactualResponse(ctx)
 
-	response := r.applyResponseWarnings(ctx, responseBody, bodyMutation, headerMutation)
+	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
+	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, clientBody)
+	}
+	r.persistResponseObject(ctx)
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 	return response
 }
 
-// translateResponseBodyForClient dispatches body rewriting based on the
-// inbound client protocol. Returns the rewritten body and a flag
-// indicating whether a rewrite happened, so callers know whether to
-// emit a body mutation downstream.
-//
-// Branch order matters: ClientProtocol "anthropic" and Response API are
-// mutually exclusive (different inbound paths — /v1/messages vs
-// /v1/responses), but pinning the Anthropic branch first keeps the
-// dispatcher reading top-down by likelihood.
-func (r *OpenAIRouter) translateResponseBodyForClient(
+func (r *OpenAIRouter) applySemanticResponseWarnings(
 	ctx *RequestContext,
-	responseBody []byte,
-) ([]byte, bool) {
-	// Defensive: a nil ctx cannot match either dispatcher branch and the
-	// downstream isResponseAPIRequest dereference would panic. Treat as
-	// plain OpenAI pass-through.
-	if ctx == nil {
-		return responseBody, false
-	}
+	semanticResponse *llmprotocol.Response,
+	originalBody []byte,
+) (*ext_proc.ProcessingResponse, []byte) {
+	response := buildResponseBodyContinueResponse(nil, nil)
+	changed := false
+	var codes []string
+	var bodyChanged bool
 
-	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		translated, err := anthropic.EmitAnthropicResponse(responseBody, ctx.IRExtensions, ctx.RequestModel)
-		if err != nil {
-			logging.Errorf("Anthropic outbound emit failed: %v", err)
-			return anthropic.EmitAnthropicError("api_error", err.Error()), true
-		}
-		return translated, true
-	}
+	bodyChanged, code := r.applySemanticHallucinationWarning(ctx, semanticResponse)
+	changed = changed || bodyChanged
+	codes = appendNonEmpty(codes, code)
+	bodyChanged, code = r.applySemanticUnverifiedFactualWarning(ctx, semanticResponse)
+	changed = changed || bodyChanged
+	codes = appendNonEmpty(codes, code)
+	codes = appendNonEmpty(codes, r.responseJailbreakWarningCode(ctx))
 
-	if !isResponseAPIRequest(ctx) || r.ResponseAPIFilter == nil {
-		return responseBody, false
+	if len(codes) > 0 {
+		setResponseWarningsHeader(response, codes)
 	}
-
-	translatedBody, err := r.ResponseAPIFilter.TranslateResponse(
-		ctx.TraceContext,
-		ctx.ResponseAPICtx,
-		responseBody,
-	)
+	addResponseStageSignalHeaders(ctx, response)
+	if !changed {
+		return response, originalBody
+	}
+	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
-		logging.Errorf("Response API translation error: %v", err)
-		return responseBody, false
+		logging.ComponentErrorEvent("extproc", "neutral_response_warning_encode_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return response, originalBody
 	}
-
-	logging.Infof("Response API: Translated response to Response API format")
-	return translatedBody, true
-}
-
-func buildInitialResponseMutations(
-	finalBody []byte,
-	bodyWasTransformed bool,
-) (*ext_proc.BodyMutation, *ext_proc.HeaderMutation) {
-	if !bodyWasTransformed {
-		return nil, nil
-	}
-
-	return &ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{
-				Body: finalBody,
-			},
-		}, &ext_proc.HeaderMutation{
-			RemoveHeaders: []string{"content-length"},
-		}
+	setResponseBodyMutation(response, encoded)
+	return response, encoded
 }
 
 func (r *OpenAIRouter) markUnverifiedFactualResponse(ctx *RequestContext) {
@@ -124,46 +125,6 @@ func (r *OpenAIRouter) markUnverifiedFactualResponse(ctx *RequestContext) {
 	}
 }
 
-// applyResponseWarnings consolidates the response-quality warnings into the
-// single x-vsr-response-warnings header (#2204). Each warning either contributes
-// its code to that header (the "header"/default action), rewrites the body with
-// an inline warning (the "body" action), or is suppressed ("none"). Codes are
-// collected in a fixed order so the header value is deterministic. The detail
-// behind each warning stays in the replay record.
-func (r *OpenAIRouter) applyResponseWarnings(
-	ctx *RequestContext,
-	responseBody []byte,
-	bodyMutation *ext_proc.BodyMutation,
-	headerMutation *ext_proc.HeaderMutation,
-) *ext_proc.ProcessingResponse {
-	response := buildResponseBodyContinueResponse(bodyMutation, headerMutation)
-	modifiedBody := responseBody
-	var codes []string
-
-	if ctx.HallucinationDetected {
-		var code string
-		modifiedBody, code = r.applyHallucinationWarning(ctx, modifiedBody)
-		codes = appendNonEmpty(codes, code)
-	}
-	if ctx.UnverifiedFactualResponse {
-		var code string
-		modifiedBody, code = r.applyUnverifiedFactualWarning(ctx, modifiedBody)
-		codes = appendNonEmpty(codes, code)
-	}
-	// Jailbreak never rewrites the body, so its position relative to the
-	// body-prepending warnings above is immaterial; it is appended last only to
-	// fix the code order in the header value.
-	codes = appendNonEmpty(codes, r.responseJailbreakWarningCode(ctx))
-
-	if len(codes) > 0 {
-		setResponseWarningsHeader(response, codes)
-	}
-	if string(modifiedBody) != string(responseBody) {
-		setResponseBodyMutation(response, modifiedBody)
-	}
-	return response
-}
-
 func appendNonEmpty(codes []string, code string) []string {
 	if code == "" {
 		return codes
@@ -171,9 +132,37 @@ func appendNonEmpty(codes []string, code string) []string {
 	return append(codes, code)
 }
 
+// addResponseStageSignalHeaders writes the response-stage matches in the body
+// phase: x-vsr-matched-jailbreak is rewritten once the response-direction
+// rules have been scored, and x-vsr-matched-hallucination is written once the
+// answer has been checked. The response headers phase wrote the request-stage
+// matches before the body existed, so the debug headers would otherwise never
+// show a response-stage match. Same gate as the request-stage signal headers:
+// only when debug is requested.
+func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !debugHeadersRequested(ctx) {
+		return
+	}
+	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
+		matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
+		matched = append(matched, ctx.VSRMatchedJailbreak...)
+		matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	}
+	if len(ctx.VSRMatchedHallucination) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(ctx.VSRMatchedHallucination, ","))
+	}
+}
+
 // setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
+	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// setResponseBodyHeader sets one response header from the body phase, merging
+// with any header mutation the response already carries.
+func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -183,8 +172,8 @@ func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []st
 	}
 	opt := &core.HeaderValueOption{
 		Header: &core.HeaderValue{
-			Key:      headers.VSRResponseWarnings,
-			RawValue: []byte(strings.Join(codes, ",")),
+			Key:      key,
+			RawValue: []byte(value),
 		},
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {
@@ -201,13 +190,52 @@ func setResponseBodyMutation(response *ext_proc.ProcessingResponse, body []byte)
 	if !ok {
 		return
 	}
+	if bodyResponse.ResponseBody.Response == nil {
+		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
+	}
 	bodyResponse.ResponseBody.Response.BodyMutation = &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: body,
 		},
 	}
+	if bodyResponse.ResponseBody.Response.HeaderMutation == nil {
+		bodyResponse.ResponseBody.Response.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	// A body rewrite invalidates the upstream byte count. Let Envoy derive the
+	// correct framing instead of forwarding a stale content-length.
+	ensureHeaderRemoved(bodyResponse.ResponseBody.Response.HeaderMutation, "content-length")
+}
+
+func setResponseContentType(response *ext_proc.ProcessingResponse, contentType string) {
+	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
+	if !ok {
+		return
+	}
+	if bodyResponse.ResponseBody.Response == nil {
+		bodyResponse.ResponseBody.Response = &ext_proc.CommonResponse{}
+	}
+	if bodyResponse.ResponseBody.Response.HeaderMutation == nil {
+		bodyResponse.ResponseBody.Response.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	mutation := bodyResponse.ResponseBody.Response.HeaderMutation
+	for _, option := range mutation.SetHeaders {
+		if option.GetHeader().GetKey() != "content-type" {
+			continue
+		}
+		option.Header.Value = ""
+		option.Header.RawValue = []byte(contentType)
+		option.AppendAction = core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD
+		return
+	}
+	mutation.SetHeaders = append(mutation.SetHeaders, &core.HeaderValueOption{
+		Header: &core.HeaderValue{
+			Key:      "content-type",
+			RawValue: []byte(contentType),
+		},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+	})
 }
 
 func isResponseAPIRequest(ctx *RequestContext) bool {
-	return ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest
+	return ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1
 }

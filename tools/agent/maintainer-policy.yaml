@@ -10,6 +10,8 @@ labels:
   issue_defaults:
     feature: enhancement
     bug: bug
+  structure:
+    epic: epic
   lifecycle:
     needs_acceptance: needs-acceptance
     accepted: accepted
@@ -36,26 +38,6 @@ labels:
     - wg/developer-experience-ecosystem
     - wg/evaluation-quality
   maintainer_owner: owner/maintainers
-
-release_tracks:
-  contracts:
-    label: track/contracts
-    description: API, config, deployment, and control-plane contracts.
-  ops:
-    label: track/ops
-    description: Release channels, upgrades, rollback, and production operations.
-  performance:
-    label: track/performance
-    description: Native/runtime parity and performance validation.
-  research-to-product:
-    label: track/research-to-product
-    description: Research work graduating into supported open-source behavior.
-  hardening:
-    label: track/hardening
-    description: Dashboard, eval, RAG, memory, protocol, and runtime hardening.
-  security:
-    label: track/security
-    description: Security, RBAC, observability, and E2E closure.
 
 staleness:
   issue_stale_days: 90

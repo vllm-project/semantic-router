@@ -12,7 +12,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-onerror-block", pkgtestcases.TestCase{
-		Description: "Test that PromptGuardConfig.OnError: block closes the request when the guardrail classifier is unreachable (#2918)",
+		Description: "Test explicit unknown no-match and legacy PromptGuard fail-closed behavior against an unreachable classifier",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "prompt-guard"},
 		Fn:          testJailbreakOnErrorBlock,
 	})
@@ -72,7 +72,7 @@ func testJailbreakOnErrorBlock(ctx context.Context, client *kubernetes.Clientset
 	}
 	if selectedDecision != "block_on_classifier_error" {
 		return fmt.Errorf(
-			"request was blocked, but by decision %q, want %q - the classify failure may not be reaching on_error: block",
+			"request was blocked by decision %q, want %q - explicit no_match or legacy fail-closed behavior may be broken",
 			selectedDecision, "block_on_classifier_error",
 		)
 	}

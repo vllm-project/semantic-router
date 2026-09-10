@@ -266,12 +266,13 @@ func (r *OpenAIRouter) learningCandidateModels(
 						return decision.Tier == tier
 					},
 				),
+				ctx,
 			)
 		}
 	case config.RouterLearningCandidateSetGlobal:
-		return r.eligibleLearningModelRefs(r.deployedLearningModelRefs())
+		return r.eligibleLearningModelRefs(r.deployedLearningModelRefs(), ctx)
 	}
-	return r.eligibleLearningModelRefs(cloneModelRefs(selCtx.CandidateModels))
+	return r.eligibleLearningModelRefs(cloneModelRefs(selCtx.CandidateModels), ctx)
 }
 
 func (r *OpenAIRouter) unionRecipeDecisionModelRefs(
@@ -387,10 +388,6 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			continue
 		}
 		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
-		if params, ok := r.Config.ModelConfig[model]; ok && params.QualityScore > 0 && exp.GoodFitCount+exp.UnderpoweredCount == 0 {
-			exp.QualitySeed = clamp01(params.QualityScore)
-			exp.SeedWeight = 2
-		}
 		alpha := exp.SeedWeight*exp.QualitySeed + float64(exp.GoodFitCount) + 1
 		beta := exp.SeedWeight*(1-exp.QualitySeed) + float64(exp.UnderpoweredCount) + 1
 		mean := alpha / (alpha + beta)

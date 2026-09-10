@@ -104,7 +104,7 @@ impl TraditionalBertClassifier {
                 "bert.pooler.dense.weight",
             )?;
             let pooler_bias = vb.get(config.hidden_size, "bert.pooler.dense.bias")?;
-            Linear::new(pooler_weight.t()?, Some(pooler_bias))
+            Linear::new(pooler_weight, Some(pooler_bias))
         };
 
         // Create classification head

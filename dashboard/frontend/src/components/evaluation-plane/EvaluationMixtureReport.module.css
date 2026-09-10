@@ -1,0 +1,356 @@
+.mixtureSubjectFacts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.mixtureOutcomeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mixtureOutcomeLayer {
+  min-width: 0;
+  padding: 1rem;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.mixtureOutcomeLayer:first-child {
+  border-left: 0;
+}
+
+.mixtureReadingGuide {
+  margin: 0.7rem 0 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 2px solid var(--brand-amd);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.mixtureOutcomeLayer > span,
+.mixtureSubheading span {
+  color: var(--evaluation-accent-text);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.mixtureOutcomeLayer h4 {
+  margin: 0.28rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+.mixtureOutcomeLayer > p {
+  min-height: 2.8rem;
+  margin: 0.35rem 0 0.8rem;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.mixtureOutcomeLayer dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.mixtureOutcomeLayer dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.7rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mixtureOutcomeLayer dt,
+.mixtureArmMatrix dt {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.mixtureOutcomeLayer dd,
+.mixtureArmMatrix dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+}
+
+.mixtureMissing {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.mixtureDetailGrid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.28fr);
+  gap: 0;
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mixtureDetailGrid > div {
+  min-width: 0;
+  padding: 1rem;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+
+.mixtureDetailGrid > div:first-child {
+  border-left: 0;
+}
+
+.mixtureSubheading {
+  margin-bottom: 0.65rem;
+}
+
+.mixtureSubheading > div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.mixtureSubheading strong {
+  color: var(--text-primary);
+  font-size: 0.86rem;
+}
+
+.mixtureDecisionMap,
+.mixtureArmMatrix {
+  display: grid;
+  gap: 0;
+}
+
+.mixtureDecisionMap article,
+.mixtureArmMatrix article {
+  min-width: 0;
+  padding: 0.7rem 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mixtureDecisionMap article,
+.mixtureDecisionMap article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.mixtureDecisionMap article {
+  align-items: flex-start;
+}
+
+.mixtureDecisionMap strong,
+.mixtureArmMatrix strong {
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.mixtureDecisionMap code,
+.mixtureDecisionMap span,
+.mixtureArmMatrix header span,
+.mixtureArmMatrix footer {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.mixtureDecisionMap article > span {
+  max-width: 58%;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.mixtureSupportModels {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0.55rem 0 0;
+  padding: 0.4rem 0 0.4rem 0.65rem;
+  border-left: 1px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mixtureSupportModels strong {
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+}
+
+.mixtureSupportModels span {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  overflow-wrap: anywhere;
+}
+
+.mixtureArmMatrix article {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.mixtureArmMatrix header,
+.mixtureArmMatrix header > div,
+.mixtureArmMatrix footer {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.mixtureArmMatrix header,
+.mixtureArmMatrix footer {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.mixtureArmMatrix header > div {
+  min-width: 0;
+  flex-direction: column;
+}
+
+.mixtureArmMatrix dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+}
+
+.mixtureArmMatrix dl > div {
+  min-width: 0;
+  padding: 0.4rem 0.55rem;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.mixtureArmMatrix dl > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.mixtureArmMatrix dd {
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+
+.mixtureArmMatrix footer {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  line-height: 1.35;
+}
+
+.mixtureLineageDetails {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  --evaluation-disclosure-focus-color: var(--text-primary);
+  --evaluation-disclosure-hover-color: var(--text-primary);
+  --evaluation-disclosure-indicator-size: 0.4rem;
+  --evaluation-disclosure-open-color: var(--text-primary);
+}
+
+.mixtureLineageSummary {
+  width: 100%;
+  padding: 0.65rem 0;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.mixtureLineageStrip {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0 0 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.65rem;
+}
+
+.mixtureLineageStrip span {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: 0.4rem;
+}
+
+.mixtureLineageStrip code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .mixtureSubjectFacts {
+    justify-content: flex-start;
+  }
+
+  .mixtureOutcomeGrid,
+  .mixtureDetailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mixtureOutcomeLayer {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .mixtureOutcomeLayer:first-child {
+    border-top: 0;
+  }
+
+  .mixtureDetailGrid > div {
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .mixtureDetailGrid > div:first-child {
+    border-top: 0;
+  }
+
+  .mixtureOutcomeLayer > p {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .mixtureArmMatrix dl {
+    grid-template-columns: 1fr;
+  }
+
+  .mixtureArmMatrix dl > div,
+  .mixtureArmMatrix dl > div:first-child {
+    padding: 0.4rem 0;
+    border-top: 1px solid var(--border-subtle);
+    border-left: 0;
+  }
+
+  .mixtureArmMatrix dl > div:first-child {
+    border-top: 0;
+  }
+
+  .mixtureDecisionMap article,
+  .mixtureDecisionMap article > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mixtureDecisionMap article > span {
+    max-width: none;
+    text-align: left;
+  }
+}

@@ -6,21 +6,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/packages/param"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// toolEmbeddingText builds a phrase for embedding from an OpenAI-format tool (name + optional description).
-func toolEmbeddingText(t openai.ChatCompletionToolParam) string {
-	name := strings.TrimSpace(t.Function.Name)
+// toolEmbeddingText builds a phrase for embedding from a neutral function tool.
+func toolEmbeddingText(t llmprotocol.Tool) string {
+	name := strings.TrimSpace(t.Name)
 	var parts []string
 	if name != "" {
 		parts = append(parts, name)
 	}
-	if !param.IsOmitted(t.Function.Description) {
-		if d := strings.TrimSpace(t.Function.Description.Value); d != "" {
-			parts = append(parts, d)
-		}
+	if description := strings.TrimSpace(t.Description); description != "" {
+		parts = append(parts, description)
 	}
 	return strings.TrimSpace(strings.Join(parts, " "))
 }
@@ -38,12 +35,12 @@ func dotProductFloat32(a, b []float32) float32 {
 }
 
 type scoredRequestTool struct {
-	tool  openai.ChatCompletionToolParam
+	tool  llmprotocol.Tool
 	score float32
 	order int
 }
 
-// filterRequestToolsAgainstQuerySemantic scores each OpenAI-format tool definition against queryText
+// filterRequestToolsAgainstQuerySemantic scores each neutral function tool against queryText
 // using embedding dot-products (same pipeline as ToolDatabase retrieval).
 //
 // The query and every tool are embedded in a single pass through emb, which
@@ -53,17 +50,17 @@ type scoredRequestTool struct {
 func filterRequestToolsAgainstQuerySemantic(
 	ctx context.Context,
 	queryText string,
-	requestTools []openai.ChatCompletionToolParam,
+	requestTools []llmprotocol.Tool,
 	emb *cachedToolEmbedder,
 	relevanceThreshold float32,
 	preserveCount int,
-) ([]openai.ChatCompletionToolParam, float32, error) {
+) ([]llmprotocol.Tool, float32, error) {
 	if len(requestTools) == 0 {
 		return nil, 0, nil
 	}
 	trimmedQuery := strings.TrimSpace(queryText)
 	if trimmedQuery == "" {
-		out := make([]openai.ChatCompletionToolParam, len(requestTools))
+		out := make([]llmprotocol.Tool, len(requestTools))
 		copy(out, requestTools)
 		return out, 0, nil
 	}
@@ -75,7 +72,7 @@ func filterRequestToolsAgainstQuerySemantic(
 	for i, tool := range requestTools {
 		text := toolEmbeddingText(tool)
 		if text == "" {
-			text = tool.Function.Name
+			text = tool.Name
 		}
 		toolTexts[i] = text
 	}
@@ -115,8 +112,8 @@ func filterRequestToolsAgainstQuerySemantic(
 	return kept, maxScore, nil
 }
 
-func keepByRelevanceThreshold(scored []scoredRequestTool, relevanceThreshold float32) []openai.ChatCompletionToolParam {
-	kept := make([]openai.ChatCompletionToolParam, 0, len(scored))
+func keepByRelevanceThreshold(scored []scoredRequestTool, relevanceThreshold float32) []llmprotocol.Tool {
+	kept := make([]llmprotocol.Tool, 0, len(scored))
 	for _, s := range scored {
 		if s.score >= relevanceThreshold {
 			kept = append(kept, s.tool)
@@ -127,19 +124,19 @@ func keepByRelevanceThreshold(scored []scoredRequestTool, relevanceThreshold flo
 
 func preserveTopScoredTools(
 	scored []scoredRequestTool,
-	kept []openai.ChatCompletionToolParam,
+	kept []llmprotocol.Tool,
 	preserveCount int,
-) []openai.ChatCompletionToolParam {
+) []llmprotocol.Tool {
 	needed := preserveCount - len(kept)
 	seen := make(map[string]struct{}, len(kept))
 	for _, t := range kept {
-		seen[strings.ToLower(strings.TrimSpace(t.Function.Name))] = struct{}{}
+		seen[strings.ToLower(strings.TrimSpace(t.Name))] = struct{}{}
 	}
 	for _, s := range scored {
 		if needed == 0 {
 			break
 		}
-		key := strings.ToLower(strings.TrimSpace(s.tool.Function.Name))
+		key := strings.ToLower(strings.TrimSpace(s.tool.Name))
 		if _, dup := seen[key]; dup {
 			continue
 		}

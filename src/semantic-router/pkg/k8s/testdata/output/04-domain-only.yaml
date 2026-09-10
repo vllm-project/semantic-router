@@ -1,18 +1,8 @@
 version: v0.3
 providers:
   defaults:
-    default_model: mistral-7b
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: mistral-7b
+    reasoning_effort: high
   models:
     - name: mistral-7b
       pricing:
@@ -144,8 +134,9 @@ global:
       metrics:
         windowed_metrics:
           enabled: false
-          model_metrics: false
           queue_depth_estimation: false
+      profiling:
+        enabled: false
     authz: {}
     ratelimit: {}
     management_api: {}
@@ -203,8 +194,7 @@ global:
           model_id: ""
           threshold: 0.5
           use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
+          variant: mmbert32k
           category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
           model_ref: domain_classifier
         mcp:

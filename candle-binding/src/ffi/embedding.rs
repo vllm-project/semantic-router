@@ -813,6 +813,7 @@ fn generate_multimodal_text_embedding(
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
     let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = token_ids.len();
+    check_position_limit(seq_len, model.config().text_max_position_embeddings)?;
 
     let device = model.device();
     let input_ids = Tensor::from_vec(token_ids, (1, seq_len), device)
@@ -1753,6 +1754,30 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     }
 }
 
+/// One entry of the models-info table.
+///
+/// `limits` is `Some((max_position_embeddings, hidden_size))` from the loaded
+/// model's config and `None` when the model is not loaded, in which case both
+/// numbers are reported as 0 and the path as empty.
+pub(crate) fn embedding_model_info(
+    name: &str,
+    path: Option<&str>,
+    limits: Option<(usize, usize)>,
+) -> crate::ffi::types::EmbeddingModelInfo {
+    use std::ffi::CString;
+    let (max_sequence_length, default_dimension) = match limits {
+        Some((max_positions, hidden)) => (max_positions as i32, hidden as i32),
+        None => (0, 0),
+    };
+    crate::ffi::types::EmbeddingModelInfo {
+        model_name: CString::new(name).unwrap().into_raw(),
+        is_loaded: limits.is_some(),
+        max_sequence_length,
+        default_dimension,
+        model_path: CString::new(path.unwrap_or("")).unwrap().into_raw(),
+    }
+}
+
 /// Get information about loaded embedding models
 ///
 /// This function returns metadata about all available embedding models,
@@ -1769,7 +1794,6 @@ pub extern "C" fn get_embedding_models_info(
     result: *mut crate::ffi::types::EmbeddingModelsInfoResult,
 ) -> i32 {
     use crate::ffi::types::{EmbeddingModelInfo, EmbeddingModelsInfoResult};
-    use std::ffi::CString;
 
     if result.is_null() {
         eprintln!("Error: null pointer passed to get_embedding_models_info");
@@ -1788,52 +1812,20 @@ pub extern "C" fn get_embedding_models_info(
         }
     };
 
-    // Check which models are loaded
-    let qwen3_loaded = factory.get_qwen3_model().is_some();
-    let gemma_loaded = factory.get_gemma_model().is_some();
+    // The limits come from each loaded model's own config.json, not from
+    // constants: `max_position_embeddings` is what the RoPE cache and the
+    // position guard are sized for, and `hidden_size` is the default dimension.
+    let qwen3_limits = factory
+        .get_qwen3_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
+    let gemma_limits = factory
+        .get_gemma_model()
+        .map(|m| (m.config().max_position_embeddings, m.config().hidden_size));
 
-    // Get model paths from factory
-    let qwen3_path = factory.get_qwen3_model_path();
-    let gemma_path = factory.get_gemma_model_path();
-
-    // Create model info array
-    let mut models_vec = Vec::new();
-
-    // Qwen3 model info
-    {
-        let model_name = CString::new("qwen3").unwrap();
-        let model_path = if let Some(path) = qwen3_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: qwen3_loaded,
-            max_sequence_length: if qwen3_loaded { 32768 } else { 0 },
-            default_dimension: if qwen3_loaded { 1024 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
-
-    // Gemma model info
-    {
-        let model_name = CString::new("gemma").unwrap();
-        let model_path = if let Some(path) = gemma_path {
-            CString::new(path).unwrap()
-        } else {
-            CString::new("").unwrap()
-        };
-
-        models_vec.push(EmbeddingModelInfo {
-            model_name: model_name.into_raw(),
-            is_loaded: gemma_loaded,
-            max_sequence_length: if gemma_loaded { 8192 } else { 0 },
-            default_dimension: if gemma_loaded { 768 } else { 0 },
-            model_path: model_path.into_raw(),
-        });
-    }
+    let models_vec = vec![
+        embedding_model_info("qwen3", factory.get_qwen3_model_path(), qwen3_limits),
+        embedding_model_info("gemma", factory.get_gemma_model_path(), gemma_limits),
+    ];
 
     let num_models = models_vec.len() as i32;
     let models_ptr = Box::into_raw(models_vec.into_boxed_slice()) as *mut EmbeddingModelInfo;
@@ -2282,6 +2274,21 @@ pub extern "C" fn init_multimodal_embedding_model(
     }
 }
 
+/// Reject a tokenized sequence longer than the text encoder's position-embedding
+/// limit.
+///
+/// The encoder holds a fixed number of position embeddings, so a longer sequence
+/// fails inside the position lookup with an index error that names neither the
+/// limit nor the input length. This names both and discards nothing.
+pub(crate) fn check_position_limit(seq_len: usize, max_position: usize) -> Result<(), String> {
+    if seq_len > max_position {
+        return Err(format!(
+            "text tokenizes to {seq_len} tokens, over the text encoder's {max_position}-position limit"
+        ));
+    }
+    Ok(())
+}
+
 /// Encode text using the multi-modal embedding model
 ///
 /// # Parameters
@@ -2350,6 +2357,13 @@ pub extern "C" fn multimodal_encode_text(
     let ids: Vec<u32> = encoding.get_ids().to_vec();
     let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = ids.len();
+    if let Err(e) = check_position_limit(seq_len, model.config().text_max_position_embeddings) {
+        eprintln!("Error: {}", e);
+        unsafe {
+            (*result) = MultiModalEmbeddingResult::default();
+        }
+        return -1;
+    }
 
     let device = model.device();
     let input_ids = match candle_core::Tensor::from_vec(ids, (1, seq_len), device) {
@@ -2834,6 +2848,88 @@ pub extern "C" fn shutdown_embedding_batched() {
     // The scheduler thread will automatically stop when the model is dropped
     // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
     println!("INFO: Shutting down batched embedding model");
+}
+
+const BERT_EMBEDDING_WINDOW: usize = 512;
+const QWEN3_EMBEDDING_WINDOW: usize = 32768;
+
+fn embedding_window(model_type: &str) -> Option<(&'static MmTokenizer, usize)> {
+    let factory = GLOBAL_MODEL_FACTORY.get();
+    match model_type {
+        "bert" => crate::ffi::init::BERT_SIMILARITY
+            .get()
+            .map(|bert| (bert.tokenizer(), BERT_EMBEDDING_WINDOW)),
+        "gemma" => factory.and_then(|f| {
+            Some((
+                f.get_gemma_tokenizer()?,
+                f.get_gemma_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "mmbert" => factory.and_then(|f| {
+            Some((
+                f.get_mmbert_tokenizer()?,
+                f.get_mmbert_model()?.config().max_position_embeddings,
+            ))
+        }),
+        "qwen3" => factory.and_then(|f| Some((f.get_qwen3_tokenizer()?, QWEN3_EMBEDDING_WINDOW))),
+        "multimodal" => get_multimodal_refs()
+            .map(|(model, tokenizer)| (tokenizer, model.config().text_max_position_embeddings)),
+        _ => None,
+    }
+}
+
+fn tokens_exceed_window(
+    tokenizer: &MmTokenizer,
+    text: &str,
+    window: usize,
+) -> Result<bool, String> {
+    use tokenizers::{TruncationDirection, TruncationParams, TruncationStrategy};
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(TruncationParams {
+            max_length: window + 1,
+            strategy: TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: TruncationDirection::Right,
+        }))
+        .map_err(|e| e.to_string())?;
+    let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+    Ok(encoding.get_ids().len() > window)
+}
+
+/// Report whether `text` tokenizes past the context window of the loaded
+/// embedding model named by `model_type`, so a truncated embedding would alias
+/// every text sharing its prefix.
+///
+/// # Returns
+/// 1 when the text exceeds the window, 0 when it fits, -1 when the model is not
+/// loaded or the input is invalid
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn embedding_text_exceeds_window(
+    text: *const c_char,
+    model_type: *const c_char,
+) -> i32 {
+    if text.is_null() || model_type.is_null() {
+        return -1;
+    }
+    let (text, model_type) = unsafe {
+        match (
+            CStr::from_ptr(text).to_str(),
+            CStr::from_ptr(model_type).to_str(),
+        ) {
+            (Ok(t), Ok(m)) => (t, m),
+            _ => return -1,
+        }
+    };
+    let Some((tokenizer, window)) = embedding_window(model_type) else {
+        return -1;
+    };
+    match tokens_exceed_window(tokenizer, text, window) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(_) => -1,
+    }
 }
 
 #[cfg(test)]

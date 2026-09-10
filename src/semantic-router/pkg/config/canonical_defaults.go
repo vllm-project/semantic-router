@@ -64,6 +64,11 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
 			},
+			Profiling: ProfilingConfig{
+				Enabled: false,
+				Port:    DefaultProfilingPort,
+				Bind:    DefaultProfilingBind,
+			},
 			Tracing: TracingConfig{
 				Enabled:  true,
 				Provider: "opentelemetry",
@@ -94,7 +99,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
-			ExtractionBatchSize:        10,
 		},
 		ResponseCache: SemanticCache{
 			Enabled:        true,
@@ -247,7 +251,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
-				UseMmBERT32K:        true,
+				Variant:             CategoryVariantMmBERT32K,
 				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
 			},
 		},

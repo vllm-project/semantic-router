@@ -1,7 +1,7 @@
 ---
 slug: "join-vllm-sr-workgroups"
-title: "Find Your Focus and Join a Workgroup"
-description: "Seven durable directions give contributors a clear place to build, lead, and grow with the vLLM Semantic Router community."
+title: "Find Your Focus: How to Join and Work Together"
+description: "Choose a vLLM Semantic Router Workgroup, claim a useful task, grow into a Member or Lead, and make every contribution visible."
 authors:
   - name: "vLLM Semantic Router Team"
     url: "https://github.com/vllm-project/semantic-router"
@@ -26,17 +26,18 @@ A routed request crosses several responsibilities:
 
 1. **Developer Experience & Ecosystem** provides the CLI, Dashboard, APIs,
    recipes, and learning path.
-2. **Enterprise & Environment** applies access, usage, lifecycle, and
-   deployment policy.
+2. **Enterprise & Environment** secures management surfaces and owns lifecycle,
+   capacity, and deployment policy.
 3. **Router Models & Inference Runtime** produces the signals used to route.
 4. **MoM & Routing** chooses models and multi-model strategies.
-5. **Agentic & Context** manages context and chooses or composes agents.
+5. **Agentic & Context** manages bounded context, memory, and session continuity.
 6. **Data Plane & Networking** executes the chosen path.
 7. **Evaluation & Quality** measures results and catches regressions.
 
 They form one system, separated by responsibility rather than isolated code
-ownership. Every Epic below has one owning Workgroup. Dependencies on other
-groups are recorded as shared interfaces in the linked charter.
+ownership. Every Epic in the live views below has one owning Workgroup.
+Dependencies on other groups are recorded as shared interfaces in the linked
+charter.
 
 Choose the direction that matches the problem you want to solve. GitHub labels
 on each linked Epic are the source of truth for acceptance and delivery status.
@@ -72,13 +73,7 @@ compressed, or operate a hosted service.
 
 ### Owned Epics
 
-- [Define portable MoM model pools, routing recipes, evaluation, and model cards](https://github.com/vllm-project/semantic-router/issues/2971)
-- [Optimize routing recipes through an offline-to-online lifecycle](https://github.com/vllm-project/semantic-router/issues/2238)
-- [Optimize model-pool members against Mixture-of-Models objectives](https://github.com/vllm-project/semantic-router/issues/3041)
-- [Advance bounded multi-model collaboration algorithms](https://github.com/vllm-project/semantic-router/issues/3037)
-- [Enable safe cross-model KV-cache reuse](https://github.com/vllm-project/semantic-router/issues/2976)
-- [Enable vLLM-Omni backends and modality-aware MoM pools](https://github.com/vllm-project/semantic-router/issues/3030)
-- [Reuse validated reasoning experiences for small-model inference](https://github.com/vllm-project/semantic-router/issues/3031)
+[View all current MoM & Routing Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fmom-routing)
 
 ## [Router Models & Inference Runtime](https://github.com/vllm-project/semantic-router/issues/2966)
 
@@ -104,15 +99,12 @@ and new models should not spread engine-specific code throughout the Router.
 ### What it does not own
 
 This Workgroup produces routing intelligence; it does not choose the end-user
-MoM pool, own generic gateway forwarding, manage users and quotas, or rebuild
+MoM pool, own generic gateway forwarding, secure management surfaces, or rebuild
 the tensor engines and GPU schedulers it integrates with.
 
 ### Owned Epics
 
-- [Build an extensible inference runtime for Router Models](https://github.com/vllm-project/semantic-router/issues/2782)
-- [Improve current Router Models and develop routing-native model families](https://github.com/vllm-project/semantic-router/issues/2974)
-- [Build a reproducible SLM self-improvement and Router Model fine-tuning pipeline](https://github.com/vllm-project/semantic-router/issues/2975)
-- [Harden multimodal and image-routing signal robustness](https://github.com/vllm-project/semantic-router/issues/2347)
+[View all current Router Models & Inference Runtime Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Frouter-models-inference-runtime)
 
 ## [Data Plane & Networking](https://github.com/vllm-project/semantic-router/issues/2967)
 
@@ -137,38 +129,37 @@ the same behavior and failure semantics.
 
 ### What it does not own
 
-This Workgroup executes access and routing policy but does not define who may
-access a model, which quota applies, which hardware is officially supported,
-how a Router Model is trained, or which MoM recipe is best.
+This Workgroup executes request-path networking and deployment-provided access
+policy, but it does not define management identity and authorization, decide
+which hardware is officially supported, train Router Models, or choose the best
+MoM recipe.
 
 ### Owned Epics
 
-- [Support standalone and gateway-integrated data plane modes](https://github.com/vllm-project/semantic-router/issues/1138)
-- [Connect semantic routing to inference-aware backend selection](https://github.com/vllm-project/semantic-router/issues/2332)
-- [Make semantic caching safe, measurable, and lifecycle-aware](https://github.com/vllm-project/semantic-router/issues/3036)
-- [Optimize data-plane performance, streaming, and failure recovery](https://github.com/vllm-project/semantic-router/issues/2992)
+[View all current Data Plane & Networking Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fdata-plane-networking)
 
 ## [Enterprise & Environment](https://github.com/vllm-project/semantic-router/issues/2968)
 
 > **Mission:** Make vLLM Semantic Router production-grade across supported
-> organizations, environments, and hardware.
+> environments and hardware.
 
-![Identity, access, quotas, production lifecycle controls, observability, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.svg)
+![Management security, production lifecycle controls, observability, capacity planning, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.svg)
 
 ### The problem
 
-Production users need clear answers to practical questions: Who can call each
-model? How much can they use? What changed? Is the system healthy? Can a model,
-recipe, or Router upgrade be rolled out and reversed safely? Which deployment
-path is maintained, and which components does it own? The answers must remain
-consistent across deployment environments.
+Production operators need clear answers to practical questions: Which
+management surfaces are protected, and by which provider-backed identity? What
+changed? Is the system healthy? Can a model, recipe, or Router upgrade be rolled
+out and reversed safely? Which deployment path is maintained, and which
+components does it own? The answers must remain consistent across deployment
+environments.
 
 ### What this Workgroup owns
 
-- Users, organizations, serving identities, model access, API keys, quotas, and
-  usage accounting.
-- Tenant isolation, audit, reliability, scalability, monitoring, and
-  diagnostics.
+- Management authentication, provider-backed identity integration, route-bound
+  authorization, input and credential boundaries, and durable audit.
+- Reliability, scalability, monitoring, diagnostics, and the existing Insights
+  and operational surfaces.
 - Model, recipe, configuration, and vLLM-SR activation, rollout, and rollback.
 - Workload simulation and capacity planning that connect observed traffic,
   routing behavior, serving topology, and calibrated hardware profiles to
@@ -178,60 +169,61 @@ consistent across deployment environments.
 
 ### What it does not own
 
-This Workgroup does not promise a public hosted-service SLA, expose private
-infrastructure or credentials, define model quality, own evaluation standards,
-or implement networking protocols. It supplies reusable open-source production
-capabilities rather than publishing private product plans.
+This Workgroup does not build organization, team, or project administration;
+virtual API keys; tenant quotas, token rate limits, budgets, billing, or usage
+settlement. It also does not plan routing analytics beyond the existing
+Insights and operational surfaces.
+
+It does not promise a public hosted-service SLA, expose private infrastructure
+or credentials, define model quality, own evaluation standards, or implement
+networking protocols. It supplies reusable open-source production capabilities
+rather than publishing private product plans.
 
 ### Owned Epics
 
-- [Build multi-tenant inference access, quotas, and usage controls](https://github.com/vllm-project/semantic-router/issues/2960)
-- [Build versioned configuration activation and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
-- [Define deployment architecture and reference stacks across environments and hardware](https://github.com/vllm-project/semantic-router/issues/3043)
-- [Establish production observability and supported-environment qualification](https://github.com/vllm-project/semantic-router/issues/2993)
-- [Build workload-driven capacity planning for inference fleets](https://github.com/vllm-project/semantic-router/issues/3091)
+[View all current Enterprise & Environment Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fenterprise-environment)
 
 ## [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
 
-> **Mission:** Manage context and safely select, hand off, and compose agent
-> backends for long-running workloads.
+> **Mission:** Optimize bounded context, memory, session continuity, and safe
+> model or workflow switching for long-running workloads.
 
-![A long session is protected and optimized before the Router selects, hands off to, or composes agent backends within explicit limits](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
+![A long session is protected and optimized while the Router preserves bounded context, memory, and continuity](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
 
 ### The problem
 
 Long-running work accumulates messages, memory, tool output, cost, and risk.
-Important instructions can be lost, while the best model or agent may change as
-the task evolves. The Router must handle those changes without becoming a
-general-purpose agent framework.
+Important instructions can be lost, and model or workflow changes can break
+tool loops or provider state. The Router needs bounded continuity contracts
+without becoming a general-purpose agent framework.
 
 ### What this Workgroup owns
 
 - Context compression, pruning, memory selection, prompt restructuring, and
   protection of critical instructions.
-- Session budgets, state boundaries, retention, recovery, and graceful
-  degradation.
-- Agent selection, fallback, handoff, and bounded multi-agent composition.
-- Safe model or workflow switching as a session evolves, with measurable task,
-  cost, latency, and safety outcomes.
+- Prompt-visible Router Memory with explicit persistence and lifecycle receipts.
+- Session budgets, state boundaries, retention, tool-loop continuity, recovery,
+  and graceful degradation.
+- Safe model or workflow switching as a session evolves.
+- Typed task, context-portability, capability, and collaboration receipts that
+  external agent runtimes can consume.
 
 ### What it does not own
 
-This Workgroup does not build an unrestricted agent orchestrator, own all MoM
-selection algorithms, transport KV caches between models, automate CLI
-installation, or allow silent lossy transformation and unbounded online
+This Workgroup does not select, invoke, host, or compose agent endpoints inside
+the Router. It does not build an agent endpoint catalog, unrestricted agent
+orchestrator, tool platform, or workflow engine; own general MoM selection;
+transport KV caches; or allow silent lossy transformation and unbounded online
 training.
 
 ### Owned Epics
 
-- [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
-- [Enable agent-based routing and multi-agent composition](https://github.com/vllm-project/semantic-router/issues/2994)
-- [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
+[View all current Agentic & Context Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fagentic-context)
 
 ## [Developer Experience & Ecosystem](https://github.com/vllm-project/semantic-router/issues/2970)
 
-> **Mission:** Make vLLM Semantic Router easy to discover, install, configure,
-> extend, and operate.
+> **Mission:** Make vLLM Semantic Router easy to adopt, configure, extend,
+> diagnose, and contribute to.
 
 ![A developer journey connects discovery, installation, configuration, the first routed request, understanding, sharing, and contribution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/developer-experience-ecosystem.svg)
 
@@ -244,12 +236,14 @@ on it without reverse-engineering the repository.
 
 ### What this Workgroup owns
 
-- Installation, configuration, deployment, tuning, diagnosis, and operation
-  through the CLI, Dashboard, and APIs.
+- One supported first-run path through the CLI, configuration, recipes, errors,
+  and troubleshooting.
+- Dashboard configuration and diagnostics built on canonical Router and
+  deployment contracts.
 - An agent-facing skill for deployment, recipe generation, evaluation, tuning,
   and reviewed operations.
-- Documentation, reference recipes, tutorials, model cards, blogs, videos, and
-  use-case sharing.
+- Documentation, localization, integration guides, Router Model development
+  guides, technical content, and contributor entry points.
 - Clear extension and contribution paths for models, runtimes, gateways, and
   deployment systems.
 
@@ -261,9 +255,7 @@ policy, and quality standards owned by other Workgroups.
 
 ### Owned Epics
 
-- [Build agent-assisted vLLM-SR deployment, recipe, evaluation, and tuning workflows](https://github.com/vllm-project/semantic-router/issues/2977)
-- [Reduce time to the first successful routed request](https://github.com/vllm-project/semantic-router/issues/2690)
-- [Publish maintained reference recipes and end-to-end tutorials](https://github.com/vllm-project/semantic-router/issues/2334)
+[View all current Developer Experience & Ecosystem Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fdeveloper-experience-ecosystem)
 
 ## [Evaluation & Quality](https://github.com/vllm-project/semantic-router/issues/2969)
 
@@ -299,12 +291,9 @@ model research itself. It defines shared measurement and gates.
 
 ### Owned Epics
 
-- [Build reproducible decision-level routing evaluation](https://github.com/vllm-project/semantic-router/issues/2333)
-- [Evaluate each Mixture-of-Models as a first-class model](https://github.com/vllm-project/semantic-router/issues/3038)
-- [Establish cross-platform performance regression coverage](https://github.com/vllm-project/semantic-router/issues/1510)
-- [Expand end-to-end quality coverage across Router, Dashboard, and deployments](https://github.com/vllm-project/semantic-router/issues/1519)
+[View all current Evaluation & Quality Epics](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue+is%3Aopen+label%3Aepic+label%3Awg%2Fevaluation-quality)
 
-## How Workgroups Operate
+## How to Join and Work Together
 
 > A Workgroup is a technical home, not a permission level.
 
@@ -313,26 +302,117 @@ connects contributors, maintains the charter, and helps prepare work for
 acceptance. The Open Source Team retains final acceptance, merge, role, and
 release authority.
 
-| Workgroups | Open Source Team |
+The normal Member path has four clear steps:
+
+1. **Apply** — choose a Workgroup in the
+   [Workgroup join guide](https://github.com/vllm-project/semantic-router/issues/15),
+   open its charter, and leave a first-person application comment.
+2. **Claim** — choose an `AVAILABLE` issue owned by that Workgroup, open the
+   target issue, and comment `/assign`. The task counts as assigned only after
+   your name appears in the issue's **Assignees** field.
+3. **Deliver** — open a focused PR linked to the claimed issue and get a
+   substantive contribution merged.
+4. **Join the roster** — the Workgroup Operations run collects every eligible
+   person into one reviewed roster PR. You become a canonical Member after that
+   PR merges.
+
+A contribution belongs to the Workgroup that owns its issue or PR. Work in a
+different Workgroup can qualify you there, but it does not complete the
+application you made elsewhere. A requested Lead follows the same contribution
+path and then receives a separate human role review.
+
+### If you have not applied
+
+Pick the Workgroup whose charter matches the work you want to do, then comment
+on that charter in your own words. This compact shape is enough:
+
+```text
+I'd like to join this Workgroup.
+Role: Member
+Background: <relevant experience>
+Interested in: <areas you want to help with>
+```
+
+You do not need to be on a roster before collaborating. After applying, open
+the current
+[weekly Workgroup Issues](https://github.com/vllm-project/semantic-router/issues?q=is%3Aissue%20state%3Aopen%20in%3Atitle%20%22%5BCommunity%5D%20Workgroup%20Issues%22)
+or the [Community Weekly Issues view](https://community.vllm-sr.ai/weekly-issues)
+and continue with any `AVAILABLE` issue under the same Workgroup.
+
+### If you have applied but do not know how to get started
+
+Choose any `AVAILABLE` issue under your applied-to Workgroup, open the
+target issue, comment `/assign`, and verify that GitHub lists you as an
+assignee. That assignee state is what makes the application `TASK_ASSIGNED`;
+the weekly listing or the `/assign` text by itself does not. Please claim one
+issue at a time so ownership stays clear and other contributors can find open
+work; finish or hand off the current issue before claiming another.
+
+If none of the available issues fit, comment on the weekly Workgroup Issues entry
+with exactly:
+
+```text
+Need task: wg/<slug>
+```
+
+The next operations run will bring that request into the task-replenishment
+discussion. It will not assign a task automatically.
+
+Once a substantive PR owned by your applied-to Workgroup merges, your
+application becomes `READY_FOR_ROSTER`. The roster PR still needs review and
+merge before your Member card becomes canonical.
+
+### If you already joined
+
+Applicants, Members, and Leads use the same `AVAILABLE` list. Use `/assign` on
+the target issue, keep the issue updated when scope or progress changes, and
+keep one active implementation issue at a time. If nothing fits, use the same
+`Need task: wg/<slug>` comment on the weekly Workgroup Issues entry so the next
+replenishment discussion includes you.
+
+### When the weekly list changes
+
+The Workgroup Operations run posts one consolidated update on the weekly issue,
+the join guide when needed, and each Workgroup charter. A single comment may
+mention several current applicants, Members, and Leads so the charter does not
+fill with repeated one-person automation replies. The update links the shared
+Workgroup list and explains `/assign`; a mention or recommendation is not an
+assignment. Only the target issue's **Assignees** field establishes ownership.
+
+### What each role is responsible for
+
+| Role | How to participate |
 | --- | --- |
-| Direction, boundaries, Epics, and contributor focus | Project governance and repository permissions |
-| Triage and acceptance recommendations | Final acceptance, merge, and release authority |
-| Lead and Member roles | Maintainer, Committer, and Contributor roles |
+| Applicant | Choose one Workgroup, apply on its charter, claim one `AVAILABLE` issue, and deliver a focused PR. |
+| Member | Keep building in the Workgroup direction, claim from the shared `AVAILABLE` list, help with scoped discussion and review, and make current ownership visible. |
+| Lead | Maintain the charter and Epic map, keep tasks contributor-ready, coordinate triage and dependencies, and help Members find useful work. |
+| Open Source Team | Confirm acceptance and role decisions, review and merge the roster batch, and retain final merge, release, and repository-permission authority. |
 
-**Lead.** Every active Workgroup has at least one Lead and may have several. A
-Lead is a Committer or Maintainer, or a Contributor with a merged commit and a
-Committer or Maintainer Sponsor. Leads maintain the charter and Epic map and
-coordinate triage.
+Every active Workgroup has at least one Lead and may have several. A Lead is a
+Committer or Maintainer, or a Contributor with a merged commit and a Committer
+or Maintainer Sponsor. A Member has at least one substantive merged repository
+contribution and continues to build in the direction. People may join more than
+one Workgroup, and these roles provide visibility and responsibility rather
+than additional repository permissions.
 
-**Member.** A Member has at least one merged repository commit and continues to
-build in the Direction. Anyone may collaborate before meeting the roster
-requirement, and people may join more than one Workgroup.
+## Make Your Work Visible
 
-To join, open the charter and comment with your requested role, a merged
-contribution, your focus, availability, and Sponsor when required. Confirmed
-Leads and Members appear on the public
-[Workgroups map](/community/work-groups); these roles provide visibility and
-responsibility, not additional repository permissions.
+Contribution is more rewarding when people can see the work, the technical
+home behind it, and the responsibility it grows into. The
+[Community Console](https://community.vllm-sr.ai) turns public repository
+evidence into three shareable cards:
+
+| Workgroup role | Contribution impact | Project team |
+| --- | --- | --- |
+| [![Example Workgroup Member card for the Enterprise and Environment Workgroup](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/workgroup-member-card.webp)](https://community.vllm-sr.ai/workgroups?wg=wg%2Fenterprise-environment&card=abhinav-m22) | [![Example contribution card showing community activity and rank](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/contribution-card.webp)](https://community.vllm-sr.ai/contributors?range=all&card=abhinav-m22) | [![Example Team card for a repository Maintainer](/img/blog/vllm/2026-08-24-workgroups-invitation/cards/team-card.webp)](https://community.vllm-sr.ai/team?range=all&card=Xunzhuo) |
+| Your canonical Lead or Member identity after the roster PR merges. | Your public merged PRs, reviews, commits, discussions, and current rank. | Maintainer, Committer, or Emeritus responsibility after the project's separate promotion process. |
+
+Click a person's avatar or name on the
+[Workgroups](https://community.vllm-sr.ai/workgroups),
+[Contributors](https://community.vllm-sr.ai/contributors), or
+[Team](https://community.vllm-sr.ai/team) page to create the live 3:4 card,
+copy it, or download the full-resolution PNG. The examples above are snapshots;
+the live cards update with the repository.
 
 ## Proposing a New Workgroup
 

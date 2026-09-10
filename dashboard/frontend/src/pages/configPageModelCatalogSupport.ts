@@ -13,10 +13,10 @@ export function modelsForCatalogVersion(
   catalog: BuiltInModelCatalog,
   version: BuiltInModelCatalogVersion,
 ): BuiltInModelMetadata[] {
-  return catalog.models.filter(
-    (model) =>
-      model.catalog_version === version.catalog_version && model.channel === version.channel,
+  const active = catalog.catalogs.some(
+    (candidate) => modelCatalogVersionKey(candidate) === modelCatalogVersionKey(version),
   )
+  return active ? catalog.models : []
 }
 
 export function catalogSnapshotsForEntrypoint(
@@ -26,11 +26,12 @@ export function catalogSnapshotsForEntrypoint(
   if (!catalog) return []
   const publicNames = new Set(entrypoint.model_names)
   return catalog.models
-    .filter((model) => publicNames.has(model.entrypoint) || publicNames.has(model.id))
-    .sort((left, right) => {
-      if (left.channel !== right.channel) return left.channel === 'latest' ? -1 : 1
-      return right.catalog_version.localeCompare(left.catalog_version, undefined, { numeric: true })
-    })
+    .filter(
+      (model) =>
+        (typeof model.entrypoint === 'string' && publicNames.has(model.entrypoint)) ||
+        publicNames.has(model.id),
+    )
+    .sort((left, right) => left.id.localeCompare(right.id))
 }
 
 export function preferredCatalogModelForEntrypoint(

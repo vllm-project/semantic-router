@@ -1,12 +1,10 @@
 package extproc
 
 import (
-	"fmt"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -27,37 +25,13 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		return looperResponse, nil
 	}
 
-	// Anthropic clients on the streaming path always go through the
-	// outbound emitter so the client sees Anthropic-shape SSE,
-	// regardless of upstream APIFormat. The dispatcher branch order
-	// matters: this check precedes the older
-	// handleAnthropicStreamingResponseBody branch because the
-	// double-Anthropic cell (Anthropic client + Anthropic backend)
-	// would otherwise match the legacy branch and the client would
-	// receive OpenAI SSE.
-	if ctx.IsStreamingResponse && ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		return r.handleAnthropicClientStreamingResponseBody(v.ResponseBody.Body, ctx), nil
-	}
-
-	// Legacy branch: OpenAI client hitting an Anthropic backend. The
-	// extra ClientProtocol guard prevents the new Anthropic-client
-	// branch from being shadowed by this one. Response API clients also
-	// land here (Responses-ness lives on ctx.ResponseAPICtx, not
-	// ClientProtocol); the handler routes their transformed chunks
-	// through the Response API streaming mutation so a /v1/responses
-	// stream receives Response API events, not chat.completion.chunk.
-	if ctx.IsStreamingResponse && ctx.APIFormat == config.APIFormatAnthropic &&
-		ctx.ClientProtocol != config.ClientProtocolAnthropic {
-		return r.handleAnthropicStreamingResponseBody(v.ResponseBody.Body, ctx), nil
-	}
-
-	responseBody, anthropicTransformed, err := r.normalizeProviderResponseBody(v.ResponseBody.Body, ctx)
-	if err != nil {
-		return r.createErrorResponse(502, fmt.Sprintf("Response transformation error: %v", err)), nil
+	responseBody := v.ResponseBody.Body
+	if isUpstreamTransportError(ctx) {
+		return r.handleUpstreamTransportError(responseBody, ctx), nil
 	}
 
 	if ctx.IsStreamingResponse {
-		return r.handleStreamingResponseBody(responseBody, ctx), nil
+		return r.handleSemanticStreamingResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), ctx), nil
 	}
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
@@ -72,12 +46,12 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		if contextRecoveryFailClosed(ctx) {
 			return r.createErrorResponse(502, "Context recovery followup failed"), nil
 		}
-		responseBody = redactContextRecoveryToolCalls(responseBody)
+		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency, anthropicTransformed), nil
+	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
 }
 
 func contextRecoveryFailClosed(ctx *RequestContext) bool {
@@ -100,41 +74,6 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 	logging.Debugf("[Looper] Capturing response body for router replay")
 	r.attachRouterReplayResponse(ctx, responseBody, true)
 	return buildResponseBodyContinueResponse(nil, nil)
-}
-
-func (r *OpenAIRouter) normalizeProviderResponseBody(
-	responseBody []byte,
-	ctx *RequestContext,
-) ([]byte, bool, error) {
-	if ctx.APIFormat != config.APIFormatAnthropic {
-		return responseBody, false, nil
-	}
-	if anthropic.IsErrorBody(responseBody) {
-		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
-			return responseBody, false, nil
-		}
-		transformedBody, err := anthropic.ToOpenAIResponseBody(responseBody, ctx.RequestModel)
-		return transformedBody, true, err
-	}
-
-	// Pass IRExtensions through so the Anthropic-only stop reason, cache
-	// usage counters, server-tool counts, and thinking-block signatures
-	// land on the per-request sidecar. The Anthropic outbound emitter
-	// (translateResponseBodyForClient → EmitAnthropicResponse) replays
-	// them on the response body so an Anthropic client sees the same
-	// fields the upstream actually produced.
-	transformedBody, err := anthropic.ToOpenAIResponseBodyWithExt(responseBody, ctx.RequestModel, ctx.IRExtensions)
-	if err != nil {
-		logging.Errorf("Failed to transform Anthropic response to OpenAI format: %v", err)
-		return nil, false, err
-	}
-
-	logging.Infof(
-		"Transformed Anthropic response to OpenAI format, original size: %d, transformed size: %d",
-		len(responseBody),
-		len(transformedBody),
-	)
-	return transformedBody, true, nil
 }
 
 func buildResponseBodyContinueResponse(

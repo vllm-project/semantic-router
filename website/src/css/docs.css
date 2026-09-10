@@ -119,9 +119,11 @@
     color var(--site-transition-fast);
 }
 
+/* One step below the active pill's --site-accent-soft, same hue, so hovering
+ * never looks like you have selected the row. */
 .site-root--docs .theme-doc-sidebar-menu .menu__link:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text-strong);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active,
@@ -151,7 +153,7 @@
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret:hover {
-  background: var(--site-surface-soft);
+  background: var(--site-hover-chrome-bg);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret::before,
@@ -175,8 +177,8 @@
 }
 
 .site-root--docs .theme-doc-sidebar-container button[class*='collapseSidebarButton']:hover {
-  background: var(--site-surface-soft);
-  color: var(--site-text);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
 }
 
 /* Article ----------------------------------------------------------- */
@@ -598,8 +600,8 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
 }
 
 .theme-doc-toc-desktop .table-of-contents__link:hover {
-  border-left-color: var(--site-border-strong);
-  color: var(--site-text-strong);
+  border-left-color: var(--site-hover-border);
+  color: var(--site-hover-text);
 }
 
 /* Active entry: 2px accent border, negative margin absorbs extra pixel. */
@@ -635,13 +637,8 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
 
 .site-docs-shell .pagination-nav__link:hover {
   border-color: var(--site-hover-border);
-  background: var(--site-surface-alt);
+  background: var(--site-hover-chrome-bg);
   transform: none;
-}
-
-.site-docs-shell .pagination-nav__link:hover {
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-soft);
 }
 
 .site-docs-shell .pagination-nav__sublabel {

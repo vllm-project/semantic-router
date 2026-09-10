@@ -229,6 +229,7 @@ type probeVariant struct {
 	Query           string                 `yaml:"query"`
 	Messages        []map[string]any       `yaml:"messages"`
 	Tools           []map[string]any       `yaml:"tools"`
+	ToolChoice      any                    `yaml:"tool_choice"`
 	Repeat          int                    `yaml:"repeat"`
 	Padding         *Padding               `yaml:"padding"`
 	GeneratedText   *probeGeneratedText    `yaml:"generated_text"`
@@ -434,6 +435,31 @@ func validateProbeVariantRequest(variant *probeVariant, label string, issues *[]
 	if err := validateJSONObjects(variant.Tools); err != nil {
 		*issues = append(*issues, label+".tools: "+err.Error())
 	}
+	if err := validateProbeToolChoice(variant.ToolChoice); err != nil {
+		*issues = append(*issues, label+".tool_choice: "+err.Error())
+	}
+}
+
+func validateProbeToolChoice(value any) error {
+	if value == nil {
+		return nil
+	}
+	switch typed := value.(type) {
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return errors.New("must not be empty")
+		}
+	case map[string]any:
+		if len(typed) == 0 {
+			return errors.New("must not be empty")
+		}
+	default:
+		return errors.New("must be a string or object")
+	}
+	if _, err := json.Marshal(value); err != nil {
+		return fmt.Errorf("must be JSON-compatible: %w", err)
+	}
+	return nil
 }
 
 func validateProbePadding(padding *Padding, variantLabel string, issues *[]string) {
@@ -567,6 +593,7 @@ func flattenProbe(
 		Query:         variant.Query,
 		Messages:      cloneObjects(variant.Messages),
 		Tools:         cloneObjects(variant.Tools),
+		ToolChoice:    cloneJSONValue(variant.ToolChoice),
 		Repeat:        variant.Repeat,
 		Padding:       variant.Padding,
 		GeneratedText: normalizedGeneratedText(variant.GeneratedText),

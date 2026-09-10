@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
+import { DOCS_LINKS } from '../utils/docsLinks'
 
 const GRAFANA_SERVICE: ServiceConfig = {
   name: 'Grafana',
   envVar: 'TARGET_GRAFANA_URL',
   description:
     'Connect Grafana to inspect routing health, latency, throughput, and model activity.',
-  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
+  docsUrl: DOCS_LINKS.observability,
   exampleValue: 'http://localhost:3000',
 }
 

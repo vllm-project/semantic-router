@@ -124,6 +124,7 @@ function WorkGroupRow({
   index: number
 }): ReactNode {
   const charterUrl = `${GITHUB_BASE}/issues/${group.charterIssue}`
+  const epicsUrl = `${GITHUB_BASE}/issues?q=${encodeURIComponent(`is:issue is:open label:epic label:${group.label}`)}`
 
   return (
     <article className={styles.workGroup} id={group.id}>
@@ -171,9 +172,14 @@ function WorkGroupRow({
               emptyId="workGroups.roster.forming"
             />
           </div>
-          <a className={styles.charterLink} href={charterUrl}>
-            <Translate id="workGroups.group.charterLink">Charter & self-nomination →</Translate>
-          </a>
+          <div className={styles.groupLinks}>
+            <a className={styles.charterLink} href={epicsUrl}>
+              <Translate id="workGroups.group.epicsLink">Current Epics →</Translate>
+            </a>
+            <a className={styles.charterLink} href={charterUrl}>
+              <Translate id="workGroups.group.charterLink">Charter & self-nomination →</Translate>
+            </a>
+          </div>
         </footer>
       </div>
     </article>

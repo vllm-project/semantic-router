@@ -5,21 +5,19 @@ import (
 	"testing"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/utils/ptr"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
+func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 	r := &SemanticRouterReconciler{}
 	sr := &vllmv1alpha1.SemanticRouter{
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			Config: vllmv1alpha1.ConfigSpec{
-				Strategy:               "priority",
-				DefaultReasoningEffort: "high",
-				ReasoningFamilies: map[string]vllmv1alpha1.ReasoningFamily{
-					"qwen3": {Type: "reasoning_effort", Parameter: "think"},
-				},
+				Strategy:        "priority",
+				ReasoningEffort: "high",
 				Tools: &vllmv1alpha1.ToolsConfig{
 					Enabled:             true,
 					TopK:                7,
@@ -52,14 +50,30 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 					{
 						Name:      "code",
 						Threshold: "0.55",
-						Hard:      vllmv1alpha1.ComplexityCandidates{Candidates: []string{"debug a race"}},
-						Easy:      vllmv1alpha1.ComplexityCandidates{Candidates: []string{"say hello"}},
+						Hard:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"debug a race"}},
+						Easy:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"say hello"}},
 						Composer: &vllmv1alpha1.RuleComposition{
 							Operator: "AND",
 							Conditions: []vllmv1alpha1.CompositionCondition{
 								{Type: "domain", Name: "engineering"},
 							},
 						},
+					},
+					{
+						// A remote rule carries boundaries in the model's own
+						// units and no candidates at all; a negative cut point
+						// must survive the string-to-number conversion.
+						Name:      "remote",
+						HardAbove: "0.85",
+						EasyBelow: "-0.25",
+					},
+				},
+				ComplexityModel: &vllmv1alpha1.ComplexityModelConfig{
+					Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
+						Protocol:   "http_classify",
+						Contract:   "score.v1",
+						Model:      "difficulty-scorer",
+						DeadlineMs: ptr.To(2500),
 					},
 				},
 			},
@@ -75,6 +89,7 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 	assertOperatorToolsConfig(t, canonical.Global.Integrations.Tools)
 	assertOperatorClassifierConfig(t, canonical.Global.ModelCatalog.Modules.Classifier)
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
+	assertOperatorComplexityModel(t, canonical.Global.ModelCatalog.Modules.Complexity)
 	assertOperatorPromptGuardConfig(t, canonical.Global.ModelCatalog.Modules.PromptGuard)
 }
 
@@ -222,7 +237,8 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 					{
 						Name: "hybrid-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
-							Operator: "AND",
+							Operator:  "AND",
+							OnUnknown: "fail_request",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
 								{Type: "event", Name: "critical_payment_event"},
 							},
@@ -264,6 +280,9 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
 		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
 	}
+	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	}
 }
 
 func rawCanonicalRoutingJSON(t *testing.T, raw string) *apiextensionsv1.JSON {
@@ -280,10 +299,6 @@ func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.Ca
 	}
 	if canonical.Providers.Defaults.DefaultReasoningEffort != "high" {
 		t.Fatalf("unexpected default reasoning effort: %q", canonical.Providers.Defaults.DefaultReasoningEffort)
-	}
-	family := canonical.Providers.Defaults.ReasoningFamilies["qwen3"]
-	if family.Type != "reasoning_effort" || family.Parameter != "think" {
-		t.Fatalf("unexpected reasoning family: %#v", family)
 	}
 }
 
@@ -411,8 +426,8 @@ func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.Cano
 func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.ComplexityRule) {
 	t.Helper()
 
-	if len(rules) != 1 {
-		t.Fatalf("expected one complexity rule, got %#v", rules)
+	if len(rules) != 2 {
+		t.Fatalf("expected two complexity rules, got %#v", rules)
 	}
 	rule := rules[0]
 	if rule.Name != "code" || rule.Threshold < 0.549 || rule.Threshold > 0.551 {
@@ -424,5 +439,22 @@ func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.Complexit
 	condition := rule.Composer.Conditions[0]
 	if condition.Type != "domain" || condition.Name != "engineering" {
 		t.Fatalf("unexpected composer condition: %#v", condition)
+	}
+
+	remote := rules[1]
+	if remote.Name != "remote" || remote.Threshold != 0 {
+		t.Fatalf("unexpected remote rule: %#v", remote)
+	}
+	if remote.HardAbove == nil || *remote.HardAbove != 0.85 {
+		t.Fatalf("hard_above did not survive conversion: %#v", remote.HardAbove)
+	}
+	if remote.EasyBelow == nil || *remote.EasyBelow != -0.25 {
+		t.Fatalf("a negative easy_below did not survive conversion: %#v", remote.EasyBelow)
+	}
+	if remote.HardBelow != nil || remote.EasyAbove != nil {
+		t.Fatalf("unset boundary fields must stay nil: %#v", remote)
+	}
+	if len(remote.Hard.Candidates) != 0 || len(remote.Easy.Candidates) != 0 {
+		t.Fatalf("a remote rule must not grow candidates: %#v", remote)
 	}
 }

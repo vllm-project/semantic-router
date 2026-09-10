@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // RecipeClassifiers owns the immutable classifier graph for every routing
@@ -78,6 +80,7 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 	if s == nil {
 		return fmt.Errorf("recipe classifiers are nil")
 	}
+	initialized := make([]config.RecipeName, 0, len(s.lifecycleOrder()))
 	for _, recipeName := range s.lifecycleOrder() {
 		classifier := s.byRecipe[recipeName]
 		var err error
@@ -87,8 +90,22 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 			err = classifier.InitializeRuntime()
 		}
 		if err != nil {
+			var closeErrors []error
+			for i := len(initialized) - 1; i >= 0; i-- {
+				initializedRecipe := initialized[i]
+				if closeErr := s.byRecipe[initializedRecipe].Close(); closeErr != nil {
+					closeErrors = append(closeErrors, fmt.Errorf("close routing recipe %q: %w", initializedRecipe, closeErr))
+				}
+			}
+			if closeErr := errors.Join(closeErrors...); closeErr != nil {
+				logging.ComponentWarnEvent("classifier", "recipe_runtime_initialization_rollback_failed", map[string]interface{}{
+					"recipe": string(recipeName),
+					"error":  closeErr.Error(),
+				})
+			}
 			return fmt.Errorf("initialize routing recipe %q: %w", recipeName, err)
 		}
+		initialized = append(initialized, recipeName)
 	}
 	return nil
 }
@@ -120,6 +137,20 @@ func (s *RecipeClassifiers) routingLifecycleOrder() []config.RecipeName {
 		return s.routingOrder
 	}
 	return s.order
+}
+
+// Close releases every recipe classifier's runtime resources.
+func (s *RecipeClassifiers) Close() error {
+	if s == nil {
+		return nil
+	}
+	var errs []error
+	for _, recipeName := range s.order {
+		if err := s.byRecipe[recipeName].Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close routing recipe %q: %w", recipeName, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // ForRecipe returns the classifier for exactly one recipe. There is no

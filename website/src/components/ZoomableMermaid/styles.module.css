@@ -11,7 +11,7 @@
 
 .mermaidContainer:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(9, 105, 218, 0.15);
+  box-shadow: 0 12px 32px rgba(8, 118, 201, 0.15);
   border-color: var(--tech-border-accent);
 }
 
@@ -24,7 +24,7 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(9, 105, 218, 0.9);
+  background: rgba(8, 118, 201, 0.9);
   color: white;
   padding: 6px 10px;
   border-radius: var(--radius-md);
@@ -38,7 +38,7 @@
   z-index: 10;
   backdrop-filter: blur(10px);
   font-weight: var(--site-font-weight-medium);
-  box-shadow: 0 4px 12px rgba(9, 105, 218, 0.3);
+  box-shadow: 0 4px 12px rgba(8, 118, 201, 0.3);
 }
 
 .mermaidContainer:hover .zoomHint,
@@ -130,8 +130,8 @@
 }
 
 .zoomButton:hover:not(:disabled) {
-  background: rgba(9, 105, 218, 0.1);
-  color: var(--tech-primary-blue);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   transform: scale(1.05);
 }
 
@@ -161,8 +161,8 @@
 }
 
 .resetButton:hover {
-  background: rgba(156, 39, 176, 0.1);
-  color: var(--tech-accent-purple);
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   transform: scale(1.05);
 }
 
@@ -188,8 +188,8 @@
 }
 
 .closeButton:hover {
-  background: rgba(244, 67, 54, 0.1);
-  color: #f44336;
+  background: var(--site-hover-chrome-bg);
+  color: var(--site-hover-text);
   transform: scale(1.1);
 }
 
@@ -257,8 +257,8 @@
 
 /* Dark theme support */
 [data-theme='dark'] .zoomHint {
-  background: rgba(88, 166, 255, 0.9);
-  box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+  background: rgba(48, 162, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(48, 162, 255, 0.3);
 }
 
 [data-theme='dark'] .modal {

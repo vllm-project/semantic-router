@@ -129,6 +129,10 @@ For full deployment instructions, see:
 - [Qdrant](../../installation/qdrant) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `config/runtime/memory/` for backend-specific configuration references
 
+When an external model with `model_role: memory_rewrite` is configured, its
+`max_response_bytes` limits each query-rewrite response. An omitted or
+non-positive value uses the 1 MiB default.
+
 ### Vector Store
 
 ```yaml

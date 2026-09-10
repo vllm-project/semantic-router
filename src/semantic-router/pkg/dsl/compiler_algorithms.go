@@ -67,6 +67,9 @@ func (c *Compiler) compilePromptAlgo(
 
 func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
+	if minimum, ok := getIntField(spec.Fields, "minimum_candidates"); ok {
+		algo.MinimumCandidates = minimum
+	}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
 	if algo.ReMoM != nil {
@@ -122,6 +125,9 @@ func (c *Compiler) compileConfidenceAlgo(fields map[string]Value) *config.Confid
 	}
 	if v, ok := getIntField(fields, "verifier_timeout_seconds"); ok {
 		cfg.VerifierTimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "max_response_bytes"); ok {
+		cfg.MaxResponseBytes = int64(v)
 	}
 	cfg.HybridWeights = parseHybridWeights(fields)
 	return cfg
@@ -472,11 +478,27 @@ func (c *Compiler) compileMultiFactorAlgo(fields map[string]Value) *config.Multi
 	cfg := &config.MultiFactorSelectionConfig{}
 	cfg.Weights = parseMultiFactorWeights(fields)
 	cfg.SLO = parseMultiFactorSLO(fields)
+	cfg.Quality = parseQualityEvidence(fields)
 	if v, ok := getIntField(fields, "latency_percentile"); ok {
 		cfg.LatencyPercentile = v
 	}
 	if v, ok := getStringField(fields, "on_no_candidates"); ok {
 		cfg.OnNoCandidates = v
+	}
+	return cfg
+}
+
+func parseQualityEvidence(fields map[string]Value) *config.QualityEvidenceConfig {
+	quality, ok := fields["quality"].(ObjectValue)
+	if !ok {
+		return nil
+	}
+	cfg := &config.QualityEvidenceConfig{}
+	if v, ok := getStringField(quality.Fields, "index"); ok {
+		cfg.Index = v
+	}
+	if v, ok := getStringField(quality.Fields, "on_missing"); ok {
+		cfg.OnMissing = v
 	}
 	return cfg
 }

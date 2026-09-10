@@ -32,7 +32,10 @@ global: {}
 
 - `listeners` exposes inference and management endpoints.
 - `providers.defaults` defines shared provider behavior;
-  `providers.models[]` binds model names to concrete backends.
+  `providers.models[]` binds model names to concrete backends and owns their
+  deployment pricing metadata. A built-in model may add an optional `catalog`
+  identity, while `backend_refs[].provider` selects the stable runtime Provider
+  ID. Custom vLLM/SGLang models continue to omit `catalog`.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -60,7 +63,8 @@ deployments and may rely on model or service definitions from a base config.
   Heuristic and learned signal guides live under
   `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
-  boolean rule shapes.
+  boolean rule shapes. Classifier-backed rules may resolve a terminal
+  `Unknown` result with `on_unknown: no_match|match|fail_request`.
 - `config/fragments/algorithm/`: per-decision model selection and bounded
   multi-model execution policies.
 - `config/fragments/plugin/`: route-local request or response processing such
@@ -94,12 +98,35 @@ runtime dependency; they do not define routing behavior by themselves.
 
 - Model backend credentials belong in environment references, not literal YAML
   values.
-- `routing.modelCards` describes semantic capabilities; concrete URLs and
-  credentials belong in `providers.models`.
+- Catalog-backed models materialize their built-in Model Card, reasoning family,
+  provider protocol, path, and non-secret defaults automatically. A handwritten
+  override uses the canonical `catalog` identity as `routing.modelCards[].name`;
+  a fully custom model uses its request alias as the card name.
+- `api_format` selects the upstream wire format; it never selects a Provider.
+  When this config declares a listener, every physical model must use
+  `backend_refs` with an explicit Provider ID. Metadata-only external-gateway
+  configs (`listeners: []`) and built-in virtual models may remain backendless.
+  The local `vllm-sr serve` path manages an Envoy listener, so it rejects a
+  backendless physical model even when the authored listener list is empty;
+  deploy state-only metadata through the external-gateway integration instead.
+- Multiple `backend_refs` on one alias are homogeneous replicas. HTTP targets
+  may vary by host, port, and weight. HTTPS targets may vary by port and weight
+  but must keep one DNS hostname. Provider ID, wire protocol, native model ID,
+  credentials, headers, request path, and TLS semantics must also match; use
+  separate aliases for heterogeneous providers.
+- `routing.modelCards` describes semantic capabilities; concrete URLs,
+  credentials, and pricing belong in `providers.models`.
+- Protocol controls such as `tool_choice` enter routing as conversation facts;
+  projections combine those facts with text-derived intent before decisions
+  apply policy.
 - `routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
+- `routing.decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
+  portable while making its candidate-pool cardinality executable as soon as
+  an Entrypoint assigns Models. Request-time context filtering cannot silently
+  reduce the eligible pool below that contract.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response
@@ -108,20 +135,38 @@ runtime dependency; they do not define routing behavior by themselves.
   authenticated upstream component owns the bypass header.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
+- Built-in category/domain classification uses the local `variant` selector by
+  default. A named remote classifier may instead be attached with
+  `global.model_catalog.modules.classifier.domain.backend`; its `model` must
+  name an entry in `global.model_catalog.external[]` with
+  `model_role: classification`. The shared backend contract uses
+  `protocol`, `contract`, `model`, and optional `deadline_ms`.
+- Complexity attaches the same block at
+  `global.model_catalog.modules.complexity.backend`, beside `prototype_scoring`
+  rather than on a rule, so it survives the per-recipe replacement of
+  `routing.signals`. It reads two contracts and therefore requires `contract`
+  to be stated: `score.v1`, where each rule converts the score with its own
+  `hard_above`/`easy_below` boundaries, or `label_distribution.v1`, where the
+  winning label is the verdict. `threshold` stays the symmetric shorthand for
+  the local signed margin, and the `hard`/`easy` candidate lists are unread
+  once a backend supplies the score.
+- External LLM classifiers use `max_response_bytes` on their
+  `global.model_catalog.external[]` entry. The MCP classifier uses the same key
+  under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 
 When a public config field or supported routing surface changes, update its
 fragment, the exhaustive reference, affected recipes, and the matching website
 page together. Run `go test ./pkg/config/...` from `src/semantic-router`, then
-run `make agent-lint` from the repository root:
+run `make check` from the repository root:
 
 ```bash
 cd src/semantic-router
 go test ./pkg/config/...
 
 cd ../..
-make agent-lint
+make check
 ```
 
 Complete routing scenarios belong in `config/recipes/`; backend support files

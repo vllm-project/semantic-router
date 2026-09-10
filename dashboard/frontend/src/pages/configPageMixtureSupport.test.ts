@@ -4,6 +4,7 @@ import {
   applyRecipeAssignments,
   assignmentState,
   assignDecisionModels,
+  minimumCandidatesForDecision,
 } from './configPageMixtureSupport'
 import type { ConfigData, DecisionConfig } from './configPageSupport'
 
@@ -32,6 +33,16 @@ describe('Mixture model assignments', () => {
     })
   })
 
+  it('uses the decision candidate contract and defaults legacy recipes to one', () => {
+    expect(minimumCandidatesForDecision(decisions[0])).toBe(1)
+    expect(
+      minimumCandidatesForDecision({
+        ...decisions[1],
+        algorithm: { type: 'fusion', minimum_candidates: 3 },
+      }),
+    ).toBe(3)
+  })
+
   it('preserves existing model-ref policy and initializes only new references', () => {
     const updated = assignDecisionModels(decisions, {
       Simple: ['local/fast', 'local/balanced'],
@@ -45,6 +56,62 @@ describe('Mixture model assignments', () => {
     expect(decisions[0].modelRefs).toEqual([
       { model: 'local/fast', use_reasoning: false, weight: 2 },
     ])
+  })
+
+  it('materializes a missing dynamic workflow planner from the first assignment', () => {
+    const workflow: DecisionConfig = {
+      name: 'Orchestrate',
+      description: 'Dynamic workflow',
+      priority: 30,
+      rules: { operator: 'AND', conditions: [] },
+      modelRefs: [],
+      algorithm: {
+        type: 'workflows',
+        workflows: {
+          mode: 'dynamic',
+          planner: { max_completion_tokens: 1024 },
+        },
+      },
+    }
+
+    const [updated] = assignDecisionModels([workflow], {
+      Orchestrate: ['local/coordinator', 'local/worker'],
+    })
+
+    expect(updated.algorithm).toEqual({
+      type: 'workflows',
+      workflows: {
+        mode: 'dynamic',
+        planner: {
+          model: 'local/coordinator',
+          max_completion_tokens: 1024,
+        },
+      },
+    })
+    expect(workflow.algorithm).not.toHaveProperty('workflows.planner.model')
+  })
+
+  it('preserves an explicitly configured dynamic workflow planner', () => {
+    const workflow: DecisionConfig = {
+      name: 'Orchestrate',
+      description: 'Dynamic workflow',
+      priority: 30,
+      rules: { operator: 'AND', conditions: [] },
+      modelRefs: [],
+      algorithm: {
+        type: 'workflows',
+        workflows: {
+          mode: 'dynamic',
+          planner: { model: 'external/coordinator' },
+        },
+      },
+    }
+
+    const [updated] = assignDecisionModels([workflow], {
+      Orchestrate: ['local/worker'],
+    })
+
+    expect(updated.algorithm).toHaveProperty('workflows.planner.model', 'external/coordinator')
   })
 
   it('updates only the selected named recipe', () => {

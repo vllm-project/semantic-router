@@ -33,9 +33,12 @@ func TestOversizedWorkerLineKillsProcessGroupAndReleasesCapacity(t *testing.T) {
 	if err := os.WriteFile(workerPath, []byte(worker), 0o700); err != nil {
 		t.Fatalf("write worker helper: %v", err)
 	}
+	commandProcess := NewCommandProcess(workerPath)
+	commandProcess.workerScriptPath = workerPath
 	service, err := NewService(Options{
 		DataDir: root, PythonPath: workerPath, ConfigPath: configPath,
 		CodeRevision: testSourceRevision, MaxConcurrent: 1, WorkerTimeout: time.Minute,
+		Process: commandProcess,
 	})
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
@@ -45,12 +48,12 @@ func TestOversizedWorkerLineKillsProcessGroupAndReleasesCapacity(t *testing.T) {
 			t.Errorf("close evaluation service: %v", closeErr)
 		}
 	})
-	run, err := service.CreateRun(context.Background(), validCreateRequest())
+	run, err := service.CreateRunAs(context.Background(), SystemActor(), validCreateRequest())
 	if err != nil {
 		t.Fatalf("CreateRun: %v", err)
 	}
 	startedAt := time.Now()
-	if _, startErr := service.StartRun(context.Background(), run.ID); startErr != nil {
+	if _, startErr := service.StartRunAs(context.Background(), SystemActor(), run.ID); startErr != nil {
 		t.Fatalf("StartRun: %v", startErr)
 	}
 	failed := waitForRunStatus(t, service, run.ID, StatusFailed)
@@ -58,11 +61,11 @@ func TestOversizedWorkerLineKillsProcessGroupAndReleasesCapacity(t *testing.T) {
 		t.Fatalf("oversized protocol line did not fail fast and safely: elapsed=%s run=%+v", time.Since(startedAt), failed)
 	}
 	capacityDeadline := time.Now().Add(time.Second)
-	for len(service.semaphore) != 0 && time.Now().Before(capacityDeadline) {
+	for service.activity.workerSlotsInUse() != 0 && time.Now().Before(capacityDeadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if len(service.semaphore) != 0 {
-		t.Fatalf("failed worker retained a concurrency slot: %d", len(service.semaphore))
+	if service.activity.workerSlotsInUse() != 0 {
+		t.Fatalf("failed worker retained a concurrency slot: %d", service.activity.workerSlotsInUse())
 	}
 	pidBytes, err := os.ReadFile(pidPath)
 	if err != nil {

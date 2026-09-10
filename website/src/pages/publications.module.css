@@ -29,11 +29,19 @@
     border-color 180ms ease;
 }
 
-.filterButton:hover,
-.filterButton.active {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+/* Selected is the filled blue; hovering an unselected filter only tints, so
+ * the two states stay distinguishable while the pointer is over the row. */
+.filterButton:hover {
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
+}
+
+.filterButton.active,
+.filterButton.active:hover {
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
 }
 
 .groups {
@@ -89,12 +97,17 @@
   text-transform: uppercase;
 }
 
-.rowTypePaper {
+/* Doubled class on purpose. `.rowType` sets the `border` shorthand, which
+ * resets border-color, and these modifiers score the same (0,1,0) — so in a
+ * production build, where the minifier merges and reorders rules across files,
+ * the shorthand can land after the modifier and repaint the badge grey.
+ * (0,2,0) wins regardless of where the bundler puts each rule. */
+.rowType.rowTypePaper {
   border-color: var(--site-accent);
   color: var(--site-accent-strong);
 }
 
-.rowTypeTalk {
+.rowType.rowTypeTalk {
   border-color: #a1a1aa;
   color: #71717a;
 }
@@ -145,9 +158,9 @@
 }
 
 .rowLink:hover {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

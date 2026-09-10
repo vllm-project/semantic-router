@@ -4,9 +4,21 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 CANONICAL_VERSION = "v0.3"
+
+CLASSIFIER_TYPE_LOCAL = "local"
+CLASSIFIER_TYPE_LLM = "llm"
+CLASSIFIER_TYPE_SEQUENCE = "sequence_classifier"
+ClassifierSignalType = Literal[
+    "local",
+    "llm",
+    "sequence_classifier",
+]
+
+UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
+UnknownPolicy = Literal["no_match", "match", "fail_request"]
 
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
@@ -92,12 +104,18 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("modality", "modality", "modality", "modality_rules"),
     SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
+    SignalFamilySpec(
+        "hallucination", "hallucination", "hallucination", "hallucination"
+    ),
     SignalFamilySpec("pii", "pii", "pii", "pii"),
     SignalFamilySpec("kb", "kb", "kb", "kb"),
     SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
     SignalFamilySpec("events", "events", "event", "events"),
     SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
     SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
+    SignalFamilySpec(
+        "input_modality", "input_modality", "input_modality", "input_modality"
+    ),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {
@@ -130,17 +148,6 @@ def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
             yield from iter_condition_leaves(children)
         else:
             yield condition
-
-
-def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:
-    """Yield canonical signal family keys and declared signal names."""
-    if not signals:
-        return
-    for spec in SIGNAL_FAMILY_SPECS:
-        for signal in getattr(signals, spec.signal_attr, None) or []:
-            name = getattr(signal, "name", None)
-            if name:
-                yield spec.canonical_key, name
 
 
 def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:

@@ -1,30 +1,24 @@
 # ========================== agent.mk ==========================
-# = Coding-agent entry points and gates                       =
+# = Changed-file checks and explicit integration verification  =
 # ============================================================
 
-##@ Agent
+##@ Development checks
 
 ENV ?= cpu
+DOMAIN ?=
+PROFILE ?=
 CHANGED_FILES ?=
-AGENT_CHANGED_FILES_PATH ?=
-AGENT_BASE_REF ?=
-AGENT_SERVE_CONFIG ?=
-AGENT_SERVE_ARGS ?=
-AGENT_SMOKE_TIMEOUT ?= 90
-AGENT_STACK_NAME ?=
-AGENT_PORT_OFFSET ?= 0
+CHANGED_FILES_PATH ?=
+BASE_REF ?=
+HARNESS_BOOTSTRAP_DONE ?=
+
 AGENT_GOLANGCI_LINT_VERSION ?= 2.5.0
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
 AGENT_NODE_VERSION ?= 22.17.0
-AGENT_BOOTSTRAP_DONE ?=
-AGENT_REPORT_WRITE ?=
-AGENT_REPORT_WRITE_PATH ?=
-AGENT_REPORT_CONTEXT_DETAIL ?= compact
-AGENT_SKIP_PRECOMMIT_BASELINE ?=
 
-# Share harness tooling across linked worktrees. The common Git directory is
-# rooted in the primary worktree for a normal clone; fall back to the current
-# directory outside that layout. AGENT_VENV remains explicitly overridable.
+# Share the tooling environment across linked worktrees. The worktree symlink
+# keeps existing pre-commit entries portable without installing dependencies
+# more than once.
 AGENT_GIT_COMMON_DIR ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 AGENT_PRIMARY_WORKTREE ?= $(if $(filter %/.git,$(AGENT_GIT_COMMON_DIR)),$(patsubst %/.git,%,$(AGENT_GIT_COMMON_DIR)),$(CURDIR))
 AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent
@@ -36,36 +30,47 @@ AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
 
-ifeq ($(AGENT_BOOTSTRAP_DONE),1)
-AGENT_BOOTSTRAP_DEPS :=
-AGENT_VENV_DEPS :=
+ifeq ($(HARNESS_BOOTSTRAP_DONE),1)
+HARNESS_BOOTSTRAP_DEPS :=
+HARNESS_VENV_DEPS :=
 else
-AGENT_BOOTSTRAP_DEPS := agent-bootstrap
-AGENT_VENV_DEPS := agent-venv-install
+HARNESS_BOOTSTRAP_DEPS := harness-bootstrap
+HARNESS_VENV_DEPS := harness-venv-install
 endif
 
-agent-help: ## Show help for agent-specific targets
-	@echo "Agent commands:"
-	@echo "  make agent-bootstrap"
-	@echo "  make agent-validate"
-	@echo "  make agent-scorecard"
-	@echo "  make workflow-ci-validate"
-	@echo "  make agent-ci-lint CHANGED_FILES=\"...\""
-	@echo "  make agent-docs-ci-gate CHANGED_FILES=\"...\""
-	@echo "  make agent-dev ENV=cpu|amd"
-	@echo "  make agent-serve-local ENV=cpu|amd"
-	@echo "    optional: AGENT_STACK_NAME=<name> AGENT_PORT_OFFSET=<n>"
-	@echo "  make agent-report ENV=cpu|amd CHANGED_FILES=\"...\""
-	@echo "    optional: AGENT_REPORT_CONTEXT_DETAIL=compact|full AGENT_REPORT_WRITE=1 or AGENT_REPORT_WRITE_PATH=.agent-harness/reports/custom.json"
-	@echo "  make agent-lint CHANGED_FILES=\"...\""
-	@echo "  make agent-fast-gate CHANGED_FILES=\"...\""
-	@echo "  make agent-ci-gate CHANGED_FILES=\"...\""
-	@echo "  make agent-pr-gate"
-	@echo "  make test-and-build-local"
-	@echo "  make agent-e2e-affected CHANGED_FILES=\"...\""
-	@echo "  make agent-feature-gate ENV=cpu|amd CHANGED_FILES=\"...\""
+impact: $(HARNESS_VENV_DEPS) ## Show changed files, owners, checks, candidate CI, and available tools
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py impact --env "$(ENV)" --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
 
-agent-venv-install: ## Create $(AGENT_VENV) and install harness Python requirements
+check: $(HARNESS_BOOTSTRAP_DEPS) ## Lint changed files and run their owning domains' unit/contract checks
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py check --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
+
+verify: $(HARNESS_VENV_DEPS) ## Run explicitly selected integration checks (DOMAIN=... and/or PROFILE=...)
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py verify --domains "$(DOMAIN)" --profiles "$(PROFILE)"
+
+ci-full: ## Reproduce the complete baseline PR checks locally
+	@$(LOG_TARGET)
+	@$(MAKE) precommit-local BASE_REF="$(BASE_REF)"
+	@$(MAKE) test-and-build-local
+
+harness-check: $(HARNESS_BOOTSTRAP_DEPS) ## Validate the domain registry, workflows, and harness tests
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
+	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
+	@"$(AGENT_PYTHON)" -m unittest discover -s tools/agent/scripts/tests -p "test_*.py"
+	@if command -v actionlint >/dev/null 2>&1; then \
+		actionlint -shellcheck=; \
+	elif command -v go >/dev/null 2>&1; then \
+		go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck=; \
+	else \
+		echo "actionlint or Go is required for workflow validation"; \
+		exit 1; \
+	fi
+
+harness-venv-install: ## Install the repository check dependencies
 	@if [ ! -x "$(AGENT_PYTHON)" ]; then \
 		echo "Creating $(AGENT_VENV)..."; \
 		python3 -m venv "$(AGENT_VENV)"; \
@@ -83,11 +88,11 @@ agent-venv-install: ## Create $(AGENT_VENV) and install harness Python requireme
 		ln -sfn "$(AGENT_VENV)" "$(AGENT_WORKTREE_VENV)"; \
 	fi
 
-agent-bootstrap: agent-venv-install ## Prepare the shared agent Python environment
+harness-bootstrap: harness-venv-install ## Prepare the shared Python environment
 	@$(LOG_TARGET)
-	@echo "Agent Python tooling ready"
+	@echo "Harness Python tooling ready"
 
-agent-node-bootstrap: $(AGENT_VENV_DEPS) ## Provide cached Node when the host has none
+harness-node-bootstrap: $(HARNESS_VENV_DEPS) ## Provide cached Node when the host has none
 	@if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then \
 		if [ ! -x "$(AGENT_NODEENV)/bin/node" ] || [ ! -x "$(AGENT_NODEENV)/bin/npm" ]; then \
 			echo "Installing repo-local Node.js v$(AGENT_NODE_VERSION)..."; \
@@ -98,236 +103,24 @@ agent-node-bootstrap: $(AGENT_VENV_DEPS) ## Provide cached Node when the host ha
 		fi; \
 	fi
 
-agent-markdown-bootstrap: agent-node-bootstrap ## Install repo-local markdownlint when needed
+harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdownlint when needed
 	@if [ ! -x "$(AGENT_MARKDOWNLINT)" ] || \
 		[ "$$(PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" --version 2>/dev/null)" != "$(AGENT_MARKDOWNLINT_VERSION)" ]; then \
 		NODE_PATH="$$PATH"; \
 		if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
-		echo "Installing repo-local markdownlint-cli v$(AGENT_MARKDOWNLINT_VERSION)..."; \
-		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" \
-			--no-audit --no-fund --loglevel=error \
-			markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
+		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
-agent-go-bootstrap: ## Install Go lint tooling only when Go changed
+harness-go-bootstrap: ## Install Go lint tooling only when Go changed
 	@if command -v go >/dev/null 2>&1; then \
 		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
 		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
-			echo "Installing golangci-lint v$(AGENT_GOLANGCI_LINT_VERSION)..."; \
 			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
 		fi; \
 	fi
 
-agent-rust-bootstrap: ## Install Rust lint tooling only when Rust changed
-	@if command -v rustup >/dev/null 2>&1; then \
-		rustup component add clippy >/dev/null 2>&1 || true; \
-	fi
-
-agent-validate: $(AGENT_BOOTSTRAP_DEPS) ## Validate the shared agent harness manifests and docs
-	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py validate
-	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
-	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
-	@"$(AGENT_PYTHON)" -m unittest discover -s tools/agent/scripts/tests -p "test_*.py"
-
-workflow-ci-validate: $(AGENT_VENV_DEPS) ## Validate workflow YAML, expressions, and reusable contracts
-	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
-	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
-	@if command -v actionlint >/dev/null 2>&1; then \
-		actionlint -shellcheck=; \
-	elif command -v go >/dev/null 2>&1; then \
-		go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck=; \
-	else \
-		echo "actionlint or Go is required for workflow expression validation"; \
-		exit 1; \
-	fi
-
-agent-scorecard: $(AGENT_BOOTSTRAP_DEPS) ## Show the current harness governance scorecard
-	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py scorecard --format summary
-
-agent-dev: ## Build the canonical local development image for the selected environment
-	@$(LOG_TARGET)
-	@if [ "$(ENV)" = "amd" ]; then \
-		$(MAKE) vllm-sr-dev VLLM_SR_PLATFORM=amd VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY); \
-	else \
-		$(MAKE) vllm-sr-dev VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY); \
-	fi
-
-agent-serve-local: $(AGENT_VENV_DEPS) ## Start vllm-sr with the canonical local image flow
-	@$(LOG_TARGET)
-	@DEFAULT_CONFIG="$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py resolve-env --env "$(ENV)" --field smoke_config)"; \
-	CONFIG_PATH="$(AGENT_SERVE_CONFIG)"; \
-	if [ -z "$$CONFIG_PATH" ]; then \
-		CONFIG_PATH="$$DEFAULT_CONFIG"; \
-	fi; \
-	CONFIG_ARGS=""; \
-	if [ -n "$$CONFIG_PATH" ]; then \
-		CONFIG_ARGS="--config $$CONFIG_PATH"; \
-	fi; \
-	if [ "$(ENV)" = "amd" ]; then \
-		echo "Starting local AMD workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
-	else \
-		echo "Starting local CPU workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
-	fi
-
-agent-stop-local: ## Stop local vllm-sr services
-	@$(LOG_TARGET)
-	@VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr stop || true
-
-agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed files
-	@$(LOG_TARGET)
-	@RAW_FILES="$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py changed-files --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)")"; \
-	if [ -z "$$RAW_FILES" ]; then \
-		echo "No changed files detected."; \
-		exit 0; \
-	fi; \
-	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
-	CSV_FILES="$$(printf '%s\n' "$$RAW_FILES" | paste -sd',' -)"; \
-	if printf '%s\n' "$$RAW_FILES" | grep -Eq '\.go$$'; then \
-		$(MAKE) agent-go-bootstrap; \
-	fi; \
-	if printf '%s\n' "$$RAW_FILES" | grep -Eq '\.rs$$'; then \
-		$(MAKE) agent-rust-bootstrap; \
-	fi; \
-	if [ "$(AGENT_SKIP_PRECOMMIT_BASELINE)" != "1" ]; then \
-		echo "Running baseline pre-commit checks..."; \
-		PRECOMMIT_SKIP="agent-changed-files-lint,golang-lint,cargo-check"; \
-		if [ -n "$${SKIP:-}" ]; then PRECOMMIT_SKIP="$${SKIP},$$PRECOMMIT_SKIP"; fi; \
-		SKIP="$$PRECOMMIT_SKIP" "$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS || exit $$?; \
-	fi; \
-	echo "Running Python lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
-	echo "Running Go structural lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
-	echo "Running reference config contract lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
-	echo "Running Rust lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
-	echo "Running structure checks..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
-
-agent-fast-gate: $(AGENT_BOOTSTRAP_DEPS) ## Run changed-file lint and rule-selected fast tests
-	@$(LOG_TARGET)
-	@$(MAKE) agent-lint AGENT_BOOTSTRAP_DONE=1 CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@AGENT_BOOTSTRAP_DONE=1 "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
-
-agent-ci-lint: $(AGENT_BOOTSTRAP_DEPS) ## Reproduce the CI changed-file lint gate locally
-	@$(LOG_TARGET)
-	@BASE_REF="$(AGENT_BASE_REF)"; \
-	if [ -z "$$BASE_REF" ] && git rev-parse --verify origin/main >/dev/null 2>&1; then \
-		BASE_REF="origin/main"; \
-	fi; \
-	if [ -z "$$BASE_REF" ] && git rev-parse --verify HEAD^ >/dev/null 2>&1; then \
-		BASE_REF="HEAD^"; \
-	fi; \
-	if [ -n "$$BASE_REF" ]; then \
-		echo "Using AGENT_BASE_REF=$$BASE_REF"; \
-	else \
-		echo "Using AGENT_BASE_REF=<empty>"; \
-	fi; \
-	$(MAKE) codespell-tracked && \
-	$(MAKE) agent-fast-gate AGENT_BOOTSTRAP_DONE=1 CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$$BASE_REF"
-
-agent-docs-ci-gate: $(AGENT_BOOTSTRAP_DEPS) ## Reproduce the docs/website lightweight CI gate locally
-	@$(LOG_TARGET)
-	@BASE_REF="$(AGENT_BASE_REF)"; \
-	if [ -z "$$BASE_REF" ] && git rev-parse --verify origin/main >/dev/null 2>&1; then \
-		BASE_REF="origin/main"; \
-	fi; \
-	if [ -z "$$BASE_REF" ] && git rev-parse --verify HEAD^ >/dev/null 2>&1; then \
-		BASE_REF="HEAD^"; \
-	fi; \
-	if [ -n "$$BASE_REF" ]; then \
-		echo "Using AGENT_BASE_REF=$$BASE_REF"; \
-	else \
-		echo "Using AGENT_BASE_REF=<empty>"; \
-	fi; \
-	$(MAKE) agent-validate AGENT_BOOTSTRAP_DONE=1 && \
-	$(MAKE) agent-ci-lint AGENT_BOOTSTRAP_DONE=1 AGENT_BASE_REF="$$BASE_REF" CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)"
-
-agent-report: $(AGENT_VENV_DEPS) ## Show primary skill, impacted surfaces, and validation commands
-	@$(LOG_TARGET)
-	@if [ -n "$(AGENT_REPORT_WRITE_PATH)" ]; then \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write "$(AGENT_REPORT_WRITE_PATH)"; \
-	elif [ -n "$(AGENT_REPORT_WRITE)" ]; then \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write-default; \
-	else \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)"; \
-	fi
-
-agent-ci-gate: $(AGENT_BOOTSTRAP_DEPS) ## Run the repo-standard fast CI gate
-	@$(LOG_TARGET)
-	@$(MAKE) agent-report AGENT_BOOTSTRAP_DONE=1 ENV="$(ENV)" CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py resolve --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --format summary
-	@$(MAKE) agent-fast-gate AGENT_BOOTSTRAP_DONE=1 CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-
-agent-smoke-local: ## Validate local container, router, envoy, and dashboard health
-	@$(LOG_TARGET)
-	@STACK_CONTAINER="$(VLLM_SR_CONTAINER)"; \
-	STACK_ROUTER_CONTAINER="vllm-sr-router-container"; \
-	STACK_ENVOY_CONTAINER="vllm-sr-envoy-container"; \
-	STACK_DASHBOARD_CONTAINER="vllm-sr-dashboard-container"; \
-	if [ -n "$(AGENT_STACK_NAME)" ] && [ "$(AGENT_STACK_NAME)" != "vllm-sr" ]; then \
-		STACK_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-container"; \
-		STACK_ROUTER_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-router-container"; \
-		STACK_ENVOY_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-envoy-container"; \
-		STACK_DASHBOARD_CONTAINER="$(AGENT_STACK_NAME)-vllm-sr-dashboard-container"; \
-	fi; \
-	STACK_DASHBOARD_PORT=$$((8700 + $(AGENT_PORT_OFFSET))); \
-	START_TIME="$$(date +%s)"; \
-	while true; do \
-		STATUS_OUTPUT="$$(VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" vllm-sr status all 2>&1 || true)"; \
-		if echo "$$STATUS_OUTPUT" | grep -q "Container Status: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Router: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Envoy: Running" && \
-		   echo "$$STATUS_OUTPUT" | grep -q "Dashboard: Running"; then \
-			echo "$$STATUS_OUTPUT"; \
-			break; \
-		fi; \
-		NOW="$$(date +%s)"; \
-		if [ $$((NOW - START_TIME)) -ge "$(AGENT_SMOKE_TIMEOUT)" ]; then \
-			echo "$$STATUS_OUTPUT"; \
-			echo "Timed out waiting for local smoke checks"; \
-			exit 1; \
-		fi; \
-		sleep 5; \
-	done; \
-	curl -fsS "http://localhost:$$STACK_DASHBOARD_PORT" >/dev/null; \
-	if ! ( \
-		$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_CONTAINER$$" || \
-		( \
-			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_ROUTER_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_ROUTER_CONTAINER$$" && \
-			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_ENVOY_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_ENVOY_CONTAINER$$" && \
-			$(CONTAINER_RUNTIME) ps --filter "name=$$STACK_DASHBOARD_CONTAINER" --format '{{.Names}}' | grep -q "^$$STACK_DASHBOARD_CONTAINER$$" \
-		) \
-	); then \
-		echo "Managed runtime containers were not found"; \
-		exit 1; \
-	fi; \
-	for RUNTIME_CONTAINER in \
-		"$$STACK_CONTAINER" \
-		"$$STACK_ROUTER_CONTAINER" \
-		"$$STACK_ENVOY_CONTAINER" \
-		"$$STACK_DASHBOARD_CONTAINER"; do \
-		if ! $(CONTAINER_RUNTIME) ps -a --filter "name=$$RUNTIME_CONTAINER" --format '{{.Names}}' | grep -q "^$$RUNTIME_CONTAINER$$"; then \
-			continue; \
-		fi; \
-		if $(CONTAINER_RUNTIME) logs "$$RUNTIME_CONTAINER" 2>&1 | grep -E "Image not found locally|Failed to pull image|Container exited unexpectedly" >/dev/null; then \
-			echo "Detected startup failure in container logs: $$RUNTIME_CONTAINER"; \
-			exit 1; \
-		fi; \
-	done; \
-	echo "Local smoke checks passed"
-
-agent-e2e-affected: $(AGENT_VENV_DEPS) ## Run local E2E profiles affected by the changed files
-	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
+harness-rust-bootstrap: ## Install Rust lint tooling only when Rust changed
+	@if command -v rustup >/dev/null 2>&1; then rustup component add clippy >/dev/null 2>&1 || true; fi
 
 test-and-build-local: ## Reproduce the CI Test And Build job locally
 	@$(LOG_TARGET)
@@ -343,24 +136,6 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	$(MAKE) start-valkey; \
 	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
-agent-pr-gate: ## Reproduce the baseline PR requirements locally
-	@$(LOG_TARGET)
-	@$(MAKE) precommit-local AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@$(MAKE) test-and-build-local
-
-agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
-	@$(LOG_TARGET)
-	@set -e; \
-	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"; \
-	if [ "$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)")" = "true" ]; then \
-		trap '$(MAKE) agent-stop-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)" >/dev/null 2>&1 || true' EXIT; \
-		$(MAKE) agent-dev ENV=$(ENV); \
-		$(MAKE) agent-serve-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
-		$(MAKE) agent-smoke-local AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
-	fi; \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
-
-.PHONY: agent-help agent-venv-install agent-bootstrap agent-node-bootstrap agent-markdown-bootstrap agent-go-bootstrap agent-rust-bootstrap agent-ci-lint agent-docs-ci-gate agent-dev agent-serve-local agent-stop-local \
-	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
-	workflow-ci-validate test-and-build-local agent-pr-gate agent-feature-gate
+.PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
+	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \
+	test-and-build-local

@@ -59,6 +59,7 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 	if algo == nil {
 		return fields
 	}
+	setIntValue(fields, "minimum_candidates", algo.MinimumCandidates)
 	algorithmOnErrorToFields(algo, fields)
 	if export, ok := algorithmFieldExporters[algo.Type]; ok {
 		export(algo, fields)
@@ -89,6 +90,7 @@ func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map
 	setStringValue(fields, "token_filter", c.TokenFilter)
 	setStringValue(fields, "verifier_server_url", c.VerifierServerURL)
 	setIntValue(fields, "verifier_timeout_seconds", c.VerifierTimeoutSeconds)
+	setIntValue(fields, "max_response_bytes", int(c.MaxResponseBytes))
 	if c.HybridWeights != nil {
 		weights := map[string]Value{}
 		setFloatValue(weights, "logprob_weight", c.HybridWeights.LogprobWeight)
@@ -265,8 +267,21 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	if m.SLO != nil {
 		fields["slo"] = multiFactorSLOValue(m.SLO)
 	}
+	if m.Quality != nil {
+		fields["quality"] = qualityEvidenceValue(m.Quality)
+	}
 	setIntValue(fields, "latency_percentile", m.LatencyPercentile)
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
+}
+
+func qualityEvidenceValue(quality *config.QualityEvidenceConfig) ObjectValue {
+	fields := map[string]Value{}
+	if quality == nil {
+		return ObjectValue{Fields: fields}
+	}
+	setStringValue(fields, "index", quality.Index)
+	setStringValue(fields, "on_missing", quality.OnMissing)
+	return ObjectValue{Fields: fields}
 }
 
 func setStringValue(fields map[string]Value, key string, value string) {

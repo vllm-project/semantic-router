@@ -2,9 +2,11 @@ import type {
   ClassifierSignal,
   ComplexitySignal,
   ContextSignal,
+  ConversationSignal,
   DomainSignal,
   EmbeddingSignal,
   FactCheckSignal,
+  HallucinationSignal,
   JailbreakSignal,
   KBSignal,
   KeywordSignal,
@@ -35,10 +37,12 @@ type UnifiedSignalData = Partial<
     ModalitySignal &
     RoleBindingSignal &
     JailbreakSignal &
+    HallucinationSignal &
     PIISignal &
     KBSignal &
     MetadataSignal &
-    ClassifierSignal
+    ClassifierSignal &
+    ConversationSignal
 >
 
 export interface UnifiedSignal {

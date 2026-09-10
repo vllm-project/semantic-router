@@ -54,7 +54,9 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 		stop()
 		return err
 	}
-	evaluationRun, _, err := executeVerifiedEvaluationBaseline(ctx, httpClient, baseURL, token)
+	evaluationRun, _, err := executeVerifiedEvaluationBaseline(
+		ctx, httpClient, baseURL, token, newEvaluationClientRequestID(),
+	)
 	if err != nil {
 		stop()
 		return fmt.Errorf("seed restart evaluation evidence: %w", err)

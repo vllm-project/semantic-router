@@ -1,0 +1,13 @@
+{
+  "operation": "response",
+  "body": {
+    "id": "msg_1",
+    "type": "message",
+    "role": "assistant",
+    "model": "provider-model",
+    "content": [{"type": "text", "text": "done"}],
+    "stop_reason": null,
+    "stop_sequence": "",
+    "usage": {"input_tokens": 1, "output_tokens": 1}
+  }
+}

@@ -138,6 +138,8 @@ func assertManagedRecipePlan(t *testing.T, service *Service) {
 	if plan.Model != "vllm-sr/mom-test-v1" || len(plan.Messages) != 1 || len(plan.Tools) != 1 {
 		t.Fatalf("plan = %#v", plan)
 	}
+	assertNamedToolChoice(t, plan.ToolChoice, "lookup")
+	assertNamedToolChoice(t, plan.Request.ToolChoice, "lookup")
 	content, _ := plan.Messages[0]["content"].(string)
 	if content != "padding\nhello\nhello" {
 		t.Fatalf("materialized content = %q", content)
@@ -158,6 +160,19 @@ func assertManagedRecipeValidation(t *testing.T, service *Service, evaluated *Ev
 	}
 	if evaluated.Text != "padding\nhello\nhello" || evaluated.Model != "vllm-sr/mom-test-v1" || len(evaluated.Tools) != 1 {
 		t.Fatalf("eval request = %#v", evaluated)
+	}
+	assertNamedToolChoice(t, evaluated.ToolChoice, "lookup")
+}
+
+func assertNamedToolChoice(t *testing.T, value any, wantName string) {
+	t.Helper()
+	choice, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("tool choice = %#v, want object", value)
+	}
+	function, ok := choice["function"].(map[string]any)
+	if !ok || function["name"] != wantName {
+		t.Fatalf("tool choice = %#v, want function %q", value, wantName)
 	}
 }
 
@@ -708,6 +723,10 @@ decisions:
           - type: function
             function:
               name: lookup
+        tool_choice:
+          type: function
+          function:
+            name: lookup
         tags: [smoke]
       - id: messages-a
         display_prompt: Please continue the previous conversation and explain the answer more clearly.

@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -19,6 +20,25 @@ func (r *OpenAIRouter) SelectModelForEval(
 	decision := input.Decision
 	if r == nil || r.Config == nil || decision == nil {
 		return evalSelectionUnavailable("router selection runtime is unavailable")
+	}
+	if r.contextIneligibleAlgorithmModelCount(decision, input.ContextTokenCount) > 0 {
+		return evalSelectionUnavailable("an explicitly configured algorithm model cannot satisfy the request context")
+	}
+	eligibleModelRefs, excluded := r.contextEligibleModelRefs(decision.ModelRefs, input.ContextTokenCount)
+	if len(eligibleModelRefs) == 0 && excluded > 0 {
+		return evalSelectionUnavailable("no decision model can satisfy the request context")
+	}
+	if excluded > 0 {
+		eligibleDecision := *decision
+		eligibleDecision.ModelRefs = eligibleModelRefs
+		decision = &eligibleDecision
+	}
+	if err := validateMinimumEligibleDecisionModels(
+		decision,
+		eligibleModelRefs,
+		input.ContextTokenCount,
+	); err != nil {
+		return evalSelectionUnavailable(err.Error())
 	}
 	algorithmType := evalAlgorithmType(decision)
 	if selectionResult, resolved := r.evalSelectionBeforeDryRun(decision, algorithmType); resolved {
@@ -103,6 +123,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		CategoryName:               input.Category,
 		CandidateModels:            decision.ModelRefs,
 		CandidateIterations:        decision.CandidateIterations,
+		InputTokens:                input.ContextTokenCount,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: tpot,
@@ -114,6 +135,9 @@ func (r *OpenAIRouter) selectEvalCandidate(
 	}
 	result, err := selector.Select(context.Background(), selectionContext)
 	if err != nil {
+		if errors.Is(err, selection.ErrNoEligibleCandidates) {
+			return evalSelectionUnavailable(err.Error())
+		}
 		return fallbackEvalModel(defaultCandidate, method, "selector failed during dry-run")
 	}
 	if err := selection.ValidateSelectionResult(selectionContext, result); err != nil {

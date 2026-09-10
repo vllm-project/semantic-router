@@ -1,0 +1,135 @@
+{
+  "cases": [
+    {
+      "name": "temperature_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 0
+        }
+      }
+    },
+    {
+      "name": "temperature_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "temperature": 1
+        }
+      }
+    },
+    {
+      "name": "top_p_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 0
+        }
+      }
+    },
+    {
+      "name": "top_p_maximum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_p": 1
+        }
+      }
+    },
+    {
+      "name": "top_k_minimum",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 64,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "top_k": 0
+        }
+      }
+    },
+    {
+      "name": "single_output_token",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 1,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
+    }
+  ]
+}

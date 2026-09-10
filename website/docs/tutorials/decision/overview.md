@@ -51,6 +51,27 @@ routing:
           use_reasoning: false
 ```
 
+Each `rules` node is either a leaf (`type` and `name`) or a combination
+(`operator` and `conditions`). The operator must be `AND`, `OR`, or `NOT`;
+case and surrounding whitespace are normalized, and an omitted operator on a
+node with conditions means `AND`. `NOT` is strictly unary and takes exactly one
+child condition; nest `NOT` around `OR` or `AND` for NOR or NAND. Config
+validation rejects any other operator, a `NOT` with zero or several children,
+a node that mixes leaf and combination fields, and a childless combination
+anywhere except a root `AND`, which is the explicit match-all form. Errors name
+the decision and the node path, for example
+`decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
+
+Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
+`Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
+When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
+`match`, or `fail_request`. If omitted, existing generic-classifier
+`on_error` and prompt-guard `on_error` behavior is retained, and the router
+warns at startup about classifier conditions that set neither. Applied policies
+appear in the `x-vsr-applied-unknown-policy` response header and the
+`llm_decision_unknown_total{decision, policy}` metric; the `fail_request` 503
+message names the fix.
+
 Decision matching stays separate from:
 
 - `providers.models[]`, which carries deployment bindings
@@ -75,7 +96,7 @@ Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one c
 - Every leaf must reference a signal or projection output declared in the same
   recipe.
 - Higher `priority` wins when more than one decision matches. Keep an explicit
-  unconditional fallback or configure `providers.defaults.default_model`.
+  unconditional fallback or configure `providers.defaults.model`.
 - Decision names and route diagnostics can become operational metadata; avoid
   secrets or personal identifiers in names and descriptions.
 - Boolean logic is policy, not authentication. Use trusted identity through

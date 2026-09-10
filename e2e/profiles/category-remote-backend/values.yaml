@@ -1,0 +1,93 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      # general-expert, not a profile-specific name: the shared AIGatewayRoute
+      # in deploy/kubernetes/ai-gateway/aigw-resources/ matches x-ai-eg-model
+      # exactly against six names (math-, science-, social-, humanities-, law-
+      # and general-expert). A model outside that list has no route, so every
+      # request 404s at the gateway while the router itself stays healthy and
+      # logs a correctly selected backend - which is what made this look like a
+      # router bug rather than a routing one.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: general-expert
+    signals:
+      domains:
+        - name: math
+          description: Mathematics, arithmetic, and quantitative reasoning
+    decisions:
+      - name: category_backend_math
+        description: Deterministic remote category backend routing contract
+        priority: 2000
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+      - name: default-route
+        description: Fallback route for non-math requests
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-expert
+            use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      kbs: []
+      external:
+        - name: e2e-category-classifier
+          model_role: classification
+          llm_endpoint:
+            address: mock-category-classifier.default.svc.cluster.local
+            port: 8000
+            protocol: http
+          llm_model_name: category-service
+          llm_timeout_seconds: 5
+      modules:
+        classifier:
+          domain:
+            category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+            backend:
+              protocol: http_classify
+              contract: label_distribution.v1
+              model: e2e-category-classifier
+              deadline_ms: 5000
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 3600
+        max_responses: 1000
+
+resources:
+  # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
+  # and the helm wait burns its full 60m timeout - which is the 1h23m job, not
+  # a slow test. The router still loads the local mmbert embedding model the
+  # response cache is configured with; taking the classifier off-box does not
+  # avoid that, because the embedding models are gated separately from the
+  # classifier backend. A roomier machine survives 2Gi and fails later at the
+  # gateway instead, which is how this looked like two different bugs.
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 250m

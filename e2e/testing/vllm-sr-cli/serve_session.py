@@ -89,6 +89,7 @@ class ServeSessionMixin:
         endpoint: str = "host.docker.internal:8000",
         base_url: str | None = None,
         provider: str | None = None,
+        api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
         ensure_models_dir: bool = False,
@@ -98,6 +99,7 @@ class ServeSessionMixin:
             endpoint=endpoint,
             base_url=base_url,
             provider=provider,
+            api_key_env=api_key_env,
             api_only=api_only,
             managed_storage=managed_storage,
         )

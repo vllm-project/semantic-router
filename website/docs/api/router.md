@@ -23,6 +23,10 @@ queries. See [Router management API](./apiserver).
 Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
 available on a public inference listener.
 
+See [Protocol Compatibility](../installation/protocol-compatibility) for the
+client-to-backend translation matrix, backend `api_format` values, and
+field-level portability boundaries.
+
 ## Send a routed request
 
 Use an auto-model or recipe entrypoint when you want the router to select a
@@ -67,12 +71,22 @@ providers:
         - name: local-vllm
           endpoint: model-server:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 ```
 
-Pricing is operator-supplied metadata, not a live quote. Keep it aligned with
-the provider contract when cost-aware selection or replay accounting uses it.
+Pricing is operator-supplied deployment metadata, not a live quote. It stays on
+`providers.models[]`; `routing.modelCards` only describes semantic capabilities.
+`currency` is optional and resolves to `USD` for accounting when omitted. When set,
+it must be an uppercase three-letter code. All per-million-token rates must be finite
+and non-negative. `cached_input_per_1m` and `cache_write_per_1m` are optional, and an
+explicit zero represents a free rate.
+
+`api_format` declares the upstream wire contract: `openai` for Chat
+Completions, `responses` for the OpenAI Responses API, or `anthropic` for
+Anthropic Messages. The client may use any supported inference path; the Router
+translates once at the provider boundary and returns the client's original wire
+format.
 
 ### Responses API
 

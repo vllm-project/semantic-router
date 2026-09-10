@@ -2,7 +2,9 @@
 
 import json
 import math
+import re
 import warnings
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -17,9 +19,17 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .config_contract import (
+    CLASSIFIER_TYPE_LLM,
+    CLASSIFIER_TYPE_LOCAL,
+    ClassifierSignalType,
+    UnknownPolicy,
+)
+from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
+SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
@@ -179,12 +189,29 @@ class Language(BaseModel):
 
 
 class ContextRule(BaseModel):
-    """Context-based (token count) signal configuration."""
+    """Context-based (token count) signal configuration.
+
+    A rule is an inclusive band: min_tokens <= token_count <= max_tokens.
+    Both limits accept "1K" and "1.5M" suffixes. At least one limit must be
+    set. Omitting min_tokens means 0; omitting max_tokens makes the band
+    open-ended so every count at or above min_tokens matches. Equal limits
+    are an exact-match band.
+    """
 
     name: str
-    min_tokens: str  # Supports suffixes: "1K", "1.5M", etc.
-    max_tokens: str
+    min_tokens: Optional[str] = None
+    max_tokens: Optional[str] = None
     description: Optional[str] = None
+
+    @field_validator("min_tokens", "max_tokens", mode="before")
+    @classmethod
+    def coerce_token_count(cls, value, info):
+        return normalize_token_count(value, info.field_name)
+
+    @model_validator(mode="after")
+    def validate_band(self):
+        validate_context_band(self.min_tokens, self.max_tokens)
+        return self
 
 
 class StructureSource(BaseModel):
@@ -333,6 +360,7 @@ class EmbeddingEndpointConfig(BaseModel):
     api_key_env: Optional[str] = None
     timeout_seconds: Optional[int] = Field(default=None, ge=0)
     max_retries: Optional[int] = Field(default=None, ge=0)
+    max_response_bytes: Optional[int] = Field(default=None, ge=0)
     dimensions: Optional[int] = Field(default=None, ge=1)
 
 
@@ -364,10 +392,30 @@ class JailbreakRule(BaseModel):
     threshold: float
     method: Optional[str] = None  # "classifier" (default) or "contrastive"
     include_history: bool = False
+    # "request" (default) scores the prompt; "response" scores the model's
+    # output once it has answered, for the selected decision's
+    # response_jailbreak plugin to enforce on.
+    direction: Optional[Literal["request", "response"]] = None
     jailbreak_patterns: Optional[list[str]] = (
         None  # Known jailbreak prompts (contrastive KB)
     )
     benign_patterns: Optional[list[str]] = None  # Known benign prompts (contrastive KB)
+    description: Optional[str] = None
+
+
+class HallucinationRule(BaseModel):
+    """Hallucination signal configuration.
+
+    Checks the model's answer against the grounding context the request
+    carried, so it is observed at the response stage and consumed by the
+    selected decision's hallucination plugin; decision rules cannot read it.
+    """
+
+    name: str
+    # Ask the detector for span-level NLI explanations. A detection setting,
+    # so it lives on the rule; the plugin's use_nli is ignored once a rule
+    # is declared.
+    use_nli: bool = False
     description: Optional[str] = None
 
 
@@ -480,6 +528,22 @@ class MetadataRule(BaseModel):
         return self
 
 
+class InputModalityRule(BaseModel):
+    """Deterministic structural input-modality presence signal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    modality: Literal["text", "image", "audio", "video"]
+
+    @model_validator(mode="after")
+    def validate_canonical_names(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("input_modality signal name must be nonempty and trimmed")
+        return self
+
+
 class ClassifierSignal(BaseModel):
     """Generic label-score classifier signal."""
 
@@ -487,7 +551,7 @@ class ClassifierSignal(BaseModel):
 
     name: str
     description: Optional[str] = None
-    type: Literal["local", "llm"]
+    type: ClassifierSignalType
     model: Optional[str] = None
     model_path: Optional[str] = None
     labels: List[str]
@@ -506,19 +570,42 @@ class ClassifierSignal(BaseModel):
             raise ValueError("labels must be trimmed and cannot contain ':'")
         if len(set(self.labels)) != len(self.labels):
             raise ValueError("labels cannot contain duplicates")
-        if self.type == "local" and not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if self.type == "local" and len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
-        if self.type == "local" and (self.model or self.instructions):
-            raise ValueError("local classifiers do not accept model or instructions")
-        if self.type == "llm" and not self.model:
-            raise ValueError("llm classifiers require model")
-        if self.type == "llm" and not self.instructions:
-            raise ValueError("llm classifiers require instructions")
-        if self.type == "llm" and (self.model_path or self.use_cpu):
-            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+        if self.type == CLASSIFIER_TYPE_LOCAL:
+            self._validate_local()
+        elif self.type == CLASSIFIER_TYPE_LLM:
+            self._validate_llm()
+        else:
+            self._validate_sequence()
         return self
+
+    def _validate_local(self):
+        if not self.model_path:
+            raise ValueError("local classifiers require model_path")
+        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
+            raise ValueError("local classifiers require exactly two labels")
+        if self.model or self.instructions:
+            raise ValueError("local classifiers do not accept model or instructions")
+
+    def _validate_llm(self):
+        if not self.model:
+            raise ValueError("llm classifiers require model")
+        if not self.instructions:
+            raise ValueError("llm classifiers require instructions")
+        if self.model_path or self.use_cpu:
+            raise ValueError("llm classifiers do not accept model_path or use_cpu")
+
+    def _validate_sequence(self):
+        if not self.model:
+            raise ValueError("sequence_classifier classifiers require model")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError(
+                "sequence_classifier classifiers require at least two labels"
+            )
+        if self.model_path or self.use_cpu or self.instructions:
+            raise ValueError(
+                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+            )
 
 
 class Signals(BaseModel):
@@ -538,12 +625,14 @@ class Signals(BaseModel):
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
+    hallucination: Optional[List[HallucinationRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
     events: Optional[List[EventRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     classifiers: Optional[List[ClassifierSignal]] = []
+    input_modality: Optional[List[InputModalityRule]] = []
 
     @model_validator(mode="after")
     def validate_rule_names(self):
@@ -552,7 +641,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers"}
+                    if family in {"metadata", "classifiers", "input_modality"}
                     else signal.name
                 )
                 if name in seen:
@@ -571,6 +660,7 @@ class Condition(BaseModel):
     label: Optional[str] = None
     predicate: Optional[NumericPredicate] = None
     on_error: Optional[Literal["no_match", "match"]] = None
+    on_unknown: Optional[UnknownPolicy] = None
     operator: Optional[str] = None
     conditions: Optional[List["Condition"]] = None
 
@@ -593,18 +683,22 @@ class Condition(BaseModel):
             )
 
         if has_operator:
-            if not self.conditions:
-                raise ValueError(
-                    "composite condition node requires non-empty conditions"
-                )
-            op = self.operator.strip().upper()
-            if op not in {"AND", "OR", "NOT"}:
-                raise ValueError("operator must be one of: AND, OR, NOT")
-            if op == "NOT" and len(self.conditions) != 1:
-                raise ValueError("NOT operator must have exactly one child condition")
-            return self
+            return self._validate_composite_node()
+        return self._validate_leaf_node()
 
-        # Leaf node validation
+    def _validate_composite_node(self):
+        if not self.conditions:
+            raise ValueError("composite condition node requires non-empty conditions")
+        op = self.operator.strip().upper()
+        if op not in {"AND", "OR", "NOT"}:
+            raise ValueError("operator must be one of: AND, OR, NOT")
+        if op == "NOT" and len(self.conditions) != 1:
+            raise ValueError("NOT operator must have exactly one child condition")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
+        return self
+
+    def _validate_leaf_node(self):
         if self.type is None or self.name is None:
             raise ValueError("leaf condition node requires both type and name")
         if self.conditions:
@@ -615,6 +709,8 @@ class Condition(BaseModel):
             raise ValueError("classifier conditions require label and predicate")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
+        if self.on_unknown is not None:
+            raise ValueError("on_unknown is only valid on the root rules node")
         return self
 
 
@@ -631,6 +727,7 @@ class Rules(BaseModel):
 
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
+    on_unknown: Optional[UnknownPolicy] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -646,7 +743,10 @@ class Rules(BaseModel):
                 if key in data
             }
             leaf.setdefault("name", "")
-            return {"operator": "AND", "conditions": [leaf]}
+            rules = {"operator": "AND", "conditions": [leaf]}
+            if "on_unknown" in data:
+                rules["on_unknown"] = data["on_unknown"]
+            return rules
         return data
 
 
@@ -660,13 +760,13 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
-    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
     TOOL_SELECTION = "tool_selection"
     CONTEXT_COMPRESSION = "context_compression"
+    SHADOW_DISPATCH = "shadow_dispatch"
 
 
 class ResponseCacheSemanticConfig(BaseModel):
@@ -1065,6 +1165,90 @@ class RouterReplayPluginConfig(BaseModel):
     )
 
 
+# Headers that carry a credential on the primary path. A shadow copy never
+# carries them and shadow_dispatch.forward_headers may not list them. Keep in
+# step with the Router's shadowCredentialHeaders in pkg/config.
+SHADOW_CREDENTIAL_HEADERS = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "x-api-key",
+        "api-key",
+        "x-goog-api-key",
+        "x-user-openai-key",
+        "x-user-anthropic-key",
+        "x-user-azure-openai-key",
+        "x-user-bedrock-key",
+        "x-user-gemini-key",
+        "x-user-vertex-ai-key",
+        "x-user-minimax-key",
+    }
+)
+
+
+class ShadowDispatchPluginConfig(BaseModel):
+    """Configuration for shadow_dispatch plugin.
+
+    Sends a bounded, sampled copy of the approved request to a secondary
+    configured model after the primary dispatch is finalized. The primary
+    response never waits on or changes because of the shadow call.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Required, matching the Go decoder: an omitted flag must not silently
+    # validate as enabled here and decode as disabled in the router.
+    enabled: bool
+    model: Optional[str] = Field(
+        default=None, description="Configured logical model receiving the shadow copy"
+    )
+    sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    max_concurrency: int = Field(default=2, ge=0)
+    max_queue_depth: int = Field(default=8, ge=0)
+    timeout_seconds: int = Field(default=30, ge=0)
+    max_response_bytes: int = Field(default=1048576, ge=0)
+    max_retries: int = Field(default=0, ge=0, le=3)
+    capture_response_body: bool = False
+    max_capture_bytes: int = Field(default=4096, ge=0)
+    tls_skip_verify: bool = False
+    forward_headers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Decision header_mutation names the shadow copy may carry; nothing "
+            "else a decision sets for the primary backend is forwarded"
+        ),
+    )
+
+    @field_validator("forward_headers")
+    @classmethod
+    def reject_credential_headers(cls, names: list[str]) -> list[str]:
+        # Mirrors the Router's validateShadowForwardHeaders so both admission
+        # paths refuse the same names.
+        for name in names:
+            stripped = name.strip()
+            if not stripped:
+                raise ValueError(
+                    "shadow_dispatch forward_headers entries cannot be empty"
+                )
+            if stripped.startswith(":"):
+                raise ValueError(
+                    f"shadow_dispatch forward_headers cannot include pseudo-header {stripped!r}"
+                )
+            if stripped.lower() in SHADOW_CREDENTIAL_HEADERS:
+                raise ValueError(
+                    "shadow_dispatch forward_headers cannot include credential header "
+                    f"{stripped!r}"
+                )
+        return names
+
+    @model_validator(mode="after")
+    def require_model_when_enabled(self):
+        if self.enabled and not (self.model or "").strip():
+            raise ValueError("shadow_dispatch model is required when enabled")
+        return self
+
+
 class MemoryPluginConfig(BaseModel):
     """Configuration for memory plugin (per-decision memory settings)."""
 
@@ -1217,19 +1401,6 @@ class PluginConfig(BaseModel):
         elif hasattr(data.get("type"), "value"):
             data["type"] = data["type"].value
         return data
-
-
-class ImageGenPluginConfig(BaseModel):
-    """Configuration for image_gen plugin."""
-
-    enabled: bool
-    backend: str
-    backend_config: Optional[Dict[str, Any]] = None
-    modality_detection: Optional[Dict[str, Any]] = None
-    default_width: Optional[int] = Field(default=None, ge=1)
-    default_height: Optional[int] = Field(default=None, ge=1)
-    max_inference_steps: Optional[int] = Field(default=None, ge=1)
-    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class DecisionLearningAdaptationConfig(BaseModel):
@@ -1420,17 +1591,7 @@ class OutputContractNormalizeSpec(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    field_order: Optional[List[str]] = None
     defaults: Optional[Dict[str, str]] = None
-
-
-class OutputContractViolationPolicy(BaseModel):
-    """Repair and fallback policy when output contract enforcement fails."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    repair: Optional[StrictBool] = None
-    fallback: Optional[str] = None
 
 
 class OutputContractPostprocess(BaseModel):
@@ -1453,8 +1614,31 @@ class OutputContractSpec(BaseModel):
     render: Optional[OutputContractRenderSpec] = None
     extract: Optional[OutputContractExtractSpec] = None
     normalize: Optional[OutputContractNormalizeSpec] = None
-    on_violation: Optional[OutputContractViolationPolicy] = None
     postprocess: Optional[List[OutputContractPostprocess]] = None
+
+
+def _conditions_reference_signal(conditions, signal_type):
+    for condition in conditions or []:
+        if (condition.type or "").lower() == signal_type:
+            return True
+        if _conditions_reference_signal(condition.conditions, signal_type):
+            return True
+    return False
+
+
+class DecisionAction(BaseModel):
+    """Explicit action a matched decision applies instead of candidate ranking."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["route"]
+    destination: str
+
+    @model_validator(mode="after")
+    def validate_destination(self):
+        if not self.destination.strip():
+            raise ValueError("action.destination is required")
+        return self
 
 
 class Decision(BaseModel):
@@ -1469,6 +1653,7 @@ class Decision(BaseModel):
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
+    action: Optional[DecisionAction] = None
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
@@ -1478,7 +1663,29 @@ class Decision(BaseModel):
     annotations: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
+    def validate_action(self):
+        if self.action is None:
+            return self
+        if not _conditions_reference_signal(self.rules.conditions, "jailbreak"):
+            raise ValueError(
+                "a route action requires an explicit jailbreak condition in rules"
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_prompt_candidates(self):
+        if self.algorithm and self.algorithm.minimum_candidates and self.modelRefs:
+            effective_names = {
+                (model_ref.model.strip(), (model_ref.lora_name or "").strip())
+                for model_ref in self.modelRefs
+                if model_ref.model.strip()
+            }
+            if len(effective_names) < self.algorithm.minimum_candidates:
+                raise ValueError(
+                    "algorithm.minimum_candidates="
+                    f"{self.algorithm.minimum_candidates} requires at least that many "
+                    f"unique modelRefs, got {len(effective_names)}"
+                )
         if (
             self.algorithm
             and self.algorithm.type == "prompt"
@@ -1523,11 +1730,11 @@ class ModelPricing(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    currency: Optional[str] = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    prompt_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cached_input_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    cache_write_per_1m: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    completion_per_1m: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
 
 
 class ProviderReliability(BaseModel):
@@ -1546,11 +1753,153 @@ class ProviderReliability(BaseModel):
     health_check_timeout: str = "2s"
 
 
+class Reasoning(BaseModel):
+    """Built-in family reference or inline behavior for a custom model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    family: Optional[str] = None
+    type: Optional[
+        Literal[
+            "chat_template_kwargs",
+            "reasoning_effort",
+            "reasoning_mode",
+            "top_level_reasoning_effort",
+        ]
+    ] = None
+    parameter: Optional[str] = None
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]] = Field(
+        default_factory=list
+    )
+    default_mode: Optional[Literal["enabled", "disabled", "adaptive"]] = None
+    disabled: Optional[str] = None
+
+    def _has_inline_fields(self) -> bool:
+        return bool(
+            self.type
+            or self.parameter
+            or self.activation_parameter
+            or self.effort_flags
+            or self.levels
+            or self.default
+            or self.modes
+            or self.default_mode
+            or self.disabled
+        )
+
+    def _validate_reference_shape(self, inline: bool) -> None:
+        if self.family and inline:
+            raise ValueError(
+                "family and inline reasoning fields are mutually exclusive"
+            )
+        if not self.family and not inline:
+            raise ValueError(
+                "reasoning must reference a family or define inline behavior"
+            )
+        if inline and (not self.type or not self.parameter):
+            raise ValueError("inline reasoning requires type and parameter")
+
+    def _validate_activation_parameter(self) -> None:
+        if self.activation_parameter:
+            if not self.activation_parameter.strip():
+                raise ValueError(
+                    "inline reasoning activation_parameter cannot be blank"
+                )
+            if self.activation_parameter == self.parameter:
+                raise ValueError(
+                    "inline reasoning activation_parameter must differ from parameter"
+                )
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning activation_parameter requires reasoning_effort type"
+                )
+
+    def _validate_effort_flags(self) -> None:
+        if self.effort_flags:
+            if self.type != "reasoning_effort":
+                raise ValueError(
+                    "inline reasoning effort_flags requires reasoning_effort type"
+                )
+            if not self.activation_parameter:
+                raise ValueError(
+                    "inline reasoning effort_flags requires activation_parameter"
+                )
+            if any(effort not in self.levels for effort in self.effort_flags):
+                raise ValueError(
+                    "inline reasoning effort_flags keys must be listed in levels"
+                )
+            parameters = list(self.effort_flags.values())
+            if any(not parameter.strip() for parameter in parameters):
+                raise ValueError("inline reasoning effort_flags values cannot be blank")
+            if len(parameters) != len(set(parameters)):
+                raise ValueError("inline reasoning effort_flags values must be unique")
+            if self.parameter in parameters or self.activation_parameter in parameters:
+                raise ValueError(
+                    "inline reasoning effort_flags values must differ from parameter and activation_parameter"
+                )
+            active_levels = [level for level in self.levels if level != self.disabled]
+            if len(active_levels) - len(self.effort_flags) > 1:
+                raise ValueError(
+                    "inline reasoning effort_flags cannot leave multiple levels indistinguishable by omission"
+                )
+
+    def _validate_effort_levels(self) -> None:
+        if self.levels and self.default is not None and self.default not in self.levels:
+            raise ValueError("inline reasoning default must be listed in levels")
+        if (
+            self.type
+            in {
+                "reasoning_effort",
+                "top_level_reasoning_effort",
+            }
+            and not self.levels
+        ):
+            raise ValueError("inline effort-based reasoning requires levels")
+        # Operator-authored families may omit the mode contract entirely. This
+        # keeps the user-facing custom-model form small for the common cases
+        # where a boolean activation flag or an effort value already describes
+        # the complete wire behavior. Built-in families are validated strictly
+        # by the catalog generator.
+
+    def _validate_modes(self) -> None:
+        if not self.modes and self.default_mode is not None:
+            raise ValueError(
+                "inline reasoning modes are required when default_mode is set"
+            )
+        if self.modes and self.default_mode is None:
+            raise ValueError(
+                "inline reasoning default_mode is required when modes are set"
+            )
+        if self.default_mode is not None and self.default_mode not in self.modes:
+            raise ValueError("inline reasoning default_mode must be listed in modes")
+        if self.disabled and self.modes and "disabled" not in self.modes:
+            raise ValueError("inline reasoning disabled value requires disabled mode")
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        inline = self._has_inline_fields()
+        self._validate_reference_shape(inline)
+        if not inline:
+            return self
+        self._validate_activation_parameter()
+        self._validate_effort_flags()
+        self._validate_effort_levels()
+        self._validate_modes()
+        return self
+
+
 class Model(BaseModel):
-    """Provider model binding for canonical providers.models entries."""
+    """Provider model binding under the existing providers.models hierarchy."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
-    reasoning_family: Optional[str] = None
+    catalog: Optional[str] = None
+    reasoning: Optional[Reasoning] = None
     provider_model_id: Optional[str] = None
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
@@ -1566,18 +1915,237 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
+class EvaluationRecord(BaseModel):
+    """Small operator-authored benchmark result linked to one model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1)
+    benchmark: str = Field(
+        min_length=1,
+        pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
+    )
+    benchmark_profile: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    metrics: Dict[str, float]
+    source: Optional[str] = None
+    measured_at: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_measurement(self):
+        if not self.metrics:
+            raise ValueError("metrics cannot be empty")
+        if any(
+            not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", key) or not math.isfinite(value)
+            for key, value in self.metrics.items()
+        ):
+            raise ValueError("metrics must contain named finite numbers")
+        if any(
+            isinstance(value, (dict, list, tuple, set))
+            or (isinstance(value, float) and not math.isfinite(value))
+            for value in self.metadata.values()
+        ):
+            raise ValueError("metadata values must be scalar")
+        if any(not key.strip() for key in self.metadata):
+            raise ValueError("metadata keys cannot be empty")
+        if self.measured_at:
+            try:
+                if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", self.measured_at):
+                    raise ValueError
+                date.fromisoformat(self.measured_at)
+            except ValueError as error:
+                raise ValueError("measured_at must use YYYY-MM-DD") from error
+        return self
+
+
+EVALUATION_RESOURCE_ID_PATTERN = (
+    r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+" r"@[0-9]+(?:\.[0-9]+\.[0-9]+)?$"
+)
+
+
+class EvaluationBenchmarkProfile(BaseModel):
+    """One reproducible execution profile for an operator benchmark."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class EvaluationNormalizationPoint(BaseModel):
+    """One point in a piecewise-linear metric normalization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float
+    output: float = Field(ge=0, le=1)
+
+
+class EvaluationNormalization(BaseModel):
+    """Maps one benchmark metric onto the common [0, 1] utility scale."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[
+        "identity",
+        "one_minus",
+        "linear_clamp",
+        "piecewise_linear",
+        "logistic",
+        "lookup",
+    ] = "identity"
+    min: Optional[float] = None
+    max: Optional[float] = None
+    k: Optional[float] = None
+    x0: Optional[float] = None
+    points: List[EvaluationNormalizationPoint] = Field(default_factory=list)
+    values: Dict[str, float] = Field(default_factory=dict)
+
+
+class EvaluationBenchmarkMetric(BaseModel):
+    """Metric semantics owned by a versioned benchmark definition."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    unit: str = Field(min_length=1)
+    direction: Literal["higher_is_better", "lower_is_better"]
+    range: List[float] = Field(min_length=2, max_length=2)
+    normalization: Optional[EvaluationNormalization] = None
+
+    @field_validator("range")
+    @classmethod
+    def validate_range(cls, value: List[float]) -> List[float]:
+        if any(not math.isfinite(item) for item in value) or value[0] >= value[1]:
+            raise ValueError("range must contain two finite increasing values")
+        return value
+
+
+class EvaluationBenchmarkDefinition(BaseModel):
+    """Operator-owned, namespaced benchmark contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    tags: List[str] = Field(default_factory=list)
+    source: Optional[str] = None
+    default_profile: str = Field(min_length=1)
+    profiles: List[EvaluationBenchmarkProfile] = Field(min_length=1)
+    metrics: List[EvaluationBenchmarkMetric] = Field(min_length=1)
+
+
+class EvaluationMissingPolicy(BaseModel):
+    """Completeness policy for a custom capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Literal["require_all", "reported_only", "require_coverage"]
+    minimum: Optional[float] = Field(default=None, gt=0, le=1)
+
+
+class EvaluationIndexComponent(BaseModel):
+    """One benchmark metric or nested index in an index DAG."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark: Optional[str] = None
+    metric: Optional[str] = None
+    benchmark_profile: Optional[str] = None
+    benchmark_profiles: List[str] = Field(default_factory=list)
+    index: Optional[str] = None
+    weight: float = Field(gt=0)
+    normalization: EvaluationNormalization = Field(
+        default_factory=EvaluationNormalization
+    )
+
+    @model_validator(mode="after")
+    def validate_reference(self):
+        if (self.metric is None) == (self.index is None):
+            raise ValueError("component must reference exactly one metric or index")
+        return self
+
+
+class EvaluationIndexDefinition(BaseModel):
+    """Operator-owned, versioned capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    description: Optional[str] = None
+    methodology: Optional[str] = None
+    aggregation: Literal["weighted_mean"]
+    scale: List[float] = Field(min_length=2, max_length=2)
+    missing: EvaluationMissingPolicy
+    domains: Dict[str, float] = Field(default_factory=dict)
+    components: List[EvaluationIndexComponent] = Field(min_length=1)
+
+
+class Evaluation(BaseModel):
+    """Unified benchmark definitions, index DAGs, and model measurements."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmarks: List[EvaluationBenchmarkDefinition] = Field(default_factory=list)
+    indices: List[EvaluationIndexDefinition] = Field(default_factory=list)
+    records: List[EvaluationRecord] = Field(default_factory=list)
+
+
+class RoutingModelPresentation(BaseModel):
+    """Optional product presentation for a handwritten model card."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    logo: str
+    monogram: str
+    monochrome: bool = False
+
+
+class RoutingModelDistribution(BaseModel):
+    """Distribution metadata for a handwritten physical or virtual model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["open_weights", "proprietary_api", "router_recipe"]
+    source: str
+    license: Optional[str] = None
+
+
 class RoutingModel(BaseModel):
-    """Semantic model catalog entry exposed to routing/DSL."""
+    """Handwritten custom card or explicit overlay of a built-in card."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
+    display_name: Optional[str] = None
+    publisher: Optional[str] = None
+    presentation: Optional[RoutingModelPresentation] = None
+    distribution: Optional[RoutingModelDistribution] = None
+    family: Optional[str] = None
+    revision: Optional[str] = None
+    released_at: Optional[str] = None
+    knowledge_cutoff: Optional[str] = None
+    lifecycle: Optional[str] = None
     param_size: Optional[str] = None
     context_window_size: Optional[int] = Field(default=None, ge=1)
+    max_output_tokens: Optional[int] = Field(default=None, ge=1)
     description: Optional[str] = None
     capabilities: Optional[List[str]] = None
     loras: Optional[List[LoRAAdapter]] = None
     tags: Optional[List[str]] = None
-    quality_score: Optional[float] = Field(default=None, ge=0, le=1)
+    modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
+
+    @field_validator("released_at", "knowledge_cutoff", mode="before")
+    @classmethod
+    def normalize_date_metadata(cls, value: Any) -> Any:
+        if isinstance(value, (date, datetime)):
+            return value.isoformat()
+        return value
 
 
 class ReasoningFamily(BaseModel):
@@ -1585,18 +2153,26 @@ class ReasoningFamily(BaseModel):
 
     type: str
     parameter: str
+    activation_parameter: Optional[str] = None
+    effort_flags: Dict[str, str] = Field(default_factory=dict)
+    levels: List[str] = Field(default_factory=list)
+    default: Optional[str] = None
+    modes: List[Literal["enabled", "disabled", "adaptive"]]
+    default_mode: Literal["enabled", "disabled", "adaptive"]
+    disabled: Optional[str] = None
 
 
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: Optional[str] = None
     endpoint: Optional[str] = None
     protocol: str = "http"
-    weight: int = 1
-    type: Optional[str] = None
+    weight: int = Field(default=1, ge=0)
     base_url: Optional[str] = None
-    provider: Optional[str] = None
+    provider: str = "vllm"
     auth_header: Optional[str] = None
     auth_prefix: Optional[str] = None
     extra_headers: Optional[Dict[str, str]] = None
@@ -1618,36 +2194,33 @@ class BackendRef(BaseModel):
 class ProviderDefaults(BaseModel):
     """Provider-wide defaults that should not be mixed into per-model access bindings."""
 
-    default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
-        default_factory=dict
-    )
-    default_reasoning_effort: Optional[str] = "high"
+    model_config = ConfigDict(extra="forbid")
+
+    model: Optional[str] = None
+    reasoning_effort: Optional[str] = None
 
 
 class Providers(BaseModel):
     """Provider configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
     models: List[Model] = Field(default_factory=list)
 
     @property
     def default_model(self) -> Optional[str]:
-        return self.defaults.default_model
-
-    @property
-    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
-        return self.defaults.reasoning_families or {}
+        return self.defaults.model
 
     @property
     def default_reasoning_effort(self) -> Optional[str]:
-        return self.defaults.default_reasoning_effort
+        return self.defaults.reasoning_effort
 
 
 class Routing(BaseModel):
     """Canonical routing block."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
@@ -1756,6 +2329,7 @@ class UserConfig(BaseModel):
     version: str
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
+    evaluation: Optional[Evaluation] = None
     routing: Routing = Field(default_factory=Routing)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)

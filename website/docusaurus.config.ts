@@ -294,6 +294,10 @@ const config: Config = {
           position: 'right',
           items: [
             {
+              label: 'Model Hub',
+              to: '/models',
+            },
+            {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },
@@ -326,11 +330,11 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Quick Start',
+              label: 'Introduction',
               to: '/docs/intro',
             },
             {
-              label: 'Installation',
+              label: 'Quick Start',
               to: '/docs/installation',
             },
             {

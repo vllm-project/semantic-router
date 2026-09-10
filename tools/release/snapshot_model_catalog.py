@@ -54,7 +54,7 @@ def _load_catalog(path: Path) -> dict[str, Any]:
 def _latest_bundles(latest_dir: Path) -> tuple[dict[str, Any], list[str]]:
     catalog = _load_catalog(latest_dir / "catalog.yaml")
     expected_identity = {
-        "schema_version": "vllm-sr/model-catalog/v1",
+        "schema_version": "vllm-sr/model-catalog/v2",
         "catalog_version": "latest",
         "channel": "latest",
         "release": "unreleased",
@@ -132,7 +132,13 @@ def expected_release_files(latest_dir: Path, snapshot: str) -> dict[Path, bytes]
         asset["sha256"] = digests[bundle]
         asset_ids[asset["id"]] = bundle
     for model in rendered.get("models", []):
-        if not isinstance(model, dict) or model.get("asset") not in asset_ids:
+        if not isinstance(model, dict):
+            raise ValueError("latest catalog contains an invalid model")
+        if model.get("kind") != "virtual":
+            # Physical model cards are catalog facts, not packaged recipe
+            # bundles. They remain in the release snapshot unchanged.
+            continue
+        if model.get("asset") not in asset_ids:
             raise ValueError("latest catalog model references an unknown bundle")
         verification = model.get("verification")
         if not isinstance(verification, dict):

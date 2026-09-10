@@ -14,12 +14,20 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
+	"llm-classifier-distribution-routing",
+	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
 	// NLI polarity tier of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
 	"pii-detection",
+	// PII entity positions are code-point offsets (issue #3146)
+	"pii-entity-offsets",
+	// PII past the classifier's sequence limit is still detected (issue #3364)
+	"pii-long-text",
+	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
+	"security-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
@@ -28,7 +36,7 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
-	"anthropic-passthrough-openai-regression",
+	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)
@@ -37,10 +45,18 @@ var BaselineRouterContract = []string{
 	"entrypoint-recipe-routing",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
+	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
+	"plugin-short-circuit-no-dispatch",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
 	"session-pricing-response-api",
+	// Event signal rule matching and routing (issue #3178)
+	"event-routing",
+	// Language signal rule matching and routing (issue #3178)
+	"language-routing",
+	// Reask signal rule matching and routing (issue #3178)
+	"reask-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
@@ -53,6 +69,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
+	// A semantically invalid deploy must leave the active config serving (issue #3233)
+	"dashboard-deploy-safe-failure",
 	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
 	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
@@ -65,11 +83,25 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var AnthropicShimContract = []string{
+	// Chat clients must receive Chat Completions even though the selected
+	// backend speaks Anthropic Messages.
+	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
+	"anthropic-chat-cache-control",
 	"anthropic-messages-stop-sequence",
+	"anthropic-messages-streaming",
+	"anthropic-chat-completions-streaming",
+	"anthropic-response-api-buffered",
 	// /v1/responses streaming must emit Response API SSE on Anthropic-format
 	// backends instead of leaking chat.completion.chunk frames (issue #3013)
 	"anthropic-response-api-streaming",
+	"protocol-codec-anthropic-backend-buffered-matrix",
+	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-backend-tool-lifecycle",
+	"protocol-codec-anthropic-backend-structured-output",
+	"protocol-codec-anthropic-backend-error-matrix",
+	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
+	"protocol-codec-anthropic-backend-midstream-error-matrix",
 }
 
 // Combine preserves order while removing duplicate testcase names.

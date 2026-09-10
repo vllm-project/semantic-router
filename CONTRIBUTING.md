@@ -50,6 +50,11 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 - A release milestone is a time-bound commitment and is applied only after
   acceptance.
 
+Project work has exactly one `wg/*` owner. A bounded parent outcome uses an
+`[Epic]` title and the automatically synchronized `epic` label; implementation
+issues are linked below it as sub-issues. The retired `area/*` and `track/*`
+taxonomies are not part of the repository contract and must not be recreated.
+
 Do not begin a non-trivial implementation or open a PR until the tracking issue
 is accepted. PRs must link an accepted issue with exactly one Workgroup owner;
 the Community check enforces this contract.
@@ -60,25 +65,25 @@ the Community check enforces this contract.
 harness. The human-readable index is
 [tools/agent/docs/README.md](tools/agent/docs/README.md).
 
-Before a non-trivial change, ask the harness which subsystem rules and tests
-apply:
+For a non-trivial change, inspect the repository facts for the paths involved:
 
 ```bash
-make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
 ```
 
-Then read the nearest `AGENTS.md` for any hotspot you touch. Useful design and
-test references are:
+`impact` reports owners, minimum checks, candidate CI jobs, optional profiles,
+and available tools; it does not choose a skill or prescribe a development
+loop. Read the nearest `AGENTS.md` for directories you touch. Useful references
+are:
 
-- [Module boundaries](tools/agent/docs/module-boundaries.md)
 - [Change surfaces](tools/agent/docs/change-surfaces.md)
 - [Testing strategy](tools/agent/docs/testing-strategy.md)
-- [Feature-complete checklist](tools/agent/docs/feature-complete-checklist.md)
+- [Architecture guardrails](tools/agent/docs/architecture-guardrails.md)
 
 If implementation and intended architecture still differ after your change,
-record the durable gap under
-[tools/agent/docs/tech-debt/](tools/agent/docs/tech-debt/README.md) rather than
-leaving it only in a PR discussion.
+open an owned GitHub issue. Use the compact
+[architecture risk index](tools/agent/docs/architecture-risks.md) only when a
+repository-local boundary must remain visible before an issue exists.
 
 ## Run the local stack
 
@@ -101,33 +106,30 @@ and stop the stack.
 
 ## Test your change
 
-Start with the tests returned by `agent-report`. Common targets are:
+Run the daily changed-file check first:
+
+```bash
+make check CHANGED_FILES="path/one path/two"
+```
+
+It runs formatting/lint, deterministic architecture contracts, and the owning
+domains' smallest unit or static checks. Common direct targets include:
 
 | Change | Command |
 | --- | --- |
-| Harness or repository structure | `make agent-validate` |
+| Harness or workflows | `make harness-check` |
 | Go router | `make test-semantic-router` |
 | Native bindings | `make test-binding` |
 | Python CLI | `make vllm-sr-test` |
 | Category, PII, or jailbreak classifier | `make test-category-classifier`, `make test-pii-classifier`, or `make test-jailbreak-classifier` |
-| Affected local E2E profiles | `make agent-e2e-affected CHANGED_FILES="..."` |
+| Explicit integration or E2E | `make verify DOMAIN=<domain>` or `make verify PROFILE=<profile>` |
 
-Use the repository gates before submitting:
-
-```bash
-make agent-ci-lint CHANGED_FILES="path/one,path/two"
-make agent-ci-gate CHANGED_FILES="path/one,path/two"
-```
-
-`make agent-pr-gate` reproduces the baseline PR checks. Use
-`make agent-feature-gate ENV=cpu CHANGED_FILES="..."` when the harness reports
-feature tests or local smoke as required. Platform-specific changes use the
-matching environment, such as `ENV=amd`.
-
-For a docs-only change, the focused gate is:
+Integration and E2E are explicit because a path classifier cannot infer all
+runtime intent. Use the complete local baseline for high-risk changes or when
+a reviewer asks for it:
 
 ```bash
-make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+make ci-full
 ```
 
 A failed gate is part of the work: fix the cause and rerun the smallest
@@ -141,10 +143,10 @@ Install the repository hooks once:
 make precommit-install
 ```
 
-Run the branch preflight on demand with:
+Run the branch check on demand with:
 
 ```bash
-make precommit-branch-gate
+make check
 ```
 
 Follow the language's standard formatter and keep modules focused:
@@ -164,7 +166,7 @@ of truth for schemas, test selection, or public documentation.
 1. Link the change to an accepted issue with exactly one `wg/*` owner.
 2. Create a focused branch and make one coherent change.
 3. Update tests, examples, and public docs for behavior the user can observe.
-4. Run the harness-selected tests and record the commands and outcomes in the
+4. Run the relevant checks and record the commands and outcomes in the
    PR template.
 5. Commit with a Developer Certificate of Origin sign-off:
 

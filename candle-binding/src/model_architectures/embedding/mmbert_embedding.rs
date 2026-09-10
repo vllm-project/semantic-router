@@ -308,6 +308,7 @@ impl MmBertAttention {
             },
             causal: false,
             scale: (self.attention_head_size as f64).powf(-0.5),
+            q_offset: 0,
         };
         let xs = chunked_sdpa(&q, &k, &v, Some(pad_mask), &cfg)?; // (b, heads, seq, hd)
 

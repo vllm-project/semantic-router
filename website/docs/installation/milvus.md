@@ -102,7 +102,6 @@ global:
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: false
 ```
 
 Set `dimension` to the output dimension of `embedding_model`. A mismatch causes

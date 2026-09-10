@@ -18,6 +18,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   modality: 'MOD',
   authz: 'AUTH',
   jailbreak: 'JB',
+  hallucination: 'HL',
   pii: 'PII',
   kb: 'KB',
   conversation: 'CONV',
@@ -41,6 +42,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   modality: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   authz: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  hallucination: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   kb: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   conversation: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
@@ -64,6 +66,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   modality: '50-100ms',
   authz: '<1ms',
   jailbreak: '10-50ms',
+  hallucination: '200-500ms',
   pii: '10-50ms',
   kb: '10-50ms',
   conversation: '<1ms',
@@ -80,13 +83,13 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   hallucination: 'HAL',
   router_replay: 'RR',
   rag: 'RAG',
-  image_gen: 'IMG',
   fast_response: 'FR',
   request_params: 'RP',
   response_jailbreak: 'RJ',
   tools: 'TL',
   tool_selection: 'TS',
   context_compression: 'CC',
+  shadow_dispatch: 'SD',
 }
 
 // ============== Plugin Colors (Graphite Theme) ==============
@@ -98,13 +101,13 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
   router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
   rag: { background: '#2f855a', border: '#276749' },
-  image_gen: { background: '#7b5ea7', border: '#5b3f86' },
   fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   request_params: { background: '#805ad5', border: '#6b46c1' },
   response_jailbreak: { background: '#c05621', border: '#9c4221' },
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
   context_compression: { background: '#606c7a', border: '#3d4a59' },
+  shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
 }
 
 // ============== Algorithm Icons ==============
@@ -307,6 +310,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'modality',
   'authz',
   'jailbreak',
+  'hallucination',
   'pii',
   'kb',
   'conversation',
@@ -323,7 +327,6 @@ export const PLUGIN_TYPES: PluginType[] = [
   'hallucination',
   'router_replay',
   'rag',
-  'image_gen',
   'fast_response',
   'request_params',
   'response_jailbreak',

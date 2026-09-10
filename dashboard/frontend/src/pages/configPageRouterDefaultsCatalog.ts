@@ -94,7 +94,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     },
     default_retrieval_limit: 5,
     default_similarity_threshold: 0.7,
-    extraction_batch_size: 10,
   } satisfies MemoryConfig,
   response_cache: {
     enabled: true,
@@ -111,6 +110,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     embedding_model: 'mmbert',
     embedding_dimension: 384,
     ingestion_workers: 2,
+    ingestion_drain_timeout_seconds: 25,
     supported_formats: ['.txt', '.md', '.json', '.csv', '.html'],
     memory: {
       max_entries_per_store: 100000,

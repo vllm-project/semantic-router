@@ -62,8 +62,8 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields), true
 	},
-	"image_gen": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileImageGenPluginConfig(fields), true
+	"shadow_dispatch": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		return c.compileShadowDispatchPluginConfig(fields), true
 	},
 	"fast_response": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileFastResponsePluginConfig(fields), true
@@ -197,6 +197,45 @@ func (c *Compiler) compileMemoryPluginConfig(fields map[string]Value) config.Mem
 	return cfg
 }
 
+func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) config.ShadowDispatchPluginConfig {
+	cfg := config.ShadowDispatchPluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getStringField(fields, "model"); ok {
+		cfg.Model = v
+	}
+	if v, ok := getFloat64Field(fields, "sample_rate"); ok {
+		cfg.SampleRate = &v
+	}
+	if v, ok := getIntField(fields, "max_concurrency"); ok {
+		cfg.MaxConcurrency = v
+	}
+	if v, ok := getIntField(fields, "max_queue_depth"); ok {
+		cfg.MaxQueueDepth = v
+	}
+	if v, ok := getIntField(fields, "timeout_seconds"); ok {
+		cfg.TimeoutSeconds = v
+	}
+	if v, ok := getIntField(fields, "max_response_bytes"); ok {
+		cfg.MaxResponseBytes = v
+	}
+	if v, ok := getIntField(fields, "max_retries"); ok {
+		cfg.MaxRetries = v
+	}
+	if v, ok := getBoolField(fields, "capture_response_body"); ok {
+		cfg.CaptureResponseBody = v
+	}
+	if v, ok := getIntField(fields, "max_capture_bytes"); ok {
+		cfg.MaxCaptureBytes = v
+	}
+	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
+		cfg.TLSSkipVerify = v
+	}
+	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
+	return cfg
+}
+
 func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) config.RouterReplayPluginConfig {
 	cfg := config.RouterReplayPluginConfig{}
 	if v, ok := getBoolField(fields, "enabled"); ok {
@@ -219,17 +258,6 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getIntField(fields, "max_tool_trace_steps"); ok {
 		cfg.MaxToolTraceSteps = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileImageGenPluginConfig(fields map[string]Value) config.ImageGenPluginConfig {
-	cfg := config.ImageGenPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getStringField(fields, "backend"); ok {
-		cfg.Backend = v
 	}
 	return cfg
 }

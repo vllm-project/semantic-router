@@ -23,6 +23,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
@@ -95,7 +96,7 @@ func NewServer(
 		return nil, err
 	}
 	attachRuntimeRegistry(router, runtimeRegistry)
-	publishRouterState(router.Config, router, runtimeRegistry)
+	publishRouterState(router.Config, router, runtimeRegistry, nil)
 
 	service := NewRouterService(router)
 	return &Server{
@@ -265,6 +266,11 @@ type routerGeneration struct {
 	retired atomic.Bool
 }
 
+// AcquireFunc registers a reference on the live generation for the duration of
+// one acquire. It reports false once the generation is retired, so a caller that
+// loses the race against a reload falls back instead of using a closing router.
+type AcquireFunc func() (release func(), ok bool)
+
 func NewRouterService(r *OpenAIRouter) *RouterService {
 	rs := &RouterService{}
 	rs.current.Store(&routerGeneration{router: r})
@@ -276,7 +282,7 @@ func NewRouterService(r *OpenAIRouter) *RouterService {
 // pointer is swapped before publish, but Process must take rs.mu and therefore
 // cannot observe the new generation until the management snapshot is also
 // published and this critical section ends.
-func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
+func (rs *RouterService) Swap(r *OpenAIRouter, publish func(acquire AcquireFunc)) error {
 	rs.mu.Lock()
 	if rs.closed {
 		rs.mu.Unlock()
@@ -285,9 +291,10 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
 		}
 		return errors.New("router service is shutting down")
 	}
-	old := rs.current.Swap(&routerGeneration{router: r})
+	generation := &routerGeneration{router: r}
+	old := rs.current.Swap(generation)
 	if publish != nil {
-		publish()
+		publish(rs.acquireFor(generation))
 	}
 	if old != nil {
 		old.retired.Store(true)
@@ -298,6 +305,25 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
 		go rs.closeRetiredGeneration(old)
 	}
 	return nil
+}
+
+// acquireFor returns a AcquireFunc for one generation. It takes the same lock
+// Swap uses to retire a generation, so a acquire either registers before
+// retirement and makes closeRouterGeneration wait, or observes the retirement
+// and declines.
+func (rs *RouterService) acquireFor(generation *routerGeneration) AcquireFunc {
+	return func() (func(), bool) {
+		if generation == nil {
+			return nil, false
+		}
+		rs.mu.Lock()
+		defer rs.mu.Unlock()
+		if generation.retired.Load() {
+			return nil, false
+		}
+		generation.refs.Add(1)
+		return generation.refs.Done, true
+	}
 }
 
 // GetRouter returns the current router implementation.
@@ -409,8 +435,8 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
-	if err := s.service.Swap(newRouter, func() {
-		publishRouterState(candidateCfg, newRouter, s.runtime)
+	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
+		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
 	}); err != nil {
 		return err
 	}
@@ -476,6 +502,7 @@ func publishRouterState(
 	cfg *config.RouterConfig,
 	router *OpenAIRouter,
 	runtimeRegistry *routerruntime.Registry,
+	acquire AcquireFunc,
 ) {
 	if router == nil {
 		return
@@ -485,6 +512,7 @@ func publishRouterState(
 		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 			Config:                cfg,
 			ClassificationService: router.ClassificationService,
+			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),
@@ -497,4 +525,5 @@ func publishRouterState(
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
+	selection.SetGlobalRegistry(router.ModelSelector)
 }

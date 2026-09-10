@@ -1,0 +1,124 @@
+.catalogGrid,
+.trackGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.catalogCard,
+.trackCard {
+  display: flex;
+  gap: 0.65rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.78rem 0.85rem;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.catalogCard:hover,
+.trackCard:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.catalogCard:focus-within,
+.trackCard:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -3px;
+}
+
+.active {
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 2px 0 0 var(--brand-amd);
+}
+
+.catalogCard:nth-child(odd),
+.trackCard:nth-child(odd) {
+  border-left: 0;
+}
+
+.catalogCard:nth-child(n + 3),
+.trackCard:nth-child(n + 3) {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.catalogCard input,
+.trackCard input {
+  flex: 0 0 auto;
+  margin-top: 0.15rem;
+  accent-color: var(--text-primary);
+}
+
+.catalogCard span,
+.trackCard span {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.catalogCard strong,
+.trackCard strong {
+  color: var(--text-primary);
+  font-size: var(--text-xs);
+}
+
+.catalogCard small,
+.trackCard small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.catalogCard em,
+.trackCard em {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-style: normal;
+}
+
+.disabled {
+  cursor: not-allowed;
+}
+
+.disabled > input,
+.disabled strong {
+  opacity: 0.48;
+}
+
+.disabled em {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.disabled:hover {
+  background: rgba(255, 255, 255, 0.018);
+}
+
+@media (max-width: 680px) {
+  .catalogGrid,
+  .trackGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .catalogCard,
+  .trackCard,
+  .catalogCard:nth-child(odd),
+  .trackCard:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .catalogCard:nth-child(n + 2),
+  .trackCard:nth-child(n + 2) {
+    border-top: 1px solid var(--border-subtle);
+  }
+}

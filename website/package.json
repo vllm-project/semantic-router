@@ -36,18 +36,18 @@
     "documentation"
   ],
   "dependencies": {
-    "@docusaurus/core": "^3.8.1",
-    "@docusaurus/plugin-client-redirects": "^3.8.1",
-    "@docusaurus/preset-classic": "^3.8.1",
-    "@docusaurus/theme-mermaid": "^3.8.1",
+    "@docusaurus/core": "^3.10.2",
+    "@docusaurus/plugin-client-redirects": "^3.10.2",
+    "@docusaurus/preset-classic": "^3.10.2",
+    "@docusaurus/theme-mermaid": "^3.10.2",
     "@easyops-cn/docusaurus-search-local": "^0.55.3",
     "@lobehub/icons": "^5.4.0",
     "@mdx-js/react": "^3.1.0",
+    "@mermaid-js/layout-elk": "^0.1.9",
     "@stylistic/eslint-plugin": "2.13.0",
-    "eslint": "9.18.0",
+    "eslint": "9.39.5",
     "eslint-plugin-react": "^7.37.4",
     "motion": "^12.34.0",
-    "ogl": "^1.0.11",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.5.0",
@@ -56,13 +56,21 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@docusaurus/module-type-aliases": "^3.9.1",
-    "@docusaurus/types": "^3.9.1",
+    "@docusaurus/module-type-aliases": "^3.10.2",
+    "@docusaurus/types": "^3.10.2",
     "@tsconfig/docusaurus": "^2.0.3",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
+    "ajv": "^8.20.0",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "qs": "^6.16.0",
+    "serialize-javascript": "^7.1.1",
+    "sockjs": {
+      "uuid": "^11.1.1"
+    }
   }
 }

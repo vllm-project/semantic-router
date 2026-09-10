@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -267,44 +266,6 @@ func compressionPolicyForRequest(
 	}
 	policy.Recovery.Enabled = false
 	return policy
-}
-
-func contextCompressionCapabilities(
-	routerConfig *config.RouterConfig,
-	ctx *RequestContext,
-) contextcompression.ModelContextCapabilities {
-	model := strings.TrimSpace(ctx.VSRSelectedModel)
-	if model == "" {
-		model = strings.TrimSpace(ctx.RequestModel)
-	}
-	contextWindow := 0
-	if routerConfig != nil {
-		if params, ok := routerConfig.ModelConfig[model]; ok {
-			contextWindow = params.ContextWindowSize
-		}
-	}
-	requestedOutput := requestOutputTokens(ctx.workingRequestBody())
-	return contextcompression.ModelContextCapabilities{
-		ContextWindow:   contextWindow,
-		RequestedOutput: requestedOutput,
-	}
-}
-
-func requestOutputTokens(body []byte) int {
-	var request map[string]interface{}
-	if err := json.Unmarshal(body, &request); err != nil {
-		return 0
-	}
-	for _, field := range []string{"max_completion_tokens", "max_tokens"} {
-		switch value := request[field].(type) {
-		case float64:
-			return int(value)
-		case json.Number:
-			parsed, _ := strconv.Atoi(string(value))
-			return parsed
-		}
-	}
-	return 0
 }
 
 func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {

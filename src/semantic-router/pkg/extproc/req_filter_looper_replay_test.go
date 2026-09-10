@@ -12,11 +12,12 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -37,16 +38,14 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-looper-failure",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -104,16 +103,14 @@ func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t 
 			},
 		},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-confidence-partial",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -204,6 +201,15 @@ func assertPartialConfidenceTrace(t *testing.T, record store.Record) {
 	if strings.Contains(record.ResponseBody, "candidate private answer") {
 		t.Fatalf("replay response body leaked candidate answer: %q", record.ResponseBody)
 	}
+	looperTrace := record.RouteDiagnostics.Looper
+	if looperTrace == nil || len(looperTrace.Attempts) != 1 {
+		t.Fatalf("replay Looper trace = %+v, want one completed attempt", looperTrace)
+	}
+	attempt := looperTrace.Attempts[0]
+	if attempt.Ordinal != 1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
+		attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
+		t.Fatalf("replay Looper attempt = %+v", attempt)
+	}
 }
 
 func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
@@ -225,16 +231,14 @@ func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "ratings"},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-final-model",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -274,7 +278,7 @@ func assertFinalLooperReplay(
 func assertLooperResponseFinalModel(t *testing.T, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	t.Helper()
 	if response == nil || response.GetImmediateResponse() == nil || ctx.RouterReplayID == "" {
-		t.Fatal("expected immediate response and replay record")
+		t.Fatalf("expected immediate response and replay record: response=%+v replay_id=%q", response, ctx.RouterReplayID)
 	}
 	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
 	if ctx.VSRSelectedModel != "model-b" || headerMap[headers.VSRSelectedModel] != "model-b" {
@@ -309,9 +313,10 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 	cfg := looperReplayRecipeConfig()
 	recorders := initializeReplayRecorders(cfg)
 	router := &OpenAIRouter{
-		Config:          cfg,
-		Cache:           &spyCache{},
-		ReplayRecorders: recorders,
+		Config:             cfg,
+		Cache:              &spyCache{},
+		ReplayRecorders:    recorders,
+		CredentialResolver: newTestCredentialResolver(cfg),
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{},
@@ -488,6 +493,14 @@ func TestHydrateLooperRoutingContextPreservesResolvedRouting(t *testing.T) {
 
 func looperReplayRecipeConfig() *config.RouterConfig {
 	return &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"model-a": {PreferredEndpoints: []string{"model-backend"}},
+			},
+			VLLMEndpoints: []config.VLLMEndpoint{{
+				Name: "model-backend", Address: "127.0.0.1", Port: 8000, Type: "vllm", Weight: 1,
+			}},
+		},
 		RouterReplay: config.RouterReplayConfig{
 			Enabled:      true,
 			StoreBackend: "memory",

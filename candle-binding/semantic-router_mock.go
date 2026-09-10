@@ -162,6 +162,21 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeResult{}, ErrBackendUnavailable
 }
 
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	return false, ErrBackendUnavailable
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into to be embedded
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	return nil, ErrBackendUnavailable
+}
+
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	return nil, ErrBackendUnavailable
@@ -184,6 +199,12 @@ func InitEmbeddingModelsBatched(qwen3ModelPath string, maxBatchSize int, maxWait
 // GetEmbeddingBatched generates an embedding using the continuous batching model
 func GetEmbeddingBatched(text string, modelType string, targetDim int) (*EmbeddingOutput, error) {
 	return nil, ErrBackendUnavailable
+}
+
+// SupportsBatchedEmbedding reports batched-embedding capability. Returns false
+// because the native backend is unavailable.
+func SupportsBatchedEmbedding(modelType string) bool {
+	return false
 }
 
 // InitEmbeddingModels initializes Qwen3 and/or Gemma embedding models

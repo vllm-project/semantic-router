@@ -11,6 +11,7 @@ export interface PlaygroundInvocation {
   model?: string
   messages: RecipeProbeMessage[]
   tools?: unknown[]
+  toolChoice?: unknown
   request: Record<string, unknown>
 }
 
@@ -33,6 +34,7 @@ export function createProbePlaygroundInvocation(
     ...(plan.model ? { model: plan.model } : {}),
     messages: plan.messages,
     ...(plan.tools ? { tools: plan.tools } : {}),
+    ...(plan.tool_choice !== undefined ? { toolChoice: plan.tool_choice } : {}),
     request: plan.request,
   }
 }

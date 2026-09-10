@@ -9,9 +9,10 @@ from cli.config_contract import (
     LEGACY_PROVIDER_DEFAULT_KEYS,
     LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
-    iter_named_signal_entries,
     iter_routing_profiles,
 )
+from cli.config_yaml import safe_load_router_config
+from cli.context_bands import references_environment
 from cli.models import RouterLearningConfig, UserConfig
 from cli.utils import get_logger
 
@@ -436,6 +437,34 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         )
 
 
+def _deferred_context_limits(config: UserConfig) -> list[tuple[str, str]]:
+    """Return (path, value) for every context band limit that references the
+    environment, which the Router expands before parsing."""
+    deferred: list[tuple[str, str]] = []
+    for profile_name, profile in iter_routing_profiles(config):
+        prefix = (
+            "routing"
+            if profile_name == "default"
+            else f"recipes[{profile_name}].routing"
+        )
+        for rule in profile.signals.context or []:
+            for field_name in ("min_tokens", "max_tokens"):
+                value = getattr(rule, field_name)
+                if references_environment(value):
+                    deferred.append(
+                        (f"{prefix}.signals.context[{rule.name}].{field_name}", value)
+                    )
+    return deferred
+
+
+def _warn_deferred_context_limits(config: UserConfig) -> None:
+    for path, value in _deferred_context_limits(config):
+        log.warning(
+            f"{path} references the environment: {value}. The Router resolves it "
+            "when the config loads, so this band was not checked"
+        )
+
+
 def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConfig:
     """
     Parse and validate user configuration file.
@@ -457,15 +486,15 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     if not config_file.exists():
         raise ConfigParseError(f"Configuration file not found: {config_path}")
 
-    # Load YAML
+    # Load YAML. Context band token counts keep their source spelling so the
+    # checks below see the text the Router parses from the forwarded file.
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = safe_load_router_config(f)
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
         raise ConfigParseError(f"Failed to read configuration file: {e}")
-
     if not data:
         raise ConfigParseError("Configuration file is empty")
 
@@ -474,6 +503,7 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
     # Validate with Pydantic
     try:
         config = UserConfig(**data)
+        _warn_deferred_context_limits(config)
         if log_summary:
             log.info("Configuration parsed successfully")
             log.info(f"  Version: {config.version}")
@@ -505,26 +535,6 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
         raise ConfigParseError(f"Unexpected error during validation: {e}")
 
 
-def detect_config_format(data: Dict[str, Any]) -> str:
-    """
-    Detect configuration format (new vs legacy).
-
-    Args:
-        data: Configuration data dictionary
-
-    Returns:
-        str: "new" or "legacy"
-    """
-    # New format has 'version' field starting with 'v'
-    if (
-        "version" in data
-        and isinstance(data["version"], str)
-        and data["version"].startswith("v")
-    ):
-        return "new"
-    return "legacy"
-
-
 def load_config_file(config_path: str) -> Dict[str, Any]:
     """
     Load configuration file as dictionary.
@@ -545,81 +555,9 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
 
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = safe_load_router_config(f)
         return data or {}
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
         raise ConfigParseError(f"Failed to read configuration file: {e}")
-
-
-def validate_signal_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that signal names are unique across all signal types.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-    seen = {}
-
-    if not config.signals:
-        return errors
-
-    for family, signal_name in iter_named_signal_entries(config.signals):
-        if signal_name in seen:
-            errors.append(
-                f"Duplicate signal name '{signal_name}' in {family} "
-                f"(already defined in {seen[signal_name]})"
-            )
-        seen[signal_name] = family
-
-    return errors
-
-
-def validate_domain_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that domain names are unique.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-
-    if not config.signals or not config.signals.domains:
-        return errors
-
-    seen = set()
-    for domain in config.signals.domains:
-        if domain.name in seen:
-            errors.append(f"Duplicate domain name '{domain.name}'")
-        seen.add(domain.name)
-
-    return errors
-
-
-def validate_model_uniqueness(config: UserConfig) -> list:
-    """
-    Validate that model names are unique.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors (empty if valid)
-    """
-    errors = []
-    seen = set()
-
-    for model in config.providers.models:
-        if model.name in seen:
-            errors.append(f"Duplicate model name '{model.name}'")
-        seen.add(model.name)
-
-    return errors

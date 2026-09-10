@@ -9,15 +9,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // writeClassificationError maps a classification service error to an HTTP
 // status code: empty/whitespace input is a client error (400 INVALID_INPUT);
-// anything else is treated as an internal error (500 CLASSIFICATION_ERROR).
-// This keeps the classify endpoints aligned with their documented OpenAPI
-// contract ({200, 400}) and with sibling endpoints (combined/batch/embeddings).
+// an unresolved decision under fail_request is a backend outage
+// (503 DECISION_UNRESOLVED, matching ExtProc); anything else is treated as an
+// internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
 	if errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) {
@@ -26,6 +27,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
+		return
+	}
+	if errors.Is(err, decision.ErrDecisionUnresolved) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "DECISION_UNRESOLVED", err.Error())
 		return
 	}
 	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
@@ -69,6 +74,10 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 
 	response, err := s.classificationSvc.ClassifyIntentForEval(req)
 	if err != nil {
+		if response != nil {
+			s.writeJSONResponse(w, http.StatusServiceUnavailable, response)
+			return
+		}
 		s.writeClassificationError(w, err)
 		return
 	}
@@ -172,6 +181,13 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 		return BatchClassificationRequest{}, false
 	}
 
+	if maxBatchSize := s.maxBatchSize(); maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
+		metrics.RecordBatchClassificationError("unified", "batch_too_large")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
+			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
+		return BatchClassificationRequest{}, false
+	}
+
 	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
 		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
@@ -179,6 +195,14 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 	}
 
 	return req, true
+}
+
+func (s *ClassificationAPIServer) maxBatchSize() int {
+	cfg := s.currentConfig()
+	if cfg == nil {
+		return 0
+	}
+	return cfg.API.BatchClassification.MaxBatchSize
 }
 
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {

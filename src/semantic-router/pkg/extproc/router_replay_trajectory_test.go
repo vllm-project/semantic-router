@@ -161,7 +161,7 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 	assertStringField(t, messages[4], "content", "done")
 }
 
-func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
+func TestHandleRouterReplayTrajectoryDoesNotReparseStoredWireBodies(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 	// Body-based trajectory fallback presumes the bodies were captured.
 	recorder.SetCapturePolicy(true, true, 4096)
@@ -196,14 +196,9 @@ func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
 	assertIntField(t, body, "record_count", 1)
 
 	messages := mustTrajectoryMessages(t, body)
-	if len(messages) == 0 {
-		t.Fatal("expected messages from body fallback, got none")
+	if len(messages) != 0 {
+		t.Fatalf("stored wire bodies were reparsed into %d trajectory messages", len(messages))
 	}
-
-	// The last message should be the assistant final response from the response body.
-	last := messages[len(messages)-1]
-	assertStringField(t, last, "role", "assistant")
-	assertStringField(t, last, "content", "final")
 }
 
 func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testing.T) {

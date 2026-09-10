@@ -476,6 +476,25 @@ impl GemmaEmbeddingModel {
         input_ids: &Tensor,
         attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
+        // Step 0: Reject sequences the RoPE caches cannot index, naming the limit
+        let (_batch_size, seq_len) = input_ids.dims2().map_err(|_| UnifiedError::Validation {
+            field: "input_ids".to_string(),
+            expected: "2D tensor [batch_size, seq_len]".to_string(),
+            actual: format!("{:?}", input_ids.dims()),
+            context: Some("GemmaEmbeddingModel::embedding_forward".to_string()),
+        })?;
+        if seq_len > self.config.max_position_embeddings {
+            return Err(UnifiedError::Validation {
+                field: "seq_len".to_string(),
+                expected: format!("<= {}", self.config.max_position_embeddings),
+                actual: seq_len.to_string(),
+                context: Some(format!(
+                    "Sequence length exceeds max_position_embeddings ({})",
+                    self.config.max_position_embeddings
+                )),
+            });
+        }
+
         // Step 1: Gemma3 Transformer backbone
         // Output: [batch, seq_len, hidden_size=768]
         let hidden_states = self.gemma_backbone.forward(input_ids, attention_mask)?;

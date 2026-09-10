@@ -137,3 +137,55 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 		t.Fatalf("ML selection embedding config = %s/%d, want Qwen3/0 (model-native dimension)", mlCfg.ModelType, mlCfg.EmbeddingDim)
 	}
 }
+
+// TestSelectionEmbeddingModelTypeNormalizesCase guards against a configured
+// modelType (e.g. "Qwen3") passing validation case-insensitively but then
+// reaching candle_binding.SupportsBatchedEmbedding and GetEmbeddingBatched
+// unnormalized -- the former is case/whitespace-tolerant, the latter is not,
+// so a mismatch there routes a "batchable" model into a call that fails.
+func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
+	cases := []struct {
+		name      string
+		modelType string
+		want      string
+	}{
+		{"mixed case", "Qwen3", "qwen3"},
+		{"padded whitespace", "  qwen3  ", "qwen3"},
+		{"already normalized", "mmbert", "mmbert"},
+		{"empty falls back to default", "", config.EmbeddingModelTypeQwen3},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			models := config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{ModelType: tc.modelType},
+			}
+			if got := selectionEmbeddingModelType(models, config.EmbeddingBackendCandle); got != tc.want {
+				t.Errorf("selectionEmbeddingModelType(%q) = %q, want %q", tc.modelType, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
+// unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
+// but on the sibling ml.model_type path: nothing validates or rewrites it, so
+// it reaches factory.go's mlEmbeddingConfig -- and the same
+// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
+// embedding model type.
+func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				ML: config.MLSelectionConfig{
+					ModelsPath: "models/ml-selection",
+					ModelType:  "Qwen3",
+				},
+			},
+		},
+	}
+
+	mlCfg := buildModelSelectionConfig(cfg).ML
+	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 {
+		t.Fatalf("ML selection model type = %q, want %q", mlCfg.ModelType, config.EmbeddingModelTypeQwen3)
+	}
+}

@@ -28,15 +28,6 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       customRender: (value, onChange) => <ModelTagsEditor value={value} onChange={onChange} />,
     },
     {
-      name: 'quality_score',
-      label: 'Quality Score',
-      type: 'number',
-      min: 0,
-      max: 1,
-      step: 0.01,
-      placeholder: '0.85',
-    },
-    {
       name: 'loras',
       label: 'LoRA Adapters',
       type: 'custom',

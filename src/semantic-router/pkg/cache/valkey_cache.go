@@ -515,7 +515,7 @@ func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte) []s
 
 	cmd := []string{
 		"FT.SEARCH", c.indexName, knnQuery,
-		"RETURN", "2", "vector_distance", "response_body",
+		"RETURN", "4", "vector_distance", "response_body", "timestamp", "ttl_seconds",
 		"DIALECT", "2",
 		"PARAMS", "2", "vec",
 	}
@@ -610,11 +610,19 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("valkey", "find_similar", "hit", time.Since(start).Seconds())
-	return LookupResult{
-		ResponseBody: responseBody,
-		Found:        true,
-		Similarity:   similarity,
-	}, nil
+	storedAt, expiresAt := valkeyTiming(match)
+	return lookupResultFromTimestamps(responseBody, similarity, storedAt, expiresAt), nil
+}
+
+func valkeyTiming(match *searchMatch) (time.Time, time.Time) {
+	var storedAt, expiresAt time.Time
+	if match.timestamp > 0 {
+		storedAt = time.Unix(match.timestamp, 0)
+	}
+	if !storedAt.IsZero() && match.ttlSeconds > 0 {
+		expiresAt = storedAt.Add(time.Duration(match.ttlSeconds) * time.Second)
+	}
+	return storedAt, expiresAt
 }
 
 // Close releases all resources held by the cache

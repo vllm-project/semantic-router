@@ -31,11 +31,11 @@ const (
 	DecisionPluginRouterReplay       = "router_replay"
 	DecisionPluginMemory             = "memory"
 	DecisionPluginRAG                = "rag"
-	DecisionPluginImageGen           = "image_gen"
 	DecisionPluginFastResponse       = "fast_response"
 	DecisionPluginRequestParams      = "request_params"
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
+	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
 var supportedSignalTypes = []string{
@@ -47,6 +47,7 @@ var supportedSignalTypes = []string{
 	SignalTypeEmbedding,
 	SignalTypeFactCheck,
 	SignalTypeJailbreak,
+	SignalTypeHallucination,
 	SignalTypeKeyword,
 	SignalTypeLanguage,
 	SignalTypeModality,
@@ -59,19 +60,20 @@ var supportedSignalTypes = []string{
 	SignalTypeEvent,
 	SignalTypeMetadata,
 	SignalTypeClassifier,
+	SignalTypeInputModality,
 }
 
 var supportedDecisionPluginTypes = []string{
 	DecisionPluginFastResponse,
 	DecisionPluginHallucination,
 	DecisionPluginHeaderMutation,
-	DecisionPluginImageGen,
 	DecisionPluginMemory,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
 	DecisionPluginContextCompression,
 	DecisionPluginResponseJailbreak,
 	DecisionPluginRouterReplay,
+	DecisionPluginShadowDispatch,
 	DecisionPluginResponseCache,
 	DecisionPluginSystemPrompt,
 	DecisionPluginToolSelection,

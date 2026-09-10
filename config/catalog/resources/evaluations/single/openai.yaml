@@ -1,0 +1,5511 @@
+- id: independent/gpt-5-4-non-reasoning-critpt@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.4 (none)
+    source_model_slug: gpt-5-4-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .00571428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-4-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.4 (none)
+    source_model_slug: gpt-5-4-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .583333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-4-non-reasoning-omniscience@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.4 (none)
+    source_model_slug: gpt-5-4-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -15.6666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.4 (none)
+    source_model_slug: gpt-5-4-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .112604263206673
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-4-non-reasoning-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.4 (none)
+    source_model_slug: gpt-5-4-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .748484848484848
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-4-low-critpt@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.4 (low)
+    source_model_slug: gpt-5-4-low
+    run_kind: independent
+  metrics:
+    score: .0742857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-4-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.4 (low)
+    source_model_slug: gpt-5-4-low
+    run_kind: independent
+  metrics:
+    score: .766666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-4-low-omniscience@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.4 (low)
+    source_model_slug: gpt-5-4-low
+    run_kind: independent
+  metrics:
+    index: 4.78333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-4-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.4 (low)
+    source_model_slug: gpt-5-4-low
+    run_kind: independent
+  metrics:
+    accuracy: .308155699721965
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-4-low-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.4 (low)
+    source_model_slug: gpt-5-4-low
+    run_kind: independent
+  metrics:
+    accuracy: .870707070707071
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-4-critpt@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    score: .2342857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-4-gdpval-aa@2.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    elo: 1310.66
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-4-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    score: .82
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-4-omniscience@1.0.0
+  model: openai/gpt-5.4
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    index: 5.78333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-4-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    accuracy: .437442075996293
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-4-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.4
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    resolved: .782771535580524
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-4-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    accuracy: .92020202020202
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-4-tau3-banking@1.0.0
+  model: openai/gpt-5.4
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.4 (xhigh)
+    source_model_slug: gpt-5-4
+    run_kind: independent
+  metrics:
+    score: .395876288659794
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    score: 0.257142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-gdp-pdf@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    all_pass: 0.278
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    elo: 1528.69
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    score: 0.816666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    index: 20.3666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.46014828544949
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    resolved: 0.872659176029963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.928282828282828
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-scicode@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    score: 0.577546296296296
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-sol-high-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Sol (high)
+    source_model_slug: gpt-5-6-sol-high
+    run_kind: independent
+  metrics:
+    score: 0.36701030927835
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    score: 0.148571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    elo: 1359.11
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    score: 0.78
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    index: 18.8666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.393883225208526
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    resolved: 0.767790262172285
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.897979797979798
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-scicode@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    score: 0.563657407407407
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-sol-low-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Sol (low)
+    source_model_slug: gpt-5-6-sol-low
+    run_kind: independent
+  metrics:
+    score: 0.290721649484536
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-sol-aa-briefcase@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    elo: 1481.15
+    elo_lower: 1473.44
+    elo_upper: 1488.59
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/gpt-5-6-sol-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    score: 0.322857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-gdp-pdf@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    all_pass: 0.282
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gpt-5-6-sol-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    elo: 1628.92
+    elo_lower: 1614.93
+    elo_upper: 1642.91
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    score: 0.84
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    index: 21.9666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    accuracy: 0.494902687673772
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    accuracy: 0.941414141414141
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-scicode@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    score: 0.570601851851852
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-sol-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Sol (max)
+    source_model_slug: gpt-5-6-sol
+    run_kind: independent
+  metrics:
+    score: 0.443298969072165
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    score: 0.228571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    elo: 1460.35
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    index: 19.4
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.422150139017609
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.861423220973783
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.926262626262626
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-scicode@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    score: 0.574074074074074
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-sol-medium-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Sol (medium)
+    source_model_slug: gpt-5-6-sol-medium
+    run_kind: independent
+  metrics:
+    score: 0.364948453608247
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0514285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1303.09
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.623333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    index: 1.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.166821130676552
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.741573033707865
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.78989898989899
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-non-reasoning-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Sol (Non-reasoning)
+    source_model_slug: gpt-5-6-sol-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.195876288659794
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/gpt-5.6-sol-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Sol
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.888
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-sol-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Sol
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.946
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-critpt@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1590.19
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.823333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-omniscience@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    index: 20.9833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.473123262279889
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.895131086142322
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.931313131313131
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-scicode@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.570601851851852
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-sol-xhigh-tau3-banking@1.0.0
+  model: openai/gpt-5.6-sol
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Sol (xhigh)
+    source_model_slug: gpt-5-6-sol-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.381443298969072
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    score: 0.228571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    elo: 1419.67
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    score: 0.776666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    index: -3.46666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.385078776645042
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    resolved: 0.756554307116105
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.895959595959596
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-scicode@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    score: 0.524305555555556
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-terra-high-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Terra (high)
+    source_model_slug: gpt-5-6-terra-high
+    run_kind: independent
+  metrics:
+    score: 0.28659793814433
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    score: 0.0942857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    elo: 1183.71
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    score: 0.713333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    index: -6.83333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.291936978683967
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    resolved: 0.625468164794007
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.843434343434343
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-low-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Terra (low)
+    source_model_slug: gpt-5-6-terra-low
+    run_kind: independent
+  metrics:
+    score: 0.187628865979381
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-terra-aa-briefcase@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    elo: 1334.93
+    elo_lower: 1327.93
+    elo_upper: 1342.39
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/gpt-5-6-terra-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    score: 0.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-gdp-pdf@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    all_pass: 0.256
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gpt-5-6-terra-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    elo: 1481.11
+    elo_lower: 1467.05
+    elo_upper: 1495.18
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    score: 0.83
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    index: 0.05
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    accuracy: 0.429101019462465
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    accuracy: 0.925252525252525
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-scicode@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    score: 0.549768518518518
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-terra-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Terra (max)
+    source_model_slug: gpt-5-6-terra
+    run_kind: independent
+  metrics:
+    score: 0.402061855670103
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    score: 0.174285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    elo: 1324.23
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    score: 0.74
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    index: -5.13333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.332715477293791
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.722846441947566
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.871717171717172
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-medium-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Terra (medium)
+    source_model_slug: gpt-5-6-terra-medium
+    run_kind: independent
+  metrics:
+    score: 0.255670103092783
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.02
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1173.65
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.586666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -23.2166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.113994439295644
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.561797752808989
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.746464646464646
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-non-reasoning-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Terra (Non-reasoning)
+    source_model_slug: gpt-5-6-terra-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.156701030927835
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/gpt-5.6-terra-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Terra
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.874
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-terra-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Terra
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.929
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-critpt@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.271428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1483.84
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-omniscience@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    index: -2.98333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.418906394810009
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.801498127340824
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.908080808080808
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-scicode@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.523148148148148
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-terra-xhigh-tau3-banking@1.0.0
+  model: openai/gpt-5.6-terra
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Terra (xhigh)
+    source_model_slug: gpt-5-6-terra-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.296907216494845
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    score: 0.165714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    elo: 1380.99
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    index: -12
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.334105653382762
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    resolved: 0.696629213483146
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.891919191919192
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-high-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.6 Luna (high)
+    source_model_slug: gpt-5-6-luna-high
+    run_kind: independent
+  metrics:
+    score: 0.251546391752577
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    score: 0.0257142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    elo: 1087.12
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    score: 0.7
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    index: -14.65
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.198331788693234
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    resolved: 0.434456928838951
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.835353535353535
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-low-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.6 Luna (low)
+    source_model_slug: gpt-5-6-luna-low
+    run_kind: independent
+  metrics:
+    score: 0.127835051546392
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-luna-aa-briefcase@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    elo: 1344.66
+    elo_lower: 1337.6
+    elo_upper: 1352.48
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/gpt-5-6-luna-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    score: 0.205714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-gdp-pdf@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    all_pass: 0.23
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gpt-5-6-luna-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    elo: 1493.56
+    elo_lower: 1479.6
+    elo_upper: 1507.53
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    score: 0.836666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    index: -10.2833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    accuracy: 0.394810009267841
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    resolved: 0.808988764044944
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    accuracy: 0.911111111111111
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-scicode@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    score: 0.53587962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-luna-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-5.6 Luna (max)
+    source_model_slug: gpt-5-6-luna
+    run_kind: independent
+  metrics:
+    score: 0.311340206185567
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    score: 0.0485714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    elo: 1200.47
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    score: 0.75
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    index: -13.1833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.257645968489342
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.531835205992509
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.858585858585859
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-medium-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.6 Luna (medium)
+    source_model_slug: gpt-5-6-luna-medium
+    run_kind: independent
+  metrics:
+    score: 0.177319587628866
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.00285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1012.56
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.426666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -24.95
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.072289156626506
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.389513108614232
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.645454545454546
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-non-reasoning-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.6 Luna (Non-reasoning)
+    source_model_slug: gpt-5-6-luna-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0969072164948454
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/gpt-5.6-luna-launch-evals-terminal-bench@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Luna
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.847
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.6-luna-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.6 Luna
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.923
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-critpt@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.205714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-gdpval-aa@2.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    elo: 1433.23
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.816666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-omniscience@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    index: -10.7666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.369786839666358
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    resolved: 0.779026217228464
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-gpqa-diamond@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    accuracy: 0.894949494949495
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-scicode@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.50462962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-5-6-luna-xhigh-tau3-banking@1.0.0
+  model: openai/gpt-5.6-luna
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.6 Luna (xhigh)
+    source_model_slug: gpt-5-6-luna-xhigh
+    run_kind: independent
+  metrics:
+    score: 0.28659793814433
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-5-high-critpt@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    score: 0.254285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-5-high-gdpval-aa@2.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    elo: 1376.08
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-5-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    score: 0.843333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-5-high-omniscience@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    index: 18.75
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-5-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.450417052826691
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-5-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    resolved: 0.794007490636704
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-5-high-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.932323232323232
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-5-high-tau3-banking@1.0.0
+  model: openai/gpt-5.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-5.5 (high)
+    source_model_slug: gpt-5-5-high
+    run_kind: independent
+  metrics:
+    score: 0.36701030927835
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-5-low-critpt@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    score: 0.08
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-5-low-gdpval-aa@2.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    elo: 1118.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-5-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    score: 0.81
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-5-low-omniscience@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    index: 15.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-5-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.326691380908248
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-5-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    resolved: 0.655430711610487
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-5-low-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.91010101010101
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-5-low-tau3-banking@1.0.0
+  model: openai/gpt-5.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-5.5 (low)
+    source_model_slug: gpt-5-5-low
+    run_kind: independent
+  metrics:
+    score: 0.249484536082474
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-5-medium-critpt@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.185714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-5-medium-gdpval-aa@2.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    elo: 1293.29
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-5-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.83
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-5-medium-omniscience@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    index: 18.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-5-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.42354031510658
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-5-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.805243445692884
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-5-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.926262626262626
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-5-medium-tau3-banking@1.0.0
+  model: openai/gpt-5.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-5.5 (medium)
+    source_model_slug: gpt-5-5-medium
+    run_kind: independent
+  metrics:
+    score: 0.298969072164948
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-critpt@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0142857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-gdpval-aa@2.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1058.66
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.64
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-omniscience@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -4.75
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.137164040778499
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.610486891385768
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.767676767676768
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-5-non-reasoning-tau3-banking@1.0.0
+  model: openai/gpt-5.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: none
+  subject:
+    source_model: GPT-5.5 (Non-reasoning)
+    source_model_slug: gpt-5-5-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.148453608247423
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.5
+    reasoning_mode: thinking
+    hle_mode: no_tools
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.414
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.5-later-comparison-terminal-bench@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.5
+    terminal_harness: OpenAI published comparison
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.856
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-5-6/
+    redistributable: true
+- id: openai/gpt-5.5-launch-evals-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.5
+    reasoning_mode: thinking
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.936
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: independent/gpt-5-5-critpt@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    score: 0.271428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-5-5-gdpval-aa@2.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    elo: 1400.49
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-5-5-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    score: 0.843333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-5-5-omniscience@1.0.0
+  model: openai/gpt-5.5
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    index: 20.5166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-5-5-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.457831325301205
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-5-5-terminalbench-v2-1@1.0.0
+  model: openai/gpt-5.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    resolved: 0.842696629213483
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-5-5-gpqa-diamond@1.0.0
+  model: openai/gpt-5.5
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.935353535353535
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-5-5-tau3-banking@1.0.0
+  model: openai/gpt-5.5
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-5.5 (xhigh)
+    source_model_slug: gpt-5-5
+    run_kind: independent
+  metrics:
+    score: 0.389690721649485
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
+  model: openai/gpt-5.4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.4 Thinking
+    hle_mode: no_tools
+    source_kind: official_comparative_evaluation
+  metrics:
+    accuracy: 0.398
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: openai/gpt-5.4-comparison-gpqa-diamond@1.0.0
+  model: openai/gpt-5.4
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-5.4 Thinking
+    source_kind: official_comparative_evaluation
+  metrics:
+    accuracy: 0.928
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/introducing-gpt-5-5/
+    redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-120b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-120B(high)
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.808
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gpt-oss-120b-aa-briefcase@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    elo: 5.72
+    elo_lower: 0
+    elo_upper: 17.65
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/gpt-oss-120b-critpt@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    score: 0.0114285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-oss-120b-gdp-pdf@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    all_pass: 0.036
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/gpt-oss-120b-gdpval-aa@2.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    elo: 747.28
+    elo_lower: 731.68
+    elo_upper: 762.88
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-oss-120b-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    score: 0.52
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-oss-120b-omniscience@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    index: -49.25
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-oss-120b-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    accuracy: 0.196014828544949
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-oss-120b-terminalbench-v2-1@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    resolved: 0.262172284644195
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-oss-120b-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    accuracy: 0.781818181818182
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-oss-120b-scicode@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    score: 0.340277777777778
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-oss-120b-tau3-banking@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b (high)
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+  metrics:
+    score: 0.127835051546392
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-oss-120b-low-critpt@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-oss-120b-low-gdpval-aa@2.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    elo: 366.88
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-oss-120b-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    score: 0.46
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-oss-120b-low-omniscience@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    index: -53.5
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.0588507877664504
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-oss-120b-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    resolved: 0.138576779026217
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-oss-120b-low-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.671717171717172
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-oss-120b-low-tau3-banking@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-120b (low)
+    source_model_slug: gpt-oss-120b-low
+    run_kind: independent
+  metrics:
+    score: 0.0288659793814433
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-oss-20b-critpt@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.0142857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-oss-20b-gdpval-aa@2.0.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    elo: 516.54
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/gpt-oss-20b-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.346666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-oss-20b-omniscience@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    index: -63.05
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-oss-20b-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    accuracy: 0.10982391102873
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-oss-20b-terminalbench-v2-1@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    resolved: 0.138576779026217
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-oss-20b-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    accuracy: 0.687878787878788
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-oss-20b-tau3-banking@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.0701030927835052
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/gpt-oss-20b-low-critpt@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-20b (low)
+    source_model_slug: gpt-oss-20b-low
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/gpt-oss-20b-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-20b (low)
+    source_model_slug: gpt-oss-20b-low
+    run_kind: independent
+  metrics:
+    score: 0.31
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/gpt-oss-20b-low-omniscience@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-20b (low)
+    source_model_slug: gpt-oss-20b-low
+    run_kind: independent
+  metrics:
+    index: -58.55
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-20b (low)
+    source_model_slug: gpt-oss-20b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.0528266913809083
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-oss-20b-low-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: gpt-oss-20b (low)
+    source_model_slug: gpt-oss-20b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.611111111111111
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: openai/gpt-oss-120b-model-card-medium-aime-2024@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-120b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.804
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-120b-model-card-medium-aime-2025@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-120b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-120b-model-card-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-120b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.731
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-120b
+    reasoning_effort: medium
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.086
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-120b-model-card-medium-swe-bench-verified@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-120b
+    reasoning_effort: medium
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.526
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-20b-model-card-medium-aime-2024@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-20b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-20b-model-card-medium-aime-2025@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-20b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.721
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-20b-model-card-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-20b
+    reasoning_effort: medium
+    tool_policy: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.66
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-20b
+    reasoning_effort: medium
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.07
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: openai/gpt-oss-20b-model-card-medium-swe-bench-verified@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: medium
+  subject:
+    variant: gpt-oss-20b
+    reasoning_effort: medium
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.532
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://cdn.openai.com/pdf/419b6906-9da6-406c-a19d-1bb078ac7637/oai_gpt-oss_model_card.pdf
+    redistributable: true
+- id: independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.492122335495829
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-low-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.880149812734082
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-low-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.931313131313131
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-low-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: GPT-6 Astra (low)
+    source_model_slug: gpt-6-astra-low
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.540509259259259
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.527340129749768
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-medium-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.895131086142322
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-medium-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.939393939393939
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-medium-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: GPT-6 Astra (medium)
+    source_model_slug: gpt-6-astra-medium
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.541666666666667
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.530583873957368
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-high-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.898876404494382
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-high-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.94949494949495
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-high-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6 Astra (high)
+    source_model_slug: gpt-6-astra-high
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.554398148148148
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.545875810936052
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.891385767790262
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.962626262626263
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-xhigh-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6 Astra (xhigh)
+    source_model_slug: gpt-6-astra-xhigh
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.556712962962963
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 2158
+  metrics:
+    accuracy: 0.546802594995366
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/gpt-6-astra-max-terminalbench-v2-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    agent_harness: Terminus 2
+    sandbox: E2B
+    task_count: 89
+    repeats: 3
+  metrics:
+    resolved: 0.883895131086142
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/gpt-6-astra-max-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    sample_count: 198
+  metrics:
+    accuracy: 0.960606060606061
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/gpt-6-astra-max-scicode@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GPT-6 Astra (max)
+    source_model_slug: gpt-6-astra
+    run_kind: independent
+    tool_policy: no_tools
+    sample_count: 288
+    repeats: 3
+  metrics:
+    score: 0.564814814814815
+  status: available
+  observed_at: 2026-09-08
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: openai/gpt-6-astra-launch-gpqa-diamond@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.96
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-humanitys-last-exam-tools@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    tool_policy: tools_enabled
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.572
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-deep-swe-1.1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    resolved: 0.741
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-2@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.95
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: openai/gpt-6-astra-launch-arc-agi-1@1.0.0
+  model: openai/gpt-6-astra
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: unspecified
+  subject:
+    variant: GPT-6 Astra
+    result_selection: maximum_across_supported_efforts
+    source_kind: official_launch_evaluation
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: 2026-09-07
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-20b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-20B(high)
+    source_model_slug: gpt-oss-20b-high
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.736
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gpt-oss-20b-scicode@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.388888888888889
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gpt-oss-20b
+    redistributable: true
+- id: independent/gpt-oss-120b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b high
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.878306878306878
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/livecodebench
+    redistributable: true
+- id: nvidia-comparative/gpt-oss-20b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: GPT-OSS-20B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.610
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md
+    redistributable: true

@@ -2,12 +2,13 @@ import { useMemo } from 'react'
 
 import EmbeddedServicePage from '../components/EmbeddedServicePage'
 import type { ServiceConfig } from '../components/ServiceNotConfigured'
+import { DOCS_LINKS } from '../utils/docsLinks'
 
 const JAEGER_SERVICE: ServiceConfig = {
   name: 'Jaeger',
   envVar: 'TARGET_JAEGER_URL',
   description: 'Connect Jaeger to investigate request paths across the router and model backends.',
-  docsUrl: 'https://vllm-sr.ai/docs/tutorials/observability/dashboard',
+  docsUrl: DOCS_LINKS.observability,
   exampleValue: 'http://localhost:16686',
 }
 

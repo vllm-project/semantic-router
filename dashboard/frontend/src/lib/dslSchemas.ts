@@ -1,7 +1,78 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
+
+const PII_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.8',
+    description: 'Minimum confidence for PII detection (0.0-1.0)',
+  },
+  {
+    key: 'pii_types_allowed',
+    label: 'PII Types Allowed',
+    type: 'string[]',
+    placeholder: 'e.g. EMAIL_ADDRESS',
+    description: 'PII types to allow through (others trigger signal)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+]
+
+const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'method',
+    label: 'Method',
+    type: 'select',
+    options: ['classifier', 'contrastive'],
+    description: 'Detection algorithm',
+  },
+  {
+    key: 'direction',
+    label: 'Direction',
+    type: 'select',
+    options: ['request', 'response'],
+    description: 'request (default) scores the prompt; response scores the model output',
+  },
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.9',
+    description: 'Minimum score to trigger (0.0-1.0)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+  {
+    key: 'jailbreak_patterns',
+    label: 'Jailbreak Patterns',
+    type: 'string[]',
+    placeholder: 'Add jailbreak example...',
+    description: 'Contrastive mode: example jailbreak prompts',
+  },
+  {
+    key: 'benign_patterns',
+    label: 'Benign Patterns',
+    type: 'string[]',
+    placeholder: 'Add benign example...',
+    description: 'Contrastive mode: example benign prompts',
+  },
+]
 
 export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
@@ -108,15 +179,15 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'min_tokens',
           label: 'Min Tokens',
           type: 'string',
-          required: true,
-          placeholder: '4K',
+          placeholder: '4K (defaults to 0)',
+          description: 'Inclusive lower bound. Defaults to 0 when empty.',
         },
         {
           key: 'max_tokens',
           label: 'Max Tokens',
           type: 'string',
-          required: true,
-          placeholder: '32K',
+          placeholder: '32K (leave empty for no upper bound)',
+          description: 'Inclusive upper bound. Leave empty for an open-ended band.',
         },
         { key: 'description', label: 'Description', type: 'string' },
       ]
@@ -189,8 +260,39 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'threshold',
           label: 'Threshold',
           type: 'number',
-          required: true,
           placeholder: '0.1',
+          description:
+            'Symmetric cut point for local prototype scoring: a margin above it is hard, below its negative is easy. Not used with a score.v1 backend; set a boundary pair instead.',
+        },
+        {
+          key: 'hard_above',
+          label: 'Hard Above',
+          type: 'number',
+          placeholder: '0.85',
+          description:
+            'With Easy Below: boundaries for a remote score where a higher value is harder, in the model’s own units. Mutually exclusive with Threshold and with Hard Below / Easy Above.',
+        },
+        {
+          key: 'easy_below',
+          label: 'Easy Below',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores below this are easy; between Easy Below and Hard Above is medium.',
+        },
+        {
+          key: 'hard_below',
+          label: 'Hard Below',
+          type: 'number',
+          placeholder: '0.2',
+          description:
+            'With Easy Above: boundaries for a remote score where a lower value is harder, such as a predicted chance of answering correctly. Requires a score.v1 backend.',
+        },
+        {
+          key: 'easy_above',
+          label: 'Easy Above',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores above this are easy; between Hard Below and Easy Above is medium.',
         },
         {
           key: 'hard',
@@ -263,69 +365,14 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'jailbreak':
+      return JAILBREAK_SIGNAL_FIELDS
+    case 'hallucination':
       return [
-        {
-          key: 'method',
-          label: 'Method',
-          type: 'select',
-          options: ['classifier', 'contrastive'],
-          description: 'Detection algorithm',
-        },
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.9',
-          description: 'Minimum score to trigger (0.0-1.0)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
+        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
         { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'jailbreak_patterns',
-          label: 'Jailbreak Patterns',
-          type: 'string[]',
-          placeholder: 'Add jailbreak example...',
-          description: 'Contrastive mode: example jailbreak prompts',
-        },
-        {
-          key: 'benign_patterns',
-          label: 'Benign Patterns',
-          type: 'string[]',
-          placeholder: 'Add benign example...',
-          description: 'Contrastive mode: example benign prompts',
-        },
       ]
     case 'pii':
-      return [
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.8',
-          description: 'Minimum confidence for PII detection (0.0-1.0)',
-        },
-        {
-          key: 'pii_types_allowed',
-          label: 'PII Types Allowed',
-          type: 'string[]',
-          placeholder: 'e.g. EMAIL_ADDRESS',
-          description: 'PII types to allow through (others trigger signal)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
-        { key: 'description', label: 'Description', type: 'string' },
-      ]
+      return PII_SIGNAL_FIELDS
     case 'kb':
       return [
         {
@@ -391,9 +438,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   options: [
                     'message',
                     'tool_definition',
+                    'tool_choice_required',
+                    'tool_choice_none',
                     'assistant_tool_call',
                     'assistant_tool_cycle',
                     'active_tool_loop',
+                    'image_content', // validator_conversation.go:16 -- #3001
+                    'flow_tool_state',
                   ],
                   required: true,
                 },
@@ -401,7 +452,10 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
                   key: 'role',
                   label: 'Message Role',
                   type: 'select',
-                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool'],
+                  // 'non_user' is a computed aggregate, not an OpenAI role
+                  // (classifier_signal_conversation.go:139). Valid per
+                  // validator_conversation.go:25 and used by config/config.yaml:497.
+                  options: ['', 'system', 'developer', 'user', 'assistant', 'tool', 'non_user'],
                   description: 'Only used when the source type is message.',
                 },
               ],
@@ -444,7 +498,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
+  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
     case 'memory':
@@ -585,17 +639,6 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
           label: 'Delete Headers',
           type: 'string[]',
           placeholder: 'Header name to delete',
-        },
-      ]
-    case 'image_gen':
-      return [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        {
-          key: 'backend',
-          label: 'Backend',
-          type: 'string',
-          required: true,
-          placeholder: 'my_image_gen_backend',
         },
       ]
     case 'fast_response':

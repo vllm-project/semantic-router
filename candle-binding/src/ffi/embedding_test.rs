@@ -148,3 +148,63 @@ fn test_get_embedding_smart_priority_combinations(
         crate::ffi::memory::free_embedding(result.data, result.length);
     }
 }
+
+/// The multimodal text encoder holds a fixed number of position embeddings, so
+/// a longer sequence has to be rejected before it reaches the position lookup.
+/// Regression for a long input failing with
+/// "index-select invalid index 512 with dim size 512".
+#[rstest]
+#[case(0, 512)]
+#[case(1, 512)]
+#[case(511, 512)]
+#[case(512, 512)]
+fn test_check_position_limit_accepts_up_to_limit(
+    #[case] seq_len: usize,
+    #[case] max_position: usize,
+) {
+    assert!(check_position_limit(seq_len, max_position).is_ok());
+}
+
+#[rstest]
+#[case(513, 512)]
+#[case(4096, 512)]
+fn test_check_position_limit_names_length_and_limit(
+    #[case] seq_len: usize,
+    #[case] max_position: usize,
+) {
+    let err = check_position_limit(seq_len, max_position).unwrap_err();
+    assert!(
+        err.contains(&seq_len.to_string()),
+        "error must name the input length: {err}"
+    );
+    assert!(
+        err.contains(&max_position.to_string()),
+        "error must name the limit: {err}"
+    );
+}
+
+/// The models-info table advertises what the loaded config declares, and zeros
+/// for a model that is not loaded (issue #3407).
+#[rstest]
+#[case::loaded(Some("/models/qwen3"), Some((32768usize, 1024usize)), true, 32768, 1024, "/models/qwen3")]
+#[case::gemma_2k(Some("/models/gemma"), Some((2048usize, 768usize)), true, 2048, 768, "/models/gemma")]
+#[case::not_loaded(None, None, false, 0, 0, "")]
+fn test_embedding_model_info_reports_the_loaded_config(
+    #[case] path: Option<&str>,
+    #[case] limits: Option<(usize, usize)>,
+    #[case] loaded: bool,
+    #[case] max_len: i32,
+    #[case] dim: i32,
+    #[case] want_path: &str,
+) {
+    let info = embedding_model_info("qwen3", path, limits);
+    assert_eq!(info.is_loaded, loaded);
+    assert_eq!(info.max_sequence_length, max_len);
+    assert_eq!(info.default_dimension, dim);
+    unsafe {
+        let name = CString::from_raw(info.model_name);
+        let got_path = CString::from_raw(info.model_path);
+        assert_eq!(name.to_str().unwrap(), "qwen3");
+        assert_eq!(got_path.to_str().unwrap(), want_path);
+    }
+}

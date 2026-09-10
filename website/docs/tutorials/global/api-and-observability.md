@@ -60,6 +60,9 @@ global:
         max_concurrency: 8
 ```
 
+`max_batch_size` bounds `texts` per `/api/v1/classify/batch` request. Larger
+batches return `400 INVALID_INPUT`.
+
 ### Response API
 
 ```yaml
@@ -113,10 +116,55 @@ Common Prometheus metric families:
 | Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+| Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
+| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
+| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+
+Looper metric labels are restricted to bounded algorithm, stage, status,
+reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
+decision names, model names, scores, and thresholds are available through
+traces or detailed Router Replay rather than Prometheus labels. Detailed
+attempt metrics currently cover the Confidence algorithm.
+
+### Profiling
+
+The Router can expose Go `pprof` endpoints on a dedicated listener for CPU,
+heap, goroutine, and execution-trace investigations.
+
+```yaml
+global:
+  services:
+    observability:
+      profiling:
+        enabled: false        # default; opt in only while investigating
+        port: 6060            # default
+        bind: 127.0.0.1       # default; loopback only
+```
+
+Profiling is disabled by default. When enabled it binds `127.0.0.1:6060`, so
+profiles stay reachable from the Router container or host and are never
+published on a routable interface without an explicit `bind` change.
+
+```bash
+go tool pprof http://127.0.0.1:6060/debug/pprof/heap
+```
+
+Notes:
+
+- `bind` must be an IP address or `localhost`. An empty or hostname value is
+  rejected and the profiling listener is skipped.
+- An explicit `port: 0` requests an ephemeral port; the effective address is
+  reported in the `profiling_server_starting` startup log line.
+- The port must not collide with the ExtProc, metrics, or management API port.
+  A conflicting or unbindable listener is logged and skipped; it does not abort
+  Router startup.
+- This switch is read once at startup. Changing it requires a Router restart;
+  config hot reload does not take over the profiling listener.
 
 ### Skip Processing Header
 
@@ -192,5 +240,9 @@ The `store_backend` field controls where routing-decision replay records are per
   authentication before remote exposure.
 - Traces and metric labels should carry bounded identifiers, not raw request
   content or secrets.
+- `pprof` endpoints expose command-line arguments, goroutine stacks, and heap
+  contents. Keep profiling disabled outside an investigation, and keep its
+  `bind` on loopback unless a reachable listener is deliberately fronted by
+  authenticated access controls.
 - See the complete service configuration in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

@@ -141,6 +141,7 @@ routing:
 | `final.prompt` | string | built-in synthesis prompt | Optional static final synthesis instruction |
 | `planner.model` | string | required for dynamic | Control-plane model used to generate the workflow plan |
 | `planner.max_completion_tokens` | int | `2048` | Max completion tokens for the planner JSON plan only |
+| `minimum_candidates` | int | unset | Minimum distinct decision `modelRefs` required after Recipe materialization and context eligibility filtering |
 | `max_steps` | int | `3` | Maximum workflow steps accepted from the planner |
 | `max_parallel` | int | `2` | Maximum worker models per step |
 | `max_completion_tokens` | int | request default | Max completion tokens for worker and final synthesis calls |
@@ -149,6 +150,10 @@ routing:
 | `temperature` | float | request default | Temperature for planner, worker, and synthesis calls |
 | `include_intermediate_responses` | bool | `true` | Include Flow plan and worker outputs in the response trace |
 | `on_error` | string | `fail` | `fail` on worker error or `skip` failed workers when at least one worker succeeds |
+
+Every static role and every planner-generated step must contain at least
+`min_successful_responses` Models. A plan that cannot satisfy its configured
+quorum is rejected instead of running with a silently reduced quorum.
 
 ## Tool And Function Calling
 

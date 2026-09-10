@@ -1,0 +1,13 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "messages": [
+      {
+        "role": "user",
+        "content": "hello"
+      }
+    ],
+    "n": 1.5
+  }
+}

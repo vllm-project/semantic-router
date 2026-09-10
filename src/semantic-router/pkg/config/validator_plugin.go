@@ -14,12 +14,12 @@ var decisionPluginPayloadFactories = map[string]func() interface{}{
 	DecisionPluginRouterReplay:       func() interface{} { return &RouterReplayPluginConfig{} },
 	DecisionPluginMemory:             func() interface{} { return &MemoryPluginConfig{} },
 	DecisionPluginRAG:                func() interface{} { return &RAGPluginConfig{} },
-	DecisionPluginImageGen:           func() interface{} { return &ImageGenPluginConfig{} },
 	DecisionPluginFastResponse:       func() interface{} { return &FastResponsePluginConfig{} },
 	DecisionPluginRequestParams:      func() interface{} { return &RequestParamsPluginConfig{} },
 	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
 	DecisionPluginToolSelection:      func() interface{} { return &ToolSelectionPluginConfig{} },
 	DecisionPluginContextCompression: func() interface{} { return &ContextCompressionPluginConfig{} },
+	DecisionPluginShadowDispatch:     func() interface{} { return &ShadowDispatchPluginConfig{} },
 }
 
 func validateDecisionPluginPayload(
@@ -27,6 +27,18 @@ func validateDecisionPluginPayload(
 	index int,
 	plugin DecisionPlugin,
 ) error {
+	// image_gen was removed when #3076 unified inference protocol translation:
+	// the router no longer executes image-generation backends. Route image
+	// generation through a vllm-omni modality route speaking the Responses-API
+	// hosted image_generation tool instead. See issue #3129.
+	if plugin.Type == "image_gen" {
+		return fmt.Errorf(
+			"decision %q plugins[%d]: plugin %q is unsupported: the image_gen route plugin was removed; use the Responses-API hosted image_generation tool with a vllm-omni modality route",
+			decisionName,
+			index,
+			plugin.Type,
+		)
+	}
 	if !IsSupportedDecisionPluginType(plugin.Type) {
 		return fmt.Errorf(
 			"decision %q plugins[%d]: unsupported plugin type %q",
@@ -57,7 +69,8 @@ func validateDecisionPluginPayload(
 	var err error
 	if normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
-		normalizedType == DecisionPluginContextCompression {
+		normalizedType == DecisionPluginContextCompression ||
+		normalizedType == DecisionPluginShadowDispatch {
 		err = plugin.Configuration.DecodeIntoStrict(target)
 	} else {
 		err = plugin.Configuration.DecodeInto(target)
@@ -94,6 +107,8 @@ func validateDecodedPluginContract(
 		return validateResponseJailbreakPlugin(decisionName, index, pluginType, typed)
 	case *ContextCompressionPluginConfig:
 		return validateContextCompressionPlugin(decisionName, index, pluginType, typed)
+	case *ShadowDispatchPluginConfig:
+		return validateShadowDispatchPlugin(decisionName, index, pluginType, typed)
 	}
 	return nil
 }
