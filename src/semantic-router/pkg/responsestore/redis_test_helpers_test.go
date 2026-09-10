@@ -282,10 +282,10 @@ func responseIDsOf(responses []*responseapi.StoredResponse) []string {
 }
 
 // seedLegacyIndexMember installs a membership with no generation witness —
-// exactly what a backfill leaves behind when a legacy payload could not be
-// upgraded, and what every backfill produced before promotion existed. Goes
-// through the production add script rather than a raw ZADD, so the fixture
-// cannot drift from what the store really writes.
+// exactly what request-path backfill deliberately leaves behind while legacy
+// writers may still exist, and what finalization leaves if a best-effort
+// promotion fails. Goes through the production add script rather than a raw
+// ZADD, so the fixture cannot drift from what the store really writes.
 func seedLegacyIndexMember(t *testing.T, store *RedisStore, conversationID, responseID string, createdAt int64) {
 	t.Helper()
 

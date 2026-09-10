@@ -145,7 +145,7 @@ func (s *RedisStore) sweepAndIndexAllConversations(ctx context.Context) (Convers
 	var scanned, indexed atomic.Int64
 
 	storeTTL := s.ttlMillis()
-	err := s.scanResponsePayloads(ctx, func(batch []scannedResponse) error {
+	err := s.scanResponsePayloads(ctx, promoteLegacyForFinalization, func(batch []scannedResponse) error {
 		scanned.Add(int64(len(batch)))
 
 		byConversation := make(map[string]conversationIndexBatch, len(batch))

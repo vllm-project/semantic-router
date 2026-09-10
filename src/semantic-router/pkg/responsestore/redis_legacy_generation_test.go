@@ -3,6 +3,8 @@ package responsestore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +14,56 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
+
+// promotionPipelineHook distinguishes response-key Lua commands queued in a
+// pipeline from direct script calls. Finalization uses it to pin the bounded
+// one-round-trip promotion contract independently of SCAN's cursor batching.
+type promotionPipelineHook struct {
+	keys             map[string]struct{}
+	pipelines        atomic.Int64
+	pipelinedScripts atomic.Int64
+	directScripts    atomic.Int64
+}
+
+func (h *promotionPipelineHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+
+func (h *promotionPipelineHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		err := next(ctx, cmd)
+		if h.matches(cmd) {
+			h.directScripts.Add(1)
+		}
+		return err
+	}
+}
+
+func (h *promotionPipelineHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		matched := int64(0)
+		for _, cmd := range cmds {
+			if h.matches(cmd) {
+				matched++
+			}
+		}
+		if matched > 0 {
+			h.pipelines.Add(1)
+			h.pipelinedScripts.Add(matched)
+		}
+		return next(ctx, cmds)
+	}
+}
+
+func (h *promotionPipelineHook) matches(cmd redis.Cmder) bool {
+	if cmd.Name() != "eval" && cmd.Name() != "evalsha" {
+		return false
+	}
+	for key := range h.keys {
+		if commandContainsArg(cmd, key) {
+			return true
+		}
+	}
+	return false
+}
 
 // TestLegacyPayloadUpgradePreservesContentAndLifetime pins the promotion
 // primitive every legacy path depends on: the record gains a generation and
@@ -105,12 +157,78 @@ func TestLegacyPayloadUpgradePreservesUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 	var got map[string]any
 	require.NoError(t, json.Unmarshal(upgradedRaw, &got))
+	var wantFields map[string]any
+	require.NoError(t, json.Unmarshal(raw, &wantFields))
 
-	for field, want := range stored {
+	for field, want := range wantFields {
 		assert.EqualValues(t, want, got[field], "upgrade dropped or altered %q", field)
 	}
 	assert.Contains(t, got, responseGenerationField)
 	assert.Len(t, got, len(stored)+1, "the upgrade must add exactly one field")
+}
+
+// TestFinalizationPromotionsArePipelined proves that one bounded scan batch
+// queues all legacy upgrades into one Redis round trip. The old implementation
+// fetched a batch and then synchronously invoked one Lua script per payload,
+// turning a legacy scan into O(N) network round trips.
+func TestFinalizationPromotionsArePipelined(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const responseCount = 4
+	keys := make([]string, 0, responseCount)
+	keySet := make(map[string]struct{}, responseCount)
+	for i := 0; i < responseCount; i++ {
+		response := &responseapi.StoredResponse{
+			ID:             fmt.Sprintf("resp_pipelined_promotion_%d", i),
+			ConversationID: "conv_pipelined_promotion",
+			Status:         "completed",
+			CreatedAt:      time.Now().Unix() + int64(i),
+		}
+		directSetResponsePayload(t, store, response)
+		key := store.buildKey(ResponseKeyPrefix + response.ID)
+		keys = append(keys, key)
+		keySet[key] = struct{}{}
+	}
+
+	hook := &promotionPipelineHook{keys: keySet}
+	store.client.AddHook(hook)
+
+	responses, err := store.getResponsesPipelined(ctx, store.client, keys, promoteLegacyForFinalization)
+	require.NoError(t, err)
+	require.Len(t, responses, responseCount)
+	for _, response := range responses {
+		assert.NotEmpty(t, response.generation)
+	}
+	assert.EqualValues(t, responseCount, hook.pipelinedScripts.Load())
+	assert.EqualValues(t, 1, hook.pipelines.Load(), "one bounded batch must use one promotion pipeline")
+	assert.Zero(t, hook.directScripts.Load(), "no promotion may execute as a serial direct command")
+}
+
+// TestLazyBackfillPreservesLegacyPayloads pins the rolling-upgrade boundary:
+// request-path scans may index legacy records with a blank witness, but they
+// must not mint a generation which an index-unaware writer could later leave
+// stale. Only the operator-authorized finalization sweep promotes payloads.
+func TestLazyBackfillPreservesLegacyPayloads(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const convID = "conv_lazy_preserves_legacy"
+	const responseID = "resp_lazy_preserves_legacy"
+	directSetResponsePayload(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: convID, Status: "completed", CreatedAt: time.Now().Unix(),
+	})
+
+	responses, err := store.ListResponsesByConversation(ctx, convID, ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, responses, 1)
+	assert.Empty(t, optionalIndexedGeneration(t, store, convID, responseID))
+
+	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	require.NoError(t, err)
+	record, err := decodeResponseRecord(raw)
+	require.NoError(t, err)
+	assert.Empty(t, record.generation, "lazy backfill must leave the legacy payload untouched")
 }
 
 // TestScanUpgradeDoesNotClobberNewerWitness covers the interleaving that makes
@@ -198,13 +316,11 @@ func TestFinalizeThenCascadeDeletesLegacyResponses(t *testing.T) {
 	assert.Zero(t, exists(t, store, store.conversationIndexGenerationKey(convID)))
 }
 
-// TestCascadeDeleteUpgradesLiveLegacyPayloadBeforeFinalization covers the
-// residual case finalization's best-effort upgrade can leave behind: a member
-// indexed without a witness because its upgrade failed or lost a race. A
-// *live* legacy payload needs no finalization gate, because it is never
-// removed on the strength of its blankness — it is upgraded, its witness is
-// installed, and a later round deletes it under the ordinary generation CAS.
-func TestCascadeDeleteUpgradesLiveLegacyPayloadBeforeFinalization(t *testing.T) {
+// TestCascadeDeleteRefusesLiveLegacyPayloadBeforeFinalization prevents
+// promotion from laundering a legacy record into a normal witness while old
+// writers may still exist. After completion is set, the same payload can be
+// safely promoted and deleted because no writer may turn it legacy again.
+func TestCascadeDeleteRefusesLiveLegacyPayloadBeforeFinalization(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
@@ -225,9 +341,25 @@ func TestCascadeDeleteUpgradesLiveLegacyPayloadBeforeFinalization(t *testing.T) 
 	require.Zero(t, exists(t, store, store.conversationIndexCompletionKey()),
 		"precondition: the store must not be finalized")
 
+	err := store.DeleteConversation(ctx, convID, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not finalized")
+	assert.Empty(t, optionalIndexedGeneration(t, store, convID, responseID),
+		"a failed pre-finalization cascade must not launder the legacy member into a generated witness")
+
+	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	require.NoError(t, err)
+	record, err := decodeResponseRecord(raw)
+	require.NoError(t, err)
+	assert.Empty(t, record.generation, "pre-finalization cascade must leave the legacy payload untouched")
+	_, err = store.GetConversation(ctx, convID)
+	require.NoError(t, err, "the conversation remains as the retry anchor")
+
+	require.NoError(t, store.client.Set(ctx, store.conversationIndexCompletionKey(),
+		conversationIndexCompletionValue, 0).Err())
 	require.NoError(t, store.DeleteConversation(ctx, convID, true))
 
-	_, err := store.GetResponse(ctx, responseID)
+	_, err = store.GetResponse(ctx, responseID)
 	assert.ErrorIs(t, err, ErrNotFound)
 	assert.Empty(t, conversationIndexMembers(t, store, convID))
 }
@@ -317,6 +449,38 @@ func TestCascadeDeleteRepairsStaleWitnessInsteadOfRemoving(t *testing.T) {
 	_, err := store.GetResponse(ctx, responseID)
 	assert.ErrorIs(t, err, ErrNotFound, "the live payload must be deleted, not merely unindexed")
 	assert.Empty(t, conversationIndexMembers(t, store, convID))
+}
+
+// TestCascadeWitnessRepairDoesNotCountAsDrainProgress pins the spin-loop
+// accounting. Repairing a stale witness is useful, but it removes no index
+// member and a hot writer can invalidate it repeatedly; the outer loop must
+// therefore count such a batch as a race round rather than unbounded progress.
+func TestCascadeWitnessRepairDoesNotCountAsDrainProgress(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+
+	const convID = "conv_cascade_repair_progress"
+	const responseID = "resp_cascade_repair_progress"
+	createdAt := time.Now().Unix()
+	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: convID, Status: "completed", CreatedAt: createdAt,
+	}))
+	payloadRaw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
+	require.NoError(t, err)
+	payload, err := decodeResponseRecord(payloadRaw)
+	require.NoError(t, err)
+
+	stale := newResponseGeneration()
+	require.NoError(t, store.indexResponse(ctx, convID, responseID, stale, createdAt, store.ttlMillis()))
+	progress, err := store.deleteConversationResponseBatch(ctx, convID, []cascadeCandidate{{
+		responseID: responseID,
+		generation: stale,
+	}}, false)
+	require.NoError(t, err)
+	assert.Zero(t, progress.membershipsRemoved)
+	assert.Zero(t, progress.payloadsPromoted)
+	assert.Equal(t, payload.generation, indexedGeneration(t, store, convID, responseID),
+		"the repair should land without being misreported as index drainage")
 }
 
 // TestListPrunesExpiredLegacyMember is the pagination regression the review

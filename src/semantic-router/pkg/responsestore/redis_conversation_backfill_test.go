@@ -61,21 +61,21 @@ func (h *indexWriteObserverHook) ProcessPipelineHook(next redis.ProcessPipelineH
 
 // indexWriteMemberCount reports how many members one conversationIndexAddScript
 // call is adding. EVAL/EVALSHA lay out as: verb, script (or SHA), numkeys, the
-// two keys this script takes, the requested lifetime, then
-// score/member/generation triples.
+// two keys this script takes, the requested lifetime and witness mode, then
+// score/member/generation/expected-witness quads.
 func indexWriteMemberCount(cmd redis.Cmder) (int, bool) {
 	if cmd.Name() != "eval" && cmd.Name() != "evalsha" {
 		return 0, false
 	}
 	args := cmd.Args()
-	if len(args) < 6 {
+	if len(args) < 7 {
 		return 0, false
 	}
 	key, ok := args[3].(string)
 	if !ok || !strings.Contains(key, ConversationIndexKeyPrefix) {
 		return 0, false
 	}
-	return (len(args) - 6) / 3, true
+	return (len(args) - 7) / 4, true
 }
 
 func (h *indexWriteObserverHook) totalMembers() int {

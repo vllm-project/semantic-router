@@ -176,14 +176,19 @@ func spliceResponseGeneration(raw []byte, generation string) ([]byte, error) {
 //
 // Byte equality is the only witness a legacy payload has, and it is sound here
 // in a way byte-equality *deletion* is not: if the value this replaces was
-// concurrently deleted and recreated byte-identically by an index-unaware
-// writer, the promotion still writes content identical to what that writer
-// stored, under the TTL Redis holds right now. Nothing is destroyed. What must
-// never happen is byte equality authorizing destruction *transitively* — so no
-// caller may promote and then delete the minted generation in the same step.
-// The generation this yields authorizes an index write and nothing else; a
-// later, direct observation of a generational payload is what authorizes its
-// deletion. See resolveCascadeDeleteOutcome.
+// concurrently deleted and recreated byte-identically, the promotion still
+// writes content identical to what that writer stored, under the TTL Redis
+// holds right now. Nothing is destroyed.
+//
+// Promotion is nevertheless restricted to migration states in which every
+// index-unaware writer has already been drained: the operator-authorized
+// finalization sweep, or request paths running after its durable completion
+// record exists. Otherwise an old writer could replace the promoted payload
+// with a generation-less value while leaving the newly installed sidecar
+// generation behind. A later missing-payload cleanup would then mistake that
+// stale nonblank sidecar for authority to unindex an old-writer recreation.
+// Byte equality makes this script locally non-destructive; the caller-side
+// migration gate is what keeps its result safe to use as index ownership.
 //
 // Returning the PTTL matters as much as preserving it. A caller that scanned
 // the payload earlier holds a lifetime that may predate a byte-identical
@@ -210,9 +215,55 @@ redis.call("SET", KEYS[1], ARGV[2], "PX", pttl)
 return {1, pttl}
 `)
 
+// preparedLegacyPromotion is the immutable input and caller-owned generation
+// for one invocation of promoteLegacyPayloadScript. Splitting preparation from
+// result decoding lets finalization queue a bounded batch of promotions in one
+// Redis pipeline while the post-finalization cascade path can still execute a
+// single promotion directly.
+type preparedLegacyPromotion struct {
+	generation string
+	payload    []byte
+}
+
+func prepareLegacyPromotion(record responseRecord) (preparedLegacyPromotion, error) {
+	if record.generation != "" || record.response == nil || len(record.raw) == 0 {
+		return preparedLegacyPromotion{}, ErrInvalidInput
+	}
+
+	generation := newResponseGeneration()
+	payload, err := spliceResponseGeneration(record.raw, generation)
+	if err != nil {
+		return preparedLegacyPromotion{}, err
+	}
+	return preparedLegacyPromotion{generation: generation, payload: payload}, nil
+}
+
+// decodeLegacyPromotionResult validates the Lua reply shared by the direct and
+// pipelined promotion paths. promoted=false is a normal lost CAS: the payload
+// expired or changed after the caller read it.
+func decodeLegacyPromotionResult(key string, result interface{}, resultErr error) (int64, bool, error) {
+	if resultErr != nil {
+		return 0, false, fmt.Errorf("failed to upgrade legacy response payload %s: %w", key, resultErr)
+	}
+	items, ok := result.([]interface{})
+	if !ok || len(items) != 2 {
+		return 0, false, fmt.Errorf("unexpected legacy upgrade result shape %#v for %s", result, key)
+	}
+	promoted, promotedOK := items[0].(int64)
+	ttlMillis, ttlOK := items[1].(int64)
+	if !promotedOK || !ttlOK {
+		return 0, false, fmt.Errorf("unexpected legacy upgrade result types %T/%T for %s", items[0], items[1], key)
+	}
+	if promoted == 0 {
+		return 0, false, nil
+	}
+	return ttlMillis, true, nil
+}
+
 // promoteLegacyResponsePayload stamps a fresh generation onto a payload that
 // has none, returning that generation and the payload's remaining lifetime as
-// observed in the same atomic step.
+// observed in the same atomic step. Callers must first establish that legacy
+// writers have been drained; see promoteLegacyPayloadScript's contract.
 //
 // ok=false is not an error: it means the payload changed under the caller
 // (deleted, expired, or already promoted by someone else), and the caller
@@ -224,32 +275,19 @@ func promoteLegacyResponsePayload(ctx context.Context, client redis.UniversalCli
 	if record.generation != "" {
 		return record.generation, unknownPayloadTTL, true, nil
 	}
-	if record.response == nil || len(record.raw) == 0 {
-		return "", 0, false, ErrInvalidInput
-	}
 
-	generation := newResponseGeneration()
-	data, err := spliceResponseGeneration(record.raw, generation)
+	prepared, err := prepareLegacyPromotion(record)
 	if err != nil {
 		return "", 0, false, err
 	}
 
-	res, err := promoteLegacyPayloadScript.Run(ctx, client, []string{key}, record.raw, data).Result()
-	if err != nil {
-		return "", 0, false, fmt.Errorf("failed to upgrade legacy response payload %s: %w", key, err)
-	}
-	items, ok := res.([]interface{})
-	if !ok || len(items) != 2 {
-		return "", 0, false, fmt.Errorf("unexpected legacy upgrade result shape %#v for %s", res, key)
-	}
-	promoted, promotedOK := items[0].(int64)
-	ttlMillis, ttlOK := items[1].(int64)
-	if !promotedOK || !ttlOK {
-		return "", 0, false, fmt.Errorf("unexpected legacy upgrade result types %T/%T for %s", items[0], items[1], key)
-	}
-	if promoted == 0 {
-		return "", 0, false, nil
+	result, resultErr := promoteLegacyPayloadScript.Run(
+		ctx, client, []string{key}, record.raw, prepared.payload,
+	).Result()
+	ttlMillis, promoted, err := decodeLegacyPromotionResult(key, result, resultErr)
+	if err != nil || !promoted {
+		return "", 0, false, err
 	}
 
-	return generation, ttlMillis, true, nil
+	return prepared.generation, ttlMillis, true, nil
 }

@@ -286,6 +286,17 @@ type scannedResponse struct {
 	ttlMillis  int64
 }
 
+// scanLegacyPolicy makes promotion an explicit capability of a scan. Lazy
+// backfill runs while index-unaware writers may still exist and must therefore
+// preserve legacy payloads. Only FinalizeConversationIndex, whose operator
+// contract requires those writers to be drained first, may promote them.
+type scanLegacyPolicy uint8
+
+const (
+	preserveLegacyPayloads scanLegacyPolicy = iota
+	promoteLegacyForFinalization
+)
+
 // indexLifetime is how long this response's index membership must remain
 // readable, in milliseconds, under the convention longerIndexLifetime uses.
 // A payload with no measurable lifetime contributes nothing, so it reports
@@ -556,7 +567,7 @@ func (s *RedisStore) conversationIndexResolved(ctx context.Context, conversation
 // fully idempotent retry.
 func (s *RedisStore) lazyBackfillConversationIndex(ctx context.Context, conversationID string) (int64, error) {
 	var total atomic.Int64
-	err := s.scanResponsePayloads(ctx, func(batch []scannedResponse) error {
+	err := s.scanResponsePayloads(ctx, preserveLegacyPayloads, func(batch []scannedResponse) error {
 		return s.indexBackfillMatches(ctx, conversationID, batch, &total)
 	})
 	if err != nil {
@@ -714,181 +725,4 @@ func (s *RedisStore) markConversationMigrated(ctx context.Context, conversationI
 	}
 
 	return nil
-}
-
-// scanResponsePayloads walks every response payload key exactly once and
-// delivers strictly decoded records in bounded batches. A key expiring
-// between SCAN and GET is benign; any other GET, decode, or key-identity
-// failure aborts the scan so no completeness proof is published from an
-// incomplete observation.
-//
-// Shared by the per-conversation lazy legacy backfill
-// (lazyBackfillConversationIndex) and the whole-keyspace finalization sweep
-// (sweepAndIndexAllConversations) — this is the O(N) operation the index
-// exists to avoid on the hot read path. See scanResponseKeys for the
-// Cluster-aware key walking.
-func (s *RedisStore) scanResponsePayloads(ctx context.Context, visit func(batch []scannedResponse) error) error {
-	return s.scanResponseKeys(ctx, func(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error) {
-		return s.getResponsesPipelined(ctx, client, keys)
-	}, visit)
-}
-
-// scanResponseKeys walks every response payload key exactly once via SCAN,
-// fetching each bounded batch of keys (redisBackfillBatchSize) through
-// fetch and delivering the result to visit.
-//
-// Cluster-aware: a single Redis Cluster node's keyspace only holds the slots
-// assigned to it, so in Cluster mode this scans every master via
-// ForEachMaster (which invokes fetch/visit concurrently across masters, so
-// callers must not share mutable callback state except through atomics).
-// Standalone mode scans the one client directly.
-func (s *RedisStore) scanResponseKeys(
-	ctx context.Context,
-	fetch func(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error),
-	visit func(batch []scannedResponse) error,
-) error {
-	s.scanInvocations.Add(1)
-
-	pattern := s.buildKey(ResponseKeyPrefix + "*")
-
-	if clusterClient, ok := s.client.(*redis.ClusterClient); ok {
-		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, master *redis.Client) error {
-			return scanResponseNode(ctx, master, pattern, fetch, visit)
-		})
-	}
-
-	return scanResponseNode(ctx, s.client, pattern, fetch, visit)
-}
-
-func scanResponseNode(
-	ctx context.Context,
-	client redis.UniversalClient,
-	pattern string,
-	fetch func(context.Context, redis.UniversalClient, []string) ([]scannedResponse, error),
-	visit func([]scannedResponse) error,
-) error {
-	keys := make([]string, 0, redisBackfillBatchSize)
-	flush := func() error {
-		if len(keys) == 0 {
-			return nil
-		}
-		batch, err := fetch(ctx, client, keys)
-		keys = keys[:0]
-		if err != nil || len(batch) == 0 {
-			return err
-		}
-		return visit(batch)
-	}
-
-	iter := client.Scan(ctx, 0, pattern, redisScanCount).Iterator()
-	for iter.Next(ctx) {
-		keys = append(keys, iter.Val())
-		if len(keys) >= redisBackfillBatchSize {
-			if err := flush(); err != nil {
-				return err
-			}
-		}
-	}
-	if err := iter.Err(); err != nil {
-		return fmt.Errorf("failed to scan response keys: %w", err)
-	}
-	return flush()
-}
-
-// getResponsesPipelined decodes the shared raw pipelined results used by both
-// lazy backfill and finalization. A key that expired between SCAN and GET is a
-// benign TTL race and is skipped; every other read, decode, or key-identity
-// failure aborts the whole scan rather than being logged and skipped, so
-// neither a per-conversation proof nor the global completion record is ever
-// published from an observation known to be incomplete.
-//
-// Each payload's remaining lifetime is read in the same pipeline, because the
-// index these scans build has to outlive the payloads they found — and a
-// legacy payload's real lifetime is knowable here and nowhere later.
-func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.UniversalClient, keys []string) ([]scannedResponse, error) {
-	if len(keys) == 0 {
-		return nil, nil
-	}
-
-	results := fetchResponsePayloadsAndTTLsPipelined(ctx, client, keys)
-	responses := make([]scannedResponse, 0, len(keys))
-	for i, result := range results {
-		record, err := s.decodeScannedResponse(keys[i], result)
-		if err != nil {
-			return nil, err
-		}
-		if record == nil {
-			continue
-		}
-		generation, ttlMillis := s.promoteScannedLegacyPayload(ctx, client, keys[i], *record, result.ttlMillis)
-		responses = append(responses, scannedResponse{
-			response:   record.response,
-			generation: generation,
-			ttlMillis:  ttlMillis,
-		})
-	}
-
-	return responses, nil
-}
-
-// promoteScannedLegacyPayload upgrades one scanned generation-less payload so
-// the member about to be indexed from it carries a real witness, and reports
-// the generation the caller should index it under.
-//
-// This is where the legacy population is actually drained. Both scans reach
-// it — the per-conversation lazy backfill and the whole-keyspace finalization
-// sweep — so a completed FinalizeConversationIndex leaves behind an index
-// whose members are, barring the failures below, all generation-bearing, and
-// therefore all cascade-deletable and all prunable. That is what makes
-// "finalized" mean something stronger than "indexed".
-//
-// Best-effort by design. A promotion that fails or loses its race must not
-// abort the sweep: one stubborn payload would otherwise block finalization
-// for the whole store forever. The member is then indexed blank exactly as
-// before, the next scan retries the promotion, and cascade delete upgrades it
-// on demand — so nothing depends on this succeeding, it only makes the common
-// case cheap.
-//
-// Returns the lifetime to index the member under as well as its generation. A
-// successful upgrade reports the PTTL Redis held at the instant of the write,
-// not the one this scan's pipeline captured earlier: a byte-identical
-// recreation with a longer TTL would otherwise be indexed under the stale,
-// shorter bound and the index would retire ahead of the payload it names.
-func (s *RedisStore) promoteScannedLegacyPayload(
-	ctx context.Context,
-	client redis.UniversalClient,
-	key string,
-	record responseRecord,
-	scannedTTLMillis int64,
-) (string, int64) {
-	if record.generation != "" {
-		return record.generation, scannedTTLMillis
-	}
-
-	generation, ttlMillis, promoted, err := promoteLegacyResponsePayload(ctx, client, key, record)
-	switch {
-	case err != nil:
-		logging.Warnf("RedisStore: failed to upgrade legacy response payload %s during scan: %v", key, err)
-	case promoted:
-		return generation, ttlMillis
-	}
-	return "", scannedTTLMillis
-}
-
-func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadResult) (*responseRecord, error) {
-	if result.err != nil {
-		if errors.Is(result.err, redis.Nil) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to read response at key %s during scan: %w", key, result.err)
-	}
-
-	record, err := decodeResponseRecord(result.raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse response at key %s during scan: %w", key, err)
-	}
-	if record.response.ID == "" || s.buildKey(ResponseKeyPrefix+record.response.ID) != key {
-		return nil, fmt.Errorf("response payload identity does not match key %s", key)
-	}
-	return &record, nil
 }
