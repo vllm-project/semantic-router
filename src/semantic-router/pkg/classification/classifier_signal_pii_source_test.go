@@ -2,6 +2,8 @@ package classification
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -270,4 +272,66 @@ func TestEvaluatePIISignalPreservesPositiveMatchWhenToolResultExtractionIsIncomp
 	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
 		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
 	}
+}
+
+func TestEvaluatePIISignalBoundsManyToolResultInferenceCalls(t *testing.T) {
+	classifier, _, mockModel := newTestPIIClassifier()
+	classifier.Config.PIIRules = []config.PIIRule{
+		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
+	}
+
+	toolTexts := make([]string, maxPIIToolResultInferenceCalls+1)
+	for i := range toolTexts {
+		toolTexts[i] = fmt.Sprintf("tool result block %04d", i)
+	}
+	firstToolText := toolTexts[0]
+	mockModel.setMockResponse(firstToolText, []candle_binding.TokenEntity{
+		piiEntity("EMAIL", "alice@example.com", 0, 17, 0.99),
+	}, nil)
+
+	results := newPIISignalTestResults()
+	var mu sync.Mutex
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, toolTexts, false)
+
+	if got := totalPIIInferenceCalls(mockModel); got != maxPIIToolResultInferenceCalls {
+		t.Fatalf("tool-result inference calls = %d, want %d", got, maxPIIToolResultInferenceCalls)
+	}
+	if !results.PIIDetected {
+		t.Fatal("PII detected before the budget was exhausted must be preserved")
+	}
+	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
+		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
+	}
+}
+
+func TestEvaluatePIISignalBoundsOversizedToolResult(t *testing.T) {
+	classifier, _, mockModel := newTestPIIClassifier()
+	classifier.Config.PIIRules = []config.PIIRule{
+		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
+	}
+
+	var builder strings.Builder
+	for i := 0; i < maxPIIToolResultInferenceCalls*32; i++ {
+		fmt.Fprintf(&builder, "unique tool segment %06d ", i)
+	}
+	toolText := builder.String()
+
+	results := newPIISignalTestResults()
+	var mu sync.Mutex
+	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText}, false)
+
+	if got := totalPIIInferenceCalls(mockModel); got != maxPIIToolResultInferenceCalls {
+		t.Fatalf("oversized tool-result inference calls = %d, want %d", got, maxPIIToolResultInferenceCalls)
+	}
+	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
+		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
+	}
+}
+
+func totalPIIInferenceCalls(mockModel *MockPIIInference) int {
+	total := 0
+	for _, count := range mockModel.callCount {
+		total += count
+	}
+	return total
 }

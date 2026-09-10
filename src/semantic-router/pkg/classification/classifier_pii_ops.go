@@ -306,18 +306,22 @@ func collectPIIRuleContentsForSource(
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string][]cachedPIIResult) (map[string]bool, piiScanStatus) {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string]cachedPIIContent) (map[string]bool, piiScanStatus) {
 	entityTypes := make(map[string]bool)
 	successCount := 0
 	failureCount := 0
+	incompleteCount := 0
 	for _, content := range ruleContents {
-		cachedResults, ok := piiCache[content]
+		cachedContent, ok := piiCache[content]
 		if !ok {
 			logging.Errorf("[Signal Computation] PII rule %q: content missing from inference cache", ruleName)
 			failureCount++
 			continue
 		}
-		for _, cached := range cachedResults {
+		if cachedContent.incomplete {
+			incompleteCount++
+		}
+		for _, cached := range cachedContent.results {
 			if cached.err != nil {
 				logging.Errorf("[Signal Computation] PII rule %q: inference error: %v", ruleName, cached.err)
 				failureCount++
@@ -333,9 +337,9 @@ func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName strin
 	}
 
 	switch {
-	case failureCount == 0:
+	case failureCount == 0 && incompleteCount == 0:
 		return entityTypes, piiScanClean
-	case successCount == 0:
+	case failureCount > 0 && successCount == 0 && incompleteCount == 0:
 		return entityTypes, piiScanFailed
 	default:
 		return entityTypes, piiScanIncomplete
