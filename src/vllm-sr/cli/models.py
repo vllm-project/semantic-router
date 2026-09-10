@@ -656,6 +656,8 @@ class Signals(BaseModel):
 class Condition(BaseModel):
     """Routing condition node (leaf or composite boolean expression)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: Optional[str] = None
     name: Optional[str] = None
     label: Optional[str] = None
@@ -731,7 +733,7 @@ class Rules(BaseModel):
     operator: str = "AND"
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
-    on_error: Optional[Literal["no_match", "match"]] = None
+    on_error: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -741,11 +743,7 @@ class Rules(BaseModel):
             return data
         # Leaf node: has type/name but no operator → wrap in AND
         if "type" in data and "operator" not in data:
-            leaf = {
-                key: data[key]
-                for key in ("type", "name", "label", "predicate", "on_error")
-                if key in data
-            }
+            leaf = {key: value for key, value in data.items() if key != "on_unknown"}
             leaf.setdefault("name", "")
             rules = {"operator": "AND", "conditions": [leaf]}
             if "on_unknown" in data:
@@ -756,13 +754,13 @@ class Rules(BaseModel):
     @model_validator(mode="after")
     def validate_on_unknown_conflict(self):
         if self.on_unknown is not None and (
-            self.on_error is not None or _any_condition_sets_on_error(self.conditions)
+            self.on_error or _any_condition_sets_on_error(self.conditions)
         ):
             raise ValueError(
                 "condition on_error has no effect when rules.on_unknown is set; "
                 "remove one of them"
             )
-        if self.on_error is not None:
+        if self.on_error:
             raise ValueError("on_error only applies to leaf conditions")
         return self
 

@@ -342,6 +342,21 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	}
 }
 
+func boolExprSetsOnError(expr BoolExpr) bool {
+	switch e := expr.(type) {
+	case *BoolAnd:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolOr:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolNot:
+		return boolExprSetsOnError(e.Expr)
+	case *SignalRefExpr:
+		onError, _ := getStringField(e.Fields, "on_error")
+		return onError != ""
+	}
+	return false
+}
+
 func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
 	if len(names) == 0 {
 		return false
@@ -541,11 +556,8 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			nil,
 		)
 	}
-	if r.OnUnknown != "" {
-		rules := (&Compiler{prog: v.prog}).compileBoolExpr(r.When)
-		if config.RuleTreeSetsOnError(&rules) {
-			v.addDiag(DiagConstraint, r.Pos, fmt.Sprintf("%s: %s", context, config.OnUnknownOnErrorConflictMessage), nil)
-		}
+	if r.OnUnknown != "" && boolExprSetsOnError(r.When) {
+		v.addDiag(DiagConstraint, r.Pos, fmt.Sprintf("%s: %s", context, config.OnUnknownOnErrorConflictMessage), nil)
 	}
 
 	v.checkRouteAction(r, context)

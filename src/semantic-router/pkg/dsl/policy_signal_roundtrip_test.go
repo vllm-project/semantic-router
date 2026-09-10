@@ -211,6 +211,7 @@ SIGNAL keyword "hack" {
 		"empty on_error":   {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "") MODEL "m" }`, false},
 		"on_error alone":   {`ROUTE "r" { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, false},
 		"on_unknown alone": {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY") MODEL "m" }`, false},
+		"match all":        {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 MODEL "m" }`, false},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -221,6 +222,9 @@ SIGNAL keyword "hack" {
 			got := false
 			for _, diagnostic := range diagnostics {
 				if strings.Contains(diagnostic.Message, "on_error has no effect") {
+					if diagnostic.Level != DiagConstraint {
+						t.Fatalf("level = %v, want DiagConstraint", diagnostic.Level)
+					}
 					got = true
 				}
 			}
