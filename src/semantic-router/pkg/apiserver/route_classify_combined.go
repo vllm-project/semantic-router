@@ -36,7 +36,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 
 	start := time.Now()
 
-	intentResp, err := s.classificationSvc.ClassifyIntent(services.IntentRequest{
+	intentResp, err := s.classificationSvc.ClassifyIntent(r.Context(), services.IntentRequest{
 		Text:    req.Text,
 		Options: req.IntentOptions,
 	})
@@ -45,7 +45,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		return
 	}
 
-	piiResp, err := s.classificationSvc.DetectPII(services.PIIRequest{
+	piiResp, err := s.classificationSvc.DetectPII(r.Context(), services.PIIRequest{
 		Text:    req.Text,
 		Options: req.PIIOptions,
 	})

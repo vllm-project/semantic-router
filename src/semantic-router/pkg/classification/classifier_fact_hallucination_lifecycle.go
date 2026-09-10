@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -63,6 +65,7 @@ func (c *Classifier) initializeFactCheckClassifier() error {
 		return fmt.Errorf("failed to initialize fact-check classifier: %w", err)
 	}
 
+	classifier.SetAdmissioner(c.admissionRegistry.For(admissionDeploymentFactCheckClassifier))
 	c.factCheckClassifier = classifier
 	return nil
 }
@@ -104,8 +107,12 @@ func (c *Classifier) initializeHallucinationDetector() error {
 	}
 
 	c.initializeHallucinationNLI(detector)
+	detector.SetAdmissioners(
+		c.admissionRegistry.For(admissionDeploymentHallucinationDetector),
+		c.admissionRegistry.For(admissionDeploymentHallucinationExplainer),
+	)
 	c.hallucinationDetector = detector
-	wireFusionGroundingBackends(detector.Detect)
+	wireFusionGroundingBackends(detector.Detect, c.admissionRegistry.For(admissionDeploymentHallucinationExplainer))
 	return nil
 }
 
@@ -113,17 +120,17 @@ func (c *Classifier) initializeHallucinationDetector() error {
 // detection functions into the looper package so grounding-aware fusion can score
 // panel responses. This keeps the candle/CGO dependency out of the looper import
 // graph (the looper package stays hermetically testable).
-func wireFusionGroundingBackends(detect func(context, question, answer string) (*HallucinationResult, error)) {
+func wireFusionGroundingBackends(detect func(context.Context, string, string, string) (*HallucinationResult, error), explainerGate admission.Admissioner) {
 	looper.SetGroundingBackends(
-		func(premise, hypothesis string) (float32, float32, error) {
-			r, err := candle.ClassifyNLI(premise, hypothesis)
+		func(ctx context.Context, premise, hypothesis string) (float32, float32, error) {
+			r, err := admitNLI(ctx, explainerGate, candle.ClassifyNLI, premise, hypothesis)
 			if err != nil {
 				return 0, 0, err
 			}
 			return r.EntailmentProb, r.ContradictProb, nil
 		},
-		func(context, question, answer string) ([]string, float32, error) {
-			r, err := detect(context, question, answer)
+		func(ctx context.Context, contextText, question, answer string) ([]string, float32, error) {
+			r, err := detect(ctx, contextText, question, answer)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -137,11 +144,11 @@ func wireFusionGroundingBackends(detect func(context, question, answer string) (
 // backend does not include a local NLI model, so panel-mode fusion grounding
 // (which requires NLI) will gracefully degrade via the looper's on_error policy.
 // Context-mode grounding (using the detect callback) works normally.
-func wireEndpointFusionGroundingBackend(detect func(context, question, answer string) (*HallucinationResult, error)) {
+func wireEndpointFusionGroundingBackend(detect func(context.Context, string, string, string) (*HallucinationResult, error)) {
 	looper.SetGroundingBackends(
 		nil, // NLI not available with endpoint backend
-		func(context, question, answer string) ([]string, float32, error) {
-			r, err := detect(context, question, answer)
+		func(ctx context.Context, contextText, question, answer string) ([]string, float32, error) {
+			r, err := detect(ctx, contextText, question, answer)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -170,12 +177,12 @@ func (c *Classifier) initializeHallucinationNLI(detector *HallucinationDetector)
 }
 
 // ClassifyFactCheck performs fact-check classification on the given text.
-func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
+func (c *Classifier) ClassifyFactCheck(ctx context.Context, text string) (*FactCheckResult, error) {
 	if c.factCheckClassifier == nil || !c.factCheckClassifier.IsInitialized() {
 		return nil, fmt.Errorf("fact-check classifier is not initialized")
 	}
 
-	result, err := c.factCheckClassifier.Classify(text)
+	result, err := c.factCheckClassifier.Classify(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("fact-check classification failed: %w", err)
 	}
@@ -184,16 +191,16 @@ func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
 }
 
 // DetectHallucination checks if an answer contains hallucinations given the context.
-func (c *Classifier) DetectHallucination(context, question, answer string) (*HallucinationResult, error) {
+func (c *Classifier) DetectHallucination(ctx context.Context, contextText, question, answer string) (*HallucinationResult, error) {
 	if c.endpointHallucinationDetector != nil && c.endpointHallucinationDetector.IsInitialized() {
-		return c.endpointHallucinationDetector.Detect(context, question, answer)
+		return c.endpointHallucinationDetector.Detect(ctx, contextText, question, answer)
 	}
 
 	if c.hallucinationDetector == nil || !c.hallucinationDetector.IsInitialized() {
 		return nil, fmt.Errorf("hallucination detector is not initialized")
 	}
 
-	result, err := c.hallucinationDetector.Detect(context, question, answer)
+	result, err := c.hallucinationDetector.Detect(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection failed: %w", err)
 	}
@@ -202,9 +209,9 @@ func (c *Classifier) DetectHallucination(context, question, answer string) (*Hal
 }
 
 // DetectHallucinationWithNLI checks if an answer contains hallucinations with NLI explanations.
-func (c *Classifier) DetectHallucinationWithNLI(context, question, answer string) (*EnhancedHallucinationResult, error) {
+func (c *Classifier) DetectHallucinationWithNLI(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
 	if c.endpointHallucinationDetector != nil && c.endpointHallucinationDetector.IsInitialized() {
-		return c.endpointHallucinationDetector.DetectWithNLI(context, question, answer)
+		return c.endpointHallucinationDetector.DetectWithNLI(ctx, contextText, question, answer)
 	}
 
 	if c.hallucinationDetector == nil || !c.hallucinationDetector.IsInitialized() {
@@ -212,10 +219,10 @@ func (c *Classifier) DetectHallucinationWithNLI(context, question, answer string
 	}
 
 	if !c.hallucinationDetector.IsNLIInitialized() {
-		return c.detectHallucinationWithBasicFallback(context, question, answer)
+		return c.detectHallucinationWithBasicFallback(ctx, contextText, question, answer)
 	}
 
-	result, err := c.hallucinationDetector.DetectWithNLI(context, question, answer)
+	result, err := c.hallucinationDetector.DetectWithNLI(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection with NLI failed: %w", err)
 	}
@@ -228,9 +235,9 @@ func (c *Classifier) DetectHallucinationWithNLI(context, question, answer string
 	return result, nil
 }
 
-func (c *Classifier) detectHallucinationWithBasicFallback(context, question, answer string) (*EnhancedHallucinationResult, error) {
+func (c *Classifier) detectHallucinationWithBasicFallback(ctx context.Context, contextText, question, answer string) (*EnhancedHallucinationResult, error) {
 	logging.Warnf("NLI model not initialized, falling back to basic hallucination detection")
-	basicResult, err := c.hallucinationDetector.Detect(context, question, answer)
+	basicResult, err := c.hallucinationDetector.Detect(ctx, contextText, question, answer)
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection failed: %w", err)
 	}

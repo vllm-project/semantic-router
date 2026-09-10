@@ -24,19 +24,20 @@ import (
 
 type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
+	lastPIICtx  context.Context
 	evalResp    *services.EvalResponse
 	evalErr     error
 	intentErr   error
 }
 
-func (s *evalCaptureClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyIntent(_ context.Context, req services.IntentRequest) (*services.IntentResponse, error) {
 	if s.intentErr != nil {
 		return nil, s.intentErr
 	}
 	return &services.IntentResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyIntentForEval(_ context.Context, req services.IntentRequest) (*services.EvalResponse, error) {
 	s.lastEvalReq = req
 	if s.evalResp != nil {
 		return s.evalResp, s.evalErr
@@ -44,7 +45,8 @@ func (s *evalCaptureClassificationService) ClassifyIntentForEval(req services.In
 	return &services.EvalResponse{OriginalText: "captured"}, nil
 }
 
-func (s *evalCaptureClassificationService) DetectPII(req services.PIIRequest) (*services.PIIResponse, error) {
+func (s *evalCaptureClassificationService) DetectPII(ctx context.Context, req services.PIIRequest) (*services.PIIResponse, error) {
+	s.lastPIICtx = ctx
 	return &services.PIIResponse{}, nil
 }
 
@@ -56,15 +58,15 @@ func (s *evalCaptureClassificationService) ClassifyBatchUnifiedWithOptions(_ []s
 	return &services.UnifiedBatchResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyFactCheck(_ context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error) {
 	return &services.FactCheckResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyUserFeedback(_ context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	return &services.UserFeedbackResponse{}, nil
 }
 
-func (s *evalCaptureClassificationService) ClassifyNLI(_ services.NLIRequest) (*services.NLIResponse, error) {
+func (s *evalCaptureClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
 	return nil, fmt.Errorf("NLI not available in eval stub")
 }
 

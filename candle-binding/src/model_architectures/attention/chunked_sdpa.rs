@@ -35,21 +35,28 @@ pub struct ChunkedSdpaConfig {
     pub window: Option<usize>,
     /// Decoder causal masking: when `true`, a query at absolute index `i` attends
     /// only to keys `j <= i`. Composes with `window` (intersection of the causal
-    /// triangle and the sliding-window band). Implemented for the same-length case
-    /// (`q_len == k_len`); the KV-cache/decode-offset path (`k_len > q_len`) lands
-    /// with the generative-model migration.
+    /// triangle and the sliding-window band) and with `q_offset`, so a decode step
+    /// whose queries trail a KV cache (`k_len > q_len`) masks against absolute
+    /// positions.
     pub causal: bool,
     /// Softmax scale applied to the queries, typically `head_dim^-0.5`.
     pub scale: f64,
+    /// Absolute position of the first query. Query `a` of the block starting at
+    /// `qs` sits at key index `q_offset + qs + a`; the window band and the causal
+    /// triangle are built against that index. `0` for every encoder and for a
+    /// prefill; a decode step passes the number of cached keys.
+    pub q_offset: usize,
 }
 
 /// Memory-bounded scaled-dot-product attention.
 ///
-/// `q`, `k`, `v`: `(b, heads, seq, head_dim)` — RoPE already applied, GQA already
-/// repeated. `pad_mask`: optional `(b, 1, 1, seq)` additive mask (`0` for real
-/// tokens, large negative for padding) that broadcasts over query positions.
+/// `q`: `(b, heads, q_len, head_dim)`; `k`, `v`: `(b, heads, k_len, head_dim)` —
+/// RoPE already applied, GQA already repeated. `k_len` may differ from `q_len`: a
+/// pooling probe attends with one query, a decode step with cached keys.
+/// `pad_mask`: optional `(b, 1, 1, k_len)` additive mask (`0` for real tokens,
+/// large negative for padding) that broadcasts over query positions.
 ///
-/// Returns `(b, heads, seq, head_dim)`. Numerically identical to dense SDPA; the
+/// Returns `(b, heads, q_len, head_dim)`. Numerically identical to dense SDPA; the
 /// caller is responsible for the final transpose/reshape and output projection.
 pub fn chunked_sdpa(
     q: &Tensor,
@@ -58,7 +65,8 @@ pub fn chunked_sdpa(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
-    let (_b, _heads, seq_len, _head_dim) = q.dims4()?;
+    let (_b, _heads, q_len, _head_dim) = q.dims4()?;
+    let k_len = k.dim(2)?;
     let device = q.device();
 
     // Fold the scale into the queries once (cheap, O(seq*d)) before chunking.
@@ -69,28 +77,39 @@ pub fn chunked_sdpa(
     // A non-positive block size means "no chunking" (single block over the whole
     // sequence); guard against a zero so the loop always makes progress.
     let block = if cfg.block_size == 0 {
-        seq_len.max(1)
+        q_len.max(1)
     } else {
         cfg.block_size
     };
 
     let mut out_blocks: Vec<Tensor> = Vec::new();
     let mut qs = 0usize;
-    while qs < seq_len {
-        let blk = block.min(seq_len - qs);
+    while qs < q_len {
+        let blk = block.min(q_len - qs);
         let qe = qs + blk;
+        // Absolute key-space positions of this query block.
+        let q_abs_start = cfg.q_offset + qs;
+        let q_abs_end = cfg.q_offset + qe;
 
         // Key/value range for this query block: a local layer only needs the
         // `±window` band around the block; a global layer needs every key. A causal
         // query at absolute index `i` never attends to keys `j > i`, so keys beyond
-        // the block end (`qe`) are always masked — cap the upper bound there (a
+        // the block's last position are always masked — cap the upper bound there (a
         // correctness-preserving memory win, since those keys would softmax to zero).
         let (ks, ke) = match (cfg.window, cfg.causal) {
-            (Some(w), false) => (qs.saturating_sub(w), (qe + w).min(seq_len)),
-            (Some(w), true) => (qs.saturating_sub(w), qe),
-            (None, false) => (0, seq_len),
-            (None, true) => (0, qe),
+            (Some(w), false) => (q_abs_start.saturating_sub(w), (q_abs_end + w).min(k_len)),
+            (Some(w), true) => (q_abs_start.saturating_sub(w), q_abs_end.min(k_len)),
+            (None, false) => (0, k_len),
+            (None, true) => (0, q_abs_end.min(k_len)),
         };
+        if ke <= ks {
+            candle_core::bail!(
+                "chunked_sdpa: query block at absolute [{q_abs_start}, {q_abs_end}) has no keys \
+                 in range (k_len={k_len}, window={:?}, causal={})",
+                cfg.window,
+                cfg.causal
+            );
+        }
         let kw = ke - ks;
 
         let q_blk = q.narrow(2, qs, blk)?.contiguous()?; // (b, heads, blk, hd)
@@ -109,15 +128,16 @@ pub fn chunked_sdpa(
 
         // Sliding-window band: keep only |i - j| <= window within the key superset.
         if let Some(window) = cfg.window {
-            let band =
-                build_local_band_mask(qs, blk, ks, kw, window, device)?.to_dtype(scores.dtype())?;
+            let band = build_local_band_mask(q_abs_start, blk, ks, kw, window, device)?
+                .to_dtype(scores.dtype())?;
             scores = scores.broadcast_add(&band)?;
         }
 
         // Causal triangle: keep only keys j <= i. Composes with the window band and
         // the padding mask by addition (-inf + anything = -inf).
         if cfg.causal {
-            let causal = build_causal_mask(qs, blk, ks, kw, device)?.to_dtype(scores.dtype())?;
+            let causal =
+                build_causal_mask(q_abs_start, blk, ks, kw, device)?.to_dtype(scores.dtype())?;
             scores = scores.broadcast_add(&causal)?;
         }
 
