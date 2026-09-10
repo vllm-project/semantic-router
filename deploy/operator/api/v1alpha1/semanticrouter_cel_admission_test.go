@@ -26,14 +26,14 @@ func loadCRDValidator(t *testing.T) (*schema.Structural, *schemacel.Validator) {
 		t.Fatalf("read CRD: %v", err)
 	}
 	var crd apiextensionsv1.CustomResourceDefinition
-	if err := yaml.Unmarshal(data, &crd); err != nil {
+	if err = yaml.Unmarshal(data, &crd); err != nil {
 		t.Fatalf("parse CRD: %v", err)
 	}
 	if len(crd.Spec.Versions) == 0 || crd.Spec.Versions[0].Schema == nil {
 		t.Fatal("CRD carries no schema")
 	}
 	var internal apiextensions.JSONSchemaProps
-	if err := apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(crd.Spec.Versions[0].Schema.OpenAPIV3Schema, &internal, nil); err != nil {
+	if err = apiextensionsv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(crd.Spec.Versions[0].Schema.OpenAPIV3Schema, &internal, nil); err != nil {
 		t.Fatalf("convert schema: %v", err)
 	}
 	structural, err := schema.NewStructural(&internal)

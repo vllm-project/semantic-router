@@ -1509,8 +1509,10 @@ type PIIModelConfig struct {
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
 	// Backend names a remote token classifier speaking token_spans.v1. Its
-	// absence keeps local PII inference. The router refuses a backend combined
-	// with use_mmbert_32k at load, the same rule domain.backend follows.
+	// absence keeps local PII inference. The local selectors this replaces are
+	// model_id, use_modernbert and use_cpu above; the router also refuses a
+	// backend combined with the use_mmbert_32k selector that this CRD does not
+	// expose, so that combination cannot be written here.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 	// OnError selects what a PII backend failure, or a provider-declared
