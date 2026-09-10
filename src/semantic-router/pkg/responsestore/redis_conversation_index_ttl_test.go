@@ -2,9 +2,11 @@ package responsestore
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,6 +30,128 @@ func indexGenerationPTTL(t *testing.T, store *RedisStore, conversationID string)
 	pttl, err := store.client.PTTL(context.Background(), store.conversationIndexGenerationKey(conversationID)).Result()
 	require.NoError(t, err)
 	return pttl
+}
+
+// TestFinalizationRefusesUnknownPayloadLifetime covers the asymmetric
+// pipeline failure where GET succeeds but PTTL does not. The payload already
+// carries a generation so finalization cannot recover another lifetime from
+// the legacy-promotion Lua script; accepting the failed PTTL would stamp its
+// index with the much shorter store TTL and then publish a permanent proof.
+func TestFinalizationRefusesUnknownPayloadLifetime(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_unknown_payload_lifetime"
+	const responseID = "resp_unknown_payload_lifetime"
+	const payloadTTL = 30 * 24 * time.Hour
+	response := &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}
+	assert.NotEmpty(t, directSetGeneratedResponsePayloadWithTTL(t, store, response, payloadTTL))
+
+	responseKey := store.buildKey(ResponseKeyPrefix + responseID)
+	injectedErr := errors.New("injected PTTL failure")
+	hook := &commandFailureHook{name: "pttl", key: responseKey, err: injectedErr}
+	store.client.AddHook(hook)
+
+	stats, err := store.FinalizeConversationIndex(ctx)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, injectedErr)
+	assert.True(t, hook.used.Load(), "the target payload PTTL must be the command that failed")
+	assert.Zero(t, stats)
+	assert.Zero(t, exists(t, store, store.conversationIndexCompletionKey()),
+		"an incomplete lifetime observation must never publish permanent completion")
+	assert.False(t, store.conversationIndexFinalizedCache.Load())
+	assert.Zero(t, exists(t, store, store.conversationIndexKey(conversationID)),
+		"the failed batch must not be indexed under the store TTL")
+
+	stored, err := store.GetResponse(ctx, responseID)
+	require.NoError(t, err)
+	assert.Equal(t, responseID, stored.ID)
+	remaining, err := store.client.PTTL(ctx, responseKey).Result()
+	require.NoError(t, err)
+	assert.Greater(t, remaining, store.ttl,
+		"precondition: the retained payload outlives the lifetime the broken path would have used")
+
+	// The failure was one-shot. A retry with a complete lifetime observation
+	// must remain idempotent and publish an index that covers the payload.
+	stats, err = store.FinalizeConversationIndex(ctx)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, stats.ResponsesIndexed)
+	assert.EqualValues(t, 1, exists(t, store, store.conversationIndexCompletionKey()))
+	assert.Greater(t, indexPTTL(t, store, conversationID), store.ttl)
+}
+
+func TestLazyBackfillRefusesUnknownPayloadLifetime(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_backfill_unknown_lifetime"
+	const responseID = "resp_backfill_unknown_lifetime"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	injectedErr := errors.New("injected backfill PTTL failure")
+	store.client.AddHook(&commandFailureHook{
+		name: "pttl", key: store.buildKey(ResponseKeyPrefix + responseID), err: injectedErr,
+	})
+
+	_, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, injectedErr)
+	assert.Zero(t, exists(t, store, store.conversationIndexMigratedKey(conversationID)),
+		"a scan with an unknown retained-payload lifetime must not publish a per-conversation proof")
+}
+
+func TestAddResponseToConversationRefusesUnknownPayloadLifetime(t *testing.T) {
+	store := newConversationIndexStoreWithTTLSeconds(t, 300)
+	ctx := context.Background()
+
+	const conversationID = "conv_add_unknown_lifetime"
+	const responseID = "resp_add_unknown_lifetime"
+	directSetGeneratedResponsePayloadWithTTL(t, store, &responseapi.StoredResponse{
+		ID: responseID, ConversationID: conversationID,
+		Status: "completed", CreatedAt: time.Now().Unix(),
+	}, 30*24*time.Hour)
+
+	injectedErr := errors.New("injected explicit-index PTTL failure")
+	store.client.AddHook(&commandFailureHook{
+		name: "pttl", key: store.buildKey(ResponseKeyPrefix + responseID), err: injectedErr,
+	})
+
+	err := store.AddResponseToConversation(ctx, conversationID, responseID)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, injectedErr)
+	assert.Zero(t, exists(t, store, store.conversationIndexKey(conversationID)))
+}
+
+func TestDecodePayloadTTLDistinguishesGoneFromUnreadable(t *testing.T) {
+	tests := []struct {
+		name    string
+		cmd     *redis.DurationCmd
+		wantTTL int64
+		wantErr error
+	}{
+		{name: "persistent", cmd: redis.NewDurationResult(-1, nil), wantTTL: -1},
+		{name: "gone", cmd: redis.NewDurationResult(-2, nil), wantTTL: unknownPayloadTTL},
+		{name: "finite", cmd: redis.NewDurationResult(90*time.Second, nil), wantTTL: 90_000},
+		{name: "unreadable", cmd: redis.NewDurationResult(0, errors.New("PTTL denied")), wantTTL: unknownPayloadTTL, wantErr: errors.New("PTTL denied")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ttl, err := decodePayloadTTL(tt.cmd)
+			assert.Equal(t, tt.wantTTL, ttl)
+			if tt.wantErr == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tt.wantErr.Error())
+			}
+		})
+	}
 }
 
 // TestGeneratedIndexAndSidecarShareMonotonicTTL proves every generated index
