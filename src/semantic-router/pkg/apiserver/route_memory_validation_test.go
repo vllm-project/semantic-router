@@ -142,6 +142,10 @@ func TestMemoryRoutesRejectIdentityWithoutVerifiedIngress(t *testing.T) {
 	if result.Total != 3 {
 		t.Errorf("expected user-alice memories to remain unchanged, got %d", result.Total)
 	}
+	result, _ = store.List(context.Background(), memory.ListOptions{UserID: "user-bob"})
+	if result.Total != 1 {
+		t.Errorf("expected user-bob memories to remain unchanged, got %d", result.Total)
+	}
 }
 
 func TestHandleListMemories_InvalidTypeInMultiple(t *testing.T) {
