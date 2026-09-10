@@ -29,6 +29,9 @@ func TestAuthzCredentialProviderDoesNotEstablishIdentityTrust(t *testing.T) {
 	cfg := AuthzConfig{
 		Providers: []AuthzProviderConfig{{Type: "header-injection"}},
 	}
+	if len(cfg.Providers) != 1 || cfg.Providers[0].Type != "header-injection" {
+		t.Fatalf("credential providers = %#v, want one header-injection provider", cfg.Providers)
+	}
 	if cfg.Identity.HasVerifiedIngress() {
 		t.Fatal("credential header-injection provider must not establish identity trust")
 	}
