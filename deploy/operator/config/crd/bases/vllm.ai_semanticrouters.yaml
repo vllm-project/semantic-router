@@ -1601,6 +1601,68 @@ spec:
                         description: 'Use CPU for inference (default: true)'
                         type: boolean
                     type: object
+                  external_models:
+                    description: |-
+                      ExternalModels declares the remote models that classifier backends
+                      (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+                      the prompt guard protocol refer to by name. Mirrors
+                      global.model_catalog.external[] in the router config field for field;
+                      the router's own validator decides whether a backend resolves against it.
+                    items:
+                      description: |-
+                        ExternalModelConfig is one entry of global.model_catalog.external[]: a
+                        remote model a classifier backend or the prompt guard can name. Field names
+                        are the router's YAML keys so the generic typed conversion carries them
+                        unchanged.
+                      properties:
+                        llm_endpoint:
+                          description: Endpoint is where the remote model is reached.
+                          properties:
+                            address:
+                              minLength: 1
+                              type: string
+                            port:
+                              maximum: 65535
+                              minimum: 1
+                              type: integer
+                            protocol:
+                              enum:
+                              - http
+                              - https
+                              type: string
+                          required:
+                          - address
+                          - port
+                          type: object
+                        llm_model_name:
+                          description: |-
+                            ModelName is the model identifier the remote service expects, and the
+                            value a token_spans.v1 envelope's model member must equal.
+                          minLength: 1
+                          type: string
+                        llm_timeout_seconds:
+                          description: TimeoutSeconds bounds one call when the backend
+                            block sets no deadline.
+                          minimum: 1
+                          type: integer
+                        model_role:
+                          description: |-
+                            ModelRole is what the model is used for; classifier backends require
+                            "classification", the prompt guard protocol requires "guardrail".
+                          minLength: 1
+                          type: string
+                        name:
+                          description: Name is the catalog name a backend block refers
+                            to in its model field.
+                          minLength: 1
+                          type: string
+                      required:
+                      - llm_endpoint
+                      - llm_model_name
+                      - model_role
+                      - name
+                      type: object
+                    type: array
                   observability:
                     description: Observability configuration
                     properties:

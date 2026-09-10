@@ -73,6 +73,9 @@ func TestGeneratedCRDsCarryPIIBackendAndOnError(t *testing.T) {
 			"- token_spans.v1",
 			"OnError selects what a PII backend failure",
 			"Backend names a remote token classifier speaking token_spans.v1",
+			"external_models:",
+			"llm_model_name:",
+			"ExternalModels declares the remote models that classifier backends",
 		} {
 			if !strings.Contains(flattened, want) {
 				t.Errorf("%s is missing %q; run 'make manifests' and refresh bundle/manifests",

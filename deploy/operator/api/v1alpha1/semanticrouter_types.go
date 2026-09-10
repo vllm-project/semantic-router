@@ -304,6 +304,14 @@ type ConfigSpec struct {
 	// +optional
 	ComplexityModel *ComplexityModelConfig `json:"complexity_model,omitempty"`
 
+	// ExternalModels declares the remote models that classifier backends
+	// (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+	// the prompt guard protocol refer to by name. Mirrors
+	// global.model_catalog.external[] in the router config field for field;
+	// the router's own validator decides whether a backend resolves against it.
+	// +optional
+	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
+
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
 	// +optional
@@ -1210,6 +1218,46 @@ type ComplexityModelConfig struct {
 	// vanish under any recipe that did not repeat it.
 	// +optional
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+}
+
+// ExternalModelConfig is one entry of global.model_catalog.external[]: a
+// remote model a classifier backend or the prompt guard can name. Field names
+// are the router's YAML keys so the generic typed conversion carries them
+// unchanged.
+type ExternalModelConfig struct {
+	// Name is the catalog name a backend block refers to in its model field.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// ModelRole is what the model is used for; classifier backends require
+	// "classification", the prompt guard protocol requires "guardrail".
+	// +kubebuilder:validation:MinLength=1
+	ModelRole string `json:"model_role"`
+
+	// ModelName is the model identifier the remote service expects, and the
+	// value a token_spans.v1 envelope's model member must equal.
+	// +kubebuilder:validation:MinLength=1
+	ModelName string `json:"llm_model_name"`
+
+	// Endpoint is where the remote model is reached.
+	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
+
+	// TimeoutSeconds bounds one call when the backend block sets no deadline.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
+}
+
+// ExternalModelEndpoint is the address of a remote classification model.
+type ExternalModelEndpoint struct {
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int `json:"port"`
+	// +kubebuilder:validation:Enum=http;https
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // RemoteClassifierBackendConfig is the shared remote-classifier block. How
