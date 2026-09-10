@@ -176,6 +176,22 @@ const (
 	// rewritten before reporting that it could not finish.
 	conversationIndexCascadeMaxRaceRounds = 8
 
+	// listIndexScanMaxStride bounds one list cleanup window independently of
+	// the caller's return Limit. A tombstone-only window may grow up to this
+	// size after successful removals, reducing round trips through a long dead
+	// run without ever issuing an unbounded ZRANGE or payload pipeline. The
+	// whole call may still process multiple windows until it can return a full
+	// page or prove the clearable run exhausted.
+	listIndexScanMaxStride = redisBackfillBatchSize
+
+	// listIndexMaxContentionRounds bounds consecutive list cleanup rounds that
+	// identify stale candidates but remove none. A conditional no-op normally
+	// means another caller removed or recreated a member, so re-reading the
+	// original logical window observes the new state. A continuously changing
+	// index eventually returns an explicit retryable error instead of spinning
+	// or returning an underfilled page that looks terminal.
+	listIndexMaxContentionRounds = 8
+
 	// responseCompensationTimeout bounds the compensating writes that repair a
 	// response whose update or store only partly landed: a payload rollback and,
 	// for updates, reindexing the freshly generated restored record.

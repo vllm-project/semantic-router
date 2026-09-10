@@ -106,25 +106,26 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 }
 
 // listIndexedResponses reads one page of a conversation's responses through
-// its already-confirmed-existing index: a bounded rank-window read
-// (listIndexedResponseIDs), not a full-index scan, so cost is proportional
-// to the page requested rather than the conversation's full history.
+// its already-confirmed-existing index. Every individual rank-window read and
+// payload pipeline is bounded by listIndexScanMaxStride; ordinary live pages
+// still use exactly the caller's Limit.
 //
-// Pruning a stale entry can leave the page short of the requested Limit. A
-// short page used to be an accepted trade-off, because it was transient: the
-// entry that caused it was gone by the next call. That stopped being true for
-// a member with a blank witness, which no path could remove — its payload
-// expires, the tombstone stays, and every page that reads that rank window
-// underfills again forever. Worse, a window made entirely of such tombstones
-// returns nothing at all, and an empty page conventionally *terminates* a
-// client's pagination, so live responses further along are never requested.
+// A stale-only window cannot be returned as an empty terminal page while live
+// responses remain behind it. After a successful conditional prune this
+// re-resolves the original After/Before window so rank shifts — including ones
+// caused by concurrent cleaners — can never make the reader skip members. A
+// zero-live, successfully pruned run grows its bounded window exponentially
+// up to listIndexScanMaxStride to amortize round trips through mass expiry.
 //
-// So a page that pruned something and still came up short gets exactly one
-// refill pass. The window is re-resolved from scratch rather than replayed
-// from the ranks already read: removing members shifts every later rank left,
-// so the original [start, end] no longer denotes the same logical window. The
-// refill is taken only when it is strictly longer than the first pass, which
-// makes it a pure top-up — it can never shrink a page, and never recurses.
+// Total work in a cleanup-heavy call is proportional to the clearable stale
+// prefix, but each successful removal is permanent and therefore amortized.
+// If candidates repeatedly survive their conditional cleanup, this returns
+// ErrIndexContended rather than spinning or presenting an ambiguous short
+// page. Blank-witness tombstones remain deliberately non-prunable before
+// finalization: proof expiry does not remove them, so they can continue to
+// underfill a page until the operator completes finalization. Walking past
+// that migration-boundary state needs an API-visible continuation and is out
+// of scope for this generation-safe cleanup path.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
 	// Blank-witness memberships may only be cleaned up once the store is
 	// finalized — the same rule cascade delete follows, for the same reason:
@@ -137,37 +138,97 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		return nil, err
 	}
 
-	responses, pruned, err := s.collectIndexedPage(ctx, conversationID, opts, allowBlankCleanup)
-	if err != nil {
-		return nil, err
-	}
-	if pruned == 0 || len(responses) >= opts.Limit {
-		return responses, nil
-	}
+	stride := opts.Limit
+	contendedRounds := 0
+	for {
+		page, collectErr := s.collectIndexedPage(ctx, conversationID, opts, stride, allowBlankCleanup)
 
-	refilled, _, refillErr := s.collectIndexedPage(ctx, conversationID, opts, allowBlankCleanup)
-	if refillErr != nil {
-		// The first pass is still a valid answer; the pruning it did stands.
-		logging.Warnf("RedisStore: failed to refill conversation %s page after pruning: %v", conversationID, refillErr)
-		return responses, nil
+		if responses, complete := selectCompleteIndexedPage(conversationID, opts, page, collectErr); complete {
+			return responses, nil
+		}
+		if collectErr != nil {
+			return nil, collectErr
+		}
+		if page.pruneCandidates == 0 {
+			return page.responses, nil
+		}
+
+		if page.membershipsRemoved == 0 {
+			contendedRounds++
+			if contendedRounds >= listIndexMaxContentionRounds {
+				return nil, fmt.Errorf("%w: conversation %s did not advance after %d cleanup attempts",
+					ErrIndexContended, conversationID, contendedRounds)
+			}
+			continue
+		}
+
+		contendedRounds = 0
+		if len(page.responses) == 0 && stride < listIndexScanMaxStride {
+			stride = min(stride*2, listIndexScanMaxStride)
+		}
 	}
-	if len(refilled) > len(responses) {
-		return refilled, nil
-	}
-	return responses, nil
 }
 
-// collectIndexedPage reads one bounded window, resolves its payloads, and
-// conditionally prunes the memberships that window proved stale. It reports
-// how many prunes it attempted so the caller can decide whether a short page
-// is worth re-reading.
-func (s *RedisStore) collectIndexedPage(ctx context.Context, conversationID string, opts normalizedListOptions, allowBlankCleanup bool) ([]*responseapi.StoredResponse, int, error) {
-	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
+// selectCompleteIndexedPage limits an oversized cleanup snapshot to the
+// caller's logical page. Returning a complete page is safe even if the
+// best-effort cleanup of stale members later in the same snapshot failed: the
+// response page neither depends on that cleanup nor claims exhaustion.
+func selectCompleteIndexedPage(
+	conversationID string,
+	opts normalizedListOptions,
+	page collectedIndexedPage,
+	collectErr error,
+) ([]*responseapi.StoredResponse, bool) {
+	if len(page.responses) < opts.Limit {
+		return nil, false
+	}
+	if collectErr != nil {
+		logging.Warnf("RedisStore: failed to prune stale index entries after filling conversation %s page: %v",
+			conversationID, collectErr)
+	}
+
+	// Before windows grow away from their cursor by moving their starting
+	// rank backwards. Keep the responses nearest that fixed cursor; taking
+	// the first Limit would return older entries that only entered through
+	// the oversized cleanup window. Default and After windows grow at the
+	// far end, so their first Limit remain the logical page.
+	start := 0
+	if opts.Before != "" {
+		start = len(page.responses) - opts.Limit
+	}
+	return page.responses[start : start+opts.Limit], true
+}
+
+// collectedIndexedPage is one bounded index snapshot after its payloads have
+// been resolved and its stale memberships conditionally pruned. Candidate and
+// actual-removal counts stay distinct because a concurrent writer may claim a
+// generation after the snapshot, making cleanup a correct no-op.
+type collectedIndexedPage struct {
+	responses          []*responseapi.StoredResponse
+	pruneCandidates    int
+	membershipsRemoved int
+}
+
+// collectIndexedPage reads one windowSize-bounded window, resolves its
+// payloads, and conditionally prunes the memberships that window proved
+// stale. windowSize is independent of opts.Limit: the former may grow to
+// listIndexScanMaxStride while the latter remains the caller's return limit.
+// It returns the page together with the cleanup error so a full oversized
+// window can still be served, while an underfilled caller never mistakes
+// failed cleanup for end-of-list.
+func (s *RedisStore) collectIndexedPage(
+	ctx context.Context,
+	conversationID string,
+	opts normalizedListOptions,
+	windowSize int,
+	allowBlankCleanup bool,
+) (collectedIndexedPage, error) {
+	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts, windowSize)
 	if err != nil {
-		return nil, 0, err
+		return collectedIndexedPage{}, err
 	}
 	if len(witnesses) == 0 {
-		return nil, 0, nil
+		return collectedIndexedPage{}, nil
 	}
 
 	responseIDs := make([]string, len(witnesses))
@@ -189,12 +250,17 @@ func (s *RedisStore) collectIndexedPage(ctx context.Context, conversationID stri
 		}
 	}
 
-	if _, err := s.unindexResponseGenerations(ctx, conversationID, toPrune...); err != nil {
-		logging.Warnf("RedisStore: failed to prune %d stale index entr(y/ies) from conversation %s: %v",
+	page := collectedIndexedPage{
+		responses:       responses,
+		pruneCandidates: len(toPrune),
+	}
+	page.membershipsRemoved, err = s.unindexResponseGenerations(ctx, conversationID, toPrune...)
+	if err != nil {
+		return page, fmt.Errorf("failed to prune %d stale index entr(y/ies) from conversation %s: %w",
 			len(toPrune), conversationID, err)
 	}
 
-	return responses, len(toPrune), nil
+	return page, nil
 }
 
 // evaluateIndexedResponse classifies one generation-snapshotted membership,
@@ -303,9 +369,10 @@ func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, erro
 }
 
 // listIndexedResponseIDs reads one bounded window of response IDs from a
-// conversation's index: at most normalizeResponseListOptions(opts).Limit
-// IDs, in the requested order, optionally positioned after/before a cursor
-// response ID — never a full ZRANGE 0 -1.
+// conversation's index: at most windowSize IDs, in the requested order,
+// optionally positioned after/before a cursor response ID — never a full
+// ZRANGE 0 -1. normalized.Limit remains the caller's return limit; the
+// cleanup loop passes its independently capped internal stride as windowSize.
 //
 // Cursors are resolved via ZRANK (ascending order) or ZREVRANK (descending
 // order), i.e. rank in the order actually being read, and the window is
@@ -313,11 +380,16 @@ func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, erro
 // ID that is not currently a member of the index (evicted, wrong
 // conversation, typo'd by the caller) yields an empty page rather than an
 // error: the same behavior as an ordinary page with nothing left to return.
-func (s *RedisStore) listIndexedResponseIDs(ctx context.Context, conversationID string, normalized normalizedListOptions) ([]responseGenerationWitness, error) {
+func (s *RedisStore) listIndexedResponseIDs(
+	ctx context.Context,
+	conversationID string,
+	normalized normalizedListOptions,
+	windowSize int,
+) ([]responseGenerationWitness, error) {
 	indexKey := s.conversationIndexKey(conversationID)
 	ascending := normalized.Order == "asc"
 
-	start, end, ok, err := s.resolveListWindow(ctx, indexKey, ascending, normalized)
+	start, end, ok, err := s.resolveListWindow(ctx, indexKey, ascending, normalized, windowSize)
 	if err != nil {
 		return nil, err
 	}
@@ -354,8 +426,14 @@ func (s *RedisStore) rankInIndex(ctx context.Context, indexKey string, ascending
 // for one page, honoring an After or Before cursor. ok=false means the page
 // is empty (cursor not found, or the window has nothing in it) without that
 // being an error.
-func (s *RedisStore) resolveListWindow(ctx context.Context, indexKey string, ascending bool, normalized normalizedListOptions) (start, end int64, ok bool, err error) {
-	limit := int64(normalized.Limit)
+func (s *RedisStore) resolveListWindow(
+	ctx context.Context,
+	indexKey string,
+	ascending bool,
+	normalized normalizedListOptions,
+	windowSize int,
+) (start, end int64, ok bool, err error) {
+	limit := int64(windowSize)
 
 	switch {
 	case normalized.After != "":
