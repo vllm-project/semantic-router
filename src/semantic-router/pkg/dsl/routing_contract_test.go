@@ -45,7 +45,6 @@ MODEL "math-small" {
     { name: "math-adapter", description: "Improves symbolic math responses" },
   ]
   tags: ["local", "fast"]
-  evaluations: [{ benchmark: "vllm-sr/operator-rating@1.0.0", metrics: { score: 0.91 } }]
   modality: "ar"
 }
 

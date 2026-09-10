@@ -62,17 +62,43 @@ func TestBuiltInRegistryOwnsProviderProtocolAndPresentation(t *testing.T) {
 	}
 }
 
-func TestRegistryRejectsPersistedPlaceholderIndexResults(t *testing.T) {
+func TestRegistryFiltersUnscoredIndexCoverageRows(t *testing.T) {
 	document := snapshot{
 		SchemaVersion: "vllm-sr/model-catalog/v2",
 		Catalogs:      []CatalogHeader{{CatalogVersion: "latest"}},
-		IndexResults: []IndexResult{{
-			Model: "acme/model", Index: "acme/index@1.0.0", Status: "missing",
-		}},
+		IndexResults: []IndexResult{
+			{Model: "acme/model", Index: "acme/index@1.0.0", Status: "partial", Coverage: 0.4},
+			{Model: "acme/model", Index: "acme/index@1.0.0", Status: "missing"},
+		},
 	}
-	if _, err := registryFromSnapshot(document, "sha256:test"); err == nil ||
-		!strings.Contains(err.Error(), "placeholder index result") {
-		t.Fatalf("persisted placeholder index result was accepted: %v", err)
+	registry, err := registryFromSnapshot(document, "sha256:test")
+	if err != nil {
+		t.Fatalf("valid coverage rows were rejected: %v", err)
+	}
+	if len(registry.indexResults) != 0 {
+		t.Fatalf("unscored rows became routing priors: %+v", registry.indexResults)
+	}
+}
+
+func TestRegistryRejectsInvalidIndexResultStates(t *testing.T) {
+	score := 40.0
+	invalid := []IndexResult{
+		{Status: "partial", Score: &score, Coverage: 0.4},
+		{Status: "partial"},
+		{Status: "missing", Coverage: 0.4},
+		{Status: "available", Score: &score},
+		{Status: "available", Coverage: 1},
+	}
+	for _, result := range invalid {
+		document := snapshot{
+			SchemaVersion: "vllm-sr/model-catalog/v2",
+			Catalogs:      []CatalogHeader{{CatalogVersion: "latest"}},
+			IndexResults:  []IndexResult{result},
+		}
+		if _, err := registryFromSnapshot(document, "sha256:test"); err == nil ||
+			!strings.Contains(err.Error(), "invalid index result") {
+			t.Fatalf("invalid index result was accepted: %+v: %v", result, err)
+		}
 	}
 }
 
