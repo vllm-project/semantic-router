@@ -192,6 +192,19 @@ const (
 	// or returning an underfilled page that looks terminal.
 	listIndexMaxContentionRounds = 8
 
+	// listIndexScanMaxStride doubles as the bound on how far one list call may
+	// see past members it is not allowed to remove. Before finalization a
+	// blank-witness membership whose payload is gone stays deliberately
+	// non-prunable, and only a wider window reaches the live responses behind
+	// it, so the widest window is also the furthest reach. A run longer than
+	// that reports ErrIndexTraversalBlocked instead of an empty page.
+	//
+	// Bounded where a prunable run is not, because the two costs differ in
+	// kind. Removing a stale membership is permanent, so clearing a long
+	// prunable run is paid once for the life of the conversation. A blocked
+	// member survives every read, so its cost returns until an operator
+	// finalizes.
+
 	// responseCompensationTimeout bounds the compensating writes that repair a
 	// response whose update or store only partly landed: a payload rollback and,
 	// for updates, reindexing the freshly generated restored record.

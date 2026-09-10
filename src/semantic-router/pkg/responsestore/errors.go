@@ -31,4 +31,9 @@ var (
 	// ErrIndexContended is returned when a conversation index keeps changing
 	// while a list operation is conditionally pruning stale memberships.
 	ErrIndexContended = errors.New("conversation index is contended")
+
+	// ErrIndexTraversalBlocked is returned when a conversation's index holds
+	// more consecutive unreadable-but-unremovable memberships than one list
+	// call may step over. Retryable, but the durable remedy is finalization.
+	ErrIndexTraversalBlocked = errors.New("conversation index traversal blocked")
 )

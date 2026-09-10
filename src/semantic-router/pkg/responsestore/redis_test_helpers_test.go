@@ -383,6 +383,28 @@ func responseIDsOf(responses []*responseapi.StoredResponse) []string {
 	return ids
 }
 
+// seedLegacyIndexMembers installs count blank-witness memberships in one
+// script call, scored from createdAt upwards, and returns their IDs in index
+// order. Budget-exhaustion tests need more members than the traversal can
+// step over; seeding those one round trip at a time would make the fixture
+// slower than the behavior it is checking.
+func seedLegacyIndexMembers(t *testing.T, store *RedisStore, conversationID, idPrefix string, count int, createdAt int64) []string {
+	t.Helper()
+
+	ids := make([]string, count)
+	members := make([]conversationIndexMember, count)
+	for i := range members {
+		ids[i] = fmt.Sprintf("%s_%04d", idPrefix, i)
+		members[i] = conversationIndexMember{responseID: ids[i], score: float64(createdAt + int64(i))}
+	}
+
+	_, err := store.addConversationIndexMembers(
+		context.Background(), conversationID, witnessRepair, store.ttlMillis(), members,
+	)
+	require.NoError(t, err)
+	return ids
+}
+
 // seedLegacyIndexMember installs a membership with no generation witness —
 // exactly what request-path backfill deliberately leaves behind while legacy
 // writers may still exist, and what finalization leaves if a best-effort
