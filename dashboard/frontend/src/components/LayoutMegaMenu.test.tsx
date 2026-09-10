@@ -19,7 +19,6 @@ describe('layout mega-menu accessibility contract', () => {
           categories: BUILD_MENU_CATEGORIES,
           activeCategoryKey: 'outcomes',
           isItemActive: () => false,
-          onConfigSelect: vi.fn(),
           onItemIntent: vi.fn(),
           onNavigate: vi.fn(),
         }),
@@ -34,5 +33,6 @@ describe('layout mega-menu accessibility contract', () => {
     expect(markup).toContain('role="tabpanel"')
     expect(markup).not.toContain('role="dialog"')
     expect(markup).not.toContain('aria-modal="true"')
+    expect(markup).toContain('href="/evaluation"')
   })
 })

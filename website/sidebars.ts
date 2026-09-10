@@ -249,6 +249,7 @@ const sidebars: SidebarsConfig = {
             id: 'installation/configuration',
           },
           items: [
+            'installation/configuration-contract',
             'installation/configuration-workflows',
             {
               type: 'category',

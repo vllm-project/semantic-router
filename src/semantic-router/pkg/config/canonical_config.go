@@ -8,6 +8,10 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
+// CanonicalConfigVersion identifies the steady-state public configuration
+// contract accepted by the Router and published through configschema.
+const CanonicalConfigVersion = "v0.3"
+
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
 	Version     string                `yaml:"version,omitempty"`
@@ -20,6 +24,21 @@ type CanonicalConfig struct {
 	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
+}
+
+// CanonicalConfigDocument is the complete product configuration document. Its
+// canonical Router payload is embedded so every consumer shares the same Go
+// field contract, while setup remains explicit control-plane metadata rather
+// than Router runtime state.
+type CanonicalConfigDocument struct {
+	CanonicalConfig `yaml:",inline"`
+	Setup           *CanonicalSetup `yaml:"setup,omitempty"`
+}
+
+// CanonicalSetup is the product bootstrap state. The Dashboard removes this
+// block when setup is activated.
+type CanonicalSetup struct {
+	Mode bool `yaml:"mode,omitempty"`
 }
 
 // CanonicalEvaluation is the single operator-owned evaluation surface. It
@@ -198,8 +217,8 @@ func validateCanonicalVersion(canonical *CanonicalConfig) error {
 	if canonical == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
-	if canonical.Version != "" && canonical.Version != "v0.3" {
-		return fmt.Errorf("unsupported config version %q: v0.3 is required", canonical.Version)
+	if canonical.Version != "" && canonical.Version != CanonicalConfigVersion {
+		return fmt.Errorf("unsupported config version %q: %s is required", canonical.Version, CanonicalConfigVersion)
 	}
 	return nil
 }

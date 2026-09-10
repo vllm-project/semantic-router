@@ -264,6 +264,11 @@ func apiRecipeRoutes() []apiRoute {
 func apiNonRecipeConfigRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
+			EndpointMetadata{Path: "/config/router/schema", Method: "GET", Description: "Get the generated canonical Router configuration schema and routing surface catalog"},
+			routePolicy{Permission: PermDocsRead, Sensitivity: SensitivityPublic},
+			(*ClassificationAPIServer).handleConfigSchema,
+		),
+		managedRoute(
 			EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListKnowledgeBases,

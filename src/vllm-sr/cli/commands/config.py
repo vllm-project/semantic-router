@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
 
+import requests
 import yaml
 
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
+from cli.config_schema import schema_text
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
@@ -20,6 +23,19 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+
+
+def config_schema_command(endpoint: str | None = None) -> None:
+    """Print the generated local contract or query a running Router."""
+
+    if endpoint:
+        response = requests.get(endpoint, timeout=10)
+        response.raise_for_status()
+        document = response.json()
+        echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
+        return
+
+    echo(schema_text(), nl=False)
 
 
 def config_command(config_type: str, config_path: str = "config.yaml"):

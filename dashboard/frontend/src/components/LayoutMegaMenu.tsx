@@ -12,7 +12,6 @@ interface LayoutMegaMenuProps {
   categories: LayoutMenuCategory[]
   activeCategoryKey?: string
   isItemActive: (item: LayoutMenuItem) => boolean
-  onConfigSelect: (item: Extract<LayoutMenuItem, { kind: 'config' }>) => void
   onItemIntent: (item: LayoutMenuItem) => void
   onNavigate: () => void
 }
@@ -24,7 +23,6 @@ const LayoutMegaMenu = ({
   categories,
   activeCategoryKey,
   isItemActive,
-  onConfigSelect,
   onItemIntent,
   onNavigate,
 }: LayoutMegaMenuProps) => {
@@ -185,31 +183,12 @@ const LayoutMegaMenu = ({
                   const className = `${styles.item} ${active ? styles.itemActive : ''}`
                   const key = `${section.title}-${item.label}`
 
-                  if (item.kind === 'config') {
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        data-mega-link
-                        className={className}
-                        onFocus={() => onItemIntent(item)}
-                        onPointerEnter={() => onItemIntent(item)}
-                        onClick={() => onConfigSelect(item)}
-                      >
-                        <span className={styles.itemLabel}>
-                          <ProductIcon name={item.icon} />
-                          <span>{item.label}</span>
-                        </span>
-                        <ProductIcon name="chevron-right" className={styles.itemArrow} />
-                      </button>
-                    )
-                  }
-
+                  const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
                   return (
                     <NavLink
                       key={key}
                       data-mega-link
-                      to={item.to}
+                      to={to}
                       className={className}
                       onFocus={() => onItemIntent(item)}
                       onPointerEnter={() => onItemIntent(item)}

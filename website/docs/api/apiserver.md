@@ -291,6 +291,7 @@ for guidance and the running `/openapi.json` for exact schemas.
 | `GET` | `/config/router/recipes/{name}` | Read one routing recipe and its entrypoints |
 | `PUT` | `/config/router/recipes/{name}` | Atomically create or replace one routing recipe; requires If-Match |
 | `DELETE` | `/config/router/recipes/{name}` | Delete an unreferenced named routing recipe; requires If-Match |
+| `GET` | `/config/router/schema` | Get the generated canonical Router configuration schema and routing surface catalog |
 | `GET` | `/config/router` | Get the current router config as JSON (secrets redacted without secret_view) |
 | `POST` | `/config/router/validate` | Validate and normalize a router config without writing it |
 | `PATCH` | `/config/router` | Merge a router config update (validates, backs up, writes, triggers hot-reload) |

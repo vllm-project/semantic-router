@@ -54,6 +54,40 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', icon: 'playground', to: '/playground' },
 ]
 
+const CONFIG_SECTIONS = new Set<LayoutConfigSection>([
+  'models',
+  'signals',
+  'projections',
+  'decisions',
+  'entrypoints-recipes',
+  'global-config',
+  'mcp',
+])
+
+const CONFIG_SECTION_ALIASES: Record<string, LayoutConfigSection> = {
+  global: 'global-config',
+  'router-config': 'global-config',
+  routes: 'decisions',
+  endpoints: 'models',
+  entrypoints: 'entrypoints-recipes',
+  recipes: 'entrypoints-recipes',
+}
+
+export function normalizeConfigSection(section: string): LayoutConfigSection | undefined {
+  const normalized = section.toLowerCase()
+  if (CONFIG_SECTION_ALIASES[normalized]) return CONFIG_SECTION_ALIASES[normalized]
+  return CONFIG_SECTIONS.has(normalized as LayoutConfigSection)
+    ? (normalized as LayoutConfigSection)
+    : undefined
+}
+
+export function getConfigSectionFromPathname(pathname: string): LayoutConfigSection | undefined {
+  if (pathname !== '/config' && !pathname.startsWith('/config/')) return undefined
+
+  const section = pathname.split('/')[2] || 'global-config'
+  return normalizeConfigSection(section)
+}
+
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'routing',

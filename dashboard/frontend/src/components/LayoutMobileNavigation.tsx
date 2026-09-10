@@ -28,7 +28,6 @@ interface LayoutMobileNavigationProps {
   openSection: LayoutDropdownKey | null
   pathname: string
   sections: LayoutMobileNavigationSection[]
-  onConfigSelect: (item: LayoutMenuItem) => void
   onNavigate: () => void
   onSectionToggle: (section: LayoutDropdownKey) => void
 }
@@ -39,7 +38,6 @@ export default function LayoutMobileNavigation({
   openSection,
   pathname,
   sections,
-  onConfigSelect,
   onNavigate,
   onSectionToggle,
 }: LayoutMobileNavigationProps) {
@@ -94,32 +92,15 @@ export default function LayoutMobileNavigation({
     const active = isLayoutMenuItemActive(item, pathname, isConfigPage, configSection)
     const className = `${styles.mobileNavLink} ${active ? styles.mobileNavLinkActive : ''}`
 
-    if (item.kind === 'config') {
-      return (
-        <button
-          key={key}
-          type="button"
-          className={className}
-          aria-current={active ? 'page' : undefined}
-          data-mobile-nav-control
-          onFocus={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
-          onPointerDown={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
-          onClick={() => onConfigSelect(item)}
-        >
-          <ProductIcon name={item.icon} className={styles.mobileNavIcon} />
-          <span>{item.label}</span>
-        </button>
-      )
-    }
-
+    const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
     return (
       <NavLink
         key={key}
-        to={item.to}
+        to={to}
         className={className}
         data-mobile-nav-control
-        onFocus={() => void preloadDashboardRoute(item.to)}
-        onPointerDown={() => void preloadDashboardRoute(item.to)}
+        onFocus={() => void preloadDashboardRoute(to)}
+        onPointerDown={() => void preloadDashboardRoute(to)}
         onClick={onNavigate}
       >
         <ProductIcon name={item.icon} className={styles.mobileNavIcon} />

@@ -2909,6 +2909,51 @@
         }
       }
     },
+    "/config/router/schema": {
+      "get": {
+        "summary": "Get the generated canonical Router configuration schema and routing surface catalog",
+        "description": "Get the generated canonical Router configuration schema and routing surface catalog",
+        "operationId": "get_config_router_schema",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/config/router/validate": {
       "post": {
         "summary": "Validate and normalize a router config without writing it",

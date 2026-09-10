@@ -58,6 +58,7 @@ class DomainRegistryTests(unittest.TestCase):
             commands,
             (
                 "make test-semantic-router",
+                "make config-schema-check",
                 "make dashboard-check",
                 "make recipe-conformance-static",
             ),

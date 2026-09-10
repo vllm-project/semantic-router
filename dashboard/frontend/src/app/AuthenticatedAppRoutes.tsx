@@ -1,6 +1,5 @@
 import React from 'react'
 import { Navigate, Route } from 'react-router-dom'
-import type { ConfigSection } from '../components/ConfigNav'
 import AppShellLayout from './AppShellLayout'
 import {
   ConfigSectionRoute,
@@ -39,8 +38,6 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  configSection: ConfigSection
-  setConfigSection: (section: ConfigSection) => void
   canUseMLSetup: boolean
   user: PermissionUser | null
   setupMode: boolean
@@ -71,12 +68,8 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
 const renderShellContent = (
   route: Pick<ShellRouteDefinition, 'hideAccountControl' | 'hideHeaderOnMobile'>,
   element: React.ReactElement,
-  configSection: ConfigSection,
-  setConfigSection: (section: ConfigSection) => void,
 ) => (
   <AppShellLayout
-    configSection={configSection}
-    setConfigSection={setConfigSection}
     hideHeaderOnMobile={route.hideHeaderOnMobile}
     hideAccountControl={route.hideAccountControl}
   >
@@ -86,18 +79,11 @@ const renderShellContent = (
 
 const renderShellElement = (
   route: ShellRouteDefinition,
-  configSection: ConfigSection,
-  setConfigSection: (section: ConfigSection) => void,
   settingsLoading: boolean,
   evaluationAvailable: boolean,
   evaluationUnavailableReason: string,
 ) => {
-  const content = renderShellContent(
-    route,
-    shellPageElements[route.page],
-    configSection,
-    setConfigSection,
-  )
+  const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
@@ -111,8 +97,6 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  configSection,
-  setConfigSection,
   canUseMLSetup,
   user,
   setupMode,
@@ -133,8 +117,6 @@ export const renderAuthenticatedAppRoutes = ({
           canAccessDashboardPath(user, route.path) ? (
             renderShellElement(
               route,
-              configSection,
-              setConfigSection,
               settingsLoading,
               evaluationAvailable,
               evaluationUnavailableReason,
@@ -145,18 +127,8 @@ export const renderAuthenticatedAppRoutes = ({
         }
       />
     ))}
-    <Route
-      path="/config"
-      element={
-        <ConfigSectionRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
-    <Route
-      path="/config/:section"
-      element={
-        <ConfigSectionRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
+    <Route path="/config" element={<ConfigSectionRoute />} />
+    <Route path="/config/:section" element={<ConfigSectionRoute />} />
     {redirectRouteDefinitions.map((route) => (
       <Route key={route.path} path={route.path} element={<Navigate to={route.to} replace />} />
     ))}
@@ -170,12 +142,7 @@ export const renderAuthenticatedAppRoutes = ({
         )
       }
     />
-    <Route
-      path="/knowledge-bases/:view"
-      element={
-        <KnowledgeBaseRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
+    <Route path="/knowledge-bases/:view" element={<KnowledgeBaseRoute />} />
     <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
     <Route
       path="/playground/fullscreen"
@@ -193,8 +160,6 @@ export const renderAuthenticatedAppRoutes = ({
           renderShellContent(
             {},
             <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-            configSection,
-            setConfigSection,
           )
         ) : (
           <Navigate to="/dashboard" replace />

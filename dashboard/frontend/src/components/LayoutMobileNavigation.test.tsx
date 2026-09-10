@@ -19,7 +19,6 @@ describe('LayoutMobileNavigation contract', () => {
           openSection: 'build',
           pathname: '/config/models',
           sections: [{ key: 'build', label: 'Build', categories: BUILD_MENU_CATEGORIES }],
-          onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
           onSectionToggle: vi.fn(),
         }),
@@ -34,6 +33,7 @@ describe('LayoutMobileNavigation contract', () => {
     expect(markup).toContain('data-mobile-nav-control="true"')
     expect(markup).toContain('Routing')
     expect(markup).toContain('Integrations')
+    expect(markup).toContain('href="/config/models"')
   })
 
   it('supports roving keyboard focus and returns focus when dismissed', () => {
@@ -59,7 +59,6 @@ describe('LayoutMobileNavigation contract', () => {
             { key: 'build', label: 'Build', categories: [] },
             { key: 'operate', label: 'System', categories: BUILD_MENU_CATEGORIES },
           ],
-          onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
           onSectionToggle: vi.fn(),
         }),
