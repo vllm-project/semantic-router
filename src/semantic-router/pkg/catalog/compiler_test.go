@@ -122,6 +122,29 @@ func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	}
 }
 
+func TestProviderLookupReturnsDefensiveOperationOverrides(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operation = "openai/responses@1#create"
+	provider, ok := registry.Provider("azure-openai")
+	if !ok {
+		t.Fatal("azure-openai provider is missing")
+	}
+	original, ok := provider.OperationOverrides[operation]
+	if !ok || original.Path != "/openai/v1/responses" {
+		t.Fatalf("unexpected operation override: %+v", provider.OperationOverrides)
+	}
+
+	provider.OperationOverrides[operation] = OperationOverride{Path: "/mutated"}
+
+	reloaded, _ := registry.Provider("azure-openai")
+	if got := reloaded.OperationOverrides[operation]; got != original {
+		t.Fatalf("registry operation overrides were mutated: %+v", got)
+	}
+}
+
 func TestBenchmarkLookupReturnsDefensiveTagsAndNormalization(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {

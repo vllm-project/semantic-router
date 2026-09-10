@@ -269,6 +269,7 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 	value.Protocols = append([]string(nil), value.Protocols...)
 	value.SupportedOperations = append([]string(nil), value.SupportedOperations...)
 	value.PathOverrides = cloneMap(value.PathOverrides)
+	value.OperationOverrides = cloneMap(value.OperationOverrides)
 	value.DefaultHeaders = cloneMap(value.DefaultHeaders)
 	value.Models = append([]CatalogModelBinding(nil), value.Models...)
 	for index := range value.Models {
