@@ -4144,6 +4144,25 @@
     verification: claimed
     source: https://openai.com/index/introducing-gpt-5-5/
     redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-120b-high@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-120b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-120B(high)
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.808
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
 - id: independent/gpt-oss-120b-aa-briefcase@1.0.0
   model: openai/gpt-oss-120b
   benchmark: artificial-analysis/briefcase@1.0.0
@@ -5412,4 +5431,81 @@
     provenance: vendor_claimed
     verification: claimed
     source: https://openai.com/index/gpt-6-astra/
+    redistributable: true
+- id: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: gpt-oss-20b
+    source_kind: official_benchmark_leaderboard
+    source_model: GPT-oss-20B(high)
+    source_model_slug: gpt-oss-20b-high
+    metric_variant: five_shot_chain_of_thought
+  metrics:
+    accuracy: 0.736
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gpt-oss-20b-scicode@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-20b (high)
+    source_model_slug: gpt-oss-20b
+    run_kind: independent
+  metrics:
+    score: 0.388888888888889
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gpt-oss-20b
+    redistributable: true
+- id: independent/gpt-oss-120b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-120b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: gpt-oss-120b high
+    source_model_slug: gpt-oss-120b
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.878306878306878
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/livecodebench
+    redistributable: true
+- id: nvidia-comparative/gpt-oss-20b-livecodebench-v6@1.0.0
+  model: openai/gpt-oss-20b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: GPT-OSS-20B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.610
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md
     redistributable: true

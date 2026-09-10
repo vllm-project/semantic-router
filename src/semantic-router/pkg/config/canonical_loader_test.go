@@ -107,7 +107,7 @@ semantic_cache:
 
 	message := err.Error()
 	for _, fragment := range []string{
-		"config file must use canonical v0.3 version/listeners/providers/routing/global",
+		"config file must use the canonical v0.3 hierarchy",
 		"unexpected top-level keys: default_model, semantic_cache",
 		"vllm-sr config migrate --config old-config.yaml",
 	} {
@@ -690,7 +690,7 @@ routing:
     - name: default
       priority: 1
       rules:
-        operator: OR
+        operator: AND
         conditions: []
       modelRefs:
         - model: gpt-worker

@@ -451,13 +451,33 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
 		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
 	}
-	if len(document.Models) != 89 || len(document.Providers) != 60 || len(document.Evaluations) != 1365 {
+	if len(document.Models) != 101 || len(document.Providers) != 60 || len(document.Evaluations) != 1509 {
 		t.Fatalf(
-			"unexpected generated inventory: models=%d providers=%d evaluations=%d",
+			"unexpected generated inventory: models=%d providers=%d evaluations=%d; "+
+				"regenerate the catalog, or update these counts if the change is intended",
 			len(document.Models),
 			len(document.Providers),
 			len(document.Evaluations),
 		)
+	}
+}
+
+func TestDashboardAcceptsOrderedIndexProfilesAndIncompleteCoverage(t *testing.T) {
+	t.Parallel()
+
+	payload := strings.Replace(
+		validModelCatalogPayload(""),
+		`"benchmark_profile":"published-standard"`,
+		`"benchmark_profiles":["published-standard"]`,
+		1,
+	)
+	payload = strings.Replace(payload, `"status":"available",
+    "score":50,
+    "coverage":1`, `"status":"partial",
+    "score":null,
+    "coverage":0.5`, 1)
+	if _, err := normalizeModelCatalogDocument([]byte(payload)); err != nil {
+		t.Fatalf("valid incomplete catalog rejected: %v", err)
 	}
 }
 
