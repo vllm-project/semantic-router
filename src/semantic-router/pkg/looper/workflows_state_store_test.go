@@ -913,3 +913,146 @@ func redisBackend(t *testing.T) struct {
 		},
 	}
 }
+
+func makeUnclaimedBoundaryState(id string, unclaimedBytes int) *workflowPendingToolState {
+	state := &workflowPendingToolState{
+		ID:         id,
+		CreatedAt:  time.Now().UTC().Truncate(time.Second),
+		RecipeName: string(config.DefaultRecipeName),
+	}
+	const marker = "pad"
+	state.DecisionName = marker
+	base, err := json.Marshal(state)
+	if err != nil {
+		panic(err)
+	}
+	pad := unclaimedBytes - len(base)
+	if pad < 0 {
+		panic(fmt.Sprintf("base state %d already exceeds target %d", len(base), unclaimedBytes))
+	}
+	state.DecisionName = marker + strings.Repeat("x", pad)
+	got, err := json.Marshal(state)
+	if err != nil {
+		panic(err)
+	}
+	if len(got) != unclaimedBytes {
+		panic(fmt.Sprintf("boundary state %d bytes, want %d", len(got), unclaimedBytes))
+	}
+	return state
+}
+
+func TestStateStore_PutReservesClaimMetadata(t *testing.T) {
+	target := maxStatePayloadBytes - maxWorkflowStateClaimMetadataBytes
+	for _, tc := range []struct {
+		name  string
+		store func() workflowToolStateStore
+	}{
+		{
+			name: "file",
+			store: func() workflowToolStateStore {
+				return newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "boundary"), time.Hour)
+			},
+		},
+		{
+			name: "redis",
+			store: func() workflowToolStateStore {
+				mr := miniredis.RunT(t)
+				return newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+					Address:   mr.Addr(),
+					KeyPrefix: "test-boundary:",
+				}, time.Hour)
+			},
+		},
+	} {
+		t.Run(tc.name+"/exact", func(t *testing.T) {
+			s := tc.store()
+			t.Cleanup(func() { _ = s.Close() })
+			ctx := context.Background()
+			id := "boundary-exact"
+			if _, err := s.Put(ctx, makeUnclaimedBoundaryState(id, target)); err != nil {
+				t.Fatalf("Put exact reserved boundary: %v", err)
+			}
+			claim, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+			if err != nil || !ok || claim == nil {
+				t.Fatalf("Claim exact reserved boundary: ok=%v err=%v", ok, err)
+			}
+			if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, claim.Token); commitErr != nil {
+				t.Fatalf("Commit exact reserved boundary: %v", commitErr)
+			}
+		})
+		t.Run(tc.name+"/over", func(t *testing.T) {
+			s := tc.store()
+			t.Cleanup(func() { _ = s.Close() })
+			_, err := s.Put(context.Background(), makeUnclaimedBoundaryState("boundary-over", target+1))
+			if err == nil {
+				t.Fatal("Put one byte over reserved boundary succeeded")
+			}
+			if !strings.Contains(err.Error(), "claim metadata") {
+				t.Fatalf("over-boundary error = %v, want claim metadata reservation", err)
+			}
+		})
+	}
+}
+
+func TestStateStore_RenewKeepsClaimPastLease(t *testing.T) {
+	setWorkflowStateClaimLease(t, 80*time.Millisecond)
+	for _, backend := range backends(t) {
+		t.Run(backend.name, func(t *testing.T) {
+			s := backend.store()
+			t.Cleanup(func() { _ = s.Close() })
+			assertRenewKeepsClaimPastLease(t, s, func(step time.Duration) {
+				time.Sleep(step)
+			})
+		})
+	}
+	t.Run("redis", func(t *testing.T) {
+		mr := miniredis.RunT(t)
+		s := newWorkflowRedisToolStateStore(config.WorkflowStateRedisConfig{
+			Address:   mr.Addr(),
+			KeyPrefix: "test-renew:",
+		}, time.Hour)
+		t.Cleanup(func() { _ = s.Close() })
+		assertRenewKeepsClaimPastLease(t, s, func(step time.Duration) {
+			time.Sleep(5 * time.Millisecond)
+			mr.FastForward(step)
+		})
+	})
+}
+
+func assertRenewKeepsClaimPastLease(t *testing.T, s workflowToolStateStore, advance func(time.Duration)) {
+	t.Helper()
+	ctx := context.Background()
+	const id = "renew-past-lease"
+	if _, err := s.Put(ctx, makeTestState(id)); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	first, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || first == nil {
+		t.Fatalf("first Claim: ok=%v err=%v", ok, err)
+	}
+	for i := 0; i < 4; i++ {
+		if renewErr := s.Renew(ctx, config.DefaultRecipeName, id, first.Token); renewErr != nil {
+			t.Fatalf("Renew[%d]: %v", i, renewErr)
+		}
+		advance(50 * time.Millisecond)
+	}
+	second, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil {
+		t.Fatalf("Claim while renewed: %v", err)
+	}
+	if ok || second != nil {
+		t.Fatal("concurrent retry claimed a renewed live workflow")
+	}
+
+	advance(120 * time.Millisecond)
+	recovered, ok, err := s.Claim(ctx, config.DefaultRecipeName, id)
+	if err != nil || !ok || recovered == nil {
+		t.Fatalf("Claim after renew stop: ok=%v err=%v", ok, err)
+	}
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, first.Token); commitErr == nil {
+		t.Fatal("stale holder Commit succeeded after a later claim")
+	}
+	if commitErr := s.Commit(ctx, config.DefaultRecipeName, id, recovered.Token); commitErr != nil {
+		t.Fatalf("Commit recovered claim: %v", commitErr)
+	}
+}

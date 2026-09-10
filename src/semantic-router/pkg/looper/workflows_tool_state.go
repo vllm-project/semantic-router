@@ -650,7 +650,10 @@ func (l *WorkflowsLooper) resumeWorkflowToolCall(
 		err = errors.Join(err, l.releaseWorkflowToolState(claim, &restoreClaim))
 	}()
 
-	out, consumed, err := l.resumeWorkflowToolCallWithState(ctx, req, cfg, workerModels, claim.State)
+	holdCtx, stopHold := l.watchWorkflowStateClaim(ctx, claim)
+	defer stopHold()
+
+	out, consumed, err := l.resumeWorkflowToolCallWithState(holdCtx, req, cfg, workerModels, claim.State)
 	if err != nil {
 		return nil, err
 	}

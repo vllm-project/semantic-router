@@ -3,6 +3,7 @@ package looper
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -31,6 +32,42 @@ func (l *WorkflowsLooper) releaseWorkflowToolState(claim *workflowStateClaim, re
 		return fmt.Errorf("release workflow tool state %q: %w", claim.ID, err)
 	}
 	return nil
+}
+
+func (l *WorkflowsLooper) watchWorkflowStateClaim(ctx context.Context, claim *workflowStateClaim) (context.Context, context.CancelFunc) {
+	holdCtx, cancelHold := context.WithCancel(ctx)
+	if l == nil || l.toolStates == nil || claim == nil {
+		return holdCtx, cancelHold
+	}
+	renewCtx, cancelRenew := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(workflowStateClaimRenewInterval())
+		defer ticker.Stop()
+		for {
+			select {
+			case <-renewCtx.Done():
+				return
+			case <-holdCtx.Done():
+				return
+			case <-ticker.C:
+				renewTimeout, stop := context.WithTimeout(renewCtx, workflowStateRestoreTimeout)
+				err := l.toolStates.Renew(renewTimeout, claim.Recipe, claim.ID, claim.Token)
+				stop()
+				if err != nil {
+					cancelHold()
+					return
+				}
+			}
+		}
+	}()
+	return holdCtx, func() {
+		cancelRenew()
+		wg.Wait()
+		cancelHold()
+	}
 }
 
 func (l *WorkflowsLooper) commitWorkflowToolState(claim *workflowStateClaim) error {
