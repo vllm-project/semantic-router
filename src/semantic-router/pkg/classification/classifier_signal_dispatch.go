@@ -50,6 +50,7 @@ func (c *Classifier) buildSignalDispatchers(
 		imgArg,
 		imgCache,
 		requestFacts,
+		requestCtx,
 	)...)
 	return append(
 		dispatchers,
@@ -131,6 +132,7 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 	imgArg string,
 	imgCache *requestImageEmbeddingCache,
 	requestFacts RequestFacts,
+	requestCtx context.Context,
 ) []signalDispatch {
 	return []signalDispatch{
 		{
@@ -158,7 +160,7 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 		{
 			config.SignalTypeComplexity, "Complexity",
 			func() {
-				c.evaluateComplexitySignal(results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
+				c.evaluateComplexitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
 			},
 		},
 		{

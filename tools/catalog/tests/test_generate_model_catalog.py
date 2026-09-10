@@ -16,7 +16,11 @@ catalog = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = catalog
 SPEC.loader.exec_module(catalog)
 
-DEFAULT_INDEX_COMPONENT_COUNT = 5
+from catalog_evaluations import evaluation_coverage  # noqa: E402
+
+DEFAULT_INDEX_COMPONENT_COUNT = 6
+DEFAULT_INDEX_ID = "vllm-sr/intelligence@1.0.0"
+MINIMUM_RANKABLE_MODEL_COUNT = 21
 OPENAI_LONG_CONTEXT_TOKENS = 1_050_000
 
 
@@ -37,63 +41,139 @@ def _evaluation_benchmarks_by_bucket(
 
 
 class ModelCatalogCompilerTests(unittest.TestCase):
+    def test_dashboard_image_context_includes_the_shared_public_snapshot(self) -> None:
+        dockerignore = (catalog.REPO_ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn(
+            "!website/static/model-catalog/catalog.json",
+            dockerignore,
+        )
+
     def test_repository_catalog_validates_and_renders_every_projection(self) -> None:
         outputs = catalog.render_outputs()
         self.assertEqual(
             set(outputs),
             {
                 catalog.RECIPE_MANIFEST,
-                catalog.CLI_MANIFEST,
                 catalog.GO_OUTPUT,
-                catalog.DASHBOARD_OUTPUT,
                 catalog.WEBSITE_OUTPUT,
             },
         )
         self.assertEqual(catalog.check(outputs), 0)
-        public_snapshot = json.loads(outputs[catalog.DASHBOARD_OUTPUT])
+        public_snapshot = json.loads(outputs[catalog.WEBSITE_OUTPUT])
         self.assertNotIn("inventory", public_snapshot)
-        for output_path in (catalog.RECIPE_MANIFEST, catalog.CLI_MANIFEST):
-            runtime_manifest = yaml.safe_load(outputs[output_path])
-            self.assertNotIn("inventory", runtime_manifest)
+        self.assertNotIn("evaluation_coverage", public_snapshot)
+        statuses = {result["status"] for result in public_snapshot["index_results"]}
+        self.assertEqual(statuses, {"available", "partial", "missing"})
+        self.assertTrue(
+            all(
+                (result["score"] is not None) == (result["status"] == "available")
+                for result in public_snapshot["index_results"]
+            )
+        )
+        runtime_manifest = yaml.safe_load(outputs[catalog.RECIPE_MANIFEST])
+        self.assertNotIn("inventory", runtime_manifest)
+        self.assertNotIn("evaluation_coverage", runtime_manifest)
+        self.assertTrue(
+            all(
+                result["status"] == "available"
+                for result in runtime_manifest["index_results"]
+            )
+        )
+        self.assertLess(
+            len(runtime_manifest["index_results"]),
+            len(public_snapshot["index_results"]),
+        )
 
-    def test_default_intelligence_index_is_public_and_coverage_aware(self) -> None:
+    def test_default_intelligence_index_is_public_and_complete_case(self) -> None:
         _, resources, _ = catalog.load_and_validate()
-        index = next(
-            item
-            for item in resources["indices"]
-            if item["id"] == "vllm-sr/intelligence@1.0.0"
-        )
-        self.assertEqual(
-            index["missing"], {"policy": "require_coverage", "minimum": 0.6}
-        )
+        indices = {item["id"]: item for item in resources["indices"]}
+        index = indices[DEFAULT_INDEX_ID]
+        self.assertEqual(index["missing"], {"policy": "require_all"})
         self.assertEqual(
             index["domains"],
             {
-                "general_reasoning": 0.20,
-                "scientific_reasoning": 0.20,
-                "frontier_reasoning": 0.20,
-                "software_engineering": 0.20,
-                "agentic_systems": 0.20,
+                "general": 0.20,
+                "reasoning": 0.40,
+                "coding": 0.20,
+                "agentic": 0.20,
             },
         )
         self.assertEqual(
             {
-                f"{component['benchmark']}#{component['metric']}": component["weight"]
+                component["index"]: component["weight"]
                 for component in index["components"]
             },
             {
-                "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 0.20,
-                "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.20,
-                "cais/humanitys-last-exam@1.0.0#accuracy": 0.20,
-                "swe-bench/verified@1.0.0#resolved": 0.20,
-                "harbor/terminal-bench@2.1.0#resolved": 0.20,
+                "vllm-sr/general@1.0.0": 0.20,
+                "vllm-sr/reasoning@1.0.0": 0.40,
+                "vllm-sr/coding@1.0.0": 0.20,
+                "vllm-sr/agentic@1.0.0": 0.20,
             },
         )
+        expected_capabilities = {
+            "vllm-sr/general@1.0.0": {
+                "tiger-ai-lab/mmlu-pro@1.0.0#accuracy": 1.0,
+            },
+            "vllm-sr/reasoning@1.0.0": {
+                "idavidrein/gpqa-diamond@1.0.0#accuracy": 0.5,
+                "cais/humanitys-last-exam@1.0.0#accuracy": 0.5,
+            },
+            "vllm-sr/coding@1.0.0": {
+                "livecodebench/livecodebench@6.0.0#pass_at_1": 0.5,
+                "scicode-bench/scicode@1.0.0#score": 0.5,
+            },
+            "vllm-sr/agentic@1.0.0": {
+                "harbor/terminal-bench@2.1.0#resolved": 1.0,
+            },
+        }
+        for index_id, expected_components in expected_capabilities.items():
+            capability = indices[index_id]
+            self.assertEqual(capability["missing"], {"policy": "require_all"})
+            self.assertEqual(
+                {
+                    f"{component['benchmark']}#{component['metric']}": component[
+                        "weight"
+                    ]
+                    for component in capability["components"]
+                },
+                expected_components,
+            )
         self.assertTrue(
             all(
                 component["normalization"] == {"type": "identity"}
-                for component in index["components"]
+                for definition in [index]
+                + [indices[index_id] for index_id in expected_capabilities]
+                for component in definition["components"]
             )
+        )
+
+    def test_default_intelligence_index_has_a_broad_unique_model_cohort(self) -> None:
+        outputs = catalog.render_outputs()
+        snapshot = json.loads(outputs[catalog.WEBSITE_OUTPUT])
+        rankable_models = {
+            result["model"]
+            for result in snapshot["index_results"]
+            if result["index"] == DEFAULT_INDEX_ID and result["status"] == "available"
+        }
+
+        self.assertGreaterEqual(
+            len(rankable_models),
+            MINIMUM_RANKABLE_MODEL_COUNT,
+            "the core index must retain more than 20 uniquely rankable models",
+        )
+        self.assertTrue(
+            {
+                "deepseek/deepseek-v3.1-terminus",
+                "google/gemma-3-27b-it",
+                "meta/llama-4-maverick-17b-128e-instruct",
+                "minimax/minimax-m2.7",
+                "mistral/mistral-small-3.2-24b-instruct",
+                "moonshot/kimi-k2.6",
+                "nvidia/nemotron-3-nano-30b-a3b",
+                "openai/gpt-oss-20b",
+                "qwen/qwen3.5-397b-a17b",
+                "zai/glm-5.1",
+            }.issubset(rankable_models)
         )
 
     def test_benchmark_display_contract_is_percentage_ready_and_core_is_curated(
@@ -111,8 +191,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "tiger-ai-lab/mmlu-pro@1.0.0",
                 "idavidrein/gpqa-diamond@1.0.0",
                 "cais/humanitys-last-exam@1.0.0",
-                "swe-bench/verified@1.0.0",
                 "harbor/terminal-bench@2.1.0",
+                "livecodebench/livecodebench@6.0.0",
                 "scicode-bench/scicode@1.0.0",
             },
         )
@@ -178,7 +258,182 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 self.assertIn(
                     physical_models[model_id]["lifecycle"], {"active", "experimental"}
                 )
-        self.assertNotIn("openai/gpt-6-astra", physical_models)
+        self.assertIn("openai/gpt-6-astra", physical_models)
+
+    def test_gpt_6_astra_day_zero_contract_is_complete(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        models = {model["id"]: model for model in resources["models"]}
+        astra = models["openai/gpt-6-astra"]
+        self.assertEqual(
+            astra["limits"],
+            {
+                "context_window_size": 1_050_000,
+                "max_output_tokens": 128_000,
+            },
+        )
+        self.assertEqual(astra["knowledge_cutoff"], "2026-04-30")
+        self.assertEqual(astra["reasoning_family"], "gpt-6-astra")
+        self.assertTrue(
+            {"chat", "reasoning", "tools", "structured_output", "vision"}.issubset(
+                astra["capabilities"]
+            )
+        )
+
+        families = {family["id"]: family for family in resources["reasoning_families"]}
+        reasoning = families["gpt-6-astra"]
+        self.assertEqual(reasoning["levels"], ["low", "medium", "high", "xhigh", "max"])
+        self.assertEqual(reasoning["modes"], ["enabled"])
+        self.assertNotIn("disabled", reasoning)
+        self.assertNotIn(
+            "default",
+            reasoning,
+            "the official Astra model page does not publish a default effort",
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        binding = next(
+            item
+            for item in providers["openai"]["models"]
+            if item["catalog"] == "openai/gpt-6-astra"
+        )
+        self.assertEqual(binding["id"], "gpt-6-astra")
+        self.assertEqual(
+            binding["protocols"],
+            ["openai/chat-completions@1", "openai/responses@1"],
+        )
+        self.assertEqual(binding["reasoning_modes"], ["enabled"])
+        self.assertEqual(binding["reasoning_efforts"], reasoning["levels"])
+        self.assertEqual(
+            binding["reasoning_efforts_by_protocol"],
+            {
+                "openai/chat-completions@1": [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                ]
+            },
+        )
+        self.assertEqual(
+            binding["pricing"],
+            {
+                "currency": "USD",
+                "prompt_per_1m": 10.0,
+                "cached_input_per_1m": 1.0,
+                "cache_write_per_1m": 12.5,
+                "completion_per_1m": 50.0,
+            },
+        )
+        self.assertEqual(
+            binding["restrictions"],
+            {
+                "tools_protocols": ["openai/responses@1"],
+                "long_context_pricing": {
+                    "input_threshold_tokens": 272000,
+                    "prompt_multiplier": 2.0,
+                    "cached_input_multiplier": 2.0,
+                    "cache_write_multiplier": 2.0,
+                    "completion_multiplier": 1.5,
+                },
+                "unsupported_request_fields": {
+                    "openai/chat-completions@1": [
+                        "temperature",
+                        "top_p",
+                        "top_logprobs",
+                        "logprobs",
+                    ],
+                    "openai/responses@1": [
+                        "temperature",
+                        "top_p",
+                        "top_logprobs",
+                    ],
+                },
+                "unsupported_include_values": ["message.output_text.logprobs"],
+            },
+        )
+
+        evaluations = [
+            item
+            for item in resources["evaluations"]
+            if item["model"] == "openai/gpt-6-astra"
+        ]
+        launch_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("openai/gpt-6-astra-launch-")
+        ]
+        self.assertEqual(len(launch_evaluations), 5)
+        self.assertEqual(
+            {item["benchmark"] for item in launch_evaluations},
+            {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "cais/humanitys-last-exam@1.0.0",
+                "datacurve/deep-swe@1.1.0",
+                "arc-prize/arc-agi-1@1.0.0",
+                "arc-prize/arc-agi-2@1.0.0",
+            },
+        )
+        self.assertTrue(
+            all(
+                item["reasoning_effort"] == "unspecified" for item in launch_evaluations
+            )
+        )
+        self.assertTrue(
+            all(
+                item["subject"]["result_selection"]
+                == "maximum_across_supported_efforts"
+                for item in launch_evaluations
+            )
+        )
+        self.assertTrue(
+            all(
+                item["evidence"]["provenance"] == "vendor_claimed"
+                for item in launch_evaluations
+            )
+        )
+
+        independent_evaluations = [
+            item
+            for item in evaluations
+            if item["id"].startswith("independent/gpt-6-astra-")
+        ]
+        independent_efforts = {"low", "medium", "high", "xhigh", "max"}
+        independent_benchmarks = {
+            "idavidrein/gpqa-diamond@1.0.0",
+            "cais/humanitys-last-exam@1.0.0",
+            "harbor/terminal-bench@2.1.0",
+            "scicode-bench/scicode@1.0.0",
+        }
+        self.assertEqual(len(independent_evaluations), 20)
+        self.assertEqual(
+            {
+                (item["reasoning_effort"], item["benchmark"])
+                for item in independent_evaluations
+            },
+            {
+                (effort, benchmark)
+                for effort in independent_efforts
+                for benchmark in independent_benchmarks
+            },
+        )
+        self.assertTrue(
+            all(
+                item["evidence"]["provenance"] == "third_party"
+                and item["evidence"]["verification"] == "imported"
+                and item["subject"]["run_kind"] == "independent"
+                for item in independent_evaluations
+            )
+        )
+
+        openai_inventory = next(
+            creator
+            for creator in manifest["inventory"]["physical"]["creators"]
+            if creator["publisher"] == "OpenAI"
+        )
+        self.assertEqual(
+            openai_inventory["representative_models"],
+            ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
+        )
 
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
@@ -618,6 +873,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {
                 "openai/gpt-5.4",
                 "openai/gpt-5.5",
+                "openai/gpt-6-astra",
                 "openai/gpt-5.6-luna",
                 "openai/gpt-5.6-sol",
                 "openai/gpt-5.6-terra",
@@ -658,7 +914,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self,
     ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
-        coverage = catalog._evaluation_coverage(
+        coverage = evaluation_coverage(
             resources, manifest["defaults"]["intelligence_index"]
         )
         slots: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -672,7 +928,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             all(
                 len(
                     {
-                        (row["benchmark"], row["benchmark_profile"], row["metric"])
+                        (
+                            row["benchmark"],
+                            tuple(row["benchmark_profiles"]),
+                            row["metric"],
+                        )
                         for row in rows
                     }
                 )
@@ -684,11 +944,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {model["id"] for model in resources["models"]},
             {model for model, _ in slots},
         )
-        missing_qwen_low = slots[("qwen/qwen3.8-27b", "low")]
-        self.assertEqual(len(missing_qwen_low), DEFAULT_INDEX_COMPONENT_COUNT)
+        qwen_low = slots[("qwen/qwen3.8-27b", "low")]
+        self.assertEqual(len(qwen_low), DEFAULT_INDEX_COMPONENT_COUNT)
         self.assertEqual(
-            {row["status"] for row in missing_qwen_low},
-            {"missing"},
+            {row["status"] for row in qwen_low},
+            {"available", "missing"},
         )
         self.assertTrue(
             any(row["status"] == "available" for rows in slots.values() for row in rows)
@@ -698,7 +958,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self,
     ) -> None:
         manifest, resources, _ = catalog.load_and_validate()
-        coverage = catalog._evaluation_coverage(
+        coverage = evaluation_coverage(
             resources, manifest["defaults"]["intelligence_index"]
         )
         available: dict[tuple[str, str], set[str]] = {}
@@ -709,11 +969,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 ).add(row["benchmark"])
 
         expected_counts = {
-            ("deepseek/deepseek-v4-flash", "max"): 5,
-            ("deepseek/deepseek-v4-pro", "max"): 5,
-            ("zai/glm-5.3-flash", "max"): 2,
-            ("qwen/qwen3.8-27b", "xhigh"): 3,
-            ("tencent/hy3", "high"): 4,
+            ("deepseek/deepseek-v4-flash", "max"): 6,
+            ("deepseek/deepseek-v4-pro", "max"): 6,
+            ("zai/glm-5.3-flash", "max"): 4,
+            ("qwen/qwen3.8-27b", "xhigh"): 5,
+            ("tencent/hy3", "high"): 3,
             ("thinking-machines/inkling", "max"): 4,
             ("microsoft/mai-thinking-1", "unspecified"): 3,
             ("cohere/tiny-aya-global", "unspecified"): 1,
@@ -723,11 +983,15 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             expected_counts,
         )
         self.assertNotIn(
-            "cais/humanitys-last-exam@1.0.0",
+            "tiger-ai-lab/mmlu-pro@1.0.0",
             available[("zai/glm-5.3-flash", "max")],
         )
-        for effort in ("none", "low", "medium"):
-            self.assertNotIn(("qwen/qwen3.8-27b", effort), available)
+        self.assertNotIn(("qwen/qwen3.8-27b", "none"), available)
+        for effort in ("low", "medium", "xhigh"):
+            self.assertNotIn(
+                "tiger-ai-lab/mmlu-pro@1.0.0",
+                available[("qwen/qwen3.8-27b", effort)],
+            )
 
     def test_glm_5_2_independent_max_runs_keep_their_exact_effort(self) -> None:
         _, resources, _ = catalog.load_and_validate()

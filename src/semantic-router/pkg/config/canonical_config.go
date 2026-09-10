@@ -13,12 +13,36 @@ type CanonicalConfig struct {
 	Version     string                `yaml:"version,omitempty"`
 	Listeners   []Listener            `yaml:"listeners,omitempty"`
 	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
+	Evaluation  *CanonicalEvaluation  `yaml:"evaluation,omitempty"`
 	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
 	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
 	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
 	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
+}
+
+// CanonicalEvaluation is the single operator-owned evaluation surface. It
+// keeps benchmark and index definitions beside model-linked measurement
+// records so user configuration matches the built-in catalog data model.
+type CanonicalEvaluation struct {
+	Benchmarks []modelcatalog.BenchmarkDefinition `yaml:"benchmarks,omitempty"`
+	Indices    []modelcatalog.IndexDefinition     `yaml:"indices,omitempty"`
+	Records    []CanonicalEvaluationRecord        `yaml:"records,omitempty"`
+}
+
+// CanonicalEvaluationRecord is a compact operator-authored measurement. Model
+// names a canonical Model Card identity; the compiler assigns internal record
+// identity and provenance without asking users to duplicate repository fields.
+type CanonicalEvaluationRecord struct {
+	Model            string             `yaml:"model"`
+	Benchmark        string             `yaml:"benchmark"`
+	BenchmarkProfile string             `yaml:"benchmark_profile,omitempty"`
+	ReasoningEffort  string             `yaml:"reasoning_effort,omitempty"`
+	Metrics          map[string]float64 `yaml:"metrics"`
+	Source           string             `yaml:"source,omitempty"`
+	MeasuredAt       string             `yaml:"measured_at,omitempty"`
+	Metadata         map[string]any     `yaml:"metadata,omitempty"`
 }
 
 // CanonicalRouting contains the DSL-owned routing surface.
@@ -46,6 +70,7 @@ type CanonicalSignals struct {
 	Modality      []ModalityRule         `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	Hallucination []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PII           []PIIRule              `yaml:"pii,omitempty"`
 	KB            []KBSignalRule         `yaml:"kb,omitempty"`
 	Conversation  []ConversationRule     `yaml:"conversation,omitempty"`
@@ -83,7 +108,6 @@ type RoutingModel struct {
 	Modalities        *modelcatalog.Modalities           `yaml:"modalities,omitempty"`
 	Modality          string                             `yaml:"modality,omitempty"`
 	Tags              []string                           `yaml:"tags,omitempty"`
-	Evaluations       []modelcatalog.UserEvaluation      `yaml:"evaluations,omitempty"`
 }
 
 func isCanonicalConfig(raw map[string]interface{}) bool {
@@ -128,6 +152,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 	cfg.EffectiveModelRegistry = effective
+	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
@@ -421,6 +446,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		HallucinationRules: append([]HallucinationRule(nil), signals.Hallucination...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		KBRules:            append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),

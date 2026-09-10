@@ -50,6 +50,7 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 		"context":               len(cfg.ContextRules),
 		"complexity":            len(cfg.ComplexityRules),
 		"jailbreak":             len(cfg.JailbreakRules),
+		"hallucination":         len(cfg.HallucinationRules),
 		"pii":                   len(cfg.PIIRules),
 		"projection_partitions": len(cfg.Projections.Partitions),
 		"projection_scores":     len(cfg.Projections.Scores),

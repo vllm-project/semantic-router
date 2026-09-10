@@ -19,6 +19,7 @@ export type SignalType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'hallucination'
   | 'pii'
   | 'kb'
   | 'conversation'
@@ -268,6 +269,7 @@ export type PluginType =
   | 'tools'
   | 'tool_selection'
   | 'context_compression'
+  | 'shadow_dispatch'
 
 export interface PluginConfig {
   type: PluginType
@@ -520,6 +522,11 @@ export interface ConfigData {
     direction?: 'request' | 'response'
     description?: string
   }>
+  hallucination?: Array<{
+    name: string
+    use_nli?: boolean
+    description?: string
+  }>
   pii?: Array<{
     name: string
     threshold?: number
@@ -673,6 +680,11 @@ export interface ConfigData {
       threshold?: number
       include_history?: boolean
       direction?: 'request' | 'response'
+      description?: string
+    }>
+    hallucination?: Array<{
+      name: string
+      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{

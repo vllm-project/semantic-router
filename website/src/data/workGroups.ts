@@ -70,6 +70,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/truddy0.png',
         profile: 'https://github.com/truddy0',
       },
+      {
+        name: 'DAI0818',
+        avatar: 'https://github.com/daii-0818.png',
+        profile: 'https://github.com/daii-0818',
+      },
+      {
+        name: 'Nanasis',
+        avatar: 'https://github.com/nanasis.png',
+        profile: 'https://github.com/nanasis',
+      },
     ],
   },
   {
@@ -259,6 +269,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/kzos.png',
         profile: 'https://github.com/kzos',
       },
+      {
+        name: 'Ankit Jha',
+        avatar: 'https://github.com/ankit373.png',
+        profile: 'https://github.com/ankit373',
+      },
     ],
   },
   {
@@ -391,6 +406,11 @@ export const workGroups: WorkGroup[] = [
         name: 'pikachu',
         avatar: 'https://github.com/yu3zhang1.png',
         profile: 'https://github.com/yu3zhang1',
+      },
+      {
+        name: 'Rishabh Sinha',
+        avatar: 'https://github.com/rishabhsinha17.png',
+        profile: 'https://github.com/rishabhsinha17',
       },
     ],
   },

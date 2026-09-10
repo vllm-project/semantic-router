@@ -75,17 +75,7 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
-	// Build huggingface-cli command
-	args := []string{
-		"download",
-		spec.RepoID,
-		"--local-dir", spec.LocalPath,
-	}
-
-	// Add revision if specified
-	if spec.Revision != "" && spec.Revision != "main" {
-		args = append(args, "--revision", spec.Revision)
-	}
+	args := buildDownloadArgs(spec)
 
 	// Use detected CLI command, default to "hf"
 	cliCmd := hfCommand
@@ -125,6 +115,35 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil
+}
+
+// buildDownloadArgs assembles the huggingface-cli argument list for spec.
+//
+// Every exclude pattern gets its own `--exclude` flag. The typer-based `hf download`
+// takes `--exclude` as a repeatable single-value option, so `--exclude a b c` keeps
+// only `a` and treats `b` and `c` as extra positional filenames; the legacy
+// `huggingface-cli download` accepted `nargs=*`. Repeating the flag is the form both
+// CLIs parse the same way, whichever one the image ends up installing.
+func buildDownloadArgs(spec ModelSpec) []string {
+	args := []string{
+		"download",
+		spec.RepoID,
+		"--local-dir", spec.LocalPath,
+	}
+
+	// Add revision if specified
+	if spec.Revision != "" && spec.Revision != "main" {
+		args = append(args, "--revision", spec.Revision)
+	}
+
+	for _, pattern := range spec.ExcludePatterns {
+		if pattern == "" {
+			continue
+		}
+		args = append(args, "--exclude", pattern)
+	}
+
+	return args
 }
 
 // EnsureModels ensures all required models are downloaded

@@ -16,6 +16,7 @@ func (d *decompiler) decompileSignals() {
 	d.decompileModalitySignals()
 	d.decompileAuthzSignals()
 	d.decompileJailbreakSignals()
+	d.decompileHallucinationSignals()
 	d.decompilePIISignals()
 	d.decompileKBSignals()
 	d.decompileEventSignals()
