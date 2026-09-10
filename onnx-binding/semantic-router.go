@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -105,6 +111,8 @@ extern int calculate_embedding_similarity(const char* text1, const char* text2, 
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
 extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -495,6 +503,43 @@ func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
 	default:
 		return false, fmt.Errorf("embedding model %q not loaded", modelType)
 	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns byte ranges covering the full text. Each range fits the
+// loaded embedding model and consecutive ranges overlap by half a window.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !IsMmBertModelInitialized() {
+		return nil, fmt.Errorf("mmBERT model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if bool(result.error) {
+		return nil, fmt.Errorf("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := range windows {
+		windows[i] = TextWindow{
+			Start: int(offsets[i*2]),
+			End:   int(offsets[i*2+1]),
+		}
+	}
+	return windows, nil
 }
 
 // ============================================================================

@@ -6,6 +6,7 @@ pub mod memory;
 #[cfg(test)]
 mod memory_test;
 pub mod multimodal;
+pub mod text_windows;
 pub mod types;
 pub mod unified;
 
@@ -13,5 +14,6 @@ pub use classification::*;
 pub use embedding::*;
 pub use memory::*;
 pub use multimodal::*;
+pub use text_windows::*;
 pub use types::*;
 pub use unified::*;
