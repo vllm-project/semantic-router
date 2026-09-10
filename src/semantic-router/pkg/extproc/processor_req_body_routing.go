@@ -228,8 +228,14 @@ func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmproto
 	if set, ok := r.codecCapabilitiesForFormat(format); !ok || !set.Contains(required) {
 		return ""
 	}
-	if declared, ok := r.declaredModelCapabilities(model); ok && !declared.Contains(required.TaskCapabilities()) {
-		return ""
+	if declared, ok := r.declaredModelCapabilities(model); ok {
+		// Only task/modality annotations steer capability filtering. A model
+		// annotated with transport/accounting names alone (tools, reasoning,
+		// streaming, structured_json, ...) carries no task bit and stays
+		// eligible on wire expressibility exactly like an unannotated model.
+		if tasks := declared.TaskCapabilities(); !tasks.Empty() && !tasks.Contains(required.TaskCapabilities()) {
+			return ""
+		}
 	}
 	return format
 }
