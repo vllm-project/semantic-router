@@ -61,7 +61,10 @@ func TestHandleListMemories_UsesConfiguredCaseInsensitiveIdentityHeader(t *testi
 	server, store := newTestServer()
 	seedTestMemories(store)
 	server.config = &config.RouterConfig{
-		Authz: config.AuthzConfig{Identity: config.IdentityConfig{UserIDHeader: "X-JWT-Sub"}},
+		Authz: config.AuthzConfig{Identity: config.IdentityConfig{
+			UserIDHeader: "X-JWT-Sub",
+			Ingress:      config.IdentityIngressHeaderInjection,
+		}},
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
@@ -72,6 +75,72 @@ func TestHandleListMemories_UsesConfiguredCaseInsensitiveIdentityHeader(t *testi
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("configured mixed-case identity status = %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestMemoryRoutesRejectIdentityWithoutVerifiedIngress(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+	server.config = &config.RouterConfig{}
+
+	tests := []struct {
+		name    string
+		method  string
+		target  string
+		id      string
+		handler http.HandlerFunc
+	}{
+		{
+			name:    "list",
+			method:  http.MethodGet,
+			target:  "/v1/memory",
+			handler: server.handleListMemories,
+		},
+		{
+			name:    "get",
+			method:  http.MethodGet,
+			target:  "/v1/memory/mem-1",
+			id:      "mem-1",
+			handler: server.handleGetMemory,
+		},
+		{
+			name:    "delete",
+			method:  http.MethodDelete,
+			target:  "/v1/memory/mem-1",
+			id:      "mem-1",
+			handler: server.handleDeleteMemory,
+		},
+		{
+			name:    "delete by scope",
+			method:  http.MethodDelete,
+			target:  "/v1/memory",
+			handler: server.handleDeleteMemoriesByScope,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.target, nil)
+			if tc.id != "" {
+				req.SetPathValue("id", tc.id)
+			}
+			req.Header.Set("x-authz-user-id", "user-bob")
+			w := httptest.NewRecorder()
+
+			tc.handler(w, req)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want 401: %s", w.Code, w.Body.String())
+			}
+			if code := parseErrorResponse(t, w.Body.Bytes()); code != "MISSING_USER_ID" {
+				t.Fatalf("error code = %q, want MISSING_USER_ID", code)
+			}
+		})
+	}
+
+	result, _ := store.List(context.Background(), memory.ListOptions{UserID: "user-alice"})
+	if result.Total != 3 {
+		t.Errorf("expected user-alice memories to remain unchanged, got %d", result.Total)
 	}
 }
 

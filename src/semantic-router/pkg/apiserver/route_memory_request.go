@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -35,9 +34,9 @@ func (s *ClassificationAPIServer) requireMemoryStore(w http.ResponseWriter) bool
 	return true
 }
 
-// extractUserID extracts the ingress identity used to scope management memory
-// operations. Query parameters and request-body fields are never identity
-// sources because callers can author them directly.
+// extractUserID extracts the verified ingress identity used to scope management
+// memory operations. Query parameters and request-body fields are never
+// identity sources because callers can author them directly.
 func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
 	identity := s.extractTrustedIdentity(r)
 	userID := strings.TrimSpace(identity.UserID)
@@ -60,11 +59,18 @@ func (s *ClassificationAPIServer) extractTrustedIdentity(r *http.Request) authz.
 	if r == nil {
 		return authz.TrustedIdentity{}
 	}
-	headerName := headers.AuthzUserID
-	if cfg := s.currentConfig(); cfg != nil {
-		headerName = cfg.Authz.Identity.GetUserIDHeader()
+
+	// Memory management handlers are called directly by the HTTP server and do
+	// not pass through the ExtProc identity boundary. Only an explicitly
+	// verified ingress may make the configured identity header trustworthy.
+	cfg := s.currentConfig()
+	if cfg == nil || !cfg.Authz.Identity.HasVerifiedIngress() {
+		return authz.TrustedIdentity{}
 	}
-	return authz.TrustedIdentity{UserID: requestHeaderValueCI(r.Header, headerName)}
+
+	return authz.TrustedIdentity{
+		UserID: requestHeaderValueCI(r.Header, cfg.Authz.Identity.GetUserIDHeader()),
+	}
 }
 
 func requestHeaderValueCI(header http.Header, name string) string {
