@@ -227,13 +227,14 @@ func validateDecisionShadowDispatchPlugin(cfg *RouterConfig, decision *Decision)
 			decision.Algorithm.Type,
 		)
 	}
-	model := strings.TrimSpace(shadow.Model)
-	if len(cfg.GetEndpointsForModel(model)) == 0 {
-		return fmt.Errorf(
-			"decision %q: shadow_dispatch model %q has no configured backend",
-			decision.Name,
-			model,
-		)
+	for _, model := range shadow.ShadowModels() {
+		if len(cfg.GetEndpointsForModel(model)) == 0 {
+			return fmt.Errorf(
+				"decision %q: shadow_dispatch model %q has no configured backend",
+				decision.Name,
+				model,
+			)
+		}
 	}
 	return nil
 }
