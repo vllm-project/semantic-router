@@ -55,7 +55,7 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 		}, nil
 	}
 
-	if !s.classifier.IsJailbreakModelReady() {
+	if !classifier.IsJailbreakModelReady() {
 		return nil, ErrModelNotReady
 	}
 

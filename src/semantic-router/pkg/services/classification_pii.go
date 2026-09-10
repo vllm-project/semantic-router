@@ -62,7 +62,7 @@ func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) 
 		}, nil
 	}
 
-	if !s.classifier.IsPIIModelReady() {
+	if !classifier.IsPIIModelReady() {
 		return nil, ErrModelNotReady
 	}
 

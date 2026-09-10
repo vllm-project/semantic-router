@@ -168,14 +168,16 @@ typedef struct {
 
 // Classification result structure
 typedef struct {
-    int class;
+	int predicted_class;
     float confidence;
+	char* label;
 } ClassificationResult;
 
 // Classification result with full probability distribution structure
 typedef struct {
-    int class;
     float confidence;
+	int predicted_class;
+	char* label;
     float* probabilities;
     int num_classes;
 } ClassificationResultWithProbs;
@@ -269,7 +271,7 @@ extern ClassificationResultWithProbs classify_text_with_probabilities(const char
 extern void free_probabilities(float* probabilities, int num_classes);
 extern ClassificationResult classify_pii_text(const char* text);
 extern ClassificationResult classify_jailbreak_text(const char* text);
-extern ClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
+extern ModernBertClassificationResultWithProbs classify_jailbreak_text_with_probabilities(const char* text);
 extern ClassificationResult classify_bert_text(const char* text);
 extern ModernBertClassificationResult classify_modernbert_text(const char* text);
 extern ModernBertClassificationResultWithProbs classify_modernbert_text_with_probabilities(const char* text);
@@ -459,6 +461,8 @@ import "C"
 
 var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
 
+const userAgent = "semantic-router/1.0 (https://github.com/vllm-project/semantic-router)"
+
 func ensureEmbeddingModelReady(modelType string) error {
 	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
 		if !multiModalReady.Load() {
@@ -477,6 +481,9 @@ var (
 	initErr                               error
 	modelInitialized                      bool
 	embeddingModelsReady                  atomic.Bool
+	qwen3EmbeddingReady                   atomic.Bool
+	gemmaEmbeddingReady                   atomic.Bool
+	mmBertEmbeddingReady                  atomic.Bool
 	multiModalReady                       atomic.Bool
 	classifierInitOnce                    sync.Once
 	classifierInitErr                     error
@@ -943,6 +950,9 @@ func InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath string,
 	}
 
 	embeddingModelsReady.Store(true)
+	qwen3EmbeddingReady.Store(qwen3ModelPath != "")
+	gemmaEmbeddingReady.Store(gemmaModelPath != "")
+	mmBertEmbeddingReady.Store(mmBertModelPath != "")
 	log.Printf("INFO: Embedding models initialized successfully")
 
 	return nil
@@ -986,6 +996,8 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 		return fmt.Errorf("failed to initialize mmBERT embedding model")
 	}
 
+	embeddingModelsReady.Store(true)
+	mmBertEmbeddingReady.Store(true)
 	log.Printf("INFO: mmBERT embedding model initialized with 2D Matryoshka support")
 	return nil
 }
@@ -1293,7 +1305,12 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	)
 
 	client := &http.Client{Timeout: time.Duration(httpTimeout) * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET failed: %w", err)
 	}
@@ -1992,6 +2009,24 @@ func IsEmbeddingReady() bool {
 	return embeddingModelsReady.Load()
 }
 
+// IsEmbeddingModelReady reports readiness for the model selected by a request.
+func IsEmbeddingModelReady(modelType string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "", "auto":
+		return embeddingModelsReady.Load()
+	case "qwen3":
+		return qwen3EmbeddingReady.Load()
+	case "gemma":
+		return gemmaEmbeddingReady.Load()
+	case "mmbert":
+		return mmBertEmbeddingReady.Load()
+	case "multimodal":
+		return multiModalReady.Load()
+	default:
+		return false
+	}
+}
+
 // IsMultiModalReady returns whether the multi-modal embedding model has been
 // successfully initialized and is ready to serve image/audio requests.
 func IsMultiModalReady() bool {
@@ -2001,6 +2036,21 @@ func IsMultiModalReady() bool {
 // SetEmbeddingReady sets the embedding model readiness flag for testing.
 func SetEmbeddingReady(ready bool) {
 	embeddingModelsReady.Store(ready)
+	qwen3EmbeddingReady.Store(ready)
+	gemmaEmbeddingReady.Store(ready)
+	mmBertEmbeddingReady.Store(ready)
+}
+
+// SetEmbeddingModelReady overrides one embedding family's readiness for tests.
+func SetEmbeddingModelReady(modelType string, ready bool) {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "qwen3":
+		qwen3EmbeddingReady.Store(ready)
+	case "gemma":
+		gemmaEmbeddingReady.Store(ready)
+	case "mmbert":
+		mmBertEmbeddingReady.Store(ready)
+	}
 }
 
 // SetMultiModalReady sets the multimodal embedding model readiness flag for testing.
@@ -2010,7 +2060,6 @@ func SetMultiModalReady(ready bool) {
 
 // InitClassifier initializes the BERT classifier with the specified model path and number of classes
 func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
-	var err error
 	classifierInitOnce.Do(func() {
 		if modelPath == "" {
 			// Default to BERT base model if path is empty
@@ -2018,7 +2067,7 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 		}
 
 		if numClasses < 2 {
-			err = fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
+			classifierInitErr = fmt.Errorf("number of classes must be at least 2, got %d", numClasses)
 			return
 		}
 
@@ -2030,10 +2079,10 @@ func InitClassifier(modelPath string, numClasses int, useCPU bool) error {
 
 		success := C.init_classifier(cModelID, C.int(numClasses), C.bool(useCPU))
 		if !bool(success) {
-			err = fmt.Errorf("failed to initialize classifier model")
+			classifierInitErr = fmt.Errorf("failed to initialize classifier model")
 		}
 	})
-	return err
+	return classifierInitErr
 }
 
 // InitPIIClassifier initializes the BERT PII classifier with the specified model path and number of classes
@@ -2099,12 +2148,12 @@ func ClassifyText(text string) (ClassResult, error) {
 
 	result := C.classify_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }
@@ -2116,7 +2165,7 @@ func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
 
 	result := C.classify_text_with_probabilities(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResultWithProbs{}, fmt.Errorf("failed to classify text with probabilities")
 	}
 
@@ -2132,7 +2181,7 @@ func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
 	}
 
 	return ClassResultWithProbs{
-		Class:         int(result.class),
+		Class:         int(result.predicted_class),
 		Confidence:    float32(result.confidence),
 		Probabilities: probabilities,
 		NumClasses:    int(result.num_classes),
@@ -2168,12 +2217,12 @@ func ClassifyPIIText(text string) (ClassResult, error) {
 
 	result := C.classify_pii_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify PII text")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }
@@ -2185,12 +2234,12 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 
 	result := C.classify_jailbreak_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify jailbreak text")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }
@@ -3301,12 +3350,12 @@ func ClassifyDebertaJailbreakText(text string) (ClassResult, error) {
 
 	result := C.classify_deberta_jailbreak_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify jailbreak text with DeBERTa v3")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }
@@ -3460,12 +3509,12 @@ func ClassifyBertText(text string) (ClassResult, error) {
 
 	result := C.classify_bert_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text with BERT")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }
@@ -3501,12 +3550,12 @@ func ClassifyCandleBertText(text string) (ClassResult, error) {
 
 	result := C.classify_candle_bert_text(cText)
 
-	if result.class < 0 {
+	if result.predicted_class < 0 {
 		return ClassResult{}, fmt.Errorf("failed to classify text with Candle BERT")
 	}
 
 	return ClassResult{
-		Class:      int(result.class),
+		Class:      int(result.predicted_class),
 		Confidence: float32(result.confidence),
 	}, nil
 }

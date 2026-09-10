@@ -46,7 +46,10 @@ func isEmbeddingModelNotReady(err error) bool {
 // deployment from attempting image inference (which would 500) and a
 // multimodal-only deployment from being rejected for text-only requests.
 func checkEmbeddingReadiness(req EmbeddingRequest) error {
-	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingReady() {
+	if (len(req.Texts) > 0 || len(req.Images) > 0) && req.Model == "multimodal" && !candle_binding.IsMultiModalReady() {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	if len(req.Texts) > 0 && !candle_binding.IsEmbeddingModelReady(req.Model) {
 		return candle_binding.ErrEmbeddingModelNotReady
 	}
 	if len(req.Images) > 0 && !candle_binding.IsMultiModalReady() {
@@ -123,8 +126,8 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 
 	applyEmbeddingDefaults(&req)
 	mmbertPath := ""
-	if s.config != nil {
-		mmbertPath = s.config.EmbeddingModels.MmBertModelPath
+	if cfg := s.currentConfig(); cfg != nil {
+		mmbertPath = cfg.EmbeddingModels.MmBertModelPath
 	}
 	availableLayers := config.MmBertAvailableLayers(mmbertPath)
 	if code, message, ok := validateEmbeddingRequest(req, availableLayers); !ok {
@@ -250,6 +253,8 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 		return candle_binding.GetEmbeddingWithMetadata(text, req.QualityPriority, req.LatencyPriority, req.Dimension)
 	case "mmbert":
 		return candle_binding.GetEmbedding2DMatryoshka(text, req.Model, req.TargetLayer, req.Dimension)
+	case "multimodal":
+		return candle_binding.MultiModalEncodeText(text, req.Dimension)
 	default:
 		return candle_binding.GetEmbeddingWithModelType(text, req.Model, req.Dimension)
 	}
@@ -262,7 +267,7 @@ func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, 
 		s.writeJSONRequestError(w, err)
 		return SimilarityRequest{}, false
 	}
-	if req.Text1 == "" || req.Text2 == "" {
+	if strings.TrimSpace(req.Text1) == "" || strings.TrimSpace(req.Text2) == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
 		return SimilarityRequest{}, false
 	}
@@ -276,9 +281,13 @@ func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, 
 		req.QualityPriority = 0.5
 		req.LatencyPriority = 0.5
 	}
+	if req.QualityPriority < 0 || req.QualityPriority > 1 || req.LatencyPriority < 0 || req.LatencyPriority > 1 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_PARAMETER", "quality_priority and latency_priority must be between 0 and 1")
+		return SimilarityRequest{}, false
+	}
 	if !isValidDimension(req.Dimension) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+			fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
 		return SimilarityRequest{}, false
 	}
 	return req, true
@@ -291,7 +300,7 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if !candle_binding.IsEmbeddingReady() {
+	if !candle_binding.IsEmbeddingModelReady(req.Model) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			"Embedding models are not initialized — configure an embedding model in your router config")
 		return
@@ -333,7 +342,7 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	if !candle_binding.IsEmbeddingReady() {
+	if !candle_binding.IsEmbeddingModelReady(req.Model) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
 			"Embedding models are not initialized — configure an embedding model in your router config")
 		return
@@ -371,8 +380,8 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		ProcessingTimeMs: result.ProcessingTimeMs,
 	}
 
-	logging.Infof("Calculated batch similarity: query='%s', %d candidates, top-%d matches (model: %s, took: %.2fms)",
-		req.Query, len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
+	logging.Infof("Calculated batch similarity: query=%s, %d candidates, top-%d matches (model: %s, took: %.2fms)",
+		logging.ContentDescriptor(req.Query), len(req.Candidates), len(matches), result.ModelType, result.ProcessingTimeMs)
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -411,17 +420,25 @@ func applyBatchSimilarityDefaults(req *BatchSimilarityRequest) {
 }
 
 func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string, bool) {
-	if req.Query == "" {
+	if strings.TrimSpace(req.Query) == "" {
 		return "INVALID_INPUT", "query must be provided", false
 	}
 	if len(req.Candidates) == 0 {
 		return "INVALID_INPUT", "candidates array cannot be empty", false
 	}
+	for i, candidate := range req.Candidates {
+		if strings.TrimSpace(candidate) == "" {
+			return "INVALID_INPUT", fmt.Sprintf("candidate at index %d must be provided", i), false
+		}
+	}
 	if req.TopK < 0 {
 		return "INVALID_INPUT", "top_k cannot be negative", false
 	}
+	if req.QualityPriority < 0 || req.QualityPriority > 1 || req.LatencyPriority < 0 || req.LatencyPriority > 1 {
+		return "INVALID_PARAMETER", "quality_priority and latency_priority must be between 0 and 1", false
+	}
 	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
+		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
 	}
 	return "", "", true
 }

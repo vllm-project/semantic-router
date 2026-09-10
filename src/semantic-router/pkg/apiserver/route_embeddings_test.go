@@ -529,3 +529,30 @@ func TestEmbeddingHandlerReturns503ForMixedRequestWhenTextModelsNotReady(t *test
 		t.Fatalf("expected EMBEDDING_NOT_READY, got: %s", rr.Body.String())
 	}
 }
+
+func TestCheckEmbeddingReadinessUsesSelectedTextFamily(t *testing.T) {
+	origText := candle_binding.IsEmbeddingReady()
+	candle_binding.SetEmbeddingReady(true)
+	candle_binding.SetEmbeddingModelReady("qwen3", false)
+	defer candle_binding.SetEmbeddingReady(origText)
+
+	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "qwen3", Texts: []string{"hello"}}); err == nil {
+		t.Fatal("expected qwen3 request to be rejected when qwen3 is not ready")
+	}
+	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "gemma", Texts: []string{"hello"}}); err != nil {
+		t.Fatalf("expected ready gemma request to pass, got %v", err)
+	}
+}
+
+func TestCheckEmbeddingReadinessAllowsMultimodalTextWithoutTextFamily(t *testing.T) {
+	origText := candle_binding.IsEmbeddingReady()
+	origImage := candle_binding.IsMultiModalReady()
+	candle_binding.SetEmbeddingReady(false)
+	candle_binding.SetMultiModalReady(true)
+	defer candle_binding.SetEmbeddingReady(origText)
+	defer candle_binding.SetMultiModalReady(origImage)
+
+	if err := checkEmbeddingReadiness(EmbeddingRequest{Model: "multimodal", Texts: []string{"hello"}}); err != nil {
+		t.Fatalf("expected multimodal text request to pass, got %v", err)
+	}
+}
