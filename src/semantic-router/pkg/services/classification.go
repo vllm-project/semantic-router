@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -161,7 +162,7 @@ func NewPlaceholderClassificationService() *ClassificationService {
 }
 
 // ClassifyIntent performs intent classification using signal-driven architecture
-func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
+func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
 	start := time.Now()
 
 	input, err := req.resolveSignalInput()
@@ -192,6 +193,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
@@ -220,6 +222,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	}
 
 	category, confidence := resolveIntentCategory(
+		ctx,
 		classifier,
 		decisionResult,
 		input.evaluationText,
