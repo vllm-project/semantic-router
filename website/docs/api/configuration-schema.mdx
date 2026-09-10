@@ -2,6 +2,7 @@
 title: Configuration Schema Reference
 sidebar_label: Configuration Schema
 description: Search the canonical vLLM Semantic Router configuration contract.
+hide_table_of_contents: true
 ---
 
 import ConfigurationSchemaReference from "@site/src/components/ConfigurationSchemaReference";
@@ -33,3 +34,7 @@ Section views preserve their real shape: list sections such as `listeners`,
 `entrypoints`, and `recipes` expose their item fields, while `version` is shown
 as the fixed scalar value. Bootstrap-only Dashboard state such as `setup.mode`
 is deliberately outside this steady-state Router contract.
+
+For API discovery beyond configuration, use the generated
+[Router OpenAPI Reference](./openapi). Agents query both contracts directly from
+the Router; the Website and Dashboard only visualize them.

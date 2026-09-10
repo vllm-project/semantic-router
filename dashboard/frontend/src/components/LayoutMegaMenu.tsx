@@ -184,11 +184,16 @@ const LayoutMegaMenu = ({
                   const key = `${section.title}-${item.label}`
 
                   const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+                  const reloadDocument = item.kind === 'route' && item.reloadDocument
+                  const target = item.kind === 'route' ? item.target : undefined
                   return (
                     <NavLink
                       key={key}
                       data-mega-link
                       to={to}
+                      reloadDocument={reloadDocument}
+                      target={target}
+                      rel={target === '_blank' ? 'noreferrer' : undefined}
                       className={className}
                       onFocus={() => onItemIntent(item)}
                       onPointerEnter={() => onItemIntent(item)}

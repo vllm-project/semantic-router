@@ -93,14 +93,23 @@ export default function LayoutMobileNavigation({
     const className = `${styles.mobileNavLink} ${active ? styles.mobileNavLinkActive : ''}`
 
     const to = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+    const reloadDocument = item.kind === 'route' && item.reloadDocument
+    const target = item.kind === 'route' ? item.target : undefined
     return (
       <NavLink
         key={key}
         to={to}
+        reloadDocument={reloadDocument}
+        target={target}
+        rel={target === '_blank' ? 'noreferrer' : undefined}
         className={className}
         data-mobile-nav-control
-        onFocus={() => void preloadDashboardRoute(to)}
-        onPointerDown={() => void preloadDashboardRoute(to)}
+        onFocus={() => {
+          if (!reloadDocument) void preloadDashboardRoute(to)
+        }}
+        onPointerDown={() => {
+          if (!reloadDocument) void preloadDashboardRoute(to)
+        }}
         onClick={onNavigate}
       >
         <ProductIcon name={item.icon} className={styles.mobileNavIcon} />

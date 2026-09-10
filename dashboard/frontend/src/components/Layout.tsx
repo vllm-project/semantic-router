@@ -234,6 +234,7 @@ const Layout: React.FC<LayoutProps> = ({
               isLayoutMenuItemActive(item, location.pathname, isConfigPage, configSection)
             }
             onItemIntent={(item) => {
+              if (item.kind === 'route' && item.reloadDocument) return
               const target = item.kind === 'config' ? `/config/${item.configSection}` : item.to
               void preloadDashboardRoute(target)
             }}

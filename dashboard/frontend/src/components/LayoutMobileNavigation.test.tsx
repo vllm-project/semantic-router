@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import LayoutMobileNavigation from './LayoutMobileNavigation'
-import { BUILD_MENU_CATEGORIES } from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES, OPERATE_MENU_CATEGORIES } from './LayoutNavSupport'
 
 describe('LayoutMobileNavigation contract', () => {
   it('keeps the active child and its workflow parent visible in the mobile hierarchy', () => {
@@ -67,5 +67,25 @@ describe('LayoutMobileNavigation contract', () => {
 
     expect(markup).not.toContain('Build</span>')
     expect(markup).toContain('System</span>')
+  })
+
+  it('keeps the Router API documentation link outside SPA routing on mobile', () => {
+    const markup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/dashboard'] },
+        createElement(LayoutMobileNavigation, {
+          isConfigPage: false,
+          openSection: 'operate',
+          pathname: '/dashboard',
+          sections: [{ key: 'operate', label: 'System', categories: OPERATE_MENU_CATEGORIES }],
+          onNavigate: vi.fn(),
+          onSectionToggle: vi.fn(),
+        }),
+      ),
+    )
+
+    expect(markup).toContain('href="/api/router/docs"')
+    expect(markup).toContain('target="_blank"')
   })
 })

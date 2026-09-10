@@ -40,6 +40,18 @@ interface SchemaDocument extends SchemaNode {
 
 type SchemaFieldEntry = [name: string, node: SchemaNode]
 
+interface DirectoryEntry {
+  id: string
+  name: string
+  label: string
+  node: SchemaNode
+}
+
+interface DirectoryGroup {
+  kind: string
+  entries: DirectoryEntry[]
+}
+
 const document = routerConfigSchema as unknown as SchemaDocument
 
 function resolve(node: SchemaNode): SchemaNode {
@@ -66,7 +78,7 @@ function nodeType(node: SchemaNode): string {
 }
 
 function displayName(value: string): string {
-  const words = value.replaceAll('_', ' ')
+  const words = value.replace(/_/g, ' ')
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
@@ -90,69 +102,85 @@ function fieldsLabel(node: SchemaNode): string {
   return 'Value'
 }
 
-const catalogs = [
+const directoryGroups: DirectoryGroup[] = [
+  {
+    kind: 'Document sections',
+    entries: Object.entries(document.properties ?? {}).map(([name, node]) => {
+      const section = resolve(node)
+      return {
+        id: `section:${name}`,
+        name,
+        label: section.title || displayName(name),
+        node,
+      }
+    }),
+  },
   {
     kind: 'Signals',
     entries: document['x-vllm-sr'].signals.map(entry => ({
+      id: `signal:${entry.type}`,
       name: entry.type,
       label: entry.display_name,
-      ref: entry.schema_ref,
+      node: { $ref: entry.schema_ref },
     })),
   },
   {
     kind: 'Algorithms',
     entries: document['x-vllm-sr'].algorithms.map(entry => ({
+      id: `algorithm:${entry.type}`,
       name: entry.type,
       label: entry.display_name,
-      ref: entry.schema_ref,
+      node: entry.schema_ref ? { $ref: entry.schema_ref } : { type: 'object' },
     })),
   },
   {
     kind: 'Plugins',
     entries: document['x-vllm-sr'].plugins.map(entry => ({
+      id: `plugin:${entry.type}`,
       name: entry.type,
       label: entry.display_name,
-      ref: entry.schema_ref,
+      node: { $ref: entry.schema_ref },
     })),
   },
   {
     kind: 'Projections',
     entries: document['x-vllm-sr'].projections.map(entry => ({
+      id: `projection:${entry.collection}`,
       name: entry.collection,
       label: entry.display_name,
-      ref: entry.schema_ref,
+      node: { $ref: entry.schema_ref },
     })),
   },
 ]
 
 export default function ConfigurationSchemaReference() {
   const [query, setQuery] = useState('')
-  const [selectedNode, setSelectedNode] = useState<SchemaNode | null>(null)
-  const normalized = query.trim().toLowerCase()
-  const sections = useMemo(
-    () =>
-      Object.entries(document.properties ?? {}).filter(([name, node]) => {
-        const section = resolve(node)
-        return [name, section.title, section.description]
-          .filter(Boolean)
-          .some(value => value!.toLowerCase().includes(normalized))
-      }),
-    [normalized],
+  const [selectedEntryId, setSelectedEntryId] = useState(
+    directoryGroups[0]?.entries.find(entry => entry.name === 'global')?.id
+    ?? directoryGroups[0]?.entries[0]?.id
+    ?? '',
   )
-  const visibleCatalogs = useMemo(
+  const normalized = query.trim().toLowerCase()
+  const visibleGroups = useMemo(
     () =>
-      catalogs
+      directoryGroups
         .map(catalog => ({
           ...catalog,
-          entries: catalog.entries.filter(entry =>
-            [entry.name, entry.label, catalog.kind].some(value =>
-              value.toLowerCase().includes(normalized),
-            ),
-          ),
+          entries: catalog.entries.filter((entry) => {
+            const node = concrete(entry.node)
+            return [entry.name, entry.label, catalog.kind, node.title, node.description]
+              .filter(Boolean)
+              .some(value => value!.toLowerCase().includes(normalized))
+          }),
         }))
         .filter(catalog => catalog.entries.length),
     [normalized],
   )
+  const visibleEntries = visibleGroups.flatMap(group => group.entries)
+  const selectedEntry = visibleEntries.find(entry => entry.id === selectedEntryId)
+    ?? visibleEntries[0]
+    ?? null
+  const selectedNode = selectedEntry?.node ?? null
   const selected = selectedNode ? concrete(selectedNode) : null
   const selectedRoot = selectedNode ? fieldRoot(selectedNode) : null
   const selectedFields = selectedNode ? fieldEntries(selectedNode) : []
@@ -193,31 +221,16 @@ export default function ConfigurationSchemaReference() {
           className={styles.directory}
           aria-label="Configuration schema directory"
         >
-          <h3>Document sections</h3>
-          {sections.map(([name, node]) => {
-            const section = resolve(node)
-            return (
-              <button
-                type="button"
-                key={name}
-                onClick={() => setSelectedNode(node)}
-              >
-                <span>{section.title || displayName(name)}</span>
-                <code>{name}</code>
-              </button>
-            )
-          })}
-          {visibleCatalogs.map(catalog => (
+          {visibleGroups.map(catalog => (
             <section key={catalog.kind}>
               <h3>{catalog.kind}</h3>
               {catalog.entries.map(entry => (
                 <button
                   type="button"
-                  key={entry.name}
-                  onClick={() =>
-                    setSelectedNode(
-                      entry.ref ? { $ref: entry.ref } : { type: 'object' },
-                    )}
+                  key={entry.id}
+                  data-active={entry.id === selectedEntry?.id || undefined}
+                  aria-pressed={entry.id === selectedEntry?.id}
+                  onClick={() => setSelectedEntryId(entry.id)}
                 >
                   <span>{entry.label}</span>
                   <code>{entry.name}</code>
@@ -231,7 +244,15 @@ export default function ConfigurationSchemaReference() {
           {selected
             ? (
                 <>
-                  <h3>{selected.title || selectedRoot?.title || 'Schema fields'}</h3>
+                  <header className={styles.detailHeading}>
+                    <div>
+                      <span>Selected contract</span>
+                      <h3>
+                        {selected.title || selectedRoot?.title || selectedEntry?.label || 'Schema fields'}
+                      </h3>
+                    </div>
+                    <code>{selectedEntry?.name}</code>
+                  </header>
                   {selected.description || selectedRoot?.description
                     ? <p>{selected.description || selectedRoot?.description}</p>
                     : null}
@@ -290,9 +311,9 @@ export default function ConfigurationSchemaReference() {
               )
             : (
                 <div className={styles.empty}>
-                  <strong>Select a document section or routing surface</strong>
+                  <strong>No contract matches this filter</strong>
                   <span>
-                    The reference expands one schema definition at a time.
+                    Clear the search or try a broader capability name.
                   </span>
                 </div>
               )}

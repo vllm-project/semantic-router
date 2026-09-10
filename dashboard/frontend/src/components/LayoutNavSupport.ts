@@ -16,6 +16,8 @@ type LayoutRouteMenuItem = {
   label: string
   icon: ProductIconName
   to: string
+  reloadDocument?: boolean
+  target?: '_blank'
   matchMode?: 'exact' | 'prefix'
   activePathPattern?: RegExp
 }
@@ -256,6 +258,14 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
             label: 'Schema Reference',
             icon: 'code',
             to: '/config/reference',
+          },
+          {
+            kind: 'route',
+            label: 'Router API Docs',
+            icon: 'code',
+            to: '/api/router/docs',
+            reloadDocument: true,
+            target: '_blank',
           },
         ],
       },

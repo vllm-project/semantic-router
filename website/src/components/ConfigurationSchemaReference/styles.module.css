@@ -2,6 +2,8 @@
   display: grid;
   gap: 1rem;
   margin: 1.5rem 0;
+  container-name: schema-reference;
+  container-type: inline-size;
 }
 
 .identity {
@@ -70,18 +72,19 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  min-height: 520px;
-  overflow: hidden;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 10px;
+  grid-template-columns: minmax(210px, 0.34fr) minmax(0, 0.66fr);
+  align-items: start;
+  gap: 0.85rem;
 }
 
 .directory {
-  max-height: 720px;
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 1rem);
+  max-height: min(72vh, 760px);
   overflow: auto;
   padding: 0.8rem;
-  border-right: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 10px;
   background: var(--ifm-color-emphasis-100);
 }
 
@@ -116,6 +119,12 @@
   background: var(--ifm-color-emphasis-200);
 }
 
+.directory button[data-active='true'] {
+  background: color-mix(in srgb, var(--ifm-color-primary) 12%, var(--ifm-background-color));
+  box-shadow: inset 2px 0 0 var(--ifm-color-primary);
+  color: var(--ifm-color-primary-darkest);
+}
+
 .directory button span {
   overflow: hidden;
   font-size: 0.76rem;
@@ -129,11 +138,42 @@
 
 .detail {
   min-width: 0;
+  min-height: 520px;
   padding: clamp(1rem, 3vw, 1.6rem);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 10px;
+  background: var(--ifm-background-surface-color);
 }
 
-.detail > h3 {
-  margin-top: 0;
+.detailHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.detailHeading span {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detailHeading h3 {
+  margin: 0;
+}
+
+.detailHeading > code {
+  max-width: 46%;
+  overflow-wrap: anywhere;
+  font-size: 0.7rem;
+  text-align: right;
 }
 
 .detail > p {
@@ -189,6 +229,7 @@
 
 .fields {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
   gap: 0.55rem;
 }
 
@@ -201,7 +242,13 @@
 .fields header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.4rem;
+}
+
+.fields header code {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .fields header span,
@@ -243,6 +290,21 @@
   color: var(--ifm-font-color-base);
 }
 
+@container schema-reference (max-width: 820px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .directory {
+    position: static;
+    max-height: 340px;
+  }
+
+  .detail {
+    min-height: 380px;
+  }
+}
+
 @media (max-width: 760px) {
   .identity {
     grid-template-columns: 1fr 1fr;
@@ -253,18 +315,8 @@
     justify-content: flex-start;
   }
 
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
   .directory {
-    max-height: 320px;
-    border-right: 0;
-    border-bottom: 1px solid var(--ifm-color-emphasis-300);
-  }
-
-  .detail {
-    min-height: 360px;
+    max-height: 300px;
   }
 
   .shape {
@@ -275,5 +327,14 @@
   .shape small {
     width: 100%;
     margin-left: 0;
+  }
+
+  .detailHeading {
+    display: grid;
+  }
+
+  .detailHeading > code {
+    max-width: 100%;
+    text-align: left;
   }
 }

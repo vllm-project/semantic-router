@@ -78,4 +78,18 @@ describe('layout navigation route matching', () => {
     expect(schemaReference).toMatchObject({ label: 'Schema Reference', icon: 'code' })
     expect(isLayoutMenuItemActive(schemaReference!, '/config/reference', true)).toBe(true)
   })
+
+  it('links directly to the running Router OpenAPI UI without making Dashboard the contract owner', () => {
+    const routerAPI = OPERATE_MENU_CATEGORIES.find(
+      (category) => category.key === 'platform-access',
+    )
+      ?.sections.flatMap((section) => section.items)
+      .find((item) => item.kind === 'route' && item.to === '/api/router/docs')
+
+    expect(routerAPI).toMatchObject({
+      label: 'Router API Docs',
+      reloadDocument: true,
+      target: '_blank',
+    })
+  })
 })

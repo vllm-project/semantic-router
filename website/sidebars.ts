@@ -501,6 +501,7 @@ const sidebars: SidebarsConfig = {
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
+        'api/openapi',
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',

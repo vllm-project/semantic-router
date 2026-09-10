@@ -70,6 +70,12 @@ warns when the deployed and bundled contracts differ. The Website
 [Configuration Schema Reference](../api/configuration-schema) visualizes the
 current documentation release instead of claiming to represent a deployment.
 
+An Agent does not need the Dashboard. Query `GET /api/v1` on the Router for the
+compact endpoint inventory, then request one operation with
+`GET /openapi.json?path=...&method=...`; use `GET /openapi.json` only when the
+complete API document is needed. The Dashboard's **Router API Docs** link is a
+human-facing proxy to that same runtime document.
+
 Every representation has its own `ETag`; use `If-None-Match` when an agent or
 editor caches it.
 
