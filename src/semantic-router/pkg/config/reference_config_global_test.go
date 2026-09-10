@@ -96,7 +96,7 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 	metrics := mustMapAt(t, api, "batch_classification", "metrics")
 
 	assertMapCoversStructFields(t, api, reflect.TypeOf(APIConfig{}), "global.services.api")
-	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification")
+	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification", "concurrency_threshold", "max_concurrency")
 	assertMapCoversStructFields(t, metrics, reflect.TypeOf(BatchClassificationMetricsConfig{}), "global.services.api.batch_classification.metrics")
 	assertSliceUnionCoversStructFields(
 		t,
