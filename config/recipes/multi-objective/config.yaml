@@ -150,6 +150,40 @@ providers:
       cached_input_per_1m: 0.055
     external_model_ids:
       vllm: deepseek-ai/DeepSeek-V4-Flash-0731
+evaluation:
+  records:
+  - model: local/qwen3.5-122b-frontier
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.94
+  - model: local/qwen3.5-9b-economy
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.5-9b-economy-replica
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.5-9b-private
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.6-27b-coder
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.9
+  - model: local/qwen3.6-35b-flash
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.84
+  - model: local/gemma4-26b-balanced
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.89
+  - model: local/deepseek-v4-flash-analyst
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.88
 routing:
   modelCards:
   - name: local/omni
@@ -162,10 +196,6 @@ routing:
     - legal_analysis
     - high_risk_review
     - deep_synthesis
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.94
     modality: text
     tags:
     - tier:premium
@@ -179,10 +209,6 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.68
     modality: text
     tags:
     - tier:economy
@@ -197,10 +223,6 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.68
     modality: text
     tags:
     - tier:economy_replica
@@ -215,10 +237,6 @@ routing:
     - privacy_locality
     - sensitive_data
     - general_chat
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.68
     modality: text
     tags:
     - tier:private
@@ -233,10 +251,6 @@ routing:
     - coding
     - structured_output
     - tool_use
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.9
     modality: text
     tags:
     - tier:coder
@@ -250,10 +264,6 @@ routing:
     - fast_qa
     - coding
     - reasoning
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.84
     modality: text
     tags:
     - tier:flash
@@ -269,10 +279,6 @@ routing:
     - multilingual
     - structured_output
     - long_context
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.89
     modality: text
     tags:
     - tier:balanced
@@ -288,10 +294,6 @@ routing:
     - long_context
     - tool_use
     - reasoning_diversity
-    evaluations:
-    - benchmark: vllm-sr/operator-rating@1.0.0
-      metrics:
-        score: 0.88
     modality: text
     tags:
     - tier:experimental_frontier
