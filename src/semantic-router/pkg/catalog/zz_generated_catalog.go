@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:6efc18a80959d594fbe6fdd6d29f2ecb6187676288a643ff7fd718cf9d7c41e0"
+const builtInCatalogDigest = "sha256:3c9799e6c82b1a23a6eb88aa6cfb76d33c21ccacf4f05950d2941bae74b40bf6"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -92748,6 +92748,33 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Foundation models served from a Databricks workspace.",
+      "display_name": "Databricks",
+      "id": "databricks",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "DB"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create"
       ]
     },
     {

@@ -744,6 +744,38 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self.assertEqual(provider["conformance"], {"status": "unverified"})
         self.assertNotIn("models", provider)
 
+    def test_databricks_provider_contract_is_complete(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        provider = providers["databricks"]
+
+        self.assertEqual(provider["display_name"], "Databricks")
+        self.assertEqual(provider["category"], "model_api")
+        self.assertEqual(provider["support_tier"], "compatible")
+        self.assertNotIn("default_base_url", provider)
+        self.assertEqual(provider["protocols"], ["openai/chat-completions@1"])
+        self.assertEqual(provider["default_protocol"], "openai/chat-completions@1")
+        self.assertEqual(
+            provider["supported_operations"],
+            ["openai/chat-completions@1#create"],
+        )
+        self.assertNotIn("path_overrides", provider)
+        self.assertNotIn("api_version_query", provider)
+        self.assertEqual(
+            provider["auth"],
+            {
+                "strategy": "bearer",
+                "header": "Authorization",
+                "prefix": "Bearer",
+            },
+        )
+        self.assertEqual(
+            provider["presentation"],
+            {"logo": "monogram", "monogram": "DB", "monochrome": True},
+        )
+        self.assertEqual(provider["conformance"], {"status": "unverified"})
+        self.assertNotIn("models", provider)
+
     def test_core_reasoning_families_match_native_control_surfaces(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         families = {item["id"]: item for item in resources["reasoning_families"]}
