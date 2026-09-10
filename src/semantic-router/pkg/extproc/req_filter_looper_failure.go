@@ -29,11 +29,12 @@ import (
 )
 
 type looperFailureEvidence struct {
-	algorithm    string
-	modelsUsed   []string
-	iterations   int
-	usage        looper.TokenUsage
-	fusionQuorum *routerreplay.FusionQuorumDiagnostics
+	algorithm      string
+	modelsUsed     []string
+	iterations     int
+	usage          looper.TokenUsage
+	executionTrace looper.ExecutionTrace
+	fusionQuorum   *routerreplay.FusionQuorumDiagnostics
 }
 
 func (r *OpenAIRouter) looperExecutionErrorResponse(
@@ -71,10 +72,11 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
 	if evidence, ok := looper.ConfidenceEvidenceFromError(err); ok {
 		return looperFailureEvidence{
-			algorithm:  config.DecisionAlgorithmConfidence,
-			modelsUsed: append([]string(nil), evidence.ModelsUsed...),
-			iterations: evidence.Iterations,
-			usage:      evidence.Usage,
+			algorithm:      config.DecisionAlgorithmConfidence,
+			modelsUsed:     append([]string(nil), evidence.ModelsUsed...),
+			iterations:     evidence.Iterations,
+			usage:          evidence.Usage,
+			executionTrace: evidence.ExecutionTrace,
 		}, true
 	}
 	if evidence, ok := looper.FusionQuorumEvidenceFromError(err); ok {
@@ -152,6 +154,7 @@ func (r *OpenAIRouter) recordLooperFailure(
 func applyLooperFailureEvidence(ctx *RequestContext, evidence looperFailureEvidence) {
 	switch evidence.algorithm {
 	case config.DecisionAlgorithmConfidence:
+		ctx.VSRLooperDiagnostics = looperReplayDiagnostics(evidence.executionTrace)
 		if evidence.iterations <= 0 {
 			return
 		}

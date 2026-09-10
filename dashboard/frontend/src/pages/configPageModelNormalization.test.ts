@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import generatedCatalog from '../generated/modelCatalog.json'
+import generatedCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { getNormalizedModels } from './configPageModelNormalization'
 import type { ConfigData } from './configPageSupport'
@@ -87,5 +87,31 @@ describe('config page model normalization', () => {
         reasoning_modes: ['disabled', 'adaptive', 'enabled'],
       }),
     ])
+  })
+
+  it('narrows reasoning efforts to the selected provider protocol', () => {
+    const builtIn = catalog.models.find((model) => model.id === 'openai/gpt-6-astra')
+    expect(builtIn).toBeDefined()
+    const config: ConfigData = {
+      providers: {
+        models: [
+          {
+            name: 'astra-chat',
+            catalog: builtIn!.id,
+            backend_refs: [{ name: 'chat', provider: 'openai' }],
+          },
+          {
+            name: 'astra-responses',
+            catalog: builtIn!.id,
+            api_format: 'responses',
+            backend_refs: [{ name: 'responses', provider: 'openai' }],
+          },
+        ],
+      },
+    }
+
+    const [chat, responses] = getNormalizedModels(config, true, catalog)
+    expect(chat.reasoning_efforts).toEqual(['low', 'medium', 'high', 'xhigh'])
+    expect(responses.reasoning_efforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
   })
 })

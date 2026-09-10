@@ -95,6 +95,10 @@ func (r *OpenAIRouter) selectWithSelector(
 		if requestCtx.Err() != nil {
 			return nil, string(method), requestCtx.Err()
 		}
+		if errors.Is(err, selection.ErrNoEligibleCandidates) {
+			logging.Warnf("[ModelSelection] Selection rejected all candidates: %v", err)
+			return nil, string(method), err
+		}
 		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
 		selected := r.recordSelectionFallback(
 			method,

@@ -1,3 +1,21 @@
+- id: moonshot/kimi-k2-5-model-card-scicode@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Kimi K2.5 Thinking
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.487
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.5/blob/4d01dfe0332d63057c186e0b262165819efb6611/README.md
+    redistributable: true
 - id: independent/kimi-k3-low-critpt@1.0.0
   model: moonshot/kimi-k3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -1210,4 +1228,79 @@
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-moonshotai-kimi-k3
+    redistributable: true
+- id: nvidia-comparative/kimi-k2.6-mmlu-pro@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.881
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: moonshot/kimi-k2.5-livecodebench-v6@1.0.0
+  model: moonshot/kimi-k2.5
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi K2.5
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.850
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.5/blob/4d01dfe0332d63057c186e0b262165819efb6611/README.md
+    redistributable: true
+- id: moonshot/kimi-k2.6-livecodebench-v6@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi K2.6
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.896
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K2.6/blob/7eb5002f6aadc958aed6a9177b7ed26bb94011bb/README.md
+    redistributable: true
+- id: nvidia-comparative/kimi-k2.6-scicode@1.0.0
+  model: moonshot/kimi-k2.6
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Kimi-K2.6 1T-A32B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.520
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
     redistributable: true

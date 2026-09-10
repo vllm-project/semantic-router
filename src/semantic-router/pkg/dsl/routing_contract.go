@@ -6,7 +6,6 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -209,6 +208,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, jb := range d.cfg.JailbreakRules {
 		prog.Signals = append(prog.Signals, d.jailbreakToSignal(&jb))
 	}
+	for i := range d.cfg.HallucinationRules {
+		prog.Signals = append(prog.Signals, d.hallucinationToSignal(&d.cfg.HallucinationRules[i]))
+	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
 	}
@@ -246,9 +248,6 @@ func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
 	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
 	d.writeRoutingModelLoRAs(model.LoRAs)
 	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if len(model.Evaluations) > 0 {
-		d.write("  evaluations: %s\n", formatDSLFieldValue(evaluationsValue(model.Evaluations)))
-	}
 	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
@@ -311,40 +310,10 @@ func routingModelToDecl(model config.RoutingModel) *ModelDecl {
 	if len(model.Tags) > 0 {
 		fields["tags"] = stringsToArray(model.Tags)
 	}
-	if len(model.Evaluations) > 0 {
-		fields["evaluations"] = evaluationsValue(model.Evaluations)
-	}
 	if model.Modality != "" {
 		fields["modality"] = StringValue{V: model.Modality}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
-}
-
-func evaluationsValue(evaluations []modelcatalog.UserEvaluation) ArrayValue {
-	items := make([]Value, 0, len(evaluations))
-	for _, evaluation := range evaluations {
-		fields := map[string]Value{
-			"benchmark": StringValue{V: evaluation.Benchmark},
-		}
-		if len(evaluation.Metrics) > 0 {
-			metrics := make(map[string]Value, len(evaluation.Metrics))
-			for name, value := range evaluation.Metrics {
-				metrics[name] = FloatValue{V: value}
-			}
-			fields["metrics"] = ObjectValue{Fields: metrics}
-		}
-		if evaluation.Source != "" {
-			fields["source"] = StringValue{V: evaluation.Source}
-		}
-		if evaluation.MeasuredAt != "" {
-			fields["measured_at"] = StringValue{V: evaluation.MeasuredAt}
-		}
-		if len(evaluation.Metadata) > 0 {
-			fields["metadata"] = interfaceMapObjectValue(evaluation.Metadata)
-		}
-		items = append(items, ObjectValue{Fields: fields})
-	}
-	return ArrayValue{Items: items}
 }
 
 func quotedStringArray(values []string) string {

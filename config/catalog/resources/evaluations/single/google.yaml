@@ -1623,3 +1623,258 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-google-gemini-3-6-flash
     redistributable: true
+- id: mmlu-pro-leaderboard/gemma-3-27b-it@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: gemma-3-27b-it
+    source_kind: official_benchmark_leaderboard
+    source_model: Gemma-3-27B-it
+    source_model_slug: gemma-3-27b-it
+  metrics:
+    accuracy: 0.675
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gemma-3-27b-gpqa-diamond@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.428282828282828
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-humanitys-last-exam@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.044
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-scicode@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    score: 0.232638888888889
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-27b-terminalbench-v2-1@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    resolved: 0.0449438202247191
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: mmlu-pro-leaderboard/gemma-3-12b-it@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: gemma-3-12b-it
+    source_kind: official_benchmark_leaderboard
+    source_model: Gemma-3-12B-it
+    source_model_slug: gemma-3-12b-it
+  metrics:
+    accuracy: 0.606
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/gemma-3-12b-gpqa-diamond@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    accuracy: 0.349494949494949
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: google/gemma-4-31b-it-livecodebench-v6@1.0.0
+  model: google/gemma-4-31b-it
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Gemma 4 31B IT
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.800
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/google/gemma-4-31b-it/blob/842da3794eaa0b77d5f08bae87a17459d91ff475/README.md
+    redistributable: true
+- id: exaone-comparative/gemma-3-27b-it-livecodebench-v6@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B IT
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.297
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
+- id: independent/gemma-3-12b-humanitys-last-exam@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    accuracy: 0.0421
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-12b-scicode@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    score: 0.164351851851852
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-12b-terminalbench-v2-1@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    resolved: 0.0
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: independent/gemma-3-27b-aime-2025@1.0.0
+  model: google/gemma-3-27b-it
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 27B Instruct
+    source_model_slug: gemma-3-27b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.206666666666667
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-27b
+    redistributable: true
+- id: independent/gemma-3-12b-aime-2025@1.0.0
+  model: google/gemma-3-12b-it
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Gemma 3 12B Instruct
+    source_model_slug: gemma-3-12b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.183333333333333
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true

@@ -83,22 +83,22 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		indexResults = effortResults
 	}
 	params := ModelParams{
-		Catalog:           model.Catalog,
-		ParamSize:         card.ParameterSize,
-		ContextWindowSize: card.Limits.ContextWindowSize,
-		Description:       card.Description,
-		Capabilities:      append([]string(nil), card.Capabilities...),
-		LoRAs:             loraAdaptersFromEffectiveCard(model.Card),
-		Tags:              append([]string(nil), card.Tags...),
-		Evaluations:       cloneUserEvaluations(model.Card.Evaluations),
-		ReasoningFamily:   card.ReasoningFamily,
-		Modality:          modality,
-		IndexResults:      cloneCatalogIndexResults(indexResults),
-		QualityIndex:      qualityIndex,
-		Pricing:           modelPricingFromCatalog(model.BindingDefaults.Pricing),
-		Reliability:       providerReliabilityFromCatalog(model.BindingDefaults.Reliability),
-		AccessKeys:        map[string]string{},
-		ExternalModelIDs:  copyStringMap(model.BindingDefaults.ExternalModelIDs),
+		Catalog:              model.Catalog,
+		ParamSize:            card.ParameterSize,
+		ContextWindowSize:    card.Limits.ContextWindowSize,
+		Description:          card.Description,
+		Capabilities:         append([]string(nil), card.Capabilities...),
+		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
+		Tags:                 append([]string(nil), card.Tags...),
+		ReasoningFamily:      card.ReasoningFamily,
+		Modality:             modality,
+		IndexResults:         cloneCatalogIndexResults(indexResults),
+		IndexResultsByEffort: cloneCatalogIndexResultsByEffort(model.IndicesByEffort),
+		QualityIndex:         qualityIndex,
+		Pricing:              modelPricingFromCatalog(model.BindingDefaults.Pricing),
+		Reliability:          providerReliabilityFromCatalog(model.BindingDefaults.Reliability),
+		AccessKeys:           map[string]string{},
+		ExternalModelIDs:     copyStringMap(model.BindingDefaults.ExternalModelIDs),
 	}
 	if params.ExternalModelIDs == nil {
 		params.ExternalModelIDs = map[string]string{}
@@ -253,6 +253,9 @@ func materializedProviderProfile(
 	if effective.CatalogBinding != nil {
 		reasoningModes = append([]string(nil), effective.CatalogBinding.ReasoningModes...)
 		reasoningEfforts = append([]string(nil), effective.CatalogBinding.ReasoningEfforts...)
+		if protocolEfforts, ok := effective.CatalogBinding.ReasoningEffortsByProtocol[effective.Binding.Protocol]; ok {
+			reasoningEfforts = append([]string(nil), protocolEfforts...)
+		}
 	}
 	return ProviderProfile{
 		Type: provider.Definition.ID, Protocol: effective.Binding.Protocol, BaseURL: baseURL,
@@ -405,6 +408,17 @@ func cloneCatalogIndexResults(source map[string]modelcatalog.IndexResult) map[st
 	result := make(map[string]modelcatalog.IndexResult, len(source))
 	for key, value := range source {
 		result[key] = cloneCatalogIndexResult(value)
+	}
+	return result
+}
+
+func cloneCatalogIndexResultsByEffort(source map[string]map[string]modelcatalog.IndexResult) map[string]map[string]modelcatalog.IndexResult {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]map[string]modelcatalog.IndexResult, len(source))
+	for effort, values := range source {
+		result[effort] = cloneCatalogIndexResults(values)
 	}
 	return result
 }

@@ -1,7 +1,32 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
-import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
+
+const PII_SIGNAL_FIELDS: FieldSchema[] = [
+  {
+    key: 'threshold',
+    label: 'Threshold',
+    type: 'number',
+    required: true,
+    placeholder: '0.8',
+    description: 'Minimum confidence for PII detection (0.0-1.0)',
+  },
+  {
+    key: 'pii_types_allowed',
+    label: 'PII Types Allowed',
+    type: 'string[]',
+    placeholder: 'e.g. EMAIL_ADDRESS',
+    description: 'PII types to allow through (others trigger signal)',
+  },
+  {
+    key: 'include_history',
+    label: 'Include History',
+    type: 'boolean',
+    description: 'Include conversation history in detection',
+  },
+  { key: 'description', label: 'Description', type: 'string' },
+]
 
 const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
   {
@@ -235,8 +260,39 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'threshold',
           label: 'Threshold',
           type: 'number',
-          required: true,
           placeholder: '0.1',
+          description:
+            'Symmetric cut point for local prototype scoring: a margin above it is hard, below its negative is easy. Not used with a score.v1 backend; set a boundary pair instead.',
+        },
+        {
+          key: 'hard_above',
+          label: 'Hard Above',
+          type: 'number',
+          placeholder: '0.85',
+          description:
+            'With Easy Below: boundaries for a remote score where a higher value is harder, in the model’s own units. Mutually exclusive with Threshold and with Hard Below / Easy Above.',
+        },
+        {
+          key: 'easy_below',
+          label: 'Easy Below',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores below this are easy; between Easy Below and Hard Above is medium.',
+        },
+        {
+          key: 'hard_below',
+          label: 'Hard Below',
+          type: 'number',
+          placeholder: '0.2',
+          description:
+            'With Easy Above: boundaries for a remote score where a lower value is harder, such as a predicted chance of answering correctly. Requires a score.v1 backend.',
+        },
+        {
+          key: 'easy_above',
+          label: 'Easy Above',
+          type: 'number',
+          placeholder: '0.6',
+          description: 'Scores above this are easy; between Hard Below and Easy Above is medium.',
         },
         {
           key: 'hard',
@@ -310,31 +366,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
       ]
     case 'jailbreak':
       return JAILBREAK_SIGNAL_FIELDS
-    case 'pii':
+    case 'hallucination':
       return [
-        {
-          key: 'threshold',
-          label: 'Threshold',
-          type: 'number',
-          required: true,
-          placeholder: '0.8',
-          description: 'Minimum confidence for PII detection (0.0-1.0)',
-        },
-        {
-          key: 'pii_types_allowed',
-          label: 'PII Types Allowed',
-          type: 'string[]',
-          placeholder: 'e.g. EMAIL_ADDRESS',
-          description: 'PII types to allow through (others trigger signal)',
-        },
-        {
-          key: 'include_history',
-          label: 'Include History',
-          type: 'boolean',
-          description: 'Include conversation history in detection',
-        },
+        { key: 'use_nli', label: 'Use NLI Explanations', type: 'boolean' },
         { key: 'description', label: 'Description', type: 'string' },
       ]
+    case 'pii':
+      return PII_SIGNAL_FIELDS
     case 'kb':
       return [
         {
@@ -460,7 +498,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
+  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
     case 'memory':

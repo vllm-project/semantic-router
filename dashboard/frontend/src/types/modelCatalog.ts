@@ -89,6 +89,7 @@ export interface CatalogModelBinding {
     | 'deepseek_thinking'
   reasoning_modes?: Array<'enabled' | 'disabled' | 'adaptive'>
   reasoning_efforts?: string[]
+  reasoning_efforts_by_protocol?: Record<string, string[]>
   pricing?: Record<string, string | number | boolean>
   restrictions?: Record<string, unknown>
   lifecycle: ModelCatalogLifecycle
@@ -229,6 +230,7 @@ export interface CatalogIndexComponent {
   benchmark?: string
   metric?: string
   benchmark_profile?: string
+  benchmark_profiles?: string[]
   index?: string
   weight: number
   normalization: CatalogMetricNormalization
@@ -253,13 +255,14 @@ export interface CatalogIndexResult {
   model: string
   reasoning_effort: string
   index: string
-  status: CatalogResultStatus
+  status: 'available' | 'partial' | 'missing'
   score: number | null
   coverage: number
   components: Array<{
     benchmark?: string
     metric?: string
     benchmark_profile?: string
+    benchmark_profiles?: string[]
     index?: string
     evaluation?: string
     weight: number
@@ -271,17 +274,6 @@ export interface CatalogIndexResult {
   provenance: string[]
 }
 
-export interface CatalogEvaluationCoverage {
-  model: string
-  reasoning_effort: string
-  benchmark: string
-  benchmark_profile: string
-  metric: string
-  status: CatalogResultStatus
-  value?: number
-  evaluation?: string
-}
-
 export interface BuiltInModelCatalog {
   schema_version: 'vllm-sr/model-catalog/v2'
   catalogs: BuiltInModelCatalogVersion[]
@@ -291,7 +283,6 @@ export interface BuiltInModelCatalog {
   models: BuiltInModelMetadata[]
   benchmarks: CatalogBenchmark[]
   evaluations: CatalogEvaluation[]
-  evaluation_coverage: CatalogEvaluationCoverage[]
   indices: CatalogIndex[]
   index_results: CatalogIndexResult[]
 }

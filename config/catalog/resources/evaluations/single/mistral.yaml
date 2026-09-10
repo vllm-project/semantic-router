@@ -600,3 +600,131 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-mistralai-mistral-medium-3-5
     redistributable: true
+- id: mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Mistral-Small-3.2-24B-Instruct-2506
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6676
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506/blob/95a6d26c4bfb886c58daf9d3f7332c857cb27b43/README.md
+    redistributable: true
+- id: independent/mistral-small-3.2-gpqa-diamond@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.505050505050505
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: exaone-comparative/mistral-small-3.2-livecodebench-v6@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2 24B Instruct
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.269
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
+- id: independent/mistral-small-3.2-humanitys-last-exam@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.0430954587581094
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-scicode@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.28587962962963
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-terminal-bench-2.1@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    resolved: 0.0561797752808989
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: independent/mistral-small-3.2-aime-2025@1.0.0
+  model: mistral/mistral-small-3.2-24b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Mistral Small 3.2
+    source_model_slug: mistral-small-3-2
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.27
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true

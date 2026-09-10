@@ -4,7 +4,7 @@ This directory is the repository source of truth for built-in protocols,
 providers and their native model mappings, model cards, reasoning behavior,
 benchmark definitions, evaluation records, and composite indices.
 
-The source manifest is `catalog.yaml`. Resource files live under `resources/`;
+The source manifest is `manifest.yaml`. Resource files live under `resources/`;
 physical models are grouped into one focused file per creator under
 `resources/models/single/`, and their measurements use the matching creator
 file under `resources/evaluations/single/`. Router recipes and their logical
@@ -19,10 +19,14 @@ make model-catalog-generate
 make model-catalog-check
 ```
 
-Generation validates the resource graph and rewrites the committed Router,
-CLI, Dashboard, and website projections. Do not edit those projections by
-hand. Ordinary user YAML never includes the catalog release, digest, or default
-index identity; those are embedded build metadata.
+Generation validates the resource graph and rewrites one built-in distribution
+snapshot, the Router embed, and one public JSON snapshot shared by the website
+and Dashboard. The CLI reads the distribution snapshot directly in a source
+checkout. Python source builds automatically stage an ignored byte-for-byte
+package copy; `make model-catalog-package-stage` exposes that step for release
+validation. Do not edit generated projections or the staging tree by hand.
+Ordinary user YAML never includes the catalog release, digest, or default index
+identity; those are embedded build metadata.
 
 ## Resource ownership
 
@@ -64,9 +68,10 @@ display `clamp((elo - 500) / 2000, 0, 1) * 100`. This presentation mapping is
 separate from index aggregation and never rewrites evidence.
 
 Benchmark `tags` are catalog-owned presentation facets. The curated `core` tag
-contains MMLU-Pro, GPQA Diamond, Humanity's Last Exam, SWE-bench Verified,
-Terminal-Bench 2.1, and SciCode. Hub surfaces place Core first among semantic
-filters while keeping All as the unfiltered default.
+contains MMLU-Pro, GPQA Diamond, Humanity's Last Exam, LiveCodeBench, SciCode,
+and Terminal-Bench 2.1. Hub surfaces place Core first among semantic filters
+while keeping All as the unfiltered default. SWE-bench Verified and other
+useful measurements remain additional, individually visible evidence.
 
 Every available repository record carries a calendar anchor. Use
 `measured_at` when the evaluation run date is known; otherwise use
@@ -74,20 +79,23 @@ Every available repository record carries a calendar anchor. Use
 silently presented as a run date, and neither field belongs in the minimal
 user-authored evidence surface unless the operator actually knows the run date.
 
-The generator creates exactly five default-index slots for every Model Card and
+The audit derives exactly six default-index slots for every Model Card and
 every selectable reasoning effort: MMLU-Pro, GPQA Diamond, Humanity's Last Exam
-without tools, SWE-bench Verified, and Terminal-Bench 2.1. A slot links only to
-an exact model/effort/profile measurement; otherwise it is emitted as
-`missing`. A vendor-published score with an unspecified effort stays on a
-separate `unspecified` row and is never copied into `low`, `medium`, `high`, or
-another selectable effort.
+without tools, LiveCodeBench, SciCode, and Terminal-Bench 2.1. A slot links only
+to an exact model/effort measurement and one of the component's ordered
+compatible profiles. Available, partial, and missing index rows are serialized
+in the public snapshot so the Hub can distinguish a ranking result from an
+evidence gap. The runtime projection contains only available routing priors. A
+vendor-published score with an unspecified effort stays on a separate
+`unspecified` row and is never copied into `low`, `medium`, `high`, or another
+selectable effort.
 
 Evaluation admission and selectable-effort completeness are separate facts.
 Every physical card must have at least five distinct benchmarks in one exact
 model/effort/provenance evidence bucket. A reasoning family may expose
 additional real runtime levels whose effort-specific measurements have not been
 published; those
-levels retain explicit `missing` slots. The catalog audit reports selectable
+levels retain derived evidence gaps. The catalog audit reports selectable
 levels as complete, partial, or unmeasured and can enforce them with a stricter
 opt-in gate, but neither generation nor the Hub copies a score across levels.
 For a card without `reasoning_family`, labels such as `enabled`, `disabled`,
@@ -107,7 +115,7 @@ without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
 The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 83 physical cards from 22 mainstream creators and
+current baseline contains 84 physical cards from 22 mainstream creators and
 five separately stored virtual cards. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,
@@ -119,7 +127,7 @@ cloud, gateway, or runtime serving it; and a binding's `relationship` states
 how that serving channel relates to the creator. This prevents a gateway from
 being mistaken for the model publisher without overloading provider category
 or support tier.
-The repository-only `catalog.yaml.inventory.physical` policy records the
+The repository-only `manifest.yaml.inventory.physical` policy records the
 creator allowlist, reviewed current representative model IDs, and minimum
 depth. Generation rejects unlisted physical creators, missing or stale
 representatives, or a creator that falls below that depth. The policy
@@ -148,7 +156,8 @@ Catalog adoption is additive within the existing v0.3 hierarchy:
   canonical `catalog` value as its `name`.
 - A custom vLLM, SGLang, private, or newly released model omits `catalog`. It
   can remain a minimal binding or supply a handwritten Model Card, custom
-  reasoning behavior, and evaluations.
+  reasoning behavior, and top-level `evaluation.records[]` linked by its card
+  identity.
 
 Catalog release versions, digests, internal index identities, generated
 defaults, and binding relationship classifications never belong in normal

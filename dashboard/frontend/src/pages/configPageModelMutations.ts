@@ -3,7 +3,7 @@ import { buildConnectedProviderModel } from './configPageConnectModelSupport'
 import {
   cloneConfigData,
   ensureProvidersConfig,
-  removeRoutingModelCardIfUnreferenced,
+  removeModelCardDataIfUnreferenced,
   writeRoutingModelCard,
 } from './configPageCanonicalization'
 import {
@@ -71,7 +71,7 @@ export function buildEditedModelConfig(
         ? { ...providerModel, ...buildProviderModelPayload(model.name, data, providerModel) }
         : providerModel,
     )
-    if (oldCardID !== nextCardID) removeRoutingModelCardIfUnreferenced(next, oldCardID)
+    if (oldCardID !== nextCardID) removeModelCardDataIfUnreferenced(next, oldCardID)
     writeRoutingModelCard(next, nextCardID, modelCardPatch(data), {
       removeWhenEmpty: oldCardID === nextCardID,
     })
@@ -130,7 +130,7 @@ export function buildDeletedModelsConfig(
     )
     for (const modelName of namesToDelete) {
       const model = models.find((candidate) => candidate.name === modelName)
-      removeRoutingModelCardIfUnreferenced(next, model?.catalog || modelName)
+      removeModelCardDataIfUnreferenced(next, model?.catalog || modelName)
     }
   } else if (next.model_config) {
     for (const modelName of namesToDelete) delete next.model_config[modelName]

@@ -1,7 +1,7 @@
 import type { Endpoint } from '../components/EndpointsEditor'
-import bundledCatalog from '../generated/modelCatalog.json'
+import bundledCatalog from '../modelCatalogDocument'
 import type { DecisionConditionType } from '../types/config'
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
 
 export interface ListenerConfig {
   name: string
@@ -183,7 +183,8 @@ export interface ModelReasoningConfig {
   disabled?: string
 }
 
-export interface ModelEvaluationConfig {
+export interface EvaluationRecordConfig {
+  model: string
   benchmark: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -253,7 +254,6 @@ export interface RoutingModelCard {
   modalities?: { input: string[]; output: string[] }
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   modality?: string
 }
 
@@ -350,7 +350,6 @@ export interface NormalizedModel {
   capabilities?: string[]
   loras?: LoRAAdapter[]
   tags?: string[]
-  evaluations?: ModelEvaluationConfig[]
   card_override?: RoutingModelCard
   modality?: string
   pricing?: {
@@ -431,7 +430,6 @@ export interface MemoryConfig {
   hybrid_search?: boolean
   hybrid_mode?: string
   adaptive_threshold?: boolean
-  quality_scoring?: MemoryQualityScoringConfig
   reflection?: MemoryReflectionConfig
 }
 
@@ -851,6 +849,7 @@ export interface ConfigSignals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   kb?: KBSignal[]
   metadata?: MetadataSignal[]
@@ -866,12 +865,6 @@ export interface ConfigProjections {
 
 export interface DecisionPluginConfiguration {
   [key: string]: unknown
-}
-
-export interface MemoryQualityScoringConfig {
-  initial_strength_days?: number
-  prune_threshold?: number
-  max_memories_per_user?: number
 }
 
 export interface MemoryReflectionConfig {
@@ -938,56 +931,19 @@ export interface VectorStoreMilvusSearchConfig {
   consistency_level?: string
 }
 
-export interface VectorStoreMilvusConnectionPoolConfig {
-  max_connections?: number
-  max_idle_connections?: number
-  acquire_timeout?: number
-}
-
-export interface VectorStoreMilvusBatchConfig {
-  insert_batch_size?: number
-  timeout?: number
-}
-
-export interface VectorStoreMilvusPerformanceConfig {
-  connection_pool?: VectorStoreMilvusConnectionPoolConfig
-  batch?: VectorStoreMilvusBatchConfig
-}
-
-export interface VectorStoreMilvusTTLConfig {
-  enabled?: boolean
-  timestamp_field?: string
-  cleanup_interval?: number
-}
-
-export interface VectorStoreMilvusCompactionConfig {
-  enabled?: boolean
-  interval?: number
-}
-
-export interface VectorStoreMilvusDataManagementConfig {
-  ttl?: VectorStoreMilvusTTLConfig
-  compaction?: VectorStoreMilvusCompactionConfig
-}
-
 export interface VectorStoreMilvusLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface VectorStoreMilvusDevelopmentConfig {
   drop_collection_on_startup?: boolean
   auto_create_collection?: boolean
-  verbose_errors?: boolean
 }
 
 export interface VectorStoreMilvusConfig {
   connection?: VectorStoreMilvusConnectionConfig
   collection?: VectorStoreMilvusCollectionConfig
   search?: VectorStoreMilvusSearchConfig
-  performance?: VectorStoreMilvusPerformanceConfig
-  data_management?: VectorStoreMilvusDataManagementConfig
   logging?: VectorStoreMilvusLoggingConfig
   development?: VectorStoreMilvusDevelopmentConfig
 }
@@ -1034,13 +990,10 @@ export interface SemanticCacheRedisSearchConfig {
 export interface SemanticCacheRedisDevelopmentConfig {
   drop_index_on_startup?: boolean
   auto_create_index?: boolean
-  verbose_errors?: boolean
 }
 
 export interface SemanticCacheRedisLoggingConfig {
   level?: string
-  enable_query_log?: boolean
-  enable_metrics?: boolean
 }
 
 export interface SemanticCacheRedisConfig {
@@ -1171,6 +1124,12 @@ export interface FactCheckSignal {
   description: string
 }
 
+export interface HallucinationSignal {
+  name: string
+  use_nli?: boolean
+  description?: string
+}
+
 export interface UserFeedbackSignal {
   name: string
   description: string
@@ -1286,6 +1245,11 @@ export interface ConfigData {
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
+  evaluation?: {
+    benchmarks?: CatalogBenchmark[]
+    indices?: CatalogIndex[]
+    records?: EvaluationRecordConfig[]
+  }
   routing?: RoutingConfig
   entrypoints?: EntrypointConfig[]
   recipes?: RecipeConfig[]
@@ -1330,6 +1294,7 @@ export interface ConfigData {
   structure_rules?: StructureSignal[]
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
+  hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
 }
 
@@ -1348,6 +1313,7 @@ export type SignalType =
   | 'Modality'
   | 'Authz'
   | 'Jailbreak'
+  | 'Hallucination'
   | 'PII'
   | 'KB'
   | 'Metadata'
@@ -1431,6 +1397,7 @@ export interface AddSignalFormState {
   include_history?: boolean
   jailbreak_patterns?: string[]
   benign_patterns?: string[]
+  hallucination_use_nli?: boolean
   pii_threshold?: number
   pii_types_allowed?: string[]
   pii_include_history?: boolean
