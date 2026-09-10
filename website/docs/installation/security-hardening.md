@@ -50,17 +50,37 @@ request_headers_to_remove:
   - x-authz-user-groups
 ```
 
-The Router also enforces this boundary for its semantic request view. If
-`global.services.authz.providers` does not contain an explicit
-`header-injection` provider, configured identity headers are discarded before
-authz signals, rate limits, memory, or other user-scoped behavior can use them.
-Configure `header-injection` only when a trusted external authorization layer
-validates the caller and injects the headers; the provider declaration alone is
-not an authentication mechanism. The ingress creates one typed trusted
+The Router also enforces this boundary for its semantic request view. Identity
+headers are discarded before authz signals, rate limits, memory, or other
+user-scoped behavior can use them unless the configuration explicitly declares
+a verified identity ingress:
+
+```yaml
+global:
+  services:
+    authz:
+      identity:
+        user_id_header: x-jwt-sub
+        user_groups_header: x-jwt-groups
+        ingress: header-injection
+```
+
+`authz.identity.ingress` is separate from `authz.providers`. The latter's
+`header-injection` provider only resolves per-user model credentials; it does
+not prove that identity headers were authenticated. Configure the identity
+ingress only when a trusted external authorization layer validates the caller
+and injects the configured headers. The ingress creates one typed trusted
 identity snapshot, and authz, rate limits, cache, memory, replay, Responses,
 and learning consume that snapshot rather than re-reading raw headers or
 request metadata. Identity headers are removed before the request is forwarded
 to model providers as well.
+
+The default local configuration uses `ingress: none` because the local Envoy
+fixture has no external authorization filter. Client-supplied custom identity
+headers are therefore ignored and stripped.
+
+For existing deployments, see the [identity ingress migration
+guide](./identity-ingress-migration).
 
 ### Identity consumer contract
 

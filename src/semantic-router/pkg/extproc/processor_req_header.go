@@ -263,7 +263,7 @@ func (r *OpenAIRouter) deriveTrustedIdentity(ctx *RequestContext) {
 		identity.SessionID = strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID))
 	}
 
-	if r == nil || r.Config == nil || !r.Config.Authz.HasExternalAuthProvider() {
+	if r == nil || r.Config == nil || !r.Config.Authz.Identity.HasVerifiedIngress() {
 		ctx.TrustedIdentity = identity
 		return
 	}
@@ -288,14 +288,14 @@ func parseTrustedIdentityGroups(value string) []string {
 }
 
 // applyIdentityHeaderPolicy removes identity headers from the Router's
-// semantic request view unless an explicit header-injection provider is
-// configured. The provider declaration is the trust boundary: fail-open
-// behavior or a static-config provider must not make client headers trusted.
+// semantic request view unless an explicit verified identity ingress is
+// configured. Credential providers are intentionally not used as the trust
+// boundary: a header-injection credential source does not authenticate identity.
 func (r *OpenAIRouter) applyIdentityHeaderPolicy(ctx *RequestContext) {
 	if ctx == nil || ctx.Headers == nil {
 		return
 	}
-	if r != nil && r.Config != nil && r.Config.Authz.HasExternalAuthProvider() {
+	if r != nil && r.Config != nil && r.Config.Authz.Identity.HasVerifiedIngress() {
 		return
 	}
 
@@ -316,7 +316,7 @@ func (r *OpenAIRouter) applyIdentityHeaderPolicy(ctx *RequestContext) {
 	logging.ComponentWarnEvent("extproc", "untrusted_identity_headers_removed", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"headers":    stripped,
-		"reason":     "no_explicit_external_auth_provider",
+		"reason":     "no_verified_identity_ingress",
 	})
 }
 

@@ -199,6 +199,8 @@ config:
     services:
       authz:
         fail_open: true
+        identity:
+          ingress: header-injection
       ratelimit:
         fail_open: false
         providers:

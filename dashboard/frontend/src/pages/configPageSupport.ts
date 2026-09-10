@@ -556,6 +556,7 @@ export interface StreamedBodyConfig {
 export interface IdentityConfig {
   user_id_header?: string
   user_groups_header?: string
+  ingress?: string
 }
 
 export interface AuthzProviderConfig {

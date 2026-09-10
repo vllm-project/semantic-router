@@ -103,8 +103,8 @@ global:
       # boundary by injecting x-authz-user-id before the router ingress.
       # The local llm-katan echo backend intentionally has no API key.
       fail_open: true
-      providers:
-        - type: header-injection
+      identity:
+        ingress: header-injection
     response_api:
       enabled: true
       store_backend: memory

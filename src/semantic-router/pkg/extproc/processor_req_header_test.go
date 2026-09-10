@@ -131,8 +131,8 @@ func TestHandleRequestHeadersPreservesTrustedIdentityHeadersForExternalAuth(t *t
 			Identity: config.IdentityConfig{
 				UserIDHeader:     "x-user-id",
 				UserGroupsHeader: "x-user-groups",
+				Ingress:          config.IdentityIngressHeaderInjection,
 			},
-			Providers: []config.AuthzProviderConfig{{Type: "header-injection"}},
 		},
 	}}
 	ctx := &RequestContext{Headers: make(map[string]string)}
@@ -208,8 +208,8 @@ func TestHandleRequestHeadersDerivesConfiguredMixedCaseIdentity(t *testing.T) {
 			Identity: config.IdentityConfig{
 				UserIDHeader:     "X-JWT-Sub",
 				UserGroupsHeader: "X-JWT-Groups",
+				Ingress:          config.IdentityIngressHeaderInjection,
 			},
-			Providers: []config.AuthzProviderConfig{{Type: "header-injection"}},
 		},
 	}}
 	ctx := &RequestContext{Headers: make(map[string]string)}
@@ -264,8 +264,8 @@ func TestMaintainedAuthzRBACConfigsDeriveTrustedIdentity(t *testing.T) {
 			if err != nil {
 				t.Fatalf("parse maintained RBAC config: %v", err)
 			}
-			if !cfg.Authz.HasExternalAuthProvider() {
-				t.Fatal("maintained RBAC config must declare an external header-injection provider")
+			if !cfg.Authz.Identity.HasVerifiedIngress() {
+				t.Fatal("maintained RBAC config must declare a verified identity ingress")
 			}
 
 			router := &OpenAIRouter{Config: cfg}
@@ -284,6 +284,54 @@ func TestMaintainedAuthzRBACConfigsDeriveTrustedIdentity(t *testing.T) {
 				t.Fatalf("trusted groups = %#v, want [platform-admins premium-tier]", ctx.TrustedIdentity.Groups)
 			}
 		})
+	}
+}
+
+func TestDefaultLocalConfigRejectsCustomClientIdentityHeaders(t *testing.T) {
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(testFile), "..", "..", "..", ".."))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "config", "config.yaml"))
+	if err != nil {
+		t.Fatalf("read default local config: %v", err)
+	}
+	cfg, err := config.ParseYAMLBytes(data)
+	if err != nil {
+		t.Fatalf("parse default local config: %v", err)
+	}
+	if cfg.Authz.Identity.HasVerifiedIngress() {
+		t.Fatal("default local config must not claim a verified identity ingress")
+	}
+	hasCredentialProvider := false
+	for _, provider := range cfg.Authz.Providers {
+		if provider.Type == config.IdentityIngressHeaderInjection {
+			hasCredentialProvider = true
+			break
+		}
+	}
+	if !hasCredentialProvider {
+		t.Fatal("default local config should retain its credential header-injection provider")
+	}
+
+	router := &OpenAIRouter{Config: cfg}
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newRequestHeaders("POST", "/v1/chat/completions")
+	request.RequestHeaders.Headers.Headers = append(request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "x-user-id", Value: "alice"},
+		&core.HeaderValue{Key: "x-user-groups", Value: "platform-admins"},
+	)
+	if _, err := router.handleRequestHeaders(request, ctx); err != nil {
+		t.Fatalf("handleRequestHeaders() error = %v", err)
+	}
+	if ctx.TrustedIdentity.UserID != "" || len(ctx.TrustedIdentity.Groups) != 0 {
+		t.Fatalf("default local config accepted forged identity: %+v", ctx.TrustedIdentity)
+	}
+	for _, name := range []string{"x-user-id", "x-user-groups"} {
+		if _, found := ctx.Headers[name]; found {
+			t.Fatalf("forged identity header %q remained in semantic headers", name)
+		}
 	}
 }
 

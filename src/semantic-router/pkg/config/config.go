@@ -155,46 +155,35 @@ type RouterConfig struct {
 	Evaluation *CanonicalEvaluation `yaml:"-" json:"-"`
 }
 
-// AuthzConfig configures how the router resolves per-user LLM API keys.
+// AuthzConfig configures per-user LLM credential resolution and the ingress
+// declaration required before request identity headers are trusted.
 type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
 }
 
-// HasExternalAuthProvider reports whether identity and provider-credential
-// headers may have been injected by a trusted external authorization layer.
-//
-// An omitted or static-only provider list is not sufficient to establish that
-// request identity headers are trusted. Callers must fail closed in those
-// cases and ignore client-supplied identity headers.
-func (ac AuthzConfig) HasExternalAuthProvider() bool {
-	hasExternalProvider := false
-	for _, provider := range ac.Providers {
-		switch provider.Type {
-		case "header-injection":
-			for _, header := range provider.Headers {
-				if header == "" {
-					return false
-				}
-			}
-			hasExternalProvider = true
-		case "static-config":
-			// Static config is a valid fallback, but does not authenticate
-			// request identity.
-		default:
-			// The runtime falls back to its default chain when provider
-			// validation fails. Do not trust identity in that case.
-			return false
-		}
-	}
-	return hasExternalProvider
-}
-
-// IdentityConfig controls how the router reads user identity from request headers.
+// IdentityConfig controls how the router reads identity headers after a
+// verified ingress boundary has accepted them.
 type IdentityConfig struct {
 	UserIDHeader     string `yaml:"user_id_header,omitempty"`
 	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
+	// Ingress identifies the verified boundary that may populate the identity
+	// headers. It is intentionally separate from AuthzConfig.Providers, which
+	// resolve per-user model credentials from request headers.
+	Ingress string `yaml:"ingress,omitempty"`
+}
+
+// IdentityIngressHeaderInjection is the explicit ingress declaration for
+// identity headers injected by a verified external authorization boundary.
+const IdentityIngressHeaderInjection = "header-injection"
+
+// HasVerifiedIngress reports whether the deployment explicitly declares that
+// an external authorization boundary verified and injected identity headers.
+// Empty and unknown values fail closed so client-supplied headers cannot enter
+// the trusted identity path by default.
+func (ic IdentityConfig) HasVerifiedIngress() bool {
+	return ic.Ingress == IdentityIngressHeaderInjection
 }
 
 func (ic IdentityConfig) GetUserIDHeader() string {

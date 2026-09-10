@@ -1838,6 +1838,9 @@ global:
       identity:
         user_id_header: x-user-id
         user_groups_header: x-user-groups
+        # The local Envoy fixture has no external authorization boundary.
+        # Identity headers therefore remain untrusted by default.
+        ingress: none
       providers:
         - type: header-injection
           headers:

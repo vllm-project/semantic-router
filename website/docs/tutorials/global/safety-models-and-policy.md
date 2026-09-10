@@ -221,6 +221,7 @@ global:
       identity:
         user_id_header: x-user-id
         user_groups_header: x-user-groups
+        ingress: header-injection
       providers:
         - type: header-injection
           headers:
