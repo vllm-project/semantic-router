@@ -12,6 +12,11 @@ name: Image Routing Calibration
 # required PR Gate; it can also be run by hand against any ref.
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: Commit to calibrate; the PR caller passes the pull-request head so the report's provenance is the exact head, not the synthetic merge commit
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -39,6 +44,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref || github.sha }}
+
+      # The report records the checked-out commit as the fixture provenance;
+      # refuse to calibrate anything other than the commit the caller named.
+      - name: Assert the checked-out commit is the requested ref
+        if: inputs.ref != ''
+        env:
+          REQUESTED_REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          head="$(git rev-parse HEAD)"
+          requested="$(git rev-parse --verify "${REQUESTED_REF}^{commit}")"
+          if [ "${head}" != "${requested}" ]; then
+            echo "::error::checked out ${head} but the caller requested ${requested} (${REQUESTED_REF})"
+            exit 1
+          fi
+          echo "calibrating exact commit ${head}"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable

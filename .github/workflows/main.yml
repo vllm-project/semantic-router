@@ -36,6 +36,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.image_calibration == 'true'
     uses: ./.github/workflows/image-routing-calibration.yml
+    with:
+      ref: ${{ github.sha }}
     secrets: inherit
 
   dashboard:
