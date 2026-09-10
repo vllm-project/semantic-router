@@ -33,13 +33,14 @@ type PersistenceJob struct {
 }
 
 type queuedJob struct {
-	traceCtx      context.Context
+	ctx           context.Context
 	job           PersistenceJob
 	scheduledDone chan struct{}
+	finish        func()
 }
 
 type PersistenceRunner struct {
-	jobs    chan queuedJob
+	jobs    chan *queuedJob
 	workers sync.WaitGroup
 	timeout time.Duration
 
@@ -66,7 +67,7 @@ func NewPersistenceRunner(timeout time.Duration, concurrency, queue int) *Persis
 
 	baseCtx, cancel := context.WithCancel(context.Background())
 	r := &PersistenceRunner{
-		jobs:    make(chan queuedJob, queue),
+		jobs:    make(chan *queuedJob, queue),
 		timeout: timeout,
 		baseCtx: baseCtx,
 		cancel:  cancel,
@@ -108,12 +109,15 @@ func (r *PersistenceRunner) Submit(traceCtx context.Context, job PersistenceJob)
 		return
 	}
 
-	scheduledDone := make(chan struct{})
+	queued := &queuedJob{job: job, scheduledDone: make(chan struct{})}
 	select {
-	case r.jobs <- queuedJob{traceCtx: traceCtx, job: job, scheduledDone: scheduledDone}:
+	case r.jobs <- queued:
+		// Start the deadline and cancellation reporter at acceptance, so queued
+		// work reaches a terminal outcome even when every worker is stuck.
+		r.prepareJob(traceCtx, queued)
 		r.mu.Unlock()
 		reportSafely(job, "scheduled", "queue_accepted", false, nil)
-		close(scheduledDone)
+		close(queued.scheduledDone)
 	default:
 		r.mu.Unlock()
 		reportSafely(job, "rejected", "queue_full", true, nil)
@@ -124,15 +128,13 @@ func (r *PersistenceRunner) worker() {
 	defer r.workers.Done()
 	for queued := range r.jobs {
 		<-queued.scheduledDone
-		r.run(queued.traceCtx, queued.job)
+		r.run(queued)
 	}
 }
 
-func (r *PersistenceRunner) run(traceCtx context.Context, job PersistenceJob) {
+func (r *PersistenceRunner) prepareJob(traceCtx context.Context, queued *queuedJob) {
 	jobCtx, cancel := context.WithTimeout(context.WithoutCancel(traceCtx), r.timeout)
-	defer cancel()
 	stop := context.AfterFunc(r.baseCtx, cancel)
-	defer stop()
 	if r.baseCtx.Err() != nil {
 		cancel()
 	}
@@ -140,6 +142,7 @@ func (r *PersistenceRunner) run(traceCtx context.Context, job PersistenceJob) {
 	// Report cancellation even when Run cannot unwind yet. Keep this worker and
 	// its resources occupied until Run actually exits; never detach the work.
 	var terminal sync.Once
+	job := queued.job
 	report := job.Report
 	job.Report = func(status, reason string, failOpen bool, cause error) {
 		terminal.Do(func() { report(status, reason, failOpen, cause) })
@@ -147,13 +150,22 @@ func (r *PersistenceRunner) run(traceCtx context.Context, job PersistenceJob) {
 	reported := make(chan struct{})
 	stopReport := context.AfterFunc(jobCtx, func() {
 		defer close(reported)
+		<-queued.scheduledDone
 		reportPersistenceResult(jobCtx, job, PersistenceOutcome{}, nil)
 	})
-	defer func() {
+	queued.ctx, queued.job = jobCtx, job
+	queued.finish = func() {
 		if !stopReport() {
 			<-reported
 		}
-	}()
+		stop()
+		cancel()
+	}
+}
+
+func (r *PersistenceRunner) run(queued *queuedJob) {
+	defer queued.finish()
+	jobCtx, job := queued.ctx, queued.job
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			logging.ComponentErrorEvent("memory", "persistence_panic", map[string]interface{}{
