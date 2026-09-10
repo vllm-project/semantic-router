@@ -18,6 +18,7 @@ export interface FieldSchema {
   placeholder?: string
   description?: string
   min?: number
+  max?: number
   fields?: FieldSchema[]
   addLabel?: string
   emptyLabel?: string
