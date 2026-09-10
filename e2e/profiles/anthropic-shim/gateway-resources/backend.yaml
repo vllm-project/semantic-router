@@ -90,10 +90,11 @@ spec:
               mountPath: /cache/models
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "200m"
             limits:
-              memory: "512Mi"
+              # Cold model downloads exceeded 512Mi in the PR E2E runner.
+              memory: "2Gi"
               cpu: "500m"
 
       containers:

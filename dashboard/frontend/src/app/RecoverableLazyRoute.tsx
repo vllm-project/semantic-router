@@ -1,8 +1,6 @@
 import {
   Component,
   Suspense,
-  lazy,
-  useMemo,
   useState,
   type ComponentType,
   type ErrorInfo,
@@ -11,7 +9,7 @@ import {
 import { useLocation } from 'react-router-dom'
 
 import RouteLoadingFallback from './RouteLoadingFallback'
-import { resetDashboardRouteLoader, type RouteLoader } from './routeLoaders'
+import { lazyRoutePage, resetDashboardRouteLoader, type RouteLoader } from './routeLoaders'
 import { getRouteLoadFailureCopy, routeLoadErrorMessage } from './routeLoadFailureSupport'
 import styles from './RecoverableLazyRoute.module.css'
 
@@ -96,13 +94,6 @@ export interface RecoverableLazyRouteProps<Props extends object> {
   componentProps?: Props
 }
 
-function createRetryableLazyPage<Props extends object>(
-  loader: RecoverableLazyRouteProps<Props>['loader'],
-  _attempt: number,
-) {
-  return lazy(loader)
-}
-
 export default function RecoverableLazyRoute<Props extends object = Record<string, never>>({
   loader,
   routeLabel,
@@ -110,7 +101,7 @@ export default function RecoverableLazyRoute<Props extends object = Record<strin
 }: RecoverableLazyRouteProps<Props>) {
   const { pathname } = useLocation()
   const [attempt, setAttempt] = useState(0)
-  const LazyPage = useMemo(() => createRetryableLazyPage(loader, attempt), [attempt, loader])
+  const LazyPage = lazyRoutePage(loader)
   const RenderablePage = LazyPage as unknown as ComponentType<Record<string, unknown>>
   const renderProps = (componentProps ?? {}) as Record<string, unknown>
 
