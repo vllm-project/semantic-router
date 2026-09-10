@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -292,7 +293,7 @@ var _ = Describe("FactCheckClassifier", func() {
 				}
 
 				for _, text := range testCases {
-					result, err := classifier.Classify(text)
+					result, err := classifier.Classify(context.Background(), text)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result).NotTo(BeNil())
 					// Note: rule-based classifier may not catch all cases
@@ -313,7 +314,7 @@ var _ = Describe("FactCheckClassifier", func() {
 				}
 
 				for _, text := range testCases {
-					result, err := classifier.Classify(text)
+					result, err := classifier.Classify(context.Background(), text)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(result).NotTo(BeNil())
 					// Verify valid result
@@ -324,7 +325,7 @@ var _ = Describe("FactCheckClassifier", func() {
 
 		Context("with empty text", func() {
 			It("should return no fact-check needed", func() {
-				result, err := classifier.Classify("")
+				result, err := classifier.Classify(context.Background(), "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				Expect(result.NeedsFactCheck).To(BeFalse())
@@ -409,11 +410,11 @@ var _ = Describe("HallucinationDetector", func() {
 
 		Context("with grounded answers", func() {
 			It("should not detect hallucination when answer is supported by context", func() {
-				context := "The Eiffel Tower was built in 1889. It is located in Paris, France."
+				contextText := "The Eiffel Tower was built in 1889. It is located in Paris, France."
 				question := "When was the Eiffel Tower built?"
 				answer := "The Eiffel Tower was built in 1889."
 
-				result, err := detector.Detect(context, question, answer)
+				result, err := detector.Detect(context.Background(), contextText, question, answer)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				// The rule-based detector should find this grounded
@@ -423,11 +424,11 @@ var _ = Describe("HallucinationDetector", func() {
 
 		Context("with ungrounded answers", func() {
 			It("should detect hallucination when answer has unsupported claims", func() {
-				context := "The Eiffel Tower was built in 1889. It is located in Paris."
+				contextText := "The Eiffel Tower was built in 1889. It is located in Paris."
 				question := "What is the height of the Eiffel Tower?"
 				answer := "The Eiffel Tower is exactly 324 meters tall and was renovated in 2019."
 
-				result, err := detector.Detect(context, question, answer)
+				result, err := detector.Detect(context.Background(), contextText, question, answer)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				// Should have unsupported spans since "324 meters" and "2019" aren't in context
@@ -436,14 +437,14 @@ var _ = Describe("HallucinationDetector", func() {
 
 		Context("with empty inputs", func() {
 			It("should handle empty answer", func() {
-				result, err := detector.Detect("some context", "question?", "")
+				result, err := detector.Detect(context.Background(), "some context", "question?", "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				Expect(result.HallucinationDetected).To(BeFalse())
 			})
 
 			It("should return error for empty context", func() {
-				result, err := detector.Detect("", "question?", "Some answer here.")
+				result, err := detector.Detect(context.Background(), "", "question?", "Some answer here.")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("context is required"))
 				Expect(result).To(BeNil())
@@ -452,11 +453,11 @@ var _ = Describe("HallucinationDetector", func() {
 
 		Context("with uncertain language", func() {
 			It("should be lenient with hedged statements", func() {
-				context := "The project started in 2020."
+				contextText := "The project started in 2020."
 				question := "When did the project start?"
 				answer := "I think the project probably started around 2020."
 
-				result, err := detector.Detect(context, question, answer)
+				result, err := detector.Detect(context.Background(), contextText, question, answer)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result).NotTo(BeNil())
 				// Hedged language should reduce hallucination detection

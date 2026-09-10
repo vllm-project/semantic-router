@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -96,7 +97,7 @@ func TestFeedbackConfidenceIsTheSatisfiedProbabilityRealModel(t *testing.T) {
 
 	for _, text := range texts {
 		t.Run(text, func(t *testing.T) {
-			result, err := detector.Classify(text)
+			result, err := detector.Classify(context.Background(), text)
 			if err != nil {
 				t.Fatalf("Classify(%q): %v", text, err)
 			}
@@ -143,7 +144,7 @@ func TestFeedbackConfidenceUnderAThresholdNoPredictionMeetsRealModel(t *testing.
 	detector.config.Threshold = 0.999999
 
 	const text = "thanks, that answers it"
-	result, err := detector.Classify(text)
+	result, err := detector.Classify(context.Background(), text)
 	if err != nil {
 		t.Fatalf("Classify(%q): %v", text, err)
 	}
