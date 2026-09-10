@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,7 +109,7 @@ func TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow(t *testing.T) {
 
 	t.Run("inside the window", func(t *testing.T) {
 		text := secret + " " + filler
-		detections, err := classifier.ClassifyPIIWithDetails(text)
+		detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 		if err != nil {
 			t.Fatalf("ClassifyPIIWithDetails: %v", err)
 		}
@@ -121,7 +122,7 @@ func TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow(t *testing.T) {
 		text := filler + " " + secret
 		start := strings.Index(text, secret)
 
-		detections, err := classifier.ClassifyPIIWithDetails(text)
+		detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 		if err != nil {
 			t.Fatalf("ClassifyPIIWithDetails: %v", err)
 		}
