@@ -254,7 +254,15 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 	case "mmbert":
 		return candle_binding.GetEmbedding2DMatryoshka(text, req.Model, req.TargetLayer, req.Dimension)
 	case "multimodal":
-		return candle_binding.MultiModalEncodeText(text, req.Dimension)
+		output, err := candle_binding.MultiModalEncodeText(text, req.Dimension)
+		if err != nil {
+			return nil, err
+		}
+		return &candle_binding.EmbeddingOutput{
+			Embedding:        output.Embedding,
+			ModelType:        "multimodal",
+			ProcessingTimeMs: output.ProcessingTimeMs,
+		}, nil
 	default:
 		return candle_binding.GetEmbeddingWithModelType(text, req.Model, req.Dimension)
 	}
