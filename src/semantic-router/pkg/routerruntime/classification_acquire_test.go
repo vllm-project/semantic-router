@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -17,6 +18,108 @@ type generation struct {
 	refs    sync.WaitGroup
 	retired atomic.Bool
 	closed  atomic.Bool
+}
+
+func TestMemoryAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
+	oldStore := memory.NewInMemoryStore()
+	newStore := memory.NewInMemoryStore()
+	acquireStarted := make(chan struct{})
+	allowAcquire := make(chan struct{})
+	registry := &Registry{}
+	registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{
+		MemoryStore: oldStore,
+		AcquireClassification: func() (func(), bool) {
+			close(acquireStarted)
+			<-allowAcquire
+			return func() {}, true
+		},
+	})
+
+	type result struct {
+		store   memory.Store
+		release func()
+		ok      bool
+	}
+	acquired := make(chan result, 1)
+	go func() {
+		store, release, ok := registry.AcquireMemoryStore()
+		acquired <- result{store: store, release: release, ok: ok}
+	}()
+	<-acquireStarted
+
+	published := make(chan struct{})
+	go func() {
+		registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{MemoryStore: newStore})
+		close(published)
+	}()
+	select {
+	case <-published:
+		t.Fatal("snapshot changed before the old memory-store lease was registered")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(allowAcquire)
+	got := <-acquired
+	if !got.ok || got.store != oldStore {
+		t.Fatalf("AcquireMemoryStore() = (%T, %v), want old store", got.store, got.ok)
+	}
+	got.release()
+	select {
+	case <-published:
+	case <-time.After(time.Second):
+		t.Fatal("snapshot publish remained blocked after acquisition completed")
+	}
+}
+
+func TestClassificationAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
+	oldService := &services.ClassificationService{}
+	newService := &services.ClassificationService{}
+	acquireStarted := make(chan struct{})
+	allowAcquire := make(chan struct{})
+	registry := &Registry{}
+	registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{
+		ClassificationService: oldService,
+		AcquireClassification: func() (func(), bool) {
+			close(acquireStarted)
+			<-allowAcquire
+			return func() {}, true
+		},
+	})
+
+	type result struct {
+		service *services.ClassificationService
+		release func()
+		ok      bool
+	}
+	acquired := make(chan result, 1)
+	go func() {
+		service, release, ok := registry.AcquireClassificationService()
+		acquired <- result{service: service, release: release, ok: ok}
+	}()
+	<-acquireStarted
+
+	published := make(chan struct{})
+	go func() {
+		registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{ClassificationService: newService})
+		close(published)
+	}()
+	select {
+	case <-published:
+		t.Fatal("snapshot changed before the old classification lease was registered")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(allowAcquire)
+	got := <-acquired
+	if !got.ok || got.service != oldService {
+		t.Fatalf("AcquireClassificationService() = (%p, %v), want old service", got.service, got.ok)
+	}
+	got.release()
+	select {
+	case <-published:
+	case <-time.After(time.Second):
+		t.Fatal("snapshot publish remained blocked after acquisition completed")
+	}
 }
 
 func (g *generation) acquire() (func(), bool) {

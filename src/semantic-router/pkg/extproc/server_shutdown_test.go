@@ -42,9 +42,10 @@ func (*blockingWarmupEmbeddingProvider) Dimension() int  { return 1 }
 func (*blockingWarmupEmbeddingProvider) Backend() string { return "test" }
 
 type scheduledReloadShutdownFixture struct {
-	server          *Server
-	resourcesClosed chan struct{}
-	releaseReload   func()
+	server                   *Server
+	resourcesClosed          chan struct{}
+	candidateResourcesClosed chan struct{}
+	releaseReload            func()
 }
 
 func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownFixture {
@@ -79,6 +80,7 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		}
 	})
 	candidateCfg := &config.RouterConfig{}
+	candidateResourcesClosed := make(chan struct{})
 	parseReloadConfig = func(string) (*config.RouterConfig, error) {
 		return candidateCfg, nil
 	}
@@ -89,7 +91,12 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
 	buildReloadRouter = func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
-		return &OpenAIRouter{Config: cfg}, nil
+		resources := newResourceScope()
+		resources.add(func() error {
+			close(candidateResourcesClosed)
+			return nil
+		})
+		return (&routerComponents{cfg: cfg, resources: resources}).buildRouter(), nil
 	}
 	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
 		return nil
@@ -107,9 +114,10 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		t.Fatal("scheduled reload did not start")
 	}
 	return &scheduledReloadShutdownFixture{
-		server:          server,
-		resourcesClosed: resourcesClosed,
-		releaseReload:   releaseReload,
+		server:                   server,
+		resourcesClosed:          resourcesClosed,
+		candidateResourcesClosed: candidateResourcesClosed,
+		releaseReload:            releaseReload,
 	}
 }
 
@@ -139,6 +147,23 @@ func TestServerShutdownServingLeavesGenerationResourcesOpen(t *testing.T) {
 	case <-resourcesClosed:
 	default:
 		t.Fatal("ShutdownResources() left generation resources open")
+	}
+}
+
+func TestServerStartContextRejectsStartupAfterShutdown(t *testing.T) {
+	server := &Server{service: NewRouterService(nil)}
+	if err := server.ShutdownServing(context.Background()); err != nil {
+		t.Fatalf("ShutdownServing() error = %v", err)
+	}
+
+	err := server.StartContext(context.Background())
+	if err == nil || err.Error() != "router server is shutting down" {
+		t.Fatalf("StartContext() error = %v, want router server is shutting down", err)
+	}
+	server.servingMu.Lock()
+	defer server.servingMu.Unlock()
+	if server.server != nil {
+		t.Fatal("StartContext() installed a gRPC server after shutdown")
 	}
 }
 
@@ -252,6 +277,11 @@ func TestServerShutdownResourcesWaitsForScheduledReload(t *testing.T) {
 	default:
 		t.Fatal("generation resources remained open after reload exited")
 	}
+	select {
+	case <-fixture.candidateResourcesClosed:
+	default:
+		t.Fatal("published reload generation remained open after shutdown")
+	}
 }
 
 func TestServerShutdownResourcesDoesNotCloseUnderStuckScheduledReload(t *testing.T) {
@@ -275,8 +305,10 @@ func TestServerShutdownResourcesDoesNotCloseUnderStuckScheduledReload(t *testing
 	}
 
 	fixture.releaseReload()
-	if err := fixture.server.lifecycle.stopAndWaitForBackgroundWork(context.Background()); err != nil {
-		t.Fatalf("stopAndWaitForBackgroundWork() error = %v", err)
+	select {
+	case <-fixture.candidateResourcesClosed:
+	case <-time.After(time.Second):
+		t.Fatal("published reload generation remained open after timed-out shutdown resumed")
 	}
 }
 

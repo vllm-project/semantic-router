@@ -162,6 +162,35 @@ func TestServingComponentLifecycleCancelsAndWaitsForPeers(t *testing.T) {
 	}
 }
 
+func TestServingComponentLifecycleDefersCancellationUntilShutdown(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	componentStarted := make(chan struct{})
+	componentCanceled := make(chan struct{})
+	lifecycle := startServingComponents(parent, func(ctx context.Context) error {
+		close(componentStarted)
+		<-ctx.Done()
+		close(componentCanceled)
+		return nil
+	})
+	waitForTestSignal(t, componentStarted, "serving component did not start")
+
+	cancelParent()
+	if err := lifecycle.Wait(parent); err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+	requireNoTestSignal(
+		t,
+		componentCanceled,
+		50*time.Millisecond,
+		"parent cancellation bypassed the graceful serving shutdown phase",
+	)
+
+	if err := lifecycle.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+	waitForTestSignal(t, componentCanceled, "serving component was not canceled by shutdown")
+}
+
 func TestShutdownRouterComponentsDrainsAcceptedManagementRequestBeforeResources(t *testing.T) {
 	requestAccepted := make(chan struct{})
 	releaseRequest := make(chan struct{})

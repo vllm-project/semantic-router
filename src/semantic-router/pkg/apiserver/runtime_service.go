@@ -82,8 +82,24 @@ func (s *liveClassificationService) acquire() (classificationService, func()) {
 		if svc, release, ok := s.acquirer(); ok && svc != nil {
 			return svc, release
 		}
+		if s.fallback != nil {
+			return s.fallback, func() {}
+		}
+		return services.NewPlaceholderClassificationService(), func() {}
 	}
 	return s.current(), func() {}
+}
+
+func (s *ClassificationAPIServer) acquireClassificationService() (classificationService, func()) {
+	if s != nil {
+		if live, ok := s.classificationSvc.(*liveClassificationService); ok {
+			return live.acquire()
+		}
+		if s.classificationSvc != nil {
+			return s.classificationSvc, func() {}
+		}
+	}
+	return services.NewPlaceholderClassificationService(), func() {}
 }
 
 func (s *liveClassificationService) current() classificationService {

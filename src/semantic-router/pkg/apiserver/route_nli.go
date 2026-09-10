@@ -42,7 +42,9 @@ import (
 //	    "processing_time_ms": 14
 //	}
 func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter, r *http.Request) {
-	if !s.classificationSvc.IsNLIReady() {
+	service, release := s.acquireClassificationService()
+	defer release()
+	if !service.IsNLIReady() {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NLI_MODEL_NOT_READY",
 			"NLI model is not initialized — configure hallucination_mitigation.nli_model in your router config")
 		return
@@ -60,7 +62,7 @@ func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter,
 		return
 	}
 
-	result, err := s.classificationSvc.ClassifyNLI(r.Context(), req)
+	result, err := service.ClassifyNLI(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, admission.ErrQueueFull) {
 			s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())

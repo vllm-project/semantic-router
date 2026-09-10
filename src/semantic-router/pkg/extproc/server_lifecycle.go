@@ -6,22 +6,30 @@ import (
 	"sync/atomic"
 )
 
-type shutdownPhase struct {
+type lifecyclePhase struct {
 	once sync.Once
+	done chan struct{}
 	err  error
 }
 
-func (p *shutdownPhase) run(shutdown func() error) error {
+func (p *lifecyclePhase) run(ctx context.Context, shutdown func() error) error {
 	p.once.Do(func() {
-		p.err = shutdown()
+		p.done = make(chan struct{})
+		go func() {
+			p.err = shutdown()
+			close(p.done)
+		}()
 	})
+	if err := waitForLifecycleDone(ctx, p.done); err != nil {
+		return err
+	}
 	return p.err
 }
 
 type serverLifecycle struct {
 	stopping  atomic.Bool
-	serving   shutdownPhase
-	resources shutdownPhase
+	serving   lifecyclePhase
+	resources lifecyclePhase
 
 	watchMu     sync.Mutex
 	watchCancel context.CancelFunc

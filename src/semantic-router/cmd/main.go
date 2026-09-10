@@ -342,7 +342,7 @@ type servingComponentLifecycle struct {
 }
 
 func startServingComponents(ctx context.Context, components ...func(context.Context) error) *servingComponentLifecycle {
-	runCtx, cancel := context.WithCancel(ctx)
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	results := make(chan error, len(components))
 	for _, component := range components {
 		go func(component func(context.Context) error) {
@@ -370,7 +370,6 @@ func startServingComponents(ctx context.Context, components ...func(context.Cont
 func (l *servingComponentLifecycle) Wait(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		l.cancel()
 		return nil
 	case err := <-l.first:
 		return err

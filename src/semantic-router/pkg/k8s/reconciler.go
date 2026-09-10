@@ -122,14 +122,22 @@ func (r *Reconciler) Start(ctx context.Context) error {
 	}
 	logging.Infof("Starting Kubernetes reconciler in namespace %s", r.namespace)
 	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
 
 	managerDone := make(chan error, 1)
+	workers.Add(1)
 	go func() {
+		defer workers.Done()
 		managerDone <- r.runtimeManager.Start(runCtx)
 	}()
 	cacheSynced := make(chan bool, 1)
+	workers.Add(1)
 	go func() {
+		defer workers.Done()
 		cacheSynced <- r.runtimeManager.GetCache().WaitForCacheSync(runCtx)
 	}()
 	select {
@@ -157,7 +165,11 @@ func (r *Reconciler) Start(ctx context.Context) error {
 	}
 
 	// Start watch loops
-	go r.watchLoop(runCtx)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		r.watchLoop(runCtx)
+	}()
 	select {
 	case <-ctx.Done():
 		return nil

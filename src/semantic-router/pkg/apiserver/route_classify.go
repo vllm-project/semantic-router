@@ -48,7 +48,6 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 		s.writeJSONRequestError(w, err)
 		return
 	}
-
 	// Use signal-driven classification (always uses signal-driven architecture)
 	response, err := s.classificationSvc.ClassifyIntent(r.Context(), req)
 	if err != nil {
@@ -76,7 +75,6 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 	if r.URL.Query().Get("trace") == "true" {
 		req.Options.Trace = true
 	}
-
 	response, err := s.classificationSvc.ClassifyIntentForEval(r.Context(), req)
 	if err != nil {
 		if response != nil {
@@ -97,7 +95,6 @@ func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *h
 		s.writeJSONRequestError(w, err)
 		return
 	}
-
 	response, err := s.classificationSvc.DetectPII(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
@@ -114,7 +111,6 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 		s.writeJSONRequestError(w, err)
 		return
 	}
-
 	response, err := s.classificationSvc.CheckSecurity(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
@@ -132,13 +128,15 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	if !ok {
 		return
 	}
+	service, release := s.acquireClassificationService()
+	defer release()
 
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
-	if !s.ensureUnifiedClassifierAvailable(w) {
+	if !s.ensureUnifiedClassifierAvailable(w, service) {
 		return
 	}
 
-	unifiedResults, err := s.classificationSvc.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
+	unifiedResults, err := service.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "classification_failed")
 		s.writeErrorResponse(w, http.StatusInternalServerError, "UNIFIED_CLASSIFICATION_ERROR", err.Error())
@@ -210,8 +208,8 @@ func (s *ClassificationAPIServer) maxBatchSize() int {
 	return cfg.API.BatchClassification.MaxBatchSize
 }
 
-func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {
-	if !s.classificationSvc.HasUnifiedClassifier() {
+func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter, service classificationService) bool {
+	if !service.HasUnifiedClassifier() {
 		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "UNIFIED_CLASSIFIER_UNAVAILABLE",
 			"Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.")
@@ -376,7 +374,6 @@ func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseW
 		s.writeJSONRequestError(w, err)
 		return
 	}
-
 	response, err := s.classificationSvc.ClassifyFactCheck(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)
@@ -393,7 +390,6 @@ func (s *ClassificationAPIServer) handleUserFeedbackClassification(w http.Respon
 		s.writeJSONRequestError(w, err)
 		return
 	}
-
 	response, err := s.classificationSvc.ClassifyUserFeedback(r.Context(), req)
 	if err != nil {
 		s.writeClassificationError(w, err)

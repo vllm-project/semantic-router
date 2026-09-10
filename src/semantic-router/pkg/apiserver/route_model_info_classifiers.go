@@ -13,15 +13,17 @@ func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelA
 	if s == nil || s.classificationSvc == nil {
 		return classifierModelAvailability{}
 	}
+	service, release := s.acquireClassificationService()
+	defer release()
 
 	availability := classifierModelAvailability{
-		core:                   s.classificationSvc.HasClassifier(),
-		factCheck:              s.classificationSvc.HasFactCheckClassifier(),
-		hallucination:          s.classificationSvc.HasHallucinationDetector(),
-		hallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
-		feedback:               s.classificationSvc.HasFeedbackDetector(),
+		core:                   service.HasClassifier(),
+		factCheck:              service.HasFactCheckClassifier(),
+		hallucination:          service.HasHallucinationDetector(),
+		hallucinationExplainer: service.HasHallucinationExplainer(),
+		feedback:               service.HasFeedbackDetector(),
 	}
-	if inventory, ok := s.classificationSvc.(classificationInventoryReadinessService); ok {
+	if inventory, ok := service.(classificationInventoryReadinessService); ok {
 		availability.factCheck = inventory.HasAnyFactCheckClassifier()
 		availability.hallucination = inventory.HasAnyHallucinationDetector()
 		availability.hallucinationExplainer = inventory.HasAnyHallucinationExplainer()

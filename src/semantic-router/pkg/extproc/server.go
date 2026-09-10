@@ -80,6 +80,7 @@ type Server struct {
 	certPath   string
 	runtime    *routerruntime.Registry
 	reloadMu   sync.Mutex
+	servingMu  sync.Mutex
 	lifecycle  serverLifecycle
 }
 
@@ -157,6 +158,9 @@ func (s *Server) StartContext(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if s.lifecycle.isStopping() {
+		return errors.New("router server is shutting down")
+	}
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		s.Stop()
@@ -212,13 +216,21 @@ func (s *Server) StartContext(ctx context.Context) error {
 		"secure":     s.secure,
 		"max_msg_mb": maxMsgSize / (1024 * 1024),
 	})
-	s.server = grpc.NewServer(serverOpts...)
-	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
+	grpcServer := grpc.NewServer(serverOpts...)
+	ext_proc.RegisterExternalProcessorServer(grpcServer, s.service)
+	s.servingMu.Lock()
+	if s.lifecycle.isStopping() {
+		s.servingMu.Unlock()
+		_ = lis.Close()
+		return errors.New("router server is shutting down")
+	}
+	s.server = grpcServer
+	s.servingMu.Unlock()
 
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+		if err := grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 			serverErrCh <- err
 		} else {
 			serverErrCh <- nil
@@ -249,6 +261,8 @@ func (s *Server) StartContext(ctx context.Context) error {
 		logging.ComponentEvent("extproc", "server_shutdown_requested", map[string]interface{}{
 			"port": s.port,
 		})
+		grpcServer.Stop()
+		<-serverErrCh
 	}
 	return nil
 }
@@ -277,13 +291,16 @@ func (s *Server) ShutdownServing(ctx context.Context) error {
 		defer cancel()
 	}
 
-	return s.lifecycle.serving.run(func() error { return s.shutdownServing(ctx) })
+	return s.lifecycle.serving.run(ctx, func() error { return s.shutdownServing(ctx) })
 }
 
 func (s *Server) shutdownServing(ctx context.Context) error {
 	s.lifecycle.beginShutdown()
 	var shutdownErr error
-	if s.server != nil {
+	s.servingMu.Lock()
+	grpcServer := s.server
+	s.servingMu.Unlock()
+	if grpcServer != nil {
 		gracefulCtx := ctx
 		cancelGraceful := func() {}
 		if deadline, ok := ctx.Deadline(); ok {
@@ -301,14 +318,14 @@ func (s *Server) shutdownServing(ctx context.Context) error {
 
 		gracefulDone := make(chan struct{})
 		go func() {
-			s.server.GracefulStop()
+			grpcServer.GracefulStop()
 			close(gracefulDone)
 		}()
 		select {
 		case <-gracefulDone:
 		case <-gracefulCtx.Done():
 			shutdownErr = gracefulCtx.Err()
-			s.server.Stop()
+			grpcServer.Stop()
 			<-gracefulDone
 		}
 		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
@@ -325,12 +342,12 @@ func (s *Server) ShutdownResources(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
 		defer cancel()
 	}
-	return s.lifecycle.resources.run(func() error {
-		if err := s.lifecycle.stopAndWaitForBackgroundWork(ctx); err != nil {
+	return s.lifecycle.resources.run(ctx, func() error {
+		if err := s.lifecycle.stopAndWaitForBackgroundWork(context.Background()); err != nil {
 			return err
 		}
 		if s.service != nil {
-			return s.service.Shutdown(ctx)
+			return s.service.Shutdown(context.Background())
 		}
 		return nil
 	})

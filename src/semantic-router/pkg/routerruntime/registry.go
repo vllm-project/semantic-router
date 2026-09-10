@@ -18,7 +18,7 @@ type Registry struct {
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService
-	acquireClassification AcquireClassification
+	acquireGeneration     AcquireClassification
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
@@ -176,16 +176,18 @@ func (r *Registry) AcquireClassificationService() (*services.ClassificationServi
 	}
 	r.mu.RLock()
 	service := r.classificationService
-	acquire := r.acquireClassification
-	r.mu.RUnlock()
 	if service == nil {
+		r.mu.RUnlock()
 		return nil, nil, false
 	}
+	acquire := r.acquireGeneration
 	if acquire == nil {
+		r.mu.RUnlock()
 		// No generation owns this service, so nothing can close it underneath us.
 		return service, func() {}, true
 	}
 	release, ok := acquire()
+	r.mu.RUnlock()
 	if !ok {
 		return nil, nil, false
 	}
@@ -208,6 +210,31 @@ func (r *Registry) MemoryStore() memory.Store {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.memoryStore
+}
+
+// AcquireMemoryStore returns one generation's memory store and keeps that
+// generation alive until release runs.
+func (r *Registry) AcquireMemoryStore() (memory.Store, func(), bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	r.mu.RLock()
+	store := r.memoryStore
+	if store == nil {
+		r.mu.RUnlock()
+		return nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return store, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, false
+	}
+	return store, release, true
 }
 
 func (r *Registry) SetMemoryStore(store memory.Store) {
@@ -351,6 +378,7 @@ func (r *Registry) PublishRouterRuntime(
 	}
 	r.classificationService = classificationService
 	r.memoryStore = memoryStore
+	r.acquireGeneration = nil
 	r.mu.Unlock()
 }
 
@@ -363,7 +391,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 		r.config = snapshot.Config
 	}
 	r.classificationService = snapshot.ClassificationService
-	r.acquireClassification = snapshot.AcquireClassification
+	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime

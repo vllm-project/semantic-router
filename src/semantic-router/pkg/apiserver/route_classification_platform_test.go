@@ -4,16 +4,47 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+type combinedClassificationGeneration struct {
+	classificationService
+	calls []string
+}
+
+func (s *combinedClassificationGeneration) ClassifyIntent(
+	context.Context,
+	services.IntentRequest,
+) (*services.IntentResponse, error) {
+	s.calls = append(s.calls, "intent")
+	return &services.IntentResponse{}, nil
+}
+
+func (s *combinedClassificationGeneration) DetectPII(
+	context.Context,
+	services.PIIRequest,
+) (*services.PIIResponse, error) {
+	s.calls = append(s.calls, "pii")
+	return &services.PIIResponse{}, nil
+}
+
+func (s *combinedClassificationGeneration) CheckSecurity(
+	context.Context,
+	services.SecurityRequest,
+) (*services.SecurityResponse, error) {
+	s.calls = append(s.calls, "security")
+	return &services.SecurityResponse{}, nil
+}
 
 func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 	tempDir := t.TempDir()
@@ -91,6 +122,43 @@ func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 	}
 	if response.Intent == nil || response.PII == nil || response.Security == nil {
 		t.Fatalf("expected combined response to include all sub-responses, got %+v", response)
+	}
+}
+
+func TestHandleCombinedClassificationUsesOneGeneration(t *testing.T) {
+	oldGeneration := &combinedClassificationGeneration{}
+	newGeneration := &combinedClassificationGeneration{}
+	acquires := 0
+	releases := 0
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: newLiveClassificationService(nil, nil, func() (classificationService, func(), bool) {
+			acquires++
+			if acquires == 1 {
+				return oldGeneration, func() { releases++ }, true
+			}
+			return newGeneration, func() { releases++ }, true
+		}),
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/classify/combined",
+		bytes.NewBufferString(`{"text":"keep one generation"}`),
+	)
+	rr := httptest.NewRecorder()
+	apiServer.handleCombinedClassification(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rr.Code, http.StatusOK, rr.Body.String())
+	}
+	if acquires != 1 || releases != 1 {
+		t.Fatalf("generation lease acquired %d times and released %d times, want once each", acquires, releases)
+	}
+	if got, want := oldGeneration.calls, []string{"intent", "pii", "security"}; !slices.Equal(got, want) {
+		t.Fatalf("old generation calls = %v, want %v", got, want)
+	}
+	if len(newGeneration.calls) != 0 {
+		t.Fatalf("new generation handled part of the request: %v", newGeneration.calls)
 	}
 }
 
