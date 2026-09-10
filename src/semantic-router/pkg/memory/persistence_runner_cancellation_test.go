@@ -87,7 +87,9 @@ func TestPersistenceRunnerShutdownRetainsUncooperativeWorker(t *testing.T) {
 		t.Fatal("retirement claimed completion while Run is still active")
 	default:
 	}
-	assert.Equal(t, 1, receipts.count("cancelled/shutdown"))
+	require.Eventually(t, func() bool {
+		return receipts.count("cancelled/shutdown") == 2
+	}, time.Second, time.Millisecond, "queued work must report cancellation before the active job exits")
 	unblock()
 	select {
 	case <-runner.Done():
@@ -97,4 +99,39 @@ func TestPersistenceRunnerShutdownRetainsUncooperativeWorker(t *testing.T) {
 	assert.Zero(t, queuedRuns.Load(), "canceled queued jobs must not start")
 	assert.Equal(t, 2, receipts.count("cancelled/shutdown"))
 	assert.Zero(t, receipts.count("completed/persisted"))
+}
+
+func TestPersistenceRunnerQueuedTimeoutDoesNotWaitForWorker(t *testing.T) {
+	runner := NewPersistenceRunner(20*time.Millisecond, 1, 1)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(release) }) }
+	t.Cleanup(func() { unblock(); _ = runner.RetireAndWait(time.Second); <-runner.Done() })
+	runner.Submit(context.Background(), PersistenceJob{
+		Run: func(context.Context) (PersistenceOutcome, error) {
+			close(entered)
+			<-release
+			return PersistenceOutcome{}, nil
+		},
+		Report: func(string, string, bool, error) {},
+	})
+	<-entered
+	receipts := newOutcomeRecorder()
+	var queuedRuns atomic.Int32
+	runner.Submit(context.Background(), PersistenceJob{
+		Run: func(context.Context) (PersistenceOutcome, error) {
+			queuedRuns.Add(1)
+			return PersistenceOutcome{}, nil
+		},
+		Report: receipts.report,
+	})
+	require.Eventually(t, func() bool {
+		return receipts.count("timeout/persist_timeout") == 1
+	}, time.Second, time.Millisecond, "a queued attempt must expire while the worker remains blocked")
+	assert.True(t, receipts.failedOpen("timeout/persist_timeout"))
+	assert.Zero(t, queuedRuns.Load())
+	unblock()
+	require.NoError(t, runner.RetireAndWait(time.Second))
+	assert.Zero(t, queuedRuns.Load(), "expired queued work must never execute")
+	assert.Equal(t, []string{"scheduled/queue_accepted", "timeout/persist_timeout"}, receipts.eventSnapshot())
 }
