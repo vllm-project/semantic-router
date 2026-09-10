@@ -2526,8 +2526,7 @@ providers:
     monogram: SF
     monochrome: true
   conformance:
-    status: fixture_verified
-    verified_at: '2026-09-09'
+    status: unverified
 - id: stepfun
   display_name: StepFun
   description: Step models through StepFun's OpenAI-compatible API.

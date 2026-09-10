@@ -127,8 +127,8 @@ func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
 	if provider.Presentation.Monogram != "SF" {
 		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
 	}
-	if provider.Conformance.Status != "fixture_verified" {
-		t.Fatalf("conformance = %+v, want fixture_verified", provider.Conformance)
+	if provider.Conformance.Status != "unverified" {
+		t.Fatalf("conformance = %+v, want unverified until wire-level conformance exists", provider.Conformance)
 	}
 }
 

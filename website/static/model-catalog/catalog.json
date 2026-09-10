@@ -44298,8 +44298,7 @@
       },
       "category": "model_api",
       "conformance": {
-        "status": "fixture_verified",
-        "verified_at": "2026-09-09"
+        "status": "unverified"
       },
       "default_headers": {
         "anthropic-version": "2023-06-01"
