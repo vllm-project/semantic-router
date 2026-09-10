@@ -468,7 +468,7 @@ func repoState(root string, outputs ...string) (string, bool) {
 	}
 	args := []string{"-C", root, "status", "--porcelain", "--", "."}
 	for _, output := range outputs {
-		if rel, err := filepath.Rel(absolutePath(root), absolutePath(output)); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, relErr := filepath.Rel(absolutePath(root), absolutePath(output)); relErr == nil && !strings.HasPrefix(rel, "..") {
 			args = append(args, ":(exclude)"+filepath.ToSlash(rel))
 		}
 	}
