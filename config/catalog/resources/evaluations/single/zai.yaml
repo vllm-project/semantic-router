@@ -1,0 +1,1220 @@
+- id: independent/glm-5-3-aa-briefcase@1.0.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    elo: 1520.09
+    elo_lower: 1511.06
+    elo_upper: 1530.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/glm-5-3-critpt@1.0.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    score: 0.191428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-3-gdp-pdf@1.0.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    all_pass: 0.118
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/glm-5-3-gdpval-aa@2.0.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    elo: 1680.92
+    elo_lower: 1665.19
+    elo_upper: 1696.65
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/glm-5-3-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    score: 0.796666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-3-omniscience@1.0.0
+  model: zai/glm-5.3
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    index: 14.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/glm-5-3-humanitys-last-exam@1.0.0
+  model: zai/glm-5.3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    accuracy: 0.422613531047266
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/glm-5-3-terminalbench-v2-1@1.0.0
+  model: zai/glm-5.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    resolved: 0.838951310861423
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/glm-5-3-gpqa-diamond@1.0.0
+  model: zai/glm-5.3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    accuracy: 0.917171717171717
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/glm-5-3-scicode@1.0.0
+  model: zai/glm-5.3
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    score: 0.590277777777778
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/glm-5-3-tau3-banking@1.0.0
+  model: zai/glm-5.3
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3 (max)
+    source_model_slug: glm-5-3
+    run_kind: independent
+  metrics:
+    score: 0.503092783505155
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: zai/glm-5.3-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GLM-5.3
+    terminal_harness: Claude Code 2.1.207
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.882
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3
+    redistributable: true
+- id: independent/glm-5-3-flash-aa-briefcase@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    elo: 1460.68
+    elo_lower: 1451.59
+    elo_upper: 1470.5
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/glm-5-3-flash-critpt@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    score: 0.154285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-3-flash-gdp-pdf@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    all_pass: 0.13
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/glm-5-3-flash-gdpval-aa@2.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    elo: 1674.12
+    elo_lower: 1658.46
+    elo_upper: 1689.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-gdpval-aa@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_vendor_republication
+  metrics:
+    elo: 1773
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-3-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    score: 0.8
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-3-flash-omniscience@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    index: 7.46666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-agents-last-exam@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: berkeley-rdi/agents-last-exam@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    pass_rate: 0.263
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-3-flash-humanitys-last-exam@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.398517145505097
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-humanitys-last-exam-tools@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.553
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-deep-swe@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.634
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-3-flash-terminalbench-v2-1@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.842696629213483
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.843
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-3-flash-gpqa-diamond@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.912121212121212
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_vendor_republication
+  metrics:
+    accuracy: 0.912
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-3-flash-scicode@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    score: 0.516203703703704
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/glm-5-3-flash-tau3-banking@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.3-Flash
+    source_model_slug: glm-5-3-flash
+    run_kind: independent
+  metrics:
+    score: 0.472164948453608
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: zai/glm-5.3-flash-model-card-automation-bench@1.0.0
+  model: zai/glm-5.3-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: GLM-5.3-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    score: 0.488
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.3-Flash
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-critpt@1.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.0314285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-gdpval-aa@2.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1311.7
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.423333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-omniscience@1.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -6.56666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-humanitys-last-exam@1.0.0
+  model: zai/glm-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.097775718257646
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-terminalbench-v2-1@1.0.0
+  model: zai/glm-5.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.51685393258427
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-gpqa-diamond@1.0.0
+  model: zai/glm-5.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.685858585858586
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/glm-5-2-non-reasoning-tau3-banking@1.0.0
+  model: zai/glm-5.2
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.2 (Non-reasoning)
+    source_model_slug: glm-5-2-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.167010309278351
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/glm-5-2-critpt@1.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    score: 0.208571428571429
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-2-gdpval-aa@2.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    elo: 1422.02
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/glm-5-2-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    score: 0.783333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-2-omniscience@1.0.0
+  model: zai/glm-5.2
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    index: 4.43333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/glm-5-2-humanitys-last-exam@1.0.0
+  model: zai/glm-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.411492122335496
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/glm-5-2-terminalbench-v2-1@1.0.0
+  model: zai/glm-5.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    resolved: 0.779026217228464
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/glm-5-2-gpqa-diamond@1.0.0
+  model: zai/glm-5.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    accuracy: 0.894949494949495
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/glm-5-2-scicode@1.0.0
+  model: zai/glm-5.2
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    score: 0.511574074074074
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/glm-5-2-tau3-banking@1.0.0
+  model: zai/glm-5.2
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: GLM-5.2 (max)
+    source_model_slug: glm-5-2
+    run_kind: independent
+  metrics:
+    score: 0.34639175257732
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: zai/glm-5.2-model-card-humanitys-last-exam@1.0.0
+  model: zai/glm-5.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: GLM-5.2
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.405
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.2
+    redistributable: true
+- id: zai/glm-5.2-model-card-terminal-bench@1.0.0
+  model: zai/glm-5.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: GLM-5.2
+    terminal_harness: Terminus-2
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.81
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.2
+    redistributable: true
+- id: zai/glm-5.2-model-card-gpqa-diamond@1.0.0
+  model: zai/glm-5.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: GLM-5.2
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.912
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/zai-org/GLM-5.2
+    redistributable: true
+- id: independent/glm-5-1-non-reasoning-critpt@1.0.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.1 (Non-reasoning)
+    source_model_slug: glm-5-1-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-1-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.1 (Non-reasoning)
+    source_model_slug: glm-5-1-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.533333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-1-non-reasoning-omniscience@1.0.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.1 (Non-reasoning)
+    source_model_slug: glm-5-1-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -22.4333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/glm-5-1-non-reasoning-humanitys-last-exam@1.0.0
+  model: zai/glm-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.1 (Non-reasoning)
+    source_model_slug: glm-5-1-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.279425393883225
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/glm-5-1-non-reasoning-gpqa-diamond@1.0.0
+  model: zai/glm-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: GLM-5.1 (Non-reasoning)
+    source_model_slug: glm-5-1-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.839393939393939
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/glm-5-1-critpt@1.0.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    score: 0.0457142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/glm-5-1-gdpval-aa@2.0.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    elo: 1186.31
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/glm-5-1-artificial-analysis-long-context-reasoning@1.1.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    score: 0.736666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/glm-5-1-omniscience@1.0.0
+  model: zai/glm-5.1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    index: 0.85
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/glm-5-1-humanitys-last-exam@1.0.0
+  model: zai/glm-5.1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    accuracy: 0.300741427247451
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/glm-5-1-terminalbench-v2-1@1.0.0
+  model: zai/glm-5.1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    resolved: 0.617977528089888
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/glm-5-1-gpqa-diamond@1.0.0
+  model: zai/glm-5.1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    accuracy: 0.867676767676768
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/glm-5-1-tau3-banking@1.0.0
+  model: zai/glm-5.1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 (Reasoning)
+    source_model_slug: glm-5-1
+    run_kind: independent
+  metrics:
+    score: 0.136082474226804
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: cursor/glm-5-2-high-cursorbench-3-2@1.0.0
+  model: zai/glm-5.2
+  benchmark: cursor/cursorbench@3.2.0
+  benchmark_profile: production-agent
+  reasoning_effort: high
+  subject:
+    source_model: GLM 5.2
+    source_model_slug: glm-5-2-high
+    run_kind: independent
+    benchmark_revision: "3.2"
+    harness: cursor-production-agent
+  metrics:
+    score: 0.515
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cursor.com/cursorbench
+    redistributable: true
+- id: nvidia-comparative/glm-5.1-mmlu-pro@1.0.0
+  model: zai/glm-5.1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 744B-A40B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+  metrics:
+    accuracy: 0.859
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/glm-5.1-livecodebench-v6@1.0.0
+  model: zai/glm-5.1
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 744B-A40B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.857
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/glm-5.1-scicode@1.0.0
+  model: zai/glm-5.1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: GLM-5.1 744B-A40B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    metric_variant: subtask
+  metrics:
+    score: 0.477
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true

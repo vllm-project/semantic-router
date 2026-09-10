@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 from click.testing import CliRunner
 
@@ -8,9 +9,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.config_migration import migrate_config_data  # noqa: E402
 from cli.main import main  # noqa: E402
+from cli.models import UserConfig  # noqa: E402
 from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
+from cli.validator import validate_user_config  # noqa: E402
 
 
 def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases():
@@ -32,6 +36,240 @@ def test_migrate_preserves_recipes_entrypoints_and_explicit_empty_auto_aliases()
     assert migrated["entrypoints"] == source["entrypoints"]
     assert migrated["recipes"] == source["recipes"]
     assert migrated["global"]["router"]["auto_model_names"] == []
+
+
+def test_migrate_is_idempotent_for_catalog_and_custom_provider_models():
+    source = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {
+            "defaults": {"model": "frontier", "reasoning_effort": "high"},
+            "models": [
+                {
+                    "name": "frontier",
+                    "catalog": "openai/gpt-5.4",
+                    "reliability": {
+                        "lb_policy": "least_request",
+                        "retry_count": 2,
+                    },
+                    "backend_refs": [
+                        {
+                            "provider": "openai",
+                            "api_key_env": "OPENAI_API_KEY",
+                        }
+                    ],
+                },
+                {
+                    "name": "lab-model",
+                    "reasoning": {
+                        "type": "chat_template_kwargs",
+                        "parameter": "enable_thinking",
+                        "levels": ["disabled", "enabled"],
+                        "default": "enabled",
+                        "disabled": "disabled",
+                    },
+                    "reliability": {"retry_count": 1},
+                    "backend_refs": [
+                        {"provider": "vllm", "endpoint": "127.0.0.1:8000"}
+                    ],
+                },
+            ],
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "openai/gpt-5.4",
+                    "description": "Approved production overlay",
+                },
+                {
+                    "name": "lab-model",
+                    "publisher": "Example Lab",
+                    "presentation": {
+                        "logo": "monogram",
+                        "monogram": "EL",
+                        "monochrome": False,
+                    },
+                    "distribution": {
+                        "type": "open_weights",
+                        "source": "https://example.com/models/lab-model",
+                    },
+                },
+            ]
+        },
+    }
+
+    migrated = migrate_config_data(source)
+    migrated_again = migrate_config_data(migrated)
+
+    assert migrated_again == migrated
+    by_name = {model["name"]: model for model in migrated["providers"]["models"]}
+    assert by_name["frontier"]["catalog"] == "openai/gpt-5.4"
+    assert by_name["frontier"]["reliability"] == {
+        "lb_policy": "least_request",
+        "retry_count": 2,
+    }
+    assert by_name["lab-model"]["reasoning"]["disabled"] == "disabled"
+    assert by_name["lab-model"]["reliability"] == {"retry_count": 1}
+    UserConfig.model_validate(migrated)
+
+
+def test_migrate_materializes_legacy_router_owned_anthropic_backend(tmp_path):
+    source = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "providers": {
+            "models": [
+                {
+                    "name": "claude-legacy",
+                    "api_format": "anthropic",
+                }
+            ]
+        },
+        "routing": {},
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["providers"]["models"][0]["backend_refs"] == [
+        {"provider": "anthropic"}
+    ]
+    parsed = UserConfig.model_validate(migrated)
+    assert validate_user_config(parsed, log_summary=False) == []
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(parsed, str(output))
+    rendered = yaml.safe_load(output.read_text(encoding="utf-8"))
+    anthropic_cluster = next(
+        cluster
+        for cluster in rendered["static_resources"]["clusters"]
+        if cluster["name"] == "claude_legacy_cluster"
+    )
+    endpoint = anthropic_cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0][
+        "endpoint"
+    ]["address"]["socket_address"]
+    assert endpoint == {"address": "api.anthropic.com", "port_value": 443}
+
+
+def test_migrate_keeps_external_gateway_anthropic_metadata_backendless():
+    source = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {
+            "models": [
+                {
+                    "name": "claude-metadata-only",
+                    "api_format": "anthropic",
+                }
+            ]
+        },
+        "routing": {},
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert "backend_refs" not in migrated["providers"]["models"][0]
+    assert migrate_config_data(migrated) == migrated
+
+
+def test_migrate_coalesces_non_conflicting_alias_cards_by_catalog_identity():
+    source = {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {
+            "models": [
+                {
+                    "name": "prod",
+                    "catalog": "openai/gpt-5.4",
+                    "backend_refs": [{"provider": "openai"}],
+                },
+                {
+                    "name": "canary",
+                    "catalog": "openai/gpt-5.4",
+                    "backend_refs": [{"provider": "openai"}],
+                },
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {"name": "prod", "description": "Approved production profile"},
+                {"name": "canary", "tags": ["canary"]},
+            ]
+        },
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["routing"]["modelCards"] == [
+        {
+            "name": "openai/gpt-5.4",
+            "description": "Approved production profile",
+            "tags": ["canary"],
+        }
+    ]
+    assert migrate_config_data(migrated) == migrated
+    UserConfig.model_validate(migrated)
+
+
+def test_migrate_coalesces_existing_canonical_card_with_alias_metadata():
+    source = {
+        "version": "v0.3",
+        "providers": {
+            "models": [
+                {
+                    "name": "prod",
+                    "catalog": "openai/gpt-5.4",
+                    "backend_refs": [{"provider": "openai"}],
+                }
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {"name": "openai/gpt-5.4", "description": "Shared"},
+                {"name": "prod", "tags": ["approved"]},
+            ]
+        },
+    }
+
+    migrated = migrate_config_data(source)
+
+    assert migrated["routing"]["modelCards"] == [
+        {
+            "name": "openai/gpt-5.4",
+            "description": "Shared",
+            "tags": ["approved"],
+        }
+    ]
+
+
+def test_migrate_rejects_conflicting_alias_cards_by_catalog_identity():
+    source = {
+        "version": "v0.3",
+        "providers": {
+            "models": [
+                {
+                    "name": "prod",
+                    "catalog": "openai/gpt-5.4",
+                    "backend_refs": [{"provider": "openai"}],
+                },
+                {
+                    "name": "canary",
+                    "catalog": "openai/gpt-5.4",
+                    "backend_refs": [{"provider": "openai"}],
+                },
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {"name": "prod", "description": "Production"},
+                {"name": "canary", "description": "Canary"},
+            ]
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"aliases collapse to 'openai/gpt-5.4'.*description",
+    ):
+        migrate_config_data(source)
 
 
 def test_migrate_relocates_legacy_flat_empty_auto_aliases():
@@ -92,8 +330,8 @@ def test_migrate_config_preserves_entrypoints_and_recipes():
     assert migrated["recipes"] == config["recipes"]
 
 
-def test_migrate_config_data_splits_legacy_provider_models():
-    legacy = {
+def _legacy_provider_models_config() -> dict:
+    return {
         "version": "v0.1",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "signals": {
@@ -113,7 +351,14 @@ def test_migrate_config_data_splits_legacy_provider_models():
         "providers": {
             "default_model": "gpt-4o",
             "reasoning_families": {
-                "openai": {"type": "reasoning_effort", "parameter": "reasoning_effort"}
+                "openai": {
+                    "type": "reasoning_effort",
+                    "parameter": "reasoning_effort",
+                    "activation_parameter": "reasoning_enabled",
+                    "levels": ["none", "high"],
+                    "default": "high",
+                    "disabled": "none",
+                }
             },
             "default_reasoning_effort": "high",
             "models": [
@@ -142,6 +387,10 @@ def test_migrate_config_data_splits_legacy_provider_models():
         },
     }
 
+
+def test_migrate_config_data_splits_legacy_provider_models():
+    legacy = _legacy_provider_models_config()
+
     migrated = migrate_config_data(legacy)
 
     assert migrated["version"] == "v0.3"
@@ -152,14 +401,27 @@ def test_migrate_config_data_splits_legacy_provider_models():
             "name": "gpt-4o",
             "description": "General reasoning model",
             "capabilities": ["general", "reasoning"],
-            "quality_score": 0.95,
             "modality": "text",
+        }
+    ]
+    assert migrated["evaluation"]["records"] == [
+        {
+            "model": "gpt-4o",
+            "benchmark": "vllm-sr/operator-rating@1.0.0",
+            "metrics": {"score": 0.95},
         }
     ]
     assert migrated["providers"]["models"] == [
         {
             "name": "gpt-4o",
-            "reasoning_family": "openai",
+            "reasoning": {
+                "type": "reasoning_effort",
+                "parameter": "reasoning_effort",
+                "activation_parameter": "reasoning_enabled",
+                "levels": ["none", "high"],
+                "default": "high",
+                "disabled": "none",
+            },
             "backend_refs": [
                 {
                     "name": "primary",
@@ -167,12 +429,87 @@ def test_migrate_config_data_splits_legacy_provider_models():
                     "protocol": "https",
                     "weight": 100,
                     "api_key": "sk-test",
+                    "provider": "vllm",
                 }
             ],
         }
     ]
-    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o"
+    assert migrated["providers"]["defaults"]["model"] == "gpt-4o"
+    assert "reasoning_families" not in migrated["providers"]["defaults"]
     assert migrated["global"]["stores"]["memory"]["enabled"] is True
+    UserConfig.model_validate(migrated)
+
+
+def test_migrate_config_data_unifies_evaluation_definitions_and_records():
+    migrated = migrate_config_data(
+        {
+            "version": "v0.3",
+            "evaluation_catalog": {"benchmarks": []},
+            "providers": {
+                "models": [{"name": "frontier", "catalog": "vendor/frontier"}]
+            },
+            "routing": {
+                "modelCards": [
+                    {
+                        "name": "frontier",
+                        "evaluations": [
+                            {
+                                "benchmark": "acme/reasoning@1.0.0",
+                                "metrics": {"accuracy": 0.82},
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    assert "evaluation_catalog" not in migrated
+    assert migrated["evaluation"]["records"] == [
+        {
+            "model": "vendor/frontier",
+            "benchmark": "acme/reasoning@1.0.0",
+            "metrics": {"accuracy": 0.82},
+        }
+    ]
+    assert migrated["routing"].get("modelCards") is None
+    UserConfig.model_validate(migrated)
+
+
+def test_migrate_removes_reasoning_registry_when_it_was_the_only_default():
+    migrated = migrate_config_data(
+        {
+            "version": "v0.3",
+            "providers": {
+                "defaults": {
+                    "reasoning_families": {
+                        "private": {
+                            "type": "chat_template_kwargs",
+                            "parameter": "enable_thinking",
+                        }
+                    }
+                },
+                "models": [
+                    {
+                        "name": "private",
+                        "reasoning_family": "private",
+                    },
+                    {
+                        "name": "built-in-family",
+                        "reasoning_family": "qwen3",
+                    },
+                ],
+            },
+            "routing": {},
+        }
+    )
+
+    assert "defaults" not in migrated["providers"]
+    assert migrated["providers"]["models"][0]["reasoning"] == {
+        "type": "chat_template_kwargs",
+        "parameter": "enable_thinking",
+    }
+    assert migrated["providers"]["models"][1]["reasoning"] == {"family": "qwen3"}
 
 
 def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
@@ -228,14 +565,15 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     migrated = yaml.safe_load(migrated_path.read_text())
 
     assert migrated["version"] == "v0.3"
-    assert migrated["providers"]["defaults"]["default_model"] == "gpt-4o-mini"
-    assert migrated["routing"]["modelCards"][0]["name"] == "gpt-4o-mini"
+    assert migrated["providers"]["defaults"]["model"] == "gpt-4o-mini"
+    assert "modelCards" not in migrated["routing"]
     assert migrated["providers"]["models"][0]["backend_refs"] == [
         {
             "name": "primary",
             "endpoint": "host.docker.internal:8000",
             "protocol": "http",
             "weight": 100,
+            "provider": "vllm",
         }
     ]
 
@@ -376,240 +714,3 @@ def test_parse_user_config_rejects_legacy_flat_signal_blocks(tmp_path: Path):
         assert "keyword_rules" in str(exc)
     else:
         raise AssertionError("expected ConfigParseError")
-
-
-def _legacy_model_catalog_config() -> dict:
-    return {
-        "version": "v0.1",
-        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "default_model": "qwen3-32b",
-        "reasoning_families": {
-            "qwen3": {"type": "chat_template_kwargs", "parameter": "enable_thinking"}
-        },
-        "keyword_rules": [
-            {
-                "name": "code-keywords",
-                "operator": "OR",
-                "keywords": ["debug", "algorithm"],
-            }
-        ],
-        "provider_profiles": {
-            "openai-prod": {
-                "type": "openai",
-                "base_url": "https://api.openai.com/v1",
-                "auth_header": "Authorization",
-                "auth_prefix": "Bearer",
-                "chat_path": "/chat/completions",
-            }
-        },
-        "vllm_endpoints": [
-            {
-                "name": "local-primary",
-                "address": "127.0.0.1",
-                "port": 8000,
-                "protocol": "http",
-                "weight": 80,
-            },
-            {
-                "name": "openai",
-                "provider_profile": "openai-prod",
-                "weight": 20,
-            },
-        ],
-        "model_config": {
-            "qwen3-32b": {
-                "preferred_endpoints": ["local-primary", "openai"],
-                "reasoning_family": "qwen3",
-                "description": "Premium reasoning tier",
-                "capabilities": ["chat", "reasoning"],
-                "loras": [
-                    {
-                        "name": "computer-science-expert",
-                        "description": "Adapter for advanced computer science prompts",
-                    }
-                ],
-                "api_format": "openai",
-                "pricing": {
-                    "currency": "USD",
-                    "prompt_per_1m": 1.2,
-                    "cached_input_per_1m": 0.3,
-                    "completion_per_1m": 3.4,
-                },
-                "external_model_ids": {"openai": "qwen3-32b"},
-                "access_key": "sk-test-openai",
-            }
-        },
-        "decisions": [
-            {
-                "name": "cs-route",
-                "description": "Route computer science prompts",
-                "priority": 100,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [{"type": "domain", "name": "computer science"}],
-                },
-                "modelRefs": [
-                    {"model": "qwen3-32b", "lora_name": "computer-science-expert"}
-                ],
-            }
-        ],
-    }
-
-
-def test_migrate_config_data_promotes_legacy_provider_defaults_and_signals():
-    migrated = migrate_config_data(_legacy_model_catalog_config())
-
-    assert migrated["providers"]["defaults"]["default_model"] == "qwen3-32b"
-    assert migrated["routing"]["signals"]["keywords"][0]["name"] == "code-keywords"
-
-
-def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
-    migrated = migrate_config_data(_legacy_model_catalog_config())
-
-    assert migrated["routing"]["modelCards"] == [
-        {
-            "name": "qwen3-32b",
-            "description": "Premium reasoning tier",
-            "capabilities": ["chat", "reasoning"],
-            "loras": [
-                {
-                    "name": "computer-science-expert",
-                    "description": "Adapter for advanced computer science prompts",
-                }
-            ],
-        }
-    ]
-    assert migrated["providers"]["models"] == [
-        {
-            "name": "qwen3-32b",
-            "reasoning_family": "qwen3",
-            "pricing": {
-                "currency": "USD",
-                "prompt_per_1m": 1.2,
-                "cached_input_per_1m": 0.3,
-                "completion_per_1m": 3.4,
-            },
-            "api_format": "openai",
-            "external_model_ids": {"openai": "qwen3-32b"},
-            "backend_refs": [
-                {
-                    "name": "local-primary",
-                    "endpoint": "127.0.0.1:8000",
-                    "protocol": "http",
-                    "weight": 80,
-                    "api_key": "sk-test-openai",
-                },
-                {
-                    "name": "openai",
-                    "base_url": "https://api.openai.com/v1",
-                    "provider": "openai",
-                    "auth_header": "Authorization",
-                    "auth_prefix": "Bearer",
-                    "chat_path": "/chat/completions",
-                    "weight": 20,
-                    "api_key": "sk-test-openai",
-                },
-            ],
-        }
-    ]
-
-
-def test_migrate_config_data_preserves_decision_lora_reference():
-    migrated = migrate_config_data(_legacy_model_catalog_config())
-
-    assert (
-        migrated["routing"]["decisions"][0]["modelRefs"][0]["lora_name"]
-        == "computer-science-expert"
-    )
-
-
-def test_parse_user_config_rejects_deprecated_provider_model_loras(tmp_path: Path):
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "listeners": [
-                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
-                ],
-                "providers": {
-                    "defaults": {"default_model": "qwen3-32b"},
-                    "models": [
-                        {
-                            "name": "qwen3-32b",
-                            "loras": [{"name": "computer-science-expert"}],
-                            "backend_refs": [
-                                {
-                                    "endpoint": "host.docker.internal:8000",
-                                    "protocol": "http",
-                                }
-                            ],
-                        }
-                    ],
-                },
-                "routing": {
-                    "modelCards": [{"name": "qwen3-32b"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "description": "fallback",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "qwen3-32b"}],
-                        }
-                    ],
-                },
-            },
-            sort_keys=False,
-        )
-    )
-
-    try:
-        parse_user_config(str(config_path))
-    except ConfigParseError as exc:
-        assert "providers.models[0].loras" in str(exc)
-    else:
-        raise AssertionError("expected ConfigParseError")
-
-
-def test_migrate_config_data_preserves_hallucination_endpoint_backend():
-    legacy = {
-        "version": "v0.3",
-        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "providers": {"defaults": {"default_model": "gpt-4o-mini"}},
-        "routing": {
-            "modelCards": [{"name": "gpt-4o-mini"}],
-            "decisions": [
-                {
-                    "name": "default-route",
-                    "description": "fallback",
-                    "priority": 100,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "gpt-4o-mini"}],
-                }
-            ],
-        },
-        "global": {
-            "hallucination_mitigation": {
-                "enabled": True,
-                "hallucination_model": {
-                    "backend": "endpoint",
-                    "endpoint": "http://127.0.0.1:8077/v1",
-                    "include_explanation": True,
-                    "model_id": "KRLabsOrg/lettucedect-v2-qwen-2b",
-                },
-            }
-        },
-    }
-
-    migrated = migrate_config_data(legacy)
-
-    detector = migrated["global"]["model_catalog"]["modules"][
-        "hallucination_mitigation"
-    ]["detector"]
-    assert detector["backend"] == "endpoint"
-    assert detector["endpoint"] == "http://127.0.0.1:8077/v1"
-    assert detector["include_explanation"] is True
-    assert detector["model_id"] == "KRLabsOrg/lettucedect-v2-qwen-2b"
-    # Legacy detectors are given a stable model_ref during migration.
-    assert detector["model_ref"] == "hallucination_detector"

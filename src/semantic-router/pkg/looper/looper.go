@@ -71,10 +71,10 @@ type Request struct {
 	// Fusion carries request-level plugins[].id=fusion overrides.
 	Fusion *config.FusionRequestConfig
 
-	// CachedPanel, when non-nil, is used verbatim as the fusion panel instead of
-	// calling the analysis models. It exists for paired multi-arm evaluation where
-	// every arm must synthesize from a byte-identical panel (see
-	// bench/grounded_fusion). Nil in production; only the fusioneval driver sets it.
+	// CachedPanel, when non-nil, replaces live Fusion analysis-model calls. Its
+	// entries still undergo the normal usability and quorum checks before every
+	// arm synthesizes from the same retained panel (see bench/grounded_fusion).
+	// Nil in production; only the fusioneval driver sets it.
 	CachedPanel []*ModelResponse
 }
 
@@ -116,6 +116,10 @@ type Response struct {
 	// so it reflects real elapsed time regardless of whether the algorithm
 	// dispatches its model calls sequentially or concurrently.
 	LatencyMs int64 `json:"latency_ms,omitempty"`
+
+	// ExecutionTrace is bounded, content-free diagnostic evidence for tracing
+	// and Router Replay. It is not included in the client response body.
+	ExecutionTrace ExecutionTrace `json:"-"`
 }
 
 // Looper defines the interface for multi-model execution strategies

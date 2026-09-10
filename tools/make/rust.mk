@@ -14,12 +14,28 @@ TEST_GPU_DEVICE ?= 2
 # models from ../models unless those tests have been converted to skip cleanly.
 RUST_CI_LIB_TESTS ?= \
 	core::tokenization_test::test_tokenization_config_default \
+	core::tokenization_window::tests::test_window_ranges_cover_every_token \
+	core::tokenization_window::tests::test_window_ranges_overlap_on_a_short_stride \
+	core::tokenization_window::tests::test_window_ranges_edges \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
-	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding
+	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense_with_padding \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_single_query_over_many_keys \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_matches_dense_with_decode_offset \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_offset_prefill_equals_split_prefill \
+	model_architectures::attention::chunked_sdpa_test::test_chunked_sdpa_rejects_a_block_with_no_keys \
+	model_architectures::embedding::gemma3_model::chunked_attention_tests::test_chunked_attention_matches_dense \
+	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense \
+	model_architectures::embedding::qwen3_embedding::chunked_attention_tests::test_chunked_attention_matches_dense_on_real_rows_with_left_padding \
+	model_architectures::embedding::multimodal_embedding::tests::test_bert_self_attention_matches_dense \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_and_whisper_self_attention_match_dense \
+	model_architectures::embedding::multimodal_embedding::tests::test_siglip_head_attention_matches_dense \
+	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_prefill_and_decode_match_dense \
+	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_cached_suffix_generation_matches_uncached \
+	model_architectures::traditional::base_model_test::test_self_attention_matches_dense_reference
 
 test-rust-ci:
 	@$(LOG_TARGET)
@@ -94,6 +110,18 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
 		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
+
+# The CK flash-attention graph rewriter is a Python script under onnx-binding;
+# its unit tests need onnx, which the agent venv does not carry by default.
+CK_REWRITE_SCRIPTS_DIR ?= onnx-binding/ort-ck-flash-attn/scripts
+CK_REWRITE_PYTHON_DEPS ?= onnx==1.22.0
+
+ck-rewrite-deps: harness-venv-install ## Install the CK graph rewriter test dependencies into the harness venv
+	@"$(AGENT_PYTHON)" -c "import onnx" 2>/dev/null || "$(AGENT_PYTHON)" -m pip install --quiet $(CK_REWRITE_PYTHON_DEPS)
+
+ck-rewrite-test: ck-rewrite-deps ## Run the CK flash-attention graph rewriter unit tests
+	@$(LOG_TARGET)
+	@cd $(CK_REWRITE_SCRIPTS_DIR) && "$(AGENT_PYTHON)" -m unittest test_rewrite_graph
 
 # Run every MULTIMODAL_MODEL_PATH-gated test against a local model copy:
 # the candle-binding Go tests (including the network-dependent image-encode

@@ -58,7 +58,7 @@ def test_worker_http_broker_multiplexes_concurrent_out_of_order_responses() -> N
                     "status_code": 200,
                     "payload": {"echo": request["operation"]},
                     "latency_ms": 1.25,
-                    "fetched_at": "2026-08-31T00:00:00Z",
+                    "fetched_at": "2026-08-31T00:00:00.123456789Z",
                     "headers": {},
                     "error": None,
                     "broker_receipt": "sha256:" + "a" * 64,

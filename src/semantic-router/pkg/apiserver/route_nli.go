@@ -3,8 +3,10 @@
 package apiserver
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -58,8 +60,12 @@ func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter,
 		return
 	}
 
-	result, err := s.classificationSvc.ClassifyNLI(req)
+	result, err := s.classificationSvc.ClassifyNLI(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, admission.ErrQueueFull) {
+			s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NLI_CLASSIFICATION_FAILED", err.Error())
 		return
 	}

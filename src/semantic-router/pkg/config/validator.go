@@ -27,6 +27,7 @@ var (
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
 		validateCategoryModelBackendContracts,
+		validateComplexityModelBackendContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,
@@ -58,6 +59,8 @@ var (
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
 		validateJailbreakContracts,
+		validateSignalStageContracts,
+		validateHallucinationSignalContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

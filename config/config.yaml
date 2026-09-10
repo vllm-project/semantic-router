@@ -1,5 +1,8 @@
 version: v0.3
 
+# Optional operator-owned benchmark definitions, versioned index DAGs, and
+# model-linked measurements live together under evaluation.
+
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -8,21 +11,12 @@ listeners:
 
 providers:
   defaults:
-    default_model: qwen3-8b
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning.effort
-      mistral:
-        type: top_level_reasoning_effort
-        parameter: reasoning_effort
+    model: qwen3-8b
+    reasoning_effort: medium
   models:
     - name: qwen3-8b
-      reasoning_family: qwen3
+      reasoning:
+        family: qwen3
       provider_model_id: qwen3-8b-instruct
       api_format: openai
       reliability:
@@ -49,9 +43,21 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80
-          type: chat
+          provider: vllm
           api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-secondary
+        - name: local-secondary
+          endpoint: 127.0.0.1:8004
+          protocol: http
+          provider: vllm
+          api_key_env: VLLM_SR_PRIMARY_API_KEY
+          weight: 20
+    # Keep remote-provider access fields visible without mixing incompatible
+    # request semantics into the weighted qwen3-8b replica pool above.
+    - name: remote-openai-reference
+      provider_model_id: remote-openai-reference
+      api_format: openai
+      backend_refs:
+        - name: remote-primary
           base_url: https://api.example.com/v1
           provider: openai
           auth_header: Authorization
@@ -61,9 +67,20 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           api_key: static-demo-key
-          weight: 20
+          weight: 100
     - name: qwen3-32b
-      reasoning_family: gpt
+      reasoning:
+        type: reasoning_effort
+        parameter: reasoning.effort
+        activation_parameter: enable_thinking
+        effort_flags:
+          low: low_effort
+          medium: medium_effort
+        levels: [none, low, medium, high]
+        default: medium
+        disabled: none
+        modes: [enabled, disabled]
+        default_mode: enabled
       provider_model_id: qwen3-32b-instruct
       api_format: anthropic
       pricing:
@@ -75,6 +92,7 @@ providers:
         internal: qwen3-32b
       backend_refs:
         - name: large-primary
+          provider: anthropic-compatible
           endpoint: 127.0.0.1:8001
           protocol: http
           weight: 100
@@ -90,6 +108,7 @@ providers:
         openai: llava-omni-preview
       backend_refs:
         - name: omni-primary
+          provider: vllm
           endpoint: 127.0.0.1:8002
           protocol: http
           weight: 100
@@ -104,19 +123,59 @@ providers:
         openai: gpt-image-1
       backend_refs:
         - name: image-primary
+          provider: vllm
           endpoint: 127.0.0.1:8003
           protocol: http
           weight: 100
+    # Catalog-backed models do not need a handwritten routing.modelCards entry.
+    - name: built-in-catalog-example
+      catalog: vllm-sr/mom-v1-lite
 
+evaluation:
+  records:
+    - model: qwen3-8b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.83
+    - model: qwen3-32b
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.96
+    - model: llava-omni
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.88
+    - model: sdxl-image
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.79
 routing:
   strategy: priority
   modelCards:
     - name: qwen3-8b
+      display_name: Qwen3 8B reference model
+      publisher: Alibaba Cloud
+      presentation:
+        logo: package:qwen
+        monogram: Q
+        monochrome: false
+      distribution:
+        type: open_weights
+        source: https://huggingface.co/Qwen/Qwen3-8B
+        license: Apache-2.0
+      family: qwen3
+      revision: reference-v1
+      released_at: 2025-04-29
+      knowledge_cutoff: 2024-12
+      lifecycle: active
       param_size: 8B
       context_window_size: 131072
+      max_output_tokens: 32768
       description: General-purpose text model for the default routing tier.
       capabilities: [chat, reasoning, tools]
-      quality_score: 0.83
+      modalities:
+        input: [text]
+        output: [text]
       modality: ar
       tags: [default, fast]
     - name: qwen3-32b
@@ -127,7 +186,6 @@ routing:
       loras:
         - name: computer-science-expert
           description: Adapter specialized for advanced computer science and software design prompts.
-      quality_score: 0.96
       modality: ar
       tags: [premium, analysis]
     - name: llava-omni
@@ -135,7 +193,6 @@ routing:
       context_window_size: 65536
       description: Omni model that can satisfy both text and multimodal orchestration paths.
       capabilities: [chat, vision, multimodal]
-      quality_score: 0.88
       modality: omni
       tags: [multimodal, omni]
     - name: sdxl-image
@@ -143,7 +200,6 @@ routing:
       context_window_size: 8192
       description: Diffusion-style image generation backend used by image routes.
       capabilities: [image_generation]
-      quality_score: 0.79
       modality: diffusion
       tags: [image, diffusion]
 
@@ -386,6 +442,22 @@ routing:
               name: long_context
             - type: domain
               name: "computer science"
+      - name: deep_synthesis
+        # The explicit boundary pair, the asymmetric form of `threshold`: the
+        # two verdicts do not have to sit the same distance from the middle.
+        # hard_above with easy_below reads in the direction the local margin
+        # runs, where a higher score is harder.
+        hard_above: 0.25
+        easy_below: -0.05
+        description: Escalate synthesis-heavy prompts, with a wider medium band than needs_reasoning.
+        hard:
+          candidates:
+            - synthesise these sources into one argument
+            - reconcile the conflicting requirements
+        easy:
+          candidates:
+            - list the headings
+            - restate this sentence
 
     modality:
       - name: AR
@@ -422,6 +494,23 @@ routing:
         benign_patterns:
           - explain the policy
           - summarize the safety rules
+      # direction: response scores the model's output instead of the prompt, so
+      # this rule only exists once the model has answered; the selected
+      # decision's response_jailbreak plugin enforces on it.
+      - name: unsafe_completion
+        direction: response
+        threshold: 0.85
+        description: Detect jailbreak content in the model's own output.
+
+    # Hallucination rules check the model's answer against the grounding
+    # context the request carried (tool results or retrieved context), so they
+    # only exist once the model has answered; the selected decision's
+    # hallucination plugin enforces on them. use_nli asks the detector for
+    # span-level NLI explanations.
+    hallucination:
+      - name: ungrounded_claims
+        use_nli: true
+        description: Detect claims the grounding context does not support.
 
     pii:
       - name: restricted_pii
@@ -653,10 +742,11 @@ routing:
         - variable: candidate
           source: models
           models:
-            - model: qwen3-8b
+            - model: qwen3-32b
               lora_name: business-adapter
               weight: 1.0
-              use_reasoning: false
+              use_reasoning: true
+              reasoning_mode: enabled
               reasoning_description: Candidate iteration reference model for DSL authoring coverage.
               reasoning_effort: low
           outputs:
@@ -665,6 +755,23 @@ routing:
       algorithm:
         type: static
       plugins:
+        # Shadow a candidate model on a small sample of this route's traffic.
+        # The primary response never waits on or changes because of the shadow.
+        - type: shadow_dispatch
+          configuration:
+            enabled: true
+            model: qwen3-32b
+            sample_rate: 0.05
+            max_concurrency: 2
+            max_queue_depth: 8
+            timeout_seconds: 30
+            max_response_bytes: 1048576
+            max_retries: 0
+            capture_response_body: false
+            max_capture_bytes: 4096
+            tls_skip_verify: false
+            # Decision header mutations reach the shadow only when listed here.
+            forward_headers: []
         - type: system_prompt
           configuration:
             enabled: true
@@ -776,7 +883,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.4
         - model: qwen3-32b
           use_reasoning: true
@@ -829,7 +936,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
         - model: qwen3-32b
           use_reasoning: true
           reasoning_effort: high
@@ -887,7 +994,7 @@ routing:
           weight: 0.5
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.2
         - model: llava-omni
           use_reasoning: true
@@ -944,7 +1051,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.5
         - model: qwen3-32b
           use_reasoning: true
@@ -1007,7 +1114,7 @@ routing:
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
-          reasoning_effort: medium
+          reasoning_mode: enabled
           weight: 0.5
         - model: qwen3-32b
           use_reasoning: true
@@ -1329,6 +1436,13 @@ routing:
       algorithm:
         type: multi_factor
         multi_factor:
+          objective:
+            strategy: weighted
+          quality:
+            index: vllm-sr/coding@1.0.0
+            on_missing: exclude
+            min_coverage: 1.0
+            min_score: 0.0
           weights:
             quality: 0.4
             latency: 0.2
@@ -1653,7 +1767,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
         max_concurrency: 8
         metrics:
           sample_rate: 1.0
@@ -1880,30 +1993,11 @@ global:
             ef: 64
           topk: 10
           consistency_level: Bounded
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 128
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
         logging:
           level: info
-          enable_query_log: true
-          enable_metrics: true
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: true
     memory:
       enabled: true
       backend: milvus
@@ -1946,16 +2040,11 @@ global:
         key_prefix: "memory_cache:"
         password: ""
       embedding_model: bert
-      extraction_batch_size: 16
       default_retrieval_limit: 10
       default_similarity_threshold: 0.74
       hybrid_search: true
       hybrid_mode: rerank
       adaptive_threshold: true
-      quality_scoring:
-        initial_strength_days: 30
-        prune_threshold: 0.15
-        max_memories_per_user: 200
       reflection:
         enabled: true
         algorithm: recency_semantic
@@ -2007,30 +2096,11 @@ global:
             ef: 64
           topk: 10
           consistency_level: Strong
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 64
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
         logging:
           level: info
-          enable_query_log: true
-          enable_metrics: true
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: true
       memory:
         max_entries_per_store: 5000
       llama_stack:
@@ -2105,7 +2175,6 @@ global:
       grpc_max_msg_size_mb: 16
       max_response_bytes_mb: 32
       timeout_seconds: 120
-      retry_count: 2
       headers:
         X-Trace-Source: looper
       remom:
@@ -2184,8 +2253,9 @@ global:
     # on_overflow selects what happens when every slot is busy and the queue
     # is full: shed (default) rejects the request, wait blocks for a queue
     # slot and requires max_queue >= 1, fail_open admits without a slot.
-    # The gate is validated here but not yet wired into the request path;
-    # omitting admission means no gate and preserves current behavior.
+    # A shed inference surfaces as a classify error and follows the same
+    # on_error / on_unknown policy as any other inference failure.
+    # Omitting admission means no gate and preserves current behavior.
     admission:
       prompt_guard:
         max_concurrency: 4
@@ -2443,7 +2513,7 @@ global:
         use_cpu: true
         use_modernbert: false
         use_mmbert_32k: true
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
+        feedback_mapping_path: ''
       modality_detector:
         enabled: true
         method: hybrid

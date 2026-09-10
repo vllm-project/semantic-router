@@ -1,6 +1,8 @@
 package classification
 
 import (
+	"context"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
@@ -14,8 +16,9 @@ import (
 //     this round; category and hallucination-binary are intended future
 //     consumers.
 //   - ScoringBackend (below) - text -> a single continuous score, for
-//     regression-style models such as a query-difficulty scorer. Reserved:
-//     no backend implements it and nothing wires it in yet.
+//     regression-style models such as a query-difficulty scorer. Implemented
+//     by the complexity signal's score.v1 backend
+//     (complexity_remote_backend.go).
 //   - TokenClassifierBackend (below) - text -> spans, for PII / GLiGuard-style
 //     entity extraction. Reserved: no backend implements it and nothing
 //     wires it in yet.
@@ -25,8 +28,11 @@ import (
 // (e.g. a trained query-difficulty model). A ScoringBackend's output is
 // expected to plug into existing threshold-based decision logic unchanged -
 // it does not carry a label of its own.
+//
+// Score takes the caller's context so a request that is abandoned cancels the
+// outbound call rather than running on to the backend's own deadline.
 type ScoringBackend interface {
-	Score(text string) (float64, error)
+	Score(ctx context.Context, text string) (float64, error)
 }
 
 // TokenClassifierBackend is implemented by classifier backends that return

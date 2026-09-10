@@ -4,6 +4,7 @@ use super::config::PathSelectionStrategy;
 use super::model_factory::*;
 use super::traits::TaskType;
 use crate::test_fixtures::fixtures::*;
+use crate::test_fixtures::test_utils::get_first_available_model;
 use candle_core::Device;
 use rstest::*;
 use std::collections::HashMap;
@@ -76,4 +77,51 @@ fn test_model_factory_model_factory_with_strategies(
     assert!(lora_result.is_err());
 
     println!("ModelFactory strategy test passed for {}", strategy_name);
+}
+
+/// The Gemma tokenizer must clamp long inputs to max_position_embeddings so a single
+/// oversized text neither fails on its own nor takes down a whole batch (issue #3388).
+#[rstest]
+#[serial_test::serial(gemma_model)]
+fn test_model_factory_gemma_tokenizer_truncates_to_max_position_embeddings() {
+    let Some(model_path) =
+        get_first_available_model(&["mom-embedding-flash", GEMMA_EMBEDDING_300M])
+    else {
+        println!("Gemma embedding model not found, skipping tokenizer truncation test");
+        return;
+    };
+
+    let mut factory = ModelFactory::new(test_device());
+    factory
+        .register_gemma_embedding_model(&model_path)
+        .expect("Failed to register Gemma embedding model");
+
+    let tokenizer = factory
+        .get_gemma_tokenizer()
+        .expect("Gemma tokenizer must be registered");
+    let max_len = factory
+        .get_gemma_model()
+        .expect("Gemma model must be registered")
+        .config()
+        .max_position_embeddings;
+
+    // Well past 2048 tokens in both Latin and CJK scripts
+    let long_latin = "hello world ".repeat(4000);
+    let long_cjk = "你好世界".repeat(2000);
+
+    for text in [long_latin.as_str(), long_cjk.as_str()] {
+        let encoding = tokenizer.encode(text, true).expect("Tokenization failed");
+        assert_eq!(
+            encoding.get_ids().len(),
+            max_len,
+            "encoding must be clamped to max_position_embeddings"
+        );
+        assert_eq!(encoding.get_attention_mask().len(), max_len);
+    }
+
+    let batch = tokenizer
+        .encode_batch(vec!["short text", long_latin.as_str()], true)
+        .expect("Batch tokenization failed");
+    assert!(batch[0].get_ids().len() < max_len);
+    assert_eq!(batch[1].get_ids().len(), max_len);
 }

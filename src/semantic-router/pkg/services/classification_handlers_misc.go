@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -25,7 +26,7 @@ type FactCheckResponse struct {
 }
 
 // ClassifyFactCheck performs fact-check classification
-func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCheckResponse, error) {
+func (s *ClassificationService) ClassifyFactCheck(ctx context.Context, req FactCheckRequest) (*FactCheckResponse, error) {
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -56,7 +57,7 @@ func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCh
 	}
 
 	// Perform fact-check classification
-	result, err := classifier.ClassifyFactCheck(req.Text)
+	result, err := classifier.ClassifyFactCheck(ctx, req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("fact-check classification failed: %w", err)
 	}
@@ -91,7 +92,7 @@ type UserFeedbackResponse struct {
 }
 
 // ClassifyUserFeedback performs user feedback classification
-func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*UserFeedbackResponse, error) {
+func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req UserFeedbackRequest) (*UserFeedbackResponse, error) {
 	start := time.Now()
 
 	if blankText(req.Text) {
@@ -122,7 +123,7 @@ func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*
 	}
 
 	// Perform user feedback classification
-	result, err := classifier.ClassifyFeedback(req.Text)
+	result, err := classifier.ClassifyFeedback(ctx, req.Text)
 	if err != nil {
 		return nil, fmt.Errorf("user feedback classification failed: %w", err)
 	}
@@ -156,7 +157,7 @@ type NLIResponse struct {
 // ClassifyNLI performs Natural Language Inference between a premise and hypothesis.
 // Returns ENTAILMENT when the premise supports the hypothesis, NEUTRAL when it
 // neither supports nor contradicts, and CONTRADICTION when it conflicts.
-func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error) {
+func (s *ClassificationService) ClassifyNLI(ctx context.Context, req NLIRequest) (*NLIResponse, error) {
 	start := time.Now()
 
 	if req.Premise == "" || req.Hypothesis == "" {
@@ -176,7 +177,7 @@ func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error
 		return nil, fmt.Errorf("NLI model backend is unavailable")
 	}
 
-	result, err := det.ClassifyNLI(req.Premise, req.Hypothesis)
+	result, err := det.ClassifyNLI(ctx, req.Premise, req.Hypothesis)
 	if err != nil {
 		return nil, fmt.Errorf("NLI classification failed: %w", err)
 	}

@@ -45,6 +45,20 @@ plugins:
       max_tool_trace_steps: 100
 ```
 
+## Looper diagnostics
+
+Confidence Looper records include a versioned `route_diagnostics.looper`
+object. It contains bounded attempt metadata, token and cost accounting,
+latencies, disposition reason codes, the OpenTelemetry trace ID when tracing is
+active, and `final_attempt_ordinal`. Attempt details are omitted from
+viewer-redacted responses and remain available to principals with replay-detail
+permission.
+
+Looper diagnostics never contain prompts, responses, hidden reasoning, tool
+arguments, endpoint URLs, credentials, or raw errors. Attempt count and encoded
+size are capped; truncation is explicit and dropped token usage remains
+accounted for.
+
 Request bodies, response bodies, and tool traces can contain secrets or personal
 data. Capture the minimum needed, set retention in the shared replay service,
 and restrict replay read permissions. See a complete example:

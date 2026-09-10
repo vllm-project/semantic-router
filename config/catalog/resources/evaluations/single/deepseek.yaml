@@ -1,0 +1,1543 @@
+- id: deepseek/deepseek-r1-model-card-mmlu-pro@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.84
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad/README.md
+    redistributable: true
+- id: scicode/deepseek-r1-subproblem-score@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: default
+  subject:
+    variant: DeepSeek-R1
+    source_kind: official_benchmark_leaderboard
+    source_model: DeepSeek-R1
+    source_model_slug: deepseek-r1
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.285
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/scicode-bench/SciCode/blob/e3158ea011d4235245a547460d3688d7ccbf9900/README.md
+    redistributable: true
+- id: independent/deepseek-v3-2-critpt@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    score: .0285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-v3-2-gdpval-aa@2.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    elo: 814.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/deepseek-v3-2-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    score: .733333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-2-omniscience@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    index: -22.4833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/deepseek-v3-2-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .245597775718258
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/deepseek-v3-2-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    resolved: .468164794007491
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/deepseek-v3-2-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.2 (Reasoning)
+    source_model_slug: deepseek-v3-2-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .84040404040404
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-v3-2-non-reasoning-critpt@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3.2 (Non-reasoning)
+    source_model_slug: deepseek-v3-2
+    run_kind: independent
+  metrics:
+    score: .00857142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-v3-2-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3.2 (Non-reasoning)
+    source_model_slug: deepseek-v3-2
+    run_kind: independent
+  metrics:
+    score: .456666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-2-non-reasoning-omniscience@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3.2 (Non-reasoning)
+    source_model_slug: deepseek-v3-2
+    run_kind: independent
+  metrics:
+    index: -46.8833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/deepseek-v3-2-non-reasoning-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3.2 (Non-reasoning)
+    source_model_slug: deepseek-v3-2
+    run_kind: independent
+  metrics:
+    accuracy: .112140871177016
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/deepseek-v3-2-non-reasoning-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3.2
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3.2 (Non-reasoning)
+    source_model_slug: deepseek-v3-2
+    run_kind: independent
+  metrics:
+    accuracy: .750505050505051
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-r1-0120-critpt@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    score: .00571428571428571
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-r1-0120-gdpval-aa@2.0.0
+  model: deepseek/deepseek-r1
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    elo: 481.37
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/deepseek-r1-0120-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-r1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    score: .576666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-r1-0120-omniscience@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    index: -32.2166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/deepseek-r1-0120-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    accuracy: .085
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/deepseek-r1-0120-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    resolved: .191011235955056
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/deepseek-r1-0120-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    accuracy: .708080808080808
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-r1-0120-tau3-banking@1.0.0
+  model: deepseek/deepseek-r1
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: default
+  subject:
+    source_model: DeepSeek R1 0120
+    source_model_slug: deepseek-r1-0120
+    run_kind: independent
+  metrics:
+    score: .0639175257731959
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/deepseek-v4-pro-aa-briefcase@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    elo: 1271.07
+    elo_lower: 1263.78
+    elo_upper: 1278.71
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/deepseek-v4-pro-critpt@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    score: 0.18
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-v4-pro-gdp-pdf@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    all_pass: 0.13
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/deepseek-v4-pro-gdpval-aa@2.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    elo: 1498.36
+    elo_lower: 1483.03
+    elo_upper: 1513.68
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/deepseek-v4-pro-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-v4-pro-omniscience@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    index: 0.833333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.377
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: independent/deepseek-v4-pro-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    accuracy: 0.410101946246525
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-release-eval-terminal-bench@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: deepseek-v4-pro
+    reasoning_effort: max
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    resolved: 0.879
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true
+- id: independent/deepseek-v4-pro-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    resolved: 0.786516853932584
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.901
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: independent/deepseek-v4-pro-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    accuracy: 0.928282828282828
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-v4-pro-scicode@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    score: 0.510416666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max-verified@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.806
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: independent/deepseek-v4-pro-tau3-banking@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 0813 (max)
+    source_model_slug: deepseek-v4-pro
+    run_kind: independent
+  metrics:
+    score: 0.395876288659794
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: deepseek/deepseek-v4-pro-model-card-max-mmlu-pro@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Pro
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.875
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-critpt@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    score: 0.0342857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-gdpval-aa@2.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    elo: 1085.26
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    score: 0.72
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-omniscience@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    index: -23.0833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.30259499536608
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    resolved: 0.569288389513109
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    accuracy: 0.866666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-v4-flash-0420-high-tau3-banking@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Flash (Reasoning, High Effort)
+    source_model_slug: deepseek-v4-flash-0420-high
+    run_kind: independent
+  metrics:
+    score: 0.261855670103093
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/deepseek-v4-flash-critpt@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    score: 0.165714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/deepseek-v4-flash-gdpval-aa@2.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    elo: 1472.33
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/deepseek-v4-flash-artificial-analysis-long-context-reasoning@1.1.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    score: 0.796666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/deepseek-v4-flash-omniscience@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    index: -14.2833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-model-card-max-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.348
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: independent/deepseek-v4-flash-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.385542168674699
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-release-eval-terminal-bench@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: deepseek-v4-flash
+    reasoning_effort: max
+    terminal_harness: DeepSeek API evaluation harness
+    source_kind: official_release_evaluation
+  metrics:
+    resolved: 0.827
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://api-docs.deepseek.com/updates/
+    redistributable: true
+- id: independent/deepseek-v4-flash-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    resolved: 0.786516853932584
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-model-card-max-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.881
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: independent/deepseek-v4-flash-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    accuracy: 0.908080808080808
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/deepseek-v4-flash-scicode@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    score: 0.503472222222222
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-model-card-max-verified@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: independent/deepseek-v4-flash-tau3-banking@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 0731 (Reasoning, Max Effort)
+    source_model_slug: deepseek-v4-flash
+    run_kind: independent
+  metrics:
+    score: 0.393814432989691
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: deepseek/deepseek-v4-flash-model-card-max-mmlu-pro@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4-Flash
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.862
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+    redistributable: true
+- id: cognition/deepseek-v4-pro-0813-high-frontiercode-1-1@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: cognition/frontiercode@1.1.0
+  benchmark_profile: main
+  reasoning_effort: high
+  subject:
+    source_model: DeepSeek V4 Pro 0813
+    source_model_slug: deepseek-v4-pro-0813-high
+    run_kind: independent
+    benchmark_revision: "1.1"
+    subset: main
+    harness: chisel
+    internet_flagged_rate: 0.106
+  metrics:
+    score: 0.2855
+    pass_rate: 0.318
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://cognition.com/data/frontiercode-leaderboard/data.json
+    redistributable: true
+- id: mmlu-pro-leaderboard/deepseek-v3@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: DeepSeek-V3
+    source_kind: official_benchmark_leaderboard
+    source_model: Deepseek-V3
+    source_model_slug: deepseek-v3
+  metrics:
+    accuracy: 0.7587
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/deepseek-v3-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    accuracy: 0.556565656565657
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    accuracy: 0.029
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-scicode@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    score: 0.357638888888889
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    resolved: 0.168539325842697
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: mmlu-pro-leaderboard/deepseek-v3-0324@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: DeepSeek-V3-0324
+    source_kind: official_benchmark_leaderboard
+    source_model: Deepseek-V3-0324
+    source_model_slug: deepseek-v3-0324
+  metrics:
+    accuracy: 0.813
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/deepseek-v3-0324-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    accuracy: 0.654545454545455
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    accuracy: 0.0474
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-scicode@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    score: 0.390046296296296
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3-0324-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    resolved: 0.138576779026217
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: deepseek/deepseek-v3.1-terminus-model-card-mmlu-pro@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: DeepSeek-V3.1-Terminus
+    source_kind: official_model_card
+    mode: reasoning
+  metrics:
+    accuracy: 0.850
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1-Terminus/blob/19510d6dc61f79dbd925bd51ee8a9081c509a4b6/README.md
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.791919191919192
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: nvidia-comparative/deepseek-v4-pro-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v4-pro
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Pro 1.6T-A49B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.925
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia-comparative/deepseek-v4-flash-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v4-flash
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: max
+  subject:
+    source_model: DeepSeek V4 Flash 284B-A13B
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.909
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: livecodebench/deepseek-v3-2024-08-2025-05@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3
+    source_model_slug: deepseek-v3
+    source_kind: official_benchmark_leaderboard
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08-01_to_2025-05-01
+    task_count: 454
+  metrics:
+    pass_at_1: 0.272026431718062
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://livecodebench.github.io/performances_generation.json
+    redistributable: true
+- id: exaone-comparative/deepseek-v3-0324-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3-0324
+    source_kind: official_cross-vendor_comparison
+    run_kind: independent
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.440
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://github.com/LG-AI-EXAONE/EXAONE-4.0/blob/c8b16a71c766ad0fc3078f3fcfaf8e21db5d290e/README.md
+    redistributable: true
+- id: ring-1t-comparative/deepseek-v3.1-terminus-livecodebench-v6@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: independent-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus Thinking
+    source_model_slug: deepseek-v3-1-terminus-thinking
+    source_kind: published_cross-vendor_evaluation
+    run_kind: independent
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.7533
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arxiv.org/abs/2510.18855
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.163577386468953
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-scicode@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.37962962962963
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-1-terminus-reasoning-terminalbench-v2-1@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.449438202247191
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: independent/deepseek-v3-aime-2025@1.0.0
+  model: deepseek/deepseek-v3
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 (Dec '24)
+    source_model_slug: deepseek-v3
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.26
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3
+    redistributable: true
+- id: independent/deepseek-v3-0324-aime-2025@1.0.0
+  model: deepseek/deepseek-v3-0324
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: DeepSeek V3 0324
+    source_model_slug: deepseek-v3-0324
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.41
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-0324
+    redistributable: true
+- id: independent/deepseek-v3.1-terminus-aime-2025@1.0.0
+  model: deepseek/deepseek-v3.1-terminus
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: DeepSeek V3.1 Terminus (Reasoning)
+    source_model_slug: deepseek-v3-1-terminus-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.896666666666667
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
