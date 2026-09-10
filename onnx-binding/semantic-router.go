@@ -250,14 +250,12 @@ type ModelInfo struct {
 // Initialization Functions
 // ============================================================================
 
-var ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
-
 var (
-	initMu sync.Mutex
+	ErrEmbeddingModelNotReady = errors.New("embedding model is not initialized")
+	initMu                    sync.Mutex
+	embeddingReadyOverride    atomic.Bool
+	multiModalEmbeddingReady  atomic.Bool
 )
-
-var embeddingReadyOverride atomic.Bool
-var multiModalEmbeddingReady atomic.Bool
 
 func ensureEmbeddingModelReady(modelType string) error {
 	switch strings.ToLower(strings.TrimSpace(modelType)) {
