@@ -18,6 +18,7 @@ import EvaluationAvailabilityRoute from './EvaluationAvailabilityRoute'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
   loadBuilderPage,
+  loadConfigSchemaReferencePage,
   loadDashboardPage,
   loadEvaluationPage,
   loadInsightsPage,
@@ -48,6 +49,9 @@ interface AuthenticatedAppRoutesProps {
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   builder: <RecoverableLazyRoute loader={loadBuilderPage} routeLabel="Config Builder" />,
+  'config-reference': (
+    <RecoverableLazyRoute loader={loadConfigSchemaReferencePage} routeLabel="Schema reference" />
+  ),
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   insights: <RecoverableLazyRoute loader={loadInsightsPage} routeLabel="Insights" />,

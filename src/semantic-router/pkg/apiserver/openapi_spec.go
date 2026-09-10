@@ -42,7 +42,7 @@ func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 		Summary:     route.Description,
 		Description: route.Description,
 		OperationID: openAPIOperationID(route.Method, route.Path),
-		Parameters:  openAPIPathParameters(route.Path),
+		Parameters:  append(openAPIPathParameters(route.Path), route.QueryParameters...),
 		Responses: map[string]OpenAPIResponse{
 			"200": openAPIObjectResponse("Successful response"),
 			"400": openAPIErrorResponse("Bad request"),

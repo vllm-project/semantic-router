@@ -35,6 +35,7 @@ FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
 WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
 COPY website/static/model-catalog/catalog.json /workspace/website/static/model-catalog/catalog.json
@@ -137,6 +138,7 @@ COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json

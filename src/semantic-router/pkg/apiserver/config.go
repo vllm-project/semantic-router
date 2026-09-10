@@ -213,7 +213,8 @@ type TaskTypeInfo struct {
 
 // EndpointMetadata stores metadata about an endpoint for API documentation
 type EndpointMetadata struct {
-	Path        string
-	Method      string
-	Description string
+	Path            string
+	Method          string
+	Description     string
+	QueryParameters []OpenAPIParameter
 }

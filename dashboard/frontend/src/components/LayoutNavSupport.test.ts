@@ -6,6 +6,7 @@ import {
   findActiveLayoutMenuCategory,
   getConfigSectionFromPathname,
   isLayoutMenuItemActive,
+  OPERATE_MENU_CATEGORIES,
 } from './LayoutNavSupport'
 
 describe('layout navigation route matching', () => {
@@ -65,5 +66,16 @@ describe('layout navigation route matching', () => {
     expect(getConfigSectionFromPathname('/config')).toBe('global-config')
     expect(getConfigSectionFromPathname('/config/not-a-section')).toBeUndefined()
     expect(getConfigSectionFromPathname('/dashboard')).toBeUndefined()
+  })
+
+  it('exposes the deployed configuration schema reference under platform operations', () => {
+    const schemaReference = OPERATE_MENU_CATEGORIES.find(
+      (category) => category.key === 'platform-access',
+    )
+      ?.sections.flatMap((section) => section.items)
+      .find((item) => item.kind === 'route' && item.to === '/config/reference')
+
+    expect(schemaReference).toMatchObject({ label: 'Schema Reference', icon: 'code' })
+    expect(isLayoutMenuItemActive(schemaReference!, '/config/reference', true)).toBe(true)
   })
 })

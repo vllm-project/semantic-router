@@ -74,6 +74,7 @@ type OpenAPIMedia struct {
 type OpenAPISchema struct {
 	Type       string                   `json:"type,omitempty"`
 	Format     string                   `json:"format,omitempty"`
+	Enum       []string                 `json:"enum,omitempty"`
 	Properties map[string]OpenAPISchema `json:"properties,omitempty"`
 	Items      *OpenAPISchema           `json:"items,omitempty"`
 	Ref        string                   `json:"$ref,omitempty"`

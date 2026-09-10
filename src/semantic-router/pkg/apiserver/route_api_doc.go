@@ -30,7 +30,11 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 	metadata := apiEndpointMetadata()
 	endpoints := make([]EndpointInfo, 0, len(metadata))
 	for _, endpoint := range metadata {
-		endpoints = append(endpoints, EndpointInfo(endpoint))
+		endpoints = append(endpoints, EndpointInfo{
+			Path:        endpoint.Path,
+			Method:      endpoint.Method,
+			Description: endpoint.Description,
+		})
 	}
 
 	response := APIOverviewResponse{

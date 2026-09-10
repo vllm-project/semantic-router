@@ -499,6 +499,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/router',
+        'api/configuration-schema',
         'api/apiserver',
         'api/session-identification',
         'api/semantic-router-crd',

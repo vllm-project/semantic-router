@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 )
 
 func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
@@ -59,6 +61,25 @@ func TestOpenAPISpecDerivesPathParametersFromRoutes(t *testing.T) {
 	}
 	if len(listFiles.Parameters) != 0 {
 		t.Fatalf("expected no path parameters for /v1/files, got %+v", listFiles.Parameters)
+	}
+}
+
+func TestOpenAPISpecPublishesConfigSchemaProgressiveQuery(t *testing.T) {
+	server := &ClassificationAPIServer{}
+	operation := server.generateOpenAPISpec().Paths[configschema.SchemaEndpoint].Get
+	if operation == nil {
+		t.Fatal("config schema operation is missing")
+	}
+	want := map[string]bool{"view": false, "path": false, "kind": false, "name": false}
+	for _, parameter := range operation.Parameters {
+		if _, ok := want[parameter.Name]; ok && parameter.In == "query" {
+			want[parameter.Name] = true
+		}
+	}
+	for name, present := range want {
+		if !present {
+			t.Errorf("config schema query parameter %q is missing", name)
+		}
 	}
 }
 

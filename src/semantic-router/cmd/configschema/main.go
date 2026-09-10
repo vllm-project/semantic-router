@@ -32,9 +32,6 @@ func main() {
 		payload []byte
 	}{
 		{filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.3.schema.json"), payload},
-		{filepath.Join(root, "config", "schemas", "router-config-v0.3.schema.json"), payload},
-		{filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.3.schema.json"), payload},
-		{filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.3.schema.json"), payload},
 		{filepath.Join(root, "dashboard", "frontend", "src", "generated", "routerConfigContract.ts"), typeScriptPayload},
 	}
 	for _, output := range outputs {

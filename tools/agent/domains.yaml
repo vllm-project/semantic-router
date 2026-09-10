@@ -98,8 +98,6 @@ domains:
     paths:
       - src/semantic-router/**
       - config/**
-      - src/vllm-sr/cli/config_schema/router-config-*.schema.json
-      - dashboard/frontend/src/generated/router-config-*.schema.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - go.mod
       - go.sum

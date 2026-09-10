@@ -12,10 +12,10 @@ and consumed by the Router API, CLI, and Dashboard.
 ```text
 Go config types + routing registries
                  │
-                 ├── JSON Schema + routing-surface catalog
-                 │      ├── Router discovery API
-                 │      ├── CLI package and `config schema`
-                 │      └── Dashboard forms and type choices
+                 ├── one checked-in JSON Schema + surface catalog
+                 │      ├── embedded in Router builds
+                 │      ├── staged into CLI and Dashboard builds
+                 │      └── consumed directly by Website and Dashboard UI
                  │
                  └── Router semantic validators
                         └── validate API used before apply
@@ -34,10 +34,19 @@ This division is intentional:
 
 ## Discover the contract
 
-Print the contract bundled with the installed CLI:
+Start with the compact section and routing-surface index bundled with the CLI:
 
 ```bash
 vllm-sr config schema
+```
+
+Expand only what the current task needs:
+
+```bash
+vllm-sr config schema --section global.router.learning
+vllm-sr config schema --surface signal:keyword
+vllm-sr config schema --surface algorithm:multi_factor
+vllm-sr config schema --full
 ```
 
 Query the exact contract exposed by a running Router:
@@ -47,10 +56,22 @@ vllm-sr config schema \
   --endpoint http://localhost:8080/config/router/schema
 ```
 
-The Router endpoint is `GET /config/router/schema`. The Dashboard also exposes
-the schema used by its build at `GET /api/router/config/schema`, including
-during setup before the Router is available. Responses include an `ETag`; use
-`If-None-Match` when an agent or editor caches the document.
+`--endpoint` works with every progressive option. The Router endpoint is
+`GET /config/router/schema`: omitting `view` returns the compact index; use
+`view=section&path=...` or `view=surface&kind=...&name=...` to expand one branch,
+and `view=full` for the complete JSON Schema.
+
+The Dashboard proxies the deployed Router contract at
+`GET /api/router/config/schema`. If that Router endpoint is unavailable, it
+falls back to the schema embedded in the Dashboard build and marks the response
+with `X-Vllm-Sr-Schema-Source: bundled`. The
+**Operate → Platform & Access → Schema Reference** page shows this source and
+warns when the deployed and bundled contracts differ. The Website
+[Configuration Schema Reference](../api/configuration-schema) visualizes the
+current documentation release instead of claiming to represent a deployment.
+
+Every representation has its own `ETag`; use `If-None-Match` when an agent or
+editor caches it.
 
 The standard JSON Schema describes the complete canonical document. Its
 `x-vllm-sr` section adds routing-specific discovery metadata:
@@ -102,12 +123,13 @@ the Router can run belongs in Go first.
 
 An automation or deployment agent should:
 
-1. fetch the running Router schema, falling back to its bundled CLI schema;
-2. use `$id`, `x-vllm-sr.contract_version`, and `ETag` as the contract identity;
-3. construct the smallest canonical document from schema fields and routing
+1. fetch the running Router schema index, falling back to its bundled CLI index;
+2. fetch only the relevant section and surface schemas while authoring;
+3. use `schema_id`, `contract_version`, and `ETag` as the contract identity;
+4. construct the smallest canonical document from schema fields and routing
    surface references;
-4. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
-5. present validation errors or apply through the normal management workflow.
+5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
+6. present validation errors or apply through the normal management workflow.
 
 Agents should never infer a field from an example or send unknown keys when a
 schema for the target Router is available.
@@ -133,8 +155,12 @@ make config-schema-check
 make check
 ```
 
-The generator updates the public schema, the Router-embedded copy, the CLI
-package copy, and the Dashboard copy together. CI fails when any copy is stale.
+The repository tracks exactly one full schema at
+`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`. The
+generator also emits a small TypeScript import/typing adapter, but no second
+JSON copy. Packaging stages the canonical artifact into wheels and container
+images without writing generated files back into the worktree. CI fails when
+the canonical artifact or adapter is stale.
 
 `setup.mode` is represented by the product document contract but remains
 control-plane metadata. The Dashboard removes it at activation; active Router

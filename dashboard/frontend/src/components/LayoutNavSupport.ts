@@ -251,6 +251,12 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
             icon: 'settings',
             configSection: 'global-config',
           },
+          {
+            kind: 'route',
+            label: 'Schema Reference',
+            icon: 'code',
+            to: '/config/reference',
+          },
         ],
       },
       {

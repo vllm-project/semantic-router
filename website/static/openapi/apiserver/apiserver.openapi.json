@@ -2911,9 +2911,55 @@
     },
     "/config/router/schema": {
       "get": {
-        "summary": "Get the generated canonical Router configuration schema and routing surface catalog",
-        "description": "Get the generated canonical Router configuration schema and routing surface catalog",
+        "summary": "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
+        "description": "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
         "operationId": "get_config_router_schema",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "description": "Representation to return. Omit for the compact index; use full for the complete schema.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "full",
+                "index",
+                "section",
+                "surface"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Dot- or slash-delimited config path required by view=section.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Surface kind required by view=surface.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "signal",
+                "algorithm",
+                "plugin",
+                "projection"
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Registered surface name required by view=surface.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",

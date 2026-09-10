@@ -29,9 +29,6 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 	}
 	artifacts := []string{
 		filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "config", "schemas", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.3.schema.json"),
 	}
 	for _, artifact := range artifacts {
 		got, readErr := os.ReadFile(artifact)
@@ -56,6 +53,21 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 	}
 	if !bytes.Equal(gotTypeScript, wantTypeScript) {
 		t.Fatalf("generated config contract is stale: %s; run go generate ./pkg/configschema", typeScriptPath)
+	}
+}
+
+func TestCanonicalSchemaIsTheOnlyTrackedSchemaArtifact(t *testing.T) {
+	root := repositoryRoot(t)
+	for _, obsolete := range []string{
+		filepath.Join(root, "config", "schemas", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.3.schema.json"),
+	} {
+		if _, err := os.Stat(obsolete); err == nil {
+			t.Errorf("obsolete schema mirror still exists: %s", obsolete)
+		} else if !os.IsNotExist(err) {
+			t.Errorf("inspect obsolete schema mirror %s: %v", obsolete, err)
+		}
 	}
 }
 

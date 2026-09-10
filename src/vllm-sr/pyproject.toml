@@ -51,6 +51,10 @@ Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.evaluation", "cli.config_schema"]
 include-package-data = false
 
+[tool.setuptools.cmdclass]
+build_py = "build_support.BuildPy"
+sdist = "build_support.SDist"
+
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
@@ -59,7 +63,6 @@ include-package-data = false
     "golden/research_benchmark_inventory.v1.json",
     "resources/live_mom_cases.v1.json",
 ]
-"cli.config_schema" = ["router-config-v0.3.schema.json"]
 
 [tool.pytest.ini_options]
 addopts = ["-v"]

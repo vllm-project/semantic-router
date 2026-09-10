@@ -11,7 +11,7 @@ or start from a maintained routing recipe.
 | Serve a packaged virtual model | `config/recipes/built-in/` |
 | Configure a storage or service backend | `config/runtime/` |
 | Validate a managed asset | `config/schemas/` |
-| Discover the machine-readable contract | `vllm-sr config schema` or `GET /config/router/schema` |
+| Discover the compact machine-readable contract index | `vllm-sr config schema` or `GET /config/router/schema` |
 
 The website's [configuration guide](../website/docs/installation/configuration.md)
 is the reader-facing reference. `config/config.yaml` is intentionally exhaustive;
@@ -53,8 +53,9 @@ vllm-sr validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-`config/schemas/router-config-v0.3.schema.json` is generated from the Go
-configuration types and routing registries. Do not edit it directly. See the
+`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
+checked-in schema generated from the Go configuration types and routing
+registries. Do not edit it directly. See the
 [Configuration Contract](../website/docs/installation/configuration-contract.md)
 for schema discovery, semantic validation, and the extension workflow.
 

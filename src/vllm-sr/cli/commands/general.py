@@ -73,11 +73,31 @@ def config_router(config_path: str) -> None:
         "the schema bundled with this CLI."
     ),
 )
+@click.option(
+    "--full",
+    is_flag=True,
+    help="Print the complete JSON Schema instead of the compact index.",
+)
+@click.option(
+    "--section",
+    metavar="PATH",
+    help="Print one config path and only its referenced definitions.",
+)
+@click.option(
+    "--surface",
+    metavar="KIND:NAME",
+    help="Print one signal, algorithm, plugin, or projection contract.",
+)
 @exit_with_logged_error(log)
-def config_schema(endpoint: str | None) -> None:
-    """Print the machine-readable canonical config contract."""
+def config_schema(
+    endpoint: str | None,
+    full: bool,
+    section: str | None,
+    surface: str | None,
+) -> None:
+    """Discover the canonical config contract progressively."""
 
-    config_schema_command(endpoint)
+    config_schema_command(endpoint, full=full, section=section, surface=surface)
 
 
 @config.command("migrate")

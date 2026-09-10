@@ -264,7 +264,17 @@ func apiRecipeRoutes() []apiRoute {
 func apiNonRecipeConfigRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: "/config/router/schema", Method: "GET", Description: "Get the generated canonical Router configuration schema and routing surface catalog"},
+			EndpointMetadata{
+				Path:        "/config/router/schema",
+				Method:      "GET",
+				Description: "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
+				QueryParameters: []OpenAPIParameter{
+					{Name: "view", In: "query", Description: "Representation to return. Omit for the compact index; use full for the complete schema.", Schema: OpenAPISchema{Type: "string", Enum: []string{"full", "index", "section", "surface"}}},
+					{Name: "path", In: "query", Description: "Dot- or slash-delimited config path required by view=section.", Schema: OpenAPISchema{Type: "string"}},
+					{Name: "kind", In: "query", Description: "Surface kind required by view=surface.", Schema: OpenAPISchema{Type: "string", Enum: []string{"signal", "algorithm", "plugin", "projection"}}},
+					{Name: "name", In: "query", Description: "Registered surface name required by view=surface.", Schema: OpenAPISchema{Type: "string"}},
+				},
+			},
 			routePolicy{Permission: PermDocsRead, Sensitivity: SensitivityPublic},
 			(*ClassificationAPIServer).handleConfigSchema,
 		),
