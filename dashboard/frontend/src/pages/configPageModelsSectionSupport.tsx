@@ -4,16 +4,11 @@ import type { FieldConfig } from '../components/EditModal'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type { ViewSection } from '../components/ViewModal'
 import type { NormalizedModel, RoutingModelCard } from './configPageSupport'
-import {
-  modelReasoningFormData,
-  normalizeModelEvaluations,
-  normalizeModelLoras,
-} from './configPageModelFormSupport'
+import { modelReasoningFormData, normalizeModelLoras } from './configPageModelFormSupport'
 import { getModelStructuredFormFields } from './configPageModelFormFields'
 import {
   ModelBackendRefsEditor,
   ModelCapabilitiesEditor,
-  ModelEvaluationsEditor,
   ModelExternalIdsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
@@ -25,7 +20,6 @@ export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModel
   const capabilities = normalizeStringList(data.capabilities)
   const tags = normalizeStringList(data.tags)
   const loras = normalizeModelLoras(data.loras)
-  const evaluations = normalizeModelEvaluations(data.evaluations)
   return {
     param_size:
       typeof data.param_size === 'string' && data.param_size.trim()
@@ -39,7 +33,6 @@ export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModel
     capabilities: capabilities.length ? capabilities : undefined,
     loras: loras.length ? loras : undefined,
     tags: tags.length ? tags : undefined,
-    evaluations: evaluations.length ? evaluations : undefined,
     modality:
       typeof data.modality === 'string' && data.modality.trim() ? data.modality.trim() : undefined,
   }
@@ -201,7 +194,6 @@ export const newModelFormData = (): Record<string, unknown> => ({
   capabilities: [],
   loras: [],
   tags: [],
-  evaluations: [],
   modality: '',
   backend_refs: [
     {
@@ -226,7 +218,6 @@ export const editModelFormData = (model: NormalizedModel): Record<string, unknow
   capabilities: model.card_override?.capabilities || [],
   loras: model.card_override?.loras || [],
   tags: model.card_override?.tags || [],
-  evaluations: model.card_override?.evaluations || [],
   modality: model.card_override?.modality || '',
   backend_refs: model.backend_refs || [],
   pricing: model.pricing || {},
@@ -253,11 +244,7 @@ const baseModelViewSection = (model: NormalizedModel, defaultModel: string): Vie
 
 const modelRoutingMetadataSection = (model: NormalizedModel): ViewSection | null => {
   const present =
-    model.description ||
-    model.capabilities?.length ||
-    model.tags?.length ||
-    model.loras?.length ||
-    model.evaluations?.length
+    model.description || model.capabilities?.length || model.tags?.length || model.loras?.length
   if (!present) return null
   return {
     title: 'Routing Metadata',
@@ -278,15 +265,6 @@ const modelRoutingMetadataSection = (model: NormalizedModel): ViewSection | null
         value: <ModelLorasEditor value={model.loras || []} readOnly />,
         fullWidth: true,
       },
-      ...(model.evaluations?.length
-        ? [
-            {
-              label: 'Operator Evaluations',
-              value: <ModelEvaluationsEditor value={model.evaluations} readOnly />,
-              fullWidth: true,
-            },
-          ]
-        : []),
     ],
   }
 }

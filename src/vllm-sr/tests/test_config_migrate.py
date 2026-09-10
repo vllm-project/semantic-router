@@ -401,13 +401,14 @@ def test_migrate_config_data_splits_legacy_provider_models():
             "name": "gpt-4o",
             "description": "General reasoning model",
             "capabilities": ["general", "reasoning"],
-            "evaluations": [
-                {
-                    "benchmark": "vllm-sr/operator-rating@1.0.0",
-                    "metrics": {"score": 0.95},
-                }
-            ],
             "modality": "text",
+        }
+    ]
+    assert migrated["evaluation"]["records"] == [
+        {
+            "model": "gpt-4o",
+            "benchmark": "vllm-sr/operator-rating@1.0.0",
+            "metrics": {"score": 0.95},
         }
     ]
     assert migrated["providers"]["models"] == [
@@ -436,6 +437,42 @@ def test_migrate_config_data_splits_legacy_provider_models():
     assert migrated["providers"]["defaults"]["model"] == "gpt-4o"
     assert "reasoning_families" not in migrated["providers"]["defaults"]
     assert migrated["global"]["stores"]["memory"]["enabled"] is True
+    UserConfig.model_validate(migrated)
+
+
+def test_migrate_config_data_unifies_evaluation_definitions_and_records():
+    migrated = migrate_config_data(
+        {
+            "version": "v0.3",
+            "evaluation_catalog": {"benchmarks": []},
+            "providers": {
+                "models": [{"name": "frontier", "catalog": "vendor/frontier"}]
+            },
+            "routing": {
+                "modelCards": [
+                    {
+                        "name": "frontier",
+                        "evaluations": [
+                            {
+                                "benchmark": "acme/reasoning@1.0.0",
+                                "metrics": {"accuracy": 0.82},
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    assert "evaluation_catalog" not in migrated
+    assert migrated["evaluation"]["records"] == [
+        {
+            "model": "vendor/frontier",
+            "benchmark": "acme/reasoning@1.0.0",
+            "metrics": {"accuracy": 0.82},
+        }
+    ]
+    assert migrated["routing"].get("modelCards") is None
     UserConfig.model_validate(migrated)
 
 

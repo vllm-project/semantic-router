@@ -172,10 +172,6 @@
   gap: 0.7rem;
 }
 
-.benchmarkWorkspace {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .catalogPanel {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.075);
