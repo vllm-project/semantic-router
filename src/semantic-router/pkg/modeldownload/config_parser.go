@@ -101,7 +101,7 @@ func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
 	paths := filterDisabledOptionalModelPaths(cfg, extractProvisioningModelPaths(cfg))
 	requiredFilesByModel := ExtractRequiredFilesByModel(cfg)
 	addEmbeddingModelRequiredFiles(cfg, requiredFilesByModel)
-	excludePatternsByModel := candleEmbeddingModelExcludePatterns(cfg)
+	excludePatternsByModel := runtimeEmbeddingModelExcludePatterns(cfg)
 
 	// Allow empty paths for API-only configurations
 	if len(paths) == 0 {
@@ -244,16 +244,16 @@ func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]
 	return excluded
 }
 
-// addEmbeddingModelRequiredFiles marks every configured candle embedding model as
-// requiring the files its runtime hard-loads, so a partial directory (for example
-// ONNX-only, or gemma without its dense-bottleneck weights) is detected as incomplete
-// and the full snapshot is re-downloaded.
+// addEmbeddingModelRequiredFiles applies the completeness contract of the
+// embedding runtime compiled into this binary. The public "candle" backend
+// name is intentionally stable when an ONNX build replaces candle-binding at
+// link time, so the contract must be selected at compile time too.
 func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
 	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return
 	}
 
-	for path, files := range candleEmbeddingModelRequiredFiles(cfg) {
+	for path, files := range runtimeEmbeddingModelRequiredFiles(cfg) {
 		if path == "" || !strings.HasPrefix(path, "models/") {
 			continue
 		}
