@@ -145,6 +145,15 @@ runtime dependency; they do not define routing behavior by themselves.
   name an entry in `global.model_catalog.external[]` with
   `model_role: classification`. The shared backend contract uses
   `protocol`, `contract`, `model`, and optional `deadline_ms`.
+- Complexity attaches the same block at
+  `global.model_catalog.modules.complexity.backend`, beside `prototype_scoring`
+  rather than on a rule, so it survives the per-recipe replacement of
+  `routing.signals`. It reads two contracts and therefore requires `contract`
+  to be stated: `score.v1`, where each rule converts the score with its own
+  `hard_above`/`easy_below` boundaries, or `label_distribution.v1`, where the
+  winning label is the verdict. `threshold` stays the symmetric shorthand for
+  the local signed margin, and the `hard`/`easy` candidate lists are unread
+  once a backend supplies the score.
 - External LLM classifiers use `max_response_bytes` on their
   `global.model_catalog.external[]` entry. The MCP classifier uses the same key
   under `global.model_catalog.modules.classifier.mcp`.

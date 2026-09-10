@@ -51,6 +51,18 @@ describe('DSL structured field schemas', () => {
       'max_cost_per_1m',
       'max_inflight',
     ])
+    const quality = requireField(multiFactor, 'quality')
+    expect(quality.type).toBe('object')
+    expect(quality.fields?.map((field) => field.key)).toEqual([
+      'index',
+      'on_missing',
+      'min_coverage',
+      'min_score',
+    ])
+    expect(requireField(quality.fields || [], 'on_missing').options).toEqual([
+      'exclude',
+      'disable_quality',
+    ])
 
     const prompt = getAlgorithmFieldSchema('prompt')
     const promptConfig = requireField(prompt, 'prompt')

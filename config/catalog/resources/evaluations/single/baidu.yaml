@@ -285,7 +285,7 @@
 - id: independent/ernie-4.5-300b-a47b-livecodebench-v6@1.0.0
   model: baidu/ernie-4.5-300b-a47b
   benchmark: livecodebench/livecodebench@6.0.0
-  benchmark_profile: code-generation-pass-at-1
+  benchmark_profile: independent-code-generation
   reasoning_effort: disabled
   subject:
     source_model: ERNIE 4.5 300B A47B

@@ -245,6 +245,21 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.Threshold != 0 {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
+		// The explicit boundary pair. Omitting these here would silently
+		// revert a rule to threshold semantics on a YAML -> DSL -> YAML round
+		// trip, discarding its declared cut points.
+		if comp.HardAbove != nil {
+			d.write("  hard_above: %v\n", *comp.HardAbove)
+		}
+		if comp.EasyBelow != nil {
+			d.write("  easy_below: %v\n", *comp.EasyBelow)
+		}
+		if comp.HardBelow != nil {
+			d.write("  hard_below: %v\n", *comp.HardBelow)
+		}
+		if comp.EasyAbove != nil {
+			d.write("  easy_above: %v\n", *comp.EasyAbove)
+		}
 		if comp.Description != "" {
 			d.write("  description: %q\n", comp.Description)
 		}

@@ -201,7 +201,12 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
-		return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		if err != nil {
+			return nil, err
+		}
+		r.dispatchShadowIfConfigured(ctx, dispatch)
+		return finalized, nil
 	}
 
 	// Record routing decision with tracing
@@ -240,6 +245,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
+	r.dispatchShadowIfConfigured(ctx, dispatch)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

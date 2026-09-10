@@ -336,24 +336,10 @@ type ModelCardOverlay struct {
 	Reasoning         *ReasoningFamilyDefinition `json:"reasoning,omitempty" yaml:"reasoning,omitempty"`
 	Tags              *[]string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
 	LoRAs             *[]LoRAAdapter             `json:"loras,omitempty" yaml:"loras,omitempty"`
-	Evaluations       []UserEvaluation           `json:"evaluations,omitempty" yaml:"evaluations,omitempty"`
 	Verification      *ModelVerification         `json:"verification,omitempty" yaml:"verification,omitempty"`
 	// RuntimeModality preserves the existing router-specific ar/diffusion/omni
 	// classification while canonical model facts use input/output modalities.
 	RuntimeModality *string `json:"-" yaml:"-"`
-}
-
-// UserEvaluation is the intentionally small operator-facing measurement
-// surface. Repository benchmark definitions own metric semantics; provenance
-// and verification are assigned internally when this is materialized.
-type UserEvaluation struct {
-	Benchmark        string             `json:"benchmark" yaml:"benchmark"`
-	BenchmarkProfile string             `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
-	ReasoningEffort  string             `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
-	Metrics          map[string]float64 `json:"metrics" yaml:"metrics"`
-	Source           string             `json:"source,omitempty" yaml:"source,omitempty"`
-	MeasuredAt       string             `json:"measured_at,omitempty" yaml:"measured_at,omitempty"`
-	Metadata         map[string]any     `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 }
 
 // EvaluationConfig is the optional operator extension surface.
@@ -467,12 +453,13 @@ type Normalization struct {
 }
 
 type IndexComponent struct {
-	Benchmark        string        `json:"benchmark,omitempty" yaml:"benchmark,omitempty"`
-	Metric           string        `json:"metric,omitempty" yaml:"metric,omitempty"`
-	BenchmarkProfile string        `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
-	Index            string        `json:"index,omitempty" yaml:"index,omitempty"`
-	Weight           float64       `json:"weight" yaml:"weight"`
-	Normalization    Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
+	Benchmark         string        `json:"benchmark,omitempty" yaml:"benchmark,omitempty"`
+	Metric            string        `json:"metric,omitempty" yaml:"metric,omitempty"`
+	BenchmarkProfile  string        `json:"benchmark_profile,omitempty" yaml:"benchmark_profile,omitempty"`
+	BenchmarkProfiles []string      `json:"benchmark_profiles,omitempty" yaml:"benchmark_profiles,omitempty"`
+	Index             string        `json:"index,omitempty" yaml:"index,omitempty"`
+	Weight            float64       `json:"weight" yaml:"weight"`
+	Normalization     Normalization `json:"normalization,omitempty" yaml:"normalization,omitempty"`
 }
 
 type MissingPolicy struct {
@@ -493,15 +480,16 @@ type IndexDefinition struct {
 }
 
 type IndexComponentResult struct {
-	Benchmark        string   `json:"benchmark,omitempty"`
-	Metric           string   `json:"metric,omitempty"`
-	BenchmarkProfile string   `json:"benchmark_profile,omitempty"`
-	Index            string   `json:"index,omitempty"`
-	Evaluation       string   `json:"evaluation,omitempty"`
-	Weight           float64  `json:"weight"`
-	Status           string   `json:"status"`
-	Value            *float64 `json:"value,omitempty"`
-	Normalized       *float64 `json:"normalized,omitempty"`
+	Benchmark         string   `json:"benchmark,omitempty"`
+	Metric            string   `json:"metric,omitempty"`
+	BenchmarkProfile  string   `json:"benchmark_profile,omitempty"`
+	BenchmarkProfiles []string `json:"benchmark_profiles,omitempty"`
+	Index             string   `json:"index,omitempty"`
+	Evaluation        string   `json:"evaluation,omitempty"`
+	Weight            float64  `json:"weight"`
+	Status            string   `json:"status"`
+	Value             *float64 `json:"value,omitempty"`
+	Normalized        *float64 `json:"normalized,omitempty"`
 }
 
 type IndexResult struct {
@@ -521,11 +509,10 @@ type IndexResult struct {
 type FieldProvenance map[string]string
 
 type EffectiveModelCard struct {
-	Card            ModelCard        `json:"card"`
-	LoRAs           []LoRAAdapter    `json:"loras,omitempty"`
-	Evaluations     []UserEvaluation `json:"evaluations,omitempty"`
-	Provenance      FieldProvenance  `json:"provenance"`
-	RuntimeModality string           `json:"runtime_modality,omitempty"`
+	Card            ModelCard       `json:"card"`
+	LoRAs           []LoRAAdapter   `json:"loras,omitempty"`
+	Provenance      FieldProvenance `json:"provenance"`
+	RuntimeModality string          `json:"runtime_modality,omitempty"`
 }
 
 type EffectiveProvider struct {

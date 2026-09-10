@@ -31,14 +31,19 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 	if err := builder.finishCards(canonical); err != nil {
 		return builder.input, err
 	}
+	if err := builder.addEvaluationRecords(canonical.Evaluation); err != nil {
+		return builder.input, err
+	}
 	return builder.input, nil
 }
 
 type catalogInputBuilder struct {
 	input             modelcatalog.CompileInput
 	builtIn           *modelcatalog.Registry
+	benchmarks        map[string]modelcatalog.BenchmarkDefinition
 	cards             map[string]RoutingModel
 	boundCards        map[string]struct{}
+	configuredCards   map[string]struct{}
 	materializedCards map[string]struct{}
 }
 
@@ -51,6 +56,10 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 	if err != nil {
 		return nil, fmt.Errorf("load built-in model catalog: %w", err)
 	}
+	benchmarks, err := canonicalEvaluationDefinitions(canonical.Evaluation, builtIn, &input.Evaluations)
+	if err != nil {
+		return nil, err
+	}
 	cards := make(map[string]RoutingModel, len(canonical.Routing.ModelCards))
 	for cardIndex, card := range canonical.Routing.ModelCards {
 		if _, exists := cards[card.Name]; exists {
@@ -59,8 +68,9 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 		cards[card.Name] = card
 	}
 	return &catalogInputBuilder{
-		input: input, builtIn: builtIn, cards: cards,
+		input: input, builtIn: builtIn, benchmarks: benchmarks, cards: cards,
 		boundCards:        make(map[string]struct{}, len(canonical.Providers.Models)),
+		configuredCards:   make(map[string]struct{}, len(canonical.Providers.Models)),
 		materializedCards: make(map[string]struct{}, len(canonical.Providers.Models)),
 	}, nil
 }
@@ -84,12 +94,13 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	builder.input.Models = append(builder.input.Models, alias)
 	builder.boundCards[cardID] = struct{}{}
+	builder.configuredCards[cardID] = struct{}{}
 	card, shouldMaterialize := builder.cardForModel(model, cardID)
 	if !shouldMaterialize {
 		return nil
 	}
 	builder.markLoRAAliasesBound(card)
-	return builder.materializeCard(card, model, modelIndex)
+	return builder.materializeCard(card, model)
 }
 
 func catalogModelAlias(model CanonicalProviderModel, cardID string) modelcatalog.ModelAlias {
@@ -194,18 +205,29 @@ func (builder *catalogInputBuilder) markLoRAAliasesBound(card RoutingModel) {
 func (builder *catalogInputBuilder) materializeCard(
 	card RoutingModel,
 	model CanonicalProviderModel,
-	modelIndex int,
 ) error {
 	if _, alreadyMaterialized := builder.materializedCards[card.Name]; alreadyMaterialized {
 		return nil
 	}
-	overlay, records, err := catalogCardOverlay(card, model, modelIndex, builder.builtIn)
+	overlay := catalogCardOverlay(card, model)
+	builder.input.ModelCards = append(builder.input.ModelCards, overlay)
+	builder.materializedCards[card.Name] = struct{}{}
+	return nil
+}
+
+func (builder *catalogInputBuilder) addEvaluationRecords(evaluation *CanonicalEvaluation) error {
+	if evaluation == nil || len(evaluation.Records) == 0 {
+		return nil
+	}
+	records, err := catalogIndexableEvaluationRecords(
+		evaluation.Records,
+		builder.benchmarks,
+		builder.configuredCards,
+	)
 	if err != nil {
 		return err
 	}
-	builder.input.ModelCards = append(builder.input.ModelCards, overlay)
 	builder.input.Evaluations.Records = append(builder.input.Evaluations.Records, records...)
-	builder.materializedCards[card.Name] = struct{}{}
 	return nil
 }
 
@@ -227,15 +249,16 @@ func (builder *catalogInputBuilder) finishCards(canonical *CanonicalConfig) erro
 func (builder *catalogInputBuilder) materializeRoutingOnlyCards(cards []RoutingModel) error {
 	// Routing fragments intentionally contain cards without provider bindings.
 	// Materialize each as a metadata-only local alias for offline consumers.
-	for cardIndex, card := range cards {
+	for _, card := range cards {
 		if _, alreadyBound := builder.boundCards[card.Name]; alreadyBound {
 			continue
 		}
 		if err := builder.materializeCard(
-			card, CanonicalProviderModel{Name: card.Name}, cardIndex,
+			card, CanonicalProviderModel{Name: card.Name},
 		); err != nil {
 			return err
 		}
+		builder.configuredCards[card.Name] = struct{}{}
 		builder.input.Models = append(builder.input.Models, modelcatalog.ModelAlias{
 			Name: card.Name, Catalog: card.Name,
 		})
@@ -287,21 +310,14 @@ func catalogReliability(value ProviderReliability) modelcatalog.Reliability {
 func catalogCardOverlay(
 	card RoutingModel,
 	model CanonicalProviderModel,
-	modelIndex int,
-	builtIn *modelcatalog.Registry,
-) (modelcatalog.ModelCardOverlay, []modelcatalog.EvaluationRecord, error) {
+) modelcatalog.ModelCardOverlay {
 	catalogBacked := strings.TrimSpace(model.Catalog) != ""
 	overlay := modelcatalog.ModelCardOverlay{Name: card.Name, BuiltIn: &catalogBacked}
 	applyCatalogCardStrings(card, &overlay)
 	applyCatalogCardLimits(card, &overlay)
 	applyCatalogCardLists(card, &overlay)
 	applyCatalogCardReasoning(model, &overlay)
-	overlay.Evaluations = cloneUserEvaluations(card.Evaluations)
-	records, err := catalogIndexableEvaluationRecords(card, modelIndex, builtIn)
-	if err != nil {
-		return overlay, nil, err
-	}
-	return overlay, records, nil
+	return overlay
 }
 
 func applyCatalogCardStrings(card RoutingModel, overlay *modelcatalog.ModelCardOverlay) {

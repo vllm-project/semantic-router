@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func (r *OpenAIRouter) extractRequestSignalSnapshot(
@@ -62,6 +63,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		if errors.Is(decisionErr, errNoContextEligibleDecisionModel) {
 			logging.Warnf("[Request Body] Decision candidates cannot satisfy request context: %v", decisionErr)
 			return requestDecisionState{}, r.createErrorResponse(422, decisionErr.Error())
+		}
+		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
+			logging.Warnf("[Request Body] Selection policy rejected all candidates: %v", decisionErr)
+			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)
 		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
@@ -114,8 +119,29 @@ func (r *OpenAIRouter) respondDecisionUnresolved(
 	originalModel string,
 	decisionErr error,
 ) *ext_proc.ProcessingResponse {
-	resp := r.createErrorResponse(503, decisionErr.Error())
-	if ctx.RouterReplayPluginConfig == nil {
+	resp := r.respondRoutingRejected(ctx, originalModel, decisionErr, "decision_unresolved")
+	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
+	return resp
+}
+
+// respondSelectionRejected preserves an explicit fail-closed selection policy
+// all the way to the client instead of silently routing to a fallback model.
+func (r *OpenAIRouter) respondSelectionRejected(
+	ctx *RequestContext,
+	originalModel string,
+	selectionErr error,
+) *ext_proc.ProcessingResponse {
+	return r.respondRoutingRejected(ctx, originalModel, selectionErr, "selection_rejected")
+}
+
+func (r *OpenAIRouter) respondRoutingRejected(
+	ctx *RequestContext,
+	originalModel string,
+	routingErr error,
+	terminalReason string,
+) *ext_proc.ProcessingResponse {
+	resp := r.createErrorResponse(503, routingErr.Error())
+	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
 		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
 	}
 	r.startRouterReplay(ctx, originalModel, "", "")
@@ -125,9 +151,8 @@ func (r *OpenAIRouter) respondDecisionUnresolved(
 	}
 	// Failed, not aborted: the router itself rejected the request with a
 	// terminal 503; aborted is reserved for streams that end early.
-	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "decision_unresolved")
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
 	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
-	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	return resp
 }
 
