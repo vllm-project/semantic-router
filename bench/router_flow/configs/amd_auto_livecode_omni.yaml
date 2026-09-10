@@ -74,36 +74,38 @@ providers:
           auth_prefix: Bearer
           api_key_env: OPENROUTER_API_KEY
           weight: 1
+evaluation:
+  records:
+    - model: opus-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.95
+    - model: gemini-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
+    - model: gpt-worker
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.94
 routing:
   modelCards:
     - name: opus-worker
       context_window_size: 1000000
       description: OpenRouter worker for long-horizon code reasoning.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.95
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker]
     - name: gemini-worker
       context_window_size: 1000000
       description: OpenRouter worker for broad code reasoning and hidden-test robustness.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:worker]
     - name: gpt-worker
       context_window_size: 1048576
       description: OpenRouter worker and final synthesis model for LiveCodeBench.
       capabilities: [chat, code, reasoning, long-context]
-      evaluations:
-        - benchmark: vllm-sr/operator-rating@1.0.0
-          metrics:
-            score: 0.94
       modality: text
       tags: [deployment:openrouter, benchmark:livecodebench, role:synthesis]
 

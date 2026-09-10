@@ -51,20 +51,33 @@ describe('built-in model catalog API snapshot identity', () => {
     })
   })
 
-  it('rejects placeholder index rows instead of treating absence as a score', async () => {
-    const malformed = structuredClone(validCatalog)
-    const results = malformed.index_results as Array<Record<string, unknown>>
-    results[0].status = 'missing'
-    results[0].score = null
+  it('accepts explicit partial and missing index coverage without a score', async () => {
+    const catalog = structuredClone(validCatalog)
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+      vi.fn(async () => new Response(JSON.stringify(catalog), { status: 200 })),
     )
 
-    await expect(getBuiltInModelCatalog()).rejects.toMatchObject({
-      name: 'ModelCatalogApiError',
-      status: 502,
-    })
+    await expect(getBuiltInModelCatalog()).resolves.toEqual(catalog)
+  })
+
+  it.each([
+    ['a partial result with a score', 'partial', 42, undefined],
+    ['an available result without a score', 'available', null, undefined],
+    ['a partial result with zero coverage', 'partial', null, 0],
+    ['a missing result with nonzero coverage', 'missing', null, 0.5],
+  ])('rejects %s', async (_name, status, score, coverage) => {
+    const malformed = structuredClone(validCatalog)
+    const results = malformed.index_results as Array<Record<string, unknown>>
+    results[0].status = status
+    results[0].score = score
+    if (coverage !== undefined) results[0].coverage = coverage
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed))),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
   })
 })
 

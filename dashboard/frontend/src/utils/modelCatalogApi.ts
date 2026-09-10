@@ -36,6 +36,10 @@ function isStringArray(value: unknown, allowEmpty = false): value is string[] {
   return Array.isArray(value) && (allowEmpty || value.length > 0) && value.every(isNonEmptyString)
 }
 
+function isUniqueStringArray(value: unknown): value is string[] {
+  return isStringArray(value) && new Set(value).size === value.length
+}
+
 function isNumberRecord(value: unknown): value is Record<string, number> {
   return isRecord(value) && Object.values(value).every((item) => typeof item === 'number')
 }
@@ -470,16 +474,24 @@ function isIndex(value: unknown): value is CatalogIndex {
     value.components.length > 0 &&
     value.components.every((component) => {
       if (!isRecord(component)) return false
+      const hasSingleProfile = component.benchmark_profile !== undefined
+      const hasProfileSet = component.benchmark_profiles !== undefined
+      const validProfileReference =
+        hasSingleProfile !== hasProfileSet &&
+        (hasSingleProfile
+          ? isNonEmptyString(component.benchmark_profile)
+          : isUniqueStringArray(component.benchmark_profiles))
       const metricReference =
         isNonEmptyString(component.benchmark) &&
         isNonEmptyString(component.metric) &&
-        isNonEmptyString(component.benchmark_profile) &&
+        validProfileReference &&
         !isNonEmptyString(component.index)
       const indexReference =
         isNonEmptyString(component.index) &&
         !isNonEmptyString(component.benchmark) &&
         !isNonEmptyString(component.metric) &&
-        !isNonEmptyString(component.benchmark_profile)
+        !hasSingleProfile &&
+        !hasProfileSet
       return (
         (metricReference || indexReference) &&
         typeof component.weight === 'number' &&
@@ -491,29 +503,40 @@ function isIndex(value: unknown): value is CatalogIndex {
 }
 
 function isIndexResult(value: unknown): value is CatalogIndexResult {
+  if (!isRecord(value)) return false
+  const coverage = value.coverage
+  if (!isFiniteNumber(coverage) || coverage < 0 || coverage > 1) return false
+  const validStatusAndScore =
+    value.status === 'available'
+      ? isFiniteNumber(value.score) && coverage > 0
+      : value.status === 'partial'
+        ? value.score === null && coverage > 0 && coverage < 1
+        : value.status === 'missing' && value.score === null && coverage === 0
   return (
-    isRecord(value) &&
     isNonEmptyString(value.model) &&
     isNonEmptyString(value.reasoning_effort) &&
     isNonEmptyString(value.index) &&
-    value.status === 'available' &&
-    typeof value.score === 'number' &&
-    typeof value.coverage === 'number' &&
-    value.coverage >= 0 &&
-    value.coverage <= 1 &&
+    validStatusAndScore &&
     Array.isArray(value.components) &&
     value.components.every((component) => {
       if (!isRecord(component)) return false
+      const hasSingleProfile = component.benchmark_profile !== undefined
+      const hasProfileSet = component.benchmark_profiles !== undefined
+      const validProfileReference =
+        (hasSingleProfile || hasProfileSet) &&
+        (!hasSingleProfile || isNonEmptyString(component.benchmark_profile)) &&
+        (!hasProfileSet || isUniqueStringArray(component.benchmark_profiles))
       const metricReference =
         isNonEmptyString(component.benchmark) &&
         isNonEmptyString(component.metric) &&
-        isNonEmptyString(component.benchmark_profile) &&
+        validProfileReference &&
         !isNonEmptyString(component.index)
       const indexReference =
         isNonEmptyString(component.index) &&
         !isNonEmptyString(component.benchmark) &&
         !isNonEmptyString(component.metric) &&
-        !isNonEmptyString(component.benchmark_profile)
+        !hasSingleProfile &&
+        !hasProfileSet
       return (
         (metricReference || indexReference) &&
         typeof component.weight === 'number' &&

@@ -13,6 +13,7 @@ import (
 // tokenizer.json, so the multi-gigabyte ONNX exports shipped in the same repository
 // must not be fetched. Every candle embedding path gets the same narrowing.
 func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	specs, err := BuildModelSpecs(newCandleEmbeddingConfig())
 	if err != nil {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
@@ -39,6 +40,7 @@ func TestBuildModelSpecsExcludesOnnxWeightsForCandleEmbeddingModels(t *testing.T
 // is keyed and looked up by the canonical path, so it must match whether the collected
 // provisioning path is the literal alias or has already been canonicalized (#2828).
 func TestBuildModelSpecsExcludesOnnxWeightsForAliasedEmbeddingModel(t *testing.T) {
+	requireCandleEmbeddingRuntime(t)
 	for _, configured := range []string{
 		"models/mom-embedding-ultra", // models/-prefixed alias
 		testEmbeddingModelPath,       // canonical path
