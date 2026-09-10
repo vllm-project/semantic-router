@@ -27,4 +27,8 @@ var (
 
 	// ErrConversationNotEmpty is returned when trying to delete a non-empty conversation.
 	ErrConversationNotEmpty = errors.New("conversation is not empty")
+
+	// ErrIndexContended is returned when a conversation index keeps changing
+	// while a list operation is conditionally pruning stale memberships.
+	ErrIndexContended = errors.New("conversation index is contended")
 )

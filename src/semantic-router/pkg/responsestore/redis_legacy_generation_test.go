@@ -485,32 +485,36 @@ func TestCascadeWitnessRepairDoesNotCountAsDrainProgress(t *testing.T) {
 
 // TestListPrunesExpiredLegacyMember is the pagination regression the review
 // asked for. A backfilled legacy member has no witness, so once its payload
-// expires nothing could remove it: the tombstone sat at the head of the window
-// and underfilled every page that read it, forever. Here the whole first
-// window is that tombstone, so before the fix the call returned an empty page
-// — which terminates a client's pagination — while a live response sat one
-// rank further along.
+// expires it becomes a blank-witness tombstone. Two complete Limit-sized
+// windows precede the live response here: a fixed one-refill implementation
+// prunes both windows but still returns empty, conventionally terminating
+// pagination while live data remains hidden behind them.
 func TestListPrunesExpiredLegacyMember(t *testing.T) {
 	store := newConversationIndexStore(t)
 	ctx := context.Background()
 
 	const convID = "conv_list_expired_legacy"
-	const expiredID = "resp_list_expired_legacy"
 	const liveID = "resp_list_live"
+	const limit = 2
 
 	now := time.Now().Unix()
-	// A member whose legacy payload has already expired: seeded with no
-	// witness and no payload behind it.
-	seedLegacyIndexMember(t, store, convID, expiredID, now)
+	expiredIDs := make([]string, 2*limit)
+	for i := range expiredIDs {
+		expiredIDs[i] = fmt.Sprintf("resp_list_expired_legacy_%d", i)
+		// A member whose legacy payload has already expired: seeded with no
+		// witness and no payload behind it.
+		seedLegacyIndexMember(t, store, convID, expiredIDs[i], now+int64(i))
+	}
 	require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
-		ID: liveID, ConversationID: convID, Status: "completed", CreatedAt: now + 1,
+		ID: liveID, ConversationID: convID, Status: "completed", CreatedAt: now + int64(len(expiredIDs)),
 	}))
 	require.NoError(t, store.client.Set(ctx, store.conversationIndexCompletionKey(),
 		conversationIndexCompletionValue, 0).Err())
-	require.Equal(t, []string{expiredID, liveID}, conversationIndexMembers(t, store, convID),
-		"precondition: the tombstone sorts ahead of the live response")
+	wantInitial := append(append([]string{}, expiredIDs...), liveID)
+	require.Equal(t, wantInitial, conversationIndexMembers(t, store, convID),
+		"precondition: both tombstone windows sort ahead of the live response")
 
-	responses, err := store.ListResponsesByConversation(ctx, convID, ListOptions{Order: "asc", Limit: 1})
+	responses, err := store.ListResponsesByConversation(ctx, convID, ListOptions{Order: "asc", Limit: limit})
 	require.NoError(t, err)
 	require.Len(t, responses, 1, "the page must list past the expired legacy member")
 	assert.Equal(t, liveID, responses[0].ID)
