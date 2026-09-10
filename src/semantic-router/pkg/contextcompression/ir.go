@@ -8,14 +8,23 @@ import (
 )
 
 type MessageIR struct {
+	// Identity and policy metadata are stable across history removal.
+	Source      ContentSource
+	Eligibility Eligibility
+	Protection  Protection
+	TurnID      int
+	ExchangeIDs []string
 	Index       int
 	Role        string
 	Raw         map[string]interface{}
 	ToolCallID  string
 	ToolName    string
-	Protected   bool
-	Blocks      []*TextBlockIR
-	ToolCallIDs []string
+	// Protected is the legacy history-block compression guard. Whole-message
+	// retention is governed by Protection and Eligibility.
+	Protected     bool
+	Blocks        []*TextBlockIR
+	ToolCallIDs   []string
+	ToolResultIDs []string
 }
 
 type TextBlockIR struct {
@@ -48,11 +57,13 @@ func (block *TextBlockIR) SetText(text string) {
 }
 
 type RequestIR struct {
-	Raw         map[string]interface{}
-	Semantic    *llmprotocol.Request
-	Messages    []*MessageIR
-	ToolIntents map[string]string
-	LastUser    string
+	Transformations TransformationPlan
+	originalHistory *HistorySnapshot
+	Raw             map[string]interface{}
+	Semantic        *llmprotocol.Request
+	Messages        []*MessageIR
+	ToolIntents     map[string]string
+	LastUser        string
 }
 
 // ParseSemanticRequest builds the compression view directly over neutral
@@ -95,6 +106,7 @@ func ParseSemanticRequest(request *llmprotocol.Request, provenance Provenance) *
 		message.Protected = message.Index == lastUser || message.Index == lastAssistant
 	}
 	protectAtomicToolExchanges(ir.Messages)
+	ir.initializeTransformMetadata(provenance)
 	return ir
 }
 
@@ -129,6 +141,7 @@ func appendSemanticToolResult(
 	if result == nil {
 		return
 	}
+	message.ToolResultIDs = append(message.ToolResultIDs, result.CallID)
 	message.ToolCallID = result.CallID
 	source := TargetToolOutput
 	if isRAGToolMessage(result.CallID, provenance) {
@@ -214,6 +227,7 @@ func ParseRequestIR(
 		message.Blocks = parseMessageBlocks(message, source, provenance)
 	}
 	protectAtomicToolExchanges(ir.Messages)
+	ir.initializeTransformMetadata(provenance)
 	return ir
 }
 
