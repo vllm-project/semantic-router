@@ -63,24 +63,36 @@ class PRChangeClassifierTests(unittest.TestCase):
             "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
             "website/static/img/blog/new-screenshot.png",
             ".github/workflows/image-routing-calibration.yml",
-            # Scoring path: the encoder, its bindings, and prototype scoring.
+            # Scoring implementation: the whole native binding and the whole
+            # classification package, so a refactor cannot move scoring code
+            # out from under a filename-level trigger.
             "candle-binding/src/model_architectures/embedding/multimodal_embedding.rs",
-            "candle-binding/src/model_architectures/embedding/pooling.rs",
             "candle-binding/src/model_architectures/attention/chunked_sdpa.rs",
             "candle-binding/src/core/similarity.rs",
             "candle-binding/src/ffi/embedding.rs",
+            "candle-binding/src/ffi/types.rs",
+            "candle-binding/src/model_architectures/unified_interface.rs",
+            "candle-binding/build.rs",
             "candle-binding/semantic-router.go",
+            "candle-binding/go.mod",
             "candle-binding/Cargo.lock",
             "src/semantic-router/pkg/classification/embedding_classifier_scoring.go",
-            "src/semantic-router/pkg/classification/embedding_classifier_multimodal.go",
-            "src/semantic-router/pkg/classification/prototype_scoring.go",
             "src/semantic-router/pkg/classification/prototype_bank.go",
             "src/semantic-router/pkg/classification/prototype_clustering.go",
             "src/semantic-router/pkg/classification/request_image_embedding_cache.go",
             "src/semantic-router/pkg/classification/classifier_signal_group_similarity.go",
+            "src/semantic-router/pkg/classification/openvino_backend_stub.go",
+            # Config contracts the tool decodes and the classifier consumes.
+            "src/semantic-router/pkg/config/canonical_config.go",
+            "src/semantic-router/pkg/config/embedding_config.go",
             "src/semantic-router/pkg/config/prototype_scoring_config.go",
             "src/semantic-router/pkg/config/signal_config.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
+            # Dependency manifests and the native build recipe the gate runs.
+            "src/semantic-router/go.mod",
+            "src/semantic-router/go.sum",
+            "Makefile",
+            "tools/make/rust.mk",
         ):
             with self.subTest(path=path):
                 self.assertIn("image-calibration", classify([path]).selected_jobs)
