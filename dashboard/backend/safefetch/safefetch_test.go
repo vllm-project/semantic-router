@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -445,5 +446,104 @@ func TestOrderByFamilyInterleaves(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// fakeConn is a net.Conn a stub dialer can hand back without a real socket.
+type fakeConn struct{ net.Conn }
+
+func (fakeConn) Close() error { return nil }
+
+// A black-holed first address must not consume the request deadline. This is
+// the case a refused address does not cover: a refusal returns in microseconds,
+// a black hole returns only when something times out. Walking the candidates
+// one at a time means the stalled attempt owns the whole budget and the healthy
+// family is never reached (review on #3617).
+func TestClientRacesPastAStalledAddress(t *testing.T) {
+	const stalled = "[2606:4700::1]:443"
+
+	var dialed []string
+	var mu sync.Mutex
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("2606:4700::1"), // first family, black holed
+			netip.MustParseAddr("1.1.1.1"),      // second family, healthy
+		}})
+	policy.FallbackDelay = 10 * time.Millisecond
+	policy.dialContext = func(ctx context.Context, _, address string) (net.Conn, error) {
+		mu.Lock()
+		dialed = append(dialed, address)
+		mu.Unlock()
+		if address == stalled {
+			<-ctx.Done() // never connects, never refuses
+			return nil, ctx.Err()
+		}
+		return fakeConn{}, nil
+	}
+
+	started := time.Now()
+	conn, err := policy.dial(context.Background(), policy.Resolver, policy.dialContext, "tcp", "cloudflare.invalid:443")
+	if err != nil {
+		t.Fatalf("dial() = %v, want the healthy address to win", err)
+	}
+	_ = conn.Close()
+
+	// The win must come from the stagger, not from the stalled attempt ending.
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Errorf("took %v, want the fallback to start after FallbackDelay", elapsed)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(dialed) != 2 || dialed[0] != stalled {
+		t.Fatalf("dialed = %v, want the stalled address first then the fallback", dialed)
+	}
+}
+
+// A failure should not wait out the stagger before the next candidate starts.
+func TestRaceStartsNextImmediatelyOnFailure(t *testing.T) {
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("2606:4700::1"),
+			netip.MustParseAddr("1.1.1.1"),
+		}})
+	policy.FallbackDelay = 30 * time.Second // would dominate if it were waited out
+	policy.dialContext = func(_ context.Context, _, address string) (net.Conn, error) {
+		if address == "[2606:4700::1]:443" {
+			return nil, errors.New("connection refused")
+		}
+		return fakeConn{}, nil
+	}
+
+	started := time.Now()
+	conn, err := policy.dial(context.Background(), policy.Resolver, policy.dialContext, "tcp", "cloudflare.invalid:443")
+	if err != nil {
+		t.Fatalf("dial() = %v", err)
+	}
+	_ = conn.Close()
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Errorf("took %v, want the next candidate to start as soon as the first failed", elapsed)
+	}
+}
+
+// Every candidate failing is still a failure, and the error names them.
+func TestRaceReportsEveryFailure(t *testing.T) {
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{
+			netip.MustParseAddr("2606:4700::1"),
+			netip.MustParseAddr("1.1.1.1"),
+		}})
+	policy.FallbackDelay = time.Millisecond
+	policy.dialContext = func(_ context.Context, _, address string) (net.Conn, error) {
+		return nil, fmt.Errorf("no route to %s", address)
+	}
+
+	_, err := policy.dial(context.Background(), policy.Resolver, policy.dialContext, "tcp", "cloudflare.invalid:443")
+	if err == nil {
+		t.Fatal("expected an error when every candidate fails")
+	}
+	for _, want := range []string{"2606:4700::1", "1.1.1.1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not name %s: %v", want, err)
+		}
 	}
 }

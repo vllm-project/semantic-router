@@ -55,6 +55,13 @@ type Policy struct {
 	ResponseHeaderTimeout time.Duration
 	// Resolver looks up destination addresses. Nil means net.DefaultResolver.
 	Resolver IPResolver
+	// FallbackDelay staggers the start of the next connection attempt, the
+	// Connection Attempt Delay of RFC 8305. Zero means the default.
+	FallbackDelay time.Duration
+	// dialContext dials one already-validated address. Nil means a net.Dialer
+	// bounded by DialTimeout. Tests substitute it to drive a stalled attempt
+	// without depending on real network timing.
+	dialContext func(ctx context.Context, network, address string) (net.Conn, error)
 	// AllowedPrivatePrefixes are the only destinations exempt from the
 	// public-address requirement. Empty by default: a private target is a
 	// deliberate operator decision, declared as a narrow prefix, never a
@@ -71,6 +78,7 @@ func DefaultPolicy() Policy {
 		MaxRedirects:          5,
 		Timeout:               30 * time.Second,
 		DialTimeout:           10 * time.Second,
+		FallbackDelay:         300 * time.Millisecond,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Second,
 	}
@@ -170,7 +178,11 @@ func (p Policy) NewClient() *http.Client {
 	if resolver == nil {
 		resolver = net.DefaultResolver
 	}
-	dialer := &net.Dialer{Timeout: p.DialTimeout, KeepAlive: 30 * time.Second}
+	dial := p.dialContext
+	if dial == nil {
+		dialer := &net.Dialer{Timeout: p.DialTimeout, KeepAlive: 30 * time.Second}
+		dial = dialer.DialContext
+	}
 
 	transport := &http.Transport{
 		// No proxy: a proxy would terminate the connection somewhere this
@@ -183,7 +195,7 @@ func (p Policy) NewClient() *http.Client {
 		TLSHandshakeTimeout:   p.TLSHandshakeTimeout,
 		ResponseHeaderTimeout: p.ResponseHeaderTimeout,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			return p.dial(ctx, resolver, dialer, network, address)
+			return p.dial(ctx, resolver, dial, network, address)
 		},
 	}
 
@@ -206,7 +218,7 @@ func (p Policy) NewClient() *http.Client {
 func (p Policy) dial(
 	ctx context.Context,
 	resolver IPResolver,
-	dialer *net.Dialer,
+	dial dialFunc,
 	network string,
 	address string,
 ) (net.Conn, error) {
@@ -232,29 +244,108 @@ func (p Policy) dial(
 		}
 	}
 
-	// Every candidate is validated, so any of them is safe to dial. Try them in
-	// turn rather than pinning the first: the stock dialer resolves the name
-	// itself and falls back across answers, and dialing one address would drop
-	// that. A host whose first record is unreachable, which is the ordinary
-	// shape of a partial IPv6 outage or a multi-A record with one bad host,
-	// would otherwise fail outright.
-	var errs error
-	for _, candidate := range orderByFamily(addresses, network) {
-		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(candidate.String(), port))
-		if dialErr == nil {
-			return conn, nil
-		}
-		errs = errors.Join(errs, dialErr)
-		// The overall deadline belongs to the caller. Once it is gone, further
-		// attempts only burn time we no longer have.
-		if ctx.Err() != nil {
-			break
-		}
-	}
-	if errs == nil {
+	// Every candidate is validated, so any of them is safe to dial. Race them
+	// rather than pinning the first or walking them one at a time: a dialer
+	// bounded by DialTimeout can spend the caller's whole deadline on a single
+	// black-holed address, which is what a partial IPv6 outage looks like. A
+	// refused address fails fast, a black-holed one does not.
+	candidates := orderByFamily(addresses, network)
+	if len(candidates) == 0 {
 		return nil, ErrDestinationForbidden
 	}
-	return nil, errs
+	return p.raceDial(ctx, dial, network, port, candidates)
+}
+
+// dialFunc dials one already-validated address.
+type dialFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+type dialAttempt struct {
+	conn net.Conn
+	err  error
+}
+
+// raceDial starts the candidates in order, staggered by FallbackDelay, and
+// takes the first connection that succeeds. This is the Happy Eyeballs shape
+// from RFC 8305, narrowed to a set of addresses that were all validated before
+// any of them was dialled.
+//
+// The point is that a stalled attempt no longer holds the request: the next
+// family starts after the delay rather than after the previous attempt times
+// out. A failure starts the next candidate immediately instead of waiting.
+func (p Policy) raceDial(
+	ctx context.Context,
+	dial dialFunc,
+	network string,
+	port string,
+	candidates []netip.Addr,
+) (net.Conn, error) {
+	attemptCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	delay := p.FallbackDelay
+	if delay <= 0 {
+		delay = 300 * time.Millisecond
+	}
+
+	results := make(chan dialAttempt, len(candidates))
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	var errs error
+	started, pending := 0, 0
+
+	for {
+		select {
+		case <-timer.C:
+			address := net.JoinHostPort(candidates[started].String(), port)
+			started++
+			pending++
+			go func() {
+				conn, err := dial(attemptCtx, network, address)
+				results <- dialAttempt{conn: conn, err: err}
+			}()
+			if started < len(candidates) {
+				timer.Reset(delay)
+			}
+
+		case result := <-results:
+			pending--
+			if result.err == nil {
+				// The losers are cancelled by the deferred cancel; drain them so
+				// a connection that lands late is closed rather than leaked.
+				if pending > 0 {
+					go discardLateConns(results, pending)
+				}
+				return result.conn, nil
+			}
+			errs = errors.Join(errs, result.err)
+			if started < len(candidates) {
+				// No reason to wait out the stagger once an attempt has failed.
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(0)
+			} else if pending == 0 {
+				return nil, errs
+			}
+
+		case <-ctx.Done():
+			return nil, errors.Join(errs, ctx.Err())
+		}
+	}
+}
+
+// discardLateConns closes connections from attempts that completed after a
+// winner was already chosen.
+func discardLateConns(results <-chan dialAttempt, pending int) {
+	for i := 0; i < pending; i++ {
+		if result := <-results; result.conn != nil {
+			_ = result.conn.Close()
+		}
+	}
 }
 
 // orderByFamily returns the validated addresses with the two families
