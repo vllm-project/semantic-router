@@ -122,6 +122,27 @@ pub struct EmbeddingModelsInfoResult {
     pub error: bool,
 }
 
+/// Byte ranges of an input that each fit the loaded embedding model's window.
+#[repr(C)]
+pub struct TextWindowsResult {
+    /// Start and end byte offsets stored as adjacent pairs.
+    pub offsets: *mut i32,
+    /// Number of start/end pairs in `offsets`.
+    pub window_count: i32,
+    /// Whether tokenization or model lookup failed.
+    pub error: bool,
+}
+
+impl Default for TextWindowsResult {
+    fn default() -> Self {
+        Self {
+            offsets: std::ptr::null_mut(),
+            window_count: 0,
+            error: true,
+        }
+    }
+}
+
 impl Default for EmbeddingModelsInfoResult {
     fn default() -> Self {
         Self {
@@ -238,6 +259,14 @@ mod tests {
         let result = EmbeddingModelsInfoResult::default();
         assert!(result.models.is_null());
         assert_eq!(result.num_models, 0);
+        assert!(result.error);
+    }
+
+    #[test]
+    fn test_text_windows_result_default() {
+        let result = TextWindowsResult::default();
+        assert!(result.offsets.is_null());
+        assert_eq!(result.window_count, 0);
         assert!(result.error);
     }
 

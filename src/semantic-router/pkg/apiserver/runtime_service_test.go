@@ -27,6 +27,7 @@ func TestLiveClassificationServiceFallsBackDuringStartup(t *testing.T) {
 	svc := newLiveClassificationService(
 		nil,
 		buildClassificationResolver(&routerruntime.Registry{}),
+		buildClassificationAcquirer(&routerruntime.Registry{}),
 	)
 
 	resp, err := svc.ClassifyIntent(services.IntentRequest{Text: "What is 2+2?"})

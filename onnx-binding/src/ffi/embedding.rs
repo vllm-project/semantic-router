@@ -9,7 +9,7 @@
 
 use crate::ffi::types::{
     BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, EmbeddingResult,
-    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch,
+    EmbeddingSimilarityResult, MatryoshkaInfo, SimilarityMatch, TextWindowsResult,
 };
 use crate::model_architectures::embedding::mmbert_embedding::MmBertEmbeddingModel;
 use ndarray::Array2;
@@ -828,4 +828,89 @@ pub extern "C" fn embedding_text_exceeds_window(
         Ok(false) => 0,
         Err(_) => -1,
     }
+}
+
+/// Split `text` into overlapping byte ranges that each fit the loaded mmBERT
+/// embedding model. Every range reserves space for the tokenizer's two special
+/// tokens and overlaps its neighbor by half a window.
+///
+/// # Safety
+/// - `text` must point to a valid null-terminated string.
+/// - The returned result must be released with [`free_text_windows`].
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn get_text_windows(text: *const c_char, max_length: i32) -> TextWindowsResult {
+    if text.is_null() {
+        return TextWindowsResult::default();
+    }
+    let text = unsafe {
+        match CStr::from_ptr(text).to_str() {
+            Ok(text) => text,
+            Err(_) => return TextWindowsResult::default(),
+        }
+    };
+    let Some(model_lock) = GLOBAL_MMBERT_MODEL.get() else {
+        return TextWindowsResult::default();
+    };
+    let model = model_lock.lock();
+    let window = if max_length > 0 {
+        max_length as usize
+    } else {
+        model.config().max_position_embeddings
+    };
+    let mut tokenizer = model.tokenizer().clone();
+    if tokenizer.with_truncation(None).is_err() {
+        return TextWindowsResult::default();
+    }
+    let encoding = match tokenizer.encode(text, false) {
+        Ok(encoding) => encoding,
+        Err(_) => return TextWindowsResult::default(),
+    };
+    let offsets: Vec<(usize, usize)> = encoding
+        .get_offsets()
+        .iter()
+        .copied()
+        .filter(|(start, end)| end > start)
+        .collect();
+    let budget = window.saturating_sub(2).max(1);
+    let ranges =
+        crate::core::tokenization_window::window_ranges(&offsets, budget, budget.div_ceil(2));
+    let mut flat = Vec::with_capacity(ranges.len() * 2);
+    for (start, end) in ranges {
+        let (Ok(start), Ok(end)) = (i32::try_from(start), i32::try_from(end)) else {
+            return TextWindowsResult::default();
+        };
+        flat.push(start);
+        flat.push(end);
+    }
+    let Ok(window_count) = i32::try_from(flat.len() / 2) else {
+        return TextWindowsResult::default();
+    };
+    if flat.is_empty() {
+        return TextWindowsResult {
+            offsets: std::ptr::null_mut(),
+            window_count,
+            error: false,
+        };
+    }
+    let offsets = Box::into_raw(flat.into_boxed_slice()) as *mut i32;
+    TextWindowsResult {
+        offsets,
+        window_count,
+        error: false,
+    }
+}
+
+/// Release byte ranges returned by [`get_text_windows`].
+///
+/// # Safety
+/// - `result` must come from [`get_text_windows`] and must not be freed twice.
+#[no_mangle]
+pub unsafe extern "C" fn free_text_windows(result: TextWindowsResult) {
+    if result.offsets.is_null() || result.window_count <= 0 {
+        return;
+    }
+    let length = result.window_count as usize * 2;
+    let offsets = std::ptr::slice_from_raw_parts_mut(result.offsets, length);
+    let _ = unsafe { Box::from_raw(offsets) };
 }
