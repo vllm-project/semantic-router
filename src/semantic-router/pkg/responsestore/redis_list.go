@@ -110,18 +110,64 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // (listIndexedResponseIDs), not a full-index scan, so cost is proportional
 // to the page requested rather than the conversation's full history.
 //
-// Because only one page of IDs is read, pruning a stale or moved entry can
-// make this return fewer than the requested Limit even when more matching
-// responses exist further in the index. That is an accepted Phase 4
-// trade-off (blueprint §5 Phase 4): topping up short pages by re-reading
-// further windows would turn a bug fix into a pagination redesign.
+// Pruning a stale entry can leave the page short of the requested Limit. A
+// short page used to be an accepted trade-off, because it was transient: the
+// entry that caused it was gone by the next call. That stopped being true for
+// a member with a blank witness, which no path could remove — its payload
+// expires, the tombstone stays, and every page that reads that rank window
+// underfills again forever. Worse, a window made entirely of such tombstones
+// returns nothing at all, and an empty page conventionally *terminates* a
+// client's pagination, so live responses further along are never requested.
+//
+// So a page that pruned something and still came up short gets exactly one
+// refill pass. The window is re-resolved from scratch rather than replayed
+// from the ranks already read: removing members shifts every later rank left,
+// so the original [start, end] no longer denotes the same logical window. The
+// refill is taken only when it is strictly longer than the first pass, which
+// makes it a pure top-up — it can never shrink a page, and never recurses.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
-	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
+	// Blank-witness memberships may only be cleaned up once the store is
+	// finalized — the same rule cascade delete follows, for the same reason:
+	// before then an index-unaware writer can recreate a payload without
+	// touching the sidecar, and the blank-expected removal would still match.
+	// The completion record is process-cached and ensureConversationResolvedForRead
+	// has already consulted it, so this costs nothing in the steady state.
+	allowBlankCleanup, err := s.conversationIndexFinalized(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	responses, pruned, err := s.collectIndexedPage(ctx, conversationID, opts, allowBlankCleanup)
+	if err != nil {
+		return nil, err
+	}
+	if pruned == 0 || len(responses) >= opts.Limit {
+		return responses, nil
+	}
+
+	refilled, _, refillErr := s.collectIndexedPage(ctx, conversationID, opts, allowBlankCleanup)
+	if refillErr != nil {
+		// The first pass is still a valid answer; the pruning it did stands.
+		logging.Warnf("RedisStore: failed to refill conversation %s page after pruning: %v", conversationID, refillErr)
+		return responses, nil
+	}
+	if len(refilled) > len(responses) {
+		return refilled, nil
+	}
+	return responses, nil
+}
+
+// collectIndexedPage reads one bounded window, resolves its payloads, and
+// conditionally prunes the memberships that window proved stale. It reports
+// how many prunes it attempted so the caller can decide whether a short page
+// is worth re-reading.
+func (s *RedisStore) collectIndexedPage(ctx context.Context, conversationID string, opts normalizedListOptions, allowBlankCleanup bool) ([]*responseapi.StoredResponse, int, error) {
+	witnesses, err := s.listIndexedResponseIDs(ctx, conversationID, opts)
+	if err != nil {
+		return nil, 0, err
+	}
 	if len(witnesses) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	responseIDs := make([]string, len(witnesses))
@@ -134,7 +180,7 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 	toPrune := make([]responseGenerationWitness, 0, len(results))
 	for i, result := range results {
 		witness := witnesses[i]
-		response, prune := evaluateIndexedResponse(conversationID, witness, result)
+		response, prune := evaluateIndexedResponse(conversationID, witness, result, allowBlankCleanup)
 		if prune {
 			toPrune = append(toPrune, witness)
 		}
@@ -143,23 +189,51 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		}
 	}
 
-	if err := s.unindexResponseGenerations(ctx, conversationID, toPrune...); err != nil {
+	if _, err := s.unindexResponseGenerations(ctx, conversationID, toPrune...); err != nil {
 		logging.Warnf("RedisStore: failed to prune %d stale index entr(y/ies) from conversation %s: %v",
 			len(toPrune), conversationID, err)
 	}
 
-	return responses, nil
+	return responses, len(toPrune), nil
 }
 
-// evaluateIndexedResponse classifies one generation-snapshotted membership.
-// Legacy payloads remain readable but can never authorize pruning.
+// evaluateIndexedResponse classifies one generation-snapshotted membership,
+// reporting the response this page should return and whether the membership
+// should be pruned.
+//
+// The two are deliberately independent. Readability follows only from the
+// payload: a response whose stored ConversationID names this conversation is
+// returned whether or not its sidecar witness agrees, because a witness that
+// has fallen behind (a legacy member not yet upgraded, an index write still in
+// flight) says nothing about whether the response belongs here. Dropping those
+// from the page silently hid live data.
+//
+// Pruning is authorized only by the two conditions that are stable rather than
+// transient — the payload is proven absent, or it names a different
+// conversation — and even then only through the conditional unindex, which
+// fires solely while the sidecar still holds exactly this witness.
+//
+// A blank witness authorizes a prune only once the store is finalized. Against
+// a generation-aware writer the blank comparison is already safe, since any
+// recreate or move-back installs a witness first and the stale cleanup finds a
+// mismatch. An index-unaware writer installs nothing, and while such writers
+// can still exist — which is to say, before finalization — a blank-expected
+// prune can unindex a payload one of them just recreated. On this path that
+// costs at most one conversationIndexProofMaxTTL of invisibility before a
+// re-scan repairs it, but cascade delete cannot absorb the same race and the
+// rule is kept uniform rather than split by caller. Until finalization the
+// remedy for a blank member is upgrade, not removal — which is why the scans
+// promote every legacy payload they find.
 func evaluateIndexedResponse(
 	conversationID string,
 	witness responseGenerationWitness,
 	result responsePayloadResult,
+	allowBlankCleanup bool,
 ) (*responseapi.StoredResponse, bool) {
+	prunable := witness.generation != "" || allowBlankCleanup
+
 	if errors.Is(result.err, redis.Nil) {
-		return nil, witness.generation != ""
+		return nil, prunable
 	}
 	if result.err != nil {
 		logging.Warnf("RedisStore: failed to get response %s: %v", witness.responseID, result.err)
@@ -171,17 +245,8 @@ func evaluateIndexedResponse(
 		logging.Warnf("RedisStore: failed to parse response %s: %v", witness.responseID, err)
 		return nil, false
 	}
-	if record.generation == "" {
-		if record.response.ConversationID == conversationID {
-			return record.response, false
-		}
-		return nil, false
-	}
-	if witness.generation == "" {
-		return nil, false
-	}
-	if record.generation != witness.generation || record.response.ConversationID != conversationID {
-		return nil, true
+	if record.response.ConversationID != conversationID {
+		return nil, prunable
 	}
 	return record.response, false
 }

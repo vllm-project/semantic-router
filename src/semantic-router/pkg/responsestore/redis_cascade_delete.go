@@ -74,12 +74,37 @@ func (s *RedisStore) readCascadeCandidates(ctx context.Context, conversationID s
 }
 
 // deleteConversationResponseBatch resolves one bounded, generation-snapshotted
-// batch. Legacy candidates fail closed. Every prune is conditional on the
-// sidecar still carrying the observed generation, and every payload delete is
-// conditional on cjson-decoded payload generation equality.
-func (s *RedisStore) deleteConversationResponseBatch(ctx context.Context, conversationID string, candidates []cascadeCandidate) error {
+// batch and reports how much the cascade actually advanced, so the caller can
+// tell real progress from a conversation being rewritten faster than it drains.
+//
+// allowBlankCleanup is the finalization gate, and it guards exactly one thing:
+// removing a membership whose witness is blank *and* whose payload this batch
+// found absent. Before finalization an index-unaware writer can recreate that
+// payload without touching the sidecar, so the blank-expected removal still
+// matches and the member goes — and unlike the read path, cascade destroys its
+// own recovery on the way out. It deletes the migrated marker and the
+// conversation record once the index drains, so no later scan will ever
+// rediscover the recreated payload. The atomic ZCARD==0 check in
+// deleteEmptyConversationIndexScript, and the whole race-round loop, exist to
+// stop precisely that orphaning; an ungated blank ZREM would walk straight
+// through both while reporting success. After finalization every writer is
+// generation-aware, installs a witness before it can matter, and the blank
+// removal is safe again.
+//
+// Legacy payloads that still exist need no gate, because they are not removed
+// on the strength of their blankness — they are upgraded
+// (promoteLegacyResponsePayload), their witness is installed, and the next
+// round deletes them under the ordinary generation CAS. Promotion never
+// authorizes a delete in the same step: byte equality is what matched it, and
+// byte equality must not reach a DEL even transitively.
+func (s *RedisStore) deleteConversationResponseBatch(
+	ctx context.Context,
+	conversationID string,
+	candidates []cascadeCandidate,
+	allowBlankCleanup bool,
+) (int, error) {
 	if len(candidates) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	responseIDs := make([]string, len(candidates))
@@ -88,60 +113,147 @@ func (s *RedisStore) deleteConversationResponseBatch(ctx context.Context, conver
 	}
 	results := fetchResponsePayloadsPipelined(ctx, s.client, responseKeys(s, responseIDs))
 
+	resolved := 0
 	var errs []error
 	for i, result := range results {
 		candidate := candidates[i]
-		if candidate.generation == "" {
-			errs = append(errs, fmt.Errorf("response %s has no generation witness; refusing cascade delete", candidate.responseID))
-			continue
-		}
 
-		witness := responseGenerationWitness{responseID: candidate.responseID, generation: candidate.generation}
 		switch {
 		case errors.Is(result.err, redis.Nil):
-			if err := s.unindexResponseGenerations(ctx, conversationID, witness); err != nil {
+			removed, err := s.dropCascadeMembership(ctx, conversationID, candidate, allowBlankCleanup)
+			if err != nil {
 				errs = append(errs, err)
+				continue
 			}
+			resolved += removed
 		case result.err != nil:
 			errs = append(errs, fmt.Errorf("failed to read response %s for cascade delete: %w", candidate.responseID, result.err))
 		default:
-			if err := s.resolveCascadeDeleteOutcome(ctx, conversationID, candidate, result, witness); err != nil {
+			progressed, err := s.resolveCascadeDeleteOutcome(ctx, conversationID, candidate, result, allowBlankCleanup)
+			if err != nil {
 				errs = append(errs, err)
 			}
+			resolved += progressed
 		}
 	}
-	return errors.Join(errs...)
+	return resolved, errors.Join(errs...)
 }
 
+// dropCascadeMembership removes a membership this batch has proven stale,
+// conditional on the sidecar still holding exactly the witness it observed.
+// A blank witness is refused before finalization: see
+// deleteConversationResponseBatch for why cascade cannot absorb that race the
+// way a listing can.
+func (s *RedisStore) dropCascadeMembership(
+	ctx context.Context,
+	conversationID string,
+	candidate cascadeCandidate,
+	allowBlankCleanup bool,
+) (int, error) {
+	if candidate.generation == "" && !allowBlankCleanup {
+		return 0, fmt.Errorf(
+			"response %s has no generation witness and the store is not finalized; refusing cascade delete",
+			candidate.responseID)
+	}
+
+	return s.unindexResponseGenerations(ctx, conversationID,
+		responseGenerationWitness{responseID: candidate.responseID, generation: candidate.generation})
+}
+
+// resolveCascadeDeleteOutcome decides and executes one candidate's outcome
+// once its payload has been read, reporting how much the cascade actually
+// advanced: memberships genuinely removed, witnesses genuinely installed, or a
+// legacy payload genuinely upgraded.
+//
+// Deliberately not "did I issue the right command". Every mutation here is
+// conditional, so a writer that keeps changing a payload turns each one into a
+// legal no-op — and a drain loop that counted those as progress would never
+// terminate against a conversation being rewritten faster than it drains.
+//
+// A live payload that still belongs to this conversation is never unindexed,
+// whatever its witness says. If the two disagree, the witness is repaired from
+// the payload and the next round deletes it; removing the membership instead
+// would leave a live response indexed nowhere, which past finalization nothing
+// rediscovers.
 func (s *RedisStore) resolveCascadeDeleteOutcome(
 	ctx context.Context,
 	conversationID string,
 	candidate cascadeCandidate,
 	result responsePayloadResult,
-	witness responseGenerationWitness,
-) error {
+	allowBlankCleanup bool,
+) (int, error) {
 	record, err := decodeResponseRecord(result.raw)
 	if err != nil {
-		return fmt.Errorf("failed to parse response %s during cascade delete: %w", candidate.responseID, err)
+		return 0, fmt.Errorf("failed to parse response %s during cascade delete: %w", candidate.responseID, err)
 	}
 	if record.response.ID != candidate.responseID {
-		return fmt.Errorf("response %s payload identity mismatch during cascade delete", candidate.responseID)
+		return 0, fmt.Errorf("response %s payload identity mismatch during cascade delete", candidate.responseID)
 	}
+
+	if record.response.ConversationID != conversationID {
+		// Moved on since being indexed here. The payload belongs to another
+		// conversation now, so only this conversation's stale membership goes
+		// — under the same blank-witness gate, since an index-unaware writer
+		// could just as well have moved it back after this read.
+		return s.dropCascadeMembership(ctx, conversationID, candidate, allowBlankCleanup)
+	}
+
 	if record.generation == "" {
-		return fmt.Errorf("response %s has no payload generation; refusing cascade delete", candidate.responseID)
+		// A legacy payload this conversation still owns. Upgrade it, install
+		// the witness the upgrade minted, and stop there: the delete happens
+		// on a later round, authorized by a direct observation of a
+		// generational payload rather than by the byte equality that matched
+		// the upgrade.
+		return s.upgradeCascadeCandidate(ctx, conversationID, candidate, result, record)
 	}
 
-	if record.generation != candidate.generation || record.response.ConversationID != conversationID {
-		return s.unindexResponseGenerations(ctx, conversationID, witness)
+	if record.generation != candidate.generation {
+		// The snapshot's witness has fallen behind the payload — an index
+		// write still in flight, or an upgrade whose witness install lost its
+		// race. Repair it from the payload rather than remove a live member.
+		return s.repairResponseWitness(ctx, conversationID, record.response.ID, record.generation,
+			candidate.generation, record.response.CreatedAt, s.ttlMillis())
 	}
 
-	deleted, err := s.compareDeleteResponsePayload(ctx, result.key, candidate.generation)
+	deleted, err := s.compareDeleteResponsePayload(ctx, result.key, record.generation)
 	if err != nil {
-		return fmt.Errorf("failed to delete response %s during cascade delete: %w", candidate.responseID, err)
+		return 0, fmt.Errorf("failed to delete response %s during cascade delete: %w", candidate.responseID, err)
 	}
 	if !deleted {
-		return fmt.Errorf("response %s changed concurrently during cascade delete; left in place for retry", candidate.responseID)
+		return 0, fmt.Errorf("response %s changed concurrently during cascade delete; left in place for retry", candidate.responseID)
 	}
 
-	return s.unindexResponseGenerations(ctx, conversationID, witness)
+	return s.unindexResponseGenerations(ctx, conversationID,
+		responseGenerationWitness{responseID: candidate.responseID, generation: candidate.generation})
+}
+
+// upgradeCascadeCandidate turns a legacy payload into an ordinary
+// generation-bearing one and records the witness, leaving the deletion to a
+// later round. Both steps are monotone: a payload is upgraded at most once,
+// and the witness install is compare-and-set against what the batch observed.
+func (s *RedisStore) upgradeCascadeCandidate(
+	ctx context.Context,
+	conversationID string,
+	candidate cascadeCandidate,
+	result responsePayloadResult,
+	record responseRecord,
+) (int, error) {
+	generation, ttlMillis, upgraded, err := promoteLegacyResponsePayload(ctx, s.client, result.key, record)
+	if err != nil {
+		return 0, fmt.Errorf("failed to upgrade legacy response %s during cascade delete: %w", candidate.responseID, err)
+	}
+	if !upgraded {
+		return 0, fmt.Errorf("response %s changed while being upgraded during cascade delete; left in place for retry",
+			candidate.responseID)
+	}
+
+	if _, err := s.repairResponseWitness(ctx, conversationID, record.response.ID, generation,
+		candidate.generation, record.response.CreatedAt, ttlMillis); err != nil {
+		return 0, err
+	}
+
+	// The upgrade itself is the progress, whether or not the witness install
+	// won its race: the payload can never be legacy again, so the next round
+	// resolves this candidate through the ordinary generational path.
+	return 1, nil
 }

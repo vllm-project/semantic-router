@@ -60,24 +60,57 @@ const (
 //
 // A legacy member has no generation. It may be added only with ZADD NX and
 // never receives a witness: generation-less records cannot authorize a later
-// prune or CAS delete. New writes update the ZSET member and HASH witness in
-// one atomic step. The two keys are extended to the same monotonic lifetime,
-// so the witness cannot expire before the membership it protects.
+// prune or CAS delete. The two keys are extended to the same monotonic
+// lifetime, so the witness cannot expire before the membership it protects.
+//
+// ARGV[2] selects who is allowed to overwrite an existing witness, and the
+// distinction is a correctness boundary, not a convenience:
+//
+//   - "owned": the caller wrote this exact payload generation moments ago
+//     (StoreResponse, UpdateResponse, a rollback restore), so it is by
+//     definition the newest and overwrites unconditionally.
+//   - "repair": the caller only *read* the generation, so its observation may
+//     already be stale. The witness is installed compare-and-set, only while
+//     it still equals the value ARGV[i+3] says the caller observed. A scan
+//     passes the empty string here, which is the maintainer's "install only
+//     while absent" rule; cascade passes the witness its own snapshot read.
+//
+// Without that split, a delayed scan could stamp the generation it read weeks
+// of keyspace ago over a witness a live update had just installed — after
+// which a conditional prune, quite correctly, removes a membership whose
+// payload is alive, and the response is left indexed nowhere.
+//
+// Returns how many witnesses were actually written, so a repair caller can
+// tell a real install from a compare-and-set that legitimately lost.
 var conversationIndexAddScript = redis.NewScript(`
 local zset_ttl = redis.call("PTTL", KEYS[1])
 local generation_ttl = redis.call("PTTL", KEYS[2])
+local owned = ARGV[2] == "owned"
+local installed = 0
 
-for i = 2, #ARGV, 3 do
+for i = 3, #ARGV, 4 do
 	local score = ARGV[i]
 	local response_id = ARGV[i + 1]
 	local generation = ARGV[i + 2]
+	local expected = ARGV[i + 3]
 	if generation == "" then
 		if redis.call("HEXISTS", KEYS[2], response_id) == 0 then
 			redis.call("ZADD", KEYS[1], "NX", score, response_id)
 		end
-	else
+	elseif owned then
 		redis.call("ZADD", KEYS[1], score, response_id)
 		redis.call("HSET", KEYS[2], response_id, generation)
+		installed = installed + 1
+	else
+		local current = redis.call("HGET", KEYS[2], response_id)
+		if current == false then
+			current = ""
+		end
+		if current == expected then
+			redis.call("ZADD", KEYS[1], score, response_id)
+			redis.call("HSET", KEYS[2], response_id, generation)
+			installed = installed + 1
+		end
 	end
 end
 
@@ -92,34 +125,58 @@ if generation_exists then
 	if want <= 0 or zset_ttl == -1 or generation_ttl == -1 then
 		redis.call("PERSIST", KEYS[1])
 		redis.call("PERSIST", KEYS[2])
-		return 1
+		return installed
 	end
 	local shared_ttl = want
 	if zset_ttl > shared_ttl then shared_ttl = zset_ttl end
 	if generation_ttl > shared_ttl then shared_ttl = generation_ttl end
 	redis.call("PEXPIRE", KEYS[1], shared_ttl)
 	redis.call("PEXPIRE", KEYS[2], shared_ttl)
-	return 1
+	return installed
 end
 
 if want <= 0 or zset_ttl == -1 then
 	redis.call("PERSIST", KEYS[1])
-	return 1
+	return installed
 end
 if zset_ttl < want then redis.call("PEXPIRE", KEYS[1], want) end
-return 1
+return installed
 `)
 
 // conditionalUnindexScript removes response IDs only while their sidecar
 // witness still equals the generation observed by the caller. ZREM and HDEL
-// are one same-slot atomic operation. Blank generations never authorize a
-// removal, so legacy members fail closed.
+// are one same-slot atomic operation.
+//
+// A blank expected generation is a legitimate observation, not a missing
+// one: it is exactly what a member backfilled from a legacy payload carries
+// (see conversationIndexAddScript), and what a DeleteResponse or
+// UpdateResponse that displaced a legacy payload owns. Refusing to compare
+// it made those members immortal — a payload that expires or is deleted
+// leaves a tombstone no path can ever remove, which past finalization
+// repeatedly underfills every page that reads it.
+//
+// Comparing it is still generation-safe, and for the same reason a non-blank
+// comparison is: the removal fires only while the sidecar field is *still*
+// absent. Any generation-aware writer that recreates the response, or moves
+// it back, installs its own witness through conversationIndexAddScript
+// first, so a stale blank-expected cleanup finds a mismatch and no-ops. The
+// only writer that can defeat it is an index-unaware one, which exists only
+// before finalization — and there conversationIndexProofMaxTTL forces the
+// re-scan that rediscovers the member.
+//
+// Redis Lua answers a missing hash field with false rather than the empty
+// string, so absence is normalized before the comparison; without that,
+// blank could never match anything.
 var conditionalUnindexScript = redis.NewScript(`
 local removed = 0
 for i = 1, #ARGV, 2 do
 	local response_id = ARGV[i]
 	local expected = ARGV[i + 1]
-	if expected ~= "" and redis.call("HGET", KEYS[2], response_id) == expected then
+	local current = redis.call("HGET", KEYS[2], response_id)
+	if current == false then
+		current = ""
+	end
+	if current == expected then
 		removed = removed + redis.call("ZREM", KEYS[1], response_id)
 		redis.call("HDEL", KEYS[2], response_id)
 	end
@@ -127,10 +184,27 @@ end
 return removed
 `)
 
+// indexWitnessMode says whether a caller is entitled to overwrite an existing
+// generation witness. See conversationIndexAddScript.
+type indexWitnessMode string
+
+const (
+	// witnessOwned is for a caller that just wrote the payload carrying this
+	// generation, and therefore holds the newest one by construction.
+	witnessOwned indexWitnessMode = "owned"
+	// witnessRepair is for a caller that only read the generation. Its write
+	// is compare-and-set against conversationIndexMember.expected.
+	witnessRepair indexWitnessMode = "repair"
+)
+
 type conversationIndexMember struct {
 	responseID string
 	generation string
-	score      float64
+	// expected is the witness value the caller observed, and is honored only
+	// in witnessRepair mode. The empty string means "observed absent", which
+	// is what every scan passes.
+	expected string
+	score    float64
 }
 
 type responseGenerationWitness struct {
@@ -140,11 +214,11 @@ type responseGenerationWitness struct {
 
 // conversationIndexAddArgs builds conversationIndexAddScript's ARGV: the
 // requested lifetime, then each member's score and value.
-func conversationIndexAddArgs(lifetimeMillis int64, members []conversationIndexMember) []interface{} {
-	args := make([]interface{}, 0, 1+3*len(members))
-	args = append(args, lifetimeMillis)
+func conversationIndexAddArgs(lifetimeMillis int64, mode indexWitnessMode, members []conversationIndexMember) []interface{} {
+	args := make([]interface{}, 0, 2+4*len(members))
+	args = append(args, lifetimeMillis, string(mode))
 	for _, member := range members {
-		args = append(args, member.score, member.responseID, member.generation)
+		args = append(args, member.score, member.responseID, member.generation, member.expected)
 	}
 	return args
 }
@@ -152,9 +226,17 @@ func conversationIndexAddArgs(lifetimeMillis int64, members []conversationIndexM
 // addConversationIndexMembers runs conversationIndexAddScript as a standalone
 // command. EVALSHA with go-redis's NOSCRIPT fallback, which is only available
 // outside a pipeline.
-func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversationID string, lifetimeMillis int64, members []conversationIndexMember) error {
+func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversationID string, mode indexWitnessMode, lifetimeMillis int64, members []conversationIndexMember) (int, error) {
 	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	return conversationIndexAddScript.Run(ctx, s.client, keys, conversationIndexAddArgs(lifetimeMillis, members)...).Err()
+	res, err := conversationIndexAddScript.Run(ctx, s.client, keys, conversationIndexAddArgs(lifetimeMillis, mode, members)...).Result()
+	if err != nil {
+		return 0, err
+	}
+	installed, ok := res.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected conversation index add result type %T for %s", res, conversationID)
+	}
+	return int(installed), nil
 }
 
 // queueConversationIndexMembers queues the same script onto an existing
@@ -165,9 +247,9 @@ func (s *RedisStore) addConversationIndexMembers(ctx context.Context, conversati
 // until Exec, so a NOSCRIPT against a Redis that has never seen this script
 // would fail the whole batch. Redis caches by SHA on EVAL too, so the only
 // cost is shipping the script body once per conversation in the batch.
-func (s *RedisStore) queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, conversationID string, lifetimeMillis int64, members []conversationIndexMember) {
+func (s *RedisStore) queueConversationIndexMembers(ctx context.Context, pipe redis.Pipeliner, conversationID string, mode indexWitnessMode, lifetimeMillis int64, members []conversationIndexMember) {
 	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	conversationIndexAddScript.Eval(ctx, pipe, keys, conversationIndexAddArgs(lifetimeMillis, members)...)
+	conversationIndexAddScript.Eval(ctx, pipe, keys, conversationIndexAddArgs(lifetimeMillis, mode, members)...)
 }
 
 // longerIndexLifetime folds one member payload's remaining lifetime into the
@@ -251,19 +333,57 @@ func (s *RedisStore) indexResponse(ctx context.Context, conversationID, response
 	lifetime := longerIndexLifetime(s.ttlMillis(), memberLifetimeMillis)
 	members := []conversationIndexMember{{responseID: responseID, generation: generation, score: float64(createdAt)}}
 
-	if err := s.addConversationIndexMembers(ctx, conversationID, lifetime, members); err != nil {
+	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessOwned, lifetime, members); err != nil {
 		return fmt.Errorf("failed to index response %s in conversation %s: %w", responseID, conversationID, err)
 	}
 
 	return nil
 }
 
+// repairResponseWitness installs a witness a caller only *read*, and reports
+// whether it actually landed.
+//
+// Compare-and-set against the witness the caller observed, never a blind
+// overwrite, because a reader's observation can already be stale by the time
+// it writes: a live update that installed its own witness in between owns the
+// membership, and stamping a read-somewhere-earlier generation over it would
+// leave the next conditional prune correctly removing a membership whose
+// payload is alive. Callers that just wrote the payload use indexResponse
+// instead — they hold the newest generation by construction.
+//
+// expected == "" means "I observed no witness", which is both what a scan
+// asserts and what a cascade batch reads for a legacy member. A blank
+// generation still routes through the script's legacy branch (ZADD NX, no
+// witness), so a caller repairing a pre-upgrade payload's membership keeps
+// working; it simply installs nothing and reports zero.
+func (s *RedisStore) repairResponseWitness(ctx context.Context, conversationID, responseID, generation, expected string, createdAt, memberLifetimeMillis int64) (int, error) {
+	if conversationID == "" || responseID == "" {
+		return 0, nil
+	}
+	lifetime := longerIndexLifetime(s.ttlMillis(), memberLifetimeMillis)
+	members := []conversationIndexMember{{
+		responseID: responseID, generation: generation, expected: expected, score: float64(createdAt),
+	}}
+
+	installed, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, lifetime, members)
+	if err != nil {
+		return 0, fmt.Errorf("failed to repair witness for response %s in conversation %s: %w", responseID, conversationID, err)
+	}
+	return installed, nil
+}
+
 // unindexResponseGenerations removes only generation witnesses the caller
-// actually observed. The ZSET and sidecar HASH are co-located and changed by
-// one script, preventing a stale reader from deleting a recreated member.
-func (s *RedisStore) unindexResponseGenerations(ctx context.Context, conversationID string, witnesses ...responseGenerationWitness) error {
+// actually observed, and reports how many memberships that actually removed.
+// The ZSET and sidecar HASH are co-located and changed by one script,
+// preventing a stale reader from deleting a recreated member.
+//
+// The count matters to cascade delete, which must not mistake "I issued the
+// right conditional command" for "the member is gone": a writer that keeps
+// refreshing a witness makes every conditional removal a legal no-op, and a
+// drain loop counting attempts rather than removals would spin on it forever.
+func (s *RedisStore) unindexResponseGenerations(ctx context.Context, conversationID string, witnesses ...responseGenerationWitness) (int, error) {
 	if conversationID == "" || len(witnesses) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	args := make([]interface{}, 0, 2*len(witnesses))
@@ -272,11 +392,51 @@ func (s *RedisStore) unindexResponseGenerations(ctx context.Context, conversatio
 	}
 
 	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	if err := conditionalUnindexScript.Run(ctx, s.client, keys, args...).Err(); err != nil {
-		return fmt.Errorf("failed to remove %d response(s) from conversation %s index: %w", len(witnesses), conversationID, err)
+	res, err := conditionalUnindexScript.Run(ctx, s.client, keys, args...).Result()
+	if err != nil {
+		return 0, fmt.Errorf("failed to remove %d response(s) from conversation %s index: %w", len(witnesses), conversationID, err)
+	}
+	removed, ok := res.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected conditional unindex result type %T for conversation %s", res, conversationID)
 	}
 
-	return nil
+	return int(removed), nil
+}
+
+// dropObservedMembership removes a membership a caller has just proven stale
+// by displacing or deleting the payload that owned it, honoring the same
+// finalization gate as every other blank-witness cleanup.
+//
+// A generational witness is dropped unconditionally: the caller observed that
+// exact generation and only that generation can be removed. A blank one is
+// dropped only once the store is finalized, because until then an
+// index-unaware writer can put a payload back under the same ID without
+// touching the sidecar — reachable in particular after DeleteResponse, which
+// leaves the key free for a SETNX to win. Before finalization the membership
+// is left in place; it is a tombstone the finalization sweep resolves, which
+// is the trade the migration window is explicitly willing to make.
+//
+// Best-effort, like both of its callers: a skipped or failed cleanup costs a
+// stale member, never a lost payload.
+func (s *RedisStore) dropObservedMembership(ctx context.Context, conversationID string, witness responseGenerationWitness) error {
+	if conversationID == "" {
+		return nil
+	}
+	if witness.generation == "" {
+		finalized, err := s.conversationIndexFinalized(ctx)
+		if err != nil {
+			return err
+		}
+		if !finalized {
+			logging.Debugf("RedisStore: leaving response %s indexed in conversation %s: its payload carried no generation and the store is not finalized",
+				witness.responseID, conversationID)
+			return nil
+		}
+	}
+
+	_, err := s.unindexResponseGenerations(ctx, conversationID, witness)
+	return err
 }
 
 // conversationIndexProof reads a conversation's migrated marker with GET,
@@ -481,7 +641,7 @@ func (s *RedisStore) finishEmptyBackfill(ctx context.Context, conversationID str
 // bring it back down to s.ttl. Both steps are best-effort; see
 // markConversationMigrated.
 func (s *RedisStore) finishPopulatedBackfill(ctx context.Context, conversationID string) {
-	if err := s.addConversationIndexMembers(ctx, conversationID, s.ttlMillis(), nil); err != nil {
+	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, s.ttlMillis(), nil); err != nil {
 		logging.Warnf("RedisStore: failed to refresh TTL on backfilled conversation index %s: %v",
 			conversationID, err)
 	}
@@ -503,7 +663,9 @@ func (s *RedisStore) indexBackfillBatch(ctx context.Context, conversationID stri
 	if len(members) == 0 {
 		return nil
 	}
-	if err := s.addConversationIndexMembers(ctx, conversationID, lifetimeMillis, members); err != nil {
+	// witnessRepair: a scan only ever *read* these generations, and a live
+	// writer that has since claimed a member owns its witness.
+	if _, err := s.addConversationIndexMembers(ctx, conversationID, witnessRepair, lifetimeMillis, members); err != nil {
 		return fmt.Errorf("failed to backfill conversation index: %w", err)
 	}
 	return nil
@@ -655,16 +817,62 @@ func (s *RedisStore) getResponsesPipelined(ctx context.Context, client redis.Uni
 		if err != nil {
 			return nil, err
 		}
-		if record != nil {
-			responses = append(responses, scannedResponse{
-				response:   record.response,
-				generation: record.generation,
-				ttlMillis:  result.ttlMillis,
-			})
+		if record == nil {
+			continue
 		}
+		generation, ttlMillis := s.promoteScannedLegacyPayload(ctx, client, keys[i], *record, result.ttlMillis)
+		responses = append(responses, scannedResponse{
+			response:   record.response,
+			generation: generation,
+			ttlMillis:  ttlMillis,
+		})
 	}
 
 	return responses, nil
+}
+
+// promoteScannedLegacyPayload upgrades one scanned generation-less payload so
+// the member about to be indexed from it carries a real witness, and reports
+// the generation the caller should index it under.
+//
+// This is where the legacy population is actually drained. Both scans reach
+// it — the per-conversation lazy backfill and the whole-keyspace finalization
+// sweep — so a completed FinalizeConversationIndex leaves behind an index
+// whose members are, barring the failures below, all generation-bearing, and
+// therefore all cascade-deletable and all prunable. That is what makes
+// "finalized" mean something stronger than "indexed".
+//
+// Best-effort by design. A promotion that fails or loses its race must not
+// abort the sweep: one stubborn payload would otherwise block finalization
+// for the whole store forever. The member is then indexed blank exactly as
+// before, the next scan retries the promotion, and cascade delete upgrades it
+// on demand — so nothing depends on this succeeding, it only makes the common
+// case cheap.
+//
+// Returns the lifetime to index the member under as well as its generation. A
+// successful upgrade reports the PTTL Redis held at the instant of the write,
+// not the one this scan's pipeline captured earlier: a byte-identical
+// recreation with a longer TTL would otherwise be indexed under the stale,
+// shorter bound and the index would retire ahead of the payload it names.
+func (s *RedisStore) promoteScannedLegacyPayload(
+	ctx context.Context,
+	client redis.UniversalClient,
+	key string,
+	record responseRecord,
+	scannedTTLMillis int64,
+) (string, int64) {
+	if record.generation != "" {
+		return record.generation, scannedTTLMillis
+	}
+
+	generation, ttlMillis, promoted, err := promoteLegacyResponsePayload(ctx, client, key, record)
+	switch {
+	case err != nil:
+		logging.Warnf("RedisStore: failed to upgrade legacy response payload %s during scan: %v", key, err)
+	case promoted:
+		return generation, ttlMillis
+	}
+	return "", scannedTTLMillis
 }
 
 func (s *RedisStore) decodeScannedResponse(key string, result responsePayloadResult) (*responseRecord, error) {

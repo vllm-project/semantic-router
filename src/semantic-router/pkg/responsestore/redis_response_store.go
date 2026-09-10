@@ -214,7 +214,9 @@ func (s *RedisStore) repairExistingResponseIndex(ctx context.Context, attempted 
 		return nil
 	}
 
-	if err := s.indexResponse(ctx, stored.response.ConversationID, stored.response.ID, stored.generation, stored.response.CreatedAt, lifetimeMillis); err != nil {
+	// witnessRepair: the stored payload was read, not written, by this call.
+	if _, err := s.repairResponseWitness(ctx, stored.response.ConversationID, stored.response.ID, stored.generation, "",
+		stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("response already exists but failed to repair conversation index: %w", err)
 	}
 
@@ -295,7 +297,7 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	// installed a newer generation cannot be erased by this stale cleanup.
 	if snapshot.conversationID != "" && snapshot.conversationID != response.ConversationID {
 		witness := responseGenerationWitness{responseID: response.ID, generation: snapshot.generation}
-		if err := s.unindexResponseGenerations(ctx, snapshot.conversationID, witness); err != nil {
+		if err := s.dropObservedMembership(ctx, snapshot.conversationID, witness); err != nil {
 			logging.Warnf("RedisStore: failed to remove response %s from previous conversation %s index: %v",
 				response.ID, snapshot.conversationID, err)
 		}
@@ -476,10 +478,11 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 	}
 
 	// Best-effort: the payload delete above is the user-visible operation, and
-	// only the deleted generation may authorize removal. Legacy payloads carry
-	// no witness and therefore deliberately leave their member untouched.
+	// only the deleted generation may authorize removal. A legacy payload's
+	// blank witness authorizes it only once the store is finalized — see
+	// dropObservedMembership.
 	witness := responseGenerationWitness{responseID: responseID, generation: record.generation}
-	if err := s.unindexResponseGenerations(ctx, record.response.ConversationID, witness); err != nil {
+	if err := s.dropObservedMembership(ctx, record.response.ConversationID, witness); err != nil {
 		logging.Warnf("RedisStore: failed to remove response %s from conversation %s index: %v",
 			responseID, record.response.ConversationID, err)
 	}

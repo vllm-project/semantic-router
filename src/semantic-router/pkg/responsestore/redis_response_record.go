@@ -1,6 +1,7 @@
 package responsestore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -133,3 +134,122 @@ end
 redis.call("DEL", KEYS[1])
 return current
 `)
+
+// spliceResponseGeneration adds the generation to a payload's raw JSON object
+// without round-tripping it through StoredResponse.
+//
+// Remarshaling would silently drop every field this build does not know about
+// — one written by a newer binary, or one retired from the struct but still
+// present in stored data. Promotion's entire justification is that it changes
+// nothing but the generation, so it must preserve the object it found.
+// json.RawMessage keeps each value's bytes verbatim; only key ordering and
+// inter-token whitespace change, and nothing depends on either — the promotion
+// CAS compares the *previous* bytes, which are untouched.
+func spliceResponseGeneration(raw []byte, generation string) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, fmt.Errorf("failed to decode response payload for upgrade: %w", err)
+	}
+	if fields == nil {
+		return nil, ErrInvalidInput
+	}
+	if _, present := fields[responseGenerationField]; present {
+		return nil, fmt.Errorf("response payload already carries a generation")
+	}
+
+	encoded, err := json.Marshal(generation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode response generation: %w", err)
+	}
+	fields[responseGenerationField] = encoded
+
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return nil, fmt.Errorf("failed to re-encode upgraded response payload: %w", err)
+	}
+	return data, nil
+}
+
+// promoteLegacyPayloadScript upgrades a generation-less payload in place,
+// conditional on the exact bytes the caller read, and returns the lifetime the
+// key actually holds at that instant.
+//
+// Byte equality is the only witness a legacy payload has, and it is sound here
+// in a way byte-equality *deletion* is not: if the value this replaces was
+// concurrently deleted and recreated byte-identically by an index-unaware
+// writer, the promotion still writes content identical to what that writer
+// stored, under the TTL Redis holds right now. Nothing is destroyed. What must
+// never happen is byte equality authorizing destruction *transitively* — so no
+// caller may promote and then delete the minted generation in the same step.
+// The generation this yields authorizes an index write and nothing else; a
+// later, direct observation of a generational payload is what authorizes its
+// deletion. See resolveCascadeDeleteOutcome.
+//
+// Returning the PTTL matters as much as preserving it. A caller that scanned
+// the payload earlier holds a lifetime that may predate a byte-identical
+// recreation with a longer TTL, and indexing under that stale bound would
+// retire the conversation index ahead of the payload it names — exactly what
+// conversationIndexAddScript's extend-only expiry exists to prevent. The
+// lifetime is therefore read in the same atomic step as the write.
+//
+// Single-key: KEYS[1] only, so it stays legal in Redis Cluster.
+var promoteLegacyPayloadScript = redis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if not current or current ~= ARGV[1] then
+	return {0, 0}
+end
+local pttl = redis.call("PTTL", KEYS[1])
+if pttl == -1 then
+	redis.call("SET", KEYS[1], ARGV[2])
+	return {1, -1}
+end
+if pttl <= 0 then
+	return {0, 0}
+end
+redis.call("SET", KEYS[1], ARGV[2], "PX", pttl)
+return {1, pttl}
+`)
+
+// promoteLegacyResponsePayload stamps a fresh generation onto a payload that
+// has none, returning that generation and the payload's remaining lifetime as
+// observed in the same atomic step.
+//
+// ok=false is not an error: it means the payload changed under the caller
+// (deleted, expired, or already promoted by someone else), and the caller
+// re-reads on its next round. A lost promotion is never a licence to fall back
+// to a weaker deletion or pruning rule.
+//
+// Takes an explicit client because the scan paths run per Cluster master.
+func promoteLegacyResponsePayload(ctx context.Context, client redis.UniversalClient, key string, record responseRecord) (string, int64, bool, error) {
+	if record.generation != "" {
+		return record.generation, unknownPayloadTTL, true, nil
+	}
+	if record.response == nil || len(record.raw) == 0 {
+		return "", 0, false, ErrInvalidInput
+	}
+
+	generation := newResponseGeneration()
+	data, err := spliceResponseGeneration(record.raw, generation)
+	if err != nil {
+		return "", 0, false, err
+	}
+
+	res, err := promoteLegacyPayloadScript.Run(ctx, client, []string{key}, record.raw, data).Result()
+	if err != nil {
+		return "", 0, false, fmt.Errorf("failed to upgrade legacy response payload %s: %w", key, err)
+	}
+	items, ok := res.([]interface{})
+	if !ok || len(items) != 2 {
+		return "", 0, false, fmt.Errorf("unexpected legacy upgrade result shape %#v for %s", res, key)
+	}
+	promoted, promotedOK := items[0].(int64)
+	ttlMillis, ttlOK := items[1].(int64)
+	if !promotedOK || !ttlOK {
+		return "", 0, false, fmt.Errorf("unexpected legacy upgrade result types %T/%T for %s", items[0], items[1], key)
+	}
+	if promoted == 0 {
+		return "", 0, false, nil
+	}
+
+	return generation, ttlMillis, true, nil
+}

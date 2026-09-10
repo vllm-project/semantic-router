@@ -160,7 +160,11 @@ func TestListPruneDoesNotRemoveRecreatedGeneration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, injectedErr)
 	assert.True(t, hook.fired.Load(), "the recreation must land in the GET-to-prune window")
-	assert.Empty(t, first, "the in-flight page is allowed to reflect its older payload snapshot")
+	// The first window's payload snapshot predates the recreation, so that
+	// pass alone yields nothing; the bounded refill re-resolves the window and
+	// returns what the membership now actually names.
+	require.Len(t, first, 1, "the refill pass must pick up the recreation the first snapshot missed")
+	assert.Equal(t, "recreated", first[0].Status)
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, conversationID))
 
 	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
@@ -223,7 +227,10 @@ func TestListPruneDoesNotRemoveMovedBackGeneration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, injectedErr)
 	assert.True(t, hook.fired.Load(), "the move-back must land in the GET-to-prune window")
-	assert.Empty(t, first, "the in-flight page may reflect the older B/G2 payload snapshot")
+	// As above: the first pass saw the payload still in B, the refill sees it
+	// back in A under G3.
+	require.Len(t, first, 1, "the refill pass must pick up the move back into A")
+	assert.Equal(t, "back-in-a", first[0].Status)
 	assert.Equal(t, []string{responseID}, conversationIndexMembers(t, store, conversationA))
 
 	raw, err := store.client.Get(ctx, store.buildKey(ResponseKeyPrefix+responseID)).Bytes()
