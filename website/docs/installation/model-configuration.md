@@ -96,13 +96,20 @@ routing:
 ```
 
 The protocol capability vocabulary is defined by the `llmprotocol` package,
-and only task/modality capabilities participate in declaration steering:
-`image_input`, `image_output`, `image_generation`, `audio_input`,
-`audio_output`, `video_input`, `video_output`, `file_input`, `file_output`.
-A declared name outside this set (including transport or accounting fidelity
-like `tools`, `reasoning`, `streaming`, `structured_json`) is treated as
-unannotated for declaration filtering — those are verified against wire codec
-expressibility, not the model declaration.
+and a declaration falls into one of three states for capability-aware
+dispatch:
+
+1. **No declaration** — the model is unannotated and stays eligible on wire
+   expressibility alone.
+2. **Task/modality declaration only** — names like `image_input`,
+   `image_output`, `image_generation`, `audio_input`, `audio_output`,
+   `video_input`, `video_output`, `file_input`, `file_output`; these steer the
+   declared-capability filter during rerouting.
+3. **Transport/accounting declaration only** — names like `tools`,
+   `reasoning`, `streaming`, `structured_json` parse successfully but carry no
+   task bit, so they are treated as unannotated for task filtering and the
+   model stays eligible on wire expressibility; those capabilities are
+   verified against wire codec expressibility, not the model declaration.
 
 ## Validate the result
 

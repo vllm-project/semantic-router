@@ -7,11 +7,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// TestQualifiedRerouteCandidateTransportOnlyDeclaration is the regression for
-// Xunzhuo's review (#3183): a model declaring only transport/accounting
-// capabilities (tools, streaming, ...) must stay eligible on wire
-// expressibility, exactly like an unannotated model, instead of being rejected
-// for a task bit it never claimed.
+// TestQualifiedRerouteCandidateTransportOnlyDeclaration is a regression test:
+// a model declaring only transport/accounting capabilities (tools, streaming,
+// ...) carries no task bit and must stay eligible on wire expressibility
+// for a task request, exactly like an unannotated model, instead of being
+// rejected for a task it never claimed.
 func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
