@@ -3,6 +3,7 @@ package responsestore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -278,4 +279,37 @@ func responseIDsOf(responses []*responseapi.StoredResponse) []string {
 		ids[i] = r.ID
 	}
 	return ids
+}
+
+// seedLegacyIndexMember installs a membership with no generation witness —
+// exactly what a backfill leaves behind when a legacy payload could not be
+// upgraded, and what every backfill produced before promotion existed. Goes
+// through the production add script rather than a raw ZADD, so the fixture
+// cannot drift from what the store really writes.
+func seedLegacyIndexMember(t *testing.T, store *RedisStore, conversationID, responseID string, createdAt int64) {
+	t.Helper()
+
+	_, err := store.addConversationIndexMembers(
+		context.Background(), conversationID, witnessRepair, store.ttlMillis(),
+		[]conversationIndexMember{{responseID: responseID, generation: "", score: float64(createdAt)}},
+	)
+	require.NoError(t, err)
+	require.Empty(t, optionalIndexedGeneration(t, store, conversationID, responseID),
+		"precondition: the seeded member must carry no witness")
+}
+
+// optionalIndexedGeneration reads a member's sidecar witness, reporting an
+// absent field as the empty string rather than failing — the distinction
+// blank-witness cleanup turns on.
+func optionalIndexedGeneration(t *testing.T, store *RedisStore, conversationID, responseID string) string {
+	t.Helper()
+
+	value, err := store.client.HGet(
+		context.Background(), store.conversationIndexGenerationKey(conversationID), responseID,
+	).Result()
+	if errors.Is(err, redis.Nil) {
+		return ""
+	}
+	require.NoError(t, err)
+	return value
 }

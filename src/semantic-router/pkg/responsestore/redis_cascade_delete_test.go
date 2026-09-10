@@ -182,8 +182,9 @@ func TestCascadeDeleteUnindexFailureReported(t *testing.T) {
 	require.NoError(t, store.ensureConversationIndexResolved(ctx, convID))
 	// Warm the conditional script so the injected EVALSHA is the actual
 	// unindex attempt, not a NOSCRIPT probe.
-	require.NoError(t, store.unindexResponseGenerations(ctx, convID,
-		responseGenerationWitness{responseID: "not-present", generation: newResponseGeneration()}))
+	_, warmErr := store.unindexResponseGenerations(ctx, convID,
+		responseGenerationWitness{responseID: "not-present", generation: newResponseGeneration()})
+	require.NoError(t, warmErr)
 	injectedErr := errors.New("injected conditional unindex failure")
 	store.client.AddHook(&scriptFailureHook{hash: conditionalUnindexScript.Hash(), err: injectedErr})
 

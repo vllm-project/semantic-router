@@ -154,9 +154,15 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 // Each iteration reads rank 0..redisDeleteBatchSize-1 again (not an offsetting
 // range), atomically pairing each member with its sidecar generation. Payload
 // deletion and later ZSET/HASH cleanup are both conditional on that observed
-// generation. If a batch reports an unresolved or legacy response, this stops
-// instead of silently reporting success. Already-resolved members are gone;
-// a stale witness left by a cleanup failure remains a safe retry anchor.
+// generation. A legacy candidate whose payload still exists is upgraded in
+// place and then deleted through the same generation CAS as everything else
+// (deleteConversationResponseBatch), so pre-upgrade responses drain rather
+// than pinning the conversation forever. A legacy membership whose payload is
+// already gone can only be dropped on the strength of its blankness, which is
+// safe once the store is finalized and fails closed before then.
+// If a batch reports an unresolved response, this stops instead of silently
+// reporting success. Already-resolved members are gone; a stale witness left
+// by a cleanup failure remains a safe retry anchor.
 //
 // An empty read is not on its own permission to delete the index. A
 // StoreResponse landing between that read and the delete has committed a real
@@ -172,6 +178,16 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 		return err
 	}
 
+	// Read once, before the loop: whether blank-witness memberships may be
+	// cleaned up at all. The completion record only ever goes from absent to
+	// permanently present (and is process-cached), so one observation is as
+	// good as re-reading it every round — and a cascade that changed its mind
+	// halfway would be harder to reason about than one that does not.
+	allowBlankCleanup, err := s.conversationIndexFinalized(ctx)
+	if err != nil {
+		return err
+	}
+
 	raced := 0
 	for {
 		candidates, err := s.readCascadeCandidates(ctx, conversationID)
@@ -180,8 +196,20 @@ func (s *RedisStore) deleteConversationResponses(ctx context.Context, conversati
 		}
 
 		if len(candidates) > 0 {
-			if batchErr := s.deleteConversationResponseBatch(ctx, conversationID, candidates); batchErr != nil {
+			resolved, batchErr := s.deleteConversationResponseBatch(ctx, conversationID, candidates, allowBlankCleanup)
+			if batchErr != nil {
 				return batchErr
+			}
+			if resolved == 0 {
+				// Every candidate was overtaken by a concurrent writer without
+				// any of them failing outright. Counted as a race round so
+				// termination is guaranteed structurally rather than argued
+				// from which branches happen to make progress.
+				raced++
+				if raced > conversationIndexCascadeMaxRaceRounds {
+					return fmt.Errorf("conversation %s kept receiving responses during cascade delete after %d attempts; retry",
+						conversationID, raced)
+				}
 			}
 			continue
 		}
@@ -303,7 +331,10 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 		return ErrInvalidInput
 	}
 
-	if err := s.indexResponse(ctx, conversationID, responseID, stored.generation, stored.response.CreatedAt, lifetimeMillis); err != nil {
+	// witnessRepair: this only read the generation, so it must not overwrite a
+	// witness a live writer already owns.
+	if _, err := s.repairResponseWitness(ctx, conversationID, responseID, stored.generation, "",
+		stored.response.CreatedAt, lifetimeMillis); err != nil {
 		return fmt.Errorf("failed to index response in Redis: %w", err)
 	}
 

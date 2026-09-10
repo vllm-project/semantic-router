@@ -213,7 +213,9 @@ func (s *RedisStore) pipelineIndexBatch(ctx context.Context, byConversation map[
 	pipe := s.client.Pipeline()
 	var total int64
 	for conversationID, grouped := range byConversation {
-		s.queueConversationIndexMembers(ctx, pipe, conversationID, grouped.lifetime, grouped.members)
+		// witnessRepair: the sweep read these generations, it did not write
+		// them, so a live writer that has since claimed a member keeps it.
+		s.queueConversationIndexMembers(ctx, pipe, conversationID, witnessRepair, grouped.lifetime, grouped.members)
 		total += int64(len(grouped.members))
 	}
 	if _, err := pipe.Exec(ctx); err != nil {

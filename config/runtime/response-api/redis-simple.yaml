@@ -51,9 +51,15 @@ tls_enabled: false
 # Redis Key Schema:
 # sr:response:{response_id}                         → flat JSON StoredResponse (source of truth).
 #                                                      New writes add an internal UUID-v4 field,
-#                                                      _vsr_generation; legacy JSON without it
-#                                                      remains readable but cannot authorize a
-#                                                      prune or CAS delete.
+#                                                      _vsr_generation. Legacy JSON without it is
+#                                                      readable, and is upgraded in place — under
+#                                                      its own unchanged content and remaining
+#                                                      TTL — by both legacy scans and by cascade
+#                                                      delete, so pre-upgrade records become
+#                                                      prunable and deletable instead of pinning
+#                                                      their conversation forever. A payload that
+#                                                      still lacks a generation is never deleted
+#                                                      by CAS; it is upgraded first.
 # sr:conversation:{conv_id}                         → JSON blob of StoredConversation.
 # sr:conversation-index:{base64url(conv_id)}        → sorted set of raw response IDs, scored by
 #                                                      created_at. The escaped brace-delimited
@@ -64,6 +70,20 @@ tls_enabled: false
 #                                                      TTL, so Lua atomically updates or
 #                                                      conditionally removes both. ZSET members
 #                                                      stay raw response IDs for cursor ordering.
+#                                                      A member left by a legacy payload has no
+#                                                      field here. That absence is a comparable
+#                                                      witness, but it only authorizes removing a
+#                                                      membership once the completion record
+#                                                      below is set: until then an index-unaware
+#                                                      writer can put a payload back under the
+#                                                      same ID without claiming the member, and
+#                                                      the stale cleanup would orphan it. Before
+#                                                      finalization the remedy for a legacy
+#                                                      member is upgrading its payload, not
+#                                                      removing it, so a membership whose payload
+#                                                      is already gone is deliberately left in
+#                                                      place for the migration window — a short
+#                                                      page beats a lost record.
 # sr:conversation-index-migrated:{conv_id}          → per-conversation proof with value
 #                                                      "v1:empty" or "v1:populated", written only
 #                                                      after a complete legacy scan. Both proof
@@ -77,7 +97,8 @@ tls_enabled: false
 #                                                      operator-triggered finalization sweep after
 #                                                      every index-unaware writer is gone. Once set,
 #                                                      reads trust the secondary index and never
-#                                                      run legacy scans again.
+#                                                      run legacy scans again, and witness-less
+#                                                      memberships become safe to clean up.
 #
 # The ZSET is derived state and can be partial until a proof or global completion record says it
 # is exhaustive. All key families use disjoint prefixes so conversation/response JSON scans never
