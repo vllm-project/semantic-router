@@ -5,6 +5,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageModelEndpoints from './ConfigPageModelEndpoints'
 import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
 import styles from './ConfigPage.module.css'
+import { evaluationRecordColumns, evaluationRecordKey } from './configPageEvaluationRecordsSupport'
 import { reasoningFamilyColumns } from './configPageReasoningFamilySupport'
 import type { ConfigPageModelsSectionController } from './useConfigPageModelsSectionController'
 import type { ConfigPageModelsSectionProps } from './configPageModelsSectionTypes'
@@ -98,6 +99,30 @@ function ReasoningFamiliesBlock({ controller }: ModelsSectionViewProps) {
   )
 }
 
+function EvaluationRecordsBlock({ props, controller }: ModelsSectionViewProps) {
+  const records = controller.evaluations.records
+  return (
+    <div className={styles.sectionTableBlock}>
+      <TableHeader
+        title="Evaluation Records"
+        count={records.length}
+        onAdd={props.isReadonly ? undefined : controller.evaluations.manage}
+        addButtonText="Manage records"
+        variant="embedded"
+      />
+      <DataTable
+        columns={evaluationRecordColumns}
+        data={records}
+        keyExtractor={evaluationRecordKey}
+        emptyMessage="No operator evaluation records configured; built-in evidence remains available automatically."
+        className={styles.managerTable}
+        readonly
+        pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'records' }}
+      />
+    </div>
+  )
+}
+
 function ConnectModelsDialog({ props, controller }: ModelsSectionViewProps) {
   const { connect, forms } = controller
   return (
@@ -121,10 +146,11 @@ export default function ConfigPageModelsSectionView(viewProps: ModelsSectionView
     <>
       <ConfigPageManagerLayout
         title="Models"
-        description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions."
+        description="Manage provider models, model-linked evaluation evidence, reasoning families, and endpoints available to routing decisions."
       >
         <div className={styles.sectionPanel}>
           <ModelInventoryBlock {...viewProps} />
+          <EvaluationRecordsBlock {...viewProps} />
           <ReasoningFamiliesBlock {...viewProps} />
         </div>
       </ConfigPageManagerLayout>
