@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:6efc18a80959d594fbe6fdd6d29f2ecb6187676288a643ff7fd718cf9d7c41e0"
+const builtInCatalogDigest = "sha256:8a87ccc2f3d24d34273a53313a28c406564eb942495493eff27333bc8dda95a9"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -93185,6 +93185,34 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1"
       ],
       "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Foundation models served through an operator-owned IBM watsonx.ai model gateway.",
+      "display_name": "IBM watsonx.ai",
+      "id": "ibm-watsonx",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "IBM"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "support_tier": "native",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models"
