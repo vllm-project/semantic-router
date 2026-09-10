@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ type truncatingPIIInference struct {
 	seen        []string
 }
 
-func (t *truncatingPIIInference) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
+func (t *truncatingPIIInference) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
 	t.seen = append(t.seen, text)
 
 	runes := []rune(text)
@@ -82,7 +83,7 @@ func TestClassifyPIIWithDetails_DetectsEntityPastTheModelWindow(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestClassifyPIIWithDetails_OffsetsAreCorrectInMultibyteText(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestClassifyPIIWithDetails_ReportsAnOverlappedEntityOnce(t *testing.T) {
 
 	classifier, _ := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
@@ -183,7 +184,7 @@ func TestClassifyPIIWithDetails_ShortTextTakesASingleCall(t *testing.T) {
 
 	classifier, model := newLongTextPIIClassifier(entity)
 
-	detections, err := classifier.ClassifyPIIWithDetails(text)
+	detections, err := classifier.ClassifyPIIWithDetails(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyPIIWithDetails: %v", err)
 	}
