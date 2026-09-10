@@ -207,6 +207,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/router-replay',
                 'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
+                'tutorials/plugin/prompt-cache',
               ],
             },
             {

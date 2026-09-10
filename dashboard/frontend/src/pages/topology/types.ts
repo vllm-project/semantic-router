@@ -269,6 +269,7 @@ export type PluginType =
   | 'tools'
   | 'tool_selection'
   | 'context_compression'
+  | 'prompt_cache'
   | 'shadow_dispatch'
 
 export interface PluginConfig {

@@ -276,7 +276,9 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	if ctx != nil {
 		ctx.ImmediateProtocolError = protocolError
 	}
-	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
+	response := r.createErrorResponse(http.StatusBadRequest, protocolError.Message)
+	addPromptCacheReceiptToImmediateResponse(response, ctx)
+	return response, true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(

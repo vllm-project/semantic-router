@@ -89,6 +89,7 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   tools: 'TL',
   tool_selection: 'TS',
   context_compression: 'CC',
+  prompt_cache: 'PC',
   shadow_dispatch: 'SD',
 }
 
@@ -107,6 +108,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   tools: { background: '#5a6c7d', border: '#3d4a59' },
   tool_selection: { background: '#4b6f7f', border: '#344f5c' },
   context_compression: { background: '#606c7a', border: '#3d4a59' },
+  prompt_cache: { background: '#6b7280', border: '#4b5563' },
   shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
 }
 
@@ -332,4 +334,5 @@ export const PLUGIN_TYPES: PluginType[] = [
   'response_jailbreak',
   'tools',
   'tool_selection',
+  'prompt_cache',
 ]

@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -275,6 +276,174 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 	if pluginConfig.Targets == nil ||
 		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 {
 		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
+	}
+}
+
+func TestPromptCachePluginRoundTrip(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:      "cache-prefix",
+				ModelRefs: []config.ModelRef{{Model: "model"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginPromptCache,
+					Configuration: config.MustStructuredPayload(
+						config.PromptCachePluginConfig{
+							Enabled: true,
+							TTL:     "1h",
+							Targets: []string{
+								config.PromptCacheTargetInstructions,
+								config.PromptCacheTargetTools,
+							},
+							OnUnsupported: config.PromptCacheUnsupportedReject,
+						},
+					),
+				}},
+			}},
+		},
+	}
+	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
+	assertDecompiledPluginConfigContains(t, dslText, []string{
+		"PLUGIN prompt_cache",
+		`ttl: "1h"`,
+		`on_unsupported: "reject"`,
+		`targets: ["instructions", "tools"]`,
+	})
+	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
+	plugin := findDecisionPluginForTest(
+		t,
+		compiled.Decisions[0],
+		config.DecisionPluginPromptCache,
+	)
+	var pluginConfig config.PromptCachePluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("prompt_cache decode error: %v", err)
+	}
+	if !pluginConfig.Enabled ||
+		pluginConfig.TTL != "1h" ||
+		pluginConfig.OnUnsupported != config.PromptCacheUnsupportedReject ||
+		len(pluginConfig.Targets) != 2 {
+		t.Fatalf("prompt_cache config = %#v", pluginConfig)
+	}
+}
+
+func TestPromptCachePluginRejectsEmptyTargets(t *testing.T) {
+	_, errs := Compile(`
+ROUTE empty_prompt_cache_targets {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN prompt_cache {
+    enabled: true
+    targets: []
+  }
+}
+`)
+	if len(errs) == 0 {
+		t.Fatal("expected empty prompt_cache targets to fail")
+	}
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "targets must not be empty") {
+			return
+		}
+	}
+	t.Fatalf("compile errors = %v", errs)
+}
+
+func TestPromptCachePluginRejectsInvalidFields(t *testing.T) {
+	tests := []struct {
+		name       string
+		pluginBody string
+		wantError  string
+	}{
+		{
+			name:       "unknown field",
+			pluginBody: `on_unsuported: "reject"`,
+			wantError:  `unknown field "on_unsuported"`,
+		},
+		{
+			name:       "invalid ttl",
+			pluginBody: `ttl: "10m"`,
+			wantError:  "ttl must be 5m or 1h",
+		},
+		{
+			name:       "invalid target",
+			pluginBody: `targets: ["messages"]`,
+			wantError:  "targets must contain only instructions or tools",
+		},
+		{
+			name:       "duplicate target",
+			pluginBody: `targets: ["tools", "tools"]`,
+			wantError:  "targets must not contain duplicates",
+		},
+		{
+			name:       "invalid unsupported behavior",
+			pluginBody: `on_unsupported: "ignore"`,
+			wantError:  "on_unsupported must be skip or reject",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			source := `
+ROUTE invalid_prompt_cache {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN prompt_cache {
+    enabled: true
+    ` + test.pluginBody + `
+  }
+}
+`
+			_, errs := Compile(source)
+			if !slices.ContainsFunc(errs, func(err error) bool {
+				return strings.Contains(err.Error(), test.wantError)
+			}) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, test.wantError)
+			}
+
+			diagnostics, parseErrs := Validate(source)
+			if len(parseErrs) != 0 {
+				t.Fatalf("parse errors = %v", parseErrs)
+			}
+			if !slices.ContainsFunc(diagnostics, func(diagnostic Diagnostic) bool {
+				return strings.Contains(diagnostic.Message, test.wantError)
+			}) {
+				t.Fatalf("validation diagnostics = %v, want substring %q", diagnostics, test.wantError)
+			}
+		})
+	}
+}
+
+func TestPromptCachePluginRejectsInvalidTemplateOverride(t *testing.T) {
+	source := `
+PLUGIN cached prompt_cache {
+  enabled: true
+  ttl: "5m"
+}
+
+ROUTE invalid_prompt_cache {
+  PRIORITY 1
+  MODEL "model"
+  PLUGIN cached {
+    ttl: "10m"
+  }
+}
+`
+	_, errs := Compile(source)
+	if !slices.ContainsFunc(errs, func(err error) bool {
+		return strings.Contains(err.Error(), "ttl must be 5m or 1h")
+	}) {
+		t.Fatalf("compile errors = %v", errs)
+	}
+
+	diagnostics, parseErrs := Validate(source)
+	if len(parseErrs) != 0 {
+		t.Fatalf("parse errors = %v", parseErrs)
+	}
+	if !slices.ContainsFunc(diagnostics, func(diagnostic Diagnostic) bool {
+		return strings.Contains(diagnostic.Message, "ttl must be 5m or 1h")
+	}) {
+		t.Fatalf("validation diagnostics = %v", diagnostics)
 	}
 }
 

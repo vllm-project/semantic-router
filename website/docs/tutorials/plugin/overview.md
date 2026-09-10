@@ -59,6 +59,7 @@ routing:
 | `tool_selection` | Add tools from a catalog or filter caller tools semantically | Embedding runtime; tool database for `add` mode | [Tool Selection](./tool-selection) |
 | `context_compression` | Reduce large provider-bound tool output or history | Optional embedding runtime and recovery store | [Context Compression](./context-compression) |
 | `response_cache` | Reuse compatible prior responses | `global.stores.response_cache` | [Response Cache](./response-cache) |
+| `prompt_cache` | Insert Anthropic prompt-cache breakpoints on instructions and tools | None | [Prompt Cache](./prompt-cache) |
 | `memory` | Retrieve and optionally store conversational memory | `global.stores.memory` | [Memory](./memory) |
 | `rag` | Retrieve documents before generation | Configured RAG/vector backend | [RAG](./rag) |
 | `router_replay` | Override replay capture for one route | `global.services.router_replay` | [Router Replay](./router-replay) |

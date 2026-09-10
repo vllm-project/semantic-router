@@ -35,6 +35,7 @@ const (
 	DecisionPluginRequestParams      = "request_params"
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
+	DecisionPluginPromptCache        = "prompt_cache"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
@@ -75,6 +76,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginRouterReplay,
 	DecisionPluginShadowDispatch,
 	DecisionPluginResponseCache,
+	DecisionPluginPromptCache,
 	DecisionPluginSystemPrompt,
 	DecisionPluginToolSelection,
 	DecisionPluginTools,
