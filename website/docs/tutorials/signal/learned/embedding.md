@@ -194,10 +194,11 @@ The shipped thresholds were obtained with
 [`cmd/image-routing-calibration`](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/cmd/image-routing-calibration)
 against `llm-semantic-router/multi-modal-embed-small` (snapshot
 `fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4`, 384 dimensions, default
-`prototype_scoring`) and a labelled image set drawn from this repository. Treat
-them as a starting point for that model only: calibrate against your own
-labelled images before relying on the rules, and recalibrate whenever you
-change the model, the candidates, or the scoring configuration.
+`prototype_scoring`) and a hand-reviewed manifest of repository images in which
+every fixture is labelled positive for a named candidate, negative, or excluded
+as ambiguous. Treat them as a starting point for that model only: calibrate
+against your own labelled images before relying on the rules, and recalibrate
+whenever you change the model, the candidates, or the scoring configuration.
 
 ### Distinction from the `modality` signal type
 

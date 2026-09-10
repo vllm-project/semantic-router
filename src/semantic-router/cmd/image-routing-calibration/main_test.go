@@ -144,3 +144,45 @@ func TestSelectThreshold_NegativeScoreBoundary(t *testing.T) {
 		t.Fatalf("selected = %+v, want the boundary threshold -0.2 with TP 1 FP 1", report.Selected)
 	}
 }
+
+func parseTestSet(t *testing.T, manifest string) error {
+	t.Helper()
+	_, err := parseSet([]byte(manifest), []config.EmbeddingRule{{Name: testRule}})
+	return err
+}
+
+// The manifest is explicit: every fixture carries a reviewed label, a path
+// cannot carry two labels, and an exclusion must say why.
+func TestParseSet_AcceptsReviewedManifest(t *testing.T) {
+	err := parseTestSet(t, `{
+		"positives": [{"image_file": "a.png", "signal_name": "rule"}],
+		"negatives": ["b.jpg", "c.jpeg"],
+		"excluded": [{"image_file": "d.png", "reason": "ambiguous"}]
+	}`)
+	if err != nil {
+		t.Fatalf("valid manifest rejected: %v", err)
+	}
+}
+
+func TestParseSet_RejectsUnreviewedShapes(t *testing.T) {
+	cases := map[string]string{
+		"no negatives":        `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": []}`,
+		"no positives":        `{"positives": [], "negatives": ["b.png"]}`,
+		"unknown rule":        `{"positives": [{"image_file": "a.png", "signal_name": "other"}], "negatives": ["b.png"]}`,
+		"positive twice":      `{"positives": [{"image_file": "a.png", "signal_name": "rule"}, {"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"]}`,
+		"positive+negative":   `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["a.png"]}`,
+		"negative twice":      `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png", "b.png"]}`,
+		"negative+excluded":   `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"], "excluded": [{"image_file": "b.png", "reason": "x"}]}`,
+		"exclusion no reason": `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"], "excluded": [{"image_file": "c.png"}]}`,
+		"bad extension":       `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.gif"]}`,
+		"empty path":          `{"positives": [{"image_file": "", "signal_name": "rule"}], "negatives": ["b.png"]}`,
+		"legacy roots":        `{"negative_roots": ["images"], "positives": [{"image_file": "a.png", "signal_name": "rule"}]}`,
+	}
+	for name, manifest := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := parseTestSet(t, manifest); err == nil {
+				t.Fatalf("manifest accepted: %s", manifest)
+			}
+		})
+	}
+}

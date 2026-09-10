@@ -29,7 +29,7 @@ spec:
 
       - name: "code_or_terminal_imagery"
         queryModality: "image"
-        threshold: 0.4632
+        threshold: 0.47
         aggregationMethod: "max"
         candidates:
           - "screenshot of source code in an editor"

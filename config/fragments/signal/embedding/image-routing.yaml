@@ -22,7 +22,7 @@ routing:
           - photograph of a tax document or paystub with personal details
           - photograph of a paper form filled in with personal information
       - name: code_or_terminal_imagery
-        threshold: 0.4632
+        threshold: 0.47
         aggregation_method: max
         query_modality: image
         candidates:

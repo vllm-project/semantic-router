@@ -16,13 +16,16 @@
 // INPUT to calibration, never an output — the report pins each candidate list
 // by sha256.
 //
-// The labelled calibration set lives in testdata/calibration-set.json: the
-// positive labels (image, rule, the candidate phrase it depicts) plus the
-// directories whose PNG/JPEG files form the negative pool. Everything not
-// named as a positive is a negative for every rule. The set is versioned by
-// the repository commit: the report records that commit, flags a dirty tree,
-// and lists every resolved fixture with its sha256, so two reports are
-// comparable without duplicating any image.
+// The labelled calibration set lives in testdata/calibration-set.json and is
+// an explicit, hand-reviewed manifest: positive labels (image, rule, the
+// candidate phrase it depicts), the list of reviewed negatives (images that
+// depict no candidate phrase of any rule), and excluded images that were
+// judged ambiguous, with the reason. Nothing is inferred from directory
+// contents, so adding an image to the repository does not silently add an
+// unlabelled negative. A positive is a negative for every other rule. The set
+// is versioned by the repository commit: the report records that commit,
+// flags a dirty tree, and lists every listed fixture with its sha256, so two
+// reports are comparable without duplicating any image.
 //
 // The generated report is PR evidence and is not committed; regenerate it with the
 // invocation below whenever the model artifact, the fixture set, or a rule's
@@ -40,10 +43,10 @@
 // separable with ~0.10 and ~0.14 cosine headroom on each side.
 // code_or_terminal_imagery is NOT separable on repo imagery — dark UI
 // screenshots outscore several genuine code/terminal images — so its shipped
-// 0.4632 is the max-F1 band midpoint (F1 0.375) and the E2E code fixture
-// (score 0.4748) clears it by only ~0.012. Treat that rule as the first suspect
-// when the multimodal E2E profile regresses; a stronger code fixture is the
-// real fix.
+// 0.47 is the max-F1 band midpoint (F1 0.444, 8 FP / 7 FN over 13 positives)
+// and the E2E code fixture (score 0.4748) clears it by only ~0.005. Treat that
+// rule as the first suspect when the multimodal E2E profile regresses; a
+// stronger code fixture is the real fix.
 //
 // Scores are the classifier's prototype blend under aggregation_method=max
 // (best_weight*best + (1-best_weight)*mean(top_m), defaults 0.75 / 2), not a
@@ -99,21 +102,29 @@ import (
 
 const modelRepository = "llm-semantic-router/multi-modal-embed-small"
 
-// calibrationSet is the labelled input. Every PNG/JPEG under NegativeRoots at
-// the checked-out commit is a fixture; a fixture is positive for a rule only
-// when named in Positives and is a negative for every other rule. The set is
-// versioned by the repository commit rather than by per-file hashes: git
-// already content-addresses the assets, and the report records the commit,
-// whether the tree was dirty, and every resolved fixture's sha256.
+// calibrationSet is the labelled input: every fixture is listed explicitly
+// with the label a reviewer gave it. A fixture is positive for a rule only
+// when named in Positives and is a negative for every other rule; Negatives
+// depict no candidate phrase of any rule; Excluded images are ambiguous and
+// are not scored, but must still exist so the manifest cannot go stale. The
+// set is versioned by the repository commit rather than by per-file hashes:
+// git already content-addresses the assets, and the report records the
+// commit, whether the tree was dirty, and every listed fixture's sha256.
 type calibrationSet struct {
-	NegativeRoots []string        `json:"negative_roots"`
-	Positives     []positiveLabel `json:"positives"`
+	Positives []positiveLabel `json:"positives"`
+	Negatives []string        `json:"negatives"`
+	Excluded  []excludedLabel `json:"excluded,omitempty"`
 }
 
 type positiveLabel struct {
 	ImageFile   string `json:"image_file"`
 	SignalName  string `json:"signal_name"`
 	Description string `json:"description,omitempty"`
+}
+
+type excludedLabel struct {
+	ImageFile string `json:"image_file"`
+	Reason    string `json:"reason"`
 }
 
 // fixtureExtensions mirrors the image crate features compiled into
@@ -172,11 +183,13 @@ type calibrationReport struct {
 		Scoring config.PrototypeScoringConfig `json:"prototype_scoring"`
 	} `json:"model"`
 	// Source pins the fixture side of the run: the repository commit the
-	// images were read from and whether anything under the scanned roots was
-	// modified or untracked at the time (a dirty run is not reproducible).
+	// images were read from, whether any listed fixture was modified or
+	// untracked at the time (a dirty run is not reproducible), and the images
+	// the calibration set excludes as ambiguous.
 	Source struct {
-		Commit string `json:"repo_commit"`
-		Dirty  bool   `json:"repo_dirty"`
+		Commit   string   `json:"repo_commit"`
+		Dirty    bool     `json:"repo_dirty"`
+		Excluded []string `json:"excluded_fixtures,omitempty"`
 	} `json:"source"`
 	Fixtures []fixtureReport `json:"fixtures"`
 	Rules    []ruleReport    `json:"rules"`
@@ -217,9 +230,14 @@ func main() {
 	report.Model.ModelType = "multimodal"
 	report.Model.Aggregation = "max"
 	report.Model.Scoring = config.PrototypeScoringConfig{}.WithDefaults()
-	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, set.NegativeRoots)
+	// The manifest is part of what the commit versions, so it joins the
+	// fixtures in the dirty check.
+	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, append(append([]string{}, fixtures...), absolutePath(*casesPath)))
+	for _, label := range set.Excluded {
+		report.Source.Excluded = append(report.Source.Excluded, label.ImageFile)
+	}
 	if report.Source.Dirty {
-		fmt.Fprintln(os.Stderr, "WARNING: uncommitted changes under the fixture roots; this report is not reproducible from its commit")
+		fmt.Fprintln(os.Stderr, "WARNING: uncommitted changes to listed fixtures; this report is not reproducible from its commit")
 	}
 	for _, fixture := range fixtures {
 		report.Fixtures = append(report.Fixtures, scoreFixture(classifier, *fixtureRoot, fixture, set, rules))
@@ -268,7 +286,7 @@ func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision 
 			gotRevision, wantRevision)
 	}
 	if report.Source.Dirty {
-		fmt.Println("  WARNING: uncommitted changes under the fixture roots; this run is not reproducible from its commit")
+		fmt.Println("  WARNING: uncommitted changes to listed fixtures; this run is not reproducible from its commit")
 	}
 	for _, rule := range report.Rules {
 		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
@@ -308,61 +326,99 @@ func loadSet(path string, rules []config.EmbeddingRule) calibrationSet {
 	if err != nil {
 		fatal("read calibration set: %v", err)
 	}
+	set, err := parseSet(data, rules)
+	if err != nil {
+		fatal("calibration set %s: %v", path, err)
+	}
+	return set
+}
+
+// parseSet decodes and validates a manifest: at least one positive and one
+// negative, every positive naming a known rule, every path decodable by the
+// FFI, and no path under two labels (a positive may be listed once per rule).
+func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error) {
 	var set calibrationSet
 	if err := json.Unmarshal(data, &set); err != nil {
-		fatal("parse calibration set: %v", err)
+		return set, fmt.Errorf("parse: %w", err)
 	}
-	if len(set.NegativeRoots) == 0 || len(set.Positives) == 0 {
-		fatal("calibration set needs at least one negative_roots entry and one positive")
+	if len(set.Positives) == 0 || len(set.Negatives) == 0 {
+		return set, fmt.Errorf("needs at least one positive and one negative")
 	}
 	known := map[string]bool{}
 	for _, rule := range rules {
 		known[rule.Name] = true
 	}
-	for _, label := range set.Positives {
-		if !known[label.SignalName] {
-			fatal("positive %q names unknown rule %q", label.ImageFile, label.SignalName)
+	label := map[string]string{}
+	claim := func(path, kind string) error {
+		if path == "" {
+			return fmt.Errorf("%s entry has an empty image_file", kind)
 		}
-		if _, ok := fixtureExtensions[strings.ToLower(filepath.Ext(label.ImageFile))]; !ok {
-			fatal("positive %q: unsupported image extension (need png/jpg/jpeg)", label.ImageFile)
+		if _, ok := fixtureExtensions[strings.ToLower(filepath.Ext(path))]; !ok {
+			return fmt.Errorf("%s %q: unsupported image extension (need png/jpg/jpeg)", kind, path)
+		}
+		if previous, seen := label[path]; seen && previous != kind {
+			return fmt.Errorf("%q is listed as both %s and %s", path, previous, kind)
+		}
+		label[path] = kind
+		return nil
+	}
+	seenPositive := map[string]bool{}
+	for _, entry := range set.Positives {
+		if !known[entry.SignalName] {
+			return set, fmt.Errorf("positive %q names unknown rule %q", entry.ImageFile, entry.SignalName)
+		}
+		key := entry.ImageFile + "\x00" + entry.SignalName
+		if seenPositive[key] {
+			return set, fmt.Errorf("positive %q is listed twice for rule %q", entry.ImageFile, entry.SignalName)
+		}
+		seenPositive[key] = true
+		if err := claim(entry.ImageFile, "positive"); err != nil {
+			return set, err
 		}
 	}
-	return set
+	for _, path := range set.Negatives {
+		if label[path] == "negative" {
+			return set, fmt.Errorf("negative %q is listed twice", path)
+		}
+		if err := claim(path, "negative"); err != nil {
+			return set, err
+		}
+	}
+	for _, entry := range set.Excluded {
+		if entry.Reason == "" {
+			return set, fmt.Errorf("excluded %q needs a reason", entry.ImageFile)
+		}
+		if label[entry.ImageFile] == "excluded" {
+			return set, fmt.Errorf("excluded %q is listed twice", entry.ImageFile)
+		}
+		if err := claim(entry.ImageFile, "excluded"); err != nil {
+			return set, err
+		}
+	}
+	return set, nil
 }
 
-// enumerateFixtures walks every negative root for decodable images and unions
-// in the positive paths, returning repo-relative paths in sorted order. A
-// positive that does not exist on disk is fatal so a renamed asset cannot
-// silently drop a label.
+// enumerateFixtures returns the scored fixtures (positives and negatives) as
+// repo-relative paths in sorted order. Every listed path, excluded ones
+// included, must exist on disk so a renamed or deleted asset cannot silently
+// drop a reviewed label.
 func enumerateFixtures(root string, set calibrationSet) []string {
 	seen := map[string]bool{}
-	for _, dir := range set.NegativeRoots {
-		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return nil
-			}
-			if _, ok := fixtureExtensions[strings.ToLower(filepath.Ext(path))]; !ok {
-				return nil
-			}
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				return err
-			}
-			seen[filepath.ToSlash(rel)] = true
-			return nil
-		})
-		if err != nil {
-			fatal("scan negative root %q: %v", dir, err)
+	require := func(path, kind string) {
+		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
+			fatal("%s fixture %q: %v", kind, path, err)
 		}
 	}
 	for _, label := range set.Positives {
-		if _, err := os.Stat(filepath.Join(root, label.ImageFile)); err != nil {
-			fatal("positive fixture %q: %v", label.ImageFile, err)
-		}
+		require(label.ImageFile, "positive")
 		seen[label.ImageFile] = true
+	}
+	for _, path := range set.Negatives {
+		require(path, "negative")
+		seen[path] = true
+	}
+	for _, label := range set.Excluded {
+		require(label.ImageFile, "excluded")
 	}
 	fixtures := make([]string, 0, len(seen))
 	for path := range seen {
@@ -373,17 +429,17 @@ func enumerateFixtures(root string, set calibrationSet) []string {
 }
 
 // repoState returns the HEAD commit of the checkout at root and whether any
-// path under roots is modified or untracked. Fixtures are versioned by this
-// commit, so the report must say when the tree did not match it.
-func repoState(root string, roots []string) (string, bool) {
+// of paths is modified or untracked. Fixtures are versioned by this commit,
+// so the report must say when the tree did not match it.
+func repoState(root string, paths []string) (string, bool) {
 	head, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
 	if err != nil {
 		fatal("resolve repository commit for fixtures (is %q a git checkout?): %v", root, err)
 	}
-	args := append([]string{"-C", root, "status", "--porcelain", "--"}, roots...)
+	args := append([]string{"-C", root, "status", "--porcelain", "--"}, paths...)
 	status, err := exec.Command("git", args...).Output()
 	if err != nil {
-		fatal("check fixture roots for uncommitted changes: %v", err)
+		fatal("check fixtures for uncommitted changes: %v", err)
 	}
 	return strings.TrimSpace(string(head)), len(strings.TrimSpace(string(status))) > 0
 }
@@ -570,9 +626,12 @@ func renderMarkdown(report calibrationReport) string {
 		report.Model.ModelType, report.Model.Aggregation, len(report.Fixtures))
 	dirty := ""
 	if report.Source.Dirty {
-		dirty = " (**tree was dirty under the fixture roots; not reproducible from this commit**)"
+		dirty = " (**listed fixtures were modified or untracked; not reproducible from this commit**)"
 	}
 	fmt.Fprintf(&b, "- Fixture source: repository commit `%s`%s\n", report.Source.Commit, dirty)
+	if len(report.Source.Excluded) > 0 {
+		fmt.Fprintf(&b, "- Excluded as ambiguous (not scored): `%s`\n", strings.Join(report.Source.Excluded, "`, `"))
+	}
 	fmt.Fprintf(&b, "- Effective score: `%.2f*best + %.2f*mean(top %d)` (prototype_scoring defaults; "+
 		"deployments that override `best_weight`/`top_m` shift every threshold)\n\n",
 		report.Model.Scoring.BestWeight, 1-report.Model.Scoring.BestWeight, report.Model.Scoring.TopM)
@@ -624,6 +683,14 @@ func imageDataURI(path string) string {
 		fatal("fixture %q: unsupported image extension", path)
 	}
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+func absolutePath(path string) string {
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		fatal("resolve %q: %v", path, err)
+	}
+	return resolved
 }
 
 func fileSHA(path string) string {
