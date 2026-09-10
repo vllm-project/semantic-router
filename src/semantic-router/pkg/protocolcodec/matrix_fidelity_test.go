@@ -74,9 +74,15 @@ func TestPolicyEnumsAndEveryLimitAreClosed(t *testing.T) {
 
 func TestCrossFormatFidelityAndCapabilityFailuresAreExplicit(t *testing.T) {
 	engine := NewBuiltinEngine()
+	// developer is OpenAI's successor to system and Anthropic's system field is
+	// the same channel, so the text must survive the mapping.
 	developer := []byte(`{"model":"source-model","messages":[{"role":"developer","content":"preserve authority"},{"role":"user","content":"hello"}],"max_tokens":8}`)
-	if _, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, developer, nil); err == nil {
-		t.Fatal("developer authority was silently collapsed")
+	translatedDeveloper, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, developer, nil)
+	if err != nil {
+		t.Fatalf("developer instructions were rejected: %v", err)
+	}
+	if !bytes.Contains(translatedDeveloper.Body, []byte("preserve authority")) {
+		t.Fatalf("developer instruction text was dropped: %s", translatedDeveloper.Body)
 	}
 	strictTool := []byte(`{"model":"source-model","messages":[{"role":"user","content":"hello"}],"max_tokens":8,"tools":[{"type":"function","function":{"name":"lookup","parameters":{"type":"object"},"strict":true}}]}`)
 	translatedTool, err := engine.TranslateRequest(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, strictTool, nil)
