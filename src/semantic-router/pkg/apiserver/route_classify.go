@@ -35,7 +35,7 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 	}
 	if errors.Is(err, services.ErrModelNotReady) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_NOT_READY", err.Error())
-    return
+		return
 	}
 	if errors.Is(err, admission.ErrQueueFull) {
 		s.writeErrorResponse(w, http.StatusTooManyRequests, "OVERLOADED", err.Error())

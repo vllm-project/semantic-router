@@ -302,6 +302,20 @@ func IsEmbeddingReady() bool {
 	return embeddingReadyOverride.Load() || IsMmBertModelInitialized()
 }
 
+// IsEmbeddingModelReady reports readiness for the model selected by a request.
+// ONNX supports mmBERT as its text embedding backend; qwen3 and gemma are
+// accepted aliases for compatibility with the shared API-server routes.
+func IsEmbeddingModelReady(modelType string) bool {
+	switch strings.ToLower(strings.TrimSpace(modelType)) {
+	case "multimodal":
+		return IsMultiModalReady()
+	case "", "auto", "mmbert", "qwen3", "gemma":
+		return IsEmbeddingReady()
+	default:
+		return IsEmbeddingReady()
+	}
+}
+
 // SetEmbeddingReady sets the embedding model readiness flag for testing.
 func SetEmbeddingReady(ready bool) {
 	embeddingReadyOverride.Store(ready)
