@@ -151,6 +151,19 @@ func parseTestSet(t *testing.T, manifest string) error {
 	return err
 }
 
+// A loaded rule with no reviewed positive must not reach calibration: it
+// would score against an empty positive set and look perfectly separable.
+func TestParseSet_RequiresAPositiveForEveryRule(t *testing.T) {
+	manifest := []byte(`{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"]}`)
+	rules := []config.EmbeddingRule{{Name: testRule}, {Name: "uncovered"}}
+	if _, err := parseSet(manifest, rules); err == nil {
+		t.Fatal("manifest accepted although rule \"uncovered\" has no positive")
+	}
+	if _, err := parseSet(manifest, rules[:1]); err != nil {
+		t.Fatalf("manifest rejected although every rule is covered: %v", err)
+	}
+}
+
 // The manifest is explicit: every fixture carries a reviewed label, a path
 // cannot carry two labels, and an exclusion must say why.
 func TestParseSet_AcceptsReviewedManifest(t *testing.T) {

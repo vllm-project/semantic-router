@@ -24,8 +24,9 @@
 // contents, so adding an image to the repository does not silently add an
 // unlabelled negative. A positive is a negative for every other rule. The set
 // is versioned by the repository commit: the report records that commit,
-// flags a dirty tree, and lists every listed fixture with its sha256, so two
-// reports are comparable without duplicating any image.
+// flags any uncommitted change in the worktree (fixtures, manifest, rules,
+// or code), and lists every listed and excluded fixture with its sha256, so
+// two reports are comparable without duplicating any image.
 //
 // The generated report is PR evidence and is not committed; regenerate it with the
 // invocation below whenever the model artifact, the fixture set, or a rule's
@@ -34,9 +35,11 @@
 // (TestImageRoutingPack_MatchesMultimodalE2EProfile enforces the lockstep).
 //
 // -check turns the run into a gate (exit 2 unless every shipped threshold
-// equals the report-selected value). The manually dispatched workflow
-// .github/workflows/image-routing-calibration.yml runs it that way at a
-// chosen ref and uploads the reports, so reviewers get exact-head evidence.
+// equals the report-selected value; with -require-clean also unless the
+// worktree matches the recorded commit). The workflow
+// .github/workflows/image-routing-calibration.yml runs it that way at the
+// exact pull-request head and uploads the reports, so reviewers get
+// reproducible evidence.
 //
 // Known state at snapshot fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4:
 // identifier_document_imagery (0.61) and ambient_office_imagery (0.54) are
@@ -131,6 +134,12 @@ type excludedLabel struct {
 // candle-binding (jpeg, png); anything else fails to decode at the FFI.
 var fixtureExtensions = map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
+type excludedFixture struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+	Reason string `json:"reason"`
+}
+
 type fixtureReport struct {
 	Path        string             `json:"path"`
 	SHA256      string             `json:"sha256"`
@@ -182,14 +191,16 @@ type calibrationReport struct {
 		// cosine, so thresholds shift if a deployment overrides these.
 		Scoring config.PrototypeScoringConfig `json:"prototype_scoring"`
 	} `json:"model"`
-	// Source pins the fixture side of the run: the repository commit the
-	// images were read from, whether any listed fixture was modified or
-	// untracked at the time (a dirty run is not reproducible), and the images
-	// the calibration set excludes as ambiguous.
+	// Source pins the repository side of the run: the commit the fixtures,
+	// manifest, rules, and tool were read from, whether anything in the
+	// worktree was modified or untracked at the time (a dirty run is not
+	// reproducible from the commit; only this run's own report files are
+	// ignored), and the images the calibration set excludes as ambiguous,
+	// hashed so a later reviewer can tell exactly which asset was excluded.
 	Source struct {
-		Commit   string   `json:"repo_commit"`
-		Dirty    bool     `json:"repo_dirty"`
-		Excluded []string `json:"excluded_fixtures,omitempty"`
+		Commit   string            `json:"repo_commit"`
+		Dirty    bool              `json:"repo_dirty"`
+		Excluded []excludedFixture `json:"excluded_fixtures,omitempty"`
 	} `json:"source"`
 	Fixtures []fixtureReport `json:"fixtures"`
 	Rules    []ruleReport    `json:"rules"`
@@ -205,6 +216,7 @@ func main() {
 	markdown := flag.String("markdown", "image-routing-calibration.md", "Markdown report path")
 	check := flag.Bool("check", false, "gate mode: exit 2 unless every rule's report-selected threshold equals the shipped value")
 	expectRevision := flag.String("expect-artifact-revision", "", "snapshot the shipped thresholds were calibrated on; a different -artifact-revision is reported as a warning, not a failure")
+	requireClean := flag.Bool("require-clean", false, "with -check: fail unless the worktree matches the recorded commit, so the report is reproducible evidence")
 	flag.Parse()
 	if *modelPath == "" || *artifactRevision == "" || *casesPath == "" {
 		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
@@ -230,14 +242,14 @@ func main() {
 	report.Model.ModelType = "multimodal"
 	report.Model.Aggregation = "max"
 	report.Model.Scoring = config.PrototypeScoringConfig{}.WithDefaults()
-	// The manifest is part of what the commit versions, so it joins the
-	// fixtures in the dirty check.
-	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, append(append([]string{}, fixtures...), absolutePath(*casesPath)))
+	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, *output, *markdown)
 	for _, label := range set.Excluded {
-		report.Source.Excluded = append(report.Source.Excluded, label.ImageFile)
+		report.Source.Excluded = append(report.Source.Excluded, excludedFixture{
+			Path: label.ImageFile, SHA256: fileSHA(filepath.Join(*fixtureRoot, label.ImageFile)), Reason: label.Reason,
+		})
 	}
 	if report.Source.Dirty {
-		fmt.Fprintln(os.Stderr, "WARNING: uncommitted changes to listed fixtures; this report is not reproducible from its commit")
+		fmt.Fprintln(os.Stderr, "WARNING: worktree has uncommitted changes; this report is not reproducible from its commit")
 	}
 	for _, fixture := range fixtures {
 		report.Fixtures = append(report.Fixtures, scoreFixture(classifier, *fixtureRoot, fixture, set, rules))
@@ -248,7 +260,7 @@ func main() {
 
 	writeReports(report, *output, *markdown)
 	if *check {
-		os.Exit(checkShippedThresholds(report, *artifactRevision, *expectRevision))
+		os.Exit(checkShippedThresholds(report, *artifactRevision, *expectRevision, *requireClean))
 	}
 }
 
@@ -276,7 +288,9 @@ const shippedThresholdTolerance = 5e-5
 // Returns the process exit code (0 pass, 2 mismatch). A model snapshot that
 // differs from the one the thresholds were calibrated on is a warning: the
 // calibration should be rerun, but the gate only asserts what it can verify.
-func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision string) int {
+// A dirty worktree is a warning locally and, with requireClean, a failure:
+// CI evidence must be reproducible from the commit it names.
+func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision string, requireClean bool) int {
 	code := 0
 	fmt.Println("image-routing calibration gate")
 	fmt.Printf("  fixtures=%d repo_commit=%s dirty=%t artifact_revision=%s\n",
@@ -286,7 +300,12 @@ func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision 
 			gotRevision, wantRevision)
 	}
 	if report.Source.Dirty {
-		fmt.Println("  WARNING: uncommitted changes to listed fixtures; this run is not reproducible from its commit")
+		if requireClean {
+			fmt.Println("  FAIL: worktree has uncommitted changes; this run is not reproducible from its commit")
+			code = 2
+		} else {
+			fmt.Println("  WARNING: worktree has uncommitted changes; this run is not reproducible from its commit")
+		}
 	}
 	for _, rule := range report.Rules {
 		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
@@ -333,9 +352,11 @@ func loadSet(path string, rules []config.EmbeddingRule) calibrationSet {
 	return set
 }
 
-// parseSet decodes and validates a manifest: at least one positive and one
-// negative, every positive naming a known rule, every path decodable by the
-// FFI, and no path under two labels (a positive may be listed once per rule).
+// parseSet decodes and validates a manifest: at least one negative, at least
+// one reviewed positive for every loaded rule (a rule with no positive would
+// otherwise calibrate against an empty set and look perfectly separable),
+// every positive naming a known rule, every path decodable by the FFI, and
+// no path under two labels (a positive may be listed once per rule).
 func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error) {
 	var set calibrationSet
 	if err := json.Unmarshal(data, &set); err != nil {
@@ -363,6 +384,7 @@ func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error)
 		return nil
 	}
 	seenPositive := map[string]bool{}
+	covered := map[string]bool{}
 	for _, entry := range set.Positives {
 		if !known[entry.SignalName] {
 			return set, fmt.Errorf("positive %q names unknown rule %q", entry.ImageFile, entry.SignalName)
@@ -372,8 +394,14 @@ func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error)
 			return set, fmt.Errorf("positive %q is listed twice for rule %q", entry.ImageFile, entry.SignalName)
 		}
 		seenPositive[key] = true
+		covered[entry.SignalName] = true
 		if err := claim(entry.ImageFile, "positive"); err != nil {
 			return set, err
+		}
+	}
+	for _, rule := range rules {
+		if !covered[rule.Name] {
+			return set, fmt.Errorf("rule %q has no reviewed positive; every loaded rule needs at least one", rule.Name)
 		}
 	}
 	for _, path := range set.Negatives {
@@ -428,18 +456,25 @@ func enumerateFixtures(root string, set calibrationSet) []string {
 	return fixtures
 }
 
-// repoState returns the HEAD commit of the checkout at root and whether any
-// of paths is modified or untracked. Fixtures are versioned by this commit,
-// so the report must say when the tree did not match it.
-func repoState(root string, paths []string) (string, bool) {
+// repoState returns the HEAD commit of the checkout at root and whether the
+// worktree differs from it anywhere: fixtures, manifest, rule YAML, the
+// scoring code, and this tool are all inputs the commit is supposed to pin.
+// Only this run's own report files are excluded when they live inside the
+// checkout (the CI workflow writes them outside it).
+func repoState(root string, outputs ...string) (string, bool) {
 	head, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
 	if err != nil {
-		fatal("resolve repository commit for fixtures (is %q a git checkout?): %v", root, err)
+		fatal("resolve repository commit (is %q a git checkout?): %v", root, err)
 	}
-	args := append([]string{"-C", root, "status", "--porcelain", "--"}, paths...)
+	args := []string{"-C", root, "status", "--porcelain", "--", "."}
+	for _, output := range outputs {
+		if rel, err := filepath.Rel(absolutePath(root), absolutePath(output)); err == nil && !strings.HasPrefix(rel, "..") {
+			args = append(args, ":(exclude)"+filepath.ToSlash(rel))
+		}
+	}
 	status, err := exec.Command("git", args...).Output()
 	if err != nil {
-		fatal("check fixtures for uncommitted changes: %v", err)
+		fatal("check worktree for uncommitted changes: %v", err)
 	}
 	return strings.TrimSpace(string(head)), len(strings.TrimSpace(string(status))) > 0
 }
@@ -626,11 +661,11 @@ func renderMarkdown(report calibrationReport) string {
 		report.Model.ModelType, report.Model.Aggregation, len(report.Fixtures))
 	dirty := ""
 	if report.Source.Dirty {
-		dirty = " (**listed fixtures were modified or untracked; not reproducible from this commit**)"
+		dirty = " (**worktree had uncommitted changes; not reproducible from this commit**)"
 	}
-	fmt.Fprintf(&b, "- Fixture source: repository commit `%s`%s\n", report.Source.Commit, dirty)
-	if len(report.Source.Excluded) > 0 {
-		fmt.Fprintf(&b, "- Excluded as ambiguous (not scored): `%s`\n", strings.Join(report.Source.Excluded, "`, `"))
+	fmt.Fprintf(&b, "- Source: repository commit `%s`%s\n", report.Source.Commit, dirty)
+	for _, excluded := range report.Source.Excluded {
+		fmt.Fprintf(&b, "- Excluded as ambiguous (not scored): `%s` (`%s`): %s\n", excluded.Path, excluded.SHA256, excluded.Reason)
 	}
 	fmt.Fprintf(&b, "- Effective score: `%.2f*best + %.2f*mean(top %d)` (prototype_scoring defaults; "+
 		"deployments that override `best_weight`/`top_m` shift every threshold)\n\n",

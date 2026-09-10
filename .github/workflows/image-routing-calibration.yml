@@ -134,7 +134,7 @@ jobs:
       - name: Run the calibration gate
         run: |
           set -euo pipefail
-          mkdir -p image-routing-calibration
+          mkdir -p "${RUNNER_TEMP}/image-routing-calibration"
           cd src/semantic-router
           go run ./cmd/image-routing-calibration \
             -model "${GITHUB_WORKSPACE}/${MODEL_DIR}" \
@@ -143,17 +143,17 @@ jobs:
             -rules ../../config/fragments/signal/embedding/image-routing.yaml \
             -cases ./cmd/image-routing-calibration/testdata/calibration-set.json \
             -fixture-root ../.. \
-            -output "${GITHUB_WORKSPACE}/image-routing-calibration/report.json" \
-            -markdown "${GITHUB_WORKSPACE}/image-routing-calibration/report.md" \
-            -check | tee "${GITHUB_WORKSPACE}/image-routing-calibration/gate.txt"
+            -output "${RUNNER_TEMP}/image-routing-calibration/report.json" \
+            -markdown "${RUNNER_TEMP}/image-routing-calibration/report.md" \
+            -check -require-clean | tee "${RUNNER_TEMP}/image-routing-calibration/gate.txt"
           {
             echo "## Image-routing calibration gate"
             echo
             echo '```'
-            cat "${GITHUB_WORKSPACE}/image-routing-calibration/gate.txt"
+            cat "${RUNNER_TEMP}/image-routing-calibration/gate.txt"
             echo '```'
             echo
-            cat "${GITHUB_WORKSPACE}/image-routing-calibration/report.md"
+            cat "${RUNNER_TEMP}/image-routing-calibration/report.md"
           } >> "${GITHUB_STEP_SUMMARY}"
         env:
           CGO_ENABLED: 1
@@ -164,5 +164,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: image-routing-calibration
-          path: image-routing-calibration/
+          path: ${{ runner.temp }}/image-routing-calibration/
           if-no-files-found: ignore
