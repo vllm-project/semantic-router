@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -64,11 +65,11 @@ func assertSignalParity(t *testing.T, remote, local *Classifier, text string) {
 
 func assertDetectionParity(t *testing.T, remote, local *Classifier, tc tokenSpansFixtureCase) {
 	t.Helper()
-	remoteDetections, err := remote.ClassifyPIIWithDetails(tc.Text)
+	remoteDetections, err := remote.ClassifyPIIWithDetails(context.Background(), tc.Text)
 	if err != nil {
 		t.Fatalf("remote detections: %v", err)
 	}
-	localDetections, err := local.ClassifyPIIWithDetails(tc.Text)
+	localDetections, err := local.ClassifyPIIWithDetails(context.Background(), tc.Text)
 	if err != nil {
 		t.Fatalf("local detections: %v", err)
 	}

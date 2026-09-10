@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -37,7 +38,7 @@ func TestRemoteOutsideSpanNeverBecomesAnEntity(t *testing.T) {
 	}
 
 	t.Run("detection path returns an error, not an O entity", func(t *testing.T) {
-		detections, err := newClassifier(config.OnErrorAllow).ClassifyPIIWithDetails(text)
+		detections, err := newClassifier(config.OnErrorAllow).ClassifyPIIWithDetails(context.Background(), text)
 		if err == nil || !strings.Contains(err.Error(), "outside label") {
 			t.Fatalf("want an outside-label error, got err=%v detections=%v", err, detections)
 		}
@@ -58,9 +59,10 @@ func TestRemoteOutsideSpanNeverBecomesAnEntity(t *testing.T) {
 				Metrics:           &SignalMetricsCollection{},
 				SignalConfidences: make(map[string]float64),
 				SignalValues:      make(map[string]float64),
+				SignalErrors:      make(map[string]string),
 			}
 			var mu sync.Mutex
-			newClassifier(tc.onError).evaluatePIISignal(results, &mu, text, nil)
+			newClassifier(tc.onError).evaluatePIISignal(context.Background(), results, &mu, text, nil)
 			if results.PIIDetected != tc.wantDetected {
 				t.Fatalf("PIIDetected = %v, want %v (entities=%v)", results.PIIDetected, tc.wantDetected, results.PIIEntities)
 			}

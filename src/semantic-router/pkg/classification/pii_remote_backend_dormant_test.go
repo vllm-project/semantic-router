@@ -47,8 +47,14 @@ func TestBuildClassifierBuildsReachableRemotePIIBackend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reachable remote PII backend failed to build: %v", err)
 	}
-	if _, ok := classifier.piiInference.(*piiHTTPBackend); !ok {
-		t.Fatalf("piiInference = %T, want *piiHTTPBackend", classifier.piiInference)
+	// The admission gate wraps every inference since #3268; the remote
+	// backend must be what sits under it.
+	inference := classifier.piiInference
+	if admitted, ok := inference.(admittedPIIInference); ok {
+		inference = admitted.backend
+	}
+	if _, ok := inference.(*piiHTTPBackend); !ok {
+		t.Fatalf("piiInference = %T, want *piiHTTPBackend", inference)
 	}
 	if !classifier.IsPIIEnabled() {
 		t.Fatal("PII must read as enabled with a mapping and a remote backend")

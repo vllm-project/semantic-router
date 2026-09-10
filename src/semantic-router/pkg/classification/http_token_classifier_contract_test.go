@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"sync"
@@ -44,9 +45,10 @@ func runPIISignal(c *Classifier, text string) *SignalResults {
 		Metrics:           &SignalMetricsCollection{},
 		SignalConfidences: make(map[string]float64),
 		SignalValues:      make(map[string]float64),
+		SignalErrors:      make(map[string]string),
 	}
 	var mu sync.Mutex
-	c.evaluatePIISignal(results, &mu, text, nil)
+	c.evaluatePIISignal(context.Background(), results, &mu, text, nil)
 	sort.Strings(results.PIIEntities)
 	sort.Strings(results.MatchedPIIRules)
 	return results

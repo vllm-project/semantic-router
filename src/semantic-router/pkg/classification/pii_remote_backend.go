@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -9,12 +10,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// piiHTTPBackend adapts a TokenClassifierBackend to PII's historical inference
-// interface, so PIIDetected, PIIEntities, MatchedPIIRules and masking keep
-// working unchanged whether the spans came from Candle or from a remote
-// token_spans.v1 provider.
+// piiHTTPBackend adapts the remote token classifier to PII's historical
+// inference interface, so PIIDetected, PIIEntities, MatchedPIIRules and masking
+// keep working unchanged whether the spans came from Candle or from a remote
+// token_spans.v1 provider. The request context reaches the HTTP call, so an
+// admission deadline or a cancelled request stops the remote call too.
 type piiHTTPBackend struct {
-	backend TokenClassifierBackend
+	backend *HTTPTokenClassifierInference
 }
 
 func newPIIHTTPBackend(external *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (PIIInference, error) {
@@ -29,8 +31,8 @@ func newPIIHTTPBackend(external *config.ExternalModelConfig, mapping *PIIMapping
 // partial response (ErrTokenSpansTruncated) keeps its spans and surfaces the
 // error: signal evaluation counts the spans it did get and lets
 // classifier.pii.on_error decide whether the unseen remainder blocks.
-func (p *piiHTTPBackend) ClassifyTokens(text string) (candle_binding.TokenClassificationResult, error) {
-	entities, err := p.backend.ClassifyTokens(text)
+func (p *piiHTTPBackend) ClassifyTokens(ctx context.Context, text string) (candle_binding.TokenClassificationResult, error) {
+	entities, err := p.backend.classifyTokens(ctx, text)
 	if err != nil {
 		if errors.Is(err, ErrTokenSpansTruncated) {
 			return candle_binding.TokenClassificationResult{Entities: entities}, err
@@ -43,8 +45,8 @@ func (p *piiHTTPBackend) ClassifyTokens(text string) (candle_binding.TokenClassi
 // Close releases the remote connector so a retired classifier generation does
 // not keep the previous backend's idle connections alive across reloads.
 func (p *piiHTTPBackend) Close() error {
-	if closer, ok := p.backend.(interface{ Close() error }); ok && closer != nil {
-		return closer.Close()
+	if p.backend == nil {
+		return nil
 	}
-	return nil
+	return p.backend.Close()
 }

@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"sync"
@@ -82,9 +83,10 @@ func TestPIISignalTruncatedResponseRoutesThroughOnError(t *testing.T) {
 				Metrics:           &SignalMetricsCollection{},
 				SignalConfidences: make(map[string]float64),
 				SignalValues:      make(map[string]float64),
+				SignalErrors:      make(map[string]string),
 			}
 			var mu sync.Mutex
-			classifier.evaluatePIISignal(results, &mu, text, nil)
+			classifier.evaluatePIISignal(context.Background(), results, &mu, text, nil)
 
 			if results.PIIDetected != tc.wantDetected {
 				t.Fatalf("PIIDetected = %v, want %v (entities=%v rules=%v)", results.PIIDetected, tc.wantDetected, results.PIIEntities, results.MatchedPIIRules)

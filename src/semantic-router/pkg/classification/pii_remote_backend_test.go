@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -27,7 +28,7 @@ func TestPIIHTTPBackendKeepsOverlappingSpansAndCloses(t *testing.T) {
 		t.Fatalf("newPIIHTTPBackend: %v", err)
 	}
 
-	result, err := backend.ClassifyTokens(text)
+	result, err := backend.ClassifyTokens(context.Background(), text)
 	if err != nil {
 		t.Fatalf("ClassifyTokens: %v", err)
 	}
