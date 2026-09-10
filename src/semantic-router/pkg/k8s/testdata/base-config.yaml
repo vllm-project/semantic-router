@@ -4,18 +4,7 @@ listeners: []
 
 providers:
   defaults:
-    default_reasoning_effort: high
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-
+    reasoning_effort: high
 routing:
   signals: {}
 

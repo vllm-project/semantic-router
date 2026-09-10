@@ -44,8 +44,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
-			"`providers.defaults.default_model`",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"`providers.defaults.model`",
 			"vllm-sr validate --config config.yaml",
 			"Environment references and secrets",
 			"Entrypoints and recipes",
@@ -82,7 +82,7 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
 			"`routing.modelCards`",
 			"`routing.modelCards[].loras`",
 			"`config/fragments/algorithm/`",
@@ -182,10 +182,9 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"`vsr_canonical_patch.yaml`",
 			"`vsr_canonical_patch_recommendation.json`",
-			"providers:\n  defaults:\n    reasoning_families:",
-			"routing:\n  modelCards:",
+			"providers:\n  defaults:\n    reasoning_effort:",
+			"reasoning:\n        family: qwen3",
 			"routing:\n  decisions:",
-			"default_reasoning_effort: medium",
 		},
 	},
 	{
@@ -357,6 +356,7 @@ var configContractForbiddenDocs = []docNeedles{
 			"config.yaml model_config section",
 			"preferred_endpoints:",
 			"\ndefault_reasoning_effort:",
+			"\n    reasoning_families:\n",
 			"\ncategories:\n",
 		},
 	},

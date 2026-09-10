@@ -1,0 +1,2764 @@
+- id: independent/qwen3-7-max-critpt@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    score: .134285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-7-max-gdpval-aa@2.0.0
+  model: qwen/qwen3.7-max
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    elo: 1193.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-7-max-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.7-max
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    score: .79
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-7-max-omniscience@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    index: 13.4833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-7-max-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    accuracy: .405004633920297
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-7-max-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    resolved: .745318352059925
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-7-max-gpqa-diamond@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    accuracy: .923232323232323
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-7-max-tau3-banking@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: unspecified
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen3-7-max
+    run_kind: independent
+  metrics:
+    score: .117525773195876
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-6-27b-critpt@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    score: .0114285714285714
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-6-27b-gdpval-aa@2.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    elo: 1072.72
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-6-27b-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    score: .773333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-6-27b-omniscience@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    index: -20.0166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-6-27b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    accuracy: .230769230769231
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-6-27b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    resolved: .606741573033708
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-6-27b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    accuracy: .842424242424242
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-6-27b-tau3-banking@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 27B (Reasoning)
+    source_model_slug: qwen3-6-27b
+    run_kind: independent
+  metrics:
+    score: .167010309278351
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-critpt@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .00857142857142857
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-gdpval-aa@2.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 1046.89
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .666666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-omniscience@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -53.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .150602409638554
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: .51310861423221
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .829292929292929
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-6-27b-non-reasoning-tau3-banking@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 27B (Non-reasoning)
+    source_model_slug: qwen3-6-27b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .0927835051546392
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-critpt@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    score: .00285714285714286
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-gdpval-aa@2.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    elo: 995.94
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    score: .716666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-omniscience@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    index: -22.1833333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    accuracy: .222428174235403
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    resolved: .449438202247191
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    accuracy: .841414141414142
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-tau3-banking@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Reasoning)
+    source_model_slug: qwen3-6-35b-a3b
+    run_kind: independent
+  metrics:
+    score: .0927835051546392
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-critpt@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-gdpval-aa@2.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    elo: 957.3
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .643333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-omniscience@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    index: -60.0166666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .139017608897127
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    resolved: .415730337078652
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: .817171717171717
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-6-35b-a3b-non-reasoning-tau3-banking@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.6 35B A3B (Non-reasoning)
+    source_model_slug: qwen3-6-35b-a3b-non-reasoning
+    run_kind: independent
+  metrics:
+    score: .0536082474226804
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-8-max-critpt@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    score: 0.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-max-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-max
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    elo: 1634.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-max-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-max
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    score: 0.783333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-max-omniscience@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    index: 3.4
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-max-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    accuracy: 0.430491195551437
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: qwen/qwen3.8-max-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Max
+    reasoning_effort: xhigh
+    hle_mode: no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.436
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    redistributable: true
+- id: independent/qwen3-8-max-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    resolved: 0.812734082397004
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: qwen/qwen3.8-max-model-card-terminal-bench@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Max
+    reasoning_effort: xhigh
+    terminal_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.866
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    redistributable: true
+- id: independent/qwen3-8-max-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    accuracy: 0.927272727272727
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: qwen/qwen3.8-max-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Max
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.926
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-2.4T-A95B
+    redistributable: true
+- id: independent/qwen3-8-max-scicode@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    score: 0.532407407407407
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/qwen3-8-max-tau3-banking@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen3-8-max
+    run_kind: independent
+  metrics:
+    score: 0.51340206185567
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-8-27b-low-critpt@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-27b-low-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    elo: 1407.51
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-27b-low-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    score: 0.773333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-27b-low-omniscience@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    index: -26.6666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-27b-low-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.140407784986098
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-8-27b-low-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    resolved: 0.674157303370786
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-8-27b-low-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    accuracy: 0.845454545454545
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-8-27b-low-scicode@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    score: 0.400462962962963
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/qwen3-8-27b-low-tau3-banking@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: low
+  subject:
+    source_model: Qwen3.8 27B (low)
+    source_model_slug: qwen3-8-27b-low
+    run_kind: independent
+  metrics:
+    score: 0.321649484536082
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-critpt@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    elo: 1434.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    score: 0.796666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-omniscience@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    index: -36.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.140871177015755
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    resolved: 0.651685393258427
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    accuracy: 0.845454545454545
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-scicode@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    score: 0.390046296296296
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/qwen3-8-27b-medium-tau3-banking@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 27B (medium)
+    source_model_slug: qwen3-8-27b-medium
+    run_kind: independent
+  metrics:
+    score: 0.474226804123711
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-8-27b-aa-briefcase@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    elo: 1404.14
+    elo_lower: 1396.91
+    elo_upper: 1411.95
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/qwen3-8-27b-critpt@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    score: 0.0542857142857143
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-27b-gdp-pdf@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    all_pass: 0.166
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/qwen3-8-27b-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    elo: 1467.93
+    elo_lower: 1452.15
+    elo_upper: 1483.71
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-27b-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    score: 0.82
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-27b-omniscience@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    index: -9.98333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-27b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.33920296570899
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    hle_judge: GPT-4o
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.308
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-deep-swe@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+    harness: Claude Code or mini-swe-agent
+  metrics:
+    resolved: 0.422
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: independent/qwen3-8-27b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    resolved: 0.797752808988764
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-terminal-bench@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+    harness: Terminus
+  metrics:
+    resolved: 0.73
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: independent/qwen3-8-27b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    accuracy: 0.905050505050505
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.892
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: independent/qwen3-8-27b-scicode@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    score: 0.466435185185185
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: qwen/qwen3.8-27b-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-27B
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+    harness: Claude Code
+  metrics:
+    resolved: 0.617
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B
+    redistributable: true
+- id: independent/qwen3-8-27b-tau3-banking@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 27B (xhigh)
+    source_model_slug: qwen3-8-27b
+    run_kind: independent
+  metrics:
+    score: 0.480412371134021
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: independent/qwen3-8-flash-next-critpt@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    score: 0.111428571428571
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-flash-next-gdp-pdf@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    all_pass: 0.156
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/qwen3-8-flash-next-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    elo: 1648.02
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-flash-next-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    score: 0.796666666666667
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-flash-next-omniscience@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    index: -9.71666666666667
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-flash-next-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    accuracy: 0.380444856348471
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    hle_judge: GPT-4o
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.359
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: independent/qwen3-8-flash-next-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    resolved: 0.861423220973783
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-8-flash-next-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    accuracy: 0.923232323232323
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.917
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: independent/qwen3-8-flash-next-scicode@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    score: 0.505787037037037
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/qwen3-8-flash-next-tau3-banking@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_model_slug: qwen3-8-flash-next
+    run_kind: independent
+  metrics:
+    score: 0.45360824742268
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-ifbench@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    evaluation_unit: prompt
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.813
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-deep-swe@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+    harness: Claude Code or mini-swe-agent
+  metrics:
+    resolved: 0.587
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-model-card-swe-bench-pro@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: xhigh
+  subject:
+    variant: Qwen3.8-Flash-Next
+    reasoning_effort: xhigh
+    source_kind: official_model_card
+    harness: Claude Code
+  metrics:
+    resolved: 0.625
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-aa-briefcase@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/briefcase@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    elo: 1445.05
+    elo_lower: 1437.56
+    elo_upper: 1452.87
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-critpt@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    score: 0.2
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/critpt
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-gdp-pdf@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    all_pass: 0.15
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-gdpval-aa@2.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/gdpval-aa@2.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    elo: 1632.01
+    elo_lower: 1616.51
+    elo_upper: 1647.51
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gdpval-aa
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-artificial-analysis-long-context-reasoning@1.1.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    score: 0.803333333333333
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-omniscience@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    index: 4.31666666666667
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/omniscience
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    accuracy: 0.424467099165894
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    resolved: 0.820224719101124
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/terminalbench-v2-1
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    accuracy: 0.935353535353535
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-scicode@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    score: 0.540509259259259
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/scicode
+    redistributable: true
+- id: independent/qwen3-8-2-4t-a95b-tau3-banking@1.0.0
+  model: qwen/qwen3.8-2.4t-a95b
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8 2.4T A95B
+    source_model_slug: qwen3-8-2-4t-a95b
+    run_kind: independent
+  metrics:
+    score: 0.490721649484536
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/evaluations/tau3-banking
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.24
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card-gpqa-diamond@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.878
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card-verified@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.772
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-27b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.6-27b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-27B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.862
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-27B
+    redistributable: true
+- id: qwen/qwen3.6-35b-a3b-model-card-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-35B-A3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.214
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    redistributable: true
+- id: qwen/qwen3.6-35b-a3b-model-card-verified@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-35B-A3B
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.734
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    redistributable: true
+- id: qwen/qwen3.6-35b-a3b-model-card-mmlu-pro@1.0.0
+  model: qwen/qwen3.6-35b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Qwen3.6-35B-A3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.852
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.6-35B-A3B
+    redistributable: true
+- id: duellab/qwen3-7-max-disabled-gamebench-2@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: disabled
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen-qwen3-7-max-disabled
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Reasoning disabled
+    result_status: tested_and_included
+  metrics:
+    score: 42.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-qwen-qwen3-7-max
+    redistributable: true
+- id: duellab/qwen3-7-max-enabled-gamebench-2@1.0.0
+  model: qwen/qwen3.7-max
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.7 Max
+    source_model_slug: qwen-qwen3-7-max-enabled
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Reasoning enabled
+    result_status: tested_and_included
+  metrics:
+    score: 42.7
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-qwen-qwen3-7-max
+    redistributable: true
+- id: duellab/qwen3-8-max-medium-gamebench-2@1.0.0
+  model: qwen/qwen3.8-max
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: medium
+  subject:
+    source_model: Qwen3.8 Max
+    source_model_slug: qwen-qwen3-8-max-medium
+    run_kind: independent
+    benchmark_release: gb2-20260824-e05a1ff89a26
+    provider_setting: Medium
+    result_status: tested_and_included
+  metrics:
+    score: 40.1
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/model-qwen-qwen3-8-max
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3.5-397b-a17b@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3.5-397B-A17B
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3.5-397B-A17B
+    source_model_slug: qwen3-5-397b-a17b
+    mode: reasoning
+  metrics:
+    accuracy: 0.878
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    accuracy: 0.892929292929293
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    accuracy: 0.289620018535681
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-scicode@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    score: 0.447916666666667
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3-5-397b-a17b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    resolved: 0.51310861423221
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3.5-122b-a10b@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3.5-122B-A10B
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3.5-122B-A10B
+    source_model_slug: qwen3-5-122b-a10b
+    mode: reasoning
+  metrics:
+    accuracy: 0.867
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-gpqa-diamond@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.856565656565657
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-humanitys-last-exam@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    accuracy: 0.252085264133457
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-scicode@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    score: 0.396990740740741
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-5-122b-a10b-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    resolved: 0.47565543071161
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3-235b-a22b-thinking-2507@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3-235B-A22B-Thinking-2507
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3-235B-A22B-Thinking-2507
+    source_model_slug: qwen3-235b-a22b-thinking-2507
+  metrics:
+    accuracy: 0.845
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.78989898989899
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.158943466172382
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-scicode@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.414351851851852
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.119850187265918
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Qwen3-30B-A3B-Thinking-2507
+    source_kind: official_benchmark_leaderboard
+    source_model: Qwen3-30B-A3B-Thinking-2507
+    source_model_slug: qwen3-30b-a3b-thinking-2507
+  metrics:
+    accuracy: 0.809
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-gpqa-diamond@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.707070707070707
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: qwen/qwen3.5-397b-a17b-livecodebench-v6@1.0.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5-397B-A17B
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.877
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-397B-A17B/blob/8472618112abcbd45acbcdc58436aff4233c23f7/README.md
+    redistributable: true
+- id: qwen/qwen3.5-122b-a10b-livecodebench-v6@1.0.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5-122B-A10B
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.805
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.5-122B-A10B/blob/dc4d348443bc740c68e2d77492492c11606384d5/README.md
+    redistributable: true
+- id: qwen/qwen3-235b-thinking-2507-livecodebench-v6@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3-235B-A22B-Thinking-2507
+    source_kind: official_model_card
+    dataset_release: v6
+    problem_window: 2025-02_to_2025-05
+  metrics:
+    pass_at_1: 0.741
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507/blob/6cbffae6d8e28b986a6b17bd36f42f9fa0f1f0a5/README.md
+    redistributable: true
+- id: qwen/qwen3-30b-thinking-2507-livecodebench-v6@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3-30B-A3B-Thinking-2507
+    source_kind: official_model_card
+    dataset_release: v6
+    problem_window: 2025-02_to_2025-05
+  metrics:
+    pass_at_1: 0.660
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507/blob/144afc2f379b542fdd4e85a1fcd5e1f79112d95d/README.md
+    redistributable: true
+- id: qwen/qwen3.8-27b-livecodebench-v6@1.0.0
+  model: qwen/qwen3.8-27b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-27B
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.903
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-27B/blob/1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0/README.md
+    redistributable: true
+- id: qwen/qwen3.8-flash-next-livecodebench-v6@1.0.0
+  model: qwen/qwen3.8-flash-next
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen3.8-Flash-Next
+    source_kind: official_model_card
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.919
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/Qwen/Qwen3.8-Flash-Next/blob/de4b8e4d43b917e7706784d8bb445c9af86a3540/README.md
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-humanitys-last-exam@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.102873030583874
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-scicode@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    score: 0.329861111111111
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.0149812734082397
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/qwen3.5-397b-a17b-lcr@1.1.0
+  model: qwen/qwen3.5-397b-a17b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 397B A17B (Reasoning)
+    source_model_slug: qwen3-5-397b-a17b
+    run_kind: independent
+  metrics:
+    score: 0.773333333333333
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-397b-a17b
+    redistributable: true
+- id: independent/qwen3.5-122b-a10b-lcr@1.1.0
+  model: qwen/qwen3.5-122b-a10b
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3.5 122B A10B (Reasoning)
+    source_model_slug: qwen3-5-122b-a10b
+    run_kind: independent
+  metrics:
+    score: 0.763333333333333
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-5-122b-a10b
+    redistributable: true
+- id: independent/qwen3-235b-a22b-instruct-2507-reasoning-aime-2025@1.0.0
+  model: qwen/qwen3-235b-a22b-thinking-2507
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 235B A22B 2507 (Reasoning)
+    source_model_slug: qwen3-235b-a22b-instruct-2507-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.91
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-235b-a22b-instruct-2507-reasoning
+    redistributable: true
+- id: independent/qwen3-30b-a3b-2507-reasoning-aime-2025@1.0.0
+  model: qwen/qwen3-30b-a3b-thinking-2507
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: Qwen3 30B A3B 2507 (Reasoning)
+    source_model_slug: qwen3-30b-a3b-2507-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.563333333333333
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true

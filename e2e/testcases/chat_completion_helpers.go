@@ -19,11 +19,8 @@ type localChatCompletionResponse struct {
 	Body       []byte
 }
 
-// sendLocalChatCompletion sends a chat-completion request to the router. It
-// always sets the x-vsr-debug request header: the v0.4 contract demotes the
-// intermediate decision/classification and matched-signal response headers off
-// the default surface (#2205), and every routing/classification test using this
-// helper asserts those demoted headers, so the debug surface is always required.
+// sendLocalChatCompletion sends a chat-completion request carrying a single
+// user prompt. See sendLocalChatConversation for the request/header details.
 func sendLocalChatCompletion(
 	ctx context.Context,
 	localPort string,
@@ -31,11 +28,29 @@ func sendLocalChatCompletion(
 	prompt string,
 	timeout time.Duration,
 ) (*localChatCompletionResponse, error) {
+	return sendLocalChatConversation(ctx, localPort, model, []map[string]string{
+		{"role": "user", "content": prompt},
+	}, timeout)
+}
+
+// sendLocalChatConversation sends a chat-completion request carrying a full
+// conversation (e.g. alternating user/assistant messages), for signals that
+// need prior-turn context (e.g. reask). It always sets the x-vsr-debug
+// request header: the v0.4 contract demotes the intermediate
+// decision/classification and matched-signal response headers off the
+// default surface (#2205), and every routing/classification test using this
+// helper asserts those demoted headers, so the debug surface is always
+// required.
+func sendLocalChatConversation(
+	ctx context.Context,
+	localPort string,
+	model string,
+	messages []map[string]string,
+	timeout time.Duration,
+) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "user", "content": prompt},
-		},
+		"model":    model,
+		"messages": messages,
 	}
 
 	jsonData, err := json.Marshal(requestBody)

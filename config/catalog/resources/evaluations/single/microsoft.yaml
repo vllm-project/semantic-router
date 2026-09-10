@@ -1,0 +1,762 @@
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-ai2d@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ai2d/ai2d@1.0.0
+  benchmark_profile: test
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .848
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-chartqa@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: chartqa/chartqa@1.0.0
+  benchmark_profile: test
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .833
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-mathvista@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mathvista/mathvista@1.0.0
+  benchmark_profile: mini
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .752
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-mmmu@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mmmu-benchmark/mmmu@1.0.0
+  benchmark_profile: dev-val
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .543
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-ocrbench@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ocrbench/ocrbench@1.0.0
+  benchmark_profile: standard
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .760
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-adaptive-screenspot-v2@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: screenspot/screenspot@2.0.0
+  benchmark_profile: all-platforms
+  reasoning_effort: adaptive
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: adaptive
+    source_kind: official_model_card
+  metrics:
+    accuracy: .882
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-ai2d@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ai2d/ai2d@1.0.0
+  benchmark_profile: test
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .847
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-chartqa@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: chartqa/chartqa@1.0.0
+  benchmark_profile: test
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .765
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-mathvista@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mathvista/mathvista@1.0.0
+  benchmark_profile: mini
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .687
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-mmmu@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mmmu-benchmark/mmmu@1.0.0
+  benchmark_profile: dev-val
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .520
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-ocrbench@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ocrbench/ocrbench@1.0.0
+  benchmark_profile: standard
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .756
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-disabled-screenspot-v2@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: screenspot/screenspot@2.0.0
+  benchmark_profile: all-platforms
+  reasoning_effort: disabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: disabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .883
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-ai2d@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ai2d/ai2d@1.0.0
+  benchmark_profile: test
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .797
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-chartqa@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: chartqa/chartqa@1.0.0
+  benchmark_profile: test
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .829
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-mathvista@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mathvista/mathvista@1.0.0
+  benchmark_profile: mini
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .741
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-mmmu@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: mmmu-benchmark/mmmu@1.0.0
+  benchmark_profile: dev-val
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .550
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-ocrbench@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: ocrbench/ocrbench@1.0.0
+  benchmark_profile: standard
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .737
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/phi-4-reasoning-vision-15b-model-card-enabled-screenspot-v2@1.0.0
+  model: microsoft/phi-4-reasoning-vision-15b
+  benchmark: screenspot/screenspot@2.0.0
+  benchmark_profile: all-platforms
+  reasoning_effort: enabled
+  subject:
+    variant: Phi-4-reasoning-vision-15B
+    inference_mode: enabled
+    source_kind: official_model_card
+  metrics:
+    accuracy: .881
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-reasoning-vision-15B#3-quality-and-performance-evaluation
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-ifbench@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    sampling_temperature: 1.0
+    sampling_top_p: 0.97
+    averaged_runs: 4
+    source_kind: official_evaluation_report
+  metrics:
+    accuracy: 0.69
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-terminal-bench-2.0@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: harbor/terminal-bench@2.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    resolved: 0.46
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-gpqa-diamond@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    accuracy: 0.842
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-livecodebench-v6@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    maximum_output_tokens: 256000
+    sampling_temperature: 1.0
+    sampling_top_p: 0.97
+    averaged_runs: 4
+    source_kind: official_evaluation_report
+    dataset_release: v6
+    task_count: 1055
+    problem_window: 2023-05_to_2025-04
+  metrics:
+    pass_at_1: 0.877
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-aime-2025@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    maximum_output_tokens: 256000
+    sampling_temperature: 1.0
+    sampling_top_p: 0.97
+    averaged_runs: 4
+    source_kind: official_evaluation_report
+  metrics:
+    pass_at_1: 0.97
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-aime-2026@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: matharena/aime@2026.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    maximum_output_tokens: 256000
+    sampling_temperature: 1.0
+    sampling_top_p: 0.97
+    averaged_runs: 4
+    source_kind: official_evaluation_report
+  metrics:
+    pass_at_1: 0.945
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-hmmt-feb-2026@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: matharena/hmmt-feb@2026.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    maximum_output_tokens: 256000
+    sampling_temperature: 1.0
+    sampling_top_p: 0.97
+    averaged_runs: 4
+    source_kind: official_evaluation_report
+  metrics:
+    pass_at_1: 0.849
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-swe-bench-pro@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    resolved: 0.528
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-swe-bench-verified@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    resolved: 0.735
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/mai-thinking-1-report-mmlu-pro@1.0.0
+  model: microsoft/mai-thinking-1
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: MAI-Thinking-1
+    reasoning_budget: published
+    source_kind: official_evaluation_report
+  metrics:
+    accuracy: 0.85
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://microsoft.ai/pdf/mai-thinking-1.pdf
+    redistributable: true
+- id: microsoft/phi-4-mini-flash-reasoning-model-card-gpqa-diamond@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-mini-flash-reasoning
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.4508
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/microsoft/Phi-4-mini-flash-reasoning
+    redistributable: true
+- id: microsoft/phi-4-mini-flash-reasoning-paper-aime-2024@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-mini-flash-reasoning
+    source_kind: official_model_report
+    maximum_output_tokens: 32768
+    samples_per_prompt: 64
+  metrics:
+    pass_at_1: 0.5229
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2507.06607
+    redistributable: true
+- id: microsoft/phi-4-mini-flash-reasoning-paper-aime-2025@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-mini-flash-reasoning
+    source_kind: official_model_report
+    maximum_output_tokens: 32768
+    samples_per_prompt: 64
+  metrics:
+    pass_at_1: 0.3359
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2507.06607
+    redistributable: true
+- id: microsoft/phi-4-mini-flash-reasoning-paper-math-500@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Phi-4-mini-flash-reasoning
+    source_kind: official_model_report
+    maximum_output_tokens: 32768
+    samples_per_prompt: 8
+  metrics:
+    pass_at_1: 0.9245
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2507.06607
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-math@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    correct_count: 4179
+    valid_sample_count: 4560
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.9164473684210527
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-finqa@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: czyssrs/finqa@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    dataset_revision: 0f16e2867befa6840783e58be38c9efb9229d742
+    correct_count: 256
+    valid_sample_count: 979
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.26149131767109296
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-medmcqa@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: openlifescienceai/medmcqa@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    dataset_revision: 91c6572c454088bf71b679ad90aa8dffcd0d5868
+    correct_count: 1285
+    valid_sample_count: 5505
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.23342415985467757
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-legalbench@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: nguha/legalbench@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    dataset_revision: e042ea68c19df12b737fe768572f22ead61e8e37
+    correct_count: 8649
+    valid_sample_count: 18321
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.4720812182741117
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-mmlu-pro@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    dataset_revision: dd36ce4b34827164989f100331f82c5a29741747
+    correct_count: 5063
+    valid_sample_count: 9404
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.538387920034028
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true
+- id: independent/phi-4-mini-flash-reasoning-rmcb-bbh@1.0.0
+  model: microsoft/phi-4-mini-flash-reasoning
+  benchmark: maveriq/bigbenchhard@1.0.0
+  benchmark_profile: rmcb-eacl-2026-valid-output-test
+  reasoning_effort: default
+  subject:
+    source_model: Phi-4-mini-flash-reasoning
+    source_model_slug: phi-4-mini-flash-reasoning
+    model_revision: unspecified_by_source
+    suite: RMCB EACL 2026
+    run_kind: independent
+    dataset_revision: d53c5b10a77edeb29da195f47e6086b29f2f7f74
+    correct_count: 4161
+    valid_sample_count: 5640
+    denominator_policy: valid_outputs_only_after_generation_failure_filter
+    maximum_output_tokens: 4096
+    sampling_temperature: 0
+    frequency_penalty: 0.8
+    presence_penalty: 1.5
+  metrics:
+    accuracy: 0.7377659574468085
+  status: available
+  observed_at: 2026-09-06
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://aclanthology.org/2026.eacl-long.78.pdf
+    redistributable: true

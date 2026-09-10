@@ -212,6 +212,17 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
 }
 
+func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if jb.Method != "" {
@@ -360,6 +371,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		ref := &ModelRef{
 			Model:     mr.Model,
 			Reasoning: mr.UseReasoning,
+			Mode:      mr.ReasoningMode,
 			Effort:    mr.ReasoningEffort,
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
@@ -420,6 +432,7 @@ func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
 		Model:     model.Model,
 		Reasoning: model.UseReasoning,
+		Mode:      model.ReasoningMode,
 		Effort:    model.ReasoningEffort,
 		LoRA:      model.LoRAName,
 		Weight:    model.Weight,
@@ -517,6 +530,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", mr.ReasoningEffort))
+	}
+	if mr.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", mr.ReasoningMode))
 	}
 	if mr.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", mr.LoRAName))

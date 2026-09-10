@@ -84,6 +84,8 @@ tools/bin/
 !*/trained_model/README.md
 !*/models/README.md
 models
+!config/catalog/resources/models/
+!config/catalog/resources/models/*.yaml
 # Exception for Go models package in dashboard backend
 !dashboard/backend/models/
 # Exception for the fleet-sim Python model catalog package
@@ -193,6 +195,9 @@ FactCHD_dataset/
 .vllm-sr-evaluation-staging/
 .codex-go-cache/
 .copilot-tmp/
+
+# Build-only mirror staged from config/recipes/built-in for Python packages.
+src/vllm-sr/cli/model_assets/*/
 
 # Dashboard Grafana configuration
 grafana/

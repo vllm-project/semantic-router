@@ -116,6 +116,10 @@ type Response struct {
 	// so it reflects real elapsed time regardless of whether the algorithm
 	// dispatches its model calls sequentially or concurrently.
 	LatencyMs int64 `json:"latency_ms,omitempty"`
+
+	// ExecutionTrace is bounded, content-free diagnostic evidence for tracing
+	// and Router Replay. It is not included in the client response body.
+	ExecutionTrace ExecutionTrace `json:"-"`
 }
 
 // Looper defines the interface for multi-model execution strategies
