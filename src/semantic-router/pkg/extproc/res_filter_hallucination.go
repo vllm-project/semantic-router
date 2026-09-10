@@ -59,6 +59,7 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 	// Use basic hallucination detection
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucination(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -103,6 +104,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucinationWithNLI(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,

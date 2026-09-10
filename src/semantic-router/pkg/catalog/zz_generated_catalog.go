@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:d164784b9cd26b5972f52fc45ac2a39202baa2763929b81f91028cfc7633800f"
+const builtInCatalogDigest = "sha256:2a3a1ae9f6a1897dffa998105d74ad37d8b006268077d231277dd1e7728ef22f"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -92531,6 +92531,33 @@ const builtInCatalogJSON = `{
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Cloudflare Workers AI OpenAI-compatible inference.",
+      "display_name": "Cloudflare Workers AI",
+      "id": "cloudflare-workers-ai",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": false,
+        "monogram": "Cf"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create"
       ]
     },
     {

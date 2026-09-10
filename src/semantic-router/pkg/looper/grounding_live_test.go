@@ -37,7 +37,7 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 	// Deterministic NLI stub: flag any answer mentioning "teleport" as contradicted
 	// by its peers, everything else entailed. Produces a real score spread so the
 	// weight policy has something to surface to the judge — without the candle model.
-	withGroundingBackends(t, func(_, hypothesis string) (float32, float32, error) {
+	withGroundingBackends(t, func(_ context.Context, _, hypothesis string) (float32, float32, error) {
 		if strings.Contains(strings.ToLower(hypothesis), "teleport") {
 			return 0.05, 0.9, nil
 		}
