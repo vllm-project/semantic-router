@@ -3850,6 +3850,9 @@
         "weight": {
           "type": "number"
         },
+        "max_completion_tokens": {
+          "type": "integer"
+        },
         "use_reasoning": {
           "type": "boolean"
         },
