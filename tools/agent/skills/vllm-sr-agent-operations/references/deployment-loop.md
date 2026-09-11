@@ -4,7 +4,9 @@
 
 Install a released CLI or build the repository's CLI through its documented
 development target. Confirm the runtime platform, container engine, available
-accelerators, ports, storage, and credential environment before serving.
+accelerators, ports, storage, and credential environment before serving. Check
+accelerator inventory vendor-neutrally; a missing NVIDIA or AMD utility alone
+does not prove that the host has no GPU.
 
 Read an active config before editing it; use `vllm-sr config init` only for a
 fresh workspace. Discover exact fields from the running schema rather than

@@ -26,7 +26,8 @@ boundaries take precedence over this skill.
 
 1. Clarify the requested outcome and inspect the host, existing installation,
    current config, model endpoints, container runtime, and accelerator with
-   read-only commands.
+   read-only commands. Check accelerator inventory vendor-neutrally; a missing
+   NVIDIA or AMD utility alone is not evidence that the host has no GPU.
 2. If the CLI is missing, install the stable release without starting or
    changing a runtime yet:
 
