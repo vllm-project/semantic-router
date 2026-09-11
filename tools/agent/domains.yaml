@@ -98,11 +98,13 @@ domains:
     paths:
       - src/semantic-router/**
       - config/**
+      - tools/configschema/**
+      - dashboard/frontend/src/generated/routerConfigContract.ts
       - go.mod
       - go.sum
       - Cargo.toml
       - Cargo.lock
-    checks: [make test-semantic-router]
+    checks: [make test-semantic-router, make config-schema-check]
     ci_jobs: [core-tests]
 
   native-bindings:

@@ -3,7 +3,11 @@
 import math
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from cli.config_schema import surface_types
+
+SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
 
 class ModelRef(BaseModel):
@@ -465,25 +469,8 @@ class AlgorithmConfig(BaseModel):
 
     Specifies how multiple models in a decision should be orchestrated.
 
-    Supports three categories of algorithms:
-
-    1. Looper algorithms (multi-model execution):
-       - "confidence": Try smaller models first, escalate if confidence is low
-       - "ratings": Coordinate bounded candidate execution
-       - "remom": Multi-round parallel reasoning with intelligent synthesis
-       - "fusion": Parallel panel deliberation with judge analysis and final synthesis
-       - "workflows": Router Flow dynamic/static micro-agent workflows
-
-    2. Selection algorithms (single model selection from candidates):
-       - "static": Use first model (default)
-       - "router_dc": Use embedding similarity for query-model matching
-       - "automix": Use POMDP-based cost-quality optimization
-       - "hybrid": Combine multiple selection methods
-       - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
-       - "multi_factor": Combine quality, latency, cost, and load
-
-    Cross-request learning systems live under global.router.learning.adaptation
-    and global.router.learning.protection.
+    The supported selector and looper types come from the generated Router
+    contract. Cross-request systems live under global.router.learning.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -492,28 +479,18 @@ class AlgorithmConfig(BaseModel):
     # is materialized by an Entrypoint.
     minimum_candidates: int | None = Field(default=None, ge=1)
 
-    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion",
-    # "workflows") or
-    # selection ("static", "router_dc", "automix", "hybrid", "knn",
-    #            "kmeans", "svm", "mlp", "multi_factor", "latency_aware")
-    type: Literal[
-        "confidence",
-        "ratings",
-        "remom",
-        "fusion",
-        "workflows",
-        "static",
-        "router_dc",
-        "automix",
-        "hybrid",
-        "knn",
-        "kmeans",
-        "svm",
-        "mlp",
-        "multi_factor",
-        "latency_aware",
-        "prompt",
-    ]
+    type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_algorithm_type(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in SUPPORTED_ALGORITHM_TYPES:
+            supported = ", ".join(sorted(SUPPORTED_ALGORITHM_TYPES))
+            raise ValueError(
+                f"unsupported algorithm type {value!r}; choose one of: {supported}"
+            )
+        return normalized
 
     # Looper algorithm configurations
     confidence: ConfidenceAlgorithmConfig | None = None
