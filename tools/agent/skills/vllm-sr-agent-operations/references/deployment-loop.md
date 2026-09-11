@@ -33,7 +33,10 @@ send a direct request to every physical backend before testing routing.
 4. Run config validation. Planning against a running Router will report
    `RESTART_REQUIRED` because provider backends are rendered into Envoy.
 5. Ask before disruption, then activate the candidate through the deployment
-   workflow and wait for Router and Envoy readiness.
+   workflow and wait for Router and Envoy readiness. For local Docker, use
+   `vllm-sr serve --config <candidate> --replace-active-config`; ordinary
+   `serve` deliberately preserves Dashboard-edited runtime state. An active
+   Recipe package must be changed through its Recipe workflow instead.
 6. Route-preview representative cases, then probe each direct model alias and
    every affected virtual model. Assert selected-model and response-model
    identity separately where the backend exposes a stable response model.

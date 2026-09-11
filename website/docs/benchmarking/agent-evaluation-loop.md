@@ -54,7 +54,10 @@ hot-reload feasibility checks as mutation without writing. `apply` plans again
 and uses the returned ETag as its compare-and-swap precondition. A plan that
 changes listeners or provider backend topology returns `RESTART_REQUIRED`
 because those fields are rendered into Envoy; activate that candidate through
-the deployment workflow instead of the Router mutation API.
+the deployment workflow instead of the Router mutation API. For local Docker,
+ask before replacing the running stack, then use
+`vllm-sr serve --config candidate.yaml --replace-active-config`. Ordinary
+`serve` preserves Dashboard-edited active state.
 
 ## 2. Verify routing in two stages
 

@@ -42,9 +42,12 @@ vllm-sr config apply --config candidate.yaml --mode replace \
 as mutation but writes nothing. `apply` plans again and uses the returned ETag
 as a compare-and-swap precondition. Listener and provider-backend topology is
 rendered into Envoy, so a plan that changes it returns `RESTART_REQUIRED` and
-must be activated through the deployment workflow; the Router apply API is for
-hot-reloadable state. Prefer `replace` for a complete reviewed document; use
-`merge` only for an intentionally partial patch.
+must be activated through the deployment workflow. For local Docker, the
+explicit operation is `vllm-sr serve --config <candidate>
+--replace-active-config`; without that flag, `serve` preserves Dashboard-edited
+runtime state. The Router apply API is for hot-reloadable state. Prefer
+`replace` for a complete reviewed document; use `merge` only for an
+intentionally partial patch.
 
 Inspect or recover state with:
 

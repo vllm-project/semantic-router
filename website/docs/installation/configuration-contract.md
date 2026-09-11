@@ -140,7 +140,9 @@ An automation or deployment agent should:
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
 6. plan the mutation; apply a hot-reloadable change with the returned
    `current_etag` in `If-Match`, or use the deployment workflow when listener
-   or provider topology returns `RESTART_REQUIRED`;
+   or provider topology returns `RESTART_REQUIRED` (for local Docker, use the
+   explicit `vllm-sr serve --config <candidate> --replace-active-config`
+   operation after approval);
 7. poll `activation_status` and probe the Envoy data plane before keeping the
    change.
 

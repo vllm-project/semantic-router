@@ -35,7 +35,10 @@ For configuration changes, follow this exact order:
 3. Plan against current state without writing.
 4. Apply a Router-hot-reloadable change with the ETag returned by the plan. If
    planning reports `RESTART_REQUIRED`, activate the candidate through the
-   deployment workflow instead of the Router mutation API.
+   deployment workflow instead of the Router mutation API. For local Docker,
+   the explicit source-authoritative operation is
+   `vllm-sr serve --config <candidate> --replace-active-config`; ask before it
+   replaces the running stack and any Dashboard-edited active config.
 5. Confirm readiness and active configuration.
 6. Preview representative routing cases without model calls.
 7. Probe the Envoy-routed endpoint with real model calls and assertions.

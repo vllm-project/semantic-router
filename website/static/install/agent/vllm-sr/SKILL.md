@@ -69,9 +69,18 @@ boundaries take precedence over this skill.
 
 7. Review the plan. A `RESTART_REQUIRED` result means the candidate changes a
    listener or provider backend topology rendered into Envoy. Do not call the
-   Router apply API for that candidate; follow the deployment workflow and ask
-   before disrupting a running stack. Apply a hot-reloadable candidate only
-   when it matches the user's requested scope:
+   Router apply API for that candidate. For a local Docker deployment, ask
+   before disrupting the running stack, then explicitly replace its active
+   runtime config from the reviewed source document:
+
+   ```bash
+   vllm-sr serve --config config.yaml --replace-active-config
+   ```
+
+   Without `--replace-active-config`, `serve` preserves Dashboard or Recipe
+   changes in active runtime state. The flag cannot replace an active Recipe
+   package; change that package through its Recipe workflow. Apply a
+   hot-reloadable candidate only when it matches the user's requested scope:
 
    ```bash
    vllm-sr config apply --config config.yaml
