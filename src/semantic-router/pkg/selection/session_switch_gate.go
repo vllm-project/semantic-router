@@ -1,6 +1,10 @@
 package selection
 
-import "time"
+import (
+	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // Switch gate decisions and suppression reasons recorded in replay.
 const (
@@ -20,35 +24,10 @@ const (
 	SwitchOriginDowngrade  = "downgrade"
 )
 
-// ProgressGateConfig tunes the evidence thresholds. A zero value disables the
-// gate, matching the default-off requirement in issue #3377.
-type ProgressGateConfig struct {
-	Enabled bool
-	Mode    string
+type ProgressGateConfig = config.ProgressGateConfig
 
-	WindowSize       int
-	WindowTTLSeconds int
-
-	MinWindowOutcomes         int
-	MinConsecutiveRegressions int
-	MinConsecutiveRecoveries  int
-	CooldownSeconds           float64
-	MaxSwitchesPerWindow      int
-}
-
-// DefaultProgressGateConfig returns the calibration placeholders.
 func DefaultProgressGateConfig() ProgressGateConfig {
-	return ProgressGateConfig{
-		Enabled:                   false,
-		Mode:                      GateModeObserve,
-		WindowSize:                8,
-		WindowTTLSeconds:          900,
-		MinWindowOutcomes:         3,
-		MinConsecutiveRegressions: 2,
-		MinConsecutiveRecoveries:  2,
-		CooldownSeconds:           120,
-		MaxSwitchesPerWindow:      2,
-	}
+	return (*config.ProgressGateTuning)(nil).EffectiveConfig()
 }
 
 // SwitchGateInput is everything the gate needs beyond the evidence itself.
@@ -73,12 +52,13 @@ type SwitchGateInput struct {
 // caller must honour it; observe mode records the same reasoning without
 // intercepting.
 type SwitchGateDecision struct {
-	Version  string
-	Mode     string
-	Decision string
-	Reason   string
-	Origin   string
-	Enforced bool
+	CalibrationID string
+	Version       string
+	Mode          string
+	Decision      string
+	Reason        string
+	Origin        string
+	Enforced      bool
 
 	RegressionStreak int
 	RecoveryStreak   int
@@ -90,6 +70,7 @@ type SwitchGateDecision struct {
 // checks remain authoritative and are re-checked by the caller before commit.
 func EvaluateSwitchGate(cfg ProgressGateConfig, in SwitchGateInput) SwitchGateDecision {
 	decision := SwitchGateDecision{
+		CalibrationID:    cfg.CalibrationID,
 		Version:          in.Evidence.Version,
 		Mode:             gateMode(cfg.Mode),
 		Decision:         GateDecisionSwitch,

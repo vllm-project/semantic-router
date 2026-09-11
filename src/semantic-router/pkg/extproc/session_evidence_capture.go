@@ -35,23 +35,32 @@ func classifyTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) sessio
 	return sessiontelemetry.TurnProgress
 }
 
-// recordSessionTurnOutcome captures one router-observed outcome into the
-// bounded evidence window. It runs on the response path next to session usage
-// accounting and never blocks it: an unresolvable session is simply skipped.
-func recordSessionTurnOutcome(ctx *RequestContext, usage responseUsageMetrics) {
-	if ctx == nil || ctx.SessionID == "" || requestBypassesRouting(ctx) {
+// recordSessionTurnOutcome captures one terminal outcome, independently of billing.
+func recordSessionTurnOutcome(ctx *RequestContext, usage responseUsageMetrics, pricing ...sessiontelemetry.TurnPricing) {
+	if ctx == nil || ctx.VSRProgressGateConfig == nil || !ctx.VSRProgressGateConfig.Enabled ||
+		ctx.VSRProgressOutcomeRecorded || requestBypassesRouting(ctx) {
 		return
 	}
-	now := time.Now()
-	sessiontelemetry.RecordTurnOutcome(routingSessionStateKey(ctx), sessiontelemetry.TurnOutcome{
-		RequestID:    ctx.RequestID,
-		TurnIndex:    ctx.TurnIndex,
-		Model:        ctx.RequestModel,
-		Category:     classifyTurnOutcome(ctx, usage),
-		OutputTokens: int64(usage.completionTokens),
-		LatencyMs:    int64(ctx.TTFTSeconds * 1000),
-		Source:       sessiontelemetry.TurnSourceRouterObserved,
-	}, now)
+	key := progressEvidenceStateKey(ctx)
+	if key == "" {
+		return
+	}
+	ctx.VSRProgressOutcomeRecorded = true
+	at := ctx.StartTime
+	if at.IsZero() {
+		at = time.Now()
+	}
+	outcome := sessiontelemetry.TurnOutcome{
+		RequestID: ctx.RequestID, TurnIndex: ctx.TurnIndex, Model: ctx.RequestModel,
+		Category: classifyTurnOutcome(ctx, usage), OutputTokens: int64(usage.completionTokens),
+		LatencyMs: int64(ctx.TTFTSeconds * 1000), LatencyKnown: ctx.TTFTRecorded,
+		Source: sessiontelemetry.TurnSourceRouterObserved,
+	}
+	if len(pricing) > 0 && (pricing[0].PromptPer1M > 0 || pricing[0].CompletionPer1M > 0) && !usage.invalid {
+		outcome.Cost = sessionTurnCost(usage, pricing[0])
+		outcome.CostKnown = true
+	}
+	sessiontelemetry.RecordTurnOutcome(key, outcome, at)
 }
 
 // verdictOutcomeCategory maps an ingested learning verdict onto the evidence
@@ -80,6 +89,7 @@ func recordIngestedTurnOutcome(
 	model string,
 	verdict routerLearningOutcomeVerdict,
 	score float64,
+	scoreProvided bool,
 ) {
 	category, ok := verdictOutcomeCategory(verdict)
 	if !ok || record.SessionID == "" {
@@ -87,15 +97,19 @@ func recordIngestedTurnOutcome(
 	}
 	eventTime := record.Timestamp
 	if eventTime.IsZero() {
-		eventTime = time.Now()
+		return
+	}
+	if record.ResponseStatus == 429 || record.ResponseStatus >= 500 {
+		category = sessiontelemetry.TurnProviderError
 	}
 	sessionKey := config.RoutingNamespaceKey(config.RecipeName(record.Recipe), record.SessionID)
 	sessiontelemetry.RecordTurnOutcome(sessionKey, sessiontelemetry.TurnOutcome{
-		RequestID:  record.RequestID,
-		TurnIndex:  record.TurnIndex,
-		Model:      model,
-		Category:   category,
-		Confidence: score,
-		Source:     sessiontelemetry.TurnSourceOutcomeIngest,
+		RequestID:       record.RequestID,
+		TurnIndex:       record.TurnIndex,
+		Model:           model,
+		Category:        category,
+		Confidence:      score,
+		ConfidenceKnown: scoreProvided,
+		Source:          sessiontelemetry.TurnSourceOutcomeIngest,
 	}, eventTime)
 }

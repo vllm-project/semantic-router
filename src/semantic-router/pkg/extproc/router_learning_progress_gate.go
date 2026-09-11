@@ -9,43 +9,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
-// progressGateConfig converts protection tuning into the selection-side gate
-// config. Omitted fields keep the packaged defaults, and an omitted section
-// leaves the gate disabled.
 func progressGateConfig(tuning config.RouterLearningProtectionTuning) selection.ProgressGateConfig {
-	cfg := selection.DefaultProgressGateConfig()
-	gate := tuning.ProgressGate
-	if gate == nil {
-		return cfg
-	}
-	if gate.Enabled != nil {
-		cfg.Enabled = *gate.Enabled
-	}
-	if gate.Mode != "" {
-		cfg.Mode = gate.Mode
-	}
-	if gate.WindowSize != nil {
-		cfg.WindowSize = *gate.WindowSize
-	}
-	if gate.WindowTTLSeconds != nil {
-		cfg.WindowTTLSeconds = *gate.WindowTTLSeconds
-	}
-	if gate.MinWindowOutcomes != nil {
-		cfg.MinWindowOutcomes = *gate.MinWindowOutcomes
-	}
-	if gate.MinConsecutiveRegressions != nil {
-		cfg.MinConsecutiveRegressions = *gate.MinConsecutiveRegressions
-	}
-	if gate.MinConsecutiveRecoveries != nil {
-		cfg.MinConsecutiveRecoveries = *gate.MinConsecutiveRecoveries
-	}
-	if gate.CooldownSeconds != nil {
-		cfg.CooldownSeconds = *gate.CooldownSeconds
-	}
-	if gate.MaxSwitchesPerWindow != nil {
-		cfg.MaxSwitchesPerWindow = *gate.MaxSwitchesPerWindow
-	}
-	return cfg
+	return tuning.ProgressGate.EffectiveConfig()
 }
 
 // turnOutcomeFacts converts stored outcomes into the selection-side facts the
@@ -63,17 +28,38 @@ func turnOutcomeFacts(window []sessiontelemetry.TurnOutcome) []selection.TurnOut
 			Category:          string(o.Category),
 			ModelAttributable: o.ModelAttributable,
 			Confidence:        o.Confidence,
+			ConfidenceKnown:   o.ConfidenceKnown,
 			OutputTokens:      o.OutputTokens,
 			LatencyMs:         o.LatencyMs,
+			LatencyKnown:      o.LatencyKnown,
+			Cost:              o.Cost,
+			CostKnown:         o.CostKnown,
 		})
 	}
 	return facts
 }
 
-// switchGateVerdict evaluates the evidence gate for a switch the selector or a
-// rescue path already proposed. It returns the verdict plus the trace section
-// so callers record the same reasoning they act on. Switches that do not change
-// the model, and sessions the gate cannot key, are left untouched.
+func progressEvidenceStateKey(ctx *RequestContext) string {
+	if ctx != nil && !ctx.Routing.IsPassthrough() && ctx.ResponseObjectState != nil {
+		return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.ResponseObjectState.SessionTrackingID)
+	}
+	return routingSessionStateKey(ctx)
+}
+
+func configureProgressEvidence(ctx *RequestContext, cfg config.ProgressGateConfig, now time.Time) {
+	if ctx == nil || !cfg.Enabled {
+		return
+	}
+	ctx.VSRProgressGateConfig = &cfg
+	ttl := time.Duration(cfg.WindowTTLSeconds) * time.Second
+	key, stateKey := progressEvidenceStateKey(ctx), routingLearningStateKey(ctx)
+	sessiontelemetry.ConfigureTurnOutcomeWindow(key, cfg.WindowSize, ttl, now)
+	if stateKey != key {
+		sessiontelemetry.ConfigureTurnOutcomeWindow(stateKey, cfg.WindowSize, ttl, now)
+	}
+}
+
+// switchGateVerdict evaluates a proposal; its caller commits the final result.
 func (r *OpenAIRouter) switchGateVerdict(
 	cfg config.RouterLearningProtectionConfig,
 	ctx *RequestContext,
@@ -86,26 +72,14 @@ func (r *OpenAIRouter) switchGateVerdict(
 	if !gateCfg.Enabled || currentModel == "" || proposedModel == "" || currentModel == proposedModel {
 		return selection.SwitchGateDecision{}, nil, false
 	}
-	sessionKey := routingSessionStateKey(ctx)
+	sessionKey := progressEvidenceStateKey(ctx)
 	if sessionKey == "" {
 		return selection.SwitchGateDecision{}, nil, false
 	}
-	// Protection records the decision state (current model, last switch, switch
-	// history) under its conversation-scoped memory key; reading it from the
-	// session-scoped routing key would always miss, blinding cooldown and the
-	// oscillation guard.
 	stateKey := routingLearningStateKey(ctx)
-
 	now := time.Now()
-	// Apply the configured bounds before reading so both the gate and the
-	// response-path writers use the operator's window policy.
 	windowTTL := time.Duration(gateCfg.WindowTTLSeconds) * time.Second
-	sessiontelemetry.ConfigureTurnOutcomeWindow(sessionKey, gateCfg.WindowSize, windowTTL, now)
-	if stateKey != sessionKey {
-		// The decision state prunes its switch timestamps with its own window
-		// policy, so the learning key needs the same bounds.
-		sessiontelemetry.ConfigureTurnOutcomeWindow(stateKey, gateCfg.WindowSize, windowTTL, now)
-	}
+	configureProgressEvidence(ctx, gateCfg, now)
 	window := sessiontelemetry.RecentTurnOutcomesWithPolicy(sessionKey, now, gateCfg.WindowSize, windowTTL)
 	evidence := selection.EvaluateProgressEvidence(turnOutcomeFacts(window))
 
@@ -134,11 +108,11 @@ func (r *OpenAIRouter) switchGateVerdict(
 	}
 
 	decision := selection.EvaluateSwitchGate(gateCfg, in)
-	return decision, switchGateTrace(decision, evidence, in, len(window)), true
+	trace := switchGateTrace(decision, in, len(window))
+	trace.CurrentModel, trace.ProposedModel, trace.FinalModel = currentModel, proposedModel, proposedModel
+	trace.Source = "selector"
+	return decision, trace, true
 }
-
-// isDowngradeSwitch is intentionally absent: quality-score knowledge lives in
-// the selection package, so callers pass the already-resolved downgrade flag.
 
 func agenticSessionFromContext(learningCtx *selection.SelectionContext) *selection.AgenticSessionContext {
 	if learningCtx == nil {
@@ -149,11 +123,15 @@ func agenticSessionFromContext(learningCtx *selection.SelectionContext) *selecti
 
 func switchGateTrace(
 	decision selection.SwitchGateDecision,
-	evidence selection.ProgressEvidence,
 	in selection.SwitchGateInput,
 	windowCount int,
 ) *selection.SessionSwitchGateTrace {
+	evidence := in.Evidence
 	return &selection.SessionSwitchGateTrace{
+		CalibrationID:   decision.CalibrationID,
+		ConfidenceTrend: evidence.ConfidenceTrend, ConfidenceTrendKnown: evidence.ConfidenceTrendKnown,
+		CostTrend: evidence.CostTrend, CostTrendKnown: evidence.CostTrendKnown,
+		LatencyTrend: evidence.LatencyTrend, LatencyTrendKnown: evidence.LatencyTrendKnown,
 		EvidenceVersion:        decision.Version,
 		Mode:                   decision.Mode,
 		Decision:               decision.Decision,

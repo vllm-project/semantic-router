@@ -17,6 +17,9 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 
 	completionLatency := time.Since(ctx.StartTime)
+	if !ctx.IsStreamingResponse || v.ResponseBody.GetEndOfStream() {
+		defer recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+	}
 
 	// Decrement active request count for queue depth estimation.
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)

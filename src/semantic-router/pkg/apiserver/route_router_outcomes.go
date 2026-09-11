@@ -138,13 +138,14 @@ func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.Rou
 		}
 	}
 	return &routerruntime.RouterOutcome{
-		ReplayID:  replayID,
-		Target:    target,
-		TargetRef: boundedOutcomeTargetRef(req.TargetRef),
-		Verdict:   verdict,
-		Reason:    strings.TrimSpace(req.Reason),
-		Score:     score,
-		Metadata:  boundedOutcomeMetadata(req.Metadata),
+		ReplayID:      replayID,
+		Target:        target,
+		TargetRef:     boundedOutcomeTargetRef(req.TargetRef),
+		Verdict:       verdict,
+		Reason:        strings.TrimSpace(req.Reason),
+		Score:         score,
+		ScoreProvided: req.Score != nil,
+		Metadata:      boundedOutcomeMetadata(req.Metadata),
 	}, nil
 }
 

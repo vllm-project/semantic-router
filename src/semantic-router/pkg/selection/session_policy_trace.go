@@ -57,22 +57,37 @@ type SessionPolicyTrace struct {
 
 	// SwitchGate explains the evidence-calibrated gate verdict when the gate
 	// evaluated this decision. Nil means the gate did not run.
-	SwitchGate *SessionSwitchGateTrace
+	SwitchGate       *SessionSwitchGateTrace
+	RescueSwitchGate *SessionSwitchGateTrace
 }
 
 // SessionSwitchGateTrace records why trajectory evidence allowed or suppressed
 // a switch, so replay can reconstruct the verdict without hidden reasoning.
 type SessionSwitchGateTrace struct {
-	EvidenceVersion string
-	Mode            string
-	Decision        string
-	Reason          string
-	Origin          string
-	Enforced        bool
+	CalibrationID     string
+	CurrentModel      string
+	ProposedModel     string
+	FinalModel        string
+	Applied           bool
+	ApplicationReason string
+	Source            string
+	EvidenceVersion   string
+	Mode              string
+	Decision          string
+	Reason            string
+	Origin            string
+	Enforced          bool
 
 	RegressionStreak int
 	RecoveryStreak   int
 	Trend            float64
+
+	ConfidenceTrend      float64
+	CostTrend            float64
+	LatencyTrend         float64
+	ConfidenceTrendKnown bool
+	CostTrendKnown       bool
+	LatencyTrendKnown    bool
 
 	AttributableCount int
 	MissingCount      int
@@ -172,25 +187,29 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		}
 		out["candidate_traces"] = candidates
 	}
-	if g := t.SwitchGate; g != nil {
-		out["switch_gate"] = map[string]interface{}{
-			"evidence_version":          g.EvidenceVersion,
-			"mode":                      g.Mode,
-			"decision":                  g.Decision,
-			"suppression_reason":        g.Reason,
-			"switch_origin":             g.Origin,
-			"enforced":                  g.Enforced,
-			"regression_streak":         g.RegressionStreak,
-			"recovery_streak":           g.RecoveryStreak,
-			"trend":                     g.Trend,
-			"attributable_count":        g.AttributableCount,
-			"missing_count":             g.MissingCount,
-			"window_count":              g.WindowCount,
-			"cold_start":                g.ColdStart,
-			"switches_in_window":        g.SwitchesInWindow,
-			"seconds_since_last_switch": g.SecondsSinceLastSwitch,
-			"last_switch_known":         g.LastSwitchKnown,
-		}
+	if t.SwitchGate != nil {
+		out["switch_gate"] = t.SwitchGate.ToMap()
+	}
+	if t.RescueSwitchGate != nil {
+		out["rescue_switch_gate"] = t.RescueSwitchGate.ToMap()
 	}
 	return out
+}
+
+func (g *SessionSwitchGateTrace) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"evidence_version": g.EvidenceVersion, "calibration_id": g.CalibrationID,
+		"mode": g.Mode, "decision": g.Decision, "suppression_reason": g.Reason,
+		"switch_origin": g.Origin, "source": g.Source, "enforced": g.Enforced,
+		"applied": g.Applied, "application_reason": g.ApplicationReason,
+		"current_model": g.CurrentModel, "proposed_model": g.ProposedModel, "final_model": g.FinalModel,
+		"regression_streak": g.RegressionStreak, "recovery_streak": g.RecoveryStreak, "trend": g.Trend,
+		"confidence_trend": g.ConfidenceTrend, "confidence_trend_known": g.ConfidenceTrendKnown,
+		"cost_trend": g.CostTrend, "cost_trend_known": g.CostTrendKnown,
+		"latency_trend": g.LatencyTrend, "latency_trend_known": g.LatencyTrendKnown,
+		"attributable_count": g.AttributableCount, "missing_count": g.MissingCount,
+		"window_count": g.WindowCount, "cold_start": g.ColdStart,
+		"switches_in_window":        g.SwitchesInWindow,
+		"seconds_since_last_switch": g.SecondsSinceLastSwitch, "last_switch_known": g.LastSwitchKnown,
+	}
 }
