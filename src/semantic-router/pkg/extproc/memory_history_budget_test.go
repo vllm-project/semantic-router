@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-func TestMemoryHistoryBudgetRejectsBeforeSnapshot(t *testing.T) {
+func TestMemorySnapshotBudgetRejectsBeforeSnapshot(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		mutate func(*budgetHistory)
@@ -43,25 +43,53 @@ func TestMemoryHistoryBudgetRejectsBeforeSnapshot(t *testing.T) {
 				Input: make([]responseapi.InputItem, maxMemorySnapshotMessages),
 			}}
 		}},
+		{"response_bytes", func(ctx *budgetHistory) {
+			ctx.response.Output[0].Content[0].Text = strings.Repeat("x", maxMemorySnapshotBytes+1)
+		}},
+		{"response_items", func(ctx *budgetHistory) {
+			ctx.response.Output = make([]llmprotocol.OutputItem, maxMemorySnapshotNodes+1)
+		}},
+		{"response_blocks", func(ctx *budgetHistory) {
+			ctx.response.Output[0].Content = make([]llmprotocol.Content, maxMemorySnapshotNodes+1)
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := newBudgetHistory()
 			tc.mutate(ctx)
-			require.ErrorIs(t, validateMemoryHistoryBudget(context.Background(), ctx.messages, ctx.retained), errMemoryHistoryTooLarge)
+			require.ErrorIs(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
 		})
 	}
 	ctx := newBudgetHistory()
-	require.NoError(t, validateMemoryHistoryBudget(context.Background(), ctx.messages, ctx.retained))
+	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response))
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	require.ErrorIs(t, validateMemoryHistoryBudget(cancelled, ctx.messages, ctx.retained), context.Canceled)
+	require.ErrorIs(t, validateMemorySnapshotBudget(cancelled, ctx.messages, ctx.retained, ctx.response), context.Canceled)
+}
+
+func TestMemorySnapshotBudgetSharesResponseAndHistoryBytes(t *testing.T) {
+	ctx := newBudgetHistory()
+	ctx.retained = []*responseapi.StoredResponse{{OutputText: "previous answer"}}
+	historyBytes := len("user") + len("text") + len(ctx.messages[0].Content[0].Text) + len(ctx.retained[0].OutputText)
+	responseBytes := maxMemorySnapshotBytes - historyBytes
+	ctx.response.Output[0].Content = []llmprotocol.Content{
+		{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", responseBytes-3)},
+		{Kind: llmprotocol.ContentRefusal, Text: "界"}, // Three UTF-8 bytes, one rune.
+	}
+	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response))
+	ctx.response.Output[0].Content[1].Text += "x"
+	require.ErrorIs(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
+	require.NoError(t, validateMemorySnapshotBudget(context.Background(), ctx.messages, ctx.retained, nil))
 }
 
 type budgetHistory struct {
 	messages []llmprotocol.Message
 	retained []*responseapi.StoredResponse
+	response *llmprotocol.Response
 }
 
 func newBudgetHistory() *budgetHistory {
-	return &budgetHistory{messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Remember my deployment preference."}}}}}
+	return &budgetHistory{
+		messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Remember my deployment preference."}}}},
+		response: &llmprotocol.Response{Output: []llmprotocol.OutputItem{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "I will remember."}}}}},
+	}
 }

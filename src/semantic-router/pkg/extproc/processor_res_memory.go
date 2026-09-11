@@ -17,13 +17,6 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	ctx *RequestContext,
 	response *llmprotocol.Response,
 ) {
-	r.scheduleResponseMemoryStoreText(ctx, extractSemanticAssistantResponseText(response))
-}
-
-func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
-	ctx *RequestContext,
-	currentAssistantResponse string,
-) {
 	if r == nil || ctx == nil {
 		return
 	}
@@ -56,6 +49,16 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		r.recordMemoryPersistenceOutcome(ctx, "skipped", "memory_info_unavailable", false, nil)
 		return
 	}
+	var retained []*responseapi.StoredResponse
+	if ctx.ResponseObjectState != nil && !ctx.ResponseObjectState.ProviderContextApplied {
+		retained = ctx.ResponseObjectState.ConversationHistory
+	}
+	// Inspect bounded structure and lengths before admission. Rejected snapshots
+	// must not occupy capacity while workers are blocked. No text is copied here.
+	if err := validateMemorySnapshotBudget(context.Background(), ctx.SemanticRequest.Messages, retained, response); err != nil {
+		r.recordMemoryPersistenceOutcome(ctx, "skipped", "history_too_large", true, err)
+		return
+	}
 	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
 	if !receipt.reserve() {
 		receipt.record("rejected", "receipt_queue_full", true, nil)
@@ -66,16 +69,12 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		return
 	}
 	defer reservation.Abort(memory.PersistenceOutcome{Status: "extraction_failed", Reason: "snapshot_failed", FailOpen: true}, nil)
-	var retained []*responseapi.StoredResponse
-	if ctx.ResponseObjectState != nil {
-		retained = ctx.ResponseObjectState.ConversationHistory
-	}
-	if err := validateMemoryHistoryBudget(reservation.Context(), ctx.SemanticRequest.Messages, retained); err != nil {
-		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "history_too_large", FailOpen: true}, err)
+	if reservation.Context().Err() != nil {
 		return
 	}
 	// Snapshot while the request still owns its mutable state. Preparation is
 	// admitted and bounded; protocol encoding remains in the worker.
+	currentAssistantResponse := extractSemanticAssistantResponseText(response)
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	sessionID, userID, history, infoErr := extractMemoryInfo(ctx)
 	if infoErr != nil {
@@ -138,7 +137,8 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 		return requestAutoStore
 	}
 	if memoryConfig != nil && memoryConfig.AutoStore != nil {
-		return extractAutoStore(ctx)
+		autoStore, _ := extractAutoStore(ctx)
+		return autoStore
 	}
 	return r.Config.Memory.AutoStore
 }

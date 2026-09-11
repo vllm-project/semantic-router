@@ -197,7 +197,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         result = response.json()
         self.assertTrue(self._extract_output_text(result))
         result["_replay_id"] = response.headers.get("x-vsr-replay-id", "")
-        receipt = self._wait_for_terminal_receipt(result)
+        receipt = self._wait_for_terminal_receipt(result, scheduled=False)
         self.assertEqual(receipt["verdict"], "skipped", receipt)
         self.assertEqual(receipt["reason"], "history_too_large", receipt)
         self.assertEqual(receipt["metadata"].get("fail_open"), "true", receipt)

@@ -80,16 +80,36 @@ func TestNeutralMemoryMessageAndCurrentUserExtraction(t *testing.T) {
 }
 
 func TestExtractAutoStoreUsesDecisionPolicy(t *testing.T) {
-	autoStore := true
-	payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: true, AutoStore: &autoStore})
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{
-		Name: "memory", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}},
-	}}
-	if !extractAutoStore(ctx) {
-		t.Fatal("decision auto-store policy was not used")
+	on, off := true, false
+	for _, tc := range []struct {
+		name      string
+		autoStore *bool
+		wantValue bool
+		wantSet   bool
+	}{
+		{name: "no_decision"},
+		{name: "no_memory_plugin"},
+		{name: "omitted"},
+		{name: "explicit_false", autoStore: &off, wantSet: true},
+		{name: "explicit_true", autoStore: &on, wantValue: true, wantSet: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := &RequestContext{}
+			if tc.name != "no_decision" {
+				ctx.VSRSelectedDecision = &config.Decision{Name: "memory"}
+				if tc.name != "no_memory_plugin" {
+					payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: true, AutoStore: tc.autoStore})
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}}
+				}
+			}
+			value, set := extractAutoStore(ctx)
+			if value != tc.wantValue || set != tc.wantSet {
+				t.Fatalf("auto_store=(%v, %v), want (%v, %v)", value, set, tc.wantValue, tc.wantSet)
+			}
+		})
 	}
 }
 
