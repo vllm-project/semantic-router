@@ -25,16 +25,13 @@ type RouterSessionSnapshot struct {
 	SessionID string
 	UserID    string
 
-	CurrentModel string
-	LastSeen     time.Time
-	IdleFor      time.Duration
-	// LastSwitchAt is the time of the most recent model change; zero when the
-	// session has never switched.
-	LastSwitchAt time.Time `json:"last_switch_at,omitempty"`
-	// SwitchTimestamps are the recent model-change times in unix millis,
-	// pruned by the session's evidence-window TTL. The gate counts switches
-	// inside its configured window from these.
-	SwitchTimestamps []int64 `json:"switch_timestamps,omitempty"`
+	CurrentModel            string
+	LastSeen                time.Time
+	IdleFor                 time.Duration
+	LastSwitchAt            time.Time `json:"last_switch_at,omitempty"`
+	SwitchTimestamps        []int64   `json:"switch_timestamps,omitempty"`
+	OutcomeWindowSize       int       `json:"outcome_window_size,omitempty"`
+	OutcomeWindowTTLSeconds int       `json:"outcome_window_ttl_seconds,omitempty"`
 
 	TurnCount   int
 	SwitchCount int
@@ -116,11 +113,10 @@ type routerSessionState struct {
 	lastCacheAccountingSource string
 	lastPolicy                map[string]interface{}
 
-	recentOutcomes []TurnOutcome
-	// Evidence window policy for this session, set from the active progress
-	// gate config. Process-local: the gate re-applies it on the request path.
+	recentOutcomes    []TurnOutcome
 	outcomeWindowSize int
 	outcomeWindowTTL  time.Duration
+	outcomeSaveMu     sync.Mutex
 }
 
 type routerSessionMemoryStore struct {
@@ -163,8 +159,8 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	if previous != "" && previous != p.SelectedModel {
 		st.switchCount++
 		st.lastSwitchAt = now
-		_, ttl := st.windowPolicy()
-		st.switchTimestamps = pruneSwitchTimestamps(append(st.switchTimestamps, now.UnixMilli()), ttl, now)
+		_, windowTTL := st.windowPolicy()
+		st.switchTimestamps = pruneSwitchTimestamps(append(st.switchTimestamps, now.UnixMilli()), windowTTL, now)
 	}
 	st.currentModel = p.SelectedModel
 	st.lastSeen = now
@@ -252,6 +248,8 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		LastSeen:                        st.lastSeen,
 		LastSwitchAt:                    st.lastSwitchAt,
 		SwitchTimestamps:                cloneInt64Slice(st.switchTimestamps),
+		OutcomeWindowSize:               st.outcomeWindowSize,
+		OutcomeWindowTTLSeconds:         int(st.outcomeWindowTTL / time.Second),
 		IdleFor:                         idleFor,
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
@@ -364,7 +362,7 @@ func CountRecentSwitches(timestamps []int64, window time.Duration, now time.Time
 	cutoff := now.Add(-window).UnixMilli()
 	count := 0
 	for _, ts := range timestamps {
-		if ts >= cutoff {
+		if ts >= cutoff && ts <= now.UnixMilli() {
 			count++
 		}
 	}

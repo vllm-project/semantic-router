@@ -1,6 +1,9 @@
 package sessiontelemetry
 
-import "time"
+import (
+	"sort"
+	"time"
+)
 
 // TurnOutcomeCategory classifies a session-turn outcome. Provider and tool
 // failures are environment noise, never model regressions.
@@ -52,8 +55,12 @@ type TurnOutcome struct {
 	Category          TurnOutcomeCategory `json:"category"`
 	ModelAttributable bool                `json:"model_attributable"`
 	Confidence        float64             `json:"confidence,omitempty"`
+	ConfidenceKnown   bool                `json:"confidence_known,omitempty"`
 	OutputTokens      int64               `json:"output_tokens,omitempty"`
 	LatencyMs         int64               `json:"latency_ms,omitempty"`
+	LatencyKnown      bool                `json:"latency_known,omitempty"`
+	Cost              float64             `json:"cost,omitempty"`
+	CostKnown         bool                `json:"cost_known,omitempty"`
 	Source            string              `json:"source,omitempty"`
 }
 
@@ -121,8 +128,15 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 
 	s := globalRouterSessionMemory
 	s.mu.Lock()
-	size, ttl := s.sessions[sessionID].windowPolicy()
-	if s.nowFn().Sub(ts) > ttl {
+	now := s.nowFn()
+	_, known := s.sessions[sessionID]
+	s.mu.Unlock()
+	if !known {
+		_, _ = loadSharedRouterSessionSnapshot(sessionID, now)
+	}
+	s.mu.Lock()
+	size, windowTTL := s.sessions[sessionID].windowPolicy()
+	if now.Sub(ts) > windowTTL || ts.After(now) {
 		s.mu.Unlock()
 		return
 	}
@@ -130,7 +144,7 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 	if st.lastSeen.IsZero() || ts.After(st.lastSeen) {
 		st.lastSeen = ts
 	}
-	st.recentOutcomes = appendTurnOutcome(st.recentOutcomes, outcome, ts, size, ttl)
+	st.recentOutcomes = appendTurnOutcome(st.recentOutcomes, outcome, now, size, windowTTL)
 	s.mu.Unlock()
 
 	persistRouterSessionState(sessionID)
@@ -213,12 +227,10 @@ func trimTurnOutcomes(outcomes []TurnOutcome, size int) []TurnOutcome {
 func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Time, size int, ttl time.Duration) []TurnOutcome {
 	outcomes = pruneTurnOutcomes(outcomes, ttl, now)
 	for i := range outcomes {
-		// Only the two writers' views of one turn merge: response capture and
-		// outcome ingest. Two captures are always distinct turns.
-		if (outcome.Source == TurnSourceOutcomeIngest || outcomes[i].Source == TurnSourceOutcomeIngest) &&
-			sameTurn(outcomes[i], outcome) {
+		if sameTurn(outcomes[i], outcome) {
 			outcomes[i] = mergeTurnOutcome(outcomes[i], outcome)
-			return outcomes
+			sort.SliceStable(outcomes, func(i, j int) bool { return outcomes[i].Timestamp < outcomes[j].Timestamp })
+			return trimTurnOutcomes(pruneTurnOutcomes(outcomes, ttl, now), size)
 		}
 	}
 	// A full window cannot accept an outcome older than everything in it.
@@ -235,36 +247,38 @@ func appendTurnOutcome(outcomes []TurnOutcome, outcome TurnOutcome, now time.Tim
 	return trimTurnOutcomes(outcomes, size)
 }
 
-// sameTurn reports whether two facts describe one turn: the same request when
-// both carry a request ID, the same turn index and model when neither does.
-// A mixed pair cannot be proven identical and stays separate.
+// TurnIndex may repeat for stateless clients; it is not an identity.
 func sameTurn(a, b TurnOutcome) bool {
-	if a.RequestID != "" || b.RequestID != "" {
-		return a.RequestID != "" && b.RequestID != "" && a.RequestID == b.RequestID
-	}
-	return a.TurnIndex == b.TurnIndex && a.Model == b.Model
+	return a.RequestID != "" && a.RequestID == b.RequestID && a.Model == b.Model
 }
 
-// mergeTurnOutcome combines the two writers' views of one turn: the ingest
-// verdict owns the semantic category, response capture owns the usage
-// measurements, and the first writer's event time keeps the window ordered.
 func mergeTurnOutcome(existing, incoming TurnOutcome) TurnOutcome {
 	merged := existing
+	if incoming.Timestamp < merged.Timestamp {
+		merged.Timestamp = incoming.Timestamp
+	}
 	switch incoming.Source {
 	case TurnSourceOutcomeIngest:
 		merged.Category = incoming.Category
 		merged.Confidence = incoming.Confidence
+		merged.ConfidenceKnown = incoming.ConfidenceKnown
 		merged.Source = TurnSourceOutcomeIngest
 	case TurnSourceRouterObserved:
 		merged.OutputTokens = incoming.OutputTokens
-		merged.LatencyMs = incoming.LatencyMs
+		merged.LatencyMs, merged.LatencyKnown = incoming.LatencyMs, incoming.LatencyKnown
+		merged.Cost, merged.CostKnown = incoming.Cost, incoming.CostKnown
 		if existing.Source != TurnSourceOutcomeIngest {
 			merged.Category = incoming.Category
 			merged.Source = TurnSourceRouterObserved
 		}
 	}
-	if merged.RequestID == "" {
-		merged.RequestID = incoming.RequestID
+	// A quality verdict must not turn an observed infrastructure failure into
+	// a model failure, regardless of arrival order.
+	for _, category := range []TurnOutcomeCategory{TurnProviderError, TurnToolError} {
+		if existing.Category == category || incoming.Category == category {
+			merged.Category = category
+			break
+		}
 	}
 	merged.ModelAttributable = categoryAttributable(merged.Category)
 	return merged
@@ -285,7 +299,7 @@ func pruneTurnOutcomes(outcomes []TurnOutcome, ttl time.Duration, now time.Time)
 	kept := make([]TurnOutcome, 0, len(outcomes))
 	for _, o := range outcomes {
 		ts := o.Time()
-		if ts.IsZero() || !ts.Before(cutoff) {
+		if !ts.IsZero() && !ts.Before(cutoff) && !ts.After(now) {
 			kept = append(kept, o)
 		}
 	}
