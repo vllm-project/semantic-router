@@ -37,6 +37,12 @@ type cascadeCandidate struct {
 	generation string
 }
 
+// witness is the candidate as the generation witness a conditional unindex
+// compares against; the two types are layout-identical by design.
+func (c cascadeCandidate) witness() responseGenerationWitness {
+	return responseGenerationWitness(c)
+}
+
 // cascadeBatchProgress separates actual index drainage from the one other
 // state transition that is safe to treat as monotone: promotion after global
 // finalization. Witness repairs are intentionally absent; installing a repair
@@ -167,8 +173,7 @@ func (s *RedisStore) dropCascadeMembership(
 			candidate.responseID)
 	}
 
-	return s.unindexResponseGenerations(ctx, conversationID,
-		responseGenerationWitness{responseID: candidate.responseID, generation: candidate.generation})
+	return s.unindexResponseGenerations(ctx, conversationID, candidate.witness())
 }
 
 // resolveCascadeDeleteOutcome decides and executes one candidate's outcome
@@ -206,8 +211,8 @@ func (s *RedisStore) resolveCascadeDeleteOutcome(
 		// conversation now, so only this conversation's stale membership goes
 		// — under the same blank-witness gate, since an index-unaware writer
 		// could just as well have moved it back after this read.
-		removed, err := s.dropCascadeMembership(ctx, conversationID, candidate, allowLegacyCleanup)
-		return cascadeBatchProgress{membershipsRemoved: removed}, err
+		removed, dropErr := s.dropCascadeMembership(ctx, conversationID, candidate, allowLegacyCleanup)
+		return cascadeBatchProgress{membershipsRemoved: removed}, dropErr
 	}
 
 	if record.generation == "" {
@@ -227,9 +232,9 @@ func (s *RedisStore) resolveCascadeDeleteOutcome(
 		// The snapshot's witness has fallen behind the payload — an index
 		// write still in flight, or an upgrade whose witness install lost its
 		// race. Repair it from the payload rather than remove a live member.
-		_, err := s.repairResponseWitness(ctx, conversationID, record.response.ID, record.generation,
+		_, repairErr := s.repairResponseWitness(ctx, conversationID, record.response.ID, record.generation,
 			candidate.generation, record.response.CreatedAt, s.ttlMillis())
-		return cascadeBatchProgress{}, err
+		return cascadeBatchProgress{}, repairErr
 	}
 
 	deleted, err := s.compareDeleteResponsePayload(ctx, result.key, record.generation)
@@ -240,8 +245,7 @@ func (s *RedisStore) resolveCascadeDeleteOutcome(
 		return cascadeBatchProgress{}, fmt.Errorf("response %s changed concurrently during cascade delete; left in place for retry", candidate.responseID)
 	}
 
-	removed, err := s.unindexResponseGenerations(ctx, conversationID,
-		responseGenerationWitness{responseID: candidate.responseID, generation: candidate.generation})
+	removed, err := s.unindexResponseGenerations(ctx, conversationID, candidate.witness())
 	return cascadeBatchProgress{membershipsRemoved: removed}, err
 }
 
