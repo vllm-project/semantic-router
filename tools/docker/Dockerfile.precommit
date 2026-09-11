@@ -45,5 +45,7 @@ RUN pip install --break-system-packages \
     tree-sitter-typescript==0.23.2 \
     yamllint==1.38.0
 
-# Golangci-lint v2.5.0 — matches CI golangci-lint-action version
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.5.0
+# golangci-lint version is pinned once in .golangci-version and shared with CI and Makefiles
+COPY .golangci-version /tmp/golangci-version
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin "v$(cat /tmp/golangci-version)" \
+    && rm /tmp/golangci-version
