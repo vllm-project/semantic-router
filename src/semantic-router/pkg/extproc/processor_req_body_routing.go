@@ -136,11 +136,20 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 }
 
 // declaredModelCapabilities parses a model's configured capability
-// declarations. A model with no declaration is unannotated and stays eligible
-// on wire expressibility alone; a declaration that is only partially
-// understood (recognized task bits plus unrecognized names) keeps its valid
-// task bits for the declared filter, with the unrecognized words treated like
-// an unannotated model (each contributes no task bit).
+// declarations into three distinct states:
+//
+//  1. absent — no declaration at all; the model is unannotated and is judged
+//     on wire expressibility alone;
+//  2. partially understood — some names recognize to protocol capabilities,
+//     the rest are unknown; the recognized task bits keep steering the
+//     declared filter, the unknown names contribute no bit;
+//  3. invalid — a declaration that recognizes to nothing; per the documented
+//     contract that unrecognized declared capability names are treated as
+//     unannotated, it is handled exactly like an absent declaration (eligible
+//     on wire expressibility), never as a capability rejection.
+//
+// The second return value reports whether a declaration exists (states 2 and
+// 3); an absent declaration is the only way to get ok=false.
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -150,8 +159,12 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 		return llmprotocol.CapabilitySet{}, false
 	}
 	// ParseCapabilities preserves the recognized subset when it meets an
-	// unrecognized name, so the known task bits still steer filtering instead
-	// of dropping out with the whole declaration.
+	// unrecognized name: for a partial declaration this keeps the valid task
+	// bits steering filtering; for an invalid one the returned subset is empty
+	// and the model falls out exactly like unannotated. The parse error is
+	// informational at the routing seam (the vocabulary boundary is a
+	// workgroup decision, not validated here); strict callers that must
+	// reject unknown names still get it from ParseCapabilities itself.
 	declared, _ := llmprotocol.ParseCapabilities(params.Capabilities)
 	return declared, true
 }
