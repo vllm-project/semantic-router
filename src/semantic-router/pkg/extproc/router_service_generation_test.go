@@ -114,7 +114,7 @@ func TestRouterServiceSwapWaitsForLeasedManagementRuntimeBeforeClosingStore(t *t
 	}
 	newRouter := (&routerComponents{resources: newResourceScope()}).buildRouter()
 	newRuntime := newRouter.routerLearningRuntimeState()
-	if err := service.Swap(newRouter, func() {
+	if err := service.Swap(newRouter, func(AcquireFunc) {
 		registry.SetLearningRuntime(newRuntime)
 	}); err != nil {
 		t.Fatalf("Swap() error = %v", err)
@@ -163,7 +163,7 @@ func TestRouterServiceSwapRetiresPublishedSessionStoreAfterGenerationDrains(t *t
 	oldGeneration := service.current.Load()
 	oldGeneration.refs.Add(1)
 
-	if err := service.Swap(newRouter, func() {
+	if err := service.Swap(newRouter, func(AcquireFunc) {
 		publishRouterLearningStateStore(newRouter)
 	}); err != nil {
 		t.Fatalf("Swap() error = %v", err)

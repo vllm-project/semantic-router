@@ -6,7 +6,7 @@
 from the conversation. Define its labels under
 `routing.signals.user_feedbacks`.
 
-This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`.
+This family is learned: it relies on the feedback detector configured under `global.model_catalog.modules.feedback_detector`. Leave `feedback_mapping_path` empty so the detector reads `id2label` from the model's `config.json`; set it only to a mapping file whose index order matches the model head.
 
 ## Key Advantages
 
@@ -48,5 +48,7 @@ Define the feedback labels your decisions will consume, then let the learned det
 
 The feedback detector processes conversational text and can confuse quoted or
 hypothetical complaints with real feedback. Evaluate it on follow-up traffic
-and keep a normal fallback path. See a complete example:
+and keep a normal fallback path.
+
+A prediction the detector is not confident about, one below the configured `threshold`, is reported as `satisfied` with the model's own probability for that class beside it. That number is often far below the threshold, because the model put its mass on a class the threshold rejected. Read the pair as uncertain, not as evidence the user was satisfied. See a complete example:
 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).

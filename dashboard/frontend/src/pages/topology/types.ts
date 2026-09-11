@@ -1,29 +1,15 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type {
+  AlgorithmType as CanonicalAlgorithmType,
+  PluginType as CanonicalPluginType,
+  SignalType as CanonicalSignalType,
+} from '../../generated/routerConfigContract'
 import type { TopologyCacheConfig, TopologyOptionalCacheConfig } from './cacheTypes'
 
 // ============== Signal Types ==============
-export type SignalType =
-  | 'keyword'
-  | 'embedding'
-  | 'domain'
-  | 'fact_check'
-  | 'user_feedback'
-  | 'reask'
-  | 'preference'
-  | 'language'
-  | 'context'
-  | 'structure'
-  | 'complexity'
-  | 'modality'
-  | 'authz'
-  | 'jailbreak'
-  | 'pii'
-  | 'kb'
-  | 'conversation'
-  | 'event'
-  | 'projection'
+export type SignalType = CanonicalSignalType | 'projection'
 
 export interface SignalConfig {
   type: SignalType
@@ -108,6 +94,7 @@ export interface ComplexitySignalConfig {
 export interface JailbreakSignalConfig {
   threshold?: number
   include_history?: boolean
+  direction?: 'request' | 'response'
 }
 
 // Modality is detected by the modality_detector inline model; no extra params needed.
@@ -184,24 +171,9 @@ export interface RawRuleCombination {
 }
 
 // ============== Algorithm Types ==============
-export type AlgorithmType =
-  | 'confidence'
-  | 'concurrent'
-  | 'sequential'
-  | 'ratings'
-  | 'static'
-  | 'router_dc'
-  | 'automix'
-  | 'hybrid'
-  | 'remom'
-  | 'fusion'
-  | 'workflows'
-  | 'latency_aware'
-  | 'knn'
-  | 'kmeans'
-  | 'svm'
-  | 'mlp'
-  | 'multi_factor'
+// concurrent and sequential are explicit legacy-display values. Canonical
+// Router inventories always come from the generated contract.
+export type AlgorithmType = CanonicalAlgorithmType | 'concurrent' | 'sequential'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -222,6 +194,7 @@ export interface AlgorithmConfig {
   svm?: GenericAlgorithmConfig
   mlp?: GenericAlgorithmConfig
   multi_factor?: GenericAlgorithmConfig
+  prompt?: GenericAlgorithmConfig
 }
 
 export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {
@@ -253,20 +226,7 @@ export interface GenericAlgorithmConfig {
 }
 
 // ============== Plugin Types ==============
-export type PluginType =
-  | 'response_cache'
-  | 'memory'
-  | 'system_prompt'
-  | 'header_mutation'
-  | 'hallucination'
-  | 'router_replay'
-  | 'rag'
-  | 'fast_response'
-  | 'request_params'
-  | 'response_jailbreak'
-  | 'tools'
-  | 'tool_selection'
-  | 'context_compression'
+export type PluginType = CanonicalPluginType
 
 export interface PluginConfig {
   type: PluginType
@@ -278,7 +238,8 @@ export interface PluginConfig {
 export interface ModelRefConfig {
   model: string
   use_reasoning?: boolean
-  reasoning_effort?: 'low' | 'medium' | 'high'
+  reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+  reasoning_effort?: string
   lora_name?: string
   reasoning_family?: string
 }
@@ -515,6 +476,12 @@ export interface ConfigData {
     name: string
     threshold?: number
     include_history?: boolean
+    direction?: 'request' | 'response'
+    description?: string
+  }>
+  hallucination?: Array<{
+    name: string
+    use_nli?: boolean
     description?: string
   }>
   pii?: Array<{
@@ -594,6 +561,7 @@ export interface ConfigData {
   }
   // Python CLI format - signals wrapper
   signals?: {
+    [collection: string]: unknown
     keywords?: Array<{
       name: string
       operator: 'AND' | 'OR'
@@ -669,6 +637,12 @@ export interface ConfigData {
       name: string
       threshold?: number
       include_history?: boolean
+      direction?: 'request' | 'response'
+      description?: string
+    }>
+    hallucination?: Array<{
+      name: string
+      use_nli?: boolean
       description?: string
     }>
     pii?: Array<{
@@ -711,7 +685,8 @@ export interface ConfigData {
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean
-      reasoning_effort?: 'low' | 'medium' | 'high'
+      reasoning_mode?: 'enabled' | 'disabled' | 'adaptive'
+      reasoning_effort?: string
       lora_name?: string
     }>
     plugins?: Array<{
@@ -722,11 +697,18 @@ export interface ConfigData {
   }>
   providers?: {
     defaults?: {
-      default_model?: string
+      model?: string
     }
     models?: Array<{
       name: string
-      reasoning_family?: string
+      catalog?: string
+      reasoning?: {
+        family?: string
+        type?: string
+        parameter?: string
+        levels?: string[]
+        default?: string
+      }
     }>
   }
   routing?: {

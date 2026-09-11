@@ -18,6 +18,8 @@ package selection
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strings"
@@ -439,13 +441,11 @@ func (r *RouterDCSelector) applySoftmax(scores map[string]float64) map[string]fl
 	return result
 }
 
-// hashQuery creates a simple hash for query tracking
+// hashQuery returns a hex-encoded SHA-256 digest of the full query so that
+// affinity is keyed per query rather than per shared prefix.
 func (r *RouterDCSelector) hashQuery(query string) string {
-	// Simple hash for query grouping (could use more sophisticated methods)
-	if len(query) < 32 {
-		return fmt.Sprintf("%x", query)
-	}
-	return fmt.Sprintf("%x", query[:32])
+	sum := sha256.Sum256([]byte(query))
+	return hex.EncodeToString(sum[:])
 }
 
 // defaultSelection returns the first configured candidate when embedding-based

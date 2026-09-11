@@ -435,9 +435,13 @@ func validateReasoningDisplay(request Request) error {
 func validateReasoningMode(request Request) error {
 	switch request.ReasoningMode {
 	case "", ReasoningModeEnabled:
-	case ReasoningModeDisabled, ReasoningModeAdaptive:
+	case ReasoningModeDisabled:
 		if request.ReasoningBudgetTokens != nil || strings.TrimSpace(request.ReasoningEffort) != "" {
-			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", string(request.ReasoningMode)+" reasoning cannot include an effort or token budget", nil)
+			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", "disabled reasoning cannot include an effort or token budget", nil)
+		}
+	case ReasoningModeAdaptive:
+		if request.ReasoningBudgetTokens != nil {
+			return NewError(ErrorInvalidRequest, "conflicting_reasoning_control", "adaptive reasoning cannot include a token budget", nil)
 		}
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_reasoning_mode", "reasoning mode is invalid", nil)

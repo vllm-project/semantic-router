@@ -3,16 +3,54 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: ratings-model-a
+      model: ratings-model-a
     models:
       - name: ratings-model-a
         provider_model_id: ratings-model-a
         backend_refs:
           - name: looper-fake-backend
+            provider: vllm
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
             weight: 1
       - name: ratings-model-b
         provider_model_id: ratings-model-b
+        backend_refs:
+          - name: looper-fake-backend
+            provider: vllm
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: confidence-model-low
+        provider_model_id: confidence-model-low
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: confidence-model-high
+        provider_model_id: confidence-model-high
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-valid
+        provider_model_id: fusion-panel-valid
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-empty
+        provider_model_id: fusion-panel-empty
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-fail
+        provider_model_id: fusion-panel-fail
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-judge
+        provider_model_id: fusion-judge
         backend_refs:
           - name: looper-fake-backend
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
@@ -21,6 +59,12 @@ config:
     modelCards:
       - name: ratings-model-a
       - name: ratings-model-b
+      - name: confidence-model-low
+      - name: confidence-model-high
+      - name: fusion-panel-valid
+      - name: fusion-panel-empty
+      - name: fusion-panel-fail
+      - name: fusion-judge
     signals:
       keywords:
         - name: looper_ratings_probe_keywords
@@ -28,7 +72,92 @@ config:
           keywords:
             - __LOOPER_RATINGS_PROBE__
           case_sensitive: true
+        - name: looper_fusion_quorum_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_QUORUM_PROBE__
+          case_sensitive: true
+        - name: looper_confidence_trace_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_CONFIDENCE_TRACE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_separate_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_SEPARATE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_one_call_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_ONE_CALL_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_none_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_NONE_PROBE__
+          case_sensitive: true
     decisions:
+      - name: looper_fusion_separate_decision
+        description: Preserve separate Fusion analysis as the compatibility default
+        priority: 123
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_separate_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: separate
+            include_analysis: false
+            include_intermediate_responses: false
+      - name: looper_fusion_one_call_decision
+        description: Combine Fusion comparison and final synthesis in one judge call
+        priority: 122
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_one_call_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: one_call
+            include_analysis: false
+            include_intermediate_responses: false
+      - name: looper_fusion_none_decision
+        description: Synthesize directly from the Fusion panel in one judge call
+        priority: 121
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_none_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: none
+            include_analysis: false
+            include_intermediate_responses: false
       - name: looper_ratings_decision
         description: Deterministic Ratings route for issue 2859 E2E coverage
         priority: 100
@@ -47,6 +176,52 @@ config:
           ratings:
             max_concurrent: 2
             on_error: skip
+      - name: looper_confidence_trace_decision
+        description: Deterministic Confidence attempt telemetry for issue 2855
+        priority: 120
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_confidence_trace_probe_keywords
+        modelRefs:
+          - model: confidence-model-low
+            use_reasoning: false
+          - model: confidence-model-high
+            use_reasoning: false
+        algorithm:
+          type: confidence
+          confidence:
+            confidence_method: avg_logprob
+            threshold: 0.72
+            escalation_order: declared
+            on_error: fail
+      - name: looper_fusion_quorum_decision
+        description: Reject Fusion synthesis when usable panel responses do not meet quorum
+        priority: 110
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_quorum_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
+            on_error: skip
       - name: default-route
         description: Fallback for unmatched profile traffic
         priority: 10
@@ -63,7 +238,9 @@ config:
       response_api:
         enabled: false
       router_replay:
-        enabled: false
+        enabled: true
+        store_backend: memory
+        async_writes: false
     stores:
       response_cache:
         enabled: false

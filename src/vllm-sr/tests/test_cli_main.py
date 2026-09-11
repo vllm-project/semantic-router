@@ -15,6 +15,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 BootstrapResult = importlib.import_module("cli.bootstrap").BootstrapResult
 runtime_commands = importlib.import_module("cli.commands.runtime")
+runtime_config_mutation = importlib.import_module(
+    "cli.commands.runtime_config_mutation"
+)
+config_schema = importlib.import_module("cli.config_schema")
 serve_config = importlib.import_module("cli.commands.runtime_serve_config")
 main = importlib.import_module("cli.main").main
 recipe_package = importlib.import_module("cli.recipe_package")
@@ -715,9 +719,23 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
         decision["algorithm"] for decision in rewritten["routing"]["decisions"]
     ]
     assert algorithms == [
-        {"type": "multi_factor"},
-        {"type": "multi_factor"},
+        {"type": "multi_factor", "multi_factor": {}},
+        {"type": "multi_factor", "multi_factor": {}},
     ]
+
+
+def test_algorithm_mutation_consumes_generated_router_payload_inventory():
+    algorithm_surfaces = config_schema.routing_surface_catalog()["algorithms"]
+    expected_blocks = {
+        surface["config_field"]
+        for surface in algorithm_surfaces
+        if surface.get("config_field")
+    }
+
+    assert set(runtime_config_mutation.ALGORITHM_CONFIG_BLOCKS) == expected_blocks
+    assert set(runtime_config_mutation.EXPECTED_CONFIG_BLOCK_BY_ALGORITHM) == {
+        surface["type"] for surface in algorithm_surfaces if surface.get("config_field")
+    }
 
 
 def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):

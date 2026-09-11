@@ -32,9 +32,15 @@ CANDIDATE_ROOTS = (
     "/home/runner/work/semantic-router/semantic-router/base",
     "/home/runner/work/semantic-router/semantic-router/pr-code",
 )
+LOCAL_IGNORED_DIRS = (".agent-harness", ".codex")
 
 
 class TestASTScannerSelfExclusion(unittest.TestCase):
+    def test_local_ignored_workspaces_are_excluded(self):
+        for dirname in LOCAL_IGNORED_DIRS:
+            with self.subTest(dirname=dirname):
+                self.assertTrue(ast_scanner.should_skip_dir(dirname))
+
     def test_own_source_files_excluded_under_any_root(self):
         for root in CANDIDATE_ROOTS:
             for name in ("ast_security_scanner.py", "scan_malicious_code.py"):
@@ -60,6 +66,11 @@ class TestASTScannerSelfExclusion(unittest.TestCase):
 
 
 class TestRegexScannerSelfExclusion(unittest.TestCase):
+    def test_local_ignored_workspaces_are_excluded(self):
+        for dirname in LOCAL_IGNORED_DIRS:
+            with self.subTest(dirname=dirname):
+                self.assertTrue(regex_scanner.should_skip_dir(dirname))
+
     def test_own_source_files_excluded_under_any_root(self):
         for root in CANDIDATE_ROOTS:
             for name in ("ast_security_scanner.py", "scan_malicious_code.py"):

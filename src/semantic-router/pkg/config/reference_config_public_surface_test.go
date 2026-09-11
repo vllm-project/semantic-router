@@ -12,18 +12,17 @@ func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface
 func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface{}) {
 	providers := mustMapAt(t, root, "providers")
 	defaults := mustMapAt(t, providers, "defaults")
-	reasoningFamilies := mustMapAt(t, defaults, "reasoning_families")
 	models := mustSliceAt(t, providers, "models")
 
 	assertMapCoversStructFields(t, providers, reflect.TypeOf(CanonicalProviders{}), "providers")
 	assertMapCoversStructFields(t, defaults, reflect.TypeOf(CanonicalProviderDefaults{}), "providers.defaults")
+	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
-		mapValuesToSlice(t, reasoningFamilies, "providers.defaults.reasoning_families"),
-		reflect.TypeOf(ReasoningFamilyConfig{}),
-		"providers.defaults.reasoning_families",
+		collectChildMapsFromSlice(t, models, "reasoning", "providers.models"),
+		reflect.TypeOf(CanonicalReasoning{}),
+		"providers.models[].reasoning",
 	)
-	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
@@ -138,7 +137,12 @@ func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]
 }
 
 func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{}) {
-	assertSliceUnionCoversStructFields(t, complexity, reflect.TypeOf(ComplexityRule{}), "routing.signals.complexity")
+	// hard_below/easy_above express a score that falls as difficulty rises,
+	// which only a score.v1 backend can produce: the local margin is
+	// hard-minus-easy, so a higher value is harder by construction. Covering
+	// them here would mean shipping a reference rule whose direction is
+	// wrong for the path the reference config actually uses.
+	assertSliceUnionCoversStructFields(t, complexity, reflect.TypeOf(ComplexityRule{}), "routing.signals.complexity", "hard_below", "easy_above")
 	assertSliceUnionCoversStructFields(
 		t,
 		collectChildMapsFromSlice(t, complexity, "hard", "routing.signals.complexity"),

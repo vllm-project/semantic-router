@@ -15,7 +15,7 @@ The repository bootstrap target creates its Python environment and installs the
 tooling used by the validation harness:
 
 ```bash
-make agent-bootstrap
+make harness-bootstrap
 ```
 
 Individual subprojects may have additional requirements. Do not install a
@@ -52,10 +52,11 @@ vllm-sr serve --image-pull-policy never --platform amd
 
 ## Select the right tests
 
-Start with the repository report for your changed files:
+Inspect the repository facts, then run the owning domains' checks:
 
 ```bash
-make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
 ```
 
 Common targeted suites include:
@@ -77,11 +78,12 @@ make vllm-sr-test
 make vllm-sr-sim-test
 ```
 
-Use the affected E2E selector when a change is visible through startup,
+Select integration or E2E explicitly when a change is visible through startup,
 routing, an API, a deployment profile, or another live path:
 
 ```bash
-make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+make verify DOMAIN=<domain>
+make verify PROFILE=<profile>
 ```
 
 ## Validate a local stack

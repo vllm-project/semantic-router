@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -507,6 +508,182 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 			"error":      err.Error(),
 		})
 	}
+}
+
+// recordRouterReplayResponseJailbreak appends the response-stage jailbreak
+// observation to the replay record, one outcome per response-direction rule.
+// The record is written while the request is routed, before the model has
+// answered, so the request-stage signal maps it carries cannot hold this;
+// outcomes are the append-only post-route channel every store implements.
+// Each outcome names the rule under the signal key a request-direction rule
+// uses, its verdict (detected, not_detected, unavailable), the score it
+// thresholded or the failure code when it could not resolve, and the action
+// the selected decision's plugin applied.
+func (r *OpenAIRouter) recordRouterReplayResponseJailbreak(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+	rules := r.responseJailbreakRules(ctx)
+	if len(rules) == 0 {
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+	now := time.Now().UTC()
+	action := r.responseJailbreakPluginAction(ctx)
+	for _, rule := range rules {
+		outcome := responseJailbreakReplayOutcome(ctx, rule, now, action)
+		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_response_jailbreak_outcome_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"replay_id":  ctx.RouterReplayID,
+				"rule":       rule.Name,
+				"error":      err.Error(),
+			})
+		}
+	}
+}
+
+// responseStageStreamingNotEnforced is the enforcement a streamed response
+// gets: none. Its answer exists as a whole for the first time when the bytes
+// are already with the client, so no plugin can act on the observation.
+const responseStageStreamingNotEnforced = "not_enforced_streaming"
+
+// recordResponseStageEnforcement records what acted on a response-stage
+// observation. A buffered response names the action the selected decision's
+// plugin applies, or nothing when the decision carries no enabled plugin. A
+// streamed response names no action at all, because none ran: saying so is the
+// point, since an "action" the record names but nothing applied would read as
+// enforcement that happened.
+func recordResponseStageEnforcement(outcome *routerreplay.Outcome, ctx *RequestContext, action string) {
+	if ctx.IsStreamingResponse {
+		outcome.Metadata["enforcement"] = responseStageStreamingNotEnforced
+		return
+	}
+	if action != "" {
+		outcome.Metadata["action"] = action
+	}
+}
+
+func responseJailbreakReplayOutcome(ctx *RequestContext, rule config.JailbreakRule, now time.Time, action string) routerreplay.Outcome {
+	key := signalKey(config.SignalTypeJailbreak, rule.Name)
+	outcome := routerreplay.Outcome{
+		Timestamp: now,
+		Source:    "router",
+		Target:    key,
+		Verdict:   "not_detected",
+		Metadata: map[string]string{
+			"signal":    config.SignalTypeJailbreak,
+			"direction": config.SignalDirectionResponse,
+			"threshold": strconv.FormatFloat(float64(rule.Threshold), 'f', -1, 32),
+		},
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
+	}
+	recordResponseStageEnforcement(&outcome, ctx, action)
+	if code, failed := ctx.VSRSignalErrors[key]; failed {
+		outcome.Verdict = "unavailable"
+		outcome.Reason = code
+		return outcome
+	}
+	outcome.Score = ctx.VSRSignalConfidences[key]
+	for _, matched := range ctx.VSRMatchedResponseJailbreak {
+		if matched == rule.Name {
+			outcome.Verdict = "detected"
+			if ctx.VSRResponseJailbreakType != "" {
+				outcome.Metadata["type"] = ctx.VSRResponseJailbreakType
+			}
+			break
+		}
+	}
+	return outcome
+}
+
+// recordRouterReplayHallucination appends the response-stage hallucination
+// observation to the replay record, one outcome per hallucination rule, the
+// way recordRouterReplayResponseJailbreak does for jailbreak rules. A rule the
+// request never evaluated (the fact-check signal said the prompt makes no
+// claims worth grounding) is recorded as not applicable, so the record says
+// why nothing was checked rather than saying nothing.
+func (r *OpenAIRouter) recordRouterReplayHallucination(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" {
+		return
+	}
+	rules := r.hallucinationRules(ctx)
+	if len(rules) == 0 {
+		return
+	}
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+	now := time.Now().UTC()
+	action := ""
+	if r.isHallucinationEnabledForDecision(ctx.VSRSelectedDecision) {
+		action = r.getHallucinationActionForDecision(ctx.VSRSelectedDecision)
+	}
+	for _, rule := range rules {
+		outcome := hallucinationReplayOutcome(ctx, rule, now, action)
+		if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+			logging.ComponentErrorEvent("extproc", "router_replay_hallucination_outcome_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"replay_id":  ctx.RouterReplayID,
+				"rule":       rule.Name,
+				"error":      err.Error(),
+			})
+		}
+	}
+}
+
+func hallucinationReplayOutcome(ctx *RequestContext, rule config.HallucinationRule, now time.Time, action string) routerreplay.Outcome {
+	key := signalKey(config.SignalTypeHallucination, rule.Name)
+	outcome := routerreplay.Outcome{
+		Timestamp: now,
+		Source:    "router",
+		Target:    key,
+		Verdict:   "not_applicable",
+		Reason:    "fact_check_not_needed",
+		Metadata: map[string]string{
+			"signal":    config.SignalTypeHallucination,
+			"direction": config.SignalDirectionResponse,
+			"use_nli":   strconv.FormatBool(rule.UseNLI),
+		},
+	}
+	if ctx.VSRSelectedDecisionName != "" {
+		outcome.Metadata["decision"] = ctx.VSRSelectedDecisionName
+	}
+	recordResponseStageEnforcement(&outcome, ctx, action)
+	if code, failed := ctx.VSRSignalErrors[key]; failed {
+		outcome.Verdict = "unavailable"
+		outcome.Reason = code
+		return outcome
+	}
+	score, observed := ctx.VSRSignalConfidences[key]
+	if !observed {
+		return outcome
+	}
+	outcome.Verdict = "not_detected"
+	outcome.Reason = ""
+	outcome.Score = score
+	if evidence := ctx.VSRHallucinationEvidence; evidence != nil {
+		outcome.Metadata["spans"] = strconv.Itoa(len(evidence.Spans))
+	}
+	for _, matched := range ctx.VSRMatchedHallucination {
+		if matched == rule.Name {
+			outcome.Verdict = "detected"
+			break
+		}
+	}
+	return outcome
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {

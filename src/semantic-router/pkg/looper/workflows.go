@@ -18,8 +18,12 @@ type WorkflowsLooper struct {
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
+	return newWorkflowsLooper(cfg, nil)
+}
+
+func newWorkflowsLooper(cfg *config.LooperConfig, client *Client) *WorkflowsLooper {
 	return &WorkflowsLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 		toolStates: newWorkflowToolStateStoreFromConfig(
 			workflowFlowRuntimeConfig(cfg),
 		),
@@ -128,8 +132,6 @@ type workflowExecutionSummary struct {
 }
 
 func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	cfg := resolveWorkflowsExecutionConfig(req)
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("workflows requires decision modelRefs")
@@ -698,10 +700,6 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
-	if modelName == cfg.PlannerModel {
-		applyWorkflowChatTemplateKwargs(callReq, workflowPlannerChatTemplateKwargs(modelName))
-	}
-	applyWorkflowModelReasoningControl(callReq, modelName, baseReq)
 	if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
@@ -711,5 +709,11 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
 	}
-	return l.callModelWithContextGate(ctx, baseReq, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
+	return l.dispatchModel(
+		ctx,
+		baseReq,
+		callReq,
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
+		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration},
+	)
 }

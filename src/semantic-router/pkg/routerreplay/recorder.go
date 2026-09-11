@@ -45,6 +45,11 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
+	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
+	LooperUsage                   = store.LooperUsage
+	LooperAttempt                 = store.LooperAttempt
+	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace

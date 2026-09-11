@@ -99,6 +99,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/embedding',
                 'tutorials/signal/learned/modality',
                 'tutorials/signal/learned/fact-check',
+                'tutorials/signal/learned/hallucination',
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
@@ -204,6 +205,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/memory',
                 'tutorials/plugin/rag',
                 'tutorials/plugin/router-replay',
+                'tutorials/plugin/shadow-dispatch',
                 'tutorials/plugin/response-cache',
               ],
             },
@@ -247,7 +249,22 @@ const sidebars: SidebarsConfig = {
             id: 'installation/configuration',
           },
           items: [
+            'installation/configuration-contract',
             'installation/configuration-workflows',
+            {
+              type: 'category',
+              label: 'Models',
+              link: {
+                type: 'doc',
+                id: 'installation/model-configuration',
+              },
+              items: [
+                'installation/catalog-backed-models',
+                'installation/custom-models',
+                'installation/model-reasoning',
+                'installation/model-configuration-patterns',
+              ],
+            },
           ],
         },
         {
@@ -409,6 +426,8 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
+            'proposals/open-intelligence-index-and-model-arena',
+            'proposals/unified-model-catalog-and-evaluation-index',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
           ],
@@ -428,9 +447,39 @@ const sidebars: SidebarsConfig = {
       label: 'Model Training',
       collapsed: false,
       items: [
-        'training/training-overview',
-        'training/model-performance-eval',
-        'training/ml-model-selection',
+        {
+          type: 'category',
+          label: 'Start Here',
+          collapsed: false,
+          items: [
+            'training/training-overview',
+            'training/model-catalog',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Embedding Models',
+          items: [
+            'training/mmbert-32k-models',
+            'training/multimodal-embeddings',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Classifier Models',
+          items: [
+            'training/classifier-models',
+            'training/mmbert-safety-classifier',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluate and Select',
+          items: [
+            'training/model-performance-eval',
+            'training/ml-model-selection',
+          ],
+        },
       ],
     },
     {
@@ -439,6 +488,8 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'benchmarking/overview',
+        'benchmarking/open-intelligence-index',
+        'benchmarking/custom-evaluations',
         'benchmarking/evaluation-plane',
       ],
     },
@@ -448,7 +499,9 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/router',
+        'api/configuration-schema',
         'api/apiserver',
+        'api/openapi',
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
@@ -471,6 +524,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'community/overview',
+        'community/model-provider-day-0-support',
         'community/development',
         'community/documentation',
         'community/translation-guide',
