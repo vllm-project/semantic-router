@@ -93,6 +93,7 @@ class ServeSessionMixin:
         api_only: bool = False,
         managed_storage: bool = False,
         ensure_models_dir: bool = False,
+        skip_processing: bool = False,
     ):
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
@@ -102,6 +103,7 @@ class ServeSessionMixin:
             api_key_env=api_key_env,
             api_only=api_only,
             managed_storage=managed_storage,
+            skip_processing=skip_processing,
         )
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
