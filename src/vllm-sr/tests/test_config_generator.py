@@ -106,6 +106,69 @@ def test_maintained_dynamo_values_preserve_backend_identity(tmp_path, monkeypatc
     } in backend_identities
 
 
+def test_maintained_dynamo_gateway_exposes_eds_backend_identity():
+    manifests = list(
+        yaml.safe_load_all(
+            (
+                REPO_ROOT
+                / "deploy/kubernetes/dynamo/dynamo-resources/gwapi-resources.yaml"
+            ).read_text()
+        )
+    )
+    patch_policy = next(
+        manifest
+        for manifest in manifests
+        if manifest.get("kind") == "EnvoyPatchPolicy"
+        and manifest["metadata"]["name"] == "semantic-router-extproc-patch-policy"
+    )
+    patches = patch_policy["spec"]["jsonPatches"]
+
+    listener_patch = next(
+        patch
+        for patch in patches
+        if patch["type"] == "type.googleapis.com/envoy.config.listener.v3.Listener"
+    )
+    assert listener_patch["operation"]["value"]["typedConfig"][
+        "response_attributes"
+    ] == [
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_name"]',
+        'xds.upstream_host_metadata.filter_metadata["semantic-router"]["backend_type"]',
+    ]
+
+    dynamo_resource = "httproute/default/semantic-router-to-dynamo/rule/0"
+    endpoint_patch = next(
+        patch
+        for patch in patches
+        if patch["name"] == dynamo_resource
+        and patch["type"]
+        == "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
+    )
+    assert endpoint_patch["operation"] == {
+        "op": "add",
+        "jsonPath": "..lb_endpoints[*]",
+        "path": "metadata",
+        "value": {
+            "filter_metadata": {
+                "semantic-router": {
+                    "backend_name": "dynamo-frontend",
+                    "backend_type": "dynamo",
+                }
+            }
+        },
+    }
+
+    cluster_operations = [
+        patch["operation"]
+        for patch in patches
+        if patch["name"] == dynamo_resource
+        and patch["type"] == "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+    ]
+    assert not any(
+        operation.get("path") in {"/type", "/eds_cluster_config", "/load_assignment"}
+        for operation in cluster_operations
+    )
+
+
 def test_envoy_exposes_actual_backend_type_to_response_processor(tmp_path, monkeypatch):
     rendered = _render_envoy_config(
         tmp_path,
