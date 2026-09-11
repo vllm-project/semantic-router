@@ -25,9 +25,9 @@ func TestHandleGetMemory_Success(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory/mem-1?user_id=user-alice", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/mem-1?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -59,9 +59,9 @@ func TestHandleGetMemory_NotFound(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory/nonexistent?user_id=user-alice", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/nonexistent?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -80,9 +80,9 @@ func TestHandleGetMemory_WrongUser(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory/mem-1?user_id=user-bob", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/mem-1?user_id=user-bob", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -96,9 +96,9 @@ func TestHandleGetMemory_MissingUserID(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory/mem-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/mem-1", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -112,9 +112,9 @@ func TestHandleDeleteMemory_Success(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("DELETE /v1/memory/{id}", server.handleDeleteMemory)
+	mux.HandleFunc("DELETE /api/v1/storage/memories/{id}", server.handleDeleteMemory)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory/mem-1?user_id=user-alice", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories/mem-1?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -142,9 +142,9 @@ func TestHandleDeleteMemory_NotFound(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("DELETE /v1/memory/{id}", server.handleDeleteMemory)
+	mux.HandleFunc("DELETE /api/v1/storage/memories/{id}", server.handleDeleteMemory)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory/nonexistent?user_id=user-alice", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories/nonexistent?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -158,9 +158,9 @@ func TestHandleDeleteMemory_WrongUser(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("DELETE /v1/memory/{id}", server.handleDeleteMemory)
+	mux.HandleFunc("DELETE /api/v1/storage/memories/{id}", server.handleDeleteMemory)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory/mem-1?user_id=user-bob", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories/mem-1?user_id=user-bob", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -181,7 +181,7 @@ func TestHandleDeleteMemoriesByScope_AllForUser(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory?user_id=user-alice", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories?user_id=user-alice", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)
@@ -211,7 +211,7 @@ func TestHandleDeleteMemoriesByScope_ByType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory?user_id=user-alice&type=semantic", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories?user_id=user-alice&type=semantic", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)
@@ -237,7 +237,7 @@ func TestHandleDeleteMemoriesByScope_ByType(t *testing.T) {
 func TestHandleDeleteMemoriesByScope_MissingUserID(t *testing.T) {
 	server, _ := newTestServer()
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)

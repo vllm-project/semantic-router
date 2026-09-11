@@ -14,7 +14,7 @@ func apiRouterReplayRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
 			EndpointMetadata{
-				Path:        "/v1/router_replay",
+				Path:        apiObservabilityReplaysPath,
 				Method:      "GET",
 				Description: "List Router Replay records",
 				Parameters:  routerReplayListParameters(),
@@ -24,17 +24,7 @@ func apiRouterReplayRoutes() []apiRoute {
 		),
 		managedRoute(
 			EndpointMetadata{
-				Path:        "/v1/router_replay/",
-				Method:      "GET",
-				Description: "List Router Replay records (trailing-slash compatibility)",
-				Parameters:  routerReplayListParameters(),
-			},
-			policy,
-			(*ClassificationAPIServer).handleRouterReplay,
-		),
-		managedRoute(
-			EndpointMetadata{
-				Path:        "/v1/router_replay/aggregate",
+				Path:        apiObservabilityReplaysPath + "/aggregate",
 				Method:      "GET",
 				Description: "Aggregate Router Replay routing and cost metadata",
 				Parameters:  routerReplayFilterParameters(),
@@ -44,7 +34,7 @@ func apiRouterReplayRoutes() []apiRoute {
 		),
 		managedRoute(
 			EndpointMetadata{
-				Path:        "/v1/router_replay/trajectory",
+				Path:        apiObservabilityReplaysPath + "/trajectory",
 				Method:      "GET",
 				Description: "Build a Router Replay session trajectory",
 				Parameters: []OpenAPIParameter{
@@ -55,7 +45,7 @@ func apiRouterReplayRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay/{id}", Method: "GET", Description: "Read one Router Replay record"},
+			EndpointMetadata{Path: apiObservabilityReplaysPath + "/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),

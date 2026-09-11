@@ -47,14 +47,20 @@ def test_cli_help_lists_registered_commands():
     for command_name in (
         "serve",
         "config",
-        "validate",
+        "route",
+        "request",
+        "benchmark",
+        "optimize",
         "status",
         "logs",
         "stop",
         "dashboard",
-        "chat",
+        "recipe",
+        "storage",
     ):
         assert command_name in result.output
+    for retired_name in ("validate", "eval", "chat", "rag"):
+        assert f"  {retired_name} " not in result.output
     assert " init" not in result.output
 
 

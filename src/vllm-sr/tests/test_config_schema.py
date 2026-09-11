@@ -18,11 +18,11 @@ def test_bundled_schema_exposes_router_surface_catalog() -> None:
     catalog = routing_surface_catalog()
 
     assert document["$id"].endswith("router-config-v0.3.schema.json")
-    assert "setup" in document["properties"]
+    assert "setup" not in document["properties"]
     assert "hallucination" in surface_types("signals")
     assert "multi_factor" in surface_types("algorithms")
     assert "shadow_dispatch" in surface_types("plugins")
-    assert catalog["validation"]["endpoint"] == "/config/router/validate"
+    assert catalog["validation"]["endpoint"] == "/api/v1/config/validate"
 
 
 def test_config_schema_command_defaults_to_compact_index() -> None:
@@ -62,6 +62,56 @@ def test_config_schema_command_supports_full_section_and_surface_views() -> None
     )
     assert incompatible.exit_code != 0
     assert "use only one" in incompatible.output
+
+
+def test_config_schema_command_uses_management_origin_and_auth_client(
+    monkeypatch,
+) -> None:
+    captured = {}
+
+    class Client:
+        def __init__(self, endpoint, *, timeout, token_env):
+            captured.update(
+                endpoint=endpoint,
+                timeout=timeout,
+                token_env=token_env,
+            )
+
+        def get_config_schema(self, **kwargs):
+            captured["view"] = kwargs
+            return type("Response", (), {"payload": {"remote": True}})()
+
+    monkeypatch.setattr("cli.commands.config.RouterManagementClient", Client)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "schema",
+            "--endpoint",
+            "https://router.example",
+            "--token-env",
+            "ROUTER_TOKEN",
+            "--timeout",
+            "7",
+            "--surface",
+            "algorithm:multi_factor",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output) == {"remote": True}
+    assert captured == {
+        "endpoint": "https://router.example",
+        "timeout": 7.0,
+        "token_env": "ROUTER_TOKEN",
+        "view": {
+            "view": "surface",
+            "path": None,
+            "surface_kind": "algorithm",
+            "surface_name": "multi_factor",
+        },
+    }
 
 
 def test_python_progressive_index_covers_every_surface_catalog() -> None:

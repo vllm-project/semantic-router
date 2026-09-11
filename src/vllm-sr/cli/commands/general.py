@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import click
 
 from cli.commands.common import exit_with_logged_error
@@ -11,8 +14,10 @@ from cli.commands.config import (
     import_config_from_source_command,
     migrate_config_command,
 )
-from cli.commands.rag import rag_list_command
+from cli.commands.config_management import CONFIG_MANAGEMENT_COMMANDS
 from cli.commands.validate import validate_command
+from cli.router_management_client import RouterManagementClient
+from cli.terminal import echo
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -69,10 +74,12 @@ def config_router(config_path: str) -> None:
 @click.option(
     "--endpoint",
     help=(
-        "Read the contract from a running Router schema endpoint instead of "
+        "Read the contract from a running Router management origin instead of "
         "the schema bundled with this CLI."
     ),
 )
+@click.option("--timeout", type=float, default=15, show_default=True)
+@click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
 @click.option(
     "--full",
     is_flag=True,
@@ -91,13 +98,22 @@ def config_router(config_path: str) -> None:
 @exit_with_logged_error(log)
 def config_schema(
     endpoint: str | None,
+    timeout: float,
+    token_env: str,
     full: bool,
     section: str | None,
     surface: str | None,
 ) -> None:
     """Discover the canonical config contract progressively."""
 
-    config_schema_command(endpoint, full=full, section=section, surface=surface)
+    config_schema_command(
+        endpoint,
+        full=full,
+        section=section,
+        surface=surface,
+        timeout=timeout,
+        token_env=token_env,
+    )
 
 
 @config.command("migrate")
@@ -165,57 +181,42 @@ def config_import(
     )
 
 
-@click.command()
+@config.command("validate")
 @click.option(
     "--config",
     default="config.yaml",
     help="Path to config file (default: config.yaml)",
 )
+@click.option(
+    "--endpoint",
+    default=None,
+    help="Also validate with this running Router's authoritative parser.",
+)
+@click.option("--timeout", type=float, default=15, show_default=True)
+@click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
 @exit_with_logged_error(log)
-def validate(config: str) -> None:
+def config_validate(
+    config: str,
+    endpoint: str | None,
+    timeout: float,
+    token_env: str,
+) -> None:
     """
     Validate configuration file.
 
     Examples:
-        vllm-sr validate                    # Uses config.yaml
-        vllm-sr validate --config my-config.yaml  # Uses my-config.yaml
+        vllm-sr config validate
+        vllm-sr config validate --config my-config.yaml
     """
     validate_command(config)
+    if endpoint:
+        response = RouterManagementClient(
+            endpoint,
+            timeout=timeout,
+            token_env=token_env,
+        ).validate_config(Path(config).read_text(encoding="utf-8"))
+        echo(json.dumps(response.payload, indent=2, sort_keys=True))
 
 
-@click.group(invoke_without_command=True)
-@click.pass_context
-@exit_with_logged_error(log)
-def rag(ctx: click.Context) -> None:
-    """
-    Inspect the RAG ingestion pipeline's vector stores.
-
-    Examples:
-        vllm-sr rag list
-        vllm-sr rag list --endpoint http://localhost:8080
-    """
-    if ctx.invoked_subcommand is not None:
-        return
-    click.echo(ctx.get_help())
-
-
-@rag.command("list")
-@click.option(
-    "--endpoint",
-    default=None,
-    help=(
-        "Router base URL or full /v1/vector_stores endpoint. "
-        "Defaults to the local router API port (8080 + VLLM_SR_PORT_OFFSET)."
-    ),
-)
-@click.option(
-    "--timeout",
-    default=15,
-    show_default=True,
-    help="HTTP request timeout in seconds.",
-)
-@exit_with_logged_error(log)
-def rag_list(endpoint: str | None, timeout: int) -> None:
-    """List the vector stores created through the RAG ingestion pipeline."""
-
-    rag_list_command(endpoint=endpoint, timeout=timeout)
+for command in CONFIG_MANAGEMENT_COMMANDS:
+    config.add_command(command)

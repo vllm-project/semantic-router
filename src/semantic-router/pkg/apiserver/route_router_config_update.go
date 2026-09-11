@@ -26,12 +26,12 @@ const (
 	routerConfigMutationReplace routerConfigMutationMode = "replace"
 )
 
-// handleConfigPatch handles PATCH /config/router with merge semantics.
+// handleConfigPatch handles PATCH /api/v1/config with merge semantics.
 func (s *ClassificationAPIServer) handleConfigPatch(w http.ResponseWriter, r *http.Request) {
 	s.handleConfigMutation(w, r, routerConfigMutationMerge)
 }
 
-// handleConfigPut handles PUT /config/router with replace semantics.
+// handleConfigPut handles PUT /api/v1/config with replace semantics.
 func (s *ClassificationAPIServer) handleConfigPut(w http.ResponseWriter, r *http.Request) {
 	s.handleConfigMutation(w, r, routerConfigMutationReplace)
 }
@@ -51,7 +51,7 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 	}
 	defer guard.Release()
 
-	req, patchDoc, ok := s.parseRouterConfigUpdateRequest(w, r)
+	patchDoc, ok := s.parseRouterConfigUpdateRequest(w, r)
 	if !ok {
 		return
 	}
@@ -61,7 +61,7 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 	if !ok {
 		return
 	}
-	if !checkConfigPrecondition(w, r, existingData, false) {
+	if !checkConfigPrecondition(w, r, existingData) {
 		return
 	}
 
@@ -70,7 +70,6 @@ func (s *ClassificationAPIServer) handleConfigMutation(
 		paths,
 		existingData,
 		yamlBytes,
-		req.DSL,
 		http.StatusOK,
 		fmt.Sprintf("config.%s", mode),
 		routerConfigMutationMessage(mode),
@@ -87,24 +86,24 @@ func routerConfigMutationMessage(mode routerConfigMutationMode) string {
 func (s *ClassificationAPIServer) parseRouterConfigUpdateRequest(
 	w http.ResponseWriter,
 	r *http.Request,
-) (RouterConfigUpdateRequest, map[string]any, bool) {
+) (map[string]any, bool) {
 	var req RouterConfigUpdateRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
-		return RouterConfigUpdateRequest{}, nil, false
+		return nil, false
 	}
 	if strings.TrimSpace(req.YAML) == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "YAML content is required")
-		return RouterConfigUpdateRequest{}, nil, false
+		return nil, false
 	}
 
 	doc, err := decodeYAMLDocument([]byte(req.YAML))
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "YAML_PARSE_ERROR", fmt.Sprintf("Invalid YAML syntax: %v", err))
-		return RouterConfigUpdateRequest{}, nil, false
+		return nil, false
 	}
 
-	return req, doc, true
+	return doc, true
 }
 
 func (s *ClassificationAPIServer) prepareRouterConfigMutationPayload(
@@ -281,27 +280,11 @@ func cloneYAMLValue(value any) any {
 	}
 }
 
-func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte, dsl string) (string, string) {
+func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string) {
 	configDir := configPersistenceBaseDir(sourceConfigPath)
 	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		logging.Warnf("Failed to create backup directory: %v", err)
-	}
-
 	version := nextConfigVersion(backupDir, time.Now())
-	source := configVersionSourceAPI
-	if strings.TrimSpace(dsl) != "" {
-		source = configVersionSourceDSL
-	}
-	recordConfigBackup(backupDir, version, existingData, source)
-
-	if strings.TrimSpace(dsl) != "" {
-		dslDir := filepath.Join(configDir, ".vllm-sr")
-		dslFile := filepath.Join(dslDir, "config.dsl")
-		if err := os.WriteFile(dslFile, []byte(dsl), 0o644); err != nil {
-			logging.Warnf("Failed to archive DSL source: %v", err)
-		}
-	}
+	recordConfigBackup(backupDir, version, existingData, configVersionSourceAPI)
 
 	return version, backupDir
 }
@@ -333,12 +316,11 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	paths configPersistencePaths,
 	previousData []byte,
 	yamlBytes []byte,
-	dsl string,
 	statusCode int,
 	action string,
 	message string,
 ) bool {
-	version, backupDir := s.recordRouterConfigArtifacts(paths.sourcePath, previousData, dsl)
+	version, backupDir := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
 	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes) {
 		return false
 	}
@@ -351,7 +333,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	case "pending":
 		responseStatus = "accepted"
 		responseCode = http.StatusAccepted
-		message += " The config is persisted but runtime activation is still pending; poll /config/hash until status is active."
+		message += " The config is persisted but runtime activation is still pending; poll /api/v1/config/hash until activation_status is active."
 	case "active":
 		message += " Runtime activation is complete."
 	default:
@@ -368,12 +350,12 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	)
 	configCleanupBackups(backupDir)
 	s.writeJSONResponse(w, responseCode, RouterConfigUpdateResponse{
-		Status:        responseStatus,
-		Version:       version,
-		ETag:          etag,
-		RuntimeStatus: runtimeStatus,
-		RuntimeHash:   runtimeHash,
-		Message:       message,
+		Status:               responseStatus,
+		Version:              version,
+		ETag:                 etag,
+		ActivationStatus:     runtimeStatus,
+		GeneratedRuntimeHash: runtimeHash,
+		Message:              message,
 	})
 	return true
 }

@@ -29,8 +29,8 @@ func TestHandleMemory_StoreNotAvailable(t *testing.T) {
 		path    string
 		handler func(http.ResponseWriter, *http.Request)
 	}{
-		{"List", http.MethodGet, "/v1/memory?user_id=test", server.handleListMemories},
-		{"DeleteByScope", http.MethodDelete, "/v1/memory?user_id=test", server.handleDeleteMemoriesByScope},
+		{"List", http.MethodGet, "/api/v1/storage/memories?user_id=test", server.handleListMemories},
+		{"DeleteByScope", http.MethodDelete, "/api/v1/storage/memories?user_id=test", server.handleDeleteMemoriesByScope},
 	}
 
 	for _, tc := range tests {
@@ -51,16 +51,16 @@ func TestHandleMemory_StoreNotAvailable(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
-	mux.HandleFunc("DELETE /v1/memory/{id}", server.handleDeleteMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
+	mux.HandleFunc("DELETE /api/v1/storage/memories/{id}", server.handleDeleteMemory)
 
 	pathTests := []struct {
 		name   string
 		method string
 		path   string
 	}{
-		{"Get", http.MethodGet, "/v1/memory/mem-1?user_id=test"},
-		{"Delete", http.MethodDelete, "/v1/memory/mem-1?user_id=test"},
+		{"Get", http.MethodGet, "/api/v1/storage/memories/mem-1?user_id=test"},
+		{"Delete", http.MethodDelete, "/api/v1/storage/memories/mem-1?user_id=test"},
 	}
 
 	for _, tc := range pathTests {
@@ -88,7 +88,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		CreatedAt: time.Now(),
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-test", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -100,7 +100,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 2: Expected 1 memory, got %d", listResp.Total)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -116,7 +116,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 3: Unexpected content: %s", getResp.Content)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -124,7 +124,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 4: Expected 200, got %d", w.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory/lifecycle-1?user_id=user-test", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/lifecycle-1?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -132,7 +132,7 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 		t.Fatalf("Step 5: Expected 404 after delete, got %d", w.Code)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-test", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-test", nil)
 	w = httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 
@@ -146,9 +146,9 @@ func TestMemoryAPI_CRDLifecycle(t *testing.T) {
 
 func newMemoryTestMux(server *ClassificationAPIServer) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
-	mux.HandleFunc("GET /v1/memory", server.handleListMemories)
-	mux.HandleFunc("DELETE /v1/memory/{id}", server.handleDeleteMemory)
-	mux.HandleFunc("DELETE /v1/memory", server.handleDeleteMemoriesByScope)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories", server.handleListMemories)
+	mux.HandleFunc("DELETE /api/v1/storage/memories/{id}", server.handleDeleteMemory)
+	mux.HandleFunc("DELETE /api/v1/storage/memories", server.handleDeleteMemoriesByScope)
 	return mux
 }

@@ -1,6 +1,6 @@
-"""Tests for `vllm-sr rag list` (#2117).
+"""Tests for ``vllm-sr storage vector-stores``.
 
-The command lists vector stores from the router's ``GET /v1/vector_stores``
+The command lists vector stores from the router's ``GET /api/v1/storage/vector-stores``
 endpoint (the RAG ingestion / Vector Stores API), served on the router API
 port (default 8080), not the Envoy listener. It must:
 - Be discoverable from the top-level CLI help.
@@ -18,7 +18,6 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-import requests
 from click.testing import CliRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -26,12 +25,14 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 main = importlib.import_module("cli.main").main
-rag_command = importlib.import_module("cli.commands.rag")
+vector_store_commands = importlib.import_module("cli.commands.vector_stores")
+management_client = importlib.import_module("cli.router_management_client")
 
 
 def _fake_response(status_code: int, json_body=None, text: str = "") -> MagicMock:
     resp = MagicMock()
     resp.status_code = status_code
+    resp.ok = 200 <= status_code < 400
     resp.text = text
     resp.headers = {}
     if json_body is None:
@@ -74,47 +75,33 @@ _TWO_STORES = {
 }
 
 
-def test_normalize_endpoint_default_uses_api_port():
-    assert rag_command._normalize_endpoint("").endswith(":8080/v1/vector_stores")
-
-
-def test_normalize_endpoint_accepts_base_url():
-    assert (
-        rag_command._normalize_endpoint("http://localhost:8180")
-        == "http://localhost:8180/v1/vector_stores"
-    )
-
-
-def test_normalize_endpoint_accepts_full_path():
-    full = "http://localhost:8080/v1/vector_stores"
-    assert rag_command._normalize_endpoint(full) == full
-
-
 def test_rag_list_registered_on_top_level_help():
     runner = CliRunner()
 
     result = runner.invoke(main, ["--help"])
 
     assert result.exit_code == 0
-    assert "rag" in result.output
+    assert "storage" in result.output
 
 
 def test_rag_list_help_describes_subcommand():
     runner = CliRunner()
 
-    result = runner.invoke(main, ["rag", "--help"])
+    result = runner.invoke(main, ["storage", "--help"])
 
     assert result.exit_code == 0
-    assert "list" in result.output
+    assert "vector-stores" in result.output
 
 
 def test_rag_list_prints_vector_stores(monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
     monkeypatch.setattr(
-        rag_command.requests, "get", lambda *a, **k: _fake_response(200, _TWO_STORES)
+        management_client.requests,
+        "request",
+        lambda *a, **k: _fake_response(200, _TWO_STORES),
     )
 
-    result = runner.invoke(main, ["rag", "list"])
+    result = runner.invoke(main, ["storage", "vector-stores"])
 
     assert result.exit_code == 0
     combined = result.stdout
@@ -132,12 +119,12 @@ def test_rag_list_prints_vector_stores(monkeypatch: pytest.MonkeyPatch):
 def test_rag_list_reports_no_vector_stores(monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
     monkeypatch.setattr(
-        rag_command.requests,
-        "get",
+        management_client.requests,
+        "request",
         lambda *a, **k: _fake_response(200, {"object": "list", "data": []}),
     )
 
-    result = runner.invoke(main, ["rag", "list"])
+    result = runner.invoke(main, ["storage", "vector-stores"])
 
     assert result.exit_code == 0
     combined = result.stdout
@@ -149,54 +136,75 @@ def test_rag_list_reports_no_vector_stores(monkeypatch: pytest.MonkeyPatch):
 def test_rag_list_reports_feature_disabled(caplog, monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
     monkeypatch.setattr(
-        rag_command.requests,
-        "get",
+        management_client.requests,
+        "request",
         lambda *a, **k: _fake_response(503, text="disabled"),
     )
 
     with caplog.at_level("ERROR"):
-        result = runner.invoke(main, ["rag", "list"])
+        result = runner.invoke(main, ["storage", "vector-stores"])
 
     assert result.exit_code == 1
     combined = "\n".join(record.message for record in caplog.records)
-    assert "not enabled" in combined
+    assert "HTTP 503" in combined
 
 
 def test_rag_list_reports_unreachable_router(caplog, monkeypatch: pytest.MonkeyPatch):
     runner = CliRunner()
 
     def _boom(*a, **k):
-        raise requests.ConnectionError("refused")
+        raise management_client.requests.ConnectionError("refused")
 
-    monkeypatch.setattr(rag_command.requests, "get", _boom)
+    monkeypatch.setattr(management_client.requests, "request", _boom)
 
     with caplog.at_level("ERROR"):
-        result = runner.invoke(main, ["rag", "list"])
+        result = runner.invoke(main, ["storage", "vector-stores"])
 
     assert result.exit_code == 1
     combined = "\n".join(record.message for record in caplog.records)
-    assert "Router is not running" in combined
+    assert "Router management API is not reachable at http://localhost:8080" in combined
 
 
-def test_rag_list_redacts_endpoint_credentials(monkeypatch: pytest.MonkeyPatch):
-    requested_urls = []
-
-    def _empty_response(url, **_kwargs):
-        requested_urls.append(url)
-        return _fake_response(200, {"object": "list", "data": []})
-
-    monkeypatch.setattr(rag_command.requests, "get", _empty_response)
+def test_rag_list_rejects_endpoint_credentials():
     result = CliRunner().invoke(
         main,
         [
-            "rag",
-            "list",
+            "storage",
+            "vector-stores",
             "--endpoint",
             "http://user:RAGSECRET@router.test",
         ],
     )
 
-    assert result.exit_code == 0
-    assert requested_urls == ["http://user:RAGSECRET@router.test/v1/vector_stores"]
+    assert result.exit_code == 1
     assert "RAGSECRET" not in result.stdout
-    assert "***@router.test" in result.stdout
+
+
+def test_rag_list_uses_canonical_path_and_token_env(monkeypatch: pytest.MonkeyPatch):
+    request = MagicMock(
+        return_value=_fake_response(200, {"object": "list", "data": []})
+    )
+    monkeypatch.setattr(management_client.requests, "request", request)
+    monkeypatch.setenv("STORAGE_TOKEN", "private-token")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "storage",
+            "vector-stores",
+            "--endpoint",
+            "http://router.test/api/v1",
+            "--token-env",
+            "STORAGE_TOKEN",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert request.call_args.args[:2] == (
+        "GET",
+        "http://router.test/api/v1/storage/vector-stores",
+    )
+    assert (
+        request.call_args.kwargs["headers"]["Authorization"] == "Bearer private-token"
+    )
+    assert "private-token" not in result.output

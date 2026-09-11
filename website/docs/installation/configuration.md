@@ -293,7 +293,7 @@ recipe signals, decisions, route plugins, cache, learning, and session routing.
 ## Validate and serve
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 

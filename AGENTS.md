@@ -39,8 +39,9 @@ prescribe a work loop, or decide when the task is complete.
 ## Durable constraints
 
 - Use the existing `vllm-sr serve` local-image flow for local runtime behavior.
-- Keep steady-state configuration canonical. Legacy layouts belong in explicit
-  migration tooling, not the runtime parser.
+- Keep steady-state configuration canonical. The public document is
+  `version/listeners/providers/evaluation/routing/entrypoints/recipes/global`;
+  legacy layouts belong in explicit migration tooling, not the runtime parser.
 - A behavior-visible routing, startup, config, Docker, CLI, or API change needs
   an appropriate integration or E2E assertion. Pure refactors do not.
 - Generated artifacts and public docs change with their source contract.

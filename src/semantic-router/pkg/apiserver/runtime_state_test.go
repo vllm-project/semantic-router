@@ -85,7 +85,7 @@ func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/classify/batch",
+		"/api/v1/diagnostics/classify/batch",
 		bytes.NewBufferString(`{"texts":["resolver should win"],"task_type":"intent"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")

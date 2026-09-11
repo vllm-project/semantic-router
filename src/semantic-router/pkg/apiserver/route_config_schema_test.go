@@ -48,7 +48,7 @@ func TestConfigSchemaRouteSupportsProgressiveViews(t *testing.T) {
 	server := &ClassificationAPIServer{}
 
 	full := httptest.NewRecorder()
-	server.handleConfigSchema(full, httptest.NewRequest(http.MethodGet, "/config/router/schema?view=full", nil))
+	server.handleConfigSchema(full, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=full", nil))
 	if full.Code != http.StatusOK || full.Header().Get("Content-Type") != "application/schema+json" {
 		t.Fatalf("full status=%d content-type=%q", full.Code, full.Header().Get("Content-Type"))
 	}
@@ -64,7 +64,7 @@ func TestConfigSchemaRouteSupportsProgressiveViews(t *testing.T) {
 	}
 
 	index := httptest.NewRecorder()
-	server.handleConfigSchema(index, httptest.NewRequest(http.MethodGet, "/config/router/schema?view=index", nil))
+	server.handleConfigSchema(index, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=index", nil))
 	if index.Code != http.StatusOK {
 		t.Fatalf("index status=%d body=%s", index.Code, index.Body.String())
 	}
@@ -80,7 +80,7 @@ func TestConfigSchemaRouteSupportsProgressiveViews(t *testing.T) {
 	}
 
 	section := httptest.NewRecorder()
-	server.handleConfigSchema(section, httptest.NewRequest(http.MethodGet, "/config/router/schema?view=section&path=global.router.learning", nil))
+	server.handleConfigSchema(section, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=section&path=global.router.learning", nil))
 	if section.Code != http.StatusOK {
 		t.Fatalf("section status=%d body=%s", section.Code, section.Body.String())
 	}
@@ -89,13 +89,13 @@ func TestConfigSchemaRouteSupportsProgressiveViews(t *testing.T) {
 	}
 
 	surface := httptest.NewRecorder()
-	server.handleConfigSchema(surface, httptest.NewRequest(http.MethodGet, "/config/router/schema?view=surface&kind=algorithm&name=static", nil))
+	server.handleConfigSchema(surface, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=surface&kind=algorithm&name=static", nil))
 	if surface.Code != http.StatusOK {
 		t.Fatalf("surface status=%d body=%s", surface.Code, surface.Body.String())
 	}
 
 	invalid := httptest.NewRecorder()
-	server.handleConfigSchema(invalid, httptest.NewRequest(http.MethodGet, "/config/router/schema?view=section&path=not.real", nil))
+	server.handleConfigSchema(invalid, httptest.NewRequest(http.MethodGet, "/api/v1/config/schema?view=section&path=not.real", nil))
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid section status=%d, want %d", invalid.Code, http.StatusBadRequest)
 	}
