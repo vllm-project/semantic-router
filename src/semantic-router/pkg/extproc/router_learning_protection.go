@@ -395,7 +395,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	}
 	currentModel := currentLearningModel(learningCtx)
 	proposedModel := selectedModelName(result)
-	downgrade := selector.IsDowngrade(currentModel, proposedModel)
+	downgrade := selector.IsDowngrade(learningCtx, currentModel, proposedModel)
 
 	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
 	if !ran {

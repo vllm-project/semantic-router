@@ -173,30 +173,30 @@ func (d SwitchGateDecision) Suppressed() bool {
 	return d.Enforced && d.Decision == GateDecisionSuppress
 }
 
-// IsDowngrade reports whether proposed is weaker than current by configured
-// quality score. Unknown models report false, so the stricter escalation
-// threshold applies when quality is not declared.
-func (s *SessionAwareSelector) IsDowngrade(current, proposed string) bool {
+// IsDowngrade compares available evidence on the same index and candidate effort.
+func (s *SessionAwareSelector) IsDowngrade(selCtx *SelectionContext, current, proposed string) bool {
 	if s == nil {
 		return false
 	}
-	currentQuality, currentOK := s.modelQualityScore(current)
-	proposedQuality, proposedOK := s.modelQualityScore(proposed)
-	if !currentOK || !proposedOK {
+	currentParams, currentOK := s.modelParams[current]
+	proposedParams, proposedOK := s.modelParams[proposed]
+	if !currentOK || !proposedOK || currentParams.QualityIndex == "" ||
+		currentParams.QualityIndex != proposedParams.QualityIndex {
 		return false
 	}
-	return proposedQuality < currentQuality
-}
-
-func (s *SessionAwareSelector) modelQualityScore(model string) (float64, bool) {
-	if s == nil || model == "" {
-		return 0, false
+	effort := func(model string) string {
+		if selCtx != nil {
+			for _, candidate := range selCtx.CandidateModels {
+				if candidate.Model == model {
+					return candidate.ReasoningEffort
+				}
+			}
+		}
+		return ""
 	}
-	params, ok := s.modelParams[model]
-	if !ok || params.QualityScore <= 0 {
-		return 0, false
-	}
-	return params.QualityScore, true
+	currentQuality, currentOK := currentParams.EvidenceScoreAt(currentParams.QualityIndex, effort(current))
+	proposedQuality, proposedOK := proposedParams.EvidenceScoreAt(currentParams.QualityIndex, effort(proposed))
+	return currentOK && proposedOK && proposedQuality < currentQuality
 }
 
 // SecondsSince is a helper for callers holding timestamps rather than deltas.
