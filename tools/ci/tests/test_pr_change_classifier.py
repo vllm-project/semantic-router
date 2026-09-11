@@ -61,6 +61,10 @@ class PRChangeClassifierTests(unittest.TestCase):
             "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json",
             "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
             "e2e/profiles/multimodal-routing/crds/intelligentroute.yaml",
+            # The CRD-mirror test runs only inside the gate, and e2e.mk defines
+            # the make target the gate invokes for it.
+            "e2e/profiles/multimodal-routing/profile_test.go",
+            "tools/make/e2e.mk",
             "website/static/img/blog/new-screenshot.png",
             ".github/workflows/image-routing-calibration.yml",
             # Scoring implementation: the whole native binding and the whole

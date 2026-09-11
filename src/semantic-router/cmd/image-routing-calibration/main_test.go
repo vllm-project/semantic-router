@@ -235,14 +235,19 @@ func TestCollectScores_RequiresOneFiniteScorePerRule(t *testing.T) {
 // Only image-modality rules with candidates can be scored; anything else the
 // classifier skips, and the calibration must refuse it up front.
 func TestValidateRules_RejectsUnscorableRules(t *testing.T) {
-	good := config.EmbeddingRule{Name: "img", QueryModality: config.QueryModalityImage, Candidates: []string{"a photo"}}
+	good := config.EmbeddingRule{Name: "img", QueryModality: config.QueryModalityImage, AggregationMethodConfiged: config.AggregationMethodMax, Candidates: []string{"a photo"}}
 	if err := validateRules([]config.EmbeddingRule{good}); err != nil {
 		t.Fatalf("image rule rejected: %v", err)
 	}
 	cases := map[string]config.EmbeddingRule{
-		"text modality":    {Name: "txt", QueryModality: config.QueryModalityText, Candidates: []string{"a"}},
-		"default modality": {Name: "def", Candidates: []string{"a"}},
-		"no candidates":    {Name: "empty", QueryModality: config.QueryModalityImage},
+		"text modality":    {Name: "txt", QueryModality: config.QueryModalityText, AggregationMethodConfiged: config.AggregationMethodMax, Candidates: []string{"a"}},
+		"default modality": {Name: "def", AggregationMethodConfiged: config.AggregationMethodMax, Candidates: []string{"a"}},
+		"no candidates":    {Name: "empty", QueryModality: config.QueryModalityImage, AggregationMethodConfiged: config.AggregationMethodMax},
+		// The classifier scores mean-aggregated rules without the prototype
+		// blend, and an unset method is not the explicit semantics the report
+		// records; both would make the report describe a run it did not do.
+		"mean aggregation":  {Name: "mean", QueryModality: config.QueryModalityImage, AggregationMethodConfiged: config.AggregationMethodMean, Candidates: []string{"a"}},
+		"unset aggregation": {Name: "unset", QueryModality: config.QueryModalityImage, Candidates: []string{"a"}},
 	}
 	for name, rule := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -411,5 +416,22 @@ func TestResolveInput_ResolvesSymlinksBeforeCleaning(t *testing.T) {
 				t.Fatalf("%q accepted as %q (%s)", path, rel, realPath)
 			}
 		})
+	}
+}
+
+// The report's scoring provenance and the classifier's options come from one
+// resolved config, so the report cannot describe a blend the run did not use.
+func TestClassifierConfig_IsTheReportedScoringSource(t *testing.T) {
+	hnsw := classifierConfig()
+	if hnsw.ModelType != "multimodal" || hnsw.TargetDimension != 384 || !hnsw.PreloadEmbeddings {
+		t.Fatalf("classifier config = %+v, want multimodal/384/preload", hnsw)
+	}
+	// Enabled is a pointer, so compare the resolved values field by field.
+	want := (config.PrototypeScoringConfig{}).WithDefaults()
+	got := hnsw.PrototypeScoring
+	if !got.IsEnabled() || got.BestWeight != want.BestWeight || got.TopM != want.TopM ||
+		got.MaxPrototypes != want.MaxPrototypes || got.ClusterSimilarityThreshold != want.ClusterSimilarityThreshold ||
+		got.MarginThreshold != want.MarginThreshold {
+		t.Fatalf("prototype scoring = %+v, want the resolved defaults %+v the classifier applies", got, want)
 	}
 }

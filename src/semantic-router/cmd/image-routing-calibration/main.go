@@ -54,7 +54,9 @@
 // Scores are the classifier's prototype blend under aggregation_method=max
 // (best_weight*best + (1-best_weight)*mean(top_m), defaults 0.75 / 2), not a
 // raw max cosine; a deployment that overrides prototype_scoring shifts every
-// threshold.
+// threshold. The tool refuses a rule that does not set aggregation_method: max
+// explicitly, because a mean rule is scored without the blend and the report
+// would then record semantics the run did not use.
 //
 // Build/run (needs the candle lib + the multimodal model):
 //
@@ -263,9 +265,8 @@ func main() {
 	if err = candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
 		fatal("initialize multimodal model: %v", err)
 	}
-	classifier, err := classification.NewEmbeddingClassifier(rules, config.HNSWConfig{
-		ModelType: "multimodal", TargetDimension: 384, PreloadEmbeddings: true,
-	})
+	hnsw := classifierConfig()
+	classifier, err := classification.NewEmbeddingClassifier(rules, hnsw)
 	if err != nil {
 		fatal("initialize classifier: %v", err)
 	}
@@ -273,10 +274,11 @@ func main() {
 	report := calibrationReport{}
 	report.Model.Repository = modelRepository
 	report.Model.ArtifactSHA = *artifactRevision
-	report.Model.TargetDimension = 384
-	report.Model.ModelType = "multimodal"
-	report.Model.Aggregation = "max"
-	report.Model.Scoring = config.PrototypeScoringConfig{}.WithDefaults()
+	report.Model.TargetDimension = hnsw.TargetDimension
+	report.Model.ModelType = hnsw.ModelType
+	// validateRules guarantees every rule uses this aggregation.
+	report.Model.Aggregation = string(config.AggregationMethodMax)
+	report.Model.Scoring = hnsw.PrototypeScoring
 	report.Source.Commit, report.Source.Dirty = repoState(*fixtureRoot, *output, *markdown)
 	for _, label := range set.Excluded {
 		report.Source.Excluded = append(report.Source.Excluded, excludedFixture{
@@ -639,7 +641,11 @@ func scoreFixture(classifier *classification.EmbeddingClassifier, root, path str
 
 // validateRules refuses a rule set the calibration cannot score honestly:
 // every rule must be an image-modality rule with candidates, otherwise the
-// classifier silently skips it and the tool would have nothing to calibrate.
+// classifier silently skips it and the tool would have nothing to calibrate;
+// and every rule must select aggregation_method max, because the classifier
+// scores mean-aggregated rules without the prototype blend the report records
+// (embeddingAggregationOptions in pkg/classification), so the report would
+// describe semantics the run did not use.
 func validateRules(rules []config.EmbeddingRule) error {
 	for _, rule := range rules {
 		if modality := rule.EffectiveQueryModality(); modality != config.QueryModalityImage {
@@ -648,8 +654,22 @@ func validateRules(rules []config.EmbeddingRule) error {
 		if len(rule.Candidates) == 0 {
 			return fmt.Errorf("rule %q has no candidates", rule.Name)
 		}
+		if rule.AggregationMethodConfiged != config.AggregationMethodMax {
+			return fmt.Errorf("rule %q has aggregation_method %q; the report records %q (prototype blend) so every rule must set it explicitly",
+				rule.Name, rule.AggregationMethodConfiged, config.AggregationMethodMax)
+		}
 	}
 	return nil
+}
+
+// classifierConfig is the single source for the classifier the tool scores
+// with and for the scoring parameters the report records: the resolved
+// defaults returned here are what NewEmbeddingClassifier applies, so the
+// report cannot describe a blend the run did not use. The runtime resolves
+// its own HNSW config from the deployment, which may override
+// prototype_scoring and shift every threshold; the report says so.
+func classifierConfig() config.HNSWConfig {
+	return config.HNSWConfig{ModelType: "multimodal", TargetDimension: 384, PreloadEmbeddings: true}.WithDefaults()
 }
 
 // collectScores turns the classifier's result into one finite score per

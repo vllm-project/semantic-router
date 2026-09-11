@@ -116,8 +116,9 @@ domains:
       - config/fragments/signal/embedding/image-routing.yaml
       - src/semantic-router/cmd/image-routing-calibration/**
       - e2e/testcases/testdata/image-fixtures/**
-      - e2e/profiles/multimodal-routing/crds/intelligentroute.yaml
-      - e2e/profiles/multimodal-routing/values.yaml
+      # The whole profile: the CRD mirror, the chart values, and the package
+      # test that asserts the mirror, which runs only inside this gate.
+      - e2e/profiles/multimodal-routing/**
       - website/static/img/**
       - dashboard/frontend/public/**
       - candle-binding/**
@@ -133,6 +134,8 @@ domains:
       - src/semantic-router/go.sum
       - Makefile
       - tools/make/rust.mk
+      # Defines the make target the gate runs for the profile package test.
+      - tools/make/e2e.mk
     checks: [make test-e2e-profile-multimodal]
     ci_jobs: [image-calibration]
 
