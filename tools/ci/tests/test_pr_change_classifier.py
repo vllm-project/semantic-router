@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -106,8 +107,6 @@ class PRChangeClassifierTests(unittest.TestCase):
         tracked image; a later change to a listed image outside the covered
         directories would move the calibrated thresholds without running the
         gate. Every positive, negative, and excluded path must select it."""
-        import json
-
         manifest = json.loads(
             (
                 REPO_ROOT
