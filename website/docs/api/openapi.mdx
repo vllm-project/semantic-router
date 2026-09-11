@@ -1,0 +1,42 @@
+---
+title: Router OpenAPI Reference
+sidebar_label: OpenAPI Reference
+description: Search the generated vLLM Semantic Router management API contract.
+hide_table_of_contents: true
+---
+
+import OpenAPIReference from '@site/src/components/OpenAPIReference'
+
+# Router OpenAPI Reference
+
+This explorer is generated from the same Router route catalog that serves
+`GET /openapi.json`. The catalog also owns each operation's permission,
+sensitivity, and mutation audit action, so runtime discovery and this page do
+not maintain parallel policy tables. An Agent should query the running Router
+directly:
+
+```bash
+# Compact endpoint discovery
+curl -sS http://localhost:8080/api/v1
+
+# One operation, without loading the complete document
+curl -sS 'http://localhost:8080/openapi.json?path=/config/router&method=PATCH'
+
+# Complete OpenAPI document
+curl -sS http://localhost:8080/openapi.json
+```
+
+The Dashboard is only a human-facing proxy and is not required for Agent or
+Router operation.
+
+The generated contract declares the runtime-configurable Bearer scheme and the
+permission required by each operation. When management authentication is
+disabled, non-health operations also accept anonymous access; when it is set to
+`bearer`, send `Authorization: Bearer <token>`.
+
+JSON request fields are generated from the Go request type decoded by each
+handler. Configuration values inside the `yaml` field are defined by the
+[Configuration Schema](./configuration-schema), which is independently
+available from the Router at `GET /config/router/schema`.
+
+<OpenAPIReference />

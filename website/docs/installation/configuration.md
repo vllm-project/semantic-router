@@ -350,6 +350,9 @@ The canonical document can be authored or applied through several interfaces:
 
 [Configuration Workflows](configuration-workflows) explains which interface
 owns which part of the document and how to avoid competing sources of truth.
+[Configuration Contract](configuration-contract) describes the generated
+machine-readable schema, Router discovery and validation APIs, and the safe
+authoring loop for tools and agents.
 
 ## Reference sources
 
@@ -361,6 +364,8 @@ owns which part of the document and how to avoid competing sources of truth.
   shared runtime configuration.
 - [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
   records the design behind the current contract.
+- [Configuration Contract](configuration-contract) is the live discovery and
+  validation contract for the current Router build.
 
 Avoid copying the exhaustive example as an application config. Start with the
 smallest document that describes the deployment, then add only the capabilities

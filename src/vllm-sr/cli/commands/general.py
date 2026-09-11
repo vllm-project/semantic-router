@@ -7,6 +7,7 @@ import click
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import (
     config_command,
+    config_schema_command,
     import_config_from_source_command,
     migrate_config_command,
 )
@@ -62,6 +63,41 @@ def config_router(config_path: str) -> None:
     """Print the canonical router configuration."""
 
     config_command("router", config_path)
+
+
+@config.command("schema")
+@click.option(
+    "--endpoint",
+    help=(
+        "Read the contract from a running Router schema endpoint instead of "
+        "the schema bundled with this CLI."
+    ),
+)
+@click.option(
+    "--full",
+    is_flag=True,
+    help="Print the complete JSON Schema instead of the compact index.",
+)
+@click.option(
+    "--section",
+    metavar="PATH",
+    help="Print one config path and only its referenced definitions.",
+)
+@click.option(
+    "--surface",
+    metavar="KIND:NAME",
+    help="Print one signal, algorithm, plugin, or projection contract.",
+)
+@exit_with_logged_error(log)
+def config_schema(
+    endpoint: str | None,
+    full: bool,
+    section: str | None,
+    surface: str | None,
+) -> None:
+    """Discover the canonical config contract progressively."""
+
+    config_schema_command(endpoint, full=full, section=section, surface=surface)
 
 
 @config.command("migrate")

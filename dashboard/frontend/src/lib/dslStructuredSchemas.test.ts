@@ -21,14 +21,18 @@ function flattenSchema(schema: FieldSchema[]): FieldSchema[] {
 }
 
 describe('DSL structured field schemas', () => {
-  it('does not expose raw JSON controls for known algorithm, signal, or plugin fields', () => {
+  it('uses JSON controls only for recursive or deliberately open payloads', () => {
     const schemas = [
       ...ALGORITHM_TYPES.flatMap((type) => getAlgorithmFieldSchema(type)),
       ...SIGNAL_TYPES.flatMap((type) => getSignalFieldSchema(type)),
       ...PLUGIN_TYPES.flatMap((type) => getPluginFieldSchema(type)),
     ]
 
-    expect(flattenSchema(schemas).map((field) => field.type)).not.toContain('json')
+    expect(
+      flattenSchema(schemas)
+        .filter((field) => field.type === 'json')
+        .map((field) => field.key),
+    ).toEqual(['conditions', 'backend_config'])
   })
 
   it('describes workflow and multi-factor structures with typed nested schemas', () => {
@@ -72,6 +76,7 @@ describe('DSL structured field schemas', () => {
       'instructions',
       'timeout_seconds',
     ])
+    expect(prompt.some((field) => field.key === 'model')).toBe(false)
   })
 
   it('maps stable signal and header contracts to object and object-list editors', () => {
