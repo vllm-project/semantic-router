@@ -146,8 +146,8 @@ def test_parse_user_config_rejects_recipe_owned_model_cards(tmp_path: Path) -> N
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "recipes -> 0 -> routing -> modelCards" in str(exc.value)
-    assert "Extra inputs are not permitted" in str(exc.value)
+    assert "recipes.0.routing.modelCards" in str(exc.value)
+    assert "Additional properties are not allowed" in str(exc.value)
 
 
 def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
@@ -344,7 +344,7 @@ def test_parse_user_config_rejects_decision_observe_component_apply(
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    with pytest.raises(ConfigParseError, match="cannot be apply"):
+    with pytest.raises(ConfigParseError, match="cannot be 'apply'"):
         parse_user_config(str(config_path))
 
 
@@ -360,7 +360,7 @@ def test_parse_user_config_rejects_decision_bypass_component_observe(
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    with pytest.raises(ConfigParseError, match="cannot be observe"):
+    with pytest.raises(ConfigParseError, match="cannot be 'observe'"):
         parse_user_config(str(config_path))
 
 
@@ -455,7 +455,7 @@ def test_parse_user_config_rejects_unknown_global_learning_fields(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "Unsupported Router Learning config fields" in str(exc.value)
+    assert "Configuration schema validation failed" in str(exc.value)
     assert expected_path in str(exc.value)
 
 
@@ -521,7 +521,7 @@ def test_parse_user_config_rejects_invalid_global_learning_values(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "Invalid Router Learning config values" in str(exc.value)
+    assert "Configuration schema validation failed" in str(exc.value)
     assert expected_text in str(exc.value)
 
 
@@ -541,7 +541,7 @@ def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> Non
         parse_user_config(str(config_path))
 
     assert "cached_input" in str(exc.value)
-    assert "Extra inputs are not permitted" in str(exc.value)
+    assert "Additional properties are not allowed" in str(exc.value)
 
 
 def test_parse_user_config_rejects_removed_session_aware_algorithm(

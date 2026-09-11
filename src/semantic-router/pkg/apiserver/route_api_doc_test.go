@@ -55,7 +55,7 @@ func TestSwaggerUIEndpoint(t *testing.T) {
 	html := rr.Body.Bytes()
 	for _, snippet := range [][]byte{
 		[]byte("swagger-ui"),
-		[]byte("/openapi.json"),
+		[]byte("openapi.json"),
 		[]byte("SwaggerUIBundle"),
 	} {
 		if !bytes.Contains(html, snippet) {
@@ -74,6 +74,26 @@ func TestAPIOverviewIncludesNewEndpoints(t *testing.T) {
 	if response.Links["swagger_ui"] != "/docs" {
 		t.Error("expected 'swagger_ui' link to '/docs'")
 	}
+	if response.Links["openapi_operation"] != "/openapi.json?path={path}&method={method}" {
+		t.Error("expected progressive OpenAPI operation link")
+	}
+	if response.Links["config_schema"] != "/config/router/schema" {
+		t.Error("expected direct Router config schema link")
+	}
+}
+
+func TestAPIOverviewIncludesRoutePolicyMetadata(t *testing.T) {
+	response := requestAPIOverview(t)
+	for _, endpoint := range response.Endpoints {
+		if endpoint.Path != "/config/router" || endpoint.Method != http.MethodPatch {
+			continue
+		}
+		if endpoint.Permission != PermConfigWrite || endpoint.Sensitivity != SensitivityMutation {
+			t.Fatalf("config patch policy metadata = %+v", endpoint)
+		}
+		return
+	}
+	t.Fatal("config patch endpoint is missing")
 }
 
 func newDocumentationTestServer() *ClassificationAPIServer {

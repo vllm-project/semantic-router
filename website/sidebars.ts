@@ -249,6 +249,7 @@ const sidebars: SidebarsConfig = {
             id: 'installation/configuration',
           },
           items: [
+            'installation/configuration-contract',
             'installation/configuration-workflows',
             {
               type: 'category',
@@ -498,7 +499,9 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/router',
+        'api/configuration-schema',
         'api/apiserver',
+        'api/openapi',
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',

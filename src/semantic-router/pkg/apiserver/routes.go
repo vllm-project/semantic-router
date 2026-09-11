@@ -22,6 +22,7 @@ type apiRequestBody struct {
 	Required    bool
 	LimitBytes  int64
 	Description string
+	Schema      *OpenAPISchema
 }
 
 type apiRoute struct {
@@ -44,15 +45,16 @@ func (r apiRoute) bind(s *ClassificationAPIServer) http.HandlerFunc {
 	return s.wrapRouteHandler(r, handler)
 }
 
-func jsonBody() apiRequestBody {
-	return jsonBodyWithLimit(defaultJSONRequestBodyLimit)
+func jsonBodyFor[T any]() apiRequestBody {
+	return jsonBodyWithLimitFor[T](defaultJSONRequestBodyLimit)
 }
 
-func jsonBodyWithLimit(limit int64) apiRequestBody {
+func jsonBodyWithLimitFor[T any](limit int64) apiRequestBody {
 	return apiRequestBody{
 		Kind:       requestBodyJSON,
 		Required:   true,
 		LimitBytes: limit,
+		Schema:     openAPIRequestSchemaFor[T](),
 	}
 }
 
@@ -62,6 +64,31 @@ func multipartBody(limit int64, description string) apiRequestBody {
 		Required:    true,
 		LimitBytes:  limit,
 		Description: description,
+	}
+}
+
+func queryParameter(name, description, valueType string, enum ...string) OpenAPIParameter {
+	return OpenAPIParameter{
+		Name:        name,
+		In:          "query",
+		Description: description,
+		Schema:      OpenAPISchema{Type: valueType, Enum: enum},
+	}
+}
+
+func requiredQueryParameter(name, description, valueType string, enum ...string) OpenAPIParameter {
+	parameter := queryParameter(name, description, valueType, enum...)
+	parameter.Required = true
+	return parameter
+}
+
+func headerParameter(name, description string, required bool) OpenAPIParameter {
+	return OpenAPIParameter{
+		Name:        name,
+		In:          "header",
+		Description: description,
+		Required:    required,
+		Schema:      OpenAPISchema{Type: "string"},
 	}
 }
 
