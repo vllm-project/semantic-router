@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent',
         {
           type: 'category',
           label: 'Plan a Deployment',
