@@ -52,7 +52,7 @@
 - id: bytedance/seed-2.0-pro-model-card-humanitys-last-exam@1.0.0
   model: bytedance/seed-2.0-pro
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: Seed2.0 Pro

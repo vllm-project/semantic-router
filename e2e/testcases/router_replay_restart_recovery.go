@@ -84,7 +84,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	}
 	time.Sleep(3 * time.Second)
 
-	recordID, err := fetchFirstReplayRecordID(apiSession, "/v1/router_replay?limit=1", opts.Verbose)
+	recordID, err := fetchFirstReplayRecordID(apiSession, "/api/v1/observability/replays?limit=1", opts.Verbose)
 	if err != nil {
 		return "", err
 	}
@@ -98,7 +98,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	return recordID, nil
 }
 
-// replayListResponse mirrors the JSON shape returned by GET /v1/router_replay.
+// replayListResponse mirrors the JSON shape returned by GET /api/v1/observability/replays.
 type replayListResponse struct {
 	Object string          `json:"object"`
 	Count  int             `json:"count"`
@@ -117,10 +117,10 @@ type replayRecordSummary struct {
 func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, requestTarget string, verbose bool) (string, error) {
 	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, requestTarget)
 	if err != nil {
-		return "", fmt.Errorf("GET /v1/router_replay failed: %w", err)
+		return "", fmt.Errorf("GET /api/v1/observability/replays failed: %w", err)
 	}
 	if raw.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET /v1/router_replay returned status %d: %s", raw.StatusCode, string(raw.Body))
+		return "", fmt.Errorf("GET /api/v1/observability/replays returned status %d: %s", raw.StatusCode, string(raw.Body))
 	}
 
 	if verbose {
@@ -146,7 +146,7 @@ func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, reques
 }
 
 func assertReplayRecordHasSessionMetadata(managementSession *fixtures.ServiceSession, recordID string, verbose bool) error {
-	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay/"+recordID)
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/api/v1/observability/replays/"+recordID)
 	if err != nil {
 		return fmt.Errorf("GET replay record for session metadata: %w", err)
 	}
@@ -240,7 +240,7 @@ func execPsql(ctx context.Context, podName string, verbose bool, query string) (
 	return result, nil
 }
 
-// verifyReplayRecordAfterRestart polls GET /v1/router_replay/{id} until the
+// verifyReplayRecordAfterRestart polls GET /api/v1/observability/replays/{id} until the
 // record is accessible again after the pod restart.
 func verifyReplayRecordAfterRestart(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, recordID string) error {
 	const verifyTimeout = 90 * time.Second
@@ -259,7 +259,7 @@ func verifyReplayRecordAfterRestart(ctx context.Context, client *kubernetes.Clie
 	return fmt.Errorf("replay record %s not retrievable after %s: %w", recordID, verifyTimeout, lastErr)
 }
 
-// fetchReplayRecordOnce tries a single GET /v1/router_replay/{id} and returns
+// fetchReplayRecordOnce tries a single GET /api/v1/observability/replays/{id} and returns
 // nil when the record is found and valid.
 func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, recordID string) error {
 	managementSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
@@ -268,7 +268,7 @@ func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, op
 	}
 	defer managementSession.Close()
 
-	raw, err := doRouterReplayManagementGET(ctx, managementSession, "/v1/router_replay/"+recordID)
+	raw, err := doRouterReplayManagementGET(ctx, managementSession, "/api/v1/observability/replays/"+recordID)
 	if err != nil {
 		if opts.Verbose {
 			fmt.Printf("[Test] GET replay %s not ready yet: %v — retrying\n", recordID, err)

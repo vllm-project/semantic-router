@@ -15,7 +15,7 @@ _LAZY_EXPORTS = {
 
 
 def __getattr__(name: str) -> Any:
-    """Load legacy package-level command exports only when requested."""
+    """Load package-level command exports only when requested."""
     try:
         module_name, attribute_name = _LAZY_EXPORTS[name]
     except KeyError as exc:

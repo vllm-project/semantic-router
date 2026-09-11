@@ -334,7 +334,7 @@ func routingRecipeReportSealFixture() (RunManifest, recordAttestation, execution
 	}
 	attestation := executionAttestation{Entries: []executionAttestationEntry{
 		{
-			Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-1",
+			Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-1",
 			FetchedAt: &decisionAt, RoutingRecipeDecision: &decision,
 		},
 		{

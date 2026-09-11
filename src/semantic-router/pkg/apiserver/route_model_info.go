@@ -11,7 +11,7 @@ func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, _ *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-// handleEmbeddingModelsInfo handles GET /api/v1/embeddings/models
+// handleEmbeddingModelsInfo handles GET /api/v1/inventory/embedding-models
 // Returns ONLY embedding models information
 func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWriter, r *http.Request) {
 	embeddingModels := s.getEmbeddingModelsInfo(s.loadModelsRuntimeState())

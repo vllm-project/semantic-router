@@ -26,7 +26,7 @@
   curl http://localhost:8080/health
 
   # Intent classification
-  curl -X POST http://localhost:8080/api/v1/classify/intent \
+  curl -X POST http://localhost:8080/api/v1/diagnostics/classify/intent \
     -H "Content-Type: application/json" \
     -d '{"text": "What is machine learning?"}'
 

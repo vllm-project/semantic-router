@@ -129,7 +129,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
-	req := httptest.NewRequest(http.MethodPost, "/api/router/v1/router/outcomes?authToken=query-user-jwt", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes?authToken=query-user-jwt", nil)
 	req.Header.Set("Authorization", "Bearer dashboard-feedback-user-jwt")
 	req.Header.Set("Proxy-Authorization", "Bearer proxy-user-jwt")
 	req.Header.Set("Cookie", "vsr_session=cookie-user-jwt")
@@ -187,16 +187,16 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		{method: http.MethodGet, path: "/api/router/openapi.json", want: true},
 		{method: http.MethodHead, path: "/api/router/docs", want: true},
 		{method: http.MethodPost, path: "/api/router/openapi.json", want: false},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay", want: true},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay/replay-1", want: true},
-		{method: http.MethodHead, path: "/api/router/v1/router_replay", want: false},
-		{method: http.MethodPost, path: "/api/router/v1/router_replay", want: false},
-		{method: http.MethodPost, path: "/api/router/v1/router/outcomes", want: true},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", want: true},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/replay-1", want: true},
+		{method: http.MethodHead, path: "/api/router/api/v1/observability/replays", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/replays", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", want: true},
 		{method: http.MethodGet, path: "/api/router/api/v1/response-cache/stats", want: true},
 		{method: http.MethodPost, path: "/api/router/api/v1/response-cache/invalidate", want: true},
 		{method: http.MethodPost, path: "/api/router/api/v1/context-compression/preview", want: true},
 		{method: http.MethodDelete, path: "/api/router/api/v1/context-compression/stats", want: false},
-		{method: http.MethodPost, path: "/api/router/config/router", want: false},
+		{method: http.MethodPost, path: "/api/router/api/v1/config", want: false},
 		{method: http.MethodPost, path: "/api/router/unknown", want: false},
 	}
 	for _, test := range tests {

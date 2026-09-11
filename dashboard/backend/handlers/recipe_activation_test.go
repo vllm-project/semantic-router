@@ -625,10 +625,10 @@ func TestRouterActivationVerifierPollsPendingUntilExactActiveHash(t *testing.T) 
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if calls.Add(1) == 1 {
-			_, _ = w.Write([]byte(`{"runtime_hash":"` + expected + `","active_hash":"old","status":"pending"}`))
+			_, _ = w.Write([]byte(`{"generated_runtime_hash":"` + expected + `","active_runtime_hash":"old","activation_status":"pending"}`))
 			return
 		}
-		_, _ = w.Write([]byte(`{"runtime_hash":"` + expected + `","active_hash":"` + expected + `","status":"active"}`))
+		_, _ = w.Write([]byte(`{"generated_runtime_hash":"` + expected + `","active_runtime_hash":"` + expected + `","activation_status":"active"}`))
 	}))
 	defer server.Close()
 	verify := newRouterActivationVerifier(server.URL, server.Client())
@@ -645,7 +645,7 @@ func TestRouterActivationVerifierPollsPendingUntilExactActiveHash(t *testing.T) 
 func TestRouterActivationVerifierStopsOnContextDeadline(t *testing.T) {
 	expected := strings.Repeat("c", 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(`{"runtime_hash":"old","active_hash":"old","status":"pending"}`))
+		_, _ = w.Write([]byte(`{"generated_runtime_hash":"old","active_runtime_hash":"old","activation_status":"pending"}`))
 	}))
 	defer server.Close()
 	verify := newRouterActivationVerifier(server.URL, server.Client())
