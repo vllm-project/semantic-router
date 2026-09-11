@@ -35,6 +35,7 @@ Start here when changing code or docs:
 - [module-boundaries.md](module-boundaries.md)
 - [testing-strategy.md](testing-strategy.md)
 - [feature-complete-checklist.md](feature-complete-checklist.md)
+- [sticky-tool-selection-guide.md](sticky-tool-selection-guide.md)
 - nearest local `AGENTS.md`
 
 Contributor-facing wrappers also live in:

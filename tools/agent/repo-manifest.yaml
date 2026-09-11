@@ -130,6 +130,7 @@ docs:
 - tools/agent/docs/architecture-scorecard.md
 - tools/agent/docs/architecture/state-taxonomy-and-inventory.md
 - tools/agent/docs/change-surfaces.md
+- tools/agent/docs/sticky-tool-selection-guide.md
 - tools/agent/docs/environments.md
 - tools/agent/docs/feature-complete-checklist.md
 - tools/agent/docs/glossary.md
@@ -264,6 +265,9 @@ doc_governance:
   - path: tools/agent/docs/change-surfaces.md
     steward: agent-contract
     freshness: update when surfaces or their mappings change
+  - path: tools/agent/docs/sticky-tool-selection-guide.md
+    steward: agent-contract
+    freshness: update when the sticky tool-selection learning guide or implementation workflow changes
   - path: tools/agent/docs/environments.md
     steward: agent-contract
     freshness: update when supported environments or default smoke paths change
