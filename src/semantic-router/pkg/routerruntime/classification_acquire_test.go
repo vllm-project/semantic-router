@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -71,13 +72,16 @@ func TestMemoryAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
 	}
 }
 
-func TestClassificationAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
+func TestClassificationRuntimeAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
+	oldConfig := &config.RouterConfig{}
+	newConfig := &config.RouterConfig{}
 	oldService := &services.ClassificationService{}
 	newService := &services.ClassificationService{}
 	acquireStarted := make(chan struct{})
 	allowAcquire := make(chan struct{})
 	registry := &Registry{}
 	registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{
+		Config:                oldConfig,
 		ClassificationService: oldService,
 		AcquireClassification: func() (func(), bool) {
 			close(acquireStarted)
@@ -87,20 +91,24 @@ func TestClassificationAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
 	})
 
 	type result struct {
+		config  *config.RouterConfig
 		service *services.ClassificationService
 		release func()
 		ok      bool
 	}
 	acquired := make(chan result, 1)
 	go func() {
-		service, release, ok := registry.AcquireClassificationService()
-		acquired <- result{service: service, release: release, ok: ok}
+		cfg, service, release, ok := registry.AcquireClassificationRuntime()
+		acquired <- result{config: cfg, service: service, release: release, ok: ok}
 	}()
 	<-acquireStarted
 
 	published := make(chan struct{})
 	go func() {
-		registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{ClassificationService: newService})
+		registry.PublishRouterRuntimeSnapshot(RouterRuntimeSnapshot{
+			Config:                newConfig,
+			ClassificationService: newService,
+		})
 		close(published)
 	}()
 	select {
@@ -111,8 +119,13 @@ func TestClassificationAcquireIsAtomicWithSnapshotPublish(t *testing.T) {
 
 	close(allowAcquire)
 	got := <-acquired
-	if !got.ok || got.service != oldService {
-		t.Fatalf("AcquireClassificationService() = (%p, %v), want old service", got.service, got.ok)
+	if !got.ok || got.config != oldConfig || got.service != oldService {
+		t.Fatalf(
+			"AcquireClassificationRuntime() = (%p, %p, %v), want old config and service",
+			got.config,
+			got.service,
+			got.ok,
+		)
 	}
 	got.release()
 	select {

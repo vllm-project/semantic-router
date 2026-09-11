@@ -124,12 +124,16 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	metrics.RecordBatchClassificationRequest("unified")
 	start := time.Now()
 
-	req, ok := s.parseBatchClassificationRequest(w, r)
+	cfg, service, release := s.acquireClassificationRuntime()
+	defer release()
+	maxBatchSize := 0
+	if cfg != nil {
+		maxBatchSize = cfg.API.BatchClassification.MaxBatchSize
+	}
+	req, ok := s.parseBatchClassificationRequest(w, r, maxBatchSize)
 	if !ok {
 		return
 	}
-	service, release := s.acquireClassificationService()
-	defer release()
 
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
 	if !s.ensureUnifiedClassifierAvailable(w, service) {
@@ -150,7 +154,11 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.ResponseWriter, r *http.Request) (BatchClassificationRequest, bool) {
+func (s *ClassificationAPIServer) parseBatchClassificationRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	maxBatchSize int,
+) (BatchClassificationRequest, bool) {
 	body, err := readJSONRequestBody(r, defaultJSONRequestBodyLimit)
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "read_body_failed")
@@ -184,7 +192,7 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 		return BatchClassificationRequest{}, false
 	}
 
-	if maxBatchSize := s.maxBatchSize(); maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
+	if maxBatchSize > 0 && len(req.Texts) > maxBatchSize {
 		metrics.RecordBatchClassificationError("unified", "batch_too_large")
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
 			fmt.Sprintf("texts array exceeds max_batch_size %d", maxBatchSize))
@@ -199,15 +207,6 @@ func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.Respons
 
 	return req, true
 }
-
-func (s *ClassificationAPIServer) maxBatchSize() int {
-	cfg := s.currentConfig()
-	if cfg == nil {
-		return 0
-	}
-	return cfg.API.BatchClassification.MaxBatchSize
-}
-
 func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter, service classificationService) bool {
 	if !service.HasUnifiedClassifier() {
 		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")

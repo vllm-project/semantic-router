@@ -166,32 +166,44 @@ func (r *Registry) ClassificationService() *services.ClassificationService {
 	return r.classificationService
 }
 
+// AcquireClassificationRuntime returns one generation's config and
+// classification service and keeps that generation alive until release runs.
+func (r *Registry) AcquireClassificationRuntime() (
+	*config.RouterConfig,
+	*services.ClassificationService,
+	func(),
+	bool,
+) {
+	if r == nil {
+		return nil, nil, nil, false
+	}
+	r.mu.RLock()
+	cfg := r.config
+	service := r.classificationService
+	if service == nil {
+		r.mu.RUnlock()
+		return nil, nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return cfg, service, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, nil, false
+	}
+	return cfg, service, release, true
+}
+
 // AcquireClassificationService returns the live classification service together
 // with a release function that must be called when the caller is done with it.
 // Holding the reference keeps the owning runtime generation from closing the
 // service mid-call. It reports false when no live service is available.
 func (r *Registry) AcquireClassificationService() (*services.ClassificationService, func(), bool) {
-	if r == nil {
-		return nil, nil, false
-	}
-	r.mu.RLock()
-	service := r.classificationService
-	if service == nil {
-		r.mu.RUnlock()
-		return nil, nil, false
-	}
-	acquire := r.acquireGeneration
-	if acquire == nil {
-		r.mu.RUnlock()
-		// No generation owns this service, so nothing can close it underneath us.
-		return service, func() {}, true
-	}
-	release, ok := acquire()
-	r.mu.RUnlock()
-	if !ok {
-		return nil, nil, false
-	}
-	return service, release, true
+	_, service, release, ok := r.AcquireClassificationRuntime()
+	return service, release, ok
 }
 
 func (r *Registry) SetClassificationService(service *services.ClassificationService) {

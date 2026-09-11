@@ -19,9 +19,8 @@ type ClassificationMetricsResponse struct {
 }
 
 func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, _ *http.Request) {
-	service, release := s.acquireClassificationService()
+	cfg, service, release := s.acquireClassificationRuntime()
 	defer release()
-	cfg := s.currentConfig()
 	response := ClassificationMetricsResponse{
 		UnifiedClassifier:      service.HasUnifiedClassifier(),
 		FactCheckClassifier:    service.HasFactCheckClassifier(),

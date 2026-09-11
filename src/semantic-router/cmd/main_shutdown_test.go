@@ -312,6 +312,54 @@ func TestShutdownRouterComponentsDoesNotCloseResourcesUnderTimedOutManagementReq
 	_ = waitForTestError(t, requestDone, "management request did not exit after release")
 }
 
+func TestShutdownRouterComponentsDoesNotRunHooksAfterResourceDrainTimeout(t *testing.T) {
+	resourceWork := make(chan struct{})
+	defer close(resourceWork)
+	hookDependencyClosed := make(chan struct{})
+	tracingStopped := make(chan struct{})
+	shutdownHooks := []func(context.Context) error{
+		func(context.Context) error {
+			close(hookDependencyClosed)
+			return nil
+		},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+
+	err := shutdownRouterComponents(
+		ctx,
+		nil,
+		func(ctx context.Context) error {
+			select {
+			case <-resourceWork:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+		&shutdownHooks,
+		func(context.Context) error {
+			close(tracingStopped)
+			return nil
+		},
+	)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("shutdownRouterComponents() error = %v, want deadline exceeded", err)
+	}
+	requireNoTestSignal(
+		t,
+		hookDependencyClosed,
+		25*time.Millisecond,
+		"shutdown hook closed a dependency while generation work was still active",
+	)
+	requireNoTestSignal(
+		t,
+		tracingStopped,
+		25*time.Millisecond,
+		"tracing stopped before generation resource drain completed",
+	)
+}
+
 func startManagementRequest(server *httptest.Server) <-chan error {
 	done := make(chan error, 1)
 	go func() {

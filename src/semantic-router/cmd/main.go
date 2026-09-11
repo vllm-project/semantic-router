@@ -183,7 +183,11 @@ func shutdownRouterComponents(
 		return shutdownErr
 	}
 	if resourceShutdown != nil {
-		shutdownErr = errors.Join(shutdownErr, resourceShutdown(ctx))
+		resourceErr := resourceShutdown(ctx)
+		shutdownErr = errors.Join(shutdownErr, resourceErr)
+		if errors.Is(resourceErr, context.Canceled) || errors.Is(resourceErr, context.DeadlineExceeded) {
+			return shutdownErr
+		}
 	}
 	shutdownErr = errors.Join(shutdownErr, runShutdownHooks(ctx, shutdownHooks))
 	shutdownErr = errors.Join(shutdownErr, shutdownTracing(ctx))

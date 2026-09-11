@@ -9,12 +9,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelAvailability {
-	if s == nil || s.classificationSvc == nil {
+func classificationAvailabilityForService(service classificationService) classifierModelAvailability {
+	if service == nil {
 		return classifierModelAvailability{}
 	}
-	service, release := s.acquireClassificationService()
-	defer release()
 
 	availability := classifierModelAvailability{
 		core:                   service.HasClassifier(),
@@ -34,10 +32,10 @@ func (s *ClassificationAPIServer) classifierModelAvailability() classifierModelA
 
 // getClassifierModelsInfo returns information about configured classifier models.
 func (s *ClassificationAPIServer) getClassifierModelsInfo(
+	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
 	runtimeState *startupstatus.State,
 ) []ModelInfo {
-	cfg := s.currentConfig()
 	if cfg == nil {
 		return s.getPlaceholderModelsInfo(runtimeState)
 	}

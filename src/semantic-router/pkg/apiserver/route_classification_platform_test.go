@@ -11,15 +11,34 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 type combinedClassificationGeneration struct {
 	classificationService
 	calls []string
+}
+
+type blockingBodyReader struct {
+	reader  *bytes.Reader
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (r *blockingBodyReader) Read(p []byte) (int, error) {
+	r.once.Do(func() {
+		close(r.started)
+		<-r.release
+	})
+	return r.reader.Read(p)
 }
 
 func (s *combinedClassificationGeneration) ClassifyIntent(
@@ -159,6 +178,88 @@ func TestHandleCombinedClassificationUsesOneGeneration(t *testing.T) {
 	}
 	if len(newGeneration.calls) != 0 {
 		t.Fatalf("new generation handled part of the request: %v", newGeneration.calls)
+	}
+}
+
+func TestHandleBatchClassificationUsesConfigAndServiceFromOneGeneration(t *testing.T) {
+	oldConfig := &config.RouterConfig{}
+	oldConfig.API.BatchClassification.MaxBatchSize = 2
+	newConfig := &config.RouterConfig{}
+	newConfig.API.BatchClassification.MaxBatchSize = 1
+	oldService := &services.ClassificationService{}
+	newService := &services.ClassificationService{}
+
+	registry := routerruntime.NewRegistry(nil)
+	routerService := extproc.NewRouterService(nil)
+	t.Cleanup(func() { _ = routerService.Close() })
+	publish := func(
+		cfg *config.RouterConfig,
+		service *services.ClassificationService,
+	) func(extproc.AcquireFunc) {
+		return func(acquire extproc.AcquireFunc) {
+			registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				Config:                cfg,
+				ClassificationService: service,
+				AcquireClassification: routerruntime.AcquireClassification(acquire),
+			})
+		}
+	}
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{Config: oldConfig, ClassificationService: oldService},
+		publish(oldConfig, oldService),
+	); err != nil {
+		t.Fatalf("publish old generation: %v", err)
+	}
+
+	body := &blockingBodyReader{
+		reader:  bytes.NewReader([]byte(`{"texts":["one","two"]}`)),
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	defer func() {
+		select {
+		case <-body.release:
+		default:
+			close(body.release)
+		}
+	}()
+	apiServer := &ClassificationAPIServer{
+		runtimeConfig:   newLiveRuntimeConfig(oldConfig, registry.CurrentConfig, nil),
+		runtimeRegistry: registry,
+	}
+	response := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/batch", body)
+		w := httptest.NewRecorder()
+		apiServer.handleBatchClassification(w, req)
+		response <- w
+	}()
+	select {
+	case <-body.started:
+	case <-time.After(time.Second):
+		t.Fatal("batch handler did not start reading the request body")
+	}
+
+	if err := routerService.Swap(
+		&extproc.OpenAIRouter{Config: newConfig, ClassificationService: newService},
+		publish(newConfig, newService),
+	); err != nil {
+		t.Fatalf("swap router generation: %v", err)
+	}
+	close(body.release)
+	var w *httptest.ResponseRecorder
+	select {
+	case w = <-response:
+	case <-time.After(time.Second):
+		t.Fatal("batch handler did not finish after request body release")
+	}
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf(
+			"status = %d, want %d from old generation classifier: %s",
+			w.Code,
+			http.StatusServiceUnavailable,
+			w.Body.String(),
+		)
 	}
 }
 

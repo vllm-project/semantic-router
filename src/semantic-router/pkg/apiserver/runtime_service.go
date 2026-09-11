@@ -102,6 +102,20 @@ func (s *ClassificationAPIServer) acquireClassificationService() (classification
 	return services.NewPlaceholderClassificationService(), func() {}
 }
 
+func (s *ClassificationAPIServer) acquireClassificationRuntime() (
+	*config.RouterConfig,
+	classificationService,
+	func(),
+) {
+	if s != nil && s.runtimeRegistry != nil {
+		if cfg, service, release, ok := s.runtimeRegistry.AcquireClassificationRuntime(); ok {
+			return cfg, service, release
+		}
+	}
+	service, release := s.acquireClassificationService()
+	return s.currentConfig(), service, release
+}
+
 func (s *liveClassificationService) current() classificationService {
 	if s != nil && s.resolver != nil {
 		if svc := s.resolver(); svc != nil {
