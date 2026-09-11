@@ -2,14 +2,22 @@ import importlib.util
 import json
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import ClassVar
 
+import pytest
+
 HTTP_OK = 200
 HTTP_UNAVAILABLE = 503
+DELAY_MS = 100
+MIN_DELAY_SECONDS = 0.09
+STREAM_INTERVAL_MS = 20
+STREAM_CONTENT_FRAMES = 5
+STREAM_TERMINAL_FRAMES = 2
 
 
 def load_fault_proxy_module():
@@ -47,6 +55,29 @@ class UpstreamEchoHandler(BaseHTTPRequestHandler):
         return
 
 
+class UpstreamSSEHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_POST(self):
+        content_length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(content_length)
+        frames = [
+            b'data: {"choices":[{"delta":{"content":"one"},"finish_reason":null}]}\n\n',
+            b'data: {"choices":[{"delta":{"content":"two"},"finish_reason":null}]}\n\n',
+            b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+            b"data: [DONE]\n\n",
+        ]
+        payload = b"".join(frames)
+        self.send_response(HTTP_OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, _fmt, *_args):
+        return
+
+
 def start_server(handler_cls):
     server = HTTPServer(("127.0.0.1", 0), handler_cls)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -76,6 +107,28 @@ def post_turn(base_url, session_idx, turn, prompt_suffix=""):
             return response.status, dict(response.headers), json.loads(response.read())
     except urllib.error.HTTPError as exc:
         return exc.code, dict(exc.headers), json.loads(exc.read())
+
+
+def post_stream(base_url):
+    payload = {
+        "model": "auto",
+        "stream": True,
+        "messages": [{"role": "user", "content": "stream this"}],
+    }
+    request = urllib.request.Request(
+        f"{base_url}/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
+        method="POST",
+    )
+    started = time.monotonic()
+    with urllib.request.urlopen(request, timeout=5) as response:
+        first_line = response.readline()
+        first_frame_seconds = time.monotonic() - started
+        first_separator = response.readline()
+        body = first_line + first_separator + response.read()
+        elapsed = time.monotonic() - started
+        return dict(response.headers), body, first_frame_seconds, elapsed
 
 
 def test_fault_proxy_injects_selected_turn_once_then_recovers(tmp_path):
@@ -152,6 +205,71 @@ def test_fault_proxy_session_modulo_selects_subset():
         stop_server(upstream, upstream_thread)
 
 
+def test_fault_proxy_delays_forwarded_and_injected_responses():
+    fault = load_fault_proxy_module()
+    upstream, upstream_thread = start_server(UpstreamEchoHandler)
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset({1}),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        delay_ms=DELAY_MS,
+    )
+    handler = fault.make_handler(f"http://127.0.0.1:{upstream.server_port}", policy)
+    proxy, proxy_thread = start_server(handler)
+
+    try:
+        base_url = f"http://127.0.0.1:{proxy.server_port}"
+        started = time.monotonic()
+        forwarded_status = post_turn(base_url, 0, 0)[0]
+        forwarded_elapsed = time.monotonic() - started
+
+        started = time.monotonic()
+        injected_status, injected_headers, injected_payload = post_turn(base_url, 0, 1)
+        injected_elapsed = time.monotonic() - started
+    finally:
+        stop_server(proxy, proxy_thread)
+        stop_server(upstream, upstream_thread)
+
+    assert forwarded_status == HTTP_OK
+    assert forwarded_elapsed >= MIN_DELAY_SECONDS
+    assert injected_status == HTTP_UNAVAILABLE
+    assert injected_headers["x-vsr-fault-injected"] == "true"
+    assert injected_payload["error"]["type"] == "fault_proxy_injected"
+    assert injected_elapsed >= MIN_DELAY_SECONDS
+
+
+def test_fault_proxy_delay_seconds_defaults_to_no_sleep():
+    fault = load_fault_proxy_module()
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+    )
+    assert policy.delay_ms == 0
+    assert policy.delay_jitter_ms == 0
+    assert fault.delay_seconds(policy) == 0.0
+
+    jittered = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        delay_ms=DELAY_MS,
+        delay_jitter_ms=DELAY_MS,
+    )
+    for _ in range(20):
+        seconds = fault.delay_seconds(jittered)
+        assert MIN_DELAY_SECONDS <= seconds <= 2 * DELAY_MS / 1000.0
+
+
 def test_fault_proxy_phase_inference_targets_tool_loops():
     fault = load_fault_proxy_module()
     assert fault.phase_from_text("Use the provided tool result now") == "tool_loop"
@@ -159,3 +277,139 @@ def test_fault_proxy_phase_inference_targets_tool_loops():
         "provider_state"
     )
     assert fault.phase_from_text("This follows an idle pause") == "idle_boundary"
+
+
+def test_encode_http_chunk_uses_hex_size_and_crlf_delimiters():
+    fault = load_fault_proxy_module()
+    payload = b"data: ok\n\n"
+
+    assert fault.encode_http_chunk(payload) == b"a\r\ndata: ok\n\n\r\n"
+
+
+def test_fault_proxy_paces_and_shapes_sse_frames():
+    fault = load_fault_proxy_module()
+    upstream, upstream_thread = start_server(UpstreamSSEHandler)
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        delay_ms=DELAY_MS,
+        stream_interval_ms=STREAM_INTERVAL_MS,
+        stream_frames=STREAM_CONTENT_FRAMES,
+    )
+    handler = fault.make_handler(f"http://127.0.0.1:{upstream.server_port}", policy)
+    proxy, proxy_thread = start_server(handler)
+
+    try:
+        headers, body, first_frame_seconds, elapsed = post_stream(
+            f"http://127.0.0.1:{proxy.server_port}"
+        )
+    finally:
+        stop_server(proxy, proxy_thread)
+        stop_server(upstream, upstream_thread)
+
+    frames = fault.split_sse_frames(body)
+    content = [frame for frame in frames if not fault.is_terminal_sse_frame(frame)]
+    terminal = [frame for frame in frames if fault.is_terminal_sse_frame(frame)]
+    assert headers["Content-Type"].startswith("text/event-stream")
+    assert len(content) == STREAM_CONTENT_FRAMES
+    assert len(terminal) == STREAM_TERMINAL_FRAMES
+    assert terminal[-1] == b"data: [DONE]\n\n"
+    assert first_frame_seconds >= MIN_DELAY_SECONDS
+    assert elapsed >= MIN_DELAY_SECONDS + STREAM_INTERVAL_MS * 5 / 1000
+
+
+@pytest.mark.parametrize("content_frames", [0, STREAM_CONTENT_FRAMES])
+@pytest.mark.parametrize("line_ending", [b"\n", b"\r\n"])
+def test_fault_proxy_forwards_each_event_before_upstream_continues(
+    content_frames, line_ending
+):
+    fault = load_fault_proxy_module()
+    release_frames = [threading.Event(), threading.Event()]
+    frames = [
+        b'data: {"choices":[{"delta":{"content":"one"},"finish_reason":null}]}',
+        b'data: {"choices":[{"delta":{"content":"two"},"finish_reason":null}]}',
+        b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+        b"data: [DONE]",
+    ]
+    frames = [frame + line_ending * 2 for frame in frames]
+
+    class GatedUpstream(UpstreamSSEHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            self.send_response(HTTP_OK)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            for index, frame in enumerate(frames):
+                # Fragment event data across HTTP chunks to exercise framing.
+                for part in (frame[:7], frame[7:]):
+                    self.wfile.write(fault.encode_http_chunk(part))
+                    self.wfile.flush()
+                if index < len(release_frames) and not release_frames[index].wait(
+                    timeout=10
+                ):
+                    self.close_connection = True
+                    return
+            self.wfile.write(fault.HTTP_CHUNKED_BODY_END)
+            self.wfile.flush()
+
+    upstream, upstream_thread = start_server(GatedUpstream)
+    policy = fault.FaultPolicy(
+        fail_turns=frozenset(),
+        fail_phases=frozenset(),
+        fail_status=HTTP_UNAVAILABLE,
+        fail_session_mod=1,
+        fail_session_remainder=0,
+        fail_once_per_session=True,
+        stream_frames=content_frames,
+    )
+    proxy, proxy_thread = start_server(
+        fault.make_handler(f"http://127.0.0.1:{upstream.server_port}", policy)
+    )
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{proxy.server_port}/v1/chat/completions",
+        data=b'{"stream": true}',
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=3) as response:
+            assert response.headers["Transfer-Encoding"] == "chunked"
+            assert response.headers.get("Content-Length") is None
+            received = []
+            for index, release in enumerate(release_frames):
+                # The upstream cannot send its next event until the client has
+                # received this one. Whole-response buffering deadlocks here.
+                received.append(response.readline() + response.readline())
+                assert received[-1] == frames[index]
+                release.set()
+            body = b"".join(received) + response.read()
+    finally:
+        for release in release_frames:
+            release.set()
+        stop_server(proxy, proxy_thread)
+        stop_server(upstream, upstream_thread)
+
+    expected_content = frames[:2]
+    if content_frames:
+        expected_content = [frames[i % 2] for i in range(content_frames)]
+    assert body == b"".join(expected_content + frames[2:])
+
+
+def test_sse_shaping_truncates_content_but_preserves_terminal_and_usage_events():
+    fault = load_fault_proxy_module()
+    content = b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+    terminal = b'data: {"choices":[{"finish_reason":"stop"}]}\n\n'
+    usage = b'data: {"choices":[],"usage":{"completion_tokens":2}}\n\n'
+    done = b"data: [DONE]\n\n"
+    assert list(
+        fault.shape_sse_frames([content, content, terminal, usage, done], 1)
+    ) == [
+        content,
+        terminal,
+        usage,
+        done,
+    ]

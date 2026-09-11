@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -44,8 +45,60 @@ func LoadCategoryMapping(path string) (*CategoryMapping, error) {
 	if err := json.Unmarshal(data, &mapping); err != nil {
 		return nil, fmt.Errorf("failed to parse mapping JSON: %w", err)
 	}
+	if err := validateCategoryMapping(path, &mapping); err != nil {
+		return nil, err
+	}
 
 	return &mapping, nil
+}
+
+// validateCategoryMapping requires both directions to describe the same
+// zero-based contiguous bijection. Remote scores are aligned through the
+// category->index direction, while routing resolves the winning index through
+// index->category; accepting disagreement between them can silently route a
+// correct score to the wrong category.
+func validateCategoryMapping(path string, mapping *CategoryMapping) error {
+	if len(mapping.CategoryToIdx) != len(mapping.IdxToCategory) {
+		return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category must have the same size", path)
+	}
+	if err := validateCategoryMappingIndexes(path, mapping); err != nil {
+		return err
+	}
+	if err := validateCategoryMappingLabels(path, mapping); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCategoryMappingIndexes(path string, mapping *CategoryMapping) error {
+	for idx := 0; idx < len(mapping.CategoryToIdx); idx++ {
+		if _, ok := mapping.IdxToCategory[strconv.Itoa(idx)]; !ok {
+			return fmt.Errorf("missing label for index %d in category mapping %s", idx, path)
+		}
+	}
+	for label, idx := range mapping.CategoryToIdx {
+		if idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index for %q must be contiguous from 0, got %d", path, label, idx)
+		}
+		reverse, ok := mapping.IdxToCategory[strconv.Itoa(idx)]
+		if !ok || reverse != label {
+			return fmt.Errorf("category mapping %s: category_to_idx and idx_to_category disagree for %q", path, label)
+		}
+	}
+	return nil
+}
+
+func validateCategoryMappingLabels(path string, mapping *CategoryMapping) error {
+	for index, label := range mapping.IdxToCategory {
+		idx, err := strconv.Atoi(index)
+		if err != nil || idx < 0 || idx >= len(mapping.CategoryToIdx) {
+			return fmt.Errorf("category mapping %s: index->category key %q is not contiguous from 0", path, index)
+		}
+		if mapped, ok := mapping.CategoryToIdx[label]; !ok || mapped != idx {
+			return fmt.Errorf("category mapping %s: idx_to_category and category_to_idx disagree for index %q", path, index)
+		}
+	}
+	return nil
 }
 
 // LoadPIIMapping loads the PII mapping from a JSON file
@@ -428,4 +481,53 @@ func resolveSinglePositiveIndex(mapping *JailbreakMapping, positiveLabels []stri
 		return 0, fmt.Errorf("none of the configured positive_labels %v were found in jailbreak_mapping", positiveLabels)
 	}
 	return resolvedIdx, nil
+}
+
+// ValidateLabelMappingAgainstModelConfig rejects a configured label mapping that
+// disagrees with the model's own config.json. An artifact can ship both a
+// sidecar mapping and config.json, and when the two disagree the one that is
+// loaded decides what class every index means, so picking the wrong file
+// relabels every prediction with no error.
+//
+// The check is skipped when mappingPath already is the model's config.json,
+// when the model directory is unknown, when the model ships no config.json, and
+// when that config declares no id2label: none of those is a disagreement.
+func ValidateLabelMappingAgainstModelConfig(mappingPath, modelDir string, idxToLabel map[string]string) error {
+	if modelDir == "" {
+		return nil
+	}
+	modelConfigPath := filepath.Join(modelDir, "config.json")
+	if filepath.Clean(mappingPath) == filepath.Clean(modelConfigPath) {
+		return nil
+	}
+	data, err := os.ReadFile(modelConfigPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	var modelConfig struct {
+		ID2Label map[string]string `json:"id2label"`
+	}
+	if err := json.Unmarshal(data, &modelConfig); err != nil {
+		return fmt.Errorf("failed to parse %s to cross-check %s: %w", modelConfigPath, mappingPath, err)
+	}
+	if len(modelConfig.ID2Label) == 0 {
+		return nil
+	}
+	for idx, modelLabel := range modelConfig.ID2Label {
+		mappedLabel, ok := idxToLabel[idx]
+		if !ok {
+			return fmt.Errorf("label mapping %s has no entry for index %s, which %s labels %q",
+				mappingPath, idx, modelConfigPath, modelLabel)
+		}
+		// Canonical labels, because the detector resolves supported aliases
+		// such as SAT and SATISFIED to one label before it uses the mapping.
+		if normalizeFeedbackLabel(mappedLabel) != normalizeFeedbackLabel(modelLabel) {
+			return fmt.Errorf("label mapping %s disagrees with %s at index %s: %q against %q",
+				mappingPath, modelConfigPath, idx, mappedLabel, modelLabel)
+		}
+	}
+	return nil
 }

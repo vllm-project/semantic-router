@@ -16,7 +16,6 @@ type ModelSelectionConfig struct {
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
 	SessionAware SessionAwareSelectionConfig `yaml:"-"`
-	Momentum     MomentumSelectionConfig     `yaml:"momentum,omitempty"`
 
 	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
 	ModelSwitchGate ModelSwitchGateConfig `yaml:"-"`
@@ -78,14 +77,6 @@ type HandoffPenaltyOverride struct {
 type RemainingTurnPriorOverride struct {
 	IntentOrDomain string  `yaml:"intent_or_domain"`
 	Value          float64 `yaml:"value"`
-}
-
-// MomentumSelectionConfig configures Conversational Routing Momentum (CRM).
-type MomentumSelectionConfig struct {
-	Enabled   bool    `yaml:"enabled,omitempty"`
-	Attack    float64 `yaml:"attack,omitempty"`
-	Release   float64 `yaml:"release,omitempty"`
-	Threshold float64 `yaml:"threshold,omitempty"`
 }
 
 // ModelSwitchGateConfig configures auditable session-aware model switching.
@@ -215,11 +206,12 @@ type SessionAwareSelectionConfig struct {
 }
 
 // MultiFactorSelectionConfig configures the multi_factor selector, which
-// composes raw quality/latency/cost/load signals into a weighted score per
-// candidate model. See issue #37.
+// compares quality/latency/cost/load with a weighted or ordered objective.
 type MultiFactorSelectionConfig struct {
-	Weights *MultiFactorWeightsConfig `yaml:"weights,omitempty"`
-	SLO     *MultiFactorSLOConfig     `yaml:"slo,omitempty"`
+	Objective *MultiFactorObjectiveConfig `yaml:"objective,omitempty"`
+	Weights   *MultiFactorWeightsConfig   `yaml:"weights,omitempty"`
+	SLO       *MultiFactorSLOConfig       `yaml:"slo,omitempty"`
+	Quality   *QualityEvidenceConfig      `yaml:"quality,omitempty"`
 
 	// LatencyPercentile selects which percentile (e.g. 95) is read from
 	// pkg/latency when computing the latency signal. Defaults to 95.
@@ -228,6 +220,46 @@ type MultiFactorSelectionConfig struct {
 	// OnNoCandidates controls behavior when SLO filtering removes every
 	// candidate. Valid values: "cheapest" (default), "first", "fail".
 	OnNoCandidates string `yaml:"on_no_candidates,omitempty"`
+}
+
+// QualityEvidenceConfig selects the versioned catalog index used as the
+// multi_factor quality signal. Capability indices and the overall index share
+// this contract, so a decision can be capability-aware without inventing a
+// partial overall score.
+type QualityEvidenceConfig struct {
+	Index       string   `yaml:"index"`
+	OnMissing   string   `yaml:"on_missing,omitempty"`
+	MinCoverage float64  `yaml:"min_coverage,omitempty"`
+	MinScore    *float64 `yaml:"min_score,omitempty"`
+}
+
+const (
+	QualityEvidenceOnMissingExclude = "exclude"
+	QualityEvidenceOnMissingDisable = "disable_quality"
+
+	MultiFactorObjectiveWeighted      = "weighted"
+	MultiFactorObjectiveLexicographic = "lexicographic"
+
+	MultiFactorFactorQuality = "quality"
+	MultiFactorFactorLatency = "latency"
+	MultiFactorFactorCost    = "cost"
+	MultiFactorFactorLoad    = "load"
+)
+
+// MultiFactorObjectiveConfig chooses how factor utilities are compared. The
+// weighted strategy uses Weights. Lexicographic compares priorities in order,
+// retaining candidates within each relative tolerance before considering the
+// next factor.
+type MultiFactorObjectiveConfig struct {
+	Strategy   string                      `yaml:"strategy,omitempty"`
+	Priorities []MultiFactorPriorityConfig `yaml:"priorities,omitempty"`
+}
+
+// MultiFactorPriorityConfig is one lexicographic comparison step. Tolerance is
+// the allowed relative gap from the best observed value (0.02 means 2%).
+type MultiFactorPriorityConfig struct {
+	Factor    string  `yaml:"factor"`
+	Tolerance float64 `yaml:"tolerance,omitempty"`
 }
 
 // MultiFactorWeightsConfig holds per-signal weights for the multi_factor
@@ -296,13 +328,12 @@ type LatencyAwareAlgorithmConfig struct {
 
 // MLModelSelectionConfig configures the ML-based algorithm used from per-decision policies.
 type MLModelSelectionConfig struct {
-	Type             string             `yaml:"type"`
-	ModelsPath       string             `yaml:"models_path,omitempty"`
-	K                int                `yaml:"k,omitempty"`
-	NumClusters      int                `yaml:"num_clusters,omitempty"`
-	Kernel           string             `yaml:"kernel,omitempty"`
-	Gamma            float64            `yaml:"gamma,omitempty"`
-	EfficiencyWeight *float64           `yaml:"efficiency_weight,omitempty"`
-	Device           string             `yaml:"device,omitempty"`
-	FeatureWeights   map[string]float64 `yaml:"feature_weights,omitempty"`
+	Type             string   `yaml:"type"`
+	ModelsPath       string   `yaml:"models_path,omitempty"`
+	K                int      `yaml:"k,omitempty"`
+	NumClusters      int      `yaml:"num_clusters,omitempty"`
+	Kernel           string   `yaml:"kernel,omitempty"`
+	Gamma            float64  `yaml:"gamma,omitempty"`
+	EfficiencyWeight *float64 `yaml:"efficiency_weight,omitempty"`
+	Device           string   `yaml:"device,omitempty"`
 }

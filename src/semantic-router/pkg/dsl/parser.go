@@ -400,6 +400,12 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.Action != nil:
+			route.Action = &ActionDecl{
+				Type:        item.Action.Type,
+				Destination: unquoteIdent(item.Action.Destination),
+				Pos:         posFromLexer(item.Action.Pos),
+			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		case item.Emit != nil:
@@ -448,6 +454,7 @@ var knownInlinePluginAliases = map[string]string{
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
 	"router-replay":       "router_replay",
+	"shadow-dispatch":     "shadow_dispatch",
 	"fast-response":       "fast_response",
 	"request-params":      "request_params",
 	"response-jailbreak":  "response_jailbreak",
@@ -490,6 +497,10 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 		case "effort":
 			if v.Str != nil {
 				m.Effort = unquote(*v.Str)
+			}
+		case "mode":
+			if v.Str != nil {
+				m.Mode = unquote(*v.Str)
 			}
 		case "lora":
 			if v.Str != nil {

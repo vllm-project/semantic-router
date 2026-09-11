@@ -1,19 +1,21 @@
 package classification
 
 import (
+	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ClassifyPII performs PII token classification on the given text and returns detected PII types
-func (c *Classifier) ClassifyPII(text string) ([]string, error) {
-	return c.ClassifyPIIWithThreshold(text, c.Config.PIIModel.Threshold)
+func (c *Classifier) ClassifyPII(ctx context.Context, text string) ([]string, error) {
+	return c.ClassifyPIIWithThreshold(ctx, text, c.Config.PIIModel.Threshold)
 }
 
 // ClassifyPIIWithThreshold performs PII token classification with a custom threshold
-func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([]string, error) {
+func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, threshold float32) ([]string, error) {
 	if !c.IsPIIEnabled() {
 		return []string{}, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -23,7 +25,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 	}
 
 	// Use ModernBERT PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
+	tokenResult, err := c.piiInference.ClassifyTokens(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("PII token classification error: %w", err)
 	}
@@ -59,12 +61,12 @@ func (c *Classifier) ClassifyPIIWithThreshold(text string, threshold float32) ([
 }
 
 // ClassifyPIIWithDetails performs PII token classification and returns full entity details including confidence scores
-func (c *Classifier) ClassifyPIIWithDetails(text string) ([]PIIDetection, error) {
-	return c.ClassifyPIIWithDetailsAndThreshold(text, c.Config.PIIModel.Threshold)
+func (c *Classifier) ClassifyPIIWithDetails(ctx context.Context, text string) ([]PIIDetection, error) {
+	return c.ClassifyPIIWithDetailsAndThreshold(ctx, text, c.Config.PIIModel.Threshold)
 }
 
 // ClassifyPIIWithDetailsAndThreshold performs PII token classification with a custom threshold and returns full entity details
-func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold float32) ([]PIIDetection, error) {
+func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(ctx context.Context, text string, threshold float32) ([]PIIDetection, error) {
 	if !c.IsPIIEnabled() {
 		return []PIIDetection{}, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -73,34 +75,9 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 		return []PIIDetection{}, nil
 	}
 
-	// Use PII token classifier for entity detection
-	tokenResult, err := c.piiInference.ClassifyTokens(text)
+	detections, err := c.scanPIIChunks(ctx, text, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("PII token classification error: %w", err)
-	}
-
-	if len(tokenResult.Entities) > 0 {
-		logging.Infof("PII token classification found %d entities", len(tokenResult.Entities))
-	}
-
-	// Convert token entities to PII detections, filtering by threshold
-	// Translate class_X format to named types using PII mapping
-	var detections []PIIDetection
-	for _, entity := range tokenResult.Entities {
-		if entity.Confidence >= threshold {
-			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
-			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
-			detection := PIIDetection{
-				EntityType: translatedType,
-				Start:      entity.Start,
-				End:        entity.End,
-				Text:       entity.Text,
-				Confidence: entity.Confidence,
-			}
-			detections = append(detections, detection)
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
-		}
+		return nil, err
 	}
 
 	if len(detections) > 0 {
@@ -119,8 +96,83 @@ func (c *Classifier) ClassifyPIIWithDetailsAndThreshold(text string, threshold f
 	return detections, nil
 }
 
+// scanPIIChunks runs PII token classification over the whole text.
+//
+// The classifier truncates at MAX_CLASSIFICATION_SEQ_LEN, so one call over a
+// long text only ever scores its start. The PII routing signal already scans in
+// bounded overlapping chunks (evaluatePIISignal); this does the same, and maps
+// every entity back onto the original text because this surface reports
+// positions and the routing signal does not.
+func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold float32) ([]PIIDetection, error) {
+	var detections []PIIDetection
+	seen := make(map[piiDetectionKey]int)
+	classified := 0
+
+	for _, span := range piiSignalChunkSpans(text) {
+		tokenResult, err := c.piiInference.ClassifyTokens(ctx, span.Text)
+		if err != nil {
+			return nil, fmt.Errorf("PII token classification error: %w", err)
+		}
+
+		classified += len(tokenResult.Entities)
+
+		for _, entity := range tokenResult.Entities {
+			if entity.Confidence < threshold {
+				continue
+			}
+
+			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
+			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
+			detection := PIIDetection{
+				EntityType: translatedType,
+				Start:      span.StartByte + entity.Start,
+				End:        span.StartByte + entity.End,
+				Text:       entity.Text,
+				Confidence: entity.Confidence,
+			}
+
+			// Chunks overlap, so an entity inside the overlap window is reported
+			// by both chunks. Keep one detection at the higher confidence.
+			key := piiDetectionKey{translatedType, detection.Start, detection.End}
+			if existing, reported := seen[key]; reported {
+				if detection.Confidence > detections[existing].Confidence {
+					detections[existing].Confidence = detection.Confidence
+				}
+				continue
+			}
+			seen[key] = len(detections)
+			detections = append(detections, detection)
+
+			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Text, detection.Start, detection.End, entity.Confidence)
+		}
+	}
+
+	if classified > 0 {
+		logging.Infof("PII token classification found %d entities", classified)
+	}
+
+	// A single call returned entities in ascending position; keep that contract
+	// now that they arrive chunk by chunk.
+	sort.SliceStable(detections, func(i, j int) bool {
+		if detections[i].Start != detections[j].Start {
+			return detections[i].Start < detections[j].Start
+		}
+		return detections[i].End < detections[j].End
+	})
+
+	return detections, nil
+}
+
+// piiDetectionKey identifies one entity occurrence in the original text.
+type piiDetectionKey struct {
+	entityType string
+	start      int
+	end        int
+}
+
 // DetectPIIInContent performs PII classification on all provided content
-func (c *Classifier) DetectPIIInContent(allContent []string) []string {
+func (c *Classifier) DetectPIIInContent(ctx context.Context, allContent []string) []string {
 	var detectedPII []string
 	seenPII := make(map[string]bool)
 
@@ -129,7 +181,7 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 			continue
 		}
 		// TODO: classifier may not handle the entire content, so we need to split the content into smaller chunks
-		piiTypes, err := c.ClassifyPII(content)
+		piiTypes, err := c.ClassifyPII(ctx, content)
 		if err != nil {
 			logging.Errorf("PII classification error: %v", err)
 			// Continue without PII enforcement on error
@@ -150,12 +202,12 @@ func (c *Classifier) DetectPIIInContent(allContent []string) []string {
 }
 
 // AnalyzeContentForPII performs detailed PII analysis on multiple content pieces
-func (c *Classifier) AnalyzeContentForPII(contentList []string) (bool, []PIIAnalysisResult, error) {
-	return c.AnalyzeContentForPIIWithThreshold(contentList, c.Config.PIIModel.Threshold)
+func (c *Classifier) AnalyzeContentForPII(ctx context.Context, contentList []string) (bool, []PIIAnalysisResult, error) {
+	return c.AnalyzeContentForPIIWithThreshold(ctx, contentList, c.Config.PIIModel.Threshold)
 }
 
 // AnalyzeContentForPIIWithThreshold performs detailed PII analysis with a custom threshold
-func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, threshold float32) (bool, []PIIAnalysisResult, error) {
+func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, contentList []string, threshold float32) (bool, []PIIAnalysisResult, error) {
 	if !c.IsPIIEnabled() {
 		return false, nil, fmt.Errorf("PII detection is not properly configured")
 	}
@@ -175,7 +227,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(contentList []string, thr
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		tokenResult, err := c.piiInference.ClassifyTokens(content)
+		tokenResult, err := c.piiInference.ClassifyTokens(ctx, content)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++

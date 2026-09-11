@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
+import random
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from http.client import HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, ClassVar
@@ -18,6 +23,9 @@ HTTP_OK = 200
 HTTP_BAD_GATEWAY = 502
 HTTP_UNAVAILABLE = 503
 SESSION_HEADER = "x-session-id"
+# HTTP/1.1 chunked-transfer framing uses CRLF and a final zero-sized chunk.
+HTTP_LINE_ENDING = b"\r\n"
+HTTP_CHUNKED_BODY_END = b"0\r\n\r\n"
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-length",
@@ -40,6 +48,10 @@ class FaultPolicy:
     fail_session_mod: int
     fail_session_remainder: int
     fail_once_per_session: bool
+    delay_ms: int = 0
+    delay_jitter_ms: int = 0
+    stream_interval_ms: int = 0
+    stream_frames: int = 0
 
 
 @dataclass(frozen=True)
@@ -61,6 +73,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fail-session-mod", type=int, default=1)
     parser.add_argument("--fail-session-remainder", type=int, default=0)
     parser.add_argument("--repeat-failures", action="store_true")
+    parser.add_argument("--delay-ms", type=int, default=0)
+    parser.add_argument("--delay-jitter-ms", type=int, default=0)
+    parser.add_argument("--stream-interval-ms", type=int, default=0)
+    parser.add_argument(
+        "--stream-frames",
+        type=int,
+        default=0,
+        help="repeat upstream content events to this count before terminal SSE events",
+    )
     parser.add_argument("--log-jsonl", type=Path, default=None)
     return parser.parse_args()
 
@@ -73,7 +94,21 @@ def parse_policy(args: argparse.Namespace) -> FaultPolicy:
         fail_session_mod=args.fail_session_mod,
         fail_session_remainder=args.fail_session_remainder,
         fail_once_per_session=not args.repeat_failures,
+        delay_ms=args.delay_ms,
+        delay_jitter_ms=args.delay_jitter_ms,
+        stream_interval_ms=max(args.stream_interval_ms, 0),
+        stream_frames=max(args.stream_frames, 0),
     )
+
+
+def delay_seconds(policy: FaultPolicy) -> float:
+    """Return the latency to apply before handling a request, in seconds."""
+    if policy.delay_ms <= 0 and policy.delay_jitter_ms <= 0:
+        return 0.0
+    total_ms = float(max(policy.delay_ms, 0))
+    if policy.delay_jitter_ms > 0:
+        total_ms += random.uniform(0.0, policy.delay_jitter_ms)
+    return total_ms / 1000.0
 
 
 def parse_int_csv(raw: str) -> set[int]:
@@ -87,6 +122,11 @@ def parse_str_csv(raw: str) -> set[str]:
 
 
 class FaultProxyHandler(BaseHTTPRequestHandler):
+    # HTTP/1.1 keep-alive avoids a TCP handshake + thread per request under soak
+    # load. Buffered responses set Content-Length and SSE responses use chunked
+    # transfer encoding so every response has an explicit framing boundary.
+    protocol_version = "HTTP/1.1"
+
     upstream: ClassVar[str]
     fault_policy: ClassVar[FaultPolicy]
     seen_failures: ClassVar[set[str]]
@@ -108,6 +148,9 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             inject_fault = should_inject_fault(
                 shape, self.fault_policy, self.seen_failures
             )
+        delay = delay_seconds(self.fault_policy)
+        if delay > 0:
+            time.sleep(delay)
         if inject_fault:
             message = (
                 f"fault proxy injected {self.fault_policy.fail_status} for "
@@ -131,8 +174,15 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             headers=headers,
             method=self.command,
         )
+        streaming_started = False
         try:
             with urllib.request.urlopen(request, timeout=120) as response:
+                if is_sse_response(response.headers):
+                    streaming_started = True
+                    self.send_sse(response.status, dict(response.headers), response)
+                    if shape is not None:
+                        self.record_event("forwarded", shape, response.status)
+                    return
                 payload = response.read()
                 self.send_response(response.status)
                 self.forward_headers(dict(response.headers), len(payload))
@@ -148,9 +198,16 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             self.wfile.write(payload)
             if shape is not None:
                 self.record_event("upstream_error", shape, exc.code)
+        except (BrokenPipeError, ConnectionResetError):
+            if shape is not None:
+                self.record_event("client_disconnected", shape, 499)
         except Exception as exc:  # pragma: no cover - network errors vary
             if shape is not None:
                 self.record_event("proxy_error", shape, HTTP_BAD_GATEWAY)
+            if streaming_started:
+                # Headers are committed: close the incomplete chunked response.
+                self.close_connection = True
+                return
             self.send_json(
                 HTTP_BAD_GATEWAY,
                 {"error": {"message": str(exc), "type": "fault_proxy_error"}},
@@ -161,6 +218,31 @@ class FaultProxyHandler(BaseHTTPRequestHandler):
             if name.lower() not in HOP_BY_HOP_HEADERS:
                 self.send_header(name, value)
         self.send_header("Content-Length", str(length))
+
+    def send_sse(
+        self, status: int, headers: dict[str, str], response: HTTPResponse
+    ) -> None:
+        frames = shape_sse_frames(
+            iter_sse_frames(response), self.fault_policy.stream_frames
+        )
+        self.send_response(status)
+        for name, value in headers.items():
+            if name.lower() not in HOP_BY_HOP_HEADERS:
+                self.send_header(name, value)
+        self.send_header("Transfer-Encoding", "chunked")
+        self.end_headers()
+
+        interval = self.fault_policy.stream_interval_ms / 1000.0
+        for index, frame in enumerate(frames):
+            if index > 0 and interval > 0:
+                time.sleep(interval)
+            self.write_chunk(frame)
+        self.wfile.write(HTTP_CHUNKED_BODY_END)
+        self.wfile.flush()
+
+    def write_chunk(self, payload: bytes) -> None:
+        self.wfile.write(encode_http_chunk(payload))
+        self.wfile.flush()
 
     def send_json(
         self,
@@ -219,6 +301,81 @@ def filtered_headers(headers: Any) -> dict[str, str]:
         for name, value in headers.items()
         if name.lower() not in HOP_BY_HOP_HEADERS
     }
+
+
+def is_sse_response(headers: Any) -> bool:
+    return "text/event-stream" in headers.get("Content-Type", "").lower()
+
+
+def encode_http_chunk(payload: bytes) -> bytes:
+    """Frame one payload for HTTP/1.1 chunked transfer encoding."""
+    size = f"{len(payload):x}".encode("ascii")
+    return b"".join((size, HTTP_LINE_ENDING, payload, HTTP_LINE_ENDING))
+
+
+def split_sse_frames(payload: bytes) -> list[bytes]:
+    normalized = payload.replace(b"\r\n", b"\n")
+    return [frame + b"\n\n" for frame in normalized.split(b"\n\n") if frame]
+
+
+def sse_data(frame: bytes) -> bytes:
+    values = []
+    for line in frame.splitlines():
+        if line.startswith(b"data:"):
+            values.append(line[len(b"data:") :].lstrip(b" "))
+    return b"\n".join(values)
+
+
+def is_terminal_sse_frame(frame: bytes) -> bool:
+    data = sse_data(frame)
+    if data == b"[DONE]":
+        return True
+    try:
+        payload = json.loads(data)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return False
+    choices = payload.get("choices") if isinstance(payload, dict) else None
+    return bool(
+        isinstance(choices, list)
+        and choices
+        and isinstance(choices[0], dict)
+        and choices[0].get("finish_reason") is not None
+    )
+
+
+def iter_sse_frames(response: HTTPResponse) -> Iterator[bytes]:
+    """Read one event at a time without waiting for upstream EOF."""
+    lines: list[bytes] = []
+    for line in response:
+        lines.append(line)
+        if line in (b"\n", b"\r\n"):
+            yield b"".join(lines)
+            lines.clear()
+    if lines:
+        yield b"".join(lines)
+
+
+def shape_sse_frames(frames: Iterable[bytes], content_frames: int) -> Iterator[bytes]:
+    """Forward live events, optionally padding/truncating before the terminal event.
+
+    Shaping retains at most the requested number of content events for replay.
+    With shaping disabled, neither the response nor previous events are retained.
+    """
+    content: list[bytes] = []
+    terminal_seen = False
+    for frame in frames:
+        if content_frames <= 0 or terminal_seen:
+            yield frame
+        elif is_terminal_sse_frame(frame):
+            if content:
+                yield from itertools.islice(
+                    itertools.cycle(content), content_frames - len(content)
+                )
+            terminal_seen = True
+            yield frame
+        elif len(content) < content_frames:
+            content.append(frame)
+            yield frame
 
 
 def join_url(upstream_base_url: str, path: str) -> str:
@@ -344,6 +501,10 @@ def main() -> int:
                 "fail_session_mod": policy.fail_session_mod,
                 "fail_session_remainder": policy.fail_session_remainder,
                 "fail_once_per_session": policy.fail_once_per_session,
+                "delay_ms": policy.delay_ms,
+                "delay_jitter_ms": policy.delay_jitter_ms,
+                "stream_interval_ms": policy.stream_interval_ms,
+                "stream_frames": policy.stream_frames,
             },
             sort_keys=True,
         ),

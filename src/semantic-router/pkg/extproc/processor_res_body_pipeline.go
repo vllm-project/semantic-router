@@ -44,6 +44,13 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	r.updateResponseCache(ctx, clientBody)
 
+	// The response-stage signal is scored from the declared rules before any
+	// plugin runs, so the observation exists whether or not the selected
+	// decision carries a plugin; the plugins below then consume it. Recorded
+	// before a block returns, so a blocked response leaves the same evidence in
+	// Router Replay as a delivered one.
+	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		return jailbreakResponse
 	}
@@ -62,6 +69,21 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 	return response
+}
+
+// observeResponseStageSignals scores the response-stage rules against the
+// answer and records the observation in Router Replay. Both response paths
+// share it, so a streamed response leaves the evidence a buffered one leaves.
+//
+// Only the buffered path goes on to enforce. A streamed answer exists as a
+// whole for the first time when its bytes are already with the client, so no
+// plugin can block or rewrite it and none runs; the observation is all that is
+// still possible, and the record says so.
+func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
@@ -85,6 +107,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	if len(codes) > 0 {
 		setResponseWarningsHeader(response, codes)
 	}
+	addResponseStageSignalHeaders(ctx, response)
 	if !changed {
 		return response, originalBody
 	}
@@ -119,9 +142,37 @@ func appendNonEmpty(codes []string, code string) []string {
 	return append(codes, code)
 }
 
+// addResponseStageSignalHeaders writes the response-stage matches in the body
+// phase: x-vsr-matched-jailbreak is rewritten once the response-direction
+// rules have been scored, and x-vsr-matched-hallucination is written once the
+// answer has been checked. The response headers phase wrote the request-stage
+// matches before the body existed, so the debug headers would otherwise never
+// show a response-stage match. Same gate as the request-stage signal headers:
+// only when debug is requested.
+func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !debugHeadersRequested(ctx) {
+		return
+	}
+	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
+		matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
+		matched = append(matched, ctx.VSRMatchedJailbreak...)
+		matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	}
+	if len(ctx.VSRMatchedHallucination) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(ctx.VSRMatchedHallucination, ","))
+	}
+}
+
 // setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
+	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// setResponseBodyHeader sets one response header from the body phase, merging
+// with any header mutation the response already carries.
+func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -131,8 +182,8 @@ func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []st
 	}
 	opt := &core.HeaderValueOption{
 		Header: &core.HeaderValue{
-			Key:      headers.VSRResponseWarnings,
-			RawValue: []byte(strings.Join(codes, ",")),
+			Key:      key,
+			RawValue: []byte(value),
 		},
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {

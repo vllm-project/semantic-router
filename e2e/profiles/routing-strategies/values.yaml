@@ -3,26 +3,15 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: base-model
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: base-model
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: premium-model
@@ -32,6 +21,7 @@ config:
           prompt_per_1m: 10
         backend_refs:
           - name: local-vllm-premium
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
       - name: economy-model
@@ -41,12 +31,78 @@ config:
           prompt_per_1m: 1
         backend_refs:
           - name: local-vllm-economy
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   entrypoints:
     - model_names: [vllm-sr/metadata-policy]
       recipe: metadata-policy
+    - model_names: [vllm-sr/input-modality-probe]
+      recipe: input-modality-probe
   recipes:
+    - name: input-modality-probe
+      description: Deterministic structural input-modality routing probe.
+      routing:
+        strategy: priority
+        signals:
+          input_modality:
+            - name: image_input
+              description: Request contains at least one image content part.
+              modality: image
+            - name: audio_input
+              description: Request contains at least one audio content part.
+              modality: audio
+            - name: text_input
+              description: Request contains user-provided text.
+              modality: text
+            - name: video_input
+              description: Request contains video content; only the classify/eval APIs can carry it today.
+              modality: video
+        decisions:
+          - name: input_modality_vision_decision
+            description: Send image-bearing requests to the vision route.
+            priority: 200
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: image_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_audio_decision
+            description: Send audio-bearing requests to the audio route.
+            priority: 150
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: audio_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_video_decision
+            description: Send video-bearing requests to the video route; reachable through the classify/eval APIs only.
+            priority: 120
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: video_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+          - name: input_modality_text_decision
+            description: Text-only requests continue on the default route.
+            priority: 100
+            rules:
+              operator: AND
+              conditions:
+                - type: input_modality
+                  name: text_input
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
     - name: metadata-policy
       description: Deterministic recipe-local metadata routing probe.
       routing:
@@ -69,6 +125,16 @@ config:
             modelRefs:
               - model: base-model
                 use_reasoning: false
+  evaluation:
+    records:
+      - model: premium-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.9
+      - model: economy-model
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.1
   routing:
     decisions:
       - name: quality_policy_decision
@@ -329,9 +395,7 @@ config:
     modelCards:
       - name: base-model
       - name: premium-model
-        quality_score: 0.9
       - name: economy-model
-        quality_score: 0.1
   global:
     model_catalog:
       kbs: []

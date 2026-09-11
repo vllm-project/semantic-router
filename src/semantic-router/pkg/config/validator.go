@@ -26,6 +26,8 @@ var (
 		validateEmbeddingModelContracts,
 		validateGlobalModalityContracts,
 		validateModelSelectionConfig,
+		validateCategoryModelBackendContracts,
+		validateComplexityModelBackendContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateGlobalRouterLearningConfig,
 		validateReMoMContracts,
@@ -34,12 +36,14 @@ var (
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
 		validateHallucinationContracts,
+		validateModelAdmissionContracts,
 	}
 
 	routingProfileContractValidators = []configContractValidator{
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,
 		validateLanguageContracts,
+		validateContextContracts,
 		validateRoutingStrategy,
 		validateDecisionSignalReferences,
 		validateDomainContracts,
@@ -55,6 +59,8 @@ var (
 		validateRoutingModalityContracts,
 		validateComplexityContracts,
 		validateJailbreakContracts,
+		validateSignalStageContracts,
+		validateHallucinationSignalContracts,
 		validateDecisionRouterLearningConfig,
 	}
 )

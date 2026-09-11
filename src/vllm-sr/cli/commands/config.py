@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
 
+import requests
 import yaml
 
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
+from cli.config_schema import schema_document
+from cli.config_schema.views import parse_surface_selector, schema_view
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
@@ -20,6 +24,48 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+
+
+def config_schema_command(
+    endpoint: str | None = None,
+    *,
+    full: bool = False,
+    section: str | None = None,
+    surface: str | None = None,
+) -> None:
+    """Print one progressive local or deployed Router contract view."""
+
+    selected = sum((full, section is not None, surface is not None))
+    if selected > 1:
+        raise ValueError("use only one of --full, --section, or --surface")
+    view = (
+        "full" if full else "section" if section else "surface" if surface else "index"
+    )
+    surface_kind = None
+    surface_name = None
+    if surface:
+        surface_kind, surface_name = parse_surface_selector(surface)
+
+    if endpoint:
+        params = {"view": view}
+        if section:
+            params["path"] = section
+        if surface_kind and surface_name:
+            params.update({"kind": surface_kind, "name": surface_name})
+        response = requests.get(endpoint, params=params, timeout=10)
+        response.raise_for_status()
+        document = response.json()
+        echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
+        return
+
+    document = schema_view(
+        schema_document(),
+        view=view,
+        path=section,
+        surface_kind=surface_kind,
+        surface_name=surface_name,
+    )
+    echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
 
 
 def config_command(config_type: str, config_path: str = "config.yaml"):

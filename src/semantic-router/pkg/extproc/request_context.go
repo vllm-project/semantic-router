@@ -9,6 +9,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -26,6 +28,16 @@ type EnhancedHallucinationSpan struct {
 	NLIConfidence           float32 `json:"nli_confidence"`
 	Severity                int     `json:"severity"`    // 0-4: 0=low, 4=critical
 	Explanation             string  `json:"explanation"` // Human-readable explanation
+}
+
+// ResponseHallucinationEvidence is the detector output behind the
+// hallucination signal: the verdict, its confidence, and the spans it rests
+// on, with NLI explanations when the rule asked for them.
+type ResponseHallucinationEvidence struct {
+	Detected   bool
+	Confidence float32
+	Spans      []string
+	Enhanced   *EnhancedHallucinationInfo
 }
 
 // EnhancedHallucinationInfo contains detailed NLI analysis of hallucinations.
@@ -125,6 +137,8 @@ type RequestContext struct {
 	VSRSelectedModel                string                                      // The model selected by VSR
 	VSRSelectionMethod              string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning           string                                      // Bounded human-readable selector rationale for replay
+	VSRFusionQuorum                 *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
+	VSRLooperDiagnostics            *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel            string                                      // Concrete prompt-selector helper model
 	VSRPromptHelperPromptTokens     int64                                       // Prompt tokens consumed by the helper
 	VSRPromptHelperCompletionTokens int64                                       // Completion tokens consumed by the helper
@@ -183,14 +197,30 @@ type RequestContext struct {
 	VSRMatchedEvent           []string // Matched event signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
+	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
-	VSRAppliedUnknownPolicies map[string]string
-	VSRProjectionTrace        *projectiontrace.Trace
+	// VSRMatchedResponseJailbreak holds response-direction jailbreak rules that
+	// matched. Populated after the model answers, unlike every VSRMatched*
+	// above it.
+	VSRMatchedResponseJailbreak []string
+	// VSRResponseJailbreakType and VSRResponseJailbreakRisk are the evidence the
+	// response-stage signal was computed from, kept so the plugin does not have
+	// to re-derive them from the per-rule confidences.
+	VSRResponseJailbreakType string
+	VSRResponseJailbreakRisk float32
+	// VSRMatchedHallucination holds hallucination rules that matched once the
+	// model answered. VSRHallucinationEvidence is what the observation was
+	// computed from, kept for the plugin that consumes it and for Router
+	// Replay; it is nil when the rule was not evaluated for this request.
+	VSRMatchedHallucination  []string
+	VSRHallucinationEvidence *ResponseHallucinationEvidence
+	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
+	VSRProjectionTrace       *projectiontrace.Trace
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
@@ -233,6 +263,10 @@ type RequestContext struct {
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay
 	RouterReplayRecorder     *routerreplay.Recorder           // The recorder instance for this decision
 
+	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
+	// configuration, or nil when the selected decision declares none.
+	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
+
 	// Looper context
 	LooperRequest   bool // True only for token-authenticated in-process looper requests
 	LooperIteration int  // The iteration number if this is a looper request
@@ -242,6 +276,10 @@ type RequestContext struct {
 	SourceFormat             llmprotocol.WireFormat
 	TargetFormat             llmprotocol.WireFormat
 	SemanticRequest          *llmprotocol.Request
+	OriginalContextHistory   *contextcompression.HistorySnapshot
+	ContextRequestIR         *contextcompression.RequestIR
+	ContextHistorySteps      []contextcompression.TransformationStep
+	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope

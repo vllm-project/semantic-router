@@ -3,30 +3,19 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: general-expert
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
+      model: general-expert
+      reasoning_effort: high
     models:
       - name: base-model
-        reasoning_family: qwen3
+        reasoning:
+          family: qwen3
         pricing:
           currency: USD
           prompt_per_1m: 0.10
           completion_per_1m: 0.30
         backend_refs:
           - name: local-vllm
+            provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
   routing:
@@ -69,7 +58,6 @@ config:
         modelRefs:
           - model: base-model
             lora_name: general-expert
-            use_reasoning: false
       - name: block_jailbreak
         description: Block jailbreak attempts
         priority: 1000
@@ -95,7 +83,7 @@ config:
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
       - name: retention_probe_decision
-        description: Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009).
+        description: "Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009)."
         priority: 600
         rules:
           operator: OR
@@ -575,6 +563,60 @@ config:
               enabled: true
               system_prompt: You are handling a query with sensitive data. Be cautious and provide security-focused guidance.
               mode: replace
+      - name: critical_event
+        description: Critical operational events requiring specialized handling
+        priority: 35
+        rules:
+          operator: OR
+          conditions:
+            - type: event
+              name: critical_payment_event
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are handling a critical event alert. Prioritize a fast, precise, and factual response.
+              mode: replace
+      - name: spanish_language
+        description: Spanish-language requests requiring specialized handling
+        priority: 25
+        rules:
+          operator: OR
+          conditions:
+            - type: language
+              name: es
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
+              mode: replace
+      - name: reask_escalation
+        description: User has repeated a similar question across recent turns without resolution
+        priority: 45
+        rules:
+          operator: AND
+          conditions:
+            - type: reask
+              name: repeated_billing_question
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
+              mode: replace
       - name: other_decision
         description: General knowledge and miscellaneous topics
         priority: 1
@@ -655,6 +697,22 @@ config:
           keywords:
             - __MULTI_MODEL_PROBE__
           case_sensitive: false
+      events:
+        - name: critical_payment_event
+          event_types:
+            - payment_failed
+          severities:
+            - critical
+          action_codes:
+            - TXN_DECLINE
+      language:
+        - name: es
+          description: Spanish-language requests.
+      reasks:
+        - name: repeated_billing_question
+          description: Current user turn closely repeats the last two billing complaints.
+          threshold: 0.8
+          lookback_turns: 2
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing

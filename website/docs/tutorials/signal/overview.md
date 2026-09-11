@@ -87,6 +87,7 @@ detectors. They do not require a general-purpose classifier model.
 | [Conversation](./heuristic/conversation) | detect multi-turn, tool-heavy, or agentic request structure |
 | [Context](./heuristic/context) | route by effective context-window needs |
 | [Event](./heuristic/event) | detect structured events by type, severity, action code, or urgency |
+| [Input Modality](./heuristic/input-modality) | detect which input modalities (text, image, audio, video) are present |
 | [Keyword](./heuristic/keyword) | match explicit words, phrases, BM25 terms, or n-grams |
 | [Language](./heuristic/language) | route by detected request language |
 | [Metadata](./heuristic/metadata) | use bounded, caller-provided application hints |
@@ -105,6 +106,7 @@ each page's data-handling notes before choosing a remote provider.
 | [Embedding](./learned/embedding) | match semantic intent from representative examples |
 | [Modality](./learned/modality) | classify text, image-generation, or mixed output intent |
 | [Fact Check](./learned/fact-check) | detect prompts that may need evidence verification |
+| [Hallucination](./learned/hallucination) | check the model's answer against the grounding context it was given |
 | [Jailbreak](./learned/jailbreak) | detect prompt-injection or jailbreak attempts |
 | [PII](./learned/pii) | detect sensitive personal data |
 | [Preference](./learned/preference) | infer response-style preferences |

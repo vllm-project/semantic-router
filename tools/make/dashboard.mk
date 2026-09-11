@@ -102,6 +102,14 @@ dashboard-test-frontend: ## Run dashboard frontend unit tests
 	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run test:unit
 	@echo "dashboard/frontend unit tests passed"
 
+dashboard-test-e2e-evaluation: ## Run Evaluation browser acceptance in Chromium
+	@$(LOG_TARGET)
+	cd $(DASHBOARD_FRONTEND_DIR) && \
+		npm install 2>/dev/null && \
+		npx playwright install --with-deps chromium && \
+		npm run test:e2e:evaluation
+	@echo "dashboard/frontend Evaluation browser acceptance passed"
+
 dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 	@$(LOG_TARGET)
 	@echo "Checking dashboard/backend..."
@@ -115,9 +123,13 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 
 dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_BACKEND_DIR) && go test ./...
+	cd $(DASHBOARD_BACKEND_DIR) && \
+		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-python3}" go test ./...
 
-dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
+dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
+	@python3 tools/ci/sync_evaluation_catalogs.py --check
+
+dashboard-check: dashboard-evaluation-catalog-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (catalogs, lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -136,6 +148,7 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
-	dashboard-test-backend dashboard-test-frontend \
+	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
+	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean

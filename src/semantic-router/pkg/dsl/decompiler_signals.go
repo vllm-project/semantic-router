@@ -16,10 +16,12 @@ func (d *decompiler) decompileSignals() {
 	d.decompileModalitySignals()
 	d.decompileAuthzSignals()
 	d.decompileJailbreakSignals()
+	d.decompileHallucinationSignals()
 	d.decompilePIISignals()
 	d.decompileKBSignals()
 	d.decompileEventSignals()
 	d.decompileMetadataSignals()
 	d.decompileClassifierSignals()
+	d.decompileInputModalitySignals()
 	d.decompileProjectionSignals()
 }

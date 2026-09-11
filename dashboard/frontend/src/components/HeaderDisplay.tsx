@@ -125,6 +125,10 @@ const HEADER_INFO: Record<
     label: 'Jailbreak Signal',
     type: 'danger',
   },
+  'x-vsr-matched-hallucination': {
+    label: 'Hallucination Signal',
+    type: 'warning',
+  },
   'x-vsr-matched-pii': {
     label: 'PII Signal',
     type: 'warning',
@@ -139,6 +143,10 @@ const HEADER_INFO: Record<
   },
   'x-vsr-matched-event': {
     label: 'Event Signal',
+    type: 'info',
+  },
+  'x-vsr-matched-input-modality': {
+    label: 'Input Modality Signal',
     type: 'info',
   },
   'x-vsr-matched-projections': {

@@ -1,5 +1,7 @@
 package extproc
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+
 // requestSignalSnapshot contains the protocol-neutral facts consumed by
 // routing signals. It deliberately excludes wire JSON, provider fields, raw
 // media, tool schemas, and tool-result payloads.
@@ -12,7 +14,10 @@ type requestSignalSnapshot struct {
 	HasAssistantReply bool
 	FirstImageURL     string
 	ImageContentCount int
-	Metadata          map[string]string
+	// InputModality holds the structural input-modality counts for the
+	// input_modality signal family, scoped to user messages.
+	InputModality classification.InputModalityFacts
+	Metadata      map[string]string
 
 	ContextTokenFloor      int
 	ContextTextBytes       int

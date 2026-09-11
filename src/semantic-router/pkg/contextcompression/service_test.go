@@ -419,3 +419,55 @@ func TestServiceReportsRecoveryBackendFailure(t *testing.T) {
 		t.Fatalf("backend failure result = %#v", result)
 	}
 }
+
+func TestServiceRollsBackAppliedBlocksOnRecoveryFailure(t *testing.T) {
+	firstContent := strings.Repeat("first recoverable output ", 200)
+	secondContent := strings.Repeat("second output ", 200)
+	body := map[string]interface{}{
+		"messages": []interface{}{
+			map[string]interface{}{"role": "user", "content": "question"},
+			map[string]interface{}{
+				"role":         "tool",
+				"tool_call_id": "call_1",
+				"content":      firstContent,
+			},
+			map[string]interface{}{
+				"role":         "tool",
+				"tool_call_id": "call_2",
+				"content":      secondContent,
+			},
+		},
+	}
+	ir := ParseRequestIR(body, Provenance{})
+	store := &testRecoveryStore{}
+	result := NewService().Apply(context.Background(), Request{
+		Scope:    "scope",
+		Request:  ir,
+		Recovery: store,
+		Policy: Policy{
+			Mode: ModeAlways,
+			Targets: Targets{
+				ToolOutputs: TargetPolicy{
+					Mode:         TargetRecoverable,
+					MinTokens:    10,
+					TargetTokens: 20,
+				},
+			},
+			Recovery: RecoveryPolicy{
+				Enabled:            true,
+				MaxBytesPerRequest: len(firstContent),
+			},
+		},
+		TokenCounter: HeuristicTokenCounter{},
+	})
+	if result.Failure == nil {
+		t.Fatalf("expected failure from recovery byte-limit, got %#v", result)
+	}
+	firstBlock := ir.Messages[1].Blocks[0]
+	if firstBlock.Text != firstContent {
+		t.Fatalf("first block not rolled back after recovery failure: got %q, want %q", firstBlock.Text[:80], firstContent[:80])
+	}
+	if len(store.entries) != 1 {
+		t.Fatalf("store should retain the first committed entry, got %d", len(store.entries))
+	}
+}

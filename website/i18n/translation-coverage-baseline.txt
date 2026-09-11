@@ -1,0 +1,7 @@
+# Current documentation locale overrides.
+# Regenerate with: make docs-update-translation-baseline
+zh-Hans	tutorials/learning/adaptations.md
+zh-Hans	tutorials/plugin/fast-response.md
+zh-Hans	tutorials/plugin/header-mutation.md
+zh-Hans	tutorials/plugin/response-jailbreak.md
+zh-Hans	tutorials/plugin/system-prompt.md

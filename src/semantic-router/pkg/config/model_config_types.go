@@ -1,5 +1,11 @@
 package config
 
+import (
+	"fmt"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+)
+
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
@@ -17,14 +23,21 @@ type BertModel struct {
 type CategoryModel struct {
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
-	Enabled             *bool   `yaml:"enabled,omitempty"`
-	ModelID             string  `yaml:"model_id"`
-	Threshold           float32 `yaml:"threshold"`
-	UseCPU              bool    `yaml:"use_cpu"`
-	UseModernBERT       bool    `yaml:"use_modernbert"`
-	UseMmBERT32K        bool    `yaml:"use_mmbert_32k"`
-	CategoryMappingPath string  `yaml:"category_mapping_path"`
-	FallbackCategory    string  `yaml:"fallback_category,omitempty"`
+	Enabled       *bool   `yaml:"enabled,omitempty"`
+	ModelID       string  `yaml:"model_id"`
+	Threshold     float32 `yaml:"threshold"`
+	UseCPU        bool    `yaml:"use_cpu"`
+	UseModernBERT bool    `yaml:"use_modernbert,omitempty"`
+	UseMmBERT32K  bool    `yaml:"use_mmbert_32k,omitempty"`
+	// Variant selects the local category model. Empty preserves the historical
+	// auto-detecting local path; candle, modernbert, and mmbert32k are the
+	// canonical local selectors.
+	Variant string `yaml:"variant,omitempty"`
+	// Backend attaches a named remote classifier. Its absence preserves local
+	// category inference exactly as before.
+	Backend             *RemoteClassifierBackend `yaml:"backend,omitempty"`
+	CategoryMappingPath string                   `yaml:"category_mapping_path"`
+	FallbackCategory    string                   `yaml:"fallback_category,omitempty"`
 }
 
 type PIIModel struct {
@@ -195,6 +208,12 @@ func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 
 type ComplexityModelConfig struct {
 	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Backend attaches a named remote scorer. Its absence preserves local
+	// prototype scoring exactly as before. It sits here, beside
+	// prototype_scoring, rather than on a rule: routing.signals is replaced
+	// wholesale per recipe, so a backend declared there would disappear under
+	// any recipe that did not repeat it.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
@@ -217,6 +236,15 @@ type ExternalModelConfig struct {
 	Temperature      float64                `yaml:"temperature,omitempty"`
 	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
 	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+}
+
+// AdmissionConfig bounds concurrent inference for one Router Model
+// deployment. Absent config means no gate and preserves current behavior.
+type AdmissionConfig struct {
+	MaxConcurrency int    `yaml:"max_concurrency"`
+	MaxQueue       int    `yaml:"max_queue,omitempty"`
+	QueueTimeoutMs int    `yaml:"queue_timeout_ms,omitempty"`
+	OnOverflow     string `yaml:"on_overflow,omitempty"`
 }
 
 type ToolFilteringWeights struct {
@@ -262,11 +290,10 @@ type ToolsConfig struct {
 }
 
 type HallucinationMitigationConfig struct {
-	Enabled                 bool                     `yaml:"enabled"`
-	FactCheckModel          FactCheckModelConfig     `yaml:"fact_check_model"`
-	HallucinationModel      HallucinationModelConfig `yaml:"hallucination_model"`
-	NLIModel                NLIModelConfig           `yaml:"nli_model"`
-	OnHallucinationDetected string                   `yaml:"on_hallucination_detected,omitempty"`
+	Enabled            bool                     `yaml:"enabled"`
+	FactCheckModel     FactCheckModelConfig     `yaml:"fact_check_model"`
+	HallucinationModel HallucinationModelConfig `yaml:"hallucination_model"`
+	NLIModel           NLIModelConfig           `yaml:"nli_model"`
 }
 
 type FactCheckModelConfig struct {
@@ -318,13 +345,22 @@ type VLLMEndpoint struct {
 }
 
 type ProviderProfile struct {
-	Type         string            `yaml:"type"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
+	Type               string                          `yaml:"type"`
+	Protocol           string                          `yaml:"protocol,omitempty"`
+	ReasoningTransport modelcatalog.ReasoningTransport `yaml:"reasoning_transport,omitempty"`
+	// ReasoningModes and ReasoningEfforts are catalog-materialized provider API
+	// constraints. They are intentionally absent from the public config surface.
+	ReasoningModes   []string `yaml:"-"`
+	ReasoningEfforts []string `yaml:"-"`
+	BaseURL          string   `yaml:"base_url,omitempty"`
+	AuthHeader       string   `yaml:"auth_header,omitempty"`
+	AuthPrefix       string   `yaml:"auth_prefix,omitempty"`
+	// AuthPrefixSet distinguishes an omitted override from an explicit empty
+	// prefix after canonical config has been materialized.
+	AuthPrefixSet bool              `yaml:"-"`
+	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
+	APIVersion    string            `yaml:"api_version,omitempty"`
+	ChatPath      string            `yaml:"chat_path,omitempty"`
 }
 
 type ModelPricing struct {
@@ -340,17 +376,79 @@ type ModelParams struct {
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
 	ReasoningFamily    string              `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter       `yaml:"loras,omitempty"`
-	AccessKey          string              `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string              `yaml:"param_size,omitempty"`
-	ContextWindowSize  int                 `yaml:"context_window_size,omitempty"`
-	APIFormat          string              `yaml:"api_format,omitempty"`
-	Description        string              `yaml:"description,omitempty"`
-	Capabilities       []string            `yaml:"capabilities,omitempty"`
-	Tags               []string            `yaml:"tags,omitempty"`
-	QualityScore       float64             `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
-	Modality           string              `yaml:"modality,omitempty"`
+	// AuthoredModel preserves the typed user declaration across materialization.
+	// Effective catalog defaults must not leak into exported user YAML, and an
+	// api_key_env reference must not be replaced by its expanded secret value.
+	AuthoredModel        *CanonicalProviderModel                        `yaml:"-" json:"-"`
+	LoRAs                []LoRAAdapter                                  `yaml:"loras,omitempty"`
+	AccessKey            string                                         `yaml:"access_key,omitempty" json:"-"`
+	AccessKeys           map[string]string                              `yaml:"-" json:"-"`
+	Catalog              string                                         `yaml:"catalog,omitempty"`
+	ParamSize            string                                         `yaml:"param_size,omitempty"`
+	ContextWindowSize    int                                            `yaml:"context_window_size,omitempty"`
+	APIFormat            string                                         `yaml:"api_format,omitempty"`
+	Description          string                                         `yaml:"description,omitempty"`
+	Capabilities         []string                                       `yaml:"capabilities,omitempty"`
+	Tags                 []string                                       `yaml:"tags,omitempty"`
+	IndexResults         map[string]modelcatalog.IndexResult            `yaml:"-" json:"-"`
+	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
+	QualityIndex         string                                         `yaml:"-" json:"-"`
+	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
+	Modality             string                                         `yaml:"modality,omitempty"`
+}
+
+// EvidenceScore resolves a versioned static model index. Missing, failed, and
+// not-applicable results return ok=false and are never coerced to zero.
+func (params ModelParams) EvidenceScore(index string) (float64, bool) {
+	result, ok := params.EvidenceResult(index)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResult resolves one available preferred-effort index result and
+// returns a defensive copy so callers can inspect coverage safely.
+func (params ModelParams) EvidenceResult(index string) (modelcatalog.IndexResult, bool) {
+	if index == "" {
+		index = params.QualityIndex
+	}
+	result, ok := params.IndexResults[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
+}
+
+// EvidenceScoreAt resolves evidence for the exact configured reasoning effort
+// when one is present on the candidate. An empty effort uses the model's
+// catalog-preferred result. Scores are never borrowed across efforts.
+func (params ModelParams) EvidenceScoreAt(index, reasoningEffort string) (float64, bool) {
+	result, ok := params.EvidenceResultAt(index, reasoningEffort)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResultAt resolves an available index result for the exact configured
+// reasoning effort. Results are never borrowed from another effort.
+func (params ModelParams) EvidenceResultAt(index, reasoningEffort string) (modelcatalog.IndexResult, bool) {
+	if reasoningEffort == "" {
+		return params.EvidenceResult(index)
+	}
+	if index == "" {
+		index = params.QualityIndex
+	}
+	results, ok := params.IndexResultsByEffort[reasoningEffort]
+	if !ok {
+		return modelcatalog.IndexResult{}, false
+	}
+	result, ok := results[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
 }
 
 type LoRAAdapter struct {
@@ -359,8 +457,15 @@ type LoRAAdapter struct {
 }
 
 type ReasoningFamilyConfig struct {
-	Type      string `yaml:"type"`
-	Parameter string `yaml:"parameter"`
+	Type                string            `yaml:"type"`
+	Parameter           string            `yaml:"parameter"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
 type PIIPolicy struct {
@@ -413,6 +518,58 @@ func moduleActive(enabled *bool) bool { return enabled == nil || *enabled }
 
 // Active reports whether category classification was explicitly disabled.
 func (m CategoryModel) Active() bool { return moduleActive(m.Enabled) }
+
+const (
+	CategoryVariantCandle     = "candle"
+	CategoryVariantModernBERT = "modernbert"
+	CategoryVariantMmBERT32K  = "mmbert32k"
+)
+
+// ValidateLocalVariant rejects ambiguous legacy combinations and validates the
+// canonical variant spelling. Legacy true values remain readable and are
+// interpreted deterministically when Variant is omitted.
+func (m CategoryModel) ValidateLocalVariant() error {
+	if m.UseModernBERT && m.UseMmBERT32K {
+		return fmt.Errorf("classifier.domain: use_modernbert and use_mmbert_32k cannot both be true")
+	}
+	switch m.Variant {
+	case "":
+		return nil
+	case CategoryVariantCandle:
+		if m.UseModernBERT || m.UseMmBERT32K {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with a legacy local selector", m.Variant)
+		}
+	case CategoryVariantModernBERT:
+		if m.UseMmBERT32K {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with use_mmbert_32k=true", m.Variant)
+		}
+	case CategoryVariantMmBERT32K:
+		if m.UseModernBERT {
+			return fmt.Errorf("classifier.domain: variant %q conflicts with use_modernbert=true", m.Variant)
+		}
+	default:
+		return fmt.Errorf("classifier.domain.variant: unsupported value %q", m.Variant)
+	}
+	return nil
+}
+
+// EffectiveVariant maps readable legacy configurations to the canonical local
+// selector used by construction. Empty means the historical auto-detect path.
+func (m CategoryModel) EffectiveVariant() (string, error) {
+	if err := m.ValidateLocalVariant(); err != nil {
+		return "", err
+	}
+	if m.Variant != "" {
+		return m.Variant, nil
+	}
+	if m.UseModernBERT {
+		return CategoryVariantModernBERT, nil
+	}
+	if m.UseMmBERT32K {
+		return CategoryVariantMmBERT32K, nil
+	}
+	return "", nil
+}
 
 // Active reports whether PII classification was explicitly disabled.
 func (m PIIModel) Active() bool { return moduleActive(m.Enabled) }

@@ -1,21 +1,73 @@
-import type { ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 import type {
-  EvaluationCoverage,
-  EvaluationMetric,
   EvaluationRunStatus,
   EvaluationTrackId,
   EvaluationTrackStatus,
   GateVerdict,
 } from '../../types/evaluationPlane'
-import { TRACK_PRESENTATION } from '../../types/evaluationPlane'
+import type { EvaluationCoverage, EvaluationGate } from '../../types/evaluationReport'
 import {
   clampFraction,
-  formatMetric,
-  GATE_VERDICT_LABELS,
+  gateVerdictPresentation,
   RUN_STATUS_LABELS,
+  TRACK_STATUS_LABELS,
 } from './evaluationPresentation'
+import { TRACK_PRESENTATION } from './evaluationTrackPresentation'
 import styles from './EvaluationPlane.module.css'
+
+interface EvaluationActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'quiet' | 'danger'
+  compact?: boolean
+}
+
+interface EvaluationTagProps {
+  children: ReactNode
+  tone?: 'neutral' | 'info' | 'positive' | 'warning' | 'negative'
+  mono?: boolean
+  title?: string
+}
+
+export function EvaluationTag({
+  children,
+  tone = 'neutral',
+  mono = false,
+  title,
+}: EvaluationTagProps) {
+  const toneClass = tone === 'neutral' ? '' : styles[`tag_${tone}`]
+  return (
+    <span
+      className={`${styles.tag} ${toneClass} ${mono ? styles.tagMono : ''}`.trim()}
+      data-evaluation-tag="true"
+      data-tone={tone}
+      title={title}
+    >
+      {children}
+    </span>
+  )
+}
+
+export function EvaluationActionButton({
+  variant = 'secondary',
+  compact = false,
+  className = '',
+  ...props
+}: EvaluationActionButtonProps) {
+  const variantClass = {
+    primary: styles.primaryButton,
+    secondary: styles.secondaryButton,
+    quiet: styles.quietButton,
+    danger: styles.dangerButton,
+  }[variant]
+  return (
+    <button
+      {...props}
+      data-density={compact ? 'compact' : 'regular'}
+      data-evaluation-action="true"
+      className={`${variantClass} ${compact ? styles.compactButton : ''} ${className}`.trim()}
+    />
+  )
+}
 
 export function RunStatusBadge({
   status,
@@ -23,25 +75,47 @@ export function RunStatusBadge({
   status: EvaluationRunStatus | EvaluationTrackStatus
 }) {
   const label =
-    status in RUN_STATUS_LABELS ? RUN_STATUS_LABELS[status as EvaluationRunStatus] : status
-  return <span className={`${styles.badge} ${styles[`status_${status}`]}`}>{label}</span>
+    status in RUN_STATUS_LABELS
+      ? RUN_STATUS_LABELS[status as EvaluationRunStatus]
+      : TRACK_STATUS_LABELS[status]
+  return (
+    <span
+      className={`${styles.badge} ${styles[`status_${status}`]}`}
+      data-evaluation-tag="true"
+      data-tone={status}
+    >
+      {label}
+    </span>
+  )
 }
 
-export function GateVerdictBadge({ verdict }: { verdict: GateVerdict }) {
+export function GateVerdictBadge({
+  verdict,
+  disposition = 'advisory',
+}: {
+  verdict: GateVerdict
+  disposition?: EvaluationGate['disposition']
+}) {
+  const presentation = gateVerdictPresentation({ verdict, disposition })
   return (
-    <span className={`${styles.badge} ${styles[`gate_${verdict}`]}`}>
-      {GATE_VERDICT_LABELS[verdict]}
+    <span
+      className={`${styles.badge} ${styles[`gate_${verdict}`]}`}
+      data-evaluation-tag="true"
+      data-tone={verdict}
+      title={presentation.explanation}
+    >
+      {presentation.label}
     </span>
   )
 }
 
 export function TrackChips({ trackIDs }: { trackIDs: EvaluationTrackId[] }) {
   return (
-    <div className={styles.chips} aria-label="Evaluation tracks">
+    <div className={styles.chips} aria-label="Evaluation areas">
       {trackIDs.map((trackID) => (
-        <span key={trackID} className={styles.chip} title={TRACK_PRESENTATION[trackID].description}>
+        <EvaluationTag key={trackID} title={TRACK_PRESENTATION[trackID].description}>
           {TRACK_PRESENTATION[trackID].label}
-        </span>
+        </EvaluationTag>
       ))}
     </div>
   )
@@ -66,48 +140,9 @@ export function CoverageBar({ coverage }: { coverage: EvaluationCoverage }) {
         <span style={{ width: `${fraction * 100}%` }} />
       </div>
       <small>
-        {coverage.evaluated} of {coverage.total} cases
-        {coverage.unavailable ? ` · ${coverage.unavailable} unavailable` : ''}
+        {coverage.evaluated} of {coverage.total} benchmark checks
+        {coverage.unavailable ? ` · ${coverage.unavailable} not measured` : ''}
       </small>
-    </div>
-  )
-}
-
-interface MetricCardProps {
-  label: string
-  value: ReactNode
-  detail?: ReactNode
-  tone?: 'neutral' | 'positive' | 'warning' | 'negative'
-}
-
-export function MetricCard({ label, value, detail, tone = 'neutral' }: MetricCardProps) {
-  return (
-    <div className={`${styles.metricCard} ${styles[`metric_${tone}`]}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {detail ? <small>{detail}</small> : null}
-    </div>
-  )
-}
-
-export function MetricGrid({ metrics }: { metrics: EvaluationMetric[] }) {
-  if (metrics.length === 0) {
-    return <p className={styles.emptyCopy}>No metrics were produced for this evidence slice.</p>
-  }
-  return (
-    <div className={styles.metricGrid}>
-      {metrics.map((metric) => (
-        <MetricCard
-          key={`${metric.track_id || 'all'}-${metric.id}`}
-          label={metric.name}
-          value={formatMetric(metric)}
-          detail={
-            metric.sample_count
-              ? `${metric.sample_count} samples${metric.confidence_interval ? ' · confidence interval available' : ''}`
-              : undefined
-          }
-        />
-      ))}
     </div>
   )
 }

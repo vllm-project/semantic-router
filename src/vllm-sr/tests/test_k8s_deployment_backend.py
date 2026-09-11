@@ -344,12 +344,6 @@ class TestK8sBackend:
         backend.release_name = "sr"
         assert "sr" in backend._label_for_service("all")
 
-    def test_k8s_simulator_service_fails_instead_of_reading_whole_release(self):
-        backend = K8sBackend.__new__(K8sBackend)
-        backend.release_name = "sr"
-        with pytest.raises(ValueError, match="do not support service 'simulator'"):
-            backend._label_for_service("simulator")
-
     def test_status_and_dashboard_url_are_release_scoped(self, monkeypatch):
         backend = K8sBackend.__new__(K8sBackend)
         backend.namespace = "test-ns"

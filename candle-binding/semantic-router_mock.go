@@ -164,6 +164,21 @@ func TokenizeTextDefault(text string) (TokenizeResult, error) {
 	return TokenizeResult{}, ErrBackendUnavailable
 }
 
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	return false, ErrBackendUnavailable
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns the byte ranges a text has to be split into to be embedded
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	return nil, ErrBackendUnavailable
+}
+
 // GetEmbedding gets the embedding vector for a text
 func GetEmbedding(text string, maxLength int) ([]float32, error) {
 	return nil, ErrBackendUnavailable
@@ -643,6 +658,12 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return ClassResult{}, ErrBackendUnavailable
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text with mmBERT-32K feedback
+// classifier and returns the full probability distribution
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
+}
+
 // InitMmBert32KPIIClassifier initializes mmBERT-32K PII classifier
 func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
@@ -701,6 +722,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies feedback text
 func ClassifyFeedbackText(text string) (FeedbackResult, error) {
 	return FeedbackResult{}, ErrBackendUnavailable
+}
+
+// ClassifyFeedbackTextWithProbs classifies feedback text and returns the full
+// probability distribution
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return ClassResultWithProbs{}, ErrBackendUnavailable
 }
 
 // DetectHallucinations detects hallucinations

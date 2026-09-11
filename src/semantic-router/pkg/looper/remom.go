@@ -33,8 +33,12 @@ const (
 
 // NewReMoMLooper creates a new ReMoM looper
 func NewReMoMLooper(cfg *config.LooperConfig) *ReMoMLooper {
+	return newReMoMLooper(cfg, nil)
+}
+
+func newReMoMLooper(cfg *config.LooperConfig, client *Client) *ReMoMLooper {
 	return &ReMoMLooper{
-		BaseLooper: NewBaseLooper(cfg),
+		BaseLooper: newBaseLooper(cfg, client),
 	}
 }
 
@@ -116,15 +120,12 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	}
 
 	startTime := time.Now()
-	resp, err := l.callModelWithContextGate(
+	resp, err := l.dispatchModel(
 		ctx,
 		req,
 		msgCopy,
-		modelName,
-		false,
-		idx+1,
-		nil,
-		accessKeyForModel(req, modelName),
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
+		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
 	)
 	elapsed := time.Since(startTime)
 
@@ -251,6 +252,11 @@ type IntermediateResp struct {
 	Reasoning        string `json:"reasoning,omitempty"`
 	CompactedContent string `json:"compacted_content,omitempty"`
 	TokenCount       int    `json:"token_count,omitempty"`
+	// Usage is the backend-reported usage for this response. It is carried so
+	// the next round's synthesis prompt compacts at the same observed
+	// bytes-per-token ratio as CompactedContent; it is not part of the
+	// published intermediate-response payload.
+	Usage TokenUsage `json:"-"`
 }
 
 // Default synthesis templates
@@ -302,8 +308,6 @@ type remomRoundExecution struct {
 
 // Execute implements the Looper interface for ReMoM
 func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
-
 	var cfg *config.ReMoMAlgorithmConfig
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
@@ -454,6 +458,7 @@ func intermediateResponsesToModelResponses(responses []IntermediateResp) []*Mode
 			Content:          ir.Content,
 			ReasoningContent: ir.Reasoning,
 			Model:            ir.Model,
+			Usage:            ir.Usage,
 		})
 	}
 	return prevResponses
@@ -531,12 +536,14 @@ func (l *ReMoMLooper) buildReMoMRoundResponse(
 	for i := 0; i < maxResponses; i++ {
 		resp := responses[i]
 		synthesisText := reMoMSynthesisText(resp)
+		bytesPerToken := reMoMBytesPerToken(resp)
 		roundResp.Responses = append(roundResp.Responses, IntermediateResp{
 			Model:            resp.Model,
 			Content:          resp.Content,
 			Reasoning:        resp.ReasoningContent,
-			CompactedContent: l.compactResponse(cfg, synthesisText),
-			TokenCount:       estimateTokens(synthesisText),
+			CompactedContent: l.compactResponse(cfg, synthesisText, bytesPerToken),
+			TokenCount:       estimateTokens(synthesisText, bytesPerToken),
+			Usage:            resp.Usage,
 		})
 	}
 	return roundResp
@@ -587,7 +594,7 @@ func (l *ReMoMLooper) buildSynthesisPrompt(cfg *config.ReMoMAlgorithmConfig, ori
 		if strings.TrimSpace(synthesisText) == "" {
 			continue
 		}
-		compacted := l.compactResponse(cfg, synthesisText)
+		compacted := l.compactResponse(cfg, synthesisText, reMoMBytesPerToken(resp))
 		refResp := ReferenceResponse{
 			Content: compacted,
 			Model:   resp.Model,
@@ -630,32 +637,6 @@ func (l *ReMoMLooper) buildSynthesisPrompt(cfg *config.ReMoMAlgorithmConfig, ori
 	}
 
 	return appendOutputContractForPrompt(buf.String(), embeddedOutputContract(originalContent)), nil
-}
-
-// compactResponse compacts a response based on strategy
-func (l *ReMoMLooper) compactResponse(cfg *config.ReMoMAlgorithmConfig, content string) string {
-	strategy := cfg.CompactionStrategy
-	if strategy == "" {
-		strategy = "full"
-	}
-
-	switch strategy {
-	case "last_n_tokens":
-		maxTokens := cfg.CompactionTokens
-		if maxTokens <= 0 {
-			maxTokens = 1000
-		}
-		// Rough heuristic: ~4 chars per token
-		maxChars := maxTokens * 4
-		if len(content) <= maxChars {
-			return content
-		}
-		return content[len(content)-maxChars:]
-	case "full":
-		fallthrough
-	default:
-		return content
-	}
 }
 
 // sortAndShuffle sorts responses by length and shuffles
@@ -762,10 +743,4 @@ func replaceLastMessage(req *openai.ChatCompletionNewParams, newContent string) 
 	}
 
 	return &result
-}
-
-// estimateTokens estimates token count from text (rough heuristic)
-func estimateTokens(text string) int {
-	// Rough heuristic: ~4 chars per token
-	return len(text) / 4
 }

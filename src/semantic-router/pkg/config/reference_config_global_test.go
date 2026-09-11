@@ -96,7 +96,7 @@ func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interfac
 	metrics := mustMapAt(t, api, "batch_classification", "metrics")
 
 	assertMapCoversStructFields(t, api, reflect.TypeOf(APIConfig{}), "global.services.api")
-	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification")
+	assertMapCoversStructFields(t, mustMapAt(t, api, "batch_classification"), reflect.TypeOf(BatchClassificationConfig{}), "global.services.api.batch_classification", "concurrency_threshold", "max_concurrency")
 	assertMapCoversStructFields(t, metrics, reflect.TypeOf(BatchClassificationMetricsConfig{}), "global.services.api.batch_classification.metrics")
 	assertSliceUnionCoversStructFields(
 		t,
@@ -200,7 +200,6 @@ func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "milvus"), reflect.TypeOf(MemoryMilvusConfig{}), "global.stores.memory.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "valkey"), reflect.TypeOf(MemoryValkeyConfig{}), "global.stores.memory.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "qdrant"), reflect.TypeOf(MemoryQdrantConfig{}), "global.stores.memory.qdrant")
-	assertMapCoversStructFields(t, mustMapAt(t, memory, "quality_scoring"), reflect.TypeOf(MemoryQualityScoringConfig{}), "global.stores.memory.quality_scoring")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "reflection"), reflect.TypeOf(MemoryReflectionConfig{}), "global.stores.memory.reflection")
 }
 
@@ -316,7 +315,10 @@ func assertReferenceConfigModelModuleCoverage(t testingT, modules map[string]int
 
 func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[string]interface{}) {
 	assertMapCoversStructFields(t, classifier, reflect.TypeOf(CanonicalClassifierModule{}), "global.model_catalog.modules.classifier")
-	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain")
+	// backend and local selectors are mutually exclusive. The canonical local
+	// variant is supplied by defaults, so the exhaustive reference does not need
+	// to force a variant line that users must delete before adding a backend.
+	assertMapCoversStructFields(t, mustMapAt(t, classifier, "domain"), reflect.TypeOf(CanonicalCategoryModule{}), "global.model_catalog.modules.classifier.domain", "backend", "variant", "use_modernbert", "use_mmbert_32k")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "mcp"), reflect.TypeOf(MCPCategoryModel{}), "global.model_catalog.modules.classifier.mcp")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "pii"), reflect.TypeOf(CanonicalPIIModule{}), "global.model_catalog.modules.classifier.pii")
 	assertMapCoversStructFields(t, mustMapAt(t, classifier, "preference"), reflect.TypeOf(PreferenceModelConfig{}), "global.model_catalog.modules.classifier.preference")
@@ -329,7 +331,11 @@ func assertReferenceConfigClassifierModuleCoverage(t testingT, classifier map[st
 }
 
 func assertReferenceConfigComplexityModuleCoverage(t testingT, complexity map[string]interface{}) {
-	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity")
+	// backend is the remote path and is mutually exclusive with the local
+	// prototype scoring the exhaustive reference keeps active, the same way
+	// classifier.domain excepts its own backend above. Remote parsing and
+	// validation are covered by classifier_backend_complexity_test.go.
+	assertMapCoversStructFields(t, complexity, reflect.TypeOf(ComplexityModelConfig{}), "global.model_catalog.modules.complexity", "backend")
 	assertMapCoversStructFields(
 		t,
 		mustMapAt(t, complexity, "prototype_scoring"),

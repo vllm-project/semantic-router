@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-import { mockAuthenticatedAppShell } from './support/auth'
+import { dashboardSettingsResponse, mockAuthenticatedAppShell } from './support/auth'
 
 async function mockPublicVisitor(page: Page) {
   await page.route('**/api/setup/state', async (route) => {
@@ -24,7 +24,7 @@ async function mockPublicVisitor(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ readonlyMode: false, platform: '' }),
+      body: JSON.stringify(dashboardSettingsResponse()),
     })
   })
 }
@@ -196,7 +196,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     expect(footerGroupBoxes[0]?.y ?? 0).toBeLessThan(footerGroupBoxes[1]?.y ?? 0)
     expect(footerGroupBoxes[1]?.y ?? 0).toBeLessThan(footerGroupBoxes[2]?.y ?? 0)
 
-    await page.getByRole('button', { name: 'Enter Dashboard' }).click()
+    await page.getByRole('link', { name: 'Enter Dashboard' }).last().click()
     await expect(page).toHaveURL(/\/login$/)
     await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
 

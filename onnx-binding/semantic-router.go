@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    int* offsets;
+    int window_count;
+    bool error;
+} TextWindowsResult;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -104,6 +110,9 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int embedding_text_exceeds_window(const char* text, const char* model_type);
+extern TextWindowsResult get_text_windows(const char* text, int max_length);
+extern void free_text_windows(TextWindowsResult result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
@@ -136,19 +145,16 @@ typedef struct {
 extern bool init_multimodal_embedding_model(const char* model_path, bool use_cpu);
 extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image_from_bytes(const unsigned char* bytes_ptr, size_t bytes_len, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
 extern void free_multimodal_embedding(float* data, int length);
 */
 import "C"
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"strings"
@@ -479,6 +485,61 @@ func GetEmbeddingWithModelType(text string, modelType string, targetDim int) (*E
 		// ONNX binding uses mmBERT path for all non-multimodal requests.
 		return GetEmbeddingWithMetadata(text, 0, 0, targetDim)
 	}
+}
+
+// EmbeddingTextExceedsWindow reports whether text tokenizes past the context
+// window of the loaded embedding model, so its embedding would be truncated.
+func EmbeddingTextExceedsWindow(text, modelType string) (bool, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+	cModelType := C.CString(modelType)
+	defer C.free(unsafe.Pointer(cModelType))
+
+	switch C.embedding_text_exceeds_window(cText, cModelType) {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("embedding model %q not loaded", modelType)
+	}
+}
+
+// TextWindow is one byte range of a text that fits the embedding window.
+type TextWindow struct {
+	Start int
+	End   int
+}
+
+// TextWindows returns overlapping byte ranges that cover all tokens in text.
+// A non-positive maxLength uses the loaded model's configured sequence limit.
+func TextWindows(text string, maxLength int) ([]TextWindow, error) {
+	if !IsMmBertModelInitialized() {
+		return nil, errors.New("mmBERT embedding model not initialized")
+	}
+
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.get_text_windows(cText, C.int(maxLength))
+	defer C.free_text_windows(result)
+	if bool(result.error) {
+		return nil, errors.New("failed to window text")
+	}
+
+	count := int(result.window_count)
+	if count == 0 || result.offsets == nil {
+		return nil, nil
+	}
+	offsets := (*[1 << 28]C.int)(unsafe.Pointer(result.offsets))[: count*2 : count*2]
+	windows := make([]TextWindow, count)
+	for i := range windows {
+		windows[i] = TextWindow{
+			Start: int(offsets[i*2]),
+			End:   int(offsets[i*2+1]),
+		}
+	}
+	return windows, nil
 }
 
 // ============================================================================
@@ -1213,17 +1274,41 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 	}, nil
 }
 
-// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to 512×512,
-// and encodes to a multi-modal embedding.
+// MultiModalEncodeImageFromBytes decodes raw JPEG/PNG bytes, resizes to
+// 512×512 using the same Catmull-Rom cubic resize as candle-binding, and
+// encodes to a multi-modal embedding. All preprocessing happens in Rust
+// (see multimodal_encode_image_from_bytes in src/ffi/multimodal.rs) so the
+// two bindings share one pixel pipeline instead of each doing their own
+// decode/resize — see #2166.
 func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	if len(imageBytes) == 0 {
 		return nil, errors.New("imageBytes cannot be empty")
 	}
-	pixelData, err := decodeAndResizeImageOnnx(imageBytes, 512, 512)
-	if err != nil {
-		return nil, fmt.Errorf("image decode error: %w", err)
+
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image_from_bytes(
+		(*C.uchar)(unsafe.Pointer(&imageBytes[0])),
+		C.size_t(len(imageBytes)),
+		C.int(targetDim),
+		&result,
+	)
+	if status != 0 || result.error {
+		return nil, errors.New("multi-modal image encoding from bytes failed")
 	}
-	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+	if result.data == nil || result.length <= 0 {
+		return nil, errors.New("multi-modal image encoding returned empty result")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	emb := make([]float32, int(result.length))
+	cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+	copy(emb, cData)
+
+	return &MultiModalEmbeddingOutput{
+		Embedding:        emb,
+		Modality:         modalityToString(int(result.modality)),
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it.
@@ -1283,28 +1368,4 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 		return nil, fmt.Errorf("read body error: %w", err)
 	}
 	return MultiModalEncodeImageFromBytes(data, targetDim)
-}
-
-// decodeAndResizeImageOnnx decodes JPEG/PNG and returns CHW float32 [0,1] pixels.
-func decodeAndResizeImageOnnx(data []byte, targetW, targetH int) ([]float32, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-
-	pixels := make([]float32, 3*targetH*targetW)
-	for y := 0; y < targetH; y++ {
-		srcY := y * srcH / targetH
-		for x := 0; x < targetW; x++ {
-			srcX := x * srcW / targetW
-			r, g, b, _ := img.At(bounds.Min.X+srcX, bounds.Min.Y+srcY).RGBA()
-			pixels[0*targetH*targetW+y*targetW+x] = float32(r) / 65535.0
-			pixels[1*targetH*targetW+y*targetW+x] = float32(g) / 65535.0
-			pixels[2*targetH*targetW+y*targetW+x] = float32(b) / 65535.0
-		}
-	}
-	return pixels, nil
 }

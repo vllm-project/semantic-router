@@ -73,28 +73,7 @@ echo ""
 
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
-cat > "$TEMP_DIR/canonical-config.yaml" <<'EOF'
-configOverride:
-  version: v0.3
-  listeners:
-    - name: http
-      address: 0.0.0.0
-      port: 8899
-  providers:
-    models:
-      - name: local/custom
-  routing:
-    decisions:
-      - name: custom-route
-  global:
-    router:
-      skip_processing:
-        enabled: true
-      learning:
-        enabled: true
-        adaptation:
-          enabled: true
-EOF
+cp deploy/helm/testdata/backend-target-values.yaml "$TEMP_DIR/canonical-config.yaml"
 
 helm template canonical-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \
@@ -108,6 +87,25 @@ if ! grep -A1 "skip_processing:" "$TEMP_DIR/canonical-template.yaml" | grep -q "
     log_error "Canonical skip_processing=true was not preserved"
     exit 1
 fi
+
+log_info "Testing backend target compatibility rendering..."
+backend_fields=(
+    "base_url: https://provider.example/v1"
+    "provider_model_id: provider/model-id"
+    "api_key_env: PROVIDER_API_KEY"
+    "X-Tenant: production"
+    "chat_path: /chat/completions"
+    "weight: 75"
+)
+for field in "${backend_fields[@]}"; do
+    if ! grep -q "$field" "$TEMP_DIR/canonical-template.yaml"; then
+        log_error "Canonical backend target fields were not preserved: $field"
+        exit 1
+    fi
+done
+
+python3 tools/ci/check_backend_target_compatibility.py \
+    --rendered-helm "$TEMP_DIR/canonical-template.yaml"
 
 helm template canonical-false-release "$CHART_PATH" \
     -f "$TEMP_DIR/canonical-config.yaml" \
@@ -241,7 +239,30 @@ for expected in 'subPath: config.yaml' 'subPath: tools_db.json'; do
 done
 echo ""
 
-# Test 8: Validate Chart.yaml
+# Test 8: Validate the default router pod security contract
+log_info "Validating hardened router pod security defaults..."
+for expected in \
+    'runAsNonRoot: true' \
+    'runAsUser: 65532' \
+    'runAsGroup: 65532' \
+    'type: RuntimeDefault' \
+    'allowPrivilegeEscalation: false' \
+    'readOnlyRootFilesystem: true' \
+    'mountPath: /tmp' \
+    'mountPath: /app/models'; do
+    if ! grep -q "$expected" "$TEMP_DIR/default-template.yaml"; then
+        log_error "Missing hardened router pod setting: $expected"
+        exit 1
+    fi
+done
+if ! grep -A2 'capabilities:' "$TEMP_DIR/default-template.yaml" | grep -q 'ALL'; then
+    log_error "Router container does not drop all Linux capabilities"
+    exit 1
+fi
+log_success "Router pod defaults enforce the restricted security contract"
+echo ""
+
+# Test 9: Validate Chart.yaml
 log_info "Validating Chart.yaml..."
 if [ -f "$CHART_PATH/Chart.yaml" ]; then
     chart_name=$(grep "^name:" "$CHART_PATH/Chart.yaml" | awk '{print $2}')
@@ -257,7 +278,7 @@ else
 fi
 echo ""
 
-# Test 9: Check for common Helm best practices
+# Test 10: Check for common Helm best practices
 log_info "Checking Helm best practices..."
 best_practices_passed=true
 
@@ -291,7 +312,7 @@ if [ "$best_practices_passed" = false ]; then
 fi
 echo ""
 
-# Test 10: Dry-run install (requires cluster)
+# Test 11: Dry-run install (requires cluster)
 if kubectl cluster-info &> /dev/null; then
     log_info "Testing dry-run install..."
     if helm install test-release "$CHART_PATH" --dry-run --debug > "$TEMP_DIR/dry-run.log" 2>&1; then

@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -13,6 +14,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 		return err
 	}
 	if err := validateClassifierSignalContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
@@ -29,10 +33,14 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 			return err
 		}
+		warnUnguardedClassifierConditions(decision)
 		if err := validateDecisionAnnotations(decision); err != nil {
 			return err
 		}
 		if err := validateDecisionModelRefs(cfg, decision); err != nil {
+			return err
+		}
+		if err := validateDecisionAction(cfg, decision); err != nil {
 			return err
 		}
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
@@ -62,10 +70,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 		if !root {
 			return fmt.Errorf("decision '%s': on_unknown is only supported on the root rules node", decisionName)
 		}
-		switch node.OnUnknown {
-		case RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest:
-		default:
-			return fmt.Errorf("decision '%s': rules on_unknown must be no_match, match, or fail_request", decisionName)
+		if !node.OnUnknown.IsValid() {
+			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
 			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
@@ -257,6 +263,9 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		if modelRef.UseReasoning == nil {
 			return fmt.Errorf("decision '%s', model '%s': missing required field 'use_reasoning'", decision.Name, modelRef.Model)
 		}
+		if err := validateModelRefReasoningControl(cfg, decision.Name, i, modelRef); err != nil {
+			return err
+		}
 		if modelRef.LoRAName == "" {
 			continue
 		}
@@ -420,6 +429,9 @@ func validateOneDecisionPluginContracts(
 		if err := tsCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': %w", decision.Name, err)
 		}
+	}
+	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {
+		return err
 	}
 	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
 }
@@ -622,12 +634,8 @@ func validateAlgorithmBlockContract(
 }
 
 func blocklessAlgorithmTypeSupported(normalizedType string) bool {
-	switch normalizedType {
-	case "static", "knn", "kmeans", "svm", "mlp":
-		return true
-	default:
-		return false
-	}
+	configField, supported := DecisionAlgorithmConfigField(normalizedType)
+	return supported && configField == ""
 }
 
 func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -659,47 +667,23 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 }
 
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 14)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
 		}
 	}
 
-	addBlock("confidence", algorithm.Confidence != nil)
-	addBlock("ratings", algorithm.Ratings != nil)
-	addBlock("remom", algorithm.ReMoM != nil)
-	addBlock("fusion", algorithm.Fusion != nil)
-	addBlock("workflows", algorithm.Workflows != nil)
 	addBlock("elo", algorithm.Elo != nil)
-	addBlock("router_dc", algorithm.RouterDC != nil)
-	addBlock("automix", algorithm.AutoMix != nil)
-	addBlock("hybrid", algorithm.Hybrid != nil)
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("latency_aware", algorithm.LatencyAware != nil)
-	addBlock("multi_factor", algorithm.MultiFactor != nil)
-	addBlock("prompt", algorithm.Prompt != nil)
 	addBlock("session_aware", algorithm.SessionAware != nil)
 	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {
-	expectedBlockByType := map[string]string{
-		"confidence":    "confidence",
-		"ratings":       "ratings",
-		"remom":         "remom",
-		"fusion":        "fusion",
-		"workflows":     "workflows",
-		"router_dc":     "router_dc",
-		"automix":       "automix",
-		"hybrid":        "hybrid",
-		"latency_aware": "latency_aware",
-		"multi_factor":  "multi_factor",
-		"prompt":        "prompt",
-	}
-	expectedBlock, ok := expectedBlockByType[normalizedType]
-	return expectedBlock, ok
+	expectedBlock, supported := DecisionAlgorithmConfigField(normalizedType)
+	return expectedBlock, supported && expectedBlock != ""
 }
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -716,6 +700,104 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case "multi_factor":
+		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
+	}
+	return nil
+}
+
+func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorSelectionConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("decision '%s': algorithm.type=multi_factor requires algorithm.multi_factor configuration", decisionName)
+	}
+	path := fmt.Sprintf("decision '%s', algorithm.multi_factor", decisionName)
+	if err := validateMultiFactorObjective(cfg, path); err != nil {
+		return err
+	}
+	if err := validateMultiFactorWeights(cfg.Weights, path+".weights"); err != nil {
+		return err
+	}
+	if cfg.LatencyPercentile < 0 || cfg.LatencyPercentile > 100 {
+		return fmt.Errorf("%s.latency_percentile must be within [1, 100] when declared", path)
+	}
+	switch cfg.OnNoCandidates {
+	case "", "cheapest", "first", "fail":
+	default:
+		return fmt.Errorf("%s.on_no_candidates must be %q, %q, or %q", path, "cheapest", "first", "fail")
+	}
+	if cfg.Quality == nil {
+		return nil
+	}
+	if strings.TrimSpace(cfg.Quality.Index) == "" {
+		return fmt.Errorf("%s.quality: index is required", path)
+	}
+	if cfg.Quality.Index != strings.TrimSpace(cfg.Quality.Index) {
+		return fmt.Errorf("%s.quality: index must not contain surrounding whitespace", path)
+	}
+	if cfg.Quality.MinCoverage < 0 || cfg.Quality.MinCoverage > 1 || math.IsNaN(cfg.Quality.MinCoverage) {
+		return fmt.Errorf("%s.quality.min_coverage must be within [0, 1]", path)
+	}
+	if cfg.Quality.MinScore != nil && (math.IsNaN(*cfg.Quality.MinScore) || math.IsInf(*cfg.Quality.MinScore, 0)) {
+		return fmt.Errorf("%s.quality.min_score must be finite", path)
+	}
+	if cfg.Quality.MinScore != nil && cfg.Quality.OnMissing == QualityEvidenceOnMissingDisable {
+		return fmt.Errorf("%s.quality.min_score requires on_missing=%q", path, QualityEvidenceOnMissingExclude)
+	}
+	switch cfg.Quality.OnMissing {
+	case "", QualityEvidenceOnMissingExclude, QualityEvidenceOnMissingDisable:
+		return nil
+	default:
+		return fmt.Errorf("%s.quality: on_missing must be %q or %q", path, QualityEvidenceOnMissingExclude, QualityEvidenceOnMissingDisable)
+	}
+}
+
+func validateMultiFactorObjective(cfg *MultiFactorSelectionConfig, path string) error {
+	if cfg.Objective == nil || cfg.Objective.Strategy == "" || cfg.Objective.Strategy == MultiFactorObjectiveWeighted {
+		if cfg.Objective != nil && len(cfg.Objective.Priorities) > 0 {
+			return fmt.Errorf("%s.objective.priorities require strategy=%q", path, MultiFactorObjectiveLexicographic)
+		}
+		return nil
+	}
+	if cfg.Objective.Strategy != MultiFactorObjectiveLexicographic {
+		return fmt.Errorf("%s.objective.strategy must be %q or %q", path, MultiFactorObjectiveWeighted, MultiFactorObjectiveLexicographic)
+	}
+	if cfg.Weights != nil {
+		return fmt.Errorf("%s.weights cannot be combined with a lexicographic objective", path)
+	}
+	if len(cfg.Objective.Priorities) == 0 {
+		return fmt.Errorf("%s.objective.priorities cannot be empty for a lexicographic objective", path)
+	}
+	seen := map[string]struct{}{}
+	for index, priority := range cfg.Objective.Priorities {
+		switch priority.Factor {
+		case MultiFactorFactorQuality, MultiFactorFactorLatency, MultiFactorFactorCost, MultiFactorFactorLoad:
+		default:
+			return fmt.Errorf("%s.objective.priorities[%d].factor %q is unsupported", path, index, priority.Factor)
+		}
+		if _, duplicate := seen[priority.Factor]; duplicate {
+			return fmt.Errorf("%s.objective.priorities contains duplicate factor %q", path, priority.Factor)
+		}
+		seen[priority.Factor] = struct{}{}
+		if priority.Tolerance < 0 || priority.Tolerance > 1 || math.IsNaN(priority.Tolerance) {
+			return fmt.Errorf("%s.objective.priorities[%d].tolerance must be within [0, 1]", path, index)
+		}
+	}
+	return nil
+}
+
+func validateMultiFactorWeights(weights *MultiFactorWeightsConfig, path string) error {
+	if weights == nil {
+		return nil
+	}
+	for name, value := range map[string]float64{
+		"quality": weights.Quality,
+		"latency": weights.Latency,
+		"cost":    weights.Cost,
+		"load":    weights.Load,
+	} {
+		if value < 0 || math.IsNaN(value) || math.IsInf(value, 0) {
+			return fmt.Errorf("%s.%s must be finite and non-negative", path, name)
+		}
 	}
 	return nil
 }

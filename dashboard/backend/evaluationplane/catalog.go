@@ -2,6 +2,7 @@ package evaluationplane
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -13,145 +14,137 @@ var allTrackIDs = []TrackID{
 }
 
 type targetDefinition struct {
-	Public                CatalogTarget
-	RouterAPIURL          string
-	EnvoyURL              string
-	RouterAPIKey          *SecretRef
-	EnvoyAPIKey           *SecretRef
-	ModelArms             []ModelArm
-	BackendTopologyDigest string
+	Public                     CatalogTarget
+	Contract                   targetContract
+	RouterAPIURL               string
+	EnvoyURL                   string
+	RouterAPIKey               *SecretRef
+	EnvoyAPIKey                *SecretRef
+	AgentTaskLedger            *ServiceEndpoint
+	FaultRecoveryLedger        *ServiceEndpoint
+	HardPolicyLedger           *ServiceEndpoint
+	ProductionExperimentLedger *ServiceEndpoint
+	Mixture                    *ManifestMixture
+	ConfigDigest               string
+	BackendTopologyDigest      string
+	Features                   []targetFeature
 }
 
 type Registry struct {
 	tracks         map[TrackID]CatalogTrack
 	suites         map[string]CatalogSuite
+	suiteOrder     []string
+	executors      map[string]executorContract
 	targets        map[string]targetDefinition
+	targetOrder    []string
 	changeProfiles map[ChangeProfile]CatalogChangeProfile
 }
 
 type RegistryOptions struct {
-	RouterAPIKey          *SecretRef
-	EnvoyAPIKey           *SecretRef
-	ModelArms             []ModelArm
-	BackendTopologyDigest string
-	RouterAuthRequired    bool
+	RouterAPIKey               *SecretRef
+	EnvoyAPIKey                *SecretRef
+	AgentTaskLedger            *ServiceEndpoint
+	FaultRecoveryLedger        *ServiceEndpoint
+	HardPolicyLedger           *ServiceEndpoint
+	ProductionExperimentLedger *ServiceEndpoint
+	Mixtures                   []MixtureTargetSnapshot
+	DeploymentTargets          []DeploymentTargetSnapshot
+	DefaultConfigDigest        string
+	RouterAuthRequired         bool
+	InstalledSuites            []CatalogSuite
 }
 
 func NewRegistry(routerAPIURL, envoyURL string, registryOptions ...RegistryOptions) (*Registry, error) {
-	options := RegistryOptions{}
-	if len(registryOptions) > 0 {
-		options = registryOptions[0]
+	if err := ValidateMetricAnalysisCatalog(); err != nil {
+		return nil, fmt.Errorf("metric analysis catalog: %w", err)
 	}
-	if len(registryOptions) > 1 {
-		return nil, fmt.Errorf("only one registry options value is accepted")
+	if err := ValidateResearchBenchmarkInventory(); err != nil {
+		return nil, fmt.Errorf("research benchmark inventory: %w", err)
 	}
-	if err := validateTargetContract(options.RouterAPIKey, options.EnvoyAPIKey, options.ModelArms, options.BackendTopologyDigest); err != nil {
+	options, err := resolveRegistryOptions(registryOptions)
+	if err != nil {
 		return nil, err
 	}
-	registry := &Registry{
-		tracks:         make(map[TrackID]CatalogTrack),
-		suites:         make(map[string]CatalogSuite),
-		targets:        make(map[string]targetDefinition),
-		changeProfiles: make(map[ChangeProfile]CatalogChangeProfile),
+	if err := validateRegistryOptions(options); err != nil {
+		return nil, err
 	}
-	for _, track := range builtinTracks() {
-		registry.tracks[track.ID] = track
+	if err := validateRegistryOrigins(routerAPIURL, envoyURL, options); err != nil {
+		return nil, err
 	}
-	for _, suite := range builtinSuites() {
-		registry.suites[suite.ID] = suite
+	registry := emptyRegistry()
+	if err := registry.registerCatalogDefinitions(options); err != nil {
+		return nil, err
 	}
-	for _, profile := range builtinChangeProfiles() {
-		registry.changeProfiles[profile.ID] = profile
+	if err := registry.registerRecordedTargets(len(options.InstalledSuites) > 0); err != nil {
+		return nil, err
 	}
-	healthy := true
-	registry.targets["fixture"] = targetDefinition{Public: CatalogTarget{
-		ID: "fixture", Name: "Built-in replay fixture", Kind: "builtin-fixture",
-		Description: "Deterministic evidence for validating the complete evaluation plane.",
-		TrackIDs:    append([]TrackID(nil), allTrackIDs...), Modes: []Mode{ModeReplay},
-		EvidenceLevel: "E0", Healthy: &healthy,
-		Labels: map[string]string{"execution": "local", "network": "none"},
-	}}
-
-	routerAPIURL, err := normalizeServerURL(routerAPIURL)
-	if err != nil {
-		return nil, fmt.Errorf("router evaluation target: %w", err)
-	}
-	envoyURL, err = normalizeServerURL(envoyURL)
-	if err != nil {
-		return nil, fmt.Errorf("envoy evaluation target: %w", err)
-	}
-	runtimeRouterURL := routerAPIURL
-	if options.RouterAuthRequired {
-		runtimeRouterURL = ""
-	}
-	runtimeTrackIDs := runtimeTracks(runtimeRouterURL, envoyURL, options.ModelArms, options.BackendTopologyDigest)
-	runtimeHealthy := len(runtimeTrackIDs) > 0
-	runtimeLabels := map[string]string{
-		"capabilities": "manifest-dependent",
-		"credentials":  "environment-only",
-		"direct_arms":  "unavailable",
-		"model_arms":   "server-owned",
-	}
-	if options.RouterAuthRequired {
-		runtimeLabels["router_auth"] = "dedicated-evaluation-credential-unavailable"
-	}
-	registry.targets["runtime"] = targetDefinition{
-		Public: CatalogTarget{
-			ID: "runtime", Name: "Active vLLM-SR runtime", Kind: "runtime",
-			Description: "Capabilities derived from server-owned endpoints; model-pool and joint evaluation require an attested direct-arm target seam.",
-			TrackIDs:    runtimeTrackIDs, Modes: []Mode{ModeLive}, Healthy: &runtimeHealthy,
-			Labels: runtimeLabels,
-		},
-		RouterAPIURL:          runtimeRouterURL,
-		EnvoyURL:              envoyURL,
-		RouterAPIKey:          copySecretRef(options.RouterAPIKey),
-		EnvoyAPIKey:           copySecretRef(options.EnvoyAPIKey),
-		ModelArms:             copyModelArms(options.ModelArms),
-		BackendTopologyDigest: options.BackendTopologyDigest,
+	if err := registry.registerMixtureTargets(routerAPIURL, envoyURL, options); err != nil {
+		return nil, err
 	}
 	return registry, nil
 }
 
-// runtimeTracks advertises only evidence the current server-owned endpoints
-// can actually produce. ModelArms are snapshot metadata, not an attested
-// direct-arm execution seam, so they cannot enable model-pool or joint tracks.
-func runtimeTracks(routerAPIURL, envoyURL string, modelArms []ModelArm, backendTopologyDigest string) []TrackID {
-	tracks := make([]TrackID, 0, 3)
-	if !digestPattern.MatchString(backendTopologyDigest) {
-		return tracks
-	}
-	if routerAPIURL != "" {
-		tracks = append(tracks, "routing")
-	}
-	if envoyURL != "" {
-		if hasMultimodalArm(modelArms) {
-			tracks = append(tracks, "multimodal")
-		}
-		tracks = append(tracks, "capacity")
-	}
-	return tracks
-}
-
-func normalizeServerURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
+func validateServerOrigin(raw string) error {
 	if raw == "" {
-		return "", nil
+		return nil
 	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", fmt.Errorf("must be an absolute http(s) URL")
+	if err != nil || parsed.Host == "" || parsed.Hostname() == "" ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("must be an absolute http(s) URL")
 	}
-	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("cannot contain credentials, query, or fragment")
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return fmt.Errorf("cannot contain credentials, query, or fragment")
 	}
-	return strings.TrimSuffix(parsed.String(), "/"), nil
+	if parsed.Path != "" || parsed.RawPath != "" || parsed.String() != raw {
+		return fmt.Errorf("must be an exact canonical origin without whitespace, a trailing slash, or an API path")
+	}
+	return nil
+}
+
+func serverOriginKey(raw string) (string, error) {
+	if err := validateServerOrigin(raw); err != nil {
+		return "", err
+	}
+	if raw == "" {
+		return "", fmt.Errorf("origin is required")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse origin: %w", err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	port := parsed.Port()
+	if port == "" {
+		if scheme == "http" {
+			port = "80"
+		} else {
+			port = "443"
+		}
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(parsed.Hostname()), port), nil
+}
+
+func serverOriginsDistinct(left, right string) (bool, error) {
+	if left == "" || right == "" {
+		return false, nil
+	}
+	leftKey, err := serverOriginKey(left)
+	if err != nil {
+		return false, err
+	}
+	rightKey, err := serverOriginKey(right)
+	if err != nil {
+		return false, err
+	}
+	return leftKey != rightKey, nil
 }
 
 func (r *Registry) Catalog() Catalog {
 	changeProfiles := make([]CatalogChangeProfile, 0, len(r.changeProfiles))
 	for _, definition := range builtinChangeProfiles() {
 		if profile, ok := r.changeProfiles[definition.ID]; ok {
-			changeProfiles = append(changeProfiles, profile)
+			changeProfiles = append(changeProfiles, copyCatalogChangeProfile(profile))
 		}
 	}
 	tracks := make([]CatalogTrack, 0, len(r.tracks))
@@ -161,15 +154,15 @@ func (r *Registry) Catalog() Catalog {
 		}
 	}
 	suites := make([]CatalogSuite, 0, len(r.suites))
-	for _, definition := range builtinSuites() {
-		if suite, ok := r.suites[definition.ID]; ok {
-			suites = append(suites, suite)
+	for _, id := range r.suiteOrder {
+		if suite, ok := r.suites[id]; ok {
+			suites = append(suites, copyCatalogSuite(suite))
 		}
 	}
 	targets := make([]CatalogTarget, 0, len(r.targets))
-	for _, id := range []string{"fixture", "runtime"} {
+	for _, id := range r.targetOrder {
 		if target, ok := r.targets[id]; ok {
-			targets = append(targets, target.Public)
+			targets = append(targets, copyCatalogTarget(target.Public))
 		}
 	}
 	return Catalog{
@@ -179,14 +172,169 @@ func (r *Registry) Catalog() Catalog {
 	}
 }
 
+func copyCatalogTarget(target CatalogTarget) CatalogTarget {
+	if target.TrackIDs != nil {
+		target.TrackIDs = append(make([]TrackID, 0, len(target.TrackIDs)), target.TrackIDs...)
+	}
+	target.Modes = append([]Mode(nil), target.Modes...)
+	target.AcceptedExecutors = copyAcceptedExecutors(target.AcceptedExecutors)
+	target.Labels = copyCatalogLabels(target.Labels)
+	target.Mixture = copyCatalogMixture(target.Mixture)
+	if target.Healthy != nil {
+		healthy := *target.Healthy
+		target.Healthy = &healthy
+	}
+	return target
+}
+
+func copyCatalogChangeProfile(profile CatalogChangeProfile) CatalogChangeProfile {
+	profile.CampaignSlots = append([]CatalogCampaignSlot(nil), profile.CampaignSlots...)
+	for index := range profile.CampaignSlots {
+		profile.CampaignSlots[index].AcceptedExecutorIDs = append(
+			[]string(nil), profile.CampaignSlots[index].AcceptedExecutorIDs...,
+		)
+	}
+	return profile
+}
+
+func catalogMixtureFromManifest(mixture *ManifestMixture) *CatalogMixture {
+	if mixture == nil {
+		return nil
+	}
+	return &CatalogMixture{
+		ID: mixture.ID, EntrypointModel: mixture.EntrypointModel,
+		Aliases:    append([]string(nil), mixture.Aliases...),
+		RecipeName: mixture.RecipeName, RecipeDescription: mixture.RecipeDescription,
+		RecipeDigest: mixture.RecipeDigest, PoolDigest: mixture.PoolDigest,
+		SelectorPolicyDigest: mixture.SelectorPolicyDigest, SelectorDigest: mixture.SelectorDigest,
+		AdaptationDigest: mixture.AdaptationDigest, BindingDigest: mixture.BindingDigest, ModelArms: copyModelArms(mixture.ModelArms),
+		SupportModels:     copySupportModels(mixture.SupportModels),
+		FallbackArmID:     mixture.FallbackArmID,
+		Decisions:         copyMixtureDecisions(mixture.Decisions),
+		RoutingRecipePlan: copyRoutingRecipePlan(mixture.RoutingRecipePlan),
+	}
+}
+
+func manifestMixtureFromCatalog(mixture *CatalogMixture) *ManifestMixture {
+	if mixture == nil {
+		return nil
+	}
+	return &ManifestMixture{
+		SchemaVersion: SchemaVersion,
+		ID:            mixture.ID, EntrypointModel: mixture.EntrypointModel,
+		Aliases:    append([]string(nil), mixture.Aliases...),
+		RecipeName: mixture.RecipeName, RecipeDescription: mixture.RecipeDescription,
+		RecipeDigest: mixture.RecipeDigest, PoolDigest: mixture.PoolDigest,
+		SelectorPolicyDigest: mixture.SelectorPolicyDigest, SelectorDigest: mixture.SelectorDigest,
+		AdaptationDigest: mixture.AdaptationDigest, BindingDigest: mixture.BindingDigest, ModelArms: copyModelArms(mixture.ModelArms),
+		SupportModels:     copySupportModels(mixture.SupportModels),
+		FallbackArmID:     mixture.FallbackArmID,
+		Decisions:         copyMixtureDecisions(mixture.Decisions),
+		RoutingRecipePlan: copyRoutingRecipePlan(mixture.RoutingRecipePlan),
+	}
+}
+
+func copyCatalogMixture(mixture *CatalogMixture) *CatalogMixture {
+	if mixture == nil {
+		return nil
+	}
+	copy := *mixture
+	copy.Aliases = append([]string(nil), mixture.Aliases...)
+	copy.ModelArms = copyModelArms(mixture.ModelArms)
+	copy.SupportModels = copySupportModels(mixture.SupportModels)
+	copy.Decisions = copyMixtureDecisions(mixture.Decisions)
+	copy.RoutingRecipePlan = copyRoutingRecipePlan(mixture.RoutingRecipePlan)
+	return &copy
+}
+
+func copyManifestMixture(mixture *ManifestMixture) *ManifestMixture {
+	if mixture == nil {
+		return nil
+	}
+	copy := *mixture
+	copy.Aliases = append([]string(nil), mixture.Aliases...)
+	copy.ModelArms = copyModelArms(mixture.ModelArms)
+	copy.SupportModels = copySupportModels(mixture.SupportModels)
+	copy.Decisions = copyMixtureDecisions(mixture.Decisions)
+	copy.RoutingRecipePlan = copyRoutingRecipePlan(mixture.RoutingRecipePlan)
+	return &copy
+}
+
+func copyRoutingRecipePlan(plan RoutingRecipePlan) RoutingRecipePlan {
+	plan.ArmIDs = append([]string{}, plan.ArmIDs...)
+	plan.Signals = append([]RoutingRecipeInputSpec{}, plan.Signals...)
+	plan.Projections = append([]RoutingRecipeProjectionSpec{}, plan.Projections...)
+	plan.TopK = append([]int{}, plan.TopK...)
+	return plan
+}
+
+func copySupportModels(models []SupportModel) []SupportModel {
+	result := make([]SupportModel, len(models))
+	for index, model := range models {
+		result[index] = model
+		result[index].RuntimeRevision = copyStringPointer(model.RuntimeRevision)
+	}
+	return result
+}
+
+func copyMixtureDecisions(decisions []MixtureDecisionBinding) []MixtureDecisionBinding {
+	result := make([]MixtureDecisionBinding, len(decisions))
+	for index, decision := range decisions {
+		result[index] = decision
+		result[index].ArmIDs = append([]string(nil), decision.ArmIDs...)
+	}
+	return result
+}
+
+func copyCatalogSuite(suite CatalogSuite) CatalogSuite {
+	if suite.CampaignProtocol != nil {
+		protocol := *suite.CampaignProtocol
+		suite.CampaignProtocol = &protocol
+	}
+	executors := suite.Executors
+	suite.Executors = make(map[Mode]string, len(suite.Executors))
+	for mode, executorID := range executors {
+		suite.Executors[mode] = executorID
+	}
+	suite.TrackIDs = append([]TrackID(nil), suite.TrackIDs...)
+	suite.Modes = append([]Mode(nil), suite.Modes...)
+	// The wire contract uses an empty array, never null, for an intentionally
+	// untagged suite. Preserve that distinction while returning a defensive copy.
+	suite.Tags = append([]string{}, suite.Tags...)
+	suite.Methods = append([]CatalogMethod(nil), suite.Methods...)
+	for index := range suite.Methods {
+		suite.Methods[index].QualifiedGateIDs = append([]string{}, suite.Methods[index].QualifiedGateIDs...)
+	}
+	return suite
+}
+
+func copyAcceptedExecutors(source map[Mode][]string) map[Mode][]string {
+	result := make(map[Mode][]string, len(source))
+	for mode, executors := range source {
+		result[mode] = append([]string(nil), executors...)
+	}
+	return result
+}
+
+func copyCatalogLabels(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
 func (r *Registry) target(id string) (targetDefinition, bool) {
 	target, ok := r.targets[id]
-	return target, ok
+	return copyTargetDefinition(target), ok
 }
 
 func (r *Registry) suite(id string) (CatalogSuite, bool) {
 	suite, ok := r.suites[id]
-	return suite, ok
+	return copyCatalogSuite(suite), ok
 }
 
 func (r *Registry) track(id TrackID) (CatalogTrack, bool) {
@@ -196,19 +344,7 @@ func (r *Registry) track(id TrackID) (CatalogTrack, bool) {
 
 func (r *Registry) changeProfile(id ChangeProfile) (CatalogChangeProfile, bool) {
 	profile, ok := r.changeProfiles[id]
-	return profile, ok
-}
-
-func builtinChangeProfiles() []CatalogChangeProfile {
-	return []CatalogChangeProfile{
-		{ID: "schema_adapter", Name: "Schema / adapter", Description: "Strict schema and adapter parity changes."},
-		{ID: "recipe", Name: "Routing recipe", Description: "Recipe signal, decision, algorithm, and policy changes."},
-		{ID: "selector", Name: "Selector / binding", Description: "Selector, projection, classifier, and binding changes."},
-		{ID: "model_pool", Name: "Model pool", Description: "Logical arm composition, capability, quality, and price changes."},
-		{ID: "runtime_capacity", Name: "Runtime / capacity", Description: "Serving runtime, placement, capacity, and transport changes."},
-		{ID: "agent_multimodal", Name: "Agent / multimodal", Description: "Agent trajectory, tool, state, and multimodal changes."},
-		{ID: "online_adaptation", Name: "Online adaptation", Description: "Online assignment, preference, feedback, and adaptive policy changes."},
-	}
+	return copyCatalogChangeProfile(profile), ok
 }
 
 func changeProfileRank(id ChangeProfile) int {
@@ -226,26 +362,110 @@ func validChangeProfile(id ChangeProfile) bool {
 
 func builtinTracks() []CatalogTrack {
 	return []CatalogTrack{
-		{ID: "routing", Name: "Routing", Description: "Recipe decisions, coverage, abstention, fallback, and oracle regret.", Modes: []Mode{ModeReplay, ModeLive}, Metrics: []string{"routing.coverage", "routing.accuracy", "routing.abstention_rate", "routing.fallback_rate", "routing.latency_p95_ms"}, EvidenceLevels: []EvidenceLevel{"E0", "E3"}},
-		{ID: "model_pool", Name: "Model pool", Description: "Arm quality, complementarity, unique wins, and pool oracle quality.", Modes: []Mode{ModeReplay, ModeLive}, Metrics: []string{"model_pool.best_single_quality", "model_pool.oracle_quality", "model_pool.oracle_gain", "model_pool.unique_win_rate", "model_pool.selection_entropy_bits", "model_pool.selection_arm_coverage"}, EvidenceLevels: []EvidenceLevel{"E0", "E4"}},
-		{ID: "joint", Name: "Routing + pool", Description: "Realized system utility, oracle regret, latency, reliability, and cost.", Modes: []Mode{ModeReplay, ModeLive}, Metrics: []string{"joint.realized_quality", "joint.oracle_regret", "joint.normalized_regret", "joint.reliability"}, EvidenceLevels: []EvidenceLevel{"E0", "E5"}},
-		{ID: "agentic", Name: "Agentic", Description: "Trajectory success, tool validity, state continuity, and recovery.", Modes: []Mode{ModeReplay}, Metrics: []string{"agentic.success_rate", "agentic.invalid_tool_rate"}, EvidenceLevels: []EvidenceLevel{"E0"}},
-		{ID: "multimodal", Name: "Multimodal", Description: "Capability-aware routing, grounding quality, and privacy signals.", Modes: []Mode{ModeReplay, ModeLive}, Metrics: []string{"multimodal.support_rate", "multimodal.quality"}, EvidenceLevels: []EvidenceLevel{"E0", "E5"}},
-		{ID: "preference", Name: "Preference", Description: "Offline preference agreement and propensity-qualified online evidence.", Modes: []Mode{ModeReplay}, Metrics: []string{"preference.agreement", "preference.propensity_coverage"}, EvidenceLevels: []EvidenceLevel{"E0"}},
-		{ID: "safety", Name: "Safety", Description: "Policy adherence, blocking correctness, privacy, and unsafe regressions.", Modes: []Mode{ModeReplay}, Metrics: []string{"safety.violation_rate", "safety.violation_upper_95", "safety.block_accuracy"}, EvidenceLevels: []EvidenceLevel{"E0"}},
-		{ID: "capacity", Name: "Capacity", Description: "Throughput, tail latency, success envelope, GPU efficiency, and TCO.", Modes: []Mode{ModeReplay, ModeLive}, Metrics: []string{"capacity.throughput_rps", "capacity.latency_p95_ms", "capacity.success_rate", "capacity.cost_per_successful_request"}, EvidenceLevels: []EvidenceLevel{"E0", "E5"}},
+		builtinTrack("routing", "Routing", "Decision quality, coverage, abstention, fallbacks, and missed best-model opportunities.", []EvidenceLevel{"E0", "E3", "E4"}),
+		builtinTrack("model_pool", "Model pool", "Quality and reliability of each model, complementary strengths, unique wins, and the best possible pool outcome.", []EvidenceLevel{"E0", "E4"}),
+		builtinTrack("joint", "Routing and model pool", "End-to-end quality, reliability, latency, and cost, including the gap from the best available model.", []EvidenceLevel{"E0", "E5"}),
+		builtinTrack("agentic", "Agent tasks", "Task completion, tool-use policy, state and privacy, recovery from failures, latency, and cost.", []EvidenceLevel{"E0", "E5"}),
+		builtinTrack("multimodal", "Multimodal", "Input capability matching, grounded response quality, reliability, and privacy for text and non-text requests.", []EvidenceLevel{"E0", "E4", "E5"}),
+		builtinTrack("preference", "Preference", "Offline preference agreement and statistically valid online preference outcomes.", []EvidenceLevel{"E0", "E4", "E5"}),
+		builtinTrack("safety", "Safety", "Policy adherence, correct blocking behavior, privacy, and unsafe regressions.", []EvidenceLevel{"E0", "E3", "E4"}),
+		builtinTrack("capacity", "Capacity", "Throughput, tail latency, error bounds, stability, service-objective headroom, and test cost across repeated load levels.", []EvidenceLevel{"E0", "E5"}),
+	}
+}
+
+func builtinTrack(id TrackID, name, description string, evidenceLevels []EvidenceLevel) CatalogTrack {
+	return CatalogTrack{
+		ID: id, Name: name, Description: description,
+		Modes: []Mode{ModeReplay, ModeLive}, Metrics: StaticMetricAnalysisIDsForTrack(id),
+		EvidenceLevels: append([]EvidenceLevel(nil), evidenceLevels...),
 	}
 }
 
 func builtinSuites() []CatalogSuite {
 	return []CatalogSuite{
-		{ID: "evaluation-smoke", Name: "Evaluation smoke", Description: "Deterministic all-track vertical slice.", TrackIDs: append([]TrackID(nil), allTrackIDs...), Modes: []Mode{ModeReplay}, EvidenceLevel: "E0", CaseCount: 4, Revision: "builtin-v1", Tags: []string{"smoke", "deterministic"}},
-		{ID: "live-routing-core", Name: "Live routing core", Description: "Diagnostic routing smoke using bounded live probes; no promotion-grade policy claim.", TrackIDs: []TrackID{"routing"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1"},
-		{ID: "live-model-pool", Name: "Live model pool", Description: "Requires an attested server-owned direct-arm matrix target; unavailable on the generic runtime target.", TrackIDs: []TrackID{"model_pool"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1"},
-		{ID: "live-joint", Name: "Live routing + pool", Description: "Requires attested route correlation and direct-arm execution; unavailable on the generic runtime target.", TrackIDs: []TrackID{"routing", "model_pool", "joint"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1"},
-		{ID: "live-multimodal", Name: "Live multimodal", Description: "Diagnostic single-probe multimodal smoke; no grounding, privacy, or robustness claim.", TrackIDs: []TrackID{"multimodal"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1"},
-		{ID: "live-capacity", Name: "Live capacity", Description: "Diagnostic bounded concurrency smoke without warmup, repeats, duration, or a declared SLO.", TrackIDs: []TrackID{"capacity"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1"},
+		{ID: "evaluation-smoke", Name: "Evaluation setup check", Description: "A small deterministic workload that verifies every evaluation area is connected and reportable.", Executors: map[Mode]string{ModeReplay: fixtureReplayExecutorID}, TrackIDs: append([]TrackID(nil), allTrackIDs...), Modes: []Mode{ModeReplay}, EvidenceLevel: "E0", CaseCount: 4, Revision: "builtin-v1", Tags: []string{"smoke", "deterministic"}, Methods: fixtureCatalogMethods()},
+		{ID: "live-mom-core", Name: "Routing and model-pool setup check", Description: "A small hidden-answer workload for diagnosing routing, model-pool, and end-to-end execution. It is not large or diverse enough to support a release comparison.", Executors: map[Mode]string{ModeReplay: momReplayExecutorID, ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"routing", "model_pool", "joint"}, Modes: []Mode{ModeReplay, ModeLive}, EvidenceLevel: "E0", CaseCount: 64, Revision: "mom-diagnostic-cohort-v2", Tags: []string{"smoke", "mom", "hidden-label", "diagnostic-only"}, Methods: []CatalogMethod{
+			configuredCatalogMethod("routing.live-diagnostic.v1", "routing", nil, CatalogMethodEvidenceSourceLiveRuntime),
+			configuredCatalogMethod("model-pool.live-dense.v1", "model_pool", nil, CatalogMethodEvidenceSourceLiveRuntime),
+			configuredCatalogMethod("joint.live-routed-outcome.v1", "joint", nil, CatalogMethodEvidenceSourceLiveRuntime),
+		}},
+		{ID: "live-agent-tasks", Name: "Agent task evaluation", Description: "Repeated tool-use and reasoning tasks with complete provider results. Measures task completion, tool-policy compliance, reliability, latency, and cost; it does not invoke tools itself or claim parity with external agent benchmarks.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"agentic"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E5", Revision: "executor-v1", Tags: []string{}, Methods: []CatalogMethod{dataRequiredCatalogMethod("live-agent-task.v1", "agentic", nil, CatalogMethodEvidenceSourceLiveRuntime, "Connect a managed agent-task results source that includes every repeated attempt, the required tool policy for each task, and provider-confirmed outcomes for the selected Mixture.")}},
+		{ID: "live-fault-recovery", Name: "Agent fault-recovery evaluation", Description: "Matched baseline and injected-failure tasks that measure recovery, state continuity, side effects, retries, and latency.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"agentic"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E5", Revision: "executor-v1", Tags: []string{}, Methods: []CatalogMethod{dataRequiredCatalogMethod("live-fault-recovery.v1", "agentic", []string{"G6"}, CatalogMethodEvidenceSourceLiveRuntime, "Connect a managed fault-recovery results source with complete matched baseline and injected-failure attempts at the same task step.")}},
+		{ID: "live-multimodal", Name: "Multimodal response evaluation", Description: "Text and non-text requests graded for supported input handling, response quality, reliability, and latency.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"multimodal"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1", Tags: []string{}, Methods: []CatalogMethod{configuredCatalogMethod("multimodal.live-chat.v1", "multimodal", nil, CatalogMethodEvidenceSourceLiveRuntime)}},
+		{ID: "live-hard-policy", Name: "Policy enforcement evaluation", Description: "Live policy and adversarial cases that verify required rules are enforced by the selected system configuration.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"safety"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E4", Revision: "executor-v1", Tags: []string{}, Methods: []CatalogMethod{dataRequiredCatalogMethod("policy.hard-enforcement.v1", "safety", []string{"G2"}, CatalogMethodEvidenceSourceLiveRuntime, "Connect managed policy-test results with the evaluated rules, enforcement points, and complete outcomes for the selected configuration.")}},
+		{ID: "live-production-experiment", Name: "Guarded production evaluation", Description: "Evaluates connected production experiment results for assignment balance, exposure controls, risk, stop conditions, rollback readiness, and preference lift between baseline and candidate.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"preference"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E5", Revision: "executor-v1", Tags: []string{}, Methods: []CatalogMethod{
+			dataRequiredCatalogMethod("production.experiment-controls.v1", "preference", []string{"G8"}, CatalogMethodEvidenceSourceLiveProduction, "Connect managed production experiment results with complete assignment, exposure, and safety-control data."),
+			dataRequiredCatalogMethod("production.preference-lift.v1", "preference", []string{"G9"}, CatalogMethodEvidenceSourceLiveProduction, "Connect managed production experiment results with complete preference outcomes and the recorded assignment probability for each policy."),
+		}},
+		{ID: "live-capacity", Name: "Capacity setup check", Description: "A short repeated closed-loop workload for checking load execution, telemetry, and report generation. It is diagnostic and does not support a release capacity decision.", Executors: map[Mode]string{ModeLive: liveRuntimeExecutorID}, TrackIDs: []TrackID{"capacity"}, Modes: []Mode{ModeLive}, EvidenceLevel: "E0", Revision: "executor-v1", Tags: []string{"smoke", "diagnostic-only"}, Methods: []CatalogMethod{configuredCatalogMethod("capacity.slo-envelope.v1", "capacity", nil, CatalogMethodEvidenceSourceLiveRuntime)}},
 	}
+}
+
+func fixtureCatalogMethods() []CatalogMethod {
+	methods := make([]CatalogMethod, 0, len(allTrackIDs))
+	for _, trackID := range allTrackIDs {
+		methods = append(methods, configuredCatalogMethod("fixture."+string(trackID)+".v1", trackID, nil, CatalogMethodEvidenceSourceDiagnosticFixture))
+	}
+	return methods
+}
+
+func configuredCatalogMethod(id string, trackID TrackID, gateIDs []string, source CatalogMethodEvidenceSource) CatalogMethod {
+	return CatalogMethod{ID: id, TrackID: trackID, QualifiedGateIDs: append([]string{}, gateIDs...), EvidenceSource: source, Status: "configured"}
+}
+
+func dataRequiredCatalogMethod(id string, trackID TrackID, gateIDs []string, source CatalogMethodEvidenceSource, reason string) CatalogMethod {
+	return CatalogMethod{ID: id, TrackID: trackID, QualifiedGateIDs: append([]string{}, gateIDs...), EvidenceSource: source, Status: "data_required", Reason: reason}
+}
+
+func builtinSuitesFor(options RegistryOptions) []CatalogSuite {
+	suites := builtinSuites()
+	ready := map[string]bool{
+		"live-agent-task.v1":                options.AgentTaskLedger != nil,
+		"live-fault-recovery.v1":            options.FaultRecoveryLedger != nil,
+		"policy.hard-enforcement.v1":        options.HardPolicyLedger != nil,
+		"production.experiment-controls.v1": options.ProductionExperimentLedger != nil,
+		"production.preference-lift.v1":     options.ProductionExperimentLedger != nil,
+	}
+	for suiteIndex := range suites {
+		for methodIndex := range suites[suiteIndex].Methods {
+			if ready[suites[suiteIndex].Methods[methodIndex].ID] {
+				suites[suiteIndex].Methods[methodIndex].Status = "configured"
+				suites[suiteIndex].Methods[methodIndex].Reason = ""
+			}
+		}
+	}
+	return suites
+}
+
+func validNormalizedSuiteExecutors(suite CatalogSuite, executors map[string]executorContract) bool {
+	expectedModes := []Mode{ModeReplay}
+	if len(normalizedSuiteLiveMethodTracks(suite)) > 0 {
+		expectedModes = append(expectedModes, ModeLive)
+	}
+	if len(suite.Modes) != len(expectedModes) || len(suite.Executors) != len(expectedModes) {
+		return false
+	}
+	for index, mode := range expectedModes {
+		if suite.Modes[index] != mode {
+			return false
+		}
+		executorID := suite.Executors[mode]
+		if mode == ModeReplay && executorID != normalizedSuiteExecutorID ||
+			mode == ModeLive && executorID != normalizedSuiteLiveExecutorID {
+			return false
+		}
+		executor, registered := executors[executorID]
+		if !registered || executor.Mode != mode || !executor.NormalizedSuite ||
+			(mode == ModeReplay) != executor.RecordedNormalizedSource {
+			return false
+		}
+	}
+	return true
+}
+
+func suiteExecutorForMode(suite CatalogSuite, mode Mode) (string, bool) {
+	executor, ok := suite.Executors[mode]
+	return executor, ok && portableIDPattern.MatchString(executor) && containsMode(suite.Modes, mode)
 }
 
 func containsMode(modes []Mode, want Mode) bool {

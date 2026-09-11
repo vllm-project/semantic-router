@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
 // This method forces evaluation of all signals and returns comprehensive signal information.
-func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalResponse, error) {
+func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req IntentRequest) (*EvalResponse, error) {
 	input, err := req.resolveSignalInput()
 	if err != nil {
 		return nil, err
@@ -31,6 +32,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,

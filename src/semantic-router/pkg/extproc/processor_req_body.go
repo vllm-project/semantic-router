@@ -113,7 +113,7 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 	}
 	isEntrypoint := ctx.Routing.SelectedRecipe() != nil
 	executesLooper := r.routeExecutesLooper(ctx)
-	if !isEntrypoint && !executesLooper {
+	if !isEntrypoint && !executesLooper && !r.usesExternalGatewayDispatch(originalModel) {
 		if unavailable := r.unavailableModelResponse(originalModel, ctx); unavailable != nil {
 			return unavailable, nil
 		}
@@ -197,11 +197,16 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)
 		if err != nil {
-			return nil, err
+			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.handleToolSelectionForRequest(request, response, ctx)
-		return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+		if err != nil {
+			return nil, err
+		}
+		r.dispatchShadowIfConfigured(ctx, dispatch)
+		return finalized, nil
 	}
 
 	// Record routing decision with tracing
@@ -218,7 +223,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
 	)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
@@ -231,9 +236,6 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		r.setClearRouteCache(response)
 	}
 
-	// Save the actual model for token tracking
-	ctx.RequestModel = matchedModel
-
 	// Capture router replay information if enabled
 	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
@@ -243,6 +245,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
+	r.dispatchShadowIfConfigured(ctx, dispatch)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -256,6 +259,9 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 		"request_id": ctx.RequestID,
 		"model":      originalModel,
 	})
+	if r.usesExternalGatewayDispatch(originalModel) {
+		return r.handleExternalGatewayModelRouting(request, originalModel, ctx)
+	}
 
 	// Reject models that are not configured. Without this guard an unknown
 	// model is forwarded with no resolvable backend credential and surfaces as
@@ -272,7 +278,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	dispatch, err := r.prepareProviderDispatch(request, originalModel, "", false, ctx)
 	if err != nil {
-		return nil, err
+		return r.imageFileDispatchFailure(err, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
@@ -283,9 +289,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
-
-	// Save the actual model for token tracking
-	ctx.RequestModel = originalModel
 
 	// Capture router replay information if enabled even when the client pins a model.
 	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)

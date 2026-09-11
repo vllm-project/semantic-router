@@ -58,7 +58,6 @@ func (r *SemanticRouterReconciler) generateDeployment(sr *vllmv1alpha1.SemanticR
 					ServiceAccountName: saName,
 					SecurityContext:    r.getPodSecurityContext(sr),
 					ImagePullSecrets:   sr.Spec.ImagePullSecrets,
-					InitContainers:     r.generateInitContainers(),
 					Containers:         r.generateContainers(sr, gatewayMode),
 					Volumes:            r.generateVolumes(sr, gatewayMode),
 					NodeSelector:       sr.Spec.NodeSelector,
@@ -397,36 +396,6 @@ func (r *SemanticRouterReconciler) generateVolumeMounts(sr *vllmv1alpha1.Semanti
 		{
 			Name:      "models-volume",
 			MountPath: "/app/models",
-		},
-	}
-}
-
-func (r *SemanticRouterReconciler) generateInitContainers() []corev1.Container {
-	return []corev1.Container{
-		{
-			Name:  "setup-dirs",
-			Image: "registry.access.redhat.com/ubi9/ubi-minimal:latest",
-			Command: []string{
-				"sh",
-				"-c",
-				"mkdir -p /var/log/supervisor",
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "var-log",
-					MountPath: "/var/log",
-				},
-				{
-					Name:      "var-run",
-					MountPath: "/var/run",
-				},
-			},
-			SecurityContext: &corev1.SecurityContext{
-				AllowPrivilegeEscalation: func() *bool { b := false; return &b }(),
-				Capabilities: &corev1.Capabilities{
-					Drop: []corev1.Capability{"ALL"},
-				},
-			},
 		},
 	}
 }

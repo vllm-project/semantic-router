@@ -89,7 +89,7 @@ func NewRegistry(codecs ...Codec) (*Registry, error) {
 }
 
 func NewBuiltinRegistry() *Registry {
-	registry, err := NewRegistry(OpenAIChatCodec{}, OpenAIResponsesCodec{}, AnthropicMessagesCodec{})
+	registry, err := NewRegistry(OpenAIChatCodec{}, OpenAIResponsesCodec{}, AnthropicMessagesCodec{}, ImagesCodec{})
 	if err != nil {
 		panic(err)
 	}
@@ -107,6 +107,20 @@ func (registry *Registry) resolve(format llmprotocol.WireFormat) (codecPair, boo
 type Capability struct {
 	Format       llmprotocol.WireFormat
 	Capabilities []string
+}
+
+// CapabilitiesFor returns the capability set advertised by the codec bound to
+// a wire format, and whether that format is registered. Unknown formats return
+// false so callers can distinguish "not registered" from "no capabilities".
+func (registry *Registry) CapabilitiesFor(format llmprotocol.WireFormat) (llmprotocol.CapabilitySet, bool) {
+	if registry == nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	pair, ok := registry.resolve(format)
+	if !ok {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	return pair.buffered.Capabilities(), true
 }
 
 func (registry *Registry) Capabilities() []Capability {

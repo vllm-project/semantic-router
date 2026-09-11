@@ -46,6 +46,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			config.SignalTypePII, "PII",
 			func() {
 				c.evaluatePIISignal(
+					requestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypePII),
@@ -75,6 +76,10 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		{
 			config.SignalTypeMetadata, "Metadata",
 			func() { c.evaluateMetadataSignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
+			config.SignalTypeInputModality, "InputModality",
+			func() { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
 			config.SignalTypeClassifier, "Classifier",

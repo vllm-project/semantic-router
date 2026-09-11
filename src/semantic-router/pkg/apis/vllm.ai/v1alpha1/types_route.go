@@ -98,15 +98,19 @@ type ContextRule struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// MinTokens is the minimum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MinTokens is the inclusive minimum token count (supports K/M suffixes).
+	// Omit it to start the band at 0. At least one of MinTokens and MaxTokens
+	// must be set.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MinTokens string `json:"minTokens" yaml:"min_tokens"`
+	MinTokens string `json:"minTokens,omitempty" yaml:"min_tokens,omitempty"`
 
-	// MaxTokens is the maximum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MaxTokens is the inclusive maximum token count (supports K/M suffixes).
+	// Omit it to make the band open-ended so every request at or above
+	// MinTokens matches. Equal MinTokens and MaxTokens match exactly one count.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MaxTokens string `json:"maxTokens" yaml:"max_tokens"`
+	MaxTokens string `json:"maxTokens,omitempty" yaml:"max_tokens,omitempty"`
 
 	// Description provides human-readable explanation
 	// +optional
@@ -299,8 +303,9 @@ type Decision struct {
 
 // SignalCombination defines how to combine multiple signals
 type SignalCombination struct {
-	// Operator defines the logical operator for combining conditions (AND/OR/NOT)
-	// NOT uses NOR semantics: matches only when none of the conditions match.
+	// Operator defines the logical operator for combining conditions (AND/OR/NOT).
+	// NOT is strictly unary: it takes exactly one child condition and negates its result.
+	// Compose NOR/NAND by nesting NOT around OR/AND.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
@@ -355,9 +360,13 @@ type ModelRef struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 
@@ -366,7 +375,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;shadow_dispatch;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object
@@ -406,9 +415,13 @@ type ModelScore struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 

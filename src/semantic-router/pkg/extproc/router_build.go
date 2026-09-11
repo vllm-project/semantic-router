@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -40,12 +41,14 @@ type routerComponents struct {
 	replayRecorder       *routerreplay.Recorder
 	replayStoreShared    bool
 	replayRecorders      map[string]*routerreplay.Recorder
+	shadowDispatcher     *shadowDispatcher
 	modelSelector        *selection.Registry
 	recipeModelSelectors map[config.RecipeName]*selection.Registry
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
 	protocolCodecs       *protocolcodec.Registry
+	looperClient         *looper.Client
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
@@ -184,6 +187,14 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	if cfg.Looper.IsEnabled() {
+		looperClient, err := looper.NewConnectorClient(&cfg.Looper)
+		if err != nil {
+			return nil, rollbackResources(components.resources, err)
+		}
+		components.looperClient = looperClient
+		components.resources.add(components.looperClient.Close)
+	}
 	mappings, err := loadClassifierMappings(cfg)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -209,12 +220,18 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	components.resources.add(func() error {
 		return closeReplayRecorders(components.replayRecorder, components.replayRecorders, components.replayStoreShared)
 	})
+	components.shadowDispatcher = newShadowDispatcher()
+	components.resources.add(components.shadowDispatcher.Close)
 	var replayReaderForLookup store.Reader
 	if components.replayRecorder != nil {
 		replayReaderForLookup = components.replayRecorder.Reader()
 	}
-	components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
-	registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
+	if cfg.ModelSelection.Enabled {
+		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
+		registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
+	} else {
+		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
+	}
 
 	components.memoryStore, components.memoryExtractor = createMemoryRuntime(cfg)
 	if components.memoryStore != nil {
@@ -336,9 +353,11 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		RecipeModelSelectors:    components.recipeModelSelectors,
 		LookupTable:             components.lookupTable,
 		ReplayRecorders:         components.replayRecorders,
+		ShadowDispatcher:        components.shadowDispatcher,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
 		ProtocolCodecs:          components.protocolCodecs,
+		looperClient:            components.looperClient,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,

@@ -146,6 +146,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"event":          signals.MatchedEventRules,
 		"metadata":       signals.MatchedMetadataRules,
 		"classifier":     signals.MatchedClassifierRules,
+		"input_modality": signals.MatchedInputModalityRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -185,7 +186,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	} else {
 		result, err = classifier.EvaluateDecisionWithEngine(signals)
 	}
-	ctx.VSRAppliedUnknownPolicies = cloneReplayStringMap(signals.AppliedUnknownPolicies)
+	ctx.VSRDecisionDiagnostics = signals.Diagnostics
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -234,6 +235,14 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
+	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
+	if actionErr != nil {
+		return decisionName, evaluationConfidence, reasoningDecision, "", actionErr
+	}
+	if terminal {
+		return decisionName, evaluationConfidence, reasoningDecision, destination, nil
+	}
+
 	if !r.requestModelActsAsAuto(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
 			"request_id":     ctx.RequestID,
@@ -259,6 +268,7 @@ func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionRes
 	if pluginCfg := r.Config.EffectiveRouterReplayConfig(result.Decision); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
+	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
 
 	// Snapshot the retention directive emitted by this decision (deep clone)
 	// and observe every declared field via log + trace. Both helpers are

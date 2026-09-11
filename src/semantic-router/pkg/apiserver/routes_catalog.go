@@ -2,6 +2,11 @@
 
 package apiserver
 
+import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
+)
+
 func apiHealthRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
@@ -25,7 +30,15 @@ func apiHealthRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleAPIOverview,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/openapi.json", Method: "GET", Description: "OpenAPI 3.0 specification"},
+			EndpointMetadata{
+				Path:        "/openapi.json",
+				Method:      "GET",
+				Description: "OpenAPI 3.0 specification; optionally narrowed to one path or operation",
+				Parameters: []OpenAPIParameter{
+					{Name: "path", In: "query", Description: "Exact API path to return, for example /config/router.", Schema: OpenAPISchema{Type: "string"}},
+					{Name: "method", In: "query", Description: "HTTP method to return for the selected path.", Schema: OpenAPISchema{Type: "string", Enum: []string{"GET", "POST", "PATCH", "PUT", "DELETE"}}},
+				},
+			},
 			routePolicy{Permission: PermDocsRead, Sensitivity: SensitivityPublic},
 			(*ClassificationAPIServer).handleOpenAPISpec,
 		),
@@ -43,73 +56,80 @@ func apiClassifyRoutes() []apiRoute {
 			EndpointMetadata{Path: "/api/v1/classify/intent", Method: "POST", Description: "Classify user queries into routing categories"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleIntentClassification,
-			jsonBody(),
+			jsonBodyFor[services.IntentRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/pii", Method: "POST", Description: "Detect personally identifiable information in text"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handlePIIDetection,
-			jsonBody(),
+			jsonBodyFor[services.PIIRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/security", Method: "POST", Description: "Detect jailbreak attempts and security threats"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSecurityDetection,
-			jsonBody(),
+			jsonBodyFor[services.SecurityRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/fact-check", Method: "POST", Description: "Classify if text needs fact-checking"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleFactCheckClassification,
-			jsonBody(),
+			jsonBodyFor[services.FactCheckRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/user-feedback", Method: "POST", Description: "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleUserFeedbackClassification,
-			jsonBody(),
+			jsonBodyFor[services.UserFeedbackRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/combined", Method: "POST", Description: "Perform combined classification (intent, PII, and security)"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleCombinedClassification,
-			jsonBody(),
+			jsonBodyFor[CombinedClassificationRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/classify/batch", Method: "POST", Description: "Batch classification with configurable task_type parameter"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleBatchClassification,
-			jsonBody(),
+			jsonBodyFor[BatchClassificationRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/api/v1/eval", Method: "POST", Description: "Evaluate all configured signals regardless of decision usage"},
+			EndpointMetadata{
+				Path:        "/api/v1/eval",
+				Method:      "POST",
+				Description: "Evaluate all configured signals regardless of decision usage",
+				Parameters: []OpenAPIParameter{
+					queryParameter("trace", "Include per-decision evaluation trace trees.", "boolean"),
+				},
+			},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEvalClassification,
-			jsonBody(),
+			jsonBodyFor[services.IntentRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/nli", Method: "POST", Description: "Natural language inference classification for premise and hypothesis pairs"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleNLIClassification,
-			jsonBody(),
+			jsonBodyFor[services.NLIRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/embeddings", Method: "POST", Description: "Generate text and image embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
-			jsonBody(),
+			jsonBodyFor[EmbeddingRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/similarity", Method: "POST", Description: "Calculate pairwise text similarity"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSimilarity,
-			jsonBody(),
+			jsonBodyFor[SimilarityRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/similarity/batch", Method: "POST", Description: "Calculate batch text-similarity matches"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleBatchSimilarity,
-			jsonBody(),
+			jsonBodyFor[BatchSimilarityRequest](),
 		),
 	}
 }
@@ -142,10 +162,17 @@ func apiInfoRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleClassificationMetrics,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router/outcomes", Method: "POST", Description: "Submit Router Learning outcome feedback linked to a replay record"},
+			EndpointMetadata{
+				Path:        "/v1/router/outcomes",
+				Method:      "POST",
+				Description: "Submit Router Learning outcome feedback linked to a replay record",
+				Parameters: []OpenAPIParameter{
+					headerParameter("Idempotency-Key", "Stable retry key for outcome ingestion.", false),
+				},
+			},
 			routePolicy{Permission: PermLearningIngest, Sensitivity: SensitivityMutation, AuditAction: AuditActionOutcomeIngest},
 			(*ClassificationAPIServer).handleRouterOutcome,
-			jsonBody(),
+			jsonBodyFor[RouterOutcomeRequest](),
 		),
 	}
 }
@@ -176,19 +203,19 @@ func apiResponseCacheRoutes() []apiRoute {
 			EndpointMetadata{Path: "/api/v1/response-cache/test", Method: "POST", Description: "Validate and probe a response-cache candidate configuration"},
 			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleResponseCacheTest,
-			jsonBody(),
+			jsonBodyFor[responseCacheTestRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/response-cache/invalidate", Method: "POST", Description: "Dry-run or invalidate a scoped response-cache partition"},
 			routePolicy{Permission: PermCacheInvalidate, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheInvalidate},
 			(*ClassificationAPIServer).handleResponseCacheInvalidate,
-			jsonBody(),
+			jsonBodyFor[responseCacheInvalidateRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/response-cache/flush", Method: "POST", Description: "Advance a scoped or global response-cache epoch"},
 			routePolicy{Permission: PermCacheManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCacheFlush},
 			(*ClassificationAPIServer).handleResponseCacheFlush,
-			jsonBody(),
+			jsonBodyFor[responseCacheFlushRequest](),
 		),
 	}
 }
@@ -214,13 +241,13 @@ func apiContextCompressionRoutes() []apiRoute {
 			EndpointMetadata{Path: "/api/v1/context-compression/preview", Method: "POST", Description: "Preview context compression without persistence"},
 			routePolicy{Permission: PermCompressionPreview, Sensitivity: SensitivityOperational, AuditAction: AuditActionCompressionPreview},
 			(*ClassificationAPIServer).handleContextCompressionPreview,
-			jsonBody(),
+			jsonBodyFor[contextCompressionPreviewRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/api/v1/context-compression/recovery/invalidate", Method: "POST", Description: "Invalidate a trusted context-recovery request scope"},
 			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
 			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
-			jsonBody(),
+			jsonBodyFor[contextCompressionRecoveryInvalidateRequest](),
 		),
 	}
 }
@@ -240,7 +267,7 @@ func apiRecipeRoutes() []apiRoute {
 			EndpointMetadata{Path: "/config/router/recipes/validate", Method: "POST", Description: "Validate a recipe mutation without writing or reloading config"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
 			(*ClassificationAPIServer).handleValidateRecipe,
-			jsonBody(),
+			jsonBodyFor[recipeMutationRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "GET", Description: "Read one routing recipe and its entrypoints"},
@@ -248,13 +275,27 @@ func apiRecipeRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleGetRecipe,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "PUT", Description: "Atomically create or replace one routing recipe; requires If-Match"},
+			EndpointMetadata{
+				Path:        "/config/router/recipes/{name}",
+				Method:      "PUT",
+				Description: "Atomically create or replace one routing recipe; requires If-Match",
+				Parameters: []OpenAPIParameter{
+					headerParameter("If-Match", "ETag returned by the current recipe or recipe collection.", true),
+				},
+			},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
 			(*ClassificationAPIServer).handlePutRecipe,
-			jsonBody(),
+			jsonBodyFor[recipeMutationRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "DELETE", Description: "Delete an unreferenced named routing recipe; requires If-Match"},
+			EndpointMetadata{
+				Path:        "/config/router/recipes/{name}",
+				Method:      "DELETE",
+				Description: "Delete an unreferenced named routing recipe; requires If-Match",
+				Parameters: []OpenAPIParameter{
+					headerParameter("If-Match", "ETag returned by the current recipe or recipe collection.", true),
+				},
+			},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeDelete},
 			(*ClassificationAPIServer).handleDeleteRecipe,
 		),
@@ -264,6 +305,21 @@ func apiRecipeRoutes() []apiRoute {
 func apiNonRecipeConfigRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
+			EndpointMetadata{
+				Path:        "/config/router/schema",
+				Method:      "GET",
+				Description: "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
+				Parameters: []OpenAPIParameter{
+					{Name: "view", In: "query", Description: "Representation to return. Omit for the compact index; use full for the complete schema.", Schema: OpenAPISchema{Type: "string", Enum: []string{"full", "index", "section", "surface"}}},
+					{Name: "path", In: "query", Description: "Dot- or slash-delimited config path required by view=section.", Schema: OpenAPISchema{Type: "string"}},
+					{Name: "kind", In: "query", Description: "Surface kind required by view=surface.", Schema: OpenAPISchema{Type: "string", Enum: []string{"signal", "algorithm", "plugin", "projection"}}},
+					{Name: "name", In: "query", Description: "Registered surface name required by view=surface.", Schema: OpenAPISchema{Type: "string"}},
+				},
+			},
+			routePolicy{Permission: PermDocsRead, Sensitivity: SensitivityPublic},
+			(*ClassificationAPIServer).handleConfigSchema,
+		),
+		managedRoute(
 			EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListKnowledgeBases,
@@ -272,7 +328,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			EndpointMetadata{Path: "/config/kbs", Method: "POST", Description: "Create a managed knowledge base"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
 			(*ClassificationAPIServer).handleCreateKnowledgeBase,
-			jsonBody(),
+			jsonBodyFor[knowledgeBaseUpsertRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/kbs/{name}", Method: "GET", Description: "Read a knowledge base"},
@@ -293,7 +349,7 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			EndpointMetadata{Path: "/config/kbs/{name}", Method: "PUT", Description: "Update a managed knowledge base"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
 			(*ClassificationAPIServer).handleUpdateKnowledgeBase,
-			jsonBody(),
+			jsonBodyFor[knowledgeBaseUpsertRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/kbs/{name}", Method: "DELETE", Description: "Delete a managed knowledge base"},
@@ -309,25 +365,39 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 			EndpointMetadata{Path: "/config/router/validate", Method: "POST", Description: "Validate and normalize a router config without writing it"},
 			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleConfigValidate,
-			jsonBody(),
+			jsonBodyFor[RouterConfigUpdateRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
+			EndpointMetadata{
+				Path:        "/config/router",
+				Method:      "PATCH",
+				Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)",
+				Parameters: []OpenAPIParameter{
+					headerParameter("If-Match", "Optional ETag precondition returned by GET /config/router.", false),
+				},
+			},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPatch},
 			(*ClassificationAPIServer).handleConfigPatch,
-			jsonBody(),
+			jsonBodyFor[RouterConfigUpdateRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "PUT", Description: "Replace the router config (validates, backs up, writes, triggers hot-reload)"},
+			EndpointMetadata{
+				Path:        "/config/router",
+				Method:      "PUT",
+				Description: "Replace the router config (validates, backs up, writes, triggers hot-reload)",
+				Parameters: []OpenAPIParameter{
+					headerParameter("If-Match", "Optional ETag precondition returned by GET /config/router.", false),
+				},
+			},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPut},
 			(*ClassificationAPIServer).handleConfigPut,
-			jsonBody(),
+			jsonBodyFor[RouterConfigUpdateRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/router/rollback", Method: "POST", Description: "Rollback to a previous router config version"},
 			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigRollback},
 			(*ClassificationAPIServer).handleConfigRollback,
-			jsonBody(),
+			jsonBodyFor[routerConfigRollbackRequest](),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/config/router/versions", Method: "GET", Description: "List available router config backup versions"},
@@ -345,22 +415,53 @@ func apiNonRecipeConfigRoutes() []apiRoute {
 func apiMemoryRoutes() []apiRoute {
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: "/v1/memory", Method: "GET", Description: "List long-term memories"},
+			EndpointMetadata{
+				Path:        "/v1/memory",
+				Method:      "GET",
+				Description: "List long-term memories",
+				Parameters: []OpenAPIParameter{
+					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
+					queryParameter("type", "Comma-separated memory types: semantic, procedural, or episodic.", "string"),
+					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
+				},
+			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListMemories,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/memory", Method: "DELETE", Description: "Delete memories by scope"},
+			EndpointMetadata{
+				Path:        "/v1/memory",
+				Method:      "DELETE",
+				Description: "Delete memories by scope",
+				Parameters: []OpenAPIParameter{
+					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
+					queryParameter("type", "Comma-separated memory types to delete: semantic, procedural, or episodic.", "string"),
+				},
+			},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionMemoryDelete},
 			(*ClassificationAPIServer).handleDeleteMemoriesByScope,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/memory/{id}", Method: "GET", Description: "Read one long-term memory"},
+			EndpointMetadata{
+				Path:        "/v1/memory/{id}",
+				Method:      "GET",
+				Description: "Read one long-term memory",
+				Parameters: []OpenAPIParameter{
+					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
+				},
+			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleGetMemory,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/memory/{id}", Method: "DELETE", Description: "Delete one long-term memory"},
+			EndpointMetadata{
+				Path:        "/v1/memory/{id}",
+				Method:      "DELETE",
+				Description: "Delete one long-term memory",
+				Parameters: []OpenAPIParameter{
+					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
+				},
+			},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionMemoryDelete},
 			(*ClassificationAPIServer).handleDeleteMemory,
 		),
@@ -373,10 +474,20 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: "/v1/vector_stores", Method: "POST", Description: "Create a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleCreateVectorStore,
-			jsonBodyWithLimit(maxVectorStoreJSONBodySize),
+			jsonBodyWithLimitFor[vectorstore.CreateStoreRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/vector_stores", Method: "GET", Description: "List vector stores"},
+			EndpointMetadata{
+				Path:        "/v1/vector_stores",
+				Method:      "GET",
+				Description: "List vector stores",
+				Parameters: []OpenAPIParameter{
+					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
+					queryParameter("order", "Sort order by creation time.", "string", "asc", "desc"),
+					queryParameter("after", "Return results after this cursor.", "string"),
+					queryParameter("before", "Return results before this cursor; mutually exclusive with after.", "string"),
+				},
+			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListVectorStores,
 		),
@@ -389,7 +500,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: "/v1/vector_stores/{id}", Method: "POST", Description: "Update a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleUpdateVectorStore,
-			jsonBodyWithLimit(maxVectorStoreJSONBodySize),
+			jsonBodyWithLimitFor[vectorstore.UpdateStoreRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/v1/vector_stores/{id}", Method: "DELETE", Description: "Delete a vector store"},
@@ -400,13 +511,13 @@ func apiVectorStoreRoutes() []apiRoute {
 			EndpointMetadata{Path: "/v1/vector_stores/{id}/search", Method: "POST", Description: "Search a vector store"},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleSearchVectorStore,
-			jsonBodyWithLimit(maxVectorStoreJSONBodySize),
+			jsonBodyWithLimitFor[SearchRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/v1/vector_stores/{id}/files", Method: "POST", Description: "Attach a file to a vector store"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleAttachFile,
-			jsonBodyWithLimit(maxVectorStoreJSONBodySize),
+			jsonBodyWithLimitFor[AttachFileRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
 			EndpointMetadata{Path: "/v1/vector_stores/{id}/files", Method: "GET", Description: "List files attached to a vector store"},
@@ -427,10 +538,17 @@ func apiFileRoutes() []apiRoute {
 			EndpointMetadata{Path: "/v1/files", Method: "POST", Description: "Upload a file"},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleUploadFile,
-			multipartBody(maxUploadSize, "Multipart upload with a file field and optional purpose field."),
+			multipartBody(maxUploadSize, "Multipart upload with a file field and optional purpose field. Documents (.txt, .md, .json, .csv, .html) by default; images (.png, .jpg, .jpeg, .gif, .webp) with purpose=vision."),
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/files", Method: "GET", Description: "List uploaded files"},
+			EndpointMetadata{
+				Path:        "/v1/files",
+				Method:      "GET",
+				Description: "List uploaded files",
+				Parameters: []OpenAPIParameter{
+					queryParameter("purpose", "Filter files by purpose.", "string"),
+				},
+			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleListFiles,
 		),

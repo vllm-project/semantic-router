@@ -264,6 +264,14 @@ func validateLLMClassifierExternalDependency(
 			rule.Model,
 		)
 	}
+	parserType := strings.ToLower(strings.TrimSpace(external.ParserType))
+	if parserType != "" && parserType != "json" {
+		return fmt.Errorf(
+			"routing.signals.classifiers[%q]: external model %q parser_type must be json for llm classifiers",
+			rule.Name,
+			rule.Model,
+		)
+	}
 	return validateClassifierExternalEndpoint(rule, external)
 }
 

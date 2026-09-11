@@ -1,0 +1,22 @@
+id: hugging-face
+display_name: Hugging Face
+description: Models served through the Hugging Face router.
+category: model_api
+support_tier: compatible
+default_base_url: https://router.huggingface.co/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:huggingface
+  monogram: HF
+  monochrome: false
+conformance:
+  status: unverified

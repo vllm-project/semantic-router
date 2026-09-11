@@ -2,33 +2,20 @@
 
 import sys
 
-from cli.config_contract import iter_routing_profiles
+from cli.catalog_provider_projection import (
+    CatalogProviderProjectionError,
+    validate_provider_model_configuration,
+)
+from cli.config_contract import (
+    PROJECTION_FAMILY_SPECS,
+    SIGNAL_FAMILY_SPECS,
+    iter_routing_profiles,
+)
+from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
 from cli.terminal import echo, error, fields, heading, success
+from cli.validation_error import ValidationError
 from cli.validator import print_validation_errors, validate_user_config
-
-_SIGNAL_SUMMARY_FIELDS = (
-    ("Keyword signals", "keywords"),
-    ("Embedding signals", "embeddings"),
-    ("Domains", "domains"),
-    ("Fact check signals", "fact_check"),
-    ("User feedback signals", "user_feedbacks"),
-    ("Reask signals", "reasks"),
-    ("Preference signals", "preferences"),
-    ("Language signals", "language"),
-    ("Context signals", "context"),
-    ("Structure signals", "structure"),
-    ("Complexity signals", "complexity"),
-    ("Modality signals", "modality"),
-    ("Authz signals", "role_bindings"),
-    ("Jailbreak signals", "jailbreak"),
-    ("PII signals", "pii"),
-    ("Knowledge-base signals", "kb"),
-    ("Conversation signals", "conversation"),
-    ("Event signals", "events"),
-    ("Metadata signals", "metadata"),
-    ("Classifier signals", "classifiers"),
-)
 
 
 def _count_items(value) -> int:
@@ -41,10 +28,10 @@ def _signal_summary_lines(signals) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
-        count = _count_items(getattr(signals, field_name, None))
+    for spec in SIGNAL_FAMILY_SPECS:
+        count = _count_items(getattr(signals, spec.signal_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
@@ -53,44 +40,36 @@ def _projection_summary_lines(projections) -> list[str]:
         return []
 
     lines = []
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
-        count = _count_items(getattr(projections, field_name, None))
+    for spec in PROJECTION_FAMILY_SPECS:
+        count = _count_items(getattr(projections, spec.projection_attr, None))
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 
 def _aggregate_signal_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
+    for spec in SIGNAL_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.signals, field_name, None))
+            _count_items(getattr(profile.signals, spec.signal_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  {spec.display_name}: {count}")
     return lines
 
 
 def _aggregate_projection_summary_lines(routing_profiles) -> list[str]:
     lines = []
     profiles = list(routing_profiles)
-    for label, field_name in (
-        ("Projection partitions", "partitions"),
-        ("Projection scores", "scores"),
-        ("Projection mappings", "mappings"),
-    ):
+    for spec in PROJECTION_FAMILY_SPECS:
         count = sum(
-            _count_items(getattr(profile.projections, field_name, None))
+            _count_items(getattr(profile.projections, spec.projection_attr, None))
             for _, profile in profiles
         )
         if count > 0:
-            lines.append(f"  {label}: {count}")
+            lines.append(f"  Projection {spec.display_name.lower()}: {count}")
     return lines
 
 
@@ -119,6 +98,26 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
+def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
+    """Validate the same provider projection used by Envoy generation.
+
+    Projection works on deep copies and resolves only structural catalog
+    defaults. It neither reads provider credentials nor mutates the authored
+    configuration, so it is safe for the validation-only command path.
+    """
+
+    try:
+        validate_provider_model_configuration(
+            config,
+            allow_backendless_physical=(
+                "listeners" in config.model_fields_set and not config.listeners
+            ),
+        )
+    except CatalogProviderProjectionError as projection_error:
+        return [ValidationError(str(projection_error))]
+    return []
+
+
 def validate_command(config_path: str):
     """
     Validate user configuration.
@@ -135,6 +134,8 @@ def validate_command(config_path: str):
 
     # Validate config
     errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(_provider_projection_errors(user_config))
 
     if errors:
         print_validation_errors(errors)

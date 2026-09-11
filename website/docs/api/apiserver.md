@@ -10,13 +10,14 @@ For model traffic, use the configured Envoy listener described in
 ## Start with the live schema
 
 The running router generates its endpoint discovery and OpenAPI document from
-the routes it has registered. Use these pages for exact request and response
-fields:
+the routes it has registered. Use these pages for registered methods, path and
+query parameters, request-body fields, access policy, and response media:
 
 | Path | Purpose |
 | --- | --- |
-| `GET /api/v1` | Endpoint discovery |
-| `GET /openapi.json` | OpenAPI 3.0 document |
+| `GET /api/v1` | Endpoint discovery with permission and sensitivity metadata |
+| `GET /openapi.json` | Complete OpenAPI 3.0 document |
+| `GET /openapi.json?path=...&method=...` | One valid path or operation document |
 | `GET /docs` | Interactive Swagger UI |
 
 This page groups the API by user task. The live OpenAPI document is the
@@ -25,7 +26,12 @@ field-level source of truth for the version you are running.
 ```bash
 curl -sS http://localhost:8080/health
 curl -sS http://localhost:8080/openapi.json
+curl -sS 'http://localhost:8080/openapi.json?path=/config/router&method=PATCH'
 ```
+
+Agents should call these Router endpoints directly; the Dashboard is not part
+of the discovery path. The Website also renders the generated contract in the
+[searchable OpenAPI reference](./openapi).
 
 ## Access and authentication
 
@@ -57,7 +63,7 @@ permission.
 | `GET` | `/ready` | Whether startup has completed |
 | `GET` | `/startup-status` | Startup and model-download progress |
 | `GET` | `/api/v1` | Registered endpoint discovery |
-| `GET` | `/openapi.json` | Generated OpenAPI schema |
+| `GET` | `/openapi.json` | Generated OpenAPI schema, optionally narrowed by exact `path` and `method` |
 | `GET` | `/docs` | Swagger UI |
 
 Use `/health` for liveness and `/ready` for readiness. During model download or
@@ -161,7 +167,11 @@ OpenAI-compatible storage and router memory:
 | Files | `/v1/files` | Upload, list, inspect, download, and delete |
 
 These routes return `503` when their required service is unavailable. File
-upload uses multipart form data; consult the live schema for limits and fields.
+upload uses multipart form data and accepts documents (`.txt`, `.md`, `.json`,
+`.csv`, `.html`) for vector-store ingestion; upload an image (`.png`, `.jpg`,
+`.jpeg`, `.gif`, `.webp`) with `purpose=vision` to reference it from a Response
+API `input_image` part by `file_id`. Consult the live schema for limits and
+fields.
 
 ## Operate the response cache
 
@@ -247,7 +257,7 @@ for guidance and the running `/openapi.json` for exact schemas.
 | `GET` | `/ready` | Readiness endpoint that turns green only after startup completes |
 | `GET` | `/startup-status` | Detailed router startup and model-download status |
 | `GET` | `/api/v1` | API discovery and documentation |
-| `GET` | `/openapi.json` | OpenAPI 3.0 specification |
+| `GET` | `/openapi.json` | OpenAPI 3.0 specification; optionally narrowed to one path or operation |
 | `GET` | `/docs` | Interactive Swagger UI documentation |
 
 ### Classification and signals
@@ -287,6 +297,7 @@ for guidance and the running `/openapi.json` for exact schemas.
 | `GET` | `/config/router/recipes/{name}` | Read one routing recipe and its entrypoints |
 | `PUT` | `/config/router/recipes/{name}` | Atomically create or replace one routing recipe; requires If-Match |
 | `DELETE` | `/config/router/recipes/{name}` | Delete an unreferenced named routing recipe; requires If-Match |
+| `GET` | `/config/router/schema` | Discover the canonical Router configuration contract progressively or return the complete JSON Schema |
 | `GET` | `/config/router` | Get the current router config as JSON (secrets redacted without secret_view) |
 | `POST` | `/config/router/validate` | Validate and normalize a router config without writing it |
 | `PATCH` | `/config/router` | Merge a router config update (validates, backs up, writes, triggers hot-reload) |

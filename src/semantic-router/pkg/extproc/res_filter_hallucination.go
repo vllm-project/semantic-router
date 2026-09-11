@@ -7,6 +7,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -25,6 +26,15 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 	ctx *RequestContext,
 	assistantContent string,
 ) *ext_proc.ProcessingResponse {
+	// With hallucination rules declared, detection already ran as a
+	// response-stage signal and this plugin only consumes it. Without them it
+	// still owns detection, so an existing configuration keeps working
+	// unchanged.
+	if r.hallucinationSignalDeclared(ctx) {
+		r.consumeHallucinationSignal(ctx)
+		return nil
+	}
+
 	// Only run if conditions are met
 	if !r.shouldPerformHallucinationDetection(ctx) {
 		return nil
@@ -49,6 +59,7 @@ func (r *OpenAIRouter) performHallucinationDetectionText(
 	// Use basic hallucination detection
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucination(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -93,6 +104,7 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	classifier := r.classifierForRequest(ctx)
 	result, err := classifier.DetectHallucinationWithNLI(
+		ctx.embeddingContext(),
 		ctx.ToolResultsContext,
 		ctx.UserContent,
 		assistantContent,
@@ -112,30 +124,12 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 		return nil
 	}
 
-	// Record result to context
-	ctx.HallucinationDetected = result.HallucinationDetected
-	ctx.HallucinationConfidence = result.Confidence
-
-	// Convert enhanced spans to context format
-	if len(result.Spans) > 0 {
-		ctx.EnhancedHallucinationInfo = &EnhancedHallucinationInfo{
-			Confidence: result.Confidence,
-			Spans:      make([]EnhancedHallucinationSpan, 0, len(result.Spans)),
-		}
-		for _, span := range result.Spans {
-			ctx.HallucinationSpans = append(ctx.HallucinationSpans, span.Text)
-			ctx.EnhancedHallucinationInfo.Spans = append(ctx.EnhancedHallucinationInfo.Spans, EnhancedHallucinationSpan{
-				Text:                    span.Text,
-				Start:                   span.Start,
-				End:                     span.End,
-				HallucinationConfidence: span.HallucinationConfidence,
-				NLILabel:                span.NLILabelStr,
-				NLIConfidence:           span.NLIConfidence,
-				Severity:                span.Severity,
-				Explanation:             span.Explanation,
-			})
-		}
-	}
+	// Record result to context, shaped exactly as the signal path shapes it.
+	evidence := hallucinationEvidenceFromNLI(result)
+	ctx.HallucinationDetected = evidence.Detected
+	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.HallucinationSpans = append(ctx.HallucinationSpans, evidence.Spans...)
+	ctx.EnhancedHallucinationInfo = evidence.Enhanced
 
 	decisionName := requestDecisionStateKey(ctx)
 
@@ -149,6 +143,38 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 	}
 
 	return nil
+}
+
+// consumeHallucinationSignal is the plugin's path once hallucination rules
+// are declared: it reads the published observation and carries it into the
+// fields its actions read, so a disabled plugin leaves the evidence on record
+// without acting on it. Nothing is classified here.
+func (r *OpenAIRouter) consumeHallucinationSignal(ctx *RequestContext) {
+	if !r.isHallucinationEnabledForDecision(ctx.VSRSelectedDecision) {
+		return
+	}
+	matched, failureCode, observed := r.hallucinationSignalOutcome(ctx)
+	decisionName := requestDecisionStateKey(ctx)
+	if failureCode != "" {
+		metrics.RecordPluginExecution("hallucination", decisionName, "unresolved", 0)
+		logging.Debugf("Hallucination signal unresolved for decision %s: %s", decisionName, failureCode)
+		return
+	}
+	evidence := ctx.VSRHallucinationEvidence
+	if !observed || evidence == nil {
+		return
+	}
+	ctx.HallucinationDetected = matched
+	ctx.HallucinationSpans = evidence.Spans
+	ctx.HallucinationConfidence = evidence.Confidence
+	ctx.EnhancedHallucinationInfo = evidence.Enhanced
+	if matched {
+		metrics.RecordPluginExecution("hallucination", decisionName, "detected", 0)
+		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d, action=%s",
+			evidence.Confidence, len(evidence.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
+		return
+	}
+	metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", 0)
 }
 
 // isNLIEnabledForDecision checks if NLI is enabled for the given decision's hallucination plugin
@@ -267,8 +293,14 @@ func severityToString(severity int) string {
 // checkUnverifiedFactualResponse checks if the response is a fact-check-needed prompt
 // without tool context, and marks it as unverified
 func (r *OpenAIRouter) checkUnverifiedFactualResponse(ctx *RequestContext) {
-	// Only applies when fact-check is needed but no tools are available
-	if !ctx.FactCheckNeeded || ctx.HasToolsForFactCheck {
+	if r.hallucinationSignalDeclared(ctx) {
+		// The signal already said whether the answer could be checked: an
+		// answer with no grounding context is the unverified-factual case.
+		if _, code, _ := r.hallucinationSignalOutcome(ctx); code != classification.HallucinationSignalContextUnavailable {
+			return
+		}
+	} else if !ctx.FactCheckNeeded || ctx.HasToolsForFactCheck {
+		// Only applies when fact-check is needed but no tools are available
 		return
 	}
 

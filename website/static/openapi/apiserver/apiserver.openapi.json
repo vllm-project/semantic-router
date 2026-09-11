@@ -17,6 +17,12 @@
         "summary": "API discovery and documentation",
         "description": "API discovery and documentation",
         "operationId": "get_api_v1",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -54,7 +60,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "docs.read",
+        "x-vllm-sr-sensitivity": "public"
       }
     },
     "/api/v1/classify/batch": {
@@ -62,6 +70,12 @@
         "summary": "Batch classification with configurable task_type parameter",
         "description": "Batch classification with configurable task_type parameter",
         "operationId": "post_api_v1_classify_batch",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -132,11 +146,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "include_explanation": {
+                        "type": "boolean"
+                      },
+                      "return_probabilities": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "task_type": {
+                    "type": "string"
+                  },
+                  "texts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "texts"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/combined": {
@@ -144,6 +188,12 @@
         "summary": "Perform combined classification (intent, PII, and security)",
         "description": "Perform combined classification (intent, PII, and security)",
         "operationId": "post_api_v1_classify_combined",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -214,11 +264,81 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "intent_options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "evaluate_all_signals": {
+                        "type": "boolean"
+                      },
+                      "include_explanation": {
+                        "type": "boolean"
+                      },
+                      "return_probabilities": {
+                        "type": "boolean"
+                      },
+                      "trace": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "pii_options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "entity_types": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "mask_entities": {
+                        "type": "boolean"
+                      },
+                      "return_positions": {
+                        "type": "boolean"
+                      },
+                      "reveal_entity_text": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "security_options": {
+                    "type": "object",
+                    "properties": {
+                      "detection_types": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "include_reasoning": {
+                        "type": "boolean"
+                      },
+                      "sensitivity": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/fact-check": {
@@ -226,6 +346,12 @@
         "summary": "Classify if text needs fact-checking",
         "description": "Classify if text needs fact-checking",
         "operationId": "post_api_v1_classify_fact_check",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -296,11 +422,29 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/intent": {
@@ -308,6 +452,12 @@
         "summary": "Classify user queries into routing categories",
         "description": "Classify user queries into routing categories",
         "operationId": "post_api_v1_classify_intent",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -378,11 +528,89 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "function_call": {},
+                  "functions": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "max_completion_tokens": {},
+                  "max_tokens": {},
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "content": {},
+                        "function_call": {},
+                        "name": {
+                          "type": "string"
+                        },
+                        "reasoning_content": {},
+                        "refusal": {},
+                        "role": {
+                          "type": "string"
+                        },
+                        "tool_call_id": {
+                          "type": "string"
+                        },
+                        "tool_calls": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      },
+                      "required": [
+                        "role",
+                        "content"
+                      ]
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "evaluate_all_signals": {
+                        "type": "boolean"
+                      },
+                      "include_explanation": {
+                        "type": "boolean"
+                      },
+                      "return_probabilities": {
+                        "type": "boolean"
+                      },
+                      "trace": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "response_format": {},
+                  "text": {
+                    "type": "string"
+                  },
+                  "tool_choice": {},
+                  "tools": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/pii": {
@@ -390,6 +618,12 @@
         "summary": "Detect personally identifiable information in text",
         "description": "Detect personally identifiable information in text",
         "operationId": "post_api_v1_classify_pii",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -460,11 +694,44 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "entity_types": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "mask_entities": {
+                        "type": "boolean"
+                      },
+                      "return_positions": {
+                        "type": "boolean"
+                      },
+                      "reveal_entity_text": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/security": {
@@ -472,6 +739,12 @@
         "summary": "Detect jailbreak attempts and security threats",
         "description": "Detect jailbreak attempts and security threats",
         "operationId": "post_api_v1_classify_security",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -542,11 +815,38 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "detection_types": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "include_reasoning": {
+                        "type": "boolean"
+                      },
+                      "sensitivity": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/classify/user-feedback": {
@@ -554,6 +854,12 @@
         "summary": "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)",
         "description": "Classify user feedback type (satisfied, need_clarification, wrong_answer, want_different)",
         "operationId": "post_api_v1_classify_user_feedback",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -624,11 +930,29 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/context-compression/capabilities": {
@@ -636,6 +960,12 @@
         "summary": "Get context-compression capabilities",
         "description": "Get context-compression capabilities",
         "operationId": "get_api_v1_context_compression_capabilities",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -673,7 +1003,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "compression.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/context-compression/health": {
@@ -681,6 +1013,12 @@
         "summary": "Check context-compression runtime health",
         "description": "Check context-compression runtime health",
         "operationId": "get_api_v1_context_compression_health",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -718,7 +1056,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "compression.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/context-compression/preview": {
@@ -726,6 +1066,12 @@
         "summary": "Preview context compression without persistence",
         "description": "Preview context compression without persistence",
         "operationId": "post_api_v1_context_compression_preview",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -796,11 +1142,37 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "configuration": {},
+                  "context_window": {
+                    "type": "integer"
+                  },
+                  "max_output_tokens": {
+                    "type": "integer"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "request_body": {},
+                  "requested_output_tokens": {
+                    "type": "integer"
+                  },
+                  "trusted_scope_present": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "configuration",
+                  "request_body"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "compression.preview",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-audit-action": "compression.preview"
       }
     },
     "/api/v1/context-compression/recovery/invalidate": {
@@ -808,6 +1180,12 @@
         "summary": "Invalidate a trusted context-recovery request scope",
         "description": "Invalidate a trusted context-recovery request scope",
         "operationId": "post_api_v1_context_compression_recovery_invalidate",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -878,11 +1256,34 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string"
+                  },
+                  "recipe": {
+                    "type": "string"
+                  },
+                  "request_id": {
+                    "type": "string"
+                  },
+                  "user_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "recipe",
+                  "decision",
+                  "user_id",
+                  "request_id"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "compression.manage",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "compression.recovery.invalidate"
       }
     },
     "/api/v1/context-compression/stats": {
@@ -890,6 +1291,12 @@
         "summary": "Get redacted context-compression statistics",
         "description": "Get redacted context-compression statistics",
         "operationId": "get_api_v1_context_compression_stats",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -927,7 +1334,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "compression.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/embeddings": {
@@ -935,6 +1344,12 @@
         "summary": "Generate text and image embeddings",
         "description": "Generate text and image embeddings",
         "operationId": "post_api_v1_embeddings",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1005,11 +1420,45 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "type": "integer"
+                  },
+                  "images": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "latency_priority": {
+                    "type": "number"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "quality_priority": {
+                    "type": "number"
+                  },
+                  "sequence_length": {
+                    "type": "integer"
+                  },
+                  "target_layer": {
+                    "type": "integer"
+                  },
+                  "texts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/embeddings/models": {
@@ -1017,6 +1466,12 @@
         "summary": "Get information about loaded embedding models",
         "description": "Get information about loaded embedding models",
         "operationId": "get_api_v1_embeddings_models",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1054,7 +1509,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/api/v1/eval": {
@@ -1062,6 +1519,22 @@
         "summary": "Evaluate all configured signals regardless of decision usage",
         "description": "Evaluate all configured signals regardless of decision usage",
         "operationId": "post_api_v1_eval",
+        "parameters": [
+          {
+            "name": "trace",
+            "in": "query",
+            "description": "Include per-decision evaluation trace trees.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1132,11 +1605,89 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "function_call": {},
+                  "functions": {
+                    "type": "array",
+                    "items": {}
+                  },
+                  "max_completion_tokens": {},
+                  "max_tokens": {},
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "content": {},
+                        "function_call": {},
+                        "name": {
+                          "type": "string"
+                        },
+                        "reasoning_content": {},
+                        "refusal": {},
+                        "role": {
+                          "type": "string"
+                        },
+                        "tool_call_id": {
+                          "type": "string"
+                        },
+                        "tool_calls": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      },
+                      "required": [
+                        "role",
+                        "content"
+                      ]
+                    }
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "object",
+                    "properties": {
+                      "confidence_threshold": {
+                        "type": "number"
+                      },
+                      "evaluate_all_signals": {
+                        "type": "boolean"
+                      },
+                      "include_explanation": {
+                        "type": "boolean"
+                      },
+                      "return_probabilities": {
+                        "type": "boolean"
+                      },
+                      "trace": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "response_format": {},
+                  "text": {
+                    "type": "string"
+                  },
+                  "tool_choice": {},
+                  "tools": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/nli": {
@@ -1144,6 +1695,12 @@
         "summary": "Natural language inference classification for premise and hypothesis pairs",
         "description": "Natural language inference classification for premise and hypothesis pairs",
         "operationId": "post_api_v1_nli",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1214,11 +1771,25 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "hypothesis": {
+                    "type": "string"
+                  },
+                  "premise": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "premise",
+                  "hypothesis"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/response-cache/audit": {
@@ -1226,6 +1797,12 @@
         "summary": "Get redacted response-cache mutation audit entries",
         "description": "Get redacted response-cache mutation audit entries",
         "operationId": "get_api_v1_response_cache_audit",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1263,7 +1840,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/response-cache/capabilities": {
@@ -1271,6 +1850,12 @@
         "summary": "Get response-cache backend capabilities",
         "description": "Get response-cache backend capabilities",
         "operationId": "get_api_v1_response_cache_capabilities",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1308,7 +1893,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/response-cache/flush": {
@@ -1316,6 +1903,12 @@
         "summary": "Advance a scoped or global response-cache epoch",
         "description": "Advance a scoped or global response-cache epoch",
         "operationId": "post_api_v1_response_cache_flush",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1386,11 +1979,57 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string"
+                  },
+                  "selector": {
+                    "type": "object",
+                    "properties": {
+                      "epoch": {
+                        "type": "string"
+                      },
+                      "partition": {
+                        "type": "object",
+                        "properties": {
+                          "decision": {
+                            "type": "string"
+                          },
+                          "epoch": {
+                            "type": "string"
+                          },
+                          "namespace": {
+                            "type": "string"
+                          },
+                          "protocol": {
+                            "type": "string"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "request_model": {
+                            "type": "string"
+                          },
+                          "selected_model": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "selector",
+                  "confirm"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.manage",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "cache.flush"
       }
     },
     "/api/v1/response-cache/health": {
@@ -1398,6 +2037,12 @@
         "summary": "Check response-cache backend health",
         "description": "Check response-cache backend health",
         "operationId": "get_api_v1_response_cache_health",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1435,7 +2080,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/response-cache/invalidate": {
@@ -1443,6 +2090,12 @@
         "summary": "Dry-run or invalidate a scoped response-cache partition",
         "description": "Dry-run or invalidate a scoped response-cache partition",
         "operationId": "post_api_v1_response_cache_invalidate",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1513,11 +2166,56 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean"
+                  },
+                  "selector": {
+                    "type": "object",
+                    "properties": {
+                      "epoch": {
+                        "type": "string"
+                      },
+                      "partition": {
+                        "type": "object",
+                        "properties": {
+                          "decision": {
+                            "type": "string"
+                          },
+                          "epoch": {
+                            "type": "string"
+                          },
+                          "namespace": {
+                            "type": "string"
+                          },
+                          "protocol": {
+                            "type": "string"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "request_model": {
+                            "type": "string"
+                          },
+                          "selected_model": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "selector"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.invalidate",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "cache.invalidate"
       }
     },
     "/api/v1/response-cache/stats": {
@@ -1525,6 +2223,12 @@
         "summary": "Get redacted response-cache statistics",
         "description": "Get redacted response-cache statistics",
         "operationId": "get_api_v1_response_cache_stats",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1562,7 +2266,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/response-cache/test": {
@@ -1570,6 +2276,12 @@
         "summary": "Validate and probe a response-cache candidate configuration",
         "description": "Validate and probe a response-cache candidate configuration",
         "operationId": "post_api_v1_response_cache_test",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1640,11 +2352,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "configuration": {}
+                },
+                "required": [
+                  "configuration"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "cache.manage",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/similarity": {
@@ -1652,6 +2372,12 @@
         "summary": "Calculate pairwise text similarity",
         "description": "Calculate pairwise text similarity",
         "operationId": "post_api_v1_similarity",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1722,11 +2448,40 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dimension": {
+                    "type": "integer"
+                  },
+                  "latency_priority": {
+                    "type": "number"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "quality_priority": {
+                    "type": "number"
+                  },
+                  "target_layer": {
+                    "type": "integer"
+                  },
+                  "text1": {
+                    "type": "string"
+                  },
+                  "text2": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text1",
+                  "text2"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/api/v1/similarity/batch": {
@@ -1734,6 +2489,12 @@
         "summary": "Calculate batch text-similarity matches",
         "description": "Calculate batch text-similarity matches",
         "operationId": "post_api_v1_similarity_batch",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1804,11 +2565,46 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "dimension": {
+                    "type": "integer"
+                  },
+                  "latency_priority": {
+                    "type": "number"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "quality_priority": {
+                    "type": "number"
+                  },
+                  "query": {
+                    "type": "string"
+                  },
+                  "target_layer": {
+                    "type": "integer"
+                  },
+                  "top_k": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "query",
+                  "candidates"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "classify.invoke",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/config/hash": {
@@ -1816,6 +2612,12 @@
         "summary": "Compare persisted source, generated runtime, and active router config hashes",
         "description": "Compare persisted source, generated runtime, and active router config hashes",
         "operationId": "get_config_hash",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1853,7 +2655,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/config/kbs": {
@@ -1861,6 +2665,12 @@
         "summary": "List configured knowledge bases",
         "description": "List configured knowledge bases",
         "operationId": "get_config_kbs",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1898,12 +2708,20 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "post": {
         "summary": "Create a managed knowledge base",
         "description": "Create a managed knowledge base",
         "operationId": "post_config_kbs",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -1974,11 +2792,92 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "label_thresholds": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "exemplars": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "exemplars"
+                      ]
+                    }
+                  },
+                  "metrics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "negative_group": {
+                          "type": "string"
+                        },
+                        "positive_group": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ]
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "threshold",
+                  "labels"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "knowledge_base.save"
       }
     },
     "/config/kbs/{name}": {
@@ -1997,6 +2896,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2034,7 +2939,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "put": {
         "summary": "Update a managed knowledge base",
@@ -2049,6 +2956,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -2121,11 +3034,92 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "groups": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "label_thresholds": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  },
+                  "labels": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "exemplars": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "exemplars"
+                      ]
+                    }
+                  },
+                  "metrics": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "negative_group": {
+                          "type": "string"
+                        },
+                        "positive_group": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ]
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "threshold",
+                  "labels"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "knowledge_base.save"
       },
       "delete": {
         "summary": "Delete a managed knowledge base",
@@ -2140,6 +3134,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -2179,7 +3179,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "knowledge_base.delete"
       }
     },
     "/config/kbs/{name}/map/data.ndjson": {
@@ -2198,6 +3201,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2235,7 +3244,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/config/kbs/{name}/map/metadata": {
@@ -2254,6 +3265,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2291,7 +3308,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/config/router": {
@@ -2299,6 +3318,12 @@
         "summary": "Get the current router config as JSON (secrets redacted without secret_view)",
         "description": "Get the current router config as JSON (secrets redacted without secret_view)",
         "operationId": "get_config_router",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2336,12 +3361,30 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "secret_view"
       },
       "patch": {
         "summary": "Merge a router config update (validates, backs up, writes, triggers hot-reload)",
         "description": "Merge a router config update (validates, backs up, writes, triggers hot-reload)",
         "operationId": "patch_config_router",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Optional ETag precondition returned by GET /config/router.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2412,16 +3455,46 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dsl": {
+                    "type": "string"
+                  },
+                  "yaml": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "yaml"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "config.patch"
       },
       "put": {
         "summary": "Replace the router config (validates, backs up, writes, triggers hot-reload)",
         "description": "Replace the router config (validates, backs up, writes, triggers hot-reload)",
         "operationId": "put_config_router",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Optional ETag precondition returned by GET /config/router.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2492,11 +3565,25 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dsl": {
+                    "type": "string"
+                  },
+                  "yaml": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "yaml"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "config.put"
       }
     },
     "/config/router/recipes": {
@@ -2504,6 +3591,12 @@
         "summary": "List the default and named routing recipes with their entrypoints",
         "description": "List the default and named routing recipes with their entrypoints",
         "operationId": "get_config_router_recipes",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2541,7 +3634,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "secret_view"
       }
     },
     "/config/router/recipes/validate": {
@@ -2549,6 +3644,12 @@
         "summary": "Validate a recipe mutation without writing or reloading config",
         "description": "Validate a recipe mutation without writing or reloading config",
         "operationId": "post_config_router_recipes_validate",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2619,11 +3720,35 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "entrypoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "routing": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "routing"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "recipe.save"
       }
     },
     "/config/router/recipes/{name}": {
@@ -2642,6 +3767,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2679,7 +3810,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "secret_view"
       },
       "put": {
         "summary": "Atomically create or replace one routing recipe; requires If-Match",
@@ -2694,6 +3827,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "ETag returned by the current recipe or recipe collection.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -2766,11 +3914,35 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string"
+                  },
+                  "entrypoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "routing": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": [
+                  "routing"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "recipe.save"
       },
       "delete": {
         "summary": "Delete an unreferenced named routing recipe; requires If-Match",
@@ -2785,6 +3957,21 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "ETag returned by the current recipe or recipe collection.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -2824,7 +4011,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "recipe.delete"
       }
     },
     "/config/router/rollback": {
@@ -2832,6 +4022,12 @@
         "summary": "Rollback to a previous router config version",
         "description": "Rollback to a previous router config version",
         "operationId": "post_config_router_rollback",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2902,11 +4098,121 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "config.rollback"
+      }
+    },
+    "/config/router/schema": {
+      "get": {
+        "summary": "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
+        "description": "Discover the canonical Router configuration contract progressively or return the complete JSON Schema",
+        "operationId": "get_config_router_schema",
+        "parameters": [
+          {
+            "name": "view",
+            "in": "query",
+            "description": "Representation to return. Omit for the compact index; use full for the complete schema.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "full",
+                "index",
+                "section",
+                "surface"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Dot- or slash-delimited config path required by view=section.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Surface kind required by view=surface.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "signal",
+                "algorithm",
+                "plugin",
+                "projection"
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "description": "Registered surface name required by view=surface.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "docs.read",
+        "x-vllm-sr-sensitivity": "public"
       }
     },
     "/config/router/validate": {
@@ -2914,6 +4220,12 @@
         "summary": "Validate and normalize a router config without writing it",
         "description": "Validate and normalize a router config without writing it",
         "operationId": "post_config_router_validate",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2984,11 +4296,24 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "dsl": {
+                    "type": "string"
+                  },
+                  "yaml": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "yaml"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/config/router/versions": {
@@ -2996,6 +4321,12 @@
         "summary": "List available router config backup versions",
         "description": "List available router config backup versions",
         "operationId": "get_config_router_versions",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3033,7 +4364,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/docs": {
@@ -3041,6 +4374,12 @@
         "summary": "Interactive Swagger UI documentation",
         "description": "Interactive Swagger UI documentation",
         "operationId": "get_docs",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3078,7 +4417,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "docs.read",
+        "x-vllm-sr-sensitivity": "public"
       }
     },
     "/health": {
@@ -3123,7 +4464,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "health.read",
+        "x-vllm-sr-sensitivity": "public"
       }
     },
     "/info/classifier": {
@@ -3131,6 +4474,12 @@
         "summary": "Get classifier information and status (secrets redacted without secret_view)",
         "description": "Get classifier information and status (secrets redacted without secret_view)",
         "operationId": "get_info_classifier",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3168,7 +4517,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "secret_view"
       }
     },
     "/info/models": {
@@ -3176,6 +4527,12 @@
         "summary": "Get information about loaded models",
         "description": "Get information about loaded models",
         "operationId": "get_info_models",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3213,7 +4570,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/metrics/classification": {
@@ -3221,6 +4580,12 @@
         "summary": "Get classification metrics and statistics",
         "description": "Get classification metrics and statistics",
         "operationId": "get_metrics_classification",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3258,14 +4623,47 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "metrics.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/openapi.json": {
       "get": {
-        "summary": "OpenAPI 3.0 specification",
-        "description": "OpenAPI 3.0 specification",
+        "summary": "OpenAPI 3.0 specification; optionally narrowed to one path or operation",
+        "description": "OpenAPI 3.0 specification; optionally narrowed to one path or operation",
         "operationId": "get_openapi_json",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Exact API path to return, for example /config/router.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "method",
+            "in": "query",
+            "description": "HTTP method to return for the selected path.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST",
+                "PATCH",
+                "PUT",
+                "DELETE"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3303,7 +4701,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "docs.read",
+        "x-vllm-sr-sensitivity": "public"
       }
     },
     "/ready": {
@@ -3311,6 +4711,12 @@
         "summary": "Readiness endpoint that turns green only after startup completes",
         "description": "Readiness endpoint that turns green only after startup completes",
         "operationId": "get_ready",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3348,7 +4754,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "ready.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/startup-status": {
@@ -3356,6 +4764,12 @@
         "summary": "Detailed router startup and model-download status",
         "description": "Detailed router startup and model-download status",
         "operationId": "get_startup_status",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3393,7 +4807,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "ready.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     },
     "/v1/files": {
@@ -3401,6 +4817,22 @@
         "summary": "List uploaded files",
         "description": "List uploaded files",
         "operationId": "get_v1_files",
+        "parameters": [
+          {
+            "name": "purpose",
+            "in": "query",
+            "description": "Filter files by purpose.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3438,12 +4870,20 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "post": {
         "summary": "Upload a file",
         "description": "Upload a file",
         "operationId": "post_v1_files",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3509,7 +4949,7 @@
           }
         },
         "requestBody": {
-          "description": "Multipart upload with a file field and optional purpose field. Limit: 52428800 bytes.",
+          "description": "Multipart upload with a file field and optional purpose field. Documents (.txt, .md, .json, .csv, .html) by default; images (.png, .jpg, .jpeg, .gif, .webp) with purpose=vision. Limit: 52428800 bytes.",
           "required": true,
           "content": {
             "multipart/form-data": {
@@ -3527,7 +4967,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/files/{id}": {
@@ -3546,58 +4989,10 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "error": {
-                      "type": "object",
-                      "properties": {
-                        "code": {
-                          "type": "string"
-                        },
-                        "message": {
-                          "type": "string"
-                        },
-                        "timestamp": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete an uploaded file",
-        "description": "Delete an uploaded file",
-        "operationId": "delete_v1_files_id",
-        "parameters": [
+        "security": [
+          {},
           {
-            "name": "id",
-            "in": "path",
-            "description": "id path parameter",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -3637,7 +5032,72 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
+      },
+      "delete": {
+        "summary": "Delete an uploaded file",
+        "description": "Delete an uploaded file",
+        "operationId": "delete_v1_files_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "id path parameter",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/files/{id}/content": {
@@ -3656,6 +5116,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3693,7 +5159,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/v1/memory": {
@@ -3701,6 +5169,38 @@
         "summary": "List long-term memories",
         "description": "List long-term memories",
         "operationId": "get_v1_memory",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Development fallback identity when x-authz-user-id is unavailable.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Comma-separated memory types: semantic, procedural, or episodic.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results; defaults to 20 and is capped at 100.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3738,12 +5238,38 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "delete": {
         "summary": "Delete memories by scope",
         "description": "Delete memories by scope",
         "operationId": "delete_v1_memory",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Development fallback identity when x-authz-user-id is unavailable.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Comma-separated memory types to delete: semantic, procedural, or episodic.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3781,7 +5307,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "memory.delete"
       }
     },
     "/v1/memory/{id}": {
@@ -3798,6 +5327,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Development fallback identity when x-authz-user-id is unavailable.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -3837,7 +5380,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "delete": {
         "summary": "Delete one long-term memory",
@@ -3852,6 +5397,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Development fallback identity when x-authz-user-id is unavailable.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -3891,7 +5450,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "memory.delete"
       }
     },
     "/v1/models": {
@@ -3899,6 +5461,12 @@
         "summary": "OpenAI-compatible model listing",
         "description": "OpenAI-compatible model listing",
         "operationId": "get_v1_models",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -3936,7 +5504,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "config"
       }
     },
     "/v1/router/outcomes": {
@@ -3944,6 +5514,22 @@
         "summary": "Submit Router Learning outcome feedback linked to a replay record",
         "description": "Submit Router Learning outcome feedback linked to a replay record",
         "operationId": "post_v1_router_outcomes",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Stable retry key for outcome ingestion.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4014,11 +5600,48 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "replay_id": {
+                    "type": "string"
+                  },
+                  "score": {
+                    "type": "number"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "target_ref": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "replay_id",
+                  "target",
+                  "verdict"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "learning.ingest",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "outcome.ingest"
       }
     },
     "/v1/router_replay": {
@@ -4026,6 +5649,91 @@
         "summary": "List Router Replay records",
         "description": "List Router Replay records",
         "operationId": "get_v1_router_replay",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum records; defaults to 20 and is capped at 100.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Zero-based result offset.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "showDetails",
+            "in": "query",
+            "description": "Include full replay details when the principal has replay_detail permission.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4063,7 +5771,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay"
       }
     },
     "/v1/router_replay/": {
@@ -4071,6 +5781,91 @@
         "summary": "List Router Replay records (trailing-slash compatibility)",
         "description": "List Router Replay records (trailing-slash compatibility)",
         "operationId": "get_v1_router_replay",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum records; defaults to 20 and is capped at 100.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Zero-based result offset.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "showDetails",
+            "in": "query",
+            "description": "Include full replay details when the principal has replay_detail permission.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4108,7 +5903,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay"
       }
     },
     "/v1/router_replay/aggregate": {
@@ -4116,6 +5913,67 @@
         "summary": "Aggregate Router Replay routing and cost metadata",
         "description": "Aggregate Router Replay routing and cost metadata",
         "operationId": "get_v1_router_replay_aggregate",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4153,7 +6011,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay"
       }
     },
     "/v1/router_replay/trajectory": {
@@ -4161,6 +6021,23 @@
         "summary": "Build a Router Replay session trajectory",
         "description": "Build a Router Replay session trajectory",
         "operationId": "get_v1_router_replay_trajectory",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Logical session whose tool trajectory should be returned.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4198,7 +6075,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay"
       }
     },
     "/v1/router_replay/{id}": {
@@ -4217,6 +6096,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4254,7 +6139,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay"
       }
     },
     "/v1/vector_stores": {
@@ -4262,6 +6149,50 @@
         "summary": "List vector stores",
         "description": "List vector stores",
         "operationId": "get_v1_vector_stores",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results; defaults to 20 and is capped at 100.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Sort order by creation time.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Return results after this cursor.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Return results before this cursor; mutually exclusive with after.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4299,12 +6230,20 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "post": {
         "summary": "Create a vector store",
         "description": "Create a vector store",
         "operationId": "post_v1_vector_stores",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4375,11 +6314,41 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "expires_after": {
+                    "type": "object",
+                    "properties": {
+                      "anchor": {
+                        "type": "string"
+                      },
+                      "days": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "anchor",
+                      "days"
+                    ]
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/vector_stores/{id}": {
@@ -4398,6 +6367,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4435,7 +6410,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "post": {
         "summary": "Update a vector store",
@@ -4450,6 +6427,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -4522,11 +6505,38 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "expires_after": {
+                    "type": "object",
+                    "properties": {
+                      "anchor": {
+                        "type": "string"
+                      },
+                      "days": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "anchor",
+                      "days"
+                    ]
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       },
       "delete": {
         "summary": "Delete a vector store",
@@ -4541,6 +6551,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -4580,7 +6596,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/vector_stores/{id}/files": {
@@ -4599,6 +6618,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4636,7 +6661,9 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "config"
       },
       "post": {
         "summary": "Attach a file to a vector store",
@@ -4651,6 +6678,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -4723,11 +6756,48 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "chunking_strategy": {
+                    "type": "object",
+                    "properties": {
+                      "static": {
+                        "type": "object",
+                        "properties": {
+                          "chunk_overlap_tokens": {
+                            "type": "integer"
+                          },
+                          "max_chunk_size_tokens": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "max_chunk_size_tokens",
+                          "chunk_overlap_tokens"
+                        ]
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "file_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/vector_stores/{id}/files/{file_id}": {
@@ -4755,6 +6825,12 @@
             }
           }
         ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful response",
@@ -4792,7 +6868,10 @@
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.write",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-audit-action": "data.write"
       }
     },
     "/v1/vector_stores/{id}/search": {
@@ -4809,6 +6888,12 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -4881,13 +6966,76 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "filters": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "hybrid": {
+                    "type": "object",
+                    "properties": {
+                      "bm25_b": {
+                        "type": "number"
+                      },
+                      "bm25_k1": {
+                        "type": "number"
+                      },
+                      "bm25_weight": {
+                        "type": "number"
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "ngram_size": {
+                        "type": "integer"
+                      },
+                      "ngram_weight": {
+                        "type": "number"
+                      },
+                      "rrf_constant": {
+                        "type": "integer"
+                      },
+                      "vector_weight": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "max_num_results": {
+                    "type": "integer"
+                  },
+                  "query": {
+                    "type": "string"
+                  },
+                  "ranking_options": {
+                    "type": "object",
+                    "properties": {
+                      "score_threshold": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "query"
+                ]
               }
             }
           }
-        }
+        },
+        "x-vllm-sr-permission": "data.read",
+        "x-vllm-sr-sensitivity": "operational"
       }
     }
   },
-  "components": {}
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque management token",
+        "description": "Required when global.services.management_api.auth.mode is bearer."
+      }
+    }
+  }
 }

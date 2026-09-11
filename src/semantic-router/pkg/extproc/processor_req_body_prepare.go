@@ -10,10 +10,13 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func (r *OpenAIRouter) extractRequestSignalSnapshot(
@@ -22,6 +25,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
+	captureOriginalContextHistory(ctx)
 	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
 	if snapshot.Stream {
 		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
@@ -57,16 +61,13 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			logging.Warnf("[Request Body] Decision candidates cannot satisfy request context: %v", decisionErr)
 			return requestDecisionState{}, r.createErrorResponse(422, decisionErr.Error())
 		}
+		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
+			logging.Warnf("[Request Body] Selection policy rejected all candidates: %v", decisionErr)
+			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)
+		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
-			resp := r.createErrorResponse(503, decisionErr.Error())
-			if ctx.RouterReplayPluginConfig == nil {
-				ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
-			}
-			r.startRouterReplay(ctx, originalModel, "", "")
-			r.updateRouterReplayStatus(ctx, 503, false)
-			addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
-			return requestDecisionState{}, resp
+			return requestDecisionState{}, r.respondDecisionUnresolved(ctx, originalModel, decisionErr)
 		}
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
@@ -106,6 +107,50 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		reasoningDecision: reasoningDecision,
 		selectedModel:     selectedModel,
 	}, nil
+}
+
+// respondDecisionUnresolved builds the fail_request 503 and finalizes the
+// replay record as failed, matching the looper-failure path.
+func (r *OpenAIRouter) respondDecisionUnresolved(
+	ctx *RequestContext,
+	originalModel string,
+	decisionErr error,
+) *ext_proc.ProcessingResponse {
+	resp := r.respondRoutingRejected(ctx, originalModel, decisionErr, "decision_unresolved")
+	addImmediateResponseHeader(resp, headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
+	return resp
+}
+
+// respondSelectionRejected preserves an explicit fail-closed selection policy
+// all the way to the client instead of silently routing to a fallback model.
+func (r *OpenAIRouter) respondSelectionRejected(
+	ctx *RequestContext,
+	originalModel string,
+	selectionErr error,
+) *ext_proc.ProcessingResponse {
+	return r.respondRoutingRejected(ctx, originalModel, selectionErr, "selection_rejected")
+}
+
+func (r *OpenAIRouter) respondRoutingRejected(
+	ctx *RequestContext,
+	originalModel string,
+	routingErr error,
+	terminalReason string,
+) *ext_proc.ProcessingResponse {
+	resp := r.createErrorResponse(503, routingErr.Error())
+	if ctx.RouterReplayPluginConfig == nil && r.Config != nil {
+		ctx.RouterReplayPluginConfig = r.Config.EffectiveRouterReplayConfig(nil)
+	}
+	r.startRouterReplay(ctx, originalModel, "", "")
+	r.updateRouterReplayStatus(ctx, 503, false)
+	if immediate := resp.GetImmediateResponse(); immediate != nil {
+		r.attachRouterReplayResponse(ctx, immediate.Body, false)
+	}
+	// Failed, not aborted: the router itself rejected the request with a
+	// terminal 503; aborted is reserved for streams that end early.
+	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, terminalReason)
+	addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
+	return resp
 }
 
 func applyRequestContextEstimate(snapshot *requestSignalSnapshot, ctx *RequestContext) {
@@ -150,7 +195,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	if compressionErr := r.applySemanticContextCompression(ctx, request); compressionErr != nil {
+	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
 		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}
 	return request, nil, nil

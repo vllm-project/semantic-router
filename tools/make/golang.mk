@@ -4,6 +4,16 @@
 
 ##@ Golang
 
+CONTROLLER_GEN_VERSION ?= v0.20.0
+
+config-schema-generate: ## Generate canonical Router config contracts for all consumers
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../..
+
+config-schema-check: ## Check that generated Router config contracts match Go source
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/configschema/main.go --repository-root ../.. --check
+
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
@@ -45,20 +55,30 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
+	@echo "Checking src/semantic-router ONNX module..."
+	@cd src/semantic-router && go mod tidy -modfile=go.onnx.mod && \
+		if ! git diff --exit-code go.onnx.mod go.sum; then \
+			echo "ERROR: go.onnx.mod or the shared go.sum file is not tidy in src/semantic-router. Please run 'go mod tidy -modfile=go.onnx.mod' in src/semantic-router and commit the changes."; \
+			git diff go.onnx.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "src/semantic-router ONNX go mod tidy check passed"
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
 	@echo "Ensuring controller-gen is available..."
-	@if command -v controller-gen >/dev/null 2>&1; then \
-		echo "Using existing controller-gen at $$(command -v controller-gen)"; \
-	else \
-		echo "Installing controller-gen..."; \
-		cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest; \
-	fi
+	@export PATH="$$(go env GOPATH)/bin:$$PATH"; \
+		installed_version="$$(controller-gen --version 2>/dev/null | awk '{print $$2}')"; \
+		if [ "$$installed_version" = "$(CONTROLLER_GEN_VERSION)" ]; then \
+			echo "Using controller-gen $(CONTROLLER_GEN_VERSION) at $$(command -v controller-gen)"; \
+		else \
+			echo "Installing controller-gen $(CONTROLLER_GEN_VERSION)..."; \
+			cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION); \
+		fi
 
 generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."
-	@cd src/semantic-router && controller-gen crd:crdVersions=v1,allowDangerousTypes=true paths=./pkg/apis/vllm.ai/v1alpha1 output:crd:artifacts:config=../../deploy/kubernetes/crds
+	@cd src/semantic-router && PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen crd:crdVersions=v1,allowDangerousTypes=true paths=./pkg/apis/vllm.ai/v1alpha1 output:crd:artifacts:config=../../deploy/kubernetes/crds
 	@echo "Copying CRDs to Helm chart..."
 	@mkdir -p deploy/helm/semantic-router/crds
 	@cp deploy/kubernetes/crds/vllm.ai_intelligentpools.yaml deploy/helm/semantic-router/crds/
@@ -67,7 +87,9 @@ generate-crd: install-controller-gen ## Generate CRD manifests using controller-
 
 generate-deepcopy: install-controller-gen ## Generate deepcopy methods using controller-gen
 	@echo "Generating deepcopy methods..."
-	@cd src/semantic-router && controller-gen object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
+	@cd src/semantic-router && PATH="$$(go env GOPATH)/bin:$$PATH" controller-gen object:headerFile=./hack/boilerplate.go.txt paths=./pkg/apis/vllm.ai/v1alpha1
 
 generate-api: generate-deepcopy generate-crd ## Generate all API artifacts (deepcopy, CRDs)
 	@echo "Generated all API artifacts"
+
+.PHONY: config-schema-generate config-schema-check

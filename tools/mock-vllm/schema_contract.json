@@ -41,7 +41,7 @@
         "verbosity",
         "web_search_options"
       ],
-      "extension_request_fields": ["reasoning_budget_tokens"],
+      "extension_request_fields": ["chat_template_kwargs", "reasoning_budget_tokens"],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {
         "add_generation_prompt": ["boolean"],
@@ -110,6 +110,7 @@
         "kv_transfer_params",
         "metrics",
         "prompt_logprobs",
+        "prompt_routed_experts",
         "prompt_text",
         "prompt_token_ids",
         "remote_block_ids",

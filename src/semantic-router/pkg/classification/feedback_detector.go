@@ -1,14 +1,17 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -40,7 +43,15 @@ type FeedbackDetector struct {
 	mapping      *FeedbackMapping
 	initialized  bool
 	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	gate         admission.Admissioner
 	mu           sync.RWMutex
+}
+
+// SetAdmissioner installs the deployment's admission gate for model inference.
+func (d *FeedbackDetector) SetAdmissioner(gate admission.Admissioner) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.gate = gate
 }
 
 // NewFeedbackDetector creates a new feedback detector
@@ -56,49 +67,46 @@ func NewFeedbackDetector(cfg *config.FeedbackDetectorConfig) (*FeedbackDetector,
 	return detector, nil
 }
 
-// loadMappingFromConfig loads the id2label mapping from the model's config.json
-func (d *FeedbackDetector) loadMappingFromConfig(modelPath string) error {
-	configPath := filepath.Join(modelPath, "config.json")
-	data, err := os.ReadFile(configPath)
+type feedbackMappingFile struct {
+	IdxToLabel map[string]string `json:"idx_to_label"`
+	LabelToIdx map[string]int    `json:"label_to_idx"`
+	ID2Label   map[string]string `json:"id2label"`
+	Label2ID   map[string]int    `json:"label2id"`
+}
+
+func (d *FeedbackDetector) loadMapping(path string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read config.json: %w", err)
+		return fmt.Errorf("failed to read feedback mapping %s: %w", path, err)
 	}
-
-	var configData struct {
-		ID2Label map[string]string `json:"id2label"`
-		Label2ID map[string]int    `json:"label2id"`
+	var file feedbackMappingFile
+	if err := json.Unmarshal(data, &file); err != nil {
+		return fmt.Errorf("failed to parse feedback mapping %s: %w", path, err)
 	}
-
-	if err := json.Unmarshal(data, &configData); err != nil {
-		return fmt.Errorf("failed to parse config.json: %w", err)
+	idxToLabel, labelToIdx := file.IdxToLabel, file.LabelToIdx
+	if len(idxToLabel) == 0 {
+		idxToLabel, labelToIdx = file.ID2Label, file.Label2ID
 	}
-
-	// Build mapping from config.json
+	if len(idxToLabel) == 0 {
+		return fmt.Errorf("feedback mapping %s declares no labels", path)
+	}
+	if err := ValidateLabelMappingAgainstModelConfig(path, d.config.ModelID, idxToLabel); err != nil {
+		return err
+	}
 	d.mapping = &FeedbackMapping{
-		LabelToIdx: make(map[string]int),
-		IdxToLabel: make(map[string]string),
+		LabelToIdx: make(map[string]int, len(labelToIdx)),
+		IdxToLabel: make(map[string]string, len(idxToLabel)),
 	}
-
-	// Use id2label from config.json and normalize labels
-	for idx, label := range configData.ID2Label {
-		normalizedLabel := normalizeFeedbackLabel(label)
-		d.mapping.IdxToLabel[idx] = normalizedLabel
+	for idx, label := range idxToLabel {
+		d.mapping.IdxToLabel[idx] = normalizeFeedbackLabel(label)
 	}
-
-	// Use label2id from config.json and normalize labels
-	for label, idx := range configData.Label2ID {
-		normalizedLabel := normalizeFeedbackLabel(label)
-		d.mapping.LabelToIdx[normalizedLabel] = idx
+	for label, idx := range labelToIdx {
+		d.mapping.LabelToIdx[normalizeFeedbackLabel(label)] = idx
 	}
-
 	logging.ComponentEvent("classifier", "feedback_mapping_loaded", map[string]interface{}{
-		"labels":    len(d.mapping.IdxToLabel),
-		"model_ref": modelPath,
+		"labels":       len(d.mapping.IdxToLabel),
+		"mapping_path": path,
 	})
-	for idx, label := range d.mapping.IdxToLabel {
-		logging.Debugf("  %s -> %s", idx, label)
-	}
-
 	return nil
 }
 
@@ -132,9 +140,12 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("feedback detector requires ModelID to be configured")
 	}
 
-	// Load mapping from model's config.json (required - no hardcoded fallback)
-	if err := d.loadMappingFromConfig(d.config.ModelID); err != nil {
-		return fmt.Errorf("failed to load id2label mapping from %s/config.json: %w", d.config.ModelID, err)
+	mappingPath := d.config.FeedbackMappingPath
+	if mappingPath == "" {
+		mappingPath = filepath.Join(d.config.ModelID, "config.json")
+	}
+	if err := d.loadMapping(mappingPath); err != nil {
+		return err
 	}
 
 	backend := "modernbert"
@@ -164,7 +175,7 @@ func (d *FeedbackDetector) Initialize() error {
 }
 
 // Classify determines user feedback type from follow-up message using the ML model
-func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
+func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*FeedbackResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -180,13 +191,12 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		}, nil
 	}
 
-	var result candle.ClassResult
-	var err error
-	if d.useMmBERT32K {
-		result, err = candle.ClassifyMmBert32KFeedback(text)
-	} else {
-		result, err = candle.ClassifyFeedbackText(text)
-	}
+	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResultWithProbs, error) {
+		if d.useMmBERT32K {
+			return candle.ClassifyMmBert32KFeedbackWithProbs(text)
+		}
+		return candle.ClassifyFeedbackTextWithProbs(text)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}
@@ -197,19 +207,12 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		feedbackType = FeedbackLabelSatisfied // Default fallback
 	}
 
-	confidence := result.Confidence
-
 	// Apply threshold check
 	threshold := d.config.Threshold
 	if threshold <= 0 {
 		threshold = 0.5 // Default threshold
 	}
-
-	// If confidence is below threshold, mark as uncertain (default to satisfied)
-	if confidence < threshold {
-		feedbackType = FeedbackLabelSatisfied
-		confidence = 1.0 - confidence
-	}
+	feedbackType, confidence := d.applyThreshold(feedbackType, result, threshold)
 
 	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f",
 		len(text), feedbackType, confidence)
@@ -219,6 +222,36 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		Confidence:   confidence,
 		Class:        result.Class,
 	}, nil
+}
+
+// applyThreshold decides what a prediction below the configured threshold is
+// reported as.
+//
+// A prediction the model is not confident about is treated as uncertain and
+// reported as satisfied, so the confidence beside that label has to be
+// P(satisfied). The detector has four classes, so 1 - confidence is the mass on
+// the other three and overstates satisfaction by whatever the two rejected
+// classes hold. The satisfied index comes from the same loaded mapping the label
+// above is read through. When that mapping names no satisfied class, or the model
+// returned no probability for it, the model's own prediction is kept, since a
+// satisfied reading nothing supports is the defect this replaces.
+func (d *FeedbackDetector) applyThreshold(
+	feedbackType string, result candle.ClassResultWithProbs, threshold float32,
+) (string, float32) {
+	if result.Confidence >= threshold {
+		return feedbackType, result.Confidence
+	}
+	for idx, label := range d.mapping.IdxToLabel {
+		if label != FeedbackLabelSatisfied {
+			continue
+		}
+		parsed, err := strconv.Atoi(idx)
+		if err != nil || parsed < 0 || parsed >= len(result.Probabilities) {
+			continue
+		}
+		return FeedbackLabelSatisfied, result.Probabilities[parsed]
+	}
+	return feedbackType, result.Confidence
 }
 
 // IsInitialized returns whether the detector is initialized

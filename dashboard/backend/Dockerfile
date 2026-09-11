@@ -4,7 +4,9 @@ ARG VLLM_SR_SOURCE_REVISION=unavailable
 FROM ${IMAGE_REGISTRY}library/golang:1.25-alpine AS wasm-builder
 WORKDIR /app/src/semantic-router
 
-ENV GOPROXY=https://proxy.golang.org,direct
+RUN apk add --no-cache git
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
@@ -30,11 +32,13 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
 
 # Stage 1: Build frontend with Node.js
 FROM ${IMAGE_REGISTRY}library/node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
+WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
+COPY website/static/model-catalog/catalog.json /workspace/website/static/model-catalog/catalog.json
 COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 # Use official npm registry to avoid mirror timeouts
 RUN npm config set registry https://registry.npmjs.org/ && \
@@ -54,11 +58,12 @@ FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
-ENV GOPROXY=https://proxy.golang.org,direct
+# Pipe falls back to direct on any proxy error; comma only on 404 and 410
+ENV GOPROXY="https://proxy.golang.org|direct"
 
-# Accept build arguments for target architecture
-ARG TARGETARCH=amd64
-ARG TARGETOS=linux
+# Use BuildKit-provided target platform arguments
+ARG TARGETARCH
+ARG TARGETOS
 ARG DASHBOARD_VERSION
 
 RUN set -eux; \
@@ -80,8 +85,11 @@ RUN set -eux; \
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
+COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
@@ -121,15 +129,17 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu wget
+    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
-COPY --from=frontend-builder /app/frontend/dist /app/frontend
+COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
@@ -145,6 +155,10 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    chown -R root:root /app/cli && \
+    find /app/cli -type d -exec chmod 0555 {} + && \
+    find /app/cli -type f -exec chmod 0444 {} + && \
+    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \

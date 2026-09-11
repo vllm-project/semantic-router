@@ -859,12 +859,12 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "Return the refactor plan. Include exact tokens "
                         "PLAN=extract-helper, BOUNDARY=small-orchestrator, "
-                        "VALIDATE=agent-ci-gate."
+                        "VALIDATE=check."
                     ),
                     expected_terms=(
                         "PLAN=extract-helper",
                         "BOUNDARY=small-orchestrator",
-                        "VALIDATE=agent-ci-gate",
+                        "VALIDATE=check",
                     ),
                 ),
             ),
@@ -1797,7 +1797,7 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     tool_result=(
                         "Pre-commit failed in agent CI lint after changed-files "
                         "classification included a generated paper artifact. Local "
-                        "agent-lint passed after removing the artifact."
+                        "make check passed after removing the artifact."
                     ),
                 ),
                 TaskTurn(
@@ -1821,7 +1821,7 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt="Use the rerun result before finalizing the review note.",
                     tool_name="rerun_pr_gate",
                     tool_result=(
-                        "make agent-ci-gate on changed files passed; GitHub build-paper "
+                        "make check on changed files passed; GitHub build-paper "
                         "and unit checks are green; pre-commit is rerunning."
                     ),
                 ),
@@ -1830,12 +1830,12 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "Return the CI patch review. Include exact tokens "
                         "BUG=generated-artifact-staged, FIX=source-only-commit, "
-                        "VALIDATE=agent-ci-gate."
+                        "VALIDATE=check."
                     ),
                     expected_terms=(
                         "BUG=generated-artifact-staged",
                         "FIX=source-only-commit",
-                        "VALIDATE=agent-ci-gate",
+                        "VALIDATE=check",
                     ),
                 ),
             ),

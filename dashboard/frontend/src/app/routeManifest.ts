@@ -1,14 +1,12 @@
 export type ShellRoutePage =
   | 'builder'
+  | 'config-reference'
   | 'dashboard'
   | 'evaluation'
-  | 'fleet-sim'
-  | 'fleet-sim-fleets'
-  | 'fleet-sim-runs'
-  | 'fleet-sim-workloads'
   | 'insights'
   | 'insights-record'
   | 'logs'
+  | 'models'
   | 'monitoring'
   | 'openclaw'
   | 'playground'
@@ -45,11 +43,9 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },
   { path: '/evaluation', page: 'evaluation' },
-  { path: '/fleet-sim', page: 'fleet-sim' },
-  { path: '/fleet-sim/workloads', page: 'fleet-sim-workloads' },
-  { path: '/fleet-sim/fleets', page: 'fleet-sim-fleets' },
-  { path: '/fleet-sim/runs', page: 'fleet-sim-runs' },
+  { path: '/models', page: 'models' },
   { path: '/builder', page: 'builder' },
+  { path: '/config/reference', page: 'config-reference' },
   { path: '/openclaw', page: 'openclaw' },
   { path: '/users', page: 'users' },
 ]

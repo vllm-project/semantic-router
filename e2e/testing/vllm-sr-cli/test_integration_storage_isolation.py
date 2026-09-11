@@ -15,7 +15,7 @@ import os
 import unittest
 from contextlib import contextmanager
 
-from cli_test_base import CLITestBase
+from cli_test_base import CLITestBase, stack_scoped_test_container_name
 from serve_session import ServeSessionMixin
 
 REDIS_PROBE_IMAGE = "docker.io/library/redis:7-alpine"
@@ -42,6 +42,14 @@ class TestStorageNetworkIsolation(ServeSessionMixin, CLITestBase):
     STORAGE_STARTUP_TIMEOUT = 300
 
     CONTROL_CONTAINER_NAME = "vllm-sr-cli-test-control-redis"
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.CONTROL_CONTAINER_NAME = stack_scoped_test_container_name(
+            cls.runtime_stack.stack_name,
+            "vllm-sr-cli-test-control-redis",
+        )
 
     def setUp(self):
         super().setUp()

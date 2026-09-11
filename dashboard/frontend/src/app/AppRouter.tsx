@@ -1,6 +1,5 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import type { ConfigSection } from '../components/ConfigNav'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
 import AuthTransitionPage from '../pages/AuthTransitionPage'
@@ -12,11 +11,16 @@ import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
+import { useReadonly } from '../contexts/ReadonlyContext'
 
 const AppRouter: React.FC = () => {
   const { setupState, isLoading, error, refreshSetupState } = useSetup()
   const { user } = useAuth()
-  const [configSection, setConfigSection] = useState<ConfigSection>('global-config')
+  const {
+    isLoading: settingsLoading,
+    evaluationAvailable,
+    evaluationUnavailableReason,
+  } = useReadonly()
   const canUseMLSetup = canAccessMLSetup(user)
 
   if (isLoading) {
@@ -58,11 +62,12 @@ const AppRouter: React.FC = () => {
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
             {renderAuthenticatedAppRoutes({
-              configSection,
-              setConfigSection,
               canUseMLSetup,
               user,
               setupMode,
+              settingsLoading,
+              evaluationAvailable,
+              evaluationUnavailableReason,
             })}
           </Route>
         </Route>

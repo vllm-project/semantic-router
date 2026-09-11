@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 // semanticAssistantContent returns the ordered, client-visible assistant text
@@ -118,6 +119,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++
 		result.LastUserAfterToolResult = previousWasTool
+		recordUserInputModalities(result, message.Content, text)
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
@@ -143,7 +145,7 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		case llmprotocol.ContentImage:
 			result.ImageContentCount++
 			if result.FirstImageURL == "" {
-				result.FirstImageURL = content.URL
+				result.FirstImageURL = neutralInlineImageDataURL(content)
 			}
 		case llmprotocol.ContentToolCall:
 			result.AssistantToolCallCount++
@@ -165,6 +167,48 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		}
 	}
 	consumeNeutralContext(result, message.Content)
+}
+
+// neutralInlineImageDataURL returns the classifier-safe representation of one
+// neutral image. Ingress codecs split inline data URIs into MediaType and Data;
+// reconstructing them here preserves protocol neutrality without permitting
+// the classifier to fetch remote URLs or read local paths.
+func neutralInlineImageDataURL(content llmprotocol.Content) string {
+	if canonical, ok := imageurl.CanonicalDataURL(content.URL); ok {
+		return canonical
+	}
+	if content.MediaType == "" || content.Data == "" {
+		return ""
+	}
+	candidate := "data:" + strings.ToLower(strings.TrimSpace(content.MediaType)) + ";base64," + content.Data
+	canonical, ok := imageurl.CanonicalDataURL(candidate)
+	if !ok {
+		return ""
+	}
+	return canonical
+}
+
+// recordUserInputModalities counts the structural input modalities carried by
+// one user message for the input_modality signal family. Only user turns
+// count: they are the input the request asks the model to consume, and the
+// classify/eval APIs scope their counts the same way. Text counts only when it
+// has non-whitespace content, matching the classify walk. Media payloads are
+// never inspected; only the neutral content kind matters.
+func recordUserInputModalities(result *requestSignalSnapshot, contents []llmprotocol.Content, text string) {
+	facts := &result.InputModality
+	if strings.TrimSpace(text) != "" {
+		facts.TextContentCount++
+	}
+	for _, content := range contents {
+		switch content.Kind {
+		case llmprotocol.ContentImage:
+			facts.ImageContentCount++
+		case llmprotocol.ContentAudio:
+			facts.AudioContentCount++
+		case llmprotocol.ContentVideo:
+			facts.VideoContentCount++
+		}
+	}
 }
 
 func consumeNeutralContext(result *requestSignalSnapshot, contents []llmprotocol.Content) {

@@ -43,6 +43,58 @@ routing:
 
 Use `context` when the router should switch candidates based on prompt length or expected context demand.
 
+## Range Semantics
+
+Each rule is an inclusive token band: it matches when
+`min_tokens <= token_count <= max_tokens`.
+
+- Both limits are optional, but at least one must be set. A missing
+  `min_tokens` means 0.
+- Omit `max_tokens` to make the band open-ended. Every request at or above
+  `min_tokens` matches, with no upper limit. Use this on the last band so
+  overflow above your largest bounded band still carries a context signal.
+- Setting `min_tokens` equal to `max_tokens` is an exact-match band for that
+  one token count.
+- Every matching rule is reported, in configuration order. Overlapping bands
+  are allowed and both names appear in `x-vsr-matched-context`.
+- Gaps and overlaps between bands are logged as warnings when the config
+  loads. Requests inside a gap match no context rule.
+- Validation rejects a rule with neither limit, unparsable, negative, or
+  oversized values, and `min_tokens` above `max_tokens`. The Router, the `vllm-sr`
+  CLI, and the Dashboard apply the same rules, so a band that passes
+  `vllm-sr validate` also loads in the Router.
+
+Values accept `K` and `M` suffixes (`1.5K`, `0.5M`).
+
+An unquoted limit is typed by the Router's YAML decoder before it is parsed,
+following YAML 1.1 rules: `0123` is octal 83, `0x10` is 16, `1_000` is 1000,
+and `1:30` is not a number. Quote a value to keep it literal, so `'0123'` is
+123. The `vllm-sr` CLI applies the same typing, so its validation matches what
+the Router loads from the forwarded file.
+
+A limit may reference an environment variable, such as `${CTX_MIN}`. The
+Router expands it when the config loads, so the CLI accepts that band with a
+warning instead of checking it.
+
+```yaml
+routing:
+  signals:
+    context:
+      - name: short_context
+        min_tokens: 0
+        max_tokens: 8K
+      - name: medium_context
+        min_tokens: 8001
+        max_tokens: 64K
+      - name: long_context
+        min_tokens: 64001
+        description: Open-ended band; matches everything above 64K tokens.
+```
+
+Context bands are routing signals only. They do not change model
+context-window limits, which the Router still enforces separately when it
+filters candidates.
+
 ## Dependencies and Limitations
 
 Token estimates depend on the request representation and are not a guarantee
