@@ -275,7 +275,12 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 	out := make([]cachedResponse, 0, len(opt.panelModels))
 	for _, model := range opt.panelModels {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, model, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: model},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("model %q: %w", model, err)
 		}
@@ -341,7 +346,12 @@ func produceArm(
 
 	if arm == "A" {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, opt.judge, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: opt.judge},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			rec.Error = err.Error()
 			return rec
