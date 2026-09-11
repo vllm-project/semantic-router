@@ -19,6 +19,7 @@ type profileValues struct {
 					Semantic struct {
 						EmbeddingConfig struct {
 							TargetLayer *int `json:"target_layer"`
+							TopK        *int `json:"top_k"`
 						} `json:"embedding_config"`
 					} `json:"semantic"`
 				} `json:"embeddings"`
@@ -77,6 +78,15 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 	targetLayer := embeddingConfig.TargetLayer
 	if targetLayer == nil || *targetLayer != 6 {
 		t.Fatalf("multimodal profile target_layer = %v, want explicit 6", targetLayer)
+	}
+
+	// The image cases assert non-matches from the matched-embeddings header.
+	// top_k limits that header to the highest-scoring rules, so anything but
+	// unlimited (0) lets a second rule fire on a labelled negative unseen.
+	if topK := embeddingConfig.TopK; topK == nil {
+		t.Fatal("multimodal profile embedding top_k is unset, want explicit 0 (unlimited) so cross-rule negatives are observable")
+	} else if *topK != 0 {
+		t.Fatalf("multimodal profile embedding top_k = %d, want 0 (unlimited) so cross-rule negatives are observable", *topK)
 	}
 }
 
