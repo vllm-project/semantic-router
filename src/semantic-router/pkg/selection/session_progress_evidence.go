@@ -16,8 +16,12 @@ type TurnOutcomeFact struct {
 	Category          string
 	ModelAttributable bool
 	Confidence        float64
+	ConfidenceKnown   bool
 	OutputTokens      int64
 	LatencyMs         int64
+	LatencyKnown      bool
+	Cost              float64
+	CostKnown         bool
 }
 
 // Model-attributable outcome categories.
@@ -43,9 +47,12 @@ type ProgressEvidence struct {
 	StreakCategory   string
 	RecoveryStreak   int
 
-	ConfidenceTrend float64
-	CostTrend       float64
-	LatencyTrend    float64
+	ConfidenceTrend      float64
+	CostTrend            float64
+	LatencyTrend         float64
+	ConfidenceTrendKnown bool
+	CostTrendKnown       bool
+	LatencyTrendKnown    bool
 
 	AttributableCount int
 	MissingCount      int
@@ -94,9 +101,9 @@ func EvaluateProgressEvidence(window []TurnOutcomeFact) ProgressEvidence {
 	evidence.Trend = clampUnit(balance / float64(2*evidence.AttributableCount))
 	evidence.RegressionStreak, evidence.StreakCategory = trailingRegressionStreak(window)
 	evidence.RecoveryStreak = trailingRecoveryStreak(window)
-	evidence.ConfidenceTrend = attributableDelta(window, func(f TurnOutcomeFact) float64 { return f.Confidence })
-	evidence.CostTrend = attributableDelta(window, func(f TurnOutcomeFact) float64 { return float64(f.OutputTokens) })
-	evidence.LatencyTrend = attributableDelta(window, func(f TurnOutcomeFact) float64 { return float64(f.LatencyMs) })
+	evidence.ConfidenceTrend, evidence.ConfidenceTrendKnown = attributableDelta(window, func(f TurnOutcomeFact) (float64, bool) { return f.Confidence, f.ConfidenceKnown })
+	evidence.CostTrend, evidence.CostTrendKnown = attributableDelta(window, func(f TurnOutcomeFact) (float64, bool) { return f.Cost, f.CostKnown })
+	evidence.LatencyTrend, evidence.LatencyTrendKnown = attributableDelta(window, func(f TurnOutcomeFact) (float64, bool) { return float64(f.LatencyMs), f.LatencyKnown })
 	return evidence
 }
 
@@ -142,26 +149,24 @@ func trailingRecoveryStreak(window []TurnOutcomeFact) int {
 
 // attributableDelta reports newest minus oldest for an attributable metric,
 // normalized by the oldest value so callers get a relative trend.
-func attributableDelta(window []TurnOutcomeFact, value func(TurnOutcomeFact) float64) float64 {
-	first, last := -1, -1
-	for i, fact := range window {
-		if !fact.ModelAttributable {
+func attributableDelta(window []TurnOutcomeFact, value func(TurnOutcomeFact) (float64, bool)) (float64, bool) {
+	var oldest, newest float64
+	count := 0
+	for _, fact := range window {
+		v, known := value(fact)
+		if !fact.ModelAttributable || !known {
 			continue
 		}
-		if first < 0 {
-			first = i
+		if count == 0 {
+			oldest = v
 		}
-		last = i
+		newest = v
+		count++
 	}
-	if first < 0 || first == last {
-		return 0
+	if count < 2 || oldest == 0 {
+		return 0, false
 	}
-	oldest := value(window[first])
-	newest := value(window[last])
-	if oldest == 0 {
-		return 0
-	}
-	return (newest - oldest) / oldest
+	return (newest - oldest) / oldest, true
 }
 
 func clampUnit(v float64) float64 {

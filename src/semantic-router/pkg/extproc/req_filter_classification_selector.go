@@ -151,6 +151,9 @@ func (r *OpenAIRouter) selectWithSelector(
 		selectedModel,
 		ctx,
 	)
+	if ctx.VSRProgressGateError != nil {
+		return nil, string(method), ctx.VSRProgressGateError
+	}
 	ctx.VSRSelectionReasoning = selectionReasoningForDiagnostics(
 		method,
 		result.Reasoning,
