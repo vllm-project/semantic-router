@@ -101,6 +101,32 @@ class PRChangeClassifierTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn("image-calibration", classify([path]).selected_jobs)
 
+    def test_every_calibration_fixture_is_covered_by_the_gate(self) -> None:
+        """The domain is a directory list while the manifest may name any
+        tracked image; a later change to a listed image outside the covered
+        directories would move the calibrated thresholds without running the
+        gate. Every positive, negative, and excluded path must select it."""
+        import json
+
+        manifest = json.loads(
+            (
+                REPO_ROOT
+                / "src/semantic-router/cmd/image-routing-calibration/testdata/calibration-set.json"
+            ).read_text()
+        )
+        paths = [entry["image_file"] for entry in manifest["positives"]]
+        paths += manifest["negatives"]
+        paths += [entry["image_file"] for entry in manifest.get("excluded", [])]
+        self.assertGreater(len(paths), 0)
+        uncovered = [
+            path
+            for path in paths
+            if "image-calibration" not in classify([path]).selected_jobs
+        ]
+        self.assertEqual(
+            uncovered, [], "manifest fixtures outside the image-calibration domain"
+        )
+
     def test_unrelated_router_change_does_not_run_the_calibration_gate(self) -> None:
         result = classify(["src/semantic-router/pkg/extproc/processor.go"])
 

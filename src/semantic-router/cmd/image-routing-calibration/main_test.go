@@ -60,15 +60,16 @@ func TestSelectThreshold_TieBreaksTowardWiderBand(t *testing.T) {
 // Separable sets take the midpoint of the gap, rounded to two decimals when
 // the rounded value still separates.
 func TestSelectThreshold_SeparableMidpointRounds(t *testing.T) {
+	// The gap midpoint is 0.525, so the rounding step is actually exercised.
 	fixtures, positive := scoredFixtures(map[string]float64{
-		"neg-a": 0.20, "neg-b": 0.41, "pos-a": 0.63, "pos-b": 0.80,
+		"neg-a": 0.20, "neg-b": 0.41, "pos-a": 0.64, "pos-b": 0.80,
 	}, "pos-a", "pos-b")
 	report := calibrate(t, fixtures, positive)
 
 	if !report.Selected.Separable {
 		t.Fatalf("expected separable selection, got %+v", report.Selected)
 	}
-	if got, want := report.Selected.Threshold, 0.52; math.Abs(got-want) > 1e-9 {
+	if got, want := report.Selected.Threshold, 0.53; math.Abs(got-want) > 1e-9 {
 		t.Fatalf("selected threshold = %.4f, want %.4f (rounded gap midpoint)", got, want)
 	}
 }
@@ -193,7 +194,11 @@ func TestParseSet_RejectsUnreviewedShapes(t *testing.T) {
 		"exclusion no reason": `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"], "excluded": [{"image_file": "c.png"}]}`,
 		"bad extension":       `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.gif"]}`,
 		"empty path":          `{"positives": [{"image_file": "", "signal_name": "rule"}], "negatives": ["b.png"]}`,
-		"legacy roots":        `{"negative_roots": ["images"], "positives": [{"image_file": "a.png", "signal_name": "rule"}]}`,
+		// Both carry a valid positive and negative, so they are rejected for
+		// the unknown key alone rather than for a missing section.
+		"legacy roots":        `{"negative_roots": ["images"], "positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"]}`,
+		"misspelled excluded": `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"], "exclusions": [{"image_file": "c.png", "reason": "x"}]}`,
+		"trailing object":     `{"positives": [{"image_file": "a.png", "signal_name": "rule"}], "negatives": ["b.png"]} {}`,
 	}
 	for name, manifest := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -425,6 +430,11 @@ func TestClassifierConfig_IsTheReportedScoringSource(t *testing.T) {
 	hnsw := classifierConfig()
 	if hnsw.ModelType != "multimodal" || hnsw.TargetDimension != 384 || !hnsw.PreloadEmbeddings {
 		t.Fatalf("classifier config = %+v, want multimodal/384/preload", hnsw)
+	}
+	// 0 selects the encoder's final layer, which is what the report records;
+	// a deployment that pins another layer shifts every score.
+	if hnsw.TargetLayer != 0 {
+		t.Fatalf("target layer = %d, want 0 (final layer)", hnsw.TargetLayer)
 	}
 	// Enabled is a pointer, so compare the resolved values field by field.
 	want := (config.PrototypeScoringConfig{}).WithDefaults()

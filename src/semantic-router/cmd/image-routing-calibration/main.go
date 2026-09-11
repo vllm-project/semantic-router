@@ -78,14 +78,18 @@
 //	    -output /tmp/image-routing-calibration.json \
 //	    -markdown /tmp/image-routing-calibration.md
 //
-// -artifact-revision is recorded verbatim: pass the snapshot the model was
-// downloaded at (the --revision above; the router's own downloader tracks
-// "main", see pkg/modeldownload/config_parser.go), or the report claims
-// reproducibility it does not have. The CI workflow pins the download to the
-// same snapshot and fails closed if the resolved revision differs.
+// -artifact-revision is the snapshot the model was downloaded at (the
+// --revision above; the router's own downloader tracks "main", see
+// pkg/modeldownload/config_parser.go). The report binds that claim to the
+// bytes it scored with: every loader input under -model is hashed into the
+// report, and where the Hugging Face download cache recorded the snapshot a
+// file resolved to, it must equal the claim or the run fails before loading.
+// The CI workflow pins the download to the same snapshot and performs the
+// same check in shell before the gate runs.
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -117,6 +121,9 @@ const modelRepository = "llm-semantic-router/multi-modal-embed-small"
 // git already content-addresses the assets, and the report records the
 // commit, whether the tree was dirty, and every listed fixture's sha256.
 type calibrationSet struct {
+	// Comment is the reviewer's free-text description of the set. It is the
+	// only key besides the three sections; anything else is rejected.
+	Comment   string          `json:"_comment,omitempty"`
 	Positives []positiveLabel `json:"positives"`
 	Negatives []string        `json:"negatives"`
 	Excluded  []excludedLabel `json:"excluded,omitempty"`
@@ -183,9 +190,22 @@ type thresholdResult struct {
 
 type calibrationReport struct {
 	Model struct {
-		Repository      string `json:"repository"`
-		ArtifactSHA     string `json:"artifact_revision"`
+		Repository  string `json:"repository"`
+		ArtifactSHA string `json:"artifact_revision"`
+		// ArtifactFiles binds the report to the weights actually loaded:
+		// sha256 of every loader input under the model directory. The
+		// revision above is the caller's claim; the hashes are the evidence,
+		// and any Hugging Face download record for a file must agree with
+		// the claim or the run fails.
+		ArtifactFiles map[string]string `json:"artifact_files"`
+		// TargetDimension is the matryoshka dimension used for the candidate
+		// (text) embeddings; the image tower always produces its native
+		// dimension, so this is a text-side parameter. TargetLayer is the
+		// encoder layer the candidate embeddings are taken from; 0 means the
+		// final layer (the E2E profile pins target_layer: 6, which is the
+		// final layer of this model). Both change every score.
 		TargetDimension int    `json:"target_dimension"`
+		TargetLayer     int    `json:"target_layer"`
 		ModelType       string `json:"model_type"`
 		Aggregation     string `json:"aggregation_method"`
 		// Scoring records the effective prototype-scoring parameters. With
@@ -262,6 +282,10 @@ func main() {
 		fatal("outputs: %v", outputErr)
 	}
 	*output, *markdown = outputs[0], outputs[1]
+	artifactFiles, err := modelArtifact(*modelPath, *artifactRevision)
+	if err != nil {
+		fatal("model artifact: %v", err)
+	}
 	if err = candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
 		fatal("initialize multimodal model: %v", err)
 	}
@@ -274,7 +298,9 @@ func main() {
 	report := calibrationReport{}
 	report.Model.Repository = modelRepository
 	report.Model.ArtifactSHA = *artifactRevision
+	report.Model.ArtifactFiles = artifactFiles
 	report.Model.TargetDimension = hnsw.TargetDimension
+	report.Model.TargetLayer = hnsw.TargetLayer
 	report.Model.ModelType = hnsw.ModelType
 	// validateRules guarantees every rule uses this aggregation.
 	report.Model.Aggregation = string(config.AggregationMethodMax)
@@ -392,11 +418,19 @@ func loadSet(path string, rules []config.EmbeddingRule) calibrationSet {
 // one reviewed positive for every loaded rule (a rule with no positive would
 // otherwise calibrate against an empty set and look perfectly separable),
 // every positive naming a known rule, every path decodable by the FFI, and
-// no path under two labels (a positive may be listed once per rule).
+// no path under two labels (a positive may be listed once per rule). Unknown
+// keys are rejected: a misspelled or legacy section would otherwise be
+// dropped silently, and its images would be neither scored nor bound to the
+// commit while the report still claimed every fixture was listed.
 func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error) {
 	var set calibrationSet
-	if err := json.Unmarshal(data, &set); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&set); err != nil {
 		return set, fmt.Errorf("parse: %w", err)
+	}
+	if decoder.More() {
+		return set, fmt.Errorf("parse: trailing data after the manifest object")
 	}
 	if len(set.Positives) == 0 || len(set.Negatives) == 0 {
 		return set, fmt.Errorf("needs at least one positive and one negative")
@@ -858,9 +892,21 @@ func renderMarkdown(report calibrationReport) string {
 	b.WriteString("# Image Routing Calibration Report\n\n")
 	b.WriteString("Generated by `cmd/image-routing-calibration`. Regenerate with the invocation in\n")
 	b.WriteString("the package doc comment of `cmd/image-routing-calibration/main.go`.\n\n")
-	fmt.Fprintf(&b, "- Model repository: `%s`\n- Artifact revision: `%s`\n- Target dimension: `%d`\n- Model type: `%s`\n- Aggregation: `%s`\n- Calibration fixtures: `%d`\n",
-		report.Model.Repository, report.Model.ArtifactSHA, report.Model.TargetDimension,
+	layer := fmt.Sprintf("%d", report.Model.TargetLayer)
+	if report.Model.TargetLayer == 0 {
+		layer = "0 (final layer)"
+	}
+	fmt.Fprintf(&b, "- Model repository: `%s`\n- Artifact revision: `%s`\n- Target dimension (candidate text embeddings): `%d`\n- Target layer (candidate text embeddings): `%s`\n- Model type: `%s`\n- Aggregation: `%s`\n- Calibration fixtures: `%d`\n",
+		report.Model.Repository, report.Model.ArtifactSHA, report.Model.TargetDimension, layer,
 		report.Model.ModelType, report.Model.Aggregation, len(report.Fixtures))
+	names := make([]string, 0, len(report.Model.ArtifactFiles))
+	for name := range report.Model.ArtifactFiles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintf(&b, "- Model file `%s`: `%s`\n", name, report.Model.ArtifactFiles[name])
+	}
 	dirty := ""
 	if report.Source.Dirty {
 		dirty = " (**worktree had uncommitted changes; not reproducible from this commit**)"

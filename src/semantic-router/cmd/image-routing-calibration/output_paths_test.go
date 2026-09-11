@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -28,6 +30,49 @@ func TestGateRequiresSelectedMatrix(t *testing.T) {
 				t.Fatalf("gate=%d, want %d; shipped=%+v selected=%+v", got, tc.want, rule.Shipped, rule.Selected)
 			}
 		})
+	}
+}
+
+// A dirty worktree is a warning locally and a failure under -require-clean,
+// independent of the thresholds matching.
+func TestGateDirtyWorktree(t *testing.T) {
+	fixtures := []fixtureReport{
+		{Path: "p", PositiveFor: []string{testRule}, Scores: map[string]float64{testRule: 0.7}},
+		{Path: "n", Scores: map[string]float64{testRule: 0.52}},
+	}
+	rule := calibrateRule(config.EmbeddingRule{Name: testRule, SimilarityThreshold: 0.61}, fixtures)
+	report := calibrationReport{Fixtures: fixtures, Rules: []ruleReport{rule}}
+	report.Source.Dirty = true
+	if got := checkShippedThresholds(report, "pin", "pin", false); got != 0 {
+		t.Fatalf("dirty worktree without -require-clean returned %d, want 0 (warning)", got)
+	}
+	if got := checkShippedThresholds(report, "pin", "pin", true); got != 2 {
+		t.Fatalf("dirty worktree with -require-clean returned %d, want 2", got)
+	}
+}
+
+// The scoring provenance the report carries must reach both outputs.
+func TestReportCarriesScoringProvenance(t *testing.T) {
+	hnsw := classifierConfig()
+	report := calibrationReport{}
+	report.Model.TargetDimension = hnsw.TargetDimension
+	report.Model.TargetLayer = hnsw.TargetLayer
+	report.Model.Scoring = hnsw.PrototypeScoring
+	report.Model.ArtifactFiles = map[string]string{"model.safetensors": "sha256:abc"}
+	data, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"target_layer":0`, `"target_dimension":384`, `"artifact_files":{"model.safetensors":"sha256:abc"}`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("JSON report lacks %s", want)
+		}
+	}
+	markdown := renderMarkdown(report)
+	for _, want := range []string{"Target layer (candidate text embeddings): `0 (final layer)`", "Model file `model.safetensors`: `sha256:abc`"} {
+		if !strings.Contains(markdown, want) {
+			t.Errorf("Markdown report lacks %q", want)
+		}
 	}
 }
 

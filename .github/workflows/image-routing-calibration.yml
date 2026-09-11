@@ -97,6 +97,17 @@ jobs:
       - name: Build Rust libraries (CPU-only, no CUDA)
         run: make rust-ci
 
+      # The gate runs with -require-clean. A Cargo.toml bump without its
+      # lockfile makes cargo rewrite Cargo.lock during the build, which would
+      # otherwise surface as an opaque "worktree has uncommitted changes".
+      - name: Assert the native build left the lockfiles untouched
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code --stat -- '*/Cargo.lock'; then
+            echo "::error::cargo rewrote a Cargo.lock during the build; commit the updated lockfile so the calibration is reproducible from the commit"
+            exit 1
+          fi
+
       # The profile package asserts the E2E CRD mirrors the shipped pack and
       # that the profile keeps the chart's runtime defaults; no cluster needed.
       - name: Run multimodal-routing profile package tests
