@@ -1366,8 +1366,8 @@
     },
     "/api/v1/config/validate": {
       "post": {
-        "summary": "Validate and normalize a router config without writing it",
-        "description": "Validate and normalize a router config without writing it",
+        "summary": "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it",
+        "description": "Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it",
         "operationId": "post_api_v1_config_validate",
         "tags": [
           "config"
@@ -1450,6 +1450,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "compare_to_active": {
+                    "type": "boolean"
+                  },
                   "yaml": {
                     "type": "string"
                   }

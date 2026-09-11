@@ -47,12 +47,14 @@ Successful and invalid candidate evaluations both return HTTP 200 with
 meaning. The response also includes field-addressable `errors` and `warnings`
 (`code`, `severity`, `resource`, `recipe`, `stage`, `field`, `message`). Set
 `compare_to_active: true` to include a bounded, schema-aware, redacted
-active-versus-candidate `diff`. Secrets are always `[REDACTED]`; `${ENV_VAR}`
-references and `*_env` names stay visible. Validation uses the same parser and
-semantic checks as `PATCH /api/v1/config` and `PUT /api/v1/config`. The path
-does not write desired config, the active snapshot, runtime state, persistence,
-or version history. The endpoint requires `config.read`; plaintext secret
-viewing is not implied.
+active-versus-candidate `diff`. The active side is the verified in-memory
+runtime snapshot when one exists, otherwise the generated runtime document, not
+desired source after an override or failed activation. Secrets are always
+`[REDACTED]`; `${ENV_VAR}` references and `*_env` names stay visible.
+Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
+and `PUT /api/v1/config`. The path does not write desired config, the active
+snapshot, runtime state, persistence, or version history. The endpoint requires
+`config.read`; plaintext secret viewing is not implied.
 
 ### API
 

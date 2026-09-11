@@ -282,7 +282,7 @@ Validate, inspect, apply, version, and roll back Router configuration and Recipe
 | `DELETE` | `/api/v1/config/recipes/{name}` | Delete an unreferenced named routing recipe; requires If-Match |
 | `GET` | `/api/v1/config/schema` | Discover the canonical Router configuration contract progressively or return the complete JSON Schema |
 | `GET` | `/api/v1/config` | Get the current router config as JSON (secrets redacted without secret_view) |
-| `POST` | `/api/v1/config/validate` | Validate and normalize a router config without writing it |
+| `POST` | `/api/v1/config/validate` | Validate and normalize a router config, returning v1 diagnostics and an optional redacted diff without writing it |
 | `POST` | `/api/v1/config/plan` | Plan an exact merge or replace mutation, including hot-reload compatibility, without writing it |
 | `PATCH` | `/api/v1/config` | Compare-and-swap merge of a router config update (validates, backs up, writes, triggers hot-reload) |
 | `PUT` | `/api/v1/config` | Compare-and-swap replacement of the router config (validates, backs up, writes, triggers hot-reload) |

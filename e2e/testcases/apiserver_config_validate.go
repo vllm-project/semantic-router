@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("apiserver-config-validate", pkgtestcases.TestCase{
-		Description: "Verify POST /config/router/validate returns the v1 diagnostic contract without mutating the live config (issue #3477)",
+		Description: "Verify POST /api/v1/config/validate returns the v1 diagnostic contract without mutating the live config (issue #3477)",
 		Tags:        []string{"apiserver", "config", "api", "validate"},
 		Fn:          testAPIServerConfigValidate,
 	})
@@ -44,12 +44,12 @@ func testAPIServerConfigValidate(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(30 * time.Second)
-	hashBefore, err := fetchConfigHash(ctx, httpClient, session.URL("/config/hash"))
+	hashBefore, err := fetchConfigHash(ctx, httpClient, session.URL("/api/v1/config/hash"))
 	if err != nil {
 		return err
 	}
 
-	validURL := session.URL("/config/router/validate")
+	validURL := session.URL("/api/v1/config/validate")
 	validBody, err := postRouterConfigValidate(ctx, httpClient, validURL, map[string]any{
 		"yaml": validateE2EValidYAML,
 	})
@@ -70,7 +70,7 @@ func testAPIServerConfigValidate(
 		return err
 	}
 
-	hashAfter, err := fetchConfigHash(ctx, httpClient, session.URL("/config/hash"))
+	hashAfter, err := fetchConfigHash(ctx, httpClient, session.URL("/api/v1/config/hash"))
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func postRouterConfigValidate(
 		return nil, fmt.Errorf("read validate response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("expected /config/router/validate status 200, got %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("expected /api/v1/config/validate status 200, got %d: %s", resp.StatusCode, string(body))
 	}
 	var decoded routerConfigValidateResponse
 	if err := json.Unmarshal(body, &decoded); err != nil {
@@ -148,16 +148,16 @@ func fetchConfigHash(ctx context.Context, httpClient *http.Client, url string) (
 		return "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("expected /config/hash status 200, got %d: %s", resp.StatusCode, string(resp.Body))
+		return "", fmt.Errorf("expected /api/v1/config/hash status 200, got %d: %s", resp.StatusCode, string(resp.Body))
 	}
 	var decoded struct {
-		Hash string `json:"hash"`
+		Hash string `json:"source_config_hash"`
 	}
 	if err := json.Unmarshal(resp.Body, &decoded); err != nil {
-		return "", fmt.Errorf("decode /config/hash: %w", err)
+		return "", fmt.Errorf("decode /api/v1/config/hash: %w", err)
 	}
 	if decoded.Hash == "" {
-		return "", fmt.Errorf("expected /config/hash to include a source hash")
+		return "", fmt.Errorf("expected /api/v1/config/hash to include a source hash")
 	}
 	return decoded.Hash, nil
 }
@@ -166,11 +166,12 @@ const validateE2EValidYAML = `version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: m1
+    model: m1
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: m1
@@ -187,11 +188,12 @@ const validateE2EInvalidYAML = `version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: m1
+    model: m1
   models:
     - name: m1
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: m1

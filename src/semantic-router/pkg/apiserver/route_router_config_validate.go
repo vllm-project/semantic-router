@@ -55,15 +55,37 @@ func (s *ClassificationAPIServer) handleConfigValidate(
 }
 
 func (s *ClassificationAPIServer) activeConfigSnapshotYAML() []byte {
-	if s == nil || s.configPath == "" {
+	if s == nil {
+		return nil
+	}
+	if snapshot := sourceDocumentFromConfig(s.verifiedActiveConfig()); len(snapshot) > 0 {
+		return snapshot
+	}
+	if s.configPath == "" {
 		return nil
 	}
 	paths := resolveConfigPersistencePaths(s.configPath)
-	data, err := os.ReadFile(paths.sourcePath)
+	data, err := os.ReadFile(paths.runtimePath)
 	if err != nil {
 		return nil
 	}
 	return data
+}
+
+func (s *ClassificationAPIServer) verifiedActiveConfig() *config.RouterConfig {
+	if s.runtimeRegistry != nil {
+		if cfg := s.runtimeRegistry.CurrentConfig(); cfg != nil {
+			return cfg
+		}
+	}
+	return s.currentConfig()
+}
+
+func sourceDocumentFromConfig(cfg *config.RouterConfig) []byte {
+	if cfg == nil || len(cfg.SourceDocument) == 0 {
+		return nil
+	}
+	return append([]byte(nil), cfg.SourceDocument...)
 }
 
 func scrubValidateDiagnostics(diagnostics []config.Diagnostic) []config.Diagnostic {

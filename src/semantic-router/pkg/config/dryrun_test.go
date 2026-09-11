@@ -154,6 +154,117 @@ func TestEvaluateRedactsSecretsAndPreservesEnvNames(t *testing.T) {
 	}
 }
 
+func TestRedactSensitiveConfigValueCoversSchemaSecretContract(t *testing.T) {
+	t.Parallel()
+
+	input := map[string]interface{}{
+		"api_key":         "plain-secret",
+		"api_key_env":     "OPENAI_API_KEY",
+		"auth_token":      "auth-token",
+		"Authorization":   "Bearer authorization-token",
+		"x-api-key":       "header-token",
+		"access_token":    "access-token",
+		"client_secret":   "${CLIENT_SECRET:-literal-fallback}",
+		"password":        "$DB_PASSWORD",
+		"tokens_per_unit": 100,
+		"token_filter":    "keep",
+		"llama_stack": map[string]interface{}{
+			"auth_token": "llama-stack-bearer",
+		},
+	}
+
+	redacted, ok := RedactSensitiveConfigValue(input).(map[string]interface{})
+	if !ok {
+		t.Fatal("expected map result")
+	}
+	for _, key := range []string{"api_key", "auth_token", "Authorization", "x-api-key", "access_token"} {
+		if redacted[key] != RedactedConfigValue {
+			t.Fatalf("%s = %v, want %q", key, redacted[key], RedactedConfigValue)
+		}
+	}
+	if redacted["api_key_env"] != "OPENAI_API_KEY" {
+		t.Fatalf("api_key_env should remain visible, got %v", redacted["api_key_env"])
+	}
+	if redacted["password"] != "$DB_PASSWORD" {
+		t.Fatalf("pure environment password reference should remain visible, got %v", redacted["password"])
+	}
+	if redacted["client_secret"] != RedactedConfigValue {
+		t.Fatalf("environment reference with literal fallback must be redacted, got %v", redacted["client_secret"])
+	}
+	if redacted["tokens_per_unit"] != 100 {
+		t.Fatal("tokens_per_unit should not be redacted")
+	}
+	if redacted["token_filter"] != "keep" {
+		t.Fatal("token_filter should not be redacted")
+	}
+	stack := redacted["llama_stack"].(map[string]interface{})
+	if stack["auth_token"] != RedactedConfigValue {
+		t.Fatalf("canonical llama_stack.auth_token = %v, want %q", stack["auth_token"], RedactedConfigValue)
+	}
+}
+
+func TestEvaluateRedactsAuthTokenFromActiveDiff(t *testing.T) {
+	const activeToken = "active-bearer-token"
+	const candidateToken = "candidate-bearer-token"
+	document := func(token string) []byte {
+		return []byte(`
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    model: m1
+  models:
+    - name: m1
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+routing:
+  modelCards:
+    - name: m1
+  decisions:
+    - name: d1
+      priority: 1
+      rules: {operator: AND, conditions: []}
+      modelRefs:
+        - model: m1
+          use_reasoning: false
+global:
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: llama_stack
+      llama_stack:
+        endpoint: http://llama-stack:8321
+        auth_token: ` + token + `
+`)
+	}
+	result := Evaluate(document(candidateToken), EvaluateOptions{
+		CompareToActive: true,
+		ActiveYAML:      document(activeToken),
+	})
+	if leaked := secretInDiff(result.Diff, activeToken); leaked != "" {
+		t.Fatalf("diff leaked active auth_token in %s", leaked)
+	}
+	if leaked := secretInDiff(result.Diff, candidateToken); leaked != "" {
+		t.Fatalf("diff leaked candidate auth_token in %s", leaked)
+	}
+	if result.Diff == nil {
+		t.Fatal("expected diff against an active snapshot that includes auth_token")
+	}
+	found := false
+	for _, entry := range result.Diff.Changed {
+		if strings.Contains(entry.Field, "auth_token") {
+			found = true
+			if entry.Old != RedactedConfigValue || entry.New != RedactedConfigValue {
+				t.Fatalf("auth_token diff = %+v, want redacted old and new", entry)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected an auth_token change, got %+v", result.Diff)
+	}
+}
+
 func TestEvaluateDiffIsBoundedAndSchemaAware(t *testing.T) {
 	result := Evaluate(readDryRunTestdata(t, "valid.yaml"), EvaluateOptions{
 		CompareToActive: true,

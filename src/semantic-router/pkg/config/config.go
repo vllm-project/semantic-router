@@ -146,6 +146,10 @@ type RouterConfig struct {
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
 	DocumentHash string `yaml:"-"`
+	// SourceDocument is the exact YAML bytes that produced this snapshot.
+	// Compare-to-active binds to this verified in-memory document instead of a
+	// later desired-source write.
+	SourceDocument []byte `yaml:"-"`
 	// EffectiveModelRegistry is the immutable catalog/config join used to
 	// materialize this runtime snapshot.
 	EffectiveModelRegistry *modelcatalog.EffectiveRegistry `yaml:"-" json:"-"`

@@ -18,6 +18,9 @@ func TestParseYAMLBytesRecordsExactDocumentHash(t *testing.T) {
 	if cfg.DocumentHash != want {
 		t.Fatalf("DocumentHash = %q, want %q", cfg.DocumentHash, want)
 	}
+	if string(cfg.SourceDocument) != string(document) {
+		t.Fatal("SourceDocument should retain the exact parsed YAML bytes")
+	}
 }
 
 func TestParseYAMLBytesDocumentHashTracksFormattingChanges(t *testing.T) {

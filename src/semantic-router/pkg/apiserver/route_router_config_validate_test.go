@@ -5,6 +5,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -288,6 +289,93 @@ func TestHandleConfigValidateIsSideEffectFree(t *testing.T) {
 	}
 	if registry.CurrentConfig().DocumentHash != beforeHash {
 		t.Fatal("validate mutated the runtime snapshot")
+	}
+}
+
+func TestHandleConfigValidateCompareToActiveUsesInMemorySnapshot(t *testing.T) {
+	desiredPath := writeValidateTestConfig(t, validateTestYAML("desired-card", "desired-secret"))
+	activeCfg, err := config.ParseYAMLBytesWithoutEnvExpansion([]byte(validateTestYAML("active-card", "active-secret")))
+	if err != nil {
+		t.Fatalf("parse active: %v", err)
+	}
+	body, err := json.Marshal(RouterConfigValidateRequest{
+		YAML:            validateTestYAML("desired-card", "desired-secret"),
+		CompareToActive: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	response := httptest.NewRecorder()
+	(&ClassificationAPIServer{
+		configPath:      desiredPath,
+		runtimeRegistry: routerruntime.NewRegistry(activeCfg),
+	}).handleConfigValidate(
+		response,
+		httptest.NewRequest(http.MethodPost, "/api/v1/config/validate", strings.NewReader(string(body))),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	decoded := decodeValidateResponse(t, response.Body.Bytes())
+	if decoded.Diff == nil {
+		t.Fatal("expected a diff against the in-memory active snapshot")
+	}
+	foundActive := false
+	for _, entry := range decoded.Diff.Changed {
+		if strings.Contains(entry.Field, "description") && fmt.Sprint(entry.Old) == "active-card" {
+			foundActive = true
+			break
+		}
+	}
+	if !foundActive {
+		t.Fatalf("compare_to_active used desired source instead of in-memory active state: %+v", decoded.Diff)
+	}
+	if strings.Contains(response.Body.String(), "active-secret") || strings.Contains(response.Body.String(), "desired-secret") {
+		t.Fatalf("diff leaked a secret: %s", response.Body.String())
+	}
+}
+
+func TestHandleConfigValidateCompareToActiveUsesGeneratedRuntime(t *testing.T) {
+	tempDir := t.TempDir()
+	sourcePath := filepath.Join(tempDir, "config.yaml")
+	runtimePath := filepath.Join(tempDir, ".vllm-sr", "runtime-config.yaml")
+	if err := os.MkdirAll(filepath.Dir(runtimePath), 0o755); err != nil {
+		t.Fatalf("mkdir runtime dir: %v", err)
+	}
+	if err := os.WriteFile(sourcePath, []byte(validateTestYAML("source-card", "source-secret")), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(runtimePath, []byte(validateTestYAML("runtime-card", "runtime-secret")), 0o644); err != nil {
+		t.Fatalf("write runtime: %v", err)
+	}
+	body, err := json.Marshal(RouterConfigValidateRequest{
+		YAML:            validateTestYAML("candidate-card", "candidate-secret"),
+		CompareToActive: true,
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	response := httptest.NewRecorder()
+	(&ClassificationAPIServer{configPath: runtimePath}).handleConfigValidate(
+		response,
+		httptest.NewRequest(http.MethodPost, "/api/v1/config/validate", strings.NewReader(string(body))),
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	decoded := decodeValidateResponse(t, response.Body.Bytes())
+	if decoded.Diff == nil {
+		t.Fatal("expected a diff against generated runtime state")
+	}
+	foundRuntime := false
+	for _, entry := range decoded.Diff.Changed {
+		if strings.Contains(entry.Field, "description") && fmt.Sprint(entry.Old) == "runtime-card" {
+			foundRuntime = true
+			break
+		}
+	}
+	if !foundRuntime {
+		t.Fatalf("compare_to_active used desired source instead of generated runtime: %+v", decoded.Diff)
 	}
 }
 
