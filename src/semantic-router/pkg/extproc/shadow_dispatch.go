@@ -48,6 +48,8 @@ const (
 	shadowReasonQueueTimeout         = "queue_timeout"
 	shadowReasonRouterClosing        = "router_closing"
 	shadowReasonBackendUnresolved    = "backend_unresolved"
+	shadowReasonDynamoBackend        = "unsupported_dynamo_nvext_backend"
+	shadowReasonDynamoFormat         = "unsupported_dynamo_nvext_translation"
 	shadowReasonCredentialUnresolved = "credential_unresolved" //nolint:gosec // outcome reason code, not a secret
 	shadowReasonEncodeFailed         = "encode_failed"
 	shadowReasonTimeout              = "timeout"
@@ -101,6 +103,8 @@ type shadowJob struct {
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
 	request         llmprotocol.Request
+	hasDynamoExt    bool
+	sourceFormat    llmprotocol.WireFormat
 	extraHeaders    map[string]string
 	decision        string
 	recipe          string
@@ -404,6 +408,8 @@ func (d *shadowDispatcher) submit(
 		engine:          deps.engine,
 		encode:          deps.encode,
 		request:         *ctx.SemanticRequest,
+		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope),
+		sourceFormat:    ctx.ProtocolEnvelope.Format,
 		extraHeaders:    deps.extraHeaders,
 		decision:        decision,
 		recipe:          recipe,

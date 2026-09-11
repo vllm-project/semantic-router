@@ -483,6 +483,103 @@ func TestShadowDispatchUnknownModelRecordsBackendUnresolved(t *testing.T) {
 	}
 }
 
+func TestShadowDispatchRejectsDynamoExtensionForNonDynamoBackend(t *testing.T) {
+	tests := []struct {
+		name   string
+		dynamo *llmprotocol.DynamoEnvelope
+	}{
+		{
+			name:   "nvext",
+			dynamo: &llmprotocol.DynamoEnvelope{RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"}},
+		},
+		{
+			name: "top-level cache_salt",
+			dynamo: func() *llmprotocol.DynamoEnvelope {
+				salt := "tenant-a"
+				return &llmprotocol.DynamoEnvelope{RequestTopLevelCacheSalt: &salt}
+			}(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			for index := range router.Config.VLLMEndpoints {
+				endpoint := &router.Config.VLLMEndpoints[index]
+				endpoint.Type = "dynamo"
+				if endpoint.Name == "shadow-backend" {
+					endpoint.Type = "vllm"
+				}
+			}
+
+			run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+				ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+				ctx.ProtocolEnvelope.Dynamo = test.dynamo
+			})
+			waitForShadow(t, router)
+
+			outcome := singleShadowOutcome(t, run)
+			if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonDynamoBackend {
+				t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+			}
+			if backend.requestCount() != 0 {
+				t.Fatal("non-Dynamo shadow backend received a Dynamo extension")
+			}
+		})
+	}
+}
+
+func TestShadowDispatchAllowsDynamoExtensionForDynamoBackend(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"},
+		}
+	})
+	waitForShadow(t, router)
+
+	if backend.requestCount() != 1 {
+		t.Fatalf("Dynamo shadow backend requests = %d, want 1", backend.requestCount())
+	}
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictCompleted || outcome.Reason != shadowReasonCompleted {
+		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+	}
+}
+
+func TestShadowDispatchRejectsDynamoExtensionForCrossFormatTarget(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	shadowModel := router.Config.ModelConfig[shadowTestModel]
+	shadowModel.APIFormat = "responses"
+	router.Config.ModelConfig[shadowTestModel] = shadowModel
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: "tenant-a"},
+		}
+	})
+	waitForShadow(t, router)
+
+	outcome := singleShadowOutcome(t, run)
+	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonDynamoFormat {
+		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+	}
+	if backend.requestCount() != 0 {
+		t.Fatal("cross-format shadow backend received a Dynamo extension")
+	}
+}
+
 func TestShadowDispatchWithoutReplayStillObserves(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)

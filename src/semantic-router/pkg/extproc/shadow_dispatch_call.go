@@ -30,6 +30,7 @@ const (
 type shadowTarget struct {
 	logicalModel  string
 	backendName   string
+	backendType   string
 	upstreamModel string
 	profile       *config.ProviderProfile
 	format        llmprotocol.WireFormat
@@ -101,6 +102,19 @@ func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCal
 	target, err := resolveShadowTarget(job.routerConfig, job.cfg.Model)
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, err
+	}
+	if job.hasDynamoExt {
+		if !strings.EqualFold(strings.TrimSpace(target.backendType), "dynamo") {
+			return nil, shadowReasonDynamoBackend, unsupportedDynamoBackendError(target.logicalModel)
+		}
+		if job.sourceFormat != target.format {
+			return nil, shadowReasonDynamoFormat, llmprotocol.NewError(
+				llmprotocol.ErrorUnsupportedFeature,
+				shadowReasonDynamoFormat,
+				"Dynamo nvext requests cannot be translated across wire formats",
+				nil,
+			)
+		}
 	}
 	client, reason, err := d.connectorFor(job, target)
 	if err != nil {
@@ -217,6 +231,11 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	if !found || address == "" {
 		return nil, fmt.Errorf("shadow model %q has no configured backend", model)
 	}
+	endpoint, found := cfg.GetEndpointByName(backendName)
+	if !found {
+		return nil, fmt.Errorf("shadow model %q resolved unknown backend %q", model, backendName)
+	}
+	backendType := strings.TrimSpace(endpoint.Type)
 	profile, err := cfg.GetProviderProfileForEndpoint(backendName)
 	if err != nil {
 		return nil, fmt.Errorf("resolve provider profile for shadow model %q: %w", model, err)
@@ -232,6 +251,7 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 	return &shadowTarget{
 		logicalModel:  model,
 		backendName:   backendName,
+		backendType:   backendType,
 		upstreamModel: cfg.ResolveExternalModelID(model, backendName),
 		profile:       profile,
 		format:        format,
