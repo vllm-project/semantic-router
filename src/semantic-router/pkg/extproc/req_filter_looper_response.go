@@ -10,6 +10,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
@@ -47,6 +48,10 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	var semantic *llmprotocol.Response
 	var body []byte
 	contentType := "application/json"
+	// Isolate looper-private "flow" so the strict Chat Completions codec can
+	// translate, then restore the public workflow trace when the decision
+	// asked for intermediate responses.
+	codecBody, flow := isolateLooperWorkflowFlow(resp.Body)
 	if strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream") {
 		stream, streamErr := engine.NewStream(
 			llmprotocol.OpenAIChatV1,
@@ -62,7 +67,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 			usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 			items: make(map[int]*semanticStreamItem),
 		}
-		frames, events, diagnostics, streamErr := stream.Push(looperClientResponseBody(resp.Body))
+		frames, events, diagnostics, streamErr := stream.Push(codecBody)
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, diagnostics...)
 		state.observe(events)
 		for _, frame := range frames {
@@ -93,7 +98,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		translated, translateErr := engine.TranslateResponse(
 			llmprotocol.OpenAIChatV1,
 			target,
-			looperClientResponseBody(resp.Body),
+			codecBody,
 			func(response *llmprotocol.Response) error {
 				if response.Model != resp.Model {
 					response.Model = resp.Model
@@ -109,6 +114,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		reqCtx.ResponseEnvelope = translated.Envelope
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
 	}
+	body = restoreLooperWorkflowTrace(body, flow, reqCtx)
 	reqCtx.SemanticResponse = semantic
 	reqCtx.ImmediateResponseEncoded = true
 	return &ext_proc.ProcessingResponse{
@@ -300,14 +306,42 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 }
 
 // looperClientResponseBody drops looper-private JSON extensions before the
-// protocol codec translates a buffered or streaming result. Workflow pause
-// responses attach a top-level "flow" trace that is not part of Chat
-// Completions, and the codec rejects unknown fields.
+// protocol codec translates a buffered or streaming result. Callers that
+// need the public workflow trace must restore it after translation.
 func looperClientResponseBody(body []byte) []byte {
+	stripped, _ := isolateLooperWorkflowFlow(body)
+	return stripped
+}
+
+func isolateLooperWorkflowFlow(body []byte) ([]byte, json.RawMessage) {
 	if isLooperSSEBody(body) {
-		return stripFlowFromSSE(body)
+		return isolateFlowFromSSE(body)
 	}
-	return stripFlowFromJSON(body)
+	return isolateFlowFromJSON(body)
+}
+
+func restoreLooperWorkflowTrace(body []byte, flow json.RawMessage, reqCtx *RequestContext) []byte {
+	if len(flow) == 0 || !looperIncludeIntermediateResponses(reqCtx) {
+		return body
+	}
+	if isLooperSSEBody(body) {
+		return restoreFlowSSE(body, flow)
+	}
+	return restoreFlowJSON(body, flow)
+}
+
+func looperIncludeIntermediateResponses(reqCtx *RequestContext) bool {
+	if reqCtx == nil || reqCtx.VSRSelectedDecision == nil {
+		return false
+	}
+	alg := reqCtx.VSRSelectedDecision.Algorithm
+	if alg == nil || alg.Type != config.DecisionAlgorithmWorkflows {
+		return false
+	}
+	if alg.Workflows == nil || alg.Workflows.IncludeIntermediateResponses == nil {
+		return true
+	}
+	return *alg.Workflows.IncludeIntermediateResponses
 }
 
 func isLooperSSEBody(body []byte) bool {
@@ -315,16 +349,45 @@ func isLooperSSEBody(body []byte) bool {
 	return bytes.HasPrefix(trimmed, []byte("data:")) || bytes.Contains(body, []byte("\ndata:"))
 }
 
-func stripFlowFromSSE(body []byte) []byte {
+func isolateFlowFromSSE(body []byte) ([]byte, json.RawMessage) {
 	lines := bytes.Split(body, []byte("\n"))
 	out := make([]byte, 0, len(body))
+	var flow json.RawMessage
 	for i, line := range lines {
 		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok {
 			payload := bytes.TrimSpace(rest)
 			if !bytes.Equal(payload, []byte("[DONE]")) {
-				payload = stripFlowFromJSON(payload)
+				var extracted json.RawMessage
+				payload, extracted = isolateFlowFromJSON(payload)
+				if len(flow) == 0 && len(extracted) > 0 {
+					flow = extracted
+				}
 			}
 			line = append([]byte("data: "), payload...)
+		}
+		out = append(out, line...)
+		if i < len(lines)-1 {
+			out = append(out, '\n')
+		}
+	}
+	return out, flow
+}
+
+func restoreFlowSSE(body []byte, flow json.RawMessage) []byte {
+	if len(flow) == 0 {
+		return body
+	}
+	lines := bytes.Split(body, []byte("\n"))
+	out := make([]byte, 0, len(body)+len(flow)+8)
+	restored := false
+	for i, line := range lines {
+		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok && !restored {
+			payload := bytes.TrimSpace(rest)
+			if len(payload) > 0 && payload[0] == '{' && !bytes.Equal(payload, []byte("[DONE]")) {
+				payload = restoreFlowJSON(payload, flow)
+				line = append([]byte("data: "), payload...)
+				restored = true
+			}
 		}
 		out = append(out, line...)
 		if i < len(lines)-1 {
@@ -334,18 +397,35 @@ func stripFlowFromSSE(body []byte) []byte {
 	return out
 }
 
-func stripFlowFromJSON(body []byte) []byte {
+func isolateFlowFromJSON(body []byte) ([]byte, json.RawMessage) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(body, &obj); err != nil {
-		return body
+		return body, nil
 	}
-	if _, ok := obj["flow"]; !ok {
-		return body
+	flow, ok := obj["flow"]
+	if !ok {
+		return body, nil
 	}
 	delete(obj, "flow")
 	stripped, err := json.Marshal(obj)
 	if err != nil {
+		return body, nil
+	}
+	return stripped, flow
+}
+
+func restoreFlowJSON(body []byte, flow json.RawMessage) []byte {
+	if len(flow) == 0 {
 		return body
 	}
-	return stripped
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return body
+	}
+	obj["flow"] = flow
+	restored, err := json.Marshal(obj)
+	if err != nil {
+		return body
+	}
+	return restored
 }

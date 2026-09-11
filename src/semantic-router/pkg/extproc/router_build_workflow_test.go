@@ -55,7 +55,11 @@ func TestNewWorkflowStateServiceIfEnabled(t *testing.T) {
 }
 
 func workflowTestDecision() config.Decision {
-	includeTrace := true
+	return workflowTestDecisionWithIntermediateResponses(true)
+}
+
+func workflowTestDecisionWithIntermediateResponses(include bool) config.Decision {
+	includeTrace := include
 	return config.Decision{
 		Name: "workflow_decision",
 		ModelRefs: []config.ModelRef{

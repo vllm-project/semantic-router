@@ -53,29 +53,85 @@ func TestHandleLooperExecution_TwoRecipesSameDecisionDoNotShareState(t *testing.
 	}
 }
 
-func TestHandleLooperExecution_StreamingPauseResumeStripsFlow(t *testing.T) {
+func TestHandleLooperExecution_WorkflowTraceAtClientBoundary(t *testing.T) {
 	t.Parallel()
 
-	server, tracker := newWorkflowPauseResumeServer(t)
-	router := newWorkflowRouter(t, newWorkflowLooperConfig(t, server.URL, config.WorkflowStateBackendMemory))
+	cases := []struct {
+		name    string
+		include bool
+		stream  bool
+	}{
+		{name: "buffered_enabled", include: true, stream: false},
+		{name: "buffered_disabled", include: false, stream: false},
+		{name: "sse_enabled", include: true, stream: true},
+		{name: "sse_disabled", include: false, stream: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			server, tracker := newWorkflowPauseResumeServer(t)
+			router := newWorkflowRouter(t, newWorkflowLooperConfig(t, server.URL, config.WorkflowStateBackendMemory))
+			include := tc.include
+			opts := workflowRouteOptions{streaming: tc.stream, includeIntermediate: &include}
 
-	pauseResp := routeWorkflowRequestWith(t, router, workflowStreamingPauseChatBody(t), workflowRouteOptions{streaming: true})
-	if got := immediateStatus(pauseResp); got != 200 {
-		t.Fatalf("streaming pause status = %d, body %s", got, immediateBody(pauseResp))
+			pauseBody := workflowPauseChatBody(t)
+			resumeFn := workflowResumeChatBody
+			if tc.stream {
+				pauseBody = workflowStreamingPauseChatBody(t)
+				resumeFn = workflowStreamingResumeChatBody
+			}
+
+			pauseResp := routeWorkflowRequestWith(t, router, pauseBody, opts)
+			if got := immediateStatus(pauseResp); got != 200 {
+				t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
+			}
+			assertWorkflowClientTrace(t, immediateBody(pauseResp), tc.include)
+
+			resumeResp := routeWorkflowRequestWith(t, router, resumeFn(t, immediateBody(pauseResp)), opts)
+			if got := immediateStatus(resumeResp); got != 200 {
+				t.Fatalf("resume status = %d, body %s", got, immediateBody(resumeResp))
+			}
+			assertWorkflowClientTrace(t, immediateBody(resumeResp), tc.include)
+			if !tracker.sawToolResult() || !tracker.sawFinal() {
+				t.Fatal("resume did not finish the workflow")
+			}
+		})
 	}
-	pauseBody := immediateBody(pauseResp)
-	if strings.Contains(string(pauseBody), `"flow"`) {
-		t.Fatalf("streaming pause leaked looper flow extension: %s", pauseBody)
-	}
-	resumeResp := routeWorkflowRequestWith(t, router, workflowStreamingResumeChatBody(t, pauseBody), workflowRouteOptions{streaming: true})
-	if got := immediateStatus(resumeResp); got != 200 {
-		t.Fatalf("streaming resume status = %d, body %s", got, immediateBody(resumeResp))
-	}
-	if strings.Contains(string(immediateBody(resumeResp)), `"flow"`) {
-		t.Fatalf("streaming resume leaked looper flow extension: %s", immediateBody(resumeResp))
-	}
-	if !tracker.sawToolResult() || !tracker.sawFinal() {
-		t.Fatal("streaming resume did not finish the workflow")
+}
+
+func TestIsolateAndRestoreLooperWorkflowTrace(t *testing.T) {
+	t.Parallel()
+
+	buffered := []byte(`{"id":"c","object":"chat.completion","flow":{"steps":[{"responses":[{"agent_id":"worker:0:worker-model","content":"x"}]}]},"choices":[{"index":0,"message":{"role":"assistant","content":"hi"}}]}`)
+	sse := []byte("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"flow\":{\"steps\":[{\"responses\":[{\"agent_id\":\"worker:0:worker-model\"}]}]},\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: [DONE]\n")
+
+	for _, tc := range []struct {
+		name    string
+		body    []byte
+		include bool
+		sse     bool
+	}{
+		{name: "buffered_enabled", body: buffered, include: true},
+		{name: "buffered_disabled", body: buffered, include: false},
+		{name: "sse_enabled", body: sse, include: true, sse: true},
+		{name: "sse_disabled", body: sse, include: false, sse: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			stripped, flow := isolateLooperWorkflowFlow(tc.body)
+			if strings.Contains(string(stripped), `"flow"`) {
+				t.Fatalf("isolated body still contains flow: %s", stripped)
+			}
+			if len(flow) == 0 {
+				t.Fatal("expected isolated flow payload")
+			}
+			if tc.sse && !strings.Contains(string(stripped), `"delta"`) {
+				t.Fatalf("SSE lost completion payload: %s", stripped)
+			}
+			decision := workflowTestDecisionWithIntermediateResponses(tc.include)
+			restored := restoreLooperWorkflowTrace(stripped, flow, &RequestContext{VSRSelectedDecision: &decision})
+			assertWorkflowClientTrace(t, restored, tc.include)
+		})
 	}
 }
 
@@ -109,9 +165,6 @@ func TestHandleLooperExecution_TwoIndependentRequestsPauseResume(t *testing.T) {
 				t.Fatalf("pause status = %d, body %s", got, immediateBody(pauseResp))
 			}
 			pauseBody := immediateBody(pauseResp)
-			if strings.Contains(string(pauseBody), `"flow"`) {
-				t.Fatalf("client pause body leaked looper flow extension: %s", pauseBody)
-			}
 			resumeResp := routeWorkflowRequest(t, router, workflowResumeChatBody(t, pauseBody))
 			if got := immediateStatus(resumeResp); got != 200 {
 				t.Fatalf("resume status = %d, body %s", got, immediateBody(resumeResp))
@@ -283,8 +336,9 @@ func routeWorkflowRequest(t *testing.T, router *OpenAIRouter, body []byte) *ext_
 }
 
 type workflowRouteOptions struct {
-	recipe    config.RecipeName
-	streaming bool
+	recipe              config.RecipeName
+	streaming           bool
+	includeIntermediate *bool
 }
 
 func routeWorkflowRequestWith(t *testing.T, router *OpenAIRouter, body []byte, opts workflowRouteOptions) *ext_proc.ProcessingResponse {
@@ -305,7 +359,11 @@ func routeWorkflowRequestWithErr(router *OpenAIRouter, body []byte, opts workflo
 	if err != nil {
 		return nil, err
 	}
-	decision := workflowTestDecision()
+	include := true
+	if opts.includeIntermediate != nil {
+		include = *opts.includeIntermediate
+	}
+	decision := workflowTestDecisionWithIntermediateResponses(include)
 	ctx := &RequestContext{
 		RequestID:               "workflow-independent-turn",
 		TraceContext:            context.Background(),
@@ -429,9 +487,6 @@ func assistantToolMessageFromClientBody(t *testing.T, body []byte) (map[string]i
 
 func assistantToolMessageFromSSEBody(t *testing.T, body []byte) (map[string]interface{}, string) {
 	t.Helper()
-	if strings.Contains(string(body), `"flow"`) {
-		t.Fatalf("streaming pause leaked looper flow extension: %s", body)
-	}
 	var toolCalls []interface{}
 	for _, line := range strings.Split(string(body), "\n") {
 		line = strings.TrimSpace(line)
@@ -445,9 +500,6 @@ func assistantToolMessageFromSSEBody(t *testing.T, body []byte) (map[string]inte
 		var chunk map[string]interface{}
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
 			t.Fatalf("parse SSE chunk %q: %v", payload, err)
-		}
-		if _, ok := chunk["flow"]; ok {
-			t.Fatalf("SSE chunk leaked flow: %s", payload)
 		}
 		choices, _ := chunk["choices"].([]interface{})
 		if len(choices) == 0 {
@@ -479,6 +531,68 @@ func assistantToolMessageFromSSEBody(t *testing.T, body []byte) (map[string]inte
 		"content":    nil,
 		"tool_calls": toolCalls,
 	}, toolCallID
+}
+
+func assertWorkflowClientTrace(t *testing.T, body []byte, wantPresent bool) {
+	t.Helper()
+	flow, ok := workflowClientFlow(body)
+	if !wantPresent {
+		if ok {
+			t.Fatalf("client body should omit flow: %s", body)
+		}
+		return
+	}
+	if !ok {
+		t.Fatalf("client body missing documented flow trace: %s", body)
+	}
+	if !workflowFlowHasAgentID(flow) {
+		t.Fatalf("flow.steps[].responses[].agent_id missing: %#v", flow)
+	}
+}
+
+func workflowClientFlow(body []byte) (map[string]interface{}, bool) {
+	if isLooperSSEBody(body) {
+		for _, line := range strings.Split(string(body), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if payload == "" || payload == "[DONE]" {
+				continue
+			}
+			var chunk map[string]interface{}
+			if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
+				continue
+			}
+			flow, ok := chunk["flow"].(map[string]interface{})
+			if ok {
+				return flow, true
+			}
+		}
+		return nil, false
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, false
+	}
+	flow, ok := parsed["flow"].(map[string]interface{})
+	return flow, ok
+}
+
+func workflowFlowHasAgentID(flow map[string]interface{}) bool {
+	steps, _ := flow["steps"].([]interface{})
+	for _, step := range steps {
+		stepMap, _ := step.(map[string]interface{})
+		responses, _ := stepMap["responses"].([]interface{})
+		for _, response := range responses {
+			respMap, _ := response.(map[string]interface{})
+			if id, _ := respMap["agent_id"].(string); strings.TrimSpace(id) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func assistantToolMessageFromImmediateBody(t *testing.T, body []byte) (map[string]interface{}, string) {

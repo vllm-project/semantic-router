@@ -58,13 +58,13 @@ func testWorkflowResumeRestartRecovery(ctx context.Context, client *kubernetes.C
 	}
 
 	// 1. Send initial request with tools guaranteed to trigger the workflows algorithm and tool pause
-	stateID, toolCallID, toolName, toolArgs, err := triggerWorkflowToolPauseBeforeRestart(ctx, client, opts)
+	stateID, toolCallID, toolName, toolArgs, recipe, err := triggerWorkflowToolPauseBeforeRestart(ctx, client, opts)
 	if err != nil {
 		return err
 	}
 
 	if opts.Verbose {
-		fmt.Printf("[Test] Triggered workflow pause (stateID=%s, toolCallID=%s). Restarting semantic-router pod...\n", stateID, toolCallID)
+		fmt.Printf("[Test] Triggered workflow pause (stateID=%s, recipe=%s, toolCallID=%s). Restarting semantic-router pod...\n", stateID, recipe, toolCallID)
 	}
 
 	// 2. Kill the router pod
@@ -81,18 +81,18 @@ func testWorkflowResumeRestartRecovery(ctx context.Context, client *kubernetes.C
 		fmt.Println("[Test] Pod restarted. Validating workflow state in Redis and resuming workflow...")
 	}
 
-	// 4. Verify Redis key exists under workflow-state prefix and resume workflow
-	return resumeAndVerifyWorkflowStateAfterRestart(ctx, client, opts, stateID, toolCallID, toolName, toolArgs)
+	// 4. Verify Redis key exists under the recipe-namespaced workflow-state prefix and resume workflow
+	return resumeAndVerifyWorkflowStateAfterRestart(ctx, client, opts, recipe, stateID, toolCallID, toolName, toolArgs)
 }
 
 func triggerWorkflowToolPauseBeforeRestart(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
-) (stateID string, toolCallID string, toolName string, toolArgs string, err error) {
+) (stateID string, toolCallID string, toolName string, toolArgs string, recipe string, err error) {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
-		return "", "", "", "", fmt.Errorf("open session for pre-restart workflow: %w", err)
+		return "", "", "", "", "", fmt.Errorf("open session for pre-restart workflow: %w", err)
 	}
 	defer session.Close()
 
@@ -118,19 +118,19 @@ func triggerWorkflowToolPauseBeforeRestart(
 
 	httpResp, err := chatClient.Create(ctx, initReq, map[string]string{"x-vsr-debug": "true"})
 	if err != nil {
-		return "", "", "", "", fmt.Errorf("initial workflow request failed: %w", err)
+		return "", "", "", "", "", fmt.Errorf("initial workflow request failed: %w", err)
 	}
 	if httpResp.StatusCode != http.StatusOK {
-		return "", "", "", "", fmt.Errorf("initial workflow request HTTP %d: %s", httpResp.StatusCode, string(httpResp.Body))
+		return "", "", "", "", "", fmt.Errorf("initial workflow request HTTP %d: %s", httpResp.StatusCode, string(httpResp.Body))
 	}
 
 	var chatResp workflowChatResponsePayload
 	if err := httpResp.DecodeJSON(&chatResp); err != nil {
-		return "", "", "", "", fmt.Errorf("decode initial workflow response: %w", err)
+		return "", "", "", "", "", fmt.Errorf("decode initial workflow response: %w", err)
 	}
 
 	if len(chatResp.Choices) == 0 || len(chatResp.Choices[0].Message.ToolCalls) == 0 {
-		return "", "", "", "", fmt.Errorf("expected workflow tool interruption but got response: %s", string(httpResp.Body))
+		return "", "", "", "", "", fmt.Errorf("expected workflow tool interruption but got response: %s", string(httpResp.Body))
 	}
 
 	toolCall := chatResp.Choices[0].Message.ToolCalls[0]
@@ -139,33 +139,35 @@ func triggerWorkflowToolPauseBeforeRestart(
 	toolArgs = toolCall.Function.Arguments
 
 	if !strings.HasPrefix(toolCallID, "flowtool_") {
-		return "", "", "", "", fmt.Errorf("expected tool_call id prefix 'flowtool_', got %q", toolCallID)
+		return "", "", "", "", "", fmt.Errorf("expected tool_call id prefix 'flowtool_', got %q", toolCallID)
 	}
 
 	trimmed := strings.TrimPrefix(toolCallID, "flowtool_")
 	idx := strings.Index(trimmed, "__")
 	if idx <= 0 {
-		return "", "", "", "", fmt.Errorf("invalid workflow tool call id format %q", toolCallID)
+		return "", "", "", "", "", fmt.Errorf("invalid workflow tool call id format %q", toolCallID)
 	}
 	stateID = trimmed[:idx]
+	recipe = workflowRecipeFromResponse(httpResp)
 
-	if err := assertWorkflowStateInRedis(ctx, client, stateID, opts); err != nil {
-		return "", "", "", "", fmt.Errorf("assert workflow state before restart: %w", err)
+	if err := assertWorkflowStateInRedis(ctx, client, recipe, stateID, opts); err != nil {
+		return "", "", "", "", "", fmt.Errorf("assert workflow state before restart: %w", err)
 	}
 
-	return stateID, toolCallID, toolName, toolArgs, nil
+	return stateID, toolCallID, toolName, toolArgs, recipe, nil
 }
 
 func resumeAndVerifyWorkflowStateAfterRestart(
 	ctx context.Context,
 	client *kubernetes.Clientset,
 	opts pkgtestcases.TestCaseOptions,
+	recipe string,
 	stateID string,
 	toolCallID string,
 	toolName string,
 	toolArgs string,
 ) error {
-	if err := assertWorkflowStateInRedis(ctx, client, stateID, opts); err != nil {
+	if err := assertWorkflowStateInRedis(ctx, client, recipe, stateID, opts); err != nil {
 		return fmt.Errorf("workflow state not found in redis after restart: %w", err)
 	}
 
@@ -219,7 +221,7 @@ func resumeAndVerifyWorkflowStateAfterRestart(
 		return fmt.Errorf("workflow resume returned empty content: %s", string(httpResp.Body))
 	}
 
-	if err := assertWorkflowStateConsumedInRedis(ctx, client, stateID, opts); err != nil {
+	if err := assertWorkflowStateConsumedInRedis(ctx, client, recipe, stateID, opts); err != nil {
 		return fmt.Errorf("workflow state consumption verification failed: %w", err)
 	}
 
@@ -229,6 +231,7 @@ func resumeAndVerifyWorkflowStateAfterRestart(
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"state_id": stateID,
+			"recipe":   recipe,
 			"resumed":  true,
 			"consumed": true,
 			"survived": true,
@@ -237,7 +240,7 @@ func resumeAndVerifyWorkflowStateAfterRestart(
 	return nil
 }
 
-func assertWorkflowStateInRedis(ctx context.Context, client *kubernetes.Clientset, stateID string, opts pkgtestcases.TestCaseOptions) error {
+func assertWorkflowStateInRedis(ctx context.Context, client *kubernetes.Clientset, recipe, stateID string, opts pkgtestcases.TestCaseOptions) error {
 	podName, useCluster, found, err := getRedisPod(ctx, client)
 	if err != nil {
 		return fmt.Errorf("lookup redis pod: %w", err)
@@ -246,7 +249,7 @@ func assertWorkflowStateInRedis(ctx context.Context, client *kubernetes.Clientse
 		return fmt.Errorf("no redis pod found")
 	}
 
-	key := workflowRedisKeyPrefix + stateID
+	key := workflowRedisStateKey(recipe, stateID)
 	output, err := execRedisCli(ctx, podName, useCluster, opts.Verbose, "EXISTS", key)
 	if err != nil {
 		return fmt.Errorf("redis EXISTS %s failed: %w", key, err)
@@ -259,7 +262,7 @@ func assertWorkflowStateInRedis(ctx context.Context, client *kubernetes.Clientse
 	return nil
 }
 
-func assertWorkflowStateConsumedInRedis(ctx context.Context, client *kubernetes.Clientset, stateID string, opts pkgtestcases.TestCaseOptions) error {
+func assertWorkflowStateConsumedInRedis(ctx context.Context, client *kubernetes.Clientset, recipe, stateID string, opts pkgtestcases.TestCaseOptions) error {
 	podName, useCluster, found, err := getRedisPod(ctx, client)
 	if err != nil {
 		return fmt.Errorf("lookup redis pod: %w", err)
@@ -268,7 +271,7 @@ func assertWorkflowStateConsumedInRedis(ctx context.Context, client *kubernetes.
 		return fmt.Errorf("no redis pod found")
 	}
 
-	key := workflowRedisKeyPrefix + stateID
+	key := workflowRedisStateKey(recipe, stateID)
 	output, err := execRedisCli(ctx, podName, useCluster, opts.Verbose, "EXISTS", key)
 	if err != nil {
 		return fmt.Errorf("redis EXISTS %s failed: %w", key, err)
@@ -279,4 +282,40 @@ func assertWorkflowStateConsumedInRedis(ctx context.Context, client *kubernetes.
 		return fmt.Errorf("expected redis key %s to be consumed, got output %q", key, output)
 	}
 	return nil
+}
+
+func workflowRecipeFromResponse(resp *fixtures.HTTPResponse) string {
+	if resp == nil {
+		return "default"
+	}
+	recipe := strings.TrimSpace(resp.Headers.Get("x-vsr-selected-recipe"))
+	if recipe == "" {
+		return "default"
+	}
+	return recipe
+}
+
+// workflowRedisStateKey mirrors production: prefix + recipeNamespace + "__" + stateID.
+func workflowRedisStateKey(recipe, stateID string) string {
+	return workflowRedisKeyPrefix + workflowRedisRecipeNamespace(recipe) + "__" + stateID
+}
+
+func workflowRedisRecipeNamespace(recipe string) string {
+	name := strings.TrimSpace(recipe)
+	if name == "" {
+		name = "default"
+	}
+	var b strings.Builder
+	b.Grow(len(name))
+	for _, ch := range name {
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' {
+			b.WriteRune(ch)
+			continue
+		}
+		b.WriteByte('_')
+	}
+	if b.Len() == 0 {
+		return "default"
+	}
+	return b.String()
 }
