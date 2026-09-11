@@ -111,6 +111,7 @@ test('lets an operator run a real provider-model query and renders pending, veri
   ).toBeEnabled()
   expect(requestBodies).toEqual([{ model: 'logical-model' }, { model: 'logical-model' }])
 })
+
 test('keeps the Pricing column horizontally stable while the Live status changes', async ({
   page,
 }) => {
