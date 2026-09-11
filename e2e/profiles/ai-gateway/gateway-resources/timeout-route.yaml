@@ -84,5 +84,3 @@ spec:
           ..routes[?(@.name == "httproute/default/semantic-router-timeout-stall/rule/0/match/0/*")]
         path: route/idle_timeout
         value: 2s
-
-
