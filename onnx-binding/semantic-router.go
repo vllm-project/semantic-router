@@ -207,6 +207,7 @@ type ClassResultWithProbs struct {
 	Class         int
 	Confidence    float32
 	Probabilities []float32
+	NumClasses    int
 }
 
 // TokenEntity represents a detected PII entity (candle_binding compatible)
@@ -668,6 +669,12 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text using the mmBERT-32K
+// feedback detector and returns the full class probability distribution.
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierWithProbs("feedback", text)
+}
+
 // ClassifyMmBert32KPII detects PII entities in text
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cName := C.CString("pii")
@@ -730,6 +737,36 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 	}, nil
 }
 
+func classifyWithClassifierWithProbs(name, text string) (ClassResultWithProbs, error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	var result C.ClassificationResultFFI
+	status := C.classify_text(cName, cText, &result) //nolint:gocritic // Cgo writes the result through an out-parameter.
+	if status != 0 || result.error {
+		return ClassResultWithProbs{}, fmt.Errorf("%s classification failed", name)
+	}
+
+	defer C.free_classification_result(&result) //nolint:gocritic // Cgo frees the result through a pointer.
+
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		cProbabilities := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, probability := range cProbabilities {
+			probabilities[i] = float32(probability)
+		}
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class_id),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // ClassifyTextWithProbabilities classifies text with the generic classifier.
 // The ONNX FFI currently exposes the winning class and confidence; callers
 // receive a sparse probability vector with the winning score populated.
@@ -746,6 +783,7 @@ func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
 		Class:         result.Class,
 		Confidence:    result.Confidence,
 		Probabilities: probabilities,
+		NumClasses:    len(probabilities),
 	}, nil
 }
 
@@ -1066,6 +1104,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies text for feedback detection
 func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyFeedbackTextWithProbs classifies text for feedback detection and
+// returns the full class probability distribution.
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierWithProbs("feedback", text)
 }
 
 // ============================================================================
