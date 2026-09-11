@@ -35,7 +35,7 @@ func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
 		configPath:        configPath,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config", nil)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleConfigGet(rr, req)
@@ -76,7 +76,7 @@ func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 		t.Fatalf("json.Marshal error: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/combined", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/combined", bytes.NewReader(body))
 	rr := httptest.NewRecorder()
 
 	apiServer.handleCombinedClassification(rr, req)
@@ -142,7 +142,7 @@ func TestHandleClassificationMetricsReportsCounts(t *testing.T) {
 		},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics/classification", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/observability/classification-metrics", nil)
 	rr := httptest.NewRecorder()
 
 	apiServer.handleClassificationMetrics(rr, req)

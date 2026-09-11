@@ -20,8 +20,11 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
 
-Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
-available on a public inference listener.
+Other `/v1/*` paths fail closed. In particular, `/v1/files`,
+`/v1/vector_stores`, and Router Replay paths are not available on a public
+inference listener. Router-owned file and vector-store operations use
+`/api/v1/storage/files` and `/api/v1/storage/vector-stores` on the management
+listener.
 
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
@@ -149,16 +152,16 @@ retention appropriate to the data being captured.
 Replay queries go to the management API:
 
 ```bash
-curl -sS 'http://localhost:8080/v1/router_replay?limit=20' \
+curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
   -H "Authorization: Bearer ${VSR_MGMT_TOKEN}"
 ```
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/v1/router_replay` | List and filter records |
-| `GET` | `/v1/router_replay/{id}` | Read one record |
-| `GET` | `/v1/router_replay/aggregate` | Aggregate routing and cost metadata |
-| `GET` | `/v1/router_replay/trajectory?session_id=...` | Reconstruct one session trajectory |
+| `GET` | `/api/v1/observability/replays` | List and filter records |
+| `GET` | `/api/v1/observability/replays/{id}` | Read one record |
+| `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
+| `GET` | `/api/v1/observability/replays/trajectory?session_id=...` | Reconstruct one session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
@@ -190,6 +193,7 @@ An HTTP `200` response header alone does not make a streaming record
 | Check health or readiness | Management API on `8080` |
 | Read or change configuration | Management API on `8080` |
 | Inspect replay records | Management API on `8080` |
+| Manage Router-owned files or vector stores | Management API on `8080` under `/api/v1/storage/*` |
 
 Do not expose the management port as a substitute for the public inference
 listener. Its endpoints can reveal configuration and operational data or make

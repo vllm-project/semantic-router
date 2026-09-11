@@ -38,8 +38,7 @@ type IntentOptions struct {
 	ReturnProbabilities bool    `json:"return_probabilities,omitempty"`
 	ConfidenceThreshold float64 `json:"confidence_threshold,omitempty"`
 	IncludeExplanation  bool    `json:"include_explanation,omitempty"`
-	EvaluateAllSignals  bool    `json:"evaluate_all_signals,omitempty"` // Force evaluate all configured signals (for eval scenarios)
-	Trace               bool    `json:"trace,omitempty"`                // Return per-decision evaluation trace trees
+	Trace               bool    `json:"trace,omitempty"` // Return per-decision evaluation trace trees
 }
 
 // MatchedSignals represents all matched signals from signal evaluation.

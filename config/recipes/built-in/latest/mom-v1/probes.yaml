@@ -20,7 +20,7 @@ fixtures:
         FeKyoe9djo72obcc/e5Db/rPeW6sDHZjJc7Qz3BjJc7QQI8AurmGHh50cw0NdPeg53Y5xgY9t8sBdN+gk33ogUEn+9BAdww6v1M4
         Kuj8TiHQftvOb9sBDTTQQAMNNNBAAw000EADDTTQQAMNNNBAAw000EADDTTQQAMNNNBAAw000EAD7S/2uepx/k6h1GNAC2gJaAlo
         CWgBLQEtAS0BLQEtoCWgJaAloCWgBbQEtAS0dN/+AM+GJ8ptsLncAAAAAElFTkSuQmCC
-router_eval_endpoint: /api/v1/eval
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 1

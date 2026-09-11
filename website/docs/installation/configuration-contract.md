@@ -29,8 +29,8 @@ This division is intentional:
   filesystem checks, defaults, and runtime feasibility;
 - the Dashboard may add labels or specialized controls, but it merges them
   onto generated fields instead of maintaining another schema;
-- migration-only aliases remain explicit in the CLI and never become part of
-  the steady-state schema.
+- the API and runtime accept only canonical field names; schema consumers do
+  not maintain aliases or alternate payloads.
 
 ## Discover the contract
 
@@ -53,11 +53,11 @@ Query the exact contract exposed by a running Router:
 
 ```bash
 vllm-sr config schema \
-  --endpoint http://localhost:8080/config/router/schema
+  --endpoint http://localhost:8080
 ```
 
 `--endpoint` works with every progressive option. The Router endpoint is
-`GET /config/router/schema`: omitting `view` returns the compact index; use
+`GET /api/v1/config/schema`: omitting `view` returns the compact index; use
 `view=section&path=...` or `view=surface&kind=...&name=...` to expand one branch,
 and `view=full` for the complete JSON Schema.
 
@@ -93,7 +93,7 @@ The standard JSON Schema describes the complete canonical document. Its
 ## Validate in two stages
 
 JSON Schema validation catches structural errors early. Before applying a
-configuration, send the authored YAML to `POST /config/router/validate`:
+configuration, send the authored YAML to `POST /api/v1/config/validate`:
 
 ```json
 {
@@ -135,7 +135,10 @@ An automation or deployment agent should:
 4. construct the smallest canonical document from schema fields and routing
    surface references;
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
-6. present validation errors or apply through the normal management workflow.
+6. plan the mutation, then apply it with the returned `current_etag` in
+   `If-Match`;
+7. poll `activation_status` and probe the Envoy data plane before keeping the
+   change.
 
 Agents should never infer a field from an example or send unknown keys when a
 schema for the target Router is available.
@@ -170,4 +173,4 @@ the canonical artifact or adapter is stale.
 
 `setup.mode` is bootstrap-only Dashboard control-plane metadata, so it is not
 published by the Router schema. The Dashboard removes it at activation; active
-Router documents and calls to `/config/router/validate` must not include it.
+Router documents and calls to `/api/v1/config/validate` must not include it.

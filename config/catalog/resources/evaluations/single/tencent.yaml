@@ -86,7 +86,7 @@
 - id: tencent/hy4-preview-model-card-humanitys-last-exam@1.0.0
   model: tencent/hy4-preview
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Hy4 preview
@@ -251,7 +251,7 @@
 - id: independent/hy3-humanitys-last-exam@1.0.0
   model: tencent/hy3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Hy3
@@ -269,7 +269,7 @@
 - id: tencent/hy3-model-card-humanitys-last-exam@1.0.0
   model: tencent/hy3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: Hy3

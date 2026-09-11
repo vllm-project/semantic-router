@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// handleListMemories handles GET /v1/memory
+// handleListMemories handles GET /api/v1/storage/memories
 // Lists memories for a user with optional filtering.
 // Returns up to `limit` most recent memories sorted by created_at descending.
 //
@@ -70,7 +70,7 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-// handleGetMemory handles GET /v1/memory/{id}
+// handleGetMemory handles GET /api/v1/storage/memories/{id}
 // Retrieves a specific memory by ID, enforcing ownership via authenticated user identity.
 func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http.Request) {
 	if !s.requireMemoryStore(w) {
@@ -112,7 +112,7 @@ func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http
 	s.writeJSONResponse(w, http.StatusOK, memoryToResponse(mem))
 }
 
-// handleDeleteMemory handles DELETE /v1/memory/{id}
+// handleDeleteMemory handles DELETE /api/v1/storage/memories/{id}
 // Deletes a specific memory by ID, enforcing ownership via authenticated user identity.
 func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *http.Request) {
 	if !s.requireMemoryStore(w) {
@@ -171,7 +171,7 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 	})
 }
 
-// handleDeleteMemoriesByScope handles DELETE /v1/memory[?type=semantic]
+// handleDeleteMemoriesByScope handles DELETE /api/v1/storage/memories[?type=semantic]
 // Deletes all memories for the authenticated user, optionally filtered by type.
 func (s *ClassificationAPIServer) handleDeleteMemoriesByScope(w http.ResponseWriter, r *http.Request) {
 	if !s.requireMemoryStore(w) {
