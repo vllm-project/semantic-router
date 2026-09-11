@@ -105,6 +105,7 @@ type shadowJob struct {
 	request         llmprotocol.Request
 	hasDynamoExt    bool
 	sourceFormat    llmprotocol.WireFormat
+	dynamoHeaders   map[string]string
 	extraHeaders    map[string]string
 	decision        string
 	recipe          string
@@ -410,6 +411,7 @@ func (d *shadowDispatcher) submit(
 		request:         *ctx.SemanticRequest,
 		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope),
 		sourceFormat:    ctx.ProtocolEnvelope.Format,
+		dynamoHeaders:   snapshotDynamoRoutingHeaders(ctx),
 		extraHeaders:    deps.extraHeaders,
 		decision:        decision,
 		recipe:          recipe,

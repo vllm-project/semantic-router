@@ -580,6 +580,68 @@ func TestShadowDispatchRejectsDynamoExtensionForCrossFormatTarget(t *testing.T) 
 	}
 }
 
+func TestShadowDispatchPreservesHeaderOnlyDynamoRouting(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "tenant-shadow"
+		ctx.Headers[headers.DynamoDPRank] = "7"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	wire := backend.headers[0]
+	if got := wire.Get(headers.DynamoTenantID); got != "tenant-shadow" {
+		t.Fatalf("%s = %q, want tenant-shadow", headers.DynamoTenantID, got)
+	}
+	if got := wire.Get(headers.DynamoDPRank); got != "7" {
+		t.Fatalf("%s = %q, want 7", headers.DynamoDPRank, got)
+	}
+}
+
+func TestShadowDispatchPreservesDynamoHeaderOverBodyPrecedence(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	bodyRank := uint32(1)
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{
+			RequestNVExt: &llmprotocol.DynamoRequestNVExt{DPRank: &bodyRank},
+		}
+		ctx.Headers[headers.DynamoDPRank] = "7"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	if got := backend.headers[0].Get(headers.DynamoDPRank); got != "7" {
+		t.Fatalf("%s = %q, want header override 7", headers.DynamoDPRank, got)
+	}
+	var wire struct {
+		NVExt struct {
+			DPRank uint32 `json:"dp_rank"`
+		} `json:"nvext"`
+	}
+	if err := json.Unmarshal(backend.bodies[0], &wire); err != nil {
+		t.Fatalf("decode shadow body: %v", err)
+	}
+	if wire.NVExt.DPRank != bodyRank {
+		t.Fatalf("body nvext.dp_rank = %d, want %d", wire.NVExt.DPRank, bodyRank)
+	}
+}
+
 func TestShadowDispatchWithoutReplayStillObserves(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)

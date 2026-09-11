@@ -10,6 +10,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+var dynamoRoutingHeaderNames = []string{
+	headers.DynamoWorkerInstanceID, headers.DynamoPrefillInstanceID,
+	headers.DynamoDPRank, headers.DynamoPrefillDPRank,
+	headers.DynamoRequestPriority, headers.DynamoRequestStrictPriority,
+	headers.DynamoTenantID, headers.DynamoWorkerInstanceIDLegacy,
+	headers.DynamoPrefillInstanceIDLegacy, headers.DynamoDPRankLegacy,
+	headers.DynamoDataParallelRankLegacy, headers.DynamoPrefillDPRankLegacy,
+}
+
 // validateDynamoRoutingHeaders validates the documented Dynamo routing header
 // types without folding their values into the request body. ExtProc forwards
 // the headers unchanged, so the Dynamo frontend remains responsible for its
@@ -103,19 +112,30 @@ func hasDynamoRequestExtension(ctx *RequestContext, envelope llmprotocol.Envelop
 }
 
 func hasDynamoRoutingHeader(ctx *RequestContext) bool {
-	for _, name := range []string{
-		headers.DynamoWorkerInstanceID, headers.DynamoPrefillInstanceID,
-		headers.DynamoDPRank, headers.DynamoPrefillDPRank,
-		headers.DynamoRequestPriority, headers.DynamoRequestStrictPriority,
-		headers.DynamoTenantID, headers.DynamoWorkerInstanceIDLegacy,
-		headers.DynamoPrefillInstanceIDLegacy, headers.DynamoDPRankLegacy,
-		headers.DynamoDataParallelRankLegacy, headers.DynamoPrefillDPRankLegacy,
-	} {
+	for _, name := range dynamoRoutingHeaderNames {
 		if strings.TrimSpace(headerValueCI(ctx, name)) != "" {
 			return true
 		}
 	}
 	return false
+}
+
+// snapshotDynamoRoutingHeaders copies only the documented, validated Dynamo
+// routing inputs needed to preserve shadow request semantics. Other client
+// headers remain outside the shadow trust boundary.
+func snapshotDynamoRoutingHeaders(ctx *RequestContext) map[string]string {
+	var result map[string]string
+	for _, name := range dynamoRoutingHeaderNames {
+		value := headerValueCI(ctx, name)
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		if result == nil {
+			result = make(map[string]string)
+		}
+		result[name] = value
+	}
+	return result
 }
 
 func modelHasOnlyDynamoBackends(
