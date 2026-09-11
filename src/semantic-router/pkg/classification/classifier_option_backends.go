@@ -40,13 +40,15 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 	}
 	timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
 	cbCfg := backendCfg.CircuitBreaker
-	cbWrappedBackend, err := newCategoryHTTPBackend(external, categoryMapping, timeout)
+
+	innerBackend, err := newHTTPClassifierInference(external, categoryMapping, timeout)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create category http_classify backend: %w", err)
 	}
 	if cbCfg != nil && cbCfg.Enabled {
-		cbWrappedBackend.backend = newCircuitBreakingBackend(cbWrappedBackend.backend, cbCfg, external.ModelName)
+		innerBackend = newCircuitBreakingBackend(innerBackend, cbCfg, external.ModelName)
 	}
+	cbWrappedBackend := &categoryHTTPBackend{backend: innerBackend}
 	b.options = append(b.options, withCategory(categoryMapping, nil, cbWrappedBackend))
 	return nil
 }
@@ -172,7 +174,8 @@ func (b *classifierOptionBuilder) addComplexityBackend() error {
 		})
 		b.options = append(b.options, withComplexityScoreBackend(scorer))
 	case config.RemoteClassifierContractLabelDistribution:
-		labels, err := newHTTPClassifierInference(
+		var labels SequenceClassifierBackend
+		labels, err = newHTTPClassifierInference(
 			external,
 			newDeclaredLabelMapping(ComplexityVerdictLabels),
 			deadline,
