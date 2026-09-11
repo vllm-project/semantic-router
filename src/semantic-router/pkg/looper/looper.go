@@ -68,7 +68,9 @@ type Request struct {
 	// normalization and post-processing. OutputContract remains prompt text.
 	OutputContractSpec *config.OutputContractSpec
 
-	// Fusion carries request-level plugins[].id=fusion overrides.
+	// Fusion carries optional call-level configuration for direct Looper
+	// callers. A recipe-owned Fusion algorithm accepts only its trace-visibility
+	// fields; an algorithm-free internal call may use the complete configuration.
 	Fusion *config.FusionRequestConfig
 
 	// CachedPanel, when non-nil, replaces live Fusion analysis-model calls. Its

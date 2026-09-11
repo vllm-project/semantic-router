@@ -24,6 +24,21 @@ const COMMON_ALGORITHM_FIELDS: FieldSchema[] = [
   },
 ]
 
+const FUSION_ANALYSIS_MODE_FIELD: FieldSchema = {
+  key: 'analysis_mode',
+  label: 'Analysis Mode',
+  type: 'select',
+  options: ['', 'separate', 'one_call', 'none'],
+  description: 'Use separate for the compatibility-default structured judge analysis',
+}
+
+const FUSION_INCLUDE_ANALYSIS_FIELD: FieldSchema = {
+  key: 'include_analysis',
+  label: 'Include Analysis',
+  type: 'boolean',
+  description: 'Return structured judge analysis in the Fusion trace',
+}
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
   return mergeRouterFieldSchemas(algorithmFieldsFromRouterSchema(algoType), [
     ...COMMON_ALGORITHM_FIELDS,
@@ -208,6 +223,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           placeholder: 'Add panel model...',
           description: 'Override route modelRefs with a dedicated panel',
         },
+        FUSION_ANALYSIS_MODE_FIELD,
         {
           key: 'analysis_overrides',
           label: 'Analysis Overrides',
@@ -255,12 +271,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           description: 'Continue once this many panel responses succeed',
         },
         { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
-        {
-          key: 'include_analysis',
-          label: 'Include Analysis',
-          type: 'boolean',
-          description: 'Return structured judge analysis in the Fusion trace',
-        },
+        FUSION_INCLUDE_ANALYSIS_FIELD,
         {
           key: 'include_intermediate_responses',
           label: 'Include Responses',

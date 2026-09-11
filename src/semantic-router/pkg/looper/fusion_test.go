@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -121,16 +122,14 @@ func TestFusionLooperRecordsPartialPanelFailures(t *testing.T) {
 	assert.Equal(t, "panel-b", failed["model"])
 }
 
-func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
+func TestResolveFusionExecutionConfigPreservesAlgorithmFreeCallControls(t *testing.T) {
 	includeAnalysis := false
 	includeResponses := false
 	temperature := 0.2
-	dst := fusionExecutionConfig{
-		IncludeAnalysis:              true,
-		IncludeIntermediateResponses: true,
-	}
-
-	mergeFusionRequestConfig(&dst, &config.FusionRequestConfig{
+	// Algorithm-free calls are an internal Looper compatibility path. The HTTP
+	// ExtProc path supplies the algorithm selected from a recipe decision.
+	req := newFusionTestRequest()
+	req.Fusion = &config.FusionRequestConfig{
 		Model:          "judge",
 		AnalysisModels: []string{"panel-a", "panel-b"},
 		AnalysisOverrides: []config.FusionModelOverride{
@@ -157,7 +156,9 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 			NLIContradictionPenalty: 0.7,
 			OnError:                 config.FusionOnErrorFail,
 		},
-	})
+	}
+
+	dst := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"}).resolveFusionExecutionConfig(req)
 
 	assert.Equal(t, "judge", dst.Model)
 	assert.Equal(t, []string{"panel-a", "panel-b"}, dst.AnalysisModels)
@@ -174,6 +175,7 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, config.FusionOnErrorFail, dst.OnError)
 	assert.Equal(t, "analysis {{prompt}}", dst.AnalysisTemplate)
 	assert.Equal(t, "synthesis {{analysis}}", dst.SynthesisTemplate)
+	assert.Equal(t, config.FusionAnalysisModeSeparate, dst.AnalysisMode)
 	assert.Equal(t, "fusion-custom", dst.JudgePromptVersion)
 	assert.True(t, dst.GroundingEnabled)
 	assert.Equal(t, config.FusionGroundingReferenceContext, dst.GroundingReference)
@@ -184,6 +186,198 @@ func TestMergeFusionRequestConfigCoversAdvancedOptions(t *testing.T) {
 	assert.Equal(t, config.FusionOnErrorFail, dst.GroundingOnError)
 }
 
+func TestResolveFusionExecutionConfigProtectsRecipeOwnedControls(t *testing.T) {
+	looper := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"})
+	want := looper.resolveFusionExecutionConfig(newRecipeOwnedFusionRequest())
+
+	tests := []struct {
+		name     string
+		override func(*config.FusionRequestConfig)
+	}{
+		{name: "judge model", override: func(cfg *config.FusionRequestConfig) { cfg.Model = "request-judge" }},
+		{name: "analysis models", override: func(cfg *config.FusionRequestConfig) {
+			cfg.AnalysisModels = []string{"request-panel-a", "request-panel-b"}
+		}},
+		{name: "analysis override temperature", override: func(cfg *config.FusionRequestConfig) {
+			cfg.AnalysisOverrides = []config.FusionModelOverride{{
+				Model: "recipe-panel-a", Temperature: float64Ptr(0.9), MaxCompletionTokens: 111,
+			}}
+		}},
+		{name: "analysis override max completion tokens", override: func(cfg *config.FusionRequestConfig) {
+			cfg.AnalysisOverrides = []config.FusionModelOverride{{
+				Model: "recipe-panel-a", Temperature: float64Ptr(0.2), MaxCompletionTokens: 999,
+			}}
+		}},
+		{name: "max concurrent", override: func(cfg *config.FusionRequestConfig) { cfg.MaxConcurrent = 1 }},
+		{name: "max completion tokens", override: func(cfg *config.FusionRequestConfig) { cfg.MaxCompletionTokens = 64 }},
+		{name: "round timeout seconds", override: func(cfg *config.FusionRequestConfig) { cfg.RoundTimeoutSeconds = 3 }},
+		{name: "minimum successful responses", override: func(cfg *config.FusionRequestConfig) { cfg.MinSuccessfulResponses = 1 }},
+		{name: "temperature", override: func(cfg *config.FusionRequestConfig) { cfg.Temperature = float64Ptr(0.9) }},
+		{name: "on error", override: func(cfg *config.FusionRequestConfig) { cfg.OnError = config.FusionOnErrorSkip }},
+		{name: "analysis template", override: func(cfg *config.FusionRequestConfig) { cfg.AnalysisTemplate = "request analysis" }},
+		{name: "synthesis template", override: func(cfg *config.FusionRequestConfig) { cfg.SynthesisTemplate = "request synthesis" }},
+		{name: "judge prompt version", override: func(cfg *config.FusionRequestConfig) { cfg.JudgePromptVersion = "request-v2" }},
+		{name: "grounding enabled", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.Enabled = false
+		})},
+		{name: "grounding reference", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.Reference = config.FusionGroundingReferenceContext
+		})},
+		{name: "grounding policy", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.Policy = config.FusionGroundingPolicyAnnotate
+		})},
+		{name: "grounding minimum score", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.MinScore = 0.2
+		})},
+		{name: "grounding minimum keep", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.MinKeep = 2
+		})},
+		{name: "grounding contradiction penalty", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.NLIContradictionPenalty = 0.3
+		})},
+		{name: "grounding on error", override: fusionGroundingRequestOverride(func(cfg *config.FusionGroundingConfig) {
+			cfg.OnError = config.FusionOnErrorSkip
+		})},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := newRecipeOwnedFusionRequest()
+			req.Fusion = &config.FusionRequestConfig{ID: "fusion"}
+			tt.override(req.Fusion)
+
+			got := looper.resolveFusionExecutionConfig(req)
+
+			assertFusionExecutionPolicyEqual(t, want, got)
+		})
+	}
+}
+
+func TestResolveFusionExecutionConfigTreatsNilFusionBlockAsRecipeOwned(t *testing.T) {
+	includeAnalysis := false
+	includeResponses := false
+	req := newFusionTestRequest()
+	req.ModelRefs = []config.ModelRef{{Model: "recipe-panel-a"}, {Model: "recipe-panel-b"}}
+	req.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion}
+	req.Fusion = &config.FusionRequestConfig{
+		ID:                           "fusion",
+		Model:                        "request-judge",
+		AnalysisModels:               []string{"request-panel"},
+		MaxConcurrent:                1,
+		MaxCompletionTokens:          64,
+		RoundTimeoutSeconds:          3,
+		MinSuccessfulResponses:       1,
+		Temperature:                  float64Ptr(0.9),
+		IncludeAnalysis:              &includeAnalysis,
+		IncludeIntermediateResponses: &includeResponses,
+		OnError:                      config.FusionOnErrorFail,
+		AnalysisTemplate:             "request analysis",
+		SynthesisTemplate:            "request synthesis",
+		JudgePromptVersion:           "request-v2",
+		Grounding:                    recipeOwnedFusionGroundingConfig(),
+	}
+
+	got := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"}).resolveFusionExecutionConfig(req)
+
+	assert.Empty(t, got.Model)
+	assert.Equal(t, []string{"recipe-panel-a", "recipe-panel-b"}, got.AnalysisModels)
+	assert.Equal(t, config.FusionAnalysisModeSeparate, got.AnalysisMode)
+	assert.Equal(t, 2, got.MaxConcurrent)
+	assert.Zero(t, got.MaxCompletionTokens)
+	assert.Zero(t, got.RoundTimeoutSeconds)
+	assert.Equal(t, 2, got.MinSuccessfulResponses)
+	assert.Nil(t, got.Temperature)
+	assert.False(t, got.IncludeAnalysis)
+	assert.False(t, got.IncludeIntermediateResponses)
+	assert.Equal(t, config.FusionOnErrorSkip, got.OnError)
+	assert.Empty(t, got.AnalysisTemplate)
+	assert.Empty(t, got.SynthesisTemplate)
+	assert.Equal(t, config.DefaultFusionJudgePromptVersion, got.JudgePromptVersion)
+	assert.False(t, got.GroundingEnabled)
+}
+
+func TestResolveFusionExecutionConfigAllowsCallTraceVisibility(t *testing.T) {
+	includeAnalysis := false
+	includeResponses := false
+	// Request.Fusion is an internal Looper call input; the HTTP ExtProc path
+	// does not populate it from public plugin parameters.
+	looper := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"})
+	want := looper.resolveFusionExecutionConfig(newRecipeOwnedFusionRequest())
+	req := newRecipeOwnedFusionRequest()
+	req.Fusion = &config.FusionRequestConfig{
+		ID:                           "fusion",
+		Model:                        "request-judge",
+		MinSuccessfulResponses:       1,
+		OnError:                      config.FusionOnErrorSkip,
+		IncludeAnalysis:              &includeAnalysis,
+		IncludeIntermediateResponses: &includeResponses,
+	}
+
+	got := looper.resolveFusionExecutionConfig(req)
+
+	assert.False(t, got.IncludeAnalysis)
+	assert.False(t, got.IncludeIntermediateResponses)
+	assertFusionExecutionPolicyEqual(t, want, got)
+}
+
+func newRecipeOwnedFusionRequest() *Request {
+	req := newFusionTestRequest()
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: config.DecisionAlgorithmFusion,
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:          "recipe-judge",
+			AnalysisModels: []string{"recipe-panel-a", "recipe-panel-b"},
+			AnalysisMode:   config.FusionAnalysisModeSeparate,
+			AnalysisOverrides: []config.FusionModelOverride{
+				{Model: "recipe-panel-a", Temperature: float64Ptr(0.2), MaxCompletionTokens: 111},
+				{Model: "recipe-panel-b", Temperature: float64Ptr(0.3), MaxCompletionTokens: 222},
+			},
+			MaxConcurrent:                2,
+			MaxCompletionTokens:          512,
+			RoundTimeoutSeconds:          17,
+			MinSuccessfulResponses:       2,
+			Temperature:                  float64Ptr(0.4),
+			IncludeAnalysis:              boolPtr(true),
+			IncludeIntermediateResponses: boolPtr(true),
+			OnError:                      config.FusionOnErrorFail,
+			AnalysisTemplate:             "recipe analysis",
+			SynthesisTemplate:            "recipe synthesis",
+			JudgePromptVersion:           "recipe-v1",
+			Grounding:                    recipeOwnedFusionGroundingConfig(),
+		},
+	}
+	return req
+}
+
+func recipeOwnedFusionGroundingConfig() *config.FusionGroundingConfig {
+	return &config.FusionGroundingConfig{
+		Enabled:                 true,
+		Reference:               config.FusionGroundingReferencePanel,
+		Policy:                  config.FusionGroundingPolicyFilter,
+		MinScore:                0.7,
+		MinKeep:                 1,
+		NLIContradictionPenalty: 0.8,
+		OnError:                 config.FusionOnErrorFail,
+	}
+}
+
+func fusionGroundingRequestOverride(
+	mutate func(*config.FusionGroundingConfig),
+) func(*config.FusionRequestConfig) {
+	return func(cfg *config.FusionRequestConfig) {
+		grounding := recipeOwnedFusionGroundingConfig()
+		mutate(grounding)
+		cfg.Grounding = grounding
+	}
+}
+
+func assertFusionExecutionPolicyEqual(t *testing.T, want, got fusionExecutionConfig) {
+	t.Helper()
+	want.IncludeAnalysis = got.IncludeAnalysis
+	want.IncludeIntermediateResponses = got.IncludeIntermediateResponses
+	assert.Equal(t, want, got)
+}
+
 func TestFusionExecutionConfigRejectsQuorumLargerThanPanel(t *testing.T) {
 	cfg := normalizeFusionExecutionConfig(fusionExecutionConfig{
 		AnalysisModels:         []string{"panel-a", "panel-b"},
@@ -191,41 +385,6 @@ func TestFusionExecutionConfigRejectsQuorumLargerThanPanel(t *testing.T) {
 	})
 	assert.Equal(t, 3, cfg.MinSuccessfulResponses)
 	require.ErrorContains(t, validateFusionExecutionConfig(cfg), "exceeds panel size 2")
-}
-
-func TestResolveFusionExecutionConfigLayersAnalysisOverridesFieldWise(t *testing.T) {
-	looper := NewFusionLooper(&config.LooperConfig{Endpoint: "http://looper"})
-	req := newFusionTestRequest()
-	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
-		Fusion: &config.FusionAlgorithmConfig{
-			Model:          "judge",
-			AnalysisModels: []string{"panel-a", "panel-b"},
-			AnalysisOverrides: []config.FusionModelOverride{
-				{Model: "panel-a", Temperature: float64Ptr(0.2), MaxCompletionTokens: 512},
-				{Model: "panel-b", Temperature: float64Ptr(0.8)},
-			},
-		},
-	}
-	req.Fusion = &config.FusionRequestConfig{
-		ID: "fusion",
-		AnalysisOverrides: []config.FusionModelOverride{
-			{Model: "panel-a", MaxCompletionTokens: 100},
-			{Model: "panel-b", Temperature: float64Ptr(0.1)},
-		},
-	}
-
-	cfg := looper.resolveFusionExecutionConfig(req)
-
-	require.Len(t, cfg.AnalysisOverrides, 2)
-	panelA := cfg.AnalysisOverrides["panel-a"]
-	require.NotNil(t, panelA.Temperature)
-	assert.Equal(t, 0.2, *panelA.Temperature)
-	assert.Equal(t, 100, panelA.MaxCompletionTokens)
-	panelB := cfg.AnalysisOverrides["panel-b"]
-	require.NotNil(t, panelB.Temperature)
-	assert.Equal(t, 0.1, *panelB.Temperature)
-	assert.Zero(t, panelB.MaxCompletionTokens)
 }
 
 func TestFusionLooperAppliesPerAnalysisOverrides(t *testing.T) {
@@ -614,6 +773,92 @@ func TestFusionLooperAllPanelFailuresReturnError(t *testing.T) {
 	require.Len(t, evidence.Attempts, 2)
 	assert.Equal(t, FusionPanelAttemptFailed, evidence.Attempts[0].State)
 	assert.Equal(t, FusionPanelAttemptFailed, evidence.Attempts[1].State)
+}
+
+func TestFusionRecipeOwnedQuorumAndFallbackCannotBeWeakened(t *testing.T) {
+	tests := []struct {
+		name           string
+		recipeOnError  string
+		recipeQuorum   int
+		requestOnError string
+		requestQuorum  int
+		panelAContent  string
+		panelAStatus   int
+		panelADelay    time.Duration
+		panelBContent  string
+		panelBStatus   int
+		panelBDelay    time.Duration
+	}{
+		{
+			name:           "request cannot change fail to skip",
+			recipeOnError:  config.FusionOnErrorFail,
+			recipeQuorum:   1,
+			requestOnError: config.FusionOnErrorSkip,
+			panelAContent:  "failed",
+			panelAStatus:   http.StatusBadGateway,
+			panelBContent:  "panel b answer",
+			panelBStatus:   http.StatusOK,
+			panelBDelay:    50 * time.Millisecond,
+		},
+		{
+			name:          "request cannot lower quorum",
+			recipeOnError: config.FusionOnErrorSkip,
+			recipeQuorum:  2,
+			requestQuorum: 1,
+			panelAContent: "panel a answer",
+			panelAStatus:  http.StatusOK,
+			panelBContent: "failed",
+			panelBStatus:  http.StatusBadGateway,
+			panelBDelay:   50 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var judgeCalls atomic.Int64
+			server := newFusionStubServer(t, func(model, prompt string) (string, int) {
+				switch model {
+				case "panel-a":
+					time.Sleep(tt.panelADelay)
+					return tt.panelAContent, tt.panelAStatus
+				case "panel-b":
+					time.Sleep(tt.panelBDelay)
+					return tt.panelBContent, tt.panelBStatus
+				case "judge":
+					judgeCalls.Add(1)
+					if strings.Contains(prompt, "return only valid JSON") {
+						return `{"consensus":["panel"],"contradictions":[],"partial_coverage":[],"unique_insights":[],"blind_spots":[]}`, http.StatusOK
+					}
+					return "final answer", http.StatusOK
+				default:
+					return "unexpected model", http.StatusInternalServerError
+				}
+			})
+			defer server.Close()
+
+			req := newFusionTestRequest()
+			req.Algorithm = &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmFusion,
+				Fusion: &config.FusionAlgorithmConfig{
+					Model:                  "judge",
+					AnalysisModels:         []string{"panel-a", "panel-b"},
+					MaxConcurrent:          2,
+					MinSuccessfulResponses: tt.recipeQuorum,
+					OnError:                tt.recipeOnError,
+				},
+			}
+			req.Fusion = &config.FusionRequestConfig{
+				ID:                     "fusion",
+				MinSuccessfulResponses: tt.requestQuorum,
+				OnError:                tt.requestOnError,
+			}
+
+			_, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
+
+			require.Error(t, err)
+			assert.Zero(t, judgeCalls.Load(), "judge must not run when recipe-owned panel policy fails")
+		})
+	}
 }
 
 func TestFusionLooperUsesDecisionModelRefs(t *testing.T) {
