@@ -18,6 +18,7 @@ from pydantic import (
     model_validator,
 )
 
+from .config_schema import surface_types
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import (
     CLASSIFIER_TYPE_LLM,
@@ -750,23 +751,11 @@ class Rules(BaseModel):
         return data
 
 
-class PluginType(str, Enum):
-    """Supported plugin types."""
-
-    RESPONSE_CACHE = "response_cache"
-    SYSTEM_PROMPT = "system_prompt"
-    HEADER_MUTATION = "header_mutation"
-    HALLUCINATION = "hallucination"
-    ROUTER_REPLAY = "router_replay"
-    MEMORY = "memory"
-    RAG = "rag"
-    FAST_RESPONSE = "fast_response"
-    REQUEST_PARAMS = "request_params"
-    RESPONSE_JAILBREAK = "response_jailbreak"
-    TOOLS = "tools"
-    TOOL_SELECTION = "tool_selection"
-    CONTEXT_COMPRESSION = "context_compression"
-    SHADOW_DISPATCH = "shadow_dispatch"
+PluginType = Enum(
+    "PluginType",
+    {plugin_type.upper(): plugin_type for plugin_type in surface_types("plugins")},
+    type=str,
+)
 
 
 class ResponseCacheSemanticConfig(BaseModel):

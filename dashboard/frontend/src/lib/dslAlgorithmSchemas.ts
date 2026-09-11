@@ -1,44 +1,17 @@
-import type { FieldSchema } from './dslSchemas'
+import {
+  ALGORITHM_TYPES,
+  ROUTER_CONFIG_EXTENSION,
+  type AlgorithmType,
+} from '../generated/routerConfigContract'
+import { algorithmFieldsFromRouterSchema, mergeRouterFieldSchemas } from './routerConfigSchema'
+import type { FieldSchema } from './dslSchemaTypes'
 
-export const ALGORITHM_TYPES = [
-  'confidence',
-  'ratings',
-  'remom',
-  'fusion',
-  'workflows',
-  'static',
-  'router_dc',
-  'automix',
-  'hybrid',
-  'latency_aware',
-  'knn',
-  'kmeans',
-  'svm',
-  'mlp',
-  'multi_factor',
-  'prompt',
-] as const
+export { ALGORITHM_TYPES }
+export type { AlgorithmType }
 
-export type AlgorithmType = (typeof ALGORITHM_TYPES)[number]
-
-export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
-  confidence: 'Try smaller models first, escalate to larger models if confidence is low',
-  ratings: 'Execute all models concurrently and return multiple choices for comparison',
-  remom: 'Multi-round parallel reasoning with intelligent synthesis (ReMoM)',
-  fusion: 'Parallel panel deliberation with judge analysis and final synthesis',
-  workflows: 'Router Flow orchestration with static or dynamic micro-agent plans',
-  static: 'Use static scores from configuration (no extra fields)',
-  router_dc: 'Dual-contrastive learning for query-model matching',
-  automix: 'POMDP-based cost-quality optimization (arXiv:2310.12963)',
-  hybrid: 'Combine multiple selection methods with configurable weights',
-  latency_aware: 'TPOT/TTFT percentile thresholds for latency-aware model selection',
-  knn: 'K-Nearest Neighbors for query-based model selection (no extra fields)',
-  kmeans: 'KMeans clustering for model selection (no extra fields)',
-  svm: 'Support Vector Machine for model classification (no extra fields)',
-  mlp: 'Neural model-selection classifier using shared ML settings (no extra fields)',
-  multi_factor: 'Combine quality, latency, cost, and load into one SLO-aware score',
-  prompt: 'Use a concrete helper model to select one declared candidate',
-}
+export const ALGORITHM_DESCRIPTIONS: Record<string, string> = Object.fromEntries(
+  ROUTER_CONFIG_EXTENSION.algorithms.map((surface) => [surface.type, surface.description]),
+)
 
 const COMMON_ALGORITHM_FIELDS: FieldSchema[] = [
   {
@@ -51,8 +24,26 @@ const COMMON_ALGORITHM_FIELDS: FieldSchema[] = [
   },
 ]
 
+const FUSION_ANALYSIS_MODE_FIELD: FieldSchema = {
+  key: 'analysis_mode',
+  label: 'Analysis Mode',
+  type: 'select',
+  options: ['', 'separate', 'one_call', 'none'],
+  description: 'Use separate for the compatibility-default structured judge analysis',
+}
+
+const FUSION_INCLUDE_ANALYSIS_FIELD: FieldSchema = {
+  key: 'include_analysis',
+  label: 'Include Analysis',
+  type: 'boolean',
+  description: 'Return structured judge analysis in the Fusion trace',
+}
+
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
-  return [...COMMON_ALGORITHM_FIELDS, ...getAlgorithmSpecificFieldSchema(algoType)]
+  return mergeRouterFieldSchemas(algorithmFieldsFromRouterSchema(algoType), [
+    ...COMMON_ALGORITHM_FIELDS,
+    ...getAlgorithmSpecificFieldSchema(algoType),
+  ])
 }
 
 function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
@@ -63,7 +54,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           key: 'confidence_method',
           label: 'Confidence Method',
           type: 'select',
-          options: ['avg_logprob', 'margin', 'hybrid', 'self_verify'],
+          options: ['avg_logprob', 'margin', 'hybrid', 'self_verify', 'automix_entailment'],
           description: 'How to evaluate model confidence',
         },
         {
@@ -72,6 +63,16 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           type: 'number',
           placeholder: '-1.0',
           description: 'Confidence threshold for escalation',
+        },
+        {
+          key: 'hybrid_weights',
+          label: 'Hybrid Weights',
+          type: 'object',
+          description: 'Weights used only by the hybrid confidence method',
+          fields: [
+            { key: 'logprob_weight', label: 'Logprob Weight', type: 'number', min: 0, max: 1 },
+            { key: 'margin_weight', label: 'Margin Weight', type: 'number', min: 0, max: 1 },
+          ],
         },
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         {
@@ -156,6 +157,12 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           description: 'Tokens to keep (last_n_tokens strategy)',
         },
         {
+          key: 'synthesis_template',
+          label: 'Synthesis Template',
+          type: 'string',
+          description: 'Optional prompt template used to synthesize each round',
+        },
+        {
           key: 'synthesis_model',
           label: 'Synthesis Model',
           type: 'string',
@@ -216,6 +223,27 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           placeholder: 'Add panel model...',
           description: 'Override route modelRefs with a dedicated panel',
         },
+        FUSION_ANALYSIS_MODE_FIELD,
+        {
+          key: 'analysis_overrides',
+          label: 'Analysis Overrides',
+          type: 'object[]',
+          description: 'Per-panel-model sampling overrides',
+          addLabel: 'Add override',
+          emptyLabel: 'No model-specific overrides configured.',
+          itemLabel: 'Model override',
+          itemLabelKey: 'model',
+          fields: [
+            { key: 'model', label: 'Model', type: 'string', required: true },
+            { key: 'temperature', label: 'Temperature', type: 'number', min: 0 },
+            {
+              key: 'max_completion_tokens',
+              label: 'Max Completion Tokens',
+              type: 'number',
+              min: 1,
+            },
+          ],
+        },
         {
           key: 'max_concurrent',
           label: 'Max Concurrent',
@@ -243,12 +271,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           description: 'Continue once this many panel responses succeed',
         },
         { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '0.2' },
-        {
-          key: 'include_analysis',
-          label: 'Include Analysis',
-          type: 'boolean',
-          description: 'Return structured judge analysis in the Fusion trace',
-        },
+        FUSION_INCLUDE_ANALYSIS_FIELD,
         {
           key: 'include_intermediate_responses',
           label: 'Include Responses',
@@ -257,10 +280,58 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
         },
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         {
+          key: 'analysis_template',
+          label: 'Analysis Template',
+          type: 'string',
+          description: 'Optional prompt template for panel analysis',
+        },
+        {
+          key: 'synthesis_template',
+          label: 'Synthesis Template',
+          type: 'string',
+          description: 'Optional prompt template for the judge synthesis',
+        },
+        {
           key: 'judge_prompt_version',
           label: 'Prompt Version',
           type: 'string',
           placeholder: 'fusion-v1',
+        },
+        {
+          key: 'grounding',
+          label: 'Grounding',
+          type: 'object',
+          description: 'Score panel responses for faithfulness before synthesis',
+          fields: [
+            { key: 'enabled', label: 'Enabled', type: 'boolean' },
+            {
+              key: 'reference',
+              label: 'Reference',
+              type: 'select',
+              options: ['', 'hybrid', 'context', 'panel'],
+            },
+            {
+              key: 'policy',
+              label: 'Policy',
+              type: 'select',
+              options: ['', 'weight', 'annotate', 'filter'],
+            },
+            { key: 'min_score', label: 'Minimum Score', type: 'number', min: 0, max: 1 },
+            { key: 'min_keep', label: 'Minimum Responses', type: 'number', min: 0 },
+            {
+              key: 'nli_contradiction_penalty',
+              label: 'NLI Contradiction Penalty',
+              type: 'number',
+              min: 0,
+              max: 1,
+            },
+            {
+              key: 'on_error',
+              label: 'On Error',
+              type: 'select',
+              options: ['', 'skip', 'fail'],
+            },
+          ],
         },
       ]
     case 'workflows':

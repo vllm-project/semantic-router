@@ -173,7 +173,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `confidence` — looper algorithm | `confidence` tries candidate models in order and stops when response confidence reaches a configured threshold. | [`config/fragments/algorithm/looper/confidence.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/confidence.yaml) | [Guide](../tutorials/algorithm/looper/confidence) |
-| `fusion` — looper algorithm | `fusion` asks several models to analyze a request and a judge model to synthesize one final answer. | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [Guide](../tutorials/algorithm/looper/fusion) |
+| `fusion` — looper algorithm | `fusion` asks several models to answer a request and a judge model to synthesize one final answer. | [`config/fragments/algorithm/looper/fusion.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/fusion.yaml) | [Guide](../tutorials/algorithm/looper/fusion) |
 | `ratings` — looper algorithm | `ratings` calls every candidate model and returns one OpenAI-compatible choice per successful model. `max_concurrent` limits parallel work; it does not limit the total number of candidates executed. | [`config/fragments/algorithm/looper/ratings.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/ratings.yaml) | [Guide](../tutorials/algorithm/looper/ratings) |
 | `remom` — looper algorithm | `remom` runs several candidate models across bounded rounds and synthesizes their responses into one answer. | [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml) | [Guide](../tutorials/algorithm/looper/remom) |
 | `workflows` — looper algorithm | `workflows` runs a bounded, multi-step Router Flow behind one OpenAI-compatible model name. | [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml) | [Guide](../tutorials/algorithm/looper/workflows) |
@@ -363,6 +363,9 @@ The canonical document can be authored or applied through several interfaces:
 
 [Configuration Workflows](configuration-workflows) explains which interface
 owns which part of the document and how to avoid competing sources of truth.
+[Configuration Contract](configuration-contract) describes the generated
+machine-readable schema, Router discovery and validation APIs, and the safe
+authoring loop for tools and agents.
 
 ## Reference sources
 
@@ -374,6 +377,8 @@ owns which part of the document and how to avoid competing sources of truth.
   shared runtime configuration.
 - [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
   records the design behind the current contract.
+- [Configuration Contract](configuration-contract) is the live discovery and
+  validation contract for the current Router build.
 
 Avoid copying the exhaustive example as an application config. Start with the
 smallest document that describes the deployment, then add only the capabilities

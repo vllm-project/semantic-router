@@ -6,6 +6,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const (
@@ -16,28 +18,16 @@ const (
 	routingRecipeNotRecommended    = "not_recommended"
 )
 
-var routingRecipeSignalCollectionKeys = map[string]string{
-	"keyword":       "keywords",
-	"embedding":     "embeddings",
-	"domain":        "domains",
-	"fact_check":    "fact_check",
-	"user_feedback": "user_feedback",
-	"reask":         "reask",
-	"preference":    "preferences",
-	"language":      "language",
-	"context":       "context",
-	"structure":     "structure",
-	"complexity":    "complexity",
-	"modality":      "modality",
-	"authz":         "authz",
-	"jailbreak":     "jailbreak",
-	"pii":           "pii",
-	"kb":            "kb",
-	"conversation":  "conversation",
-	"event":         "event",
-	"metadata":      "metadata",
-	"classifier":    "classifier",
-	"projection":    "projection",
+var routingRecipeSignalCollectionKeys = buildRoutingRecipeSignalCollectionKeys()
+
+func buildRoutingRecipeSignalCollectionKeys() map[string]string {
+	result := map[string]string{routerconfig.SignalTypeProjection: "projection"}
+	for _, signal := range routerconfig.SignalCatalog() {
+		if signal.DecisionReferenceable {
+			result[signal.Type] = signal.ObservationKey
+		}
+	}
+	return result
 }
 
 // routingRecipeDecisionFromBrokerResponse creates the only decision evidence

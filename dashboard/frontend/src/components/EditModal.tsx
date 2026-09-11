@@ -2,6 +2,7 @@ import React, { useEffect, useId, useState } from 'react'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import ConfirmDialog from './ConfirmDialog'
+import ProductCheckbox from './ProductCheckbox'
 import ProductIcon from './ProductIcon'
 import styles from './EditModal.module.css'
 
@@ -23,6 +24,8 @@ interface EditModalProps {
 export interface FieldConfig<TForm extends object = EditFormData> {
   name: string
   label: string
+  section?: string
+  fullWidth?: boolean
   type:
     | 'text'
     | 'number'
@@ -43,6 +46,20 @@ export interface FieldConfig<TForm extends object = EditFormData> {
   customRender?: BivariantCallback<
     (value: unknown, onChange: (value: unknown) => void) => React.ReactNode
   >
+}
+
+const DEFAULT_FULL_WIDTH_TYPES = new Set<FieldConfig['type']>(['custom', 'multiselect', 'textarea'])
+
+function visibleFieldSections(fields: FieldConfig[], formData: EditFormData) {
+  const sections = new Map<string, FieldConfig[]>()
+  for (const field of fields) {
+    if (field.shouldHide?.(formData)) continue
+    const section = field.section?.trim() || ''
+    const entries = sections.get(section) ?? []
+    entries.push(field)
+    sections.set(section, entries)
+  }
+  return [...sections.entries()]
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -207,176 +224,190 @@ const EditModal: React.FC<EditModalProps> = ({
             )}
 
             <div className={styles.fields}>
-              {fields.map((field) => {
-                if (field.shouldHide?.(formData)) return null
-                const fieldId = `${titleId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
-                const descriptionId = `${fieldId}-description`
-                const isGroupedField = field.type === 'multiselect' || field.type === 'custom'
+              {visibleFieldSections(fields, formData).map(([sectionTitle, sectionFields]) => (
+                <section className={styles.fieldSection} key={sectionTitle || 'fields'}>
+                  {sectionTitle ? <h3 className={styles.sectionTitle}>{sectionTitle}</h3> : null}
+                  <div className={styles.fieldGrid}>
+                    {sectionFields.map((field) => {
+                      const fieldId = `${titleId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+                      const descriptionId = `${fieldId}-description`
+                      const isGroupedField = field.type === 'multiselect' || field.type === 'custom'
+                      const fullWidth = field.fullWidth ?? DEFAULT_FULL_WIDTH_TYPES.has(field.type)
 
-                return (
-                  <div key={field.name} className={styles.field}>
-                    <label
-                      id={`${fieldId}-label`}
-                      className={styles.label}
-                      htmlFor={isGroupedField ? undefined : fieldId}
-                    >
-                      {field.label}
-                      {field.required && <span className={styles.required}>*</span>}
-                    </label>
-                    {field.description && (
-                      <p id={descriptionId} className={styles.description}>
-                        {field.description}
-                      </p>
-                    )}
-
-                    {field.type === 'text' && (
-                      <input
-                        id={fieldId}
-                        type="text"
-                        className={styles.input}
-                        value={readString(field.name)}
-                        onChange={(e) => handleChange(field.name, e.target.value)}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      />
-                    )}
-
-                    {field.type === 'number' && (
-                      <input
-                        id={fieldId}
-                        type="number"
-                        step={field.step !== undefined ? field.step : 'any'}
-                        min={field.min}
-                        max={field.max}
-                        className={styles.input}
-                        value={readNumberInput(field.name)}
-                        onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      />
-                    )}
-
-                    {field.type === 'percentage' && (
-                      <div style={{ position: 'relative' }}>
-                        <input
-                          id={fieldId}
-                          type="number"
-                          step={field.step !== undefined ? field.step : 1}
-                          min={0}
-                          max={100}
-                          className={styles.input}
-                          value={
-                            readField(field.name) !== undefined ? readNumberInput(field.name) : ''
-                          }
-                          onChange={(e) => {
-                            const val = e.target.value
-                            handleChange(field.name, val === '' ? '' : parseFloat(val))
-                          }}
-                          placeholder={field.placeholder}
-                          required={field.required}
-                          aria-describedby={field.description ? descriptionId : undefined}
-                          style={{ paddingRight: '2.5rem' }}
-                        />
-                        <span
-                          style={{
-                            position: 'absolute',
-                            right: '0.75rem',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: 'var(--color-text-secondary)',
-                            fontSize: '0.875rem',
-                            pointerEvents: 'none',
-                          }}
+                      return (
+                        <div
+                          key={field.name}
+                          className={`${styles.field} ${fullWidth ? styles.fieldFull : ''}`}
                         >
-                          %
-                        </span>
-                      </div>
-                    )}
-
-                    {field.type === 'boolean' && (
-                      <label className={styles.checkbox}>
-                        <input
-                          id={fieldId}
-                          type="checkbox"
-                          checked={readBoolean(field.name)}
-                          onChange={(e) => handleChange(field.name, e.target.checked)}
-                        />
-                        <span>Enable</span>
-                      </label>
-                    )}
-
-                    {field.type === 'select' && (
-                      <select
-                        id={fieldId}
-                        className={styles.select}
-                        value={readString(field.name)}
-                        onChange={(e) => handleChange(field.name, e.target.value)}
-                        required={field.required}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      >
-                        {field.options?.map((option) => (
-                          <option key={option} value={option}>
-                            {option || '(None)'}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-
-                    {field.type === 'multiselect' && (
-                      <div
-                        className={styles.multiselect}
-                        role="group"
-                        aria-labelledby={`${fieldId}-label`}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      >
-                        {field.options?.map((option) => (
-                          <label key={option} className={styles.multiselectOption}>
-                            <input
-                              type="checkbox"
-                              checked={readStringArray(field.name).includes(option)}
-                              onChange={(e) => {
-                                const currentValues = readStringArray(field.name)
-                                const newValues = e.target.checked
-                                  ? [...currentValues, option]
-                                  : currentValues.filter((v: string) => v !== option)
-                                handleChange(field.name, newValues)
-                              }}
-                            />
-                            <span>{option}</span>
+                          <label
+                            id={`${fieldId}-label`}
+                            className={styles.label}
+                            htmlFor={isGroupedField ? undefined : fieldId}
+                          >
+                            {field.label}
+                            {field.required && <span className={styles.required}>*</span>}
                           </label>
-                        ))}
-                      </div>
-                    )}
+                          {field.description && (
+                            <p id={descriptionId} className={styles.description}>
+                              {field.description}
+                            </p>
+                          )}
 
-                    {field.type === 'textarea' && (
-                      <textarea
-                        id={fieldId}
-                        className={styles.textarea}
-                        value={readString(field.name)}
-                        onChange={(e) => handleChange(field.name, e.target.value)}
-                        placeholder={field.placeholder}
-                        required={field.required}
-                        rows={4}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      />
-                    )}
+                          <div className={styles.control}>
+                            {field.type === 'text' && (
+                              <input
+                                id={fieldId}
+                                type="text"
+                                className={styles.input}
+                                value={readString(field.name)}
+                                onChange={(e) => handleChange(field.name, e.target.value)}
+                                placeholder={field.placeholder}
+                                required={field.required}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              />
+                            )}
 
-                    {field.type === 'custom' && field.customRender && (
-                      <div
-                        role="group"
-                        aria-labelledby={`${fieldId}-label`}
-                        aria-describedby={field.description ? descriptionId : undefined}
-                      >
-                        {field.customRender(readField(field.name), (value) =>
-                          handleChange(field.name, value),
-                        )}
-                      </div>
-                    )}
+                            {field.type === 'number' && (
+                              <input
+                                id={fieldId}
+                                type="number"
+                                step={field.step !== undefined ? field.step : 'any'}
+                                min={field.min}
+                                max={field.max}
+                                className={styles.input}
+                                value={readNumberInput(field.name)}
+                                onChange={(e) =>
+                                  handleChange(field.name, parseFloat(e.target.value))
+                                }
+                                placeholder={field.placeholder}
+                                required={field.required}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              />
+                            )}
+
+                            {field.type === 'percentage' && (
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  id={fieldId}
+                                  type="number"
+                                  step={field.step !== undefined ? field.step : 1}
+                                  min={0}
+                                  max={100}
+                                  className={styles.input}
+                                  value={
+                                    readField(field.name) !== undefined
+                                      ? readNumberInput(field.name)
+                                      : ''
+                                  }
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    handleChange(field.name, val === '' ? '' : parseFloat(val))
+                                  }}
+                                  placeholder={field.placeholder}
+                                  required={field.required}
+                                  aria-describedby={field.description ? descriptionId : undefined}
+                                  style={{ paddingRight: '2.5rem' }}
+                                />
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    right: '0.75rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--color-text-secondary)',
+                                    fontSize: '0.875rem',
+                                    pointerEvents: 'none',
+                                  }}
+                                >
+                                  %
+                                </span>
+                              </div>
+                            )}
+
+                            {field.type === 'boolean' && (
+                              <label className={styles.checkbox}>
+                                <ProductCheckbox
+                                  id={fieldId}
+                                  checked={readBoolean(field.name)}
+                                  onChange={(e) => handleChange(field.name, e.target.checked)}
+                                />
+                                <span>{readBoolean(field.name) ? 'Enabled' : 'Disabled'}</span>
+                              </label>
+                            )}
+
+                            {field.type === 'select' && (
+                              <select
+                                id={fieldId}
+                                className={styles.select}
+                                value={readString(field.name)}
+                                onChange={(e) => handleChange(field.name, e.target.value)}
+                                required={field.required}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              >
+                                {field.options?.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option || '(None)'}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {field.type === 'multiselect' && (
+                              <div
+                                className={styles.multiselect}
+                                role="group"
+                                aria-labelledby={`${fieldId}-label`}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              >
+                                {field.options?.map((option) => (
+                                  <label key={option} className={styles.multiselectOption}>
+                                    <ProductCheckbox
+                                      checked={readStringArray(field.name).includes(option)}
+                                      onChange={(e) => {
+                                        const currentValues = readStringArray(field.name)
+                                        const newValues = e.target.checked
+                                          ? [...currentValues, option]
+                                          : currentValues.filter((v: string) => v !== option)
+                                        handleChange(field.name, newValues)
+                                      }}
+                                    />
+                                    <span>{option}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+
+                            {field.type === 'textarea' && (
+                              <textarea
+                                id={fieldId}
+                                className={styles.textarea}
+                                value={readString(field.name)}
+                                onChange={(e) => handleChange(field.name, e.target.value)}
+                                placeholder={field.placeholder}
+                                required={field.required}
+                                rows={4}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              />
+                            )}
+
+                            {field.type === 'custom' && field.customRender && (
+                              <div
+                                role="group"
+                                aria-labelledby={`${fieldId}-label`}
+                                aria-describedby={field.description ? descriptionId : undefined}
+                              >
+                                {field.customRender(readField(field.name), (value) =>
+                                  handleChange(field.name, value),
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
+                </section>
+              ))}
             </div>
 
             <div className={styles.actions}>
