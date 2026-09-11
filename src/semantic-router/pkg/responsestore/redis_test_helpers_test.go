@@ -284,8 +284,15 @@ func exists(t *testing.T, store *RedisStore, key string) int64 {
 // order is resp_page_0..resp_page_(count-1) and descending is the reverse.
 func seedPageResponses(t *testing.T, store *RedisStore, convID string, count int) []string {
 	t.Helper()
+	return seedPageResponsesAt(t, store, convID, count, time.Now().Unix())
+}
+
+// seedPageResponsesAt is seedPageResponses with an explicit base CreatedAt,
+// for tests that must place a concurrently inserted member at a known score
+// relative to the seeded ones.
+func seedPageResponsesAt(t *testing.T, store *RedisStore, convID string, count int, now int64) []string {
+	t.Helper()
 	ctx := context.Background()
-	now := time.Now().Unix()
 
 	ids := make([]string, count)
 	for i := 0; i < count; i++ {

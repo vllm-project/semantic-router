@@ -46,10 +46,13 @@ func (h *listPruneContentionHook) ProcessHook(next redis.ProcessHook) redis.Proc
 	}
 }
 
-// listWindowObserverHook records the width of each warmed
+// listWindowObserverHook records the requested width of each warmed
 // readIndexWindowScript call without counting Script.Run's possible NOSCRIPT
 // probe. Tests use it to pin that dead-only progress grows beyond the public
 // Limit while every individual Redis window stays capped.
+//
+// The width is the script's fourth argument: evalsha, sha, key count, the two
+// keys, direction, cursor mode, cursor, width.
 type listWindowObserverHook struct {
 	mu     sync.Mutex
 	widths []int64
@@ -63,12 +66,10 @@ func (h *listWindowObserverHook) ProcessPipelineHook(next redis.ProcessPipelineH
 func (h *listWindowObserverHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
 	return func(ctx context.Context, cmd redis.Cmder) error {
 		args := cmd.Args()
-		if cmd.Name() == "evalsha" && len(args) > 6 && args[1] == readIndexWindowScript.Hash() {
-			start, startOK := args[5].(int64)
-			end, endOK := args[6].(int64)
-			if startOK && endOK {
+		if cmd.Name() == "evalsha" && len(args) > 8 && args[1] == readIndexWindowScript.Hash() {
+			if width, ok := args[8].(int); ok {
 				h.mu.Lock()
-				h.widths = append(h.widths, end-start+1)
+				h.widths = append(h.widths, int64(width))
 				h.mu.Unlock()
 			}
 		}
@@ -375,4 +376,143 @@ func TestListWideningSurvivesBlockedMemberRecreation(t *testing.T) {
 
 	assert.Equal(t, []string{liveID, blockedID}, conversationIndexMembers(t, store, conversationID),
 		"precondition check: the recreation really did move the member past the live response")
+}
+
+// cursorRankObserverHook counts standalone ZRANK/ZREVRANK commands. The
+// listing path must never issue one: a cursor's rank is only meaningful
+// against the membership it was measured in, so it is resolved inside the
+// same script that reads the window.
+type cursorRankObserverHook struct {
+	fired atomic.Int64
+}
+
+func (h *cursorRankObserverHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h *cursorRankObserverHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
+}
+
+func (h *cursorRankObserverHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if name := cmd.Name(); name == "zrank" || name == "zrevrank" {
+			h.fired.Add(1)
+		}
+		return next(ctx, cmd)
+	}
+}
+
+// TestListCursorPageIsOneSnapshot proves the cursor's rank and the page it
+// positions are read from a single membership. A member inserted or removed
+// before the cursor between a standalone ZRANK and the later ZRANGE shifts
+// every subsequent rank: a removal made the saved window skip the cursor's
+// true successor, and an insertion made it begin on the cursor itself and
+// return a response the caller already held.
+//
+// The mutation is injected immediately before the window script runs. Against
+// a two-command implementation that boundary is after the rank was already
+// taken, which is exactly the race; against the atomic one the mutation
+// simply precedes the snapshot and the page is correct either way.
+func TestListCursorPageIsOneSnapshot(t *testing.T) {
+	const limit = 2
+
+	cases := []struct {
+		name     string
+		order    string
+		mutate   func(ctx context.Context, writer *RedisStore, indexKey string, now int64) error
+		wantPage []string
+	}{
+		{
+			name:  "ascending after cursor, member before cursor removed",
+			order: "asc",
+			mutate: func(ctx context.Context, writer *RedisStore, indexKey string, _ int64) error {
+				return writer.client.ZRem(ctx, indexKey, "resp_page_0").Err()
+			},
+			wantPage: []string{"resp_page_3", "resp_page_4"},
+		},
+		{
+			name:  "ascending after cursor, member before cursor inserted",
+			order: "asc",
+			mutate: func(ctx context.Context, writer *RedisStore, indexKey string, now int64) error {
+				return writer.client.ZAdd(ctx, indexKey, redis.Z{Score: float64(now - 1), Member: "resp_page_inserted"}).Err()
+			},
+			wantPage: []string{"resp_page_3", "resp_page_4"},
+		},
+		{
+			name:  "descending after cursor, member before cursor removed",
+			order: "desc",
+			mutate: func(ctx context.Context, writer *RedisStore, indexKey string, _ int64) error {
+				return writer.client.ZRem(ctx, indexKey, "resp_page_4").Err()
+			},
+			wantPage: []string{"resp_page_1", "resp_page_0"},
+		},
+		{
+			name:  "descending after cursor, member before cursor inserted",
+			order: "desc",
+			mutate: func(ctx context.Context, writer *RedisStore, indexKey string, now int64) error {
+				return writer.client.ZAdd(ctx, indexKey, redis.Z{Score: float64(now + 10), Member: "resp_page_inserted"}).Err()
+			},
+			wantPage: []string{"resp_page_1", "resp_page_0"},
+		},
+	}
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newConversationIndexStore(t)
+			writer := newConcurrentRedisStore(t, store)
+			ctx := context.Background()
+			conversationID := fmt.Sprintf("conv_cursor_snapshot_%d", i)
+
+			now := time.Now().Unix()
+			seedPageResponsesAt(t, store, conversationID, 5, now)
+			require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+			require.NoError(t, readIndexWindowScript.Load(ctx, store.client).Err())
+
+			var injectedErr error
+			hook := &commandInterleavingHook{
+				before: true,
+				match: func(cmd redis.Cmder) bool {
+					args := cmd.Args()
+					return cmd.Name() == "evalsha" && len(args) > 1 && args[1] == readIndexWindowScript.Hash()
+				},
+				inject: func() {
+					injectedErr = tc.mutate(context.Background(), writer, store.conversationIndexKey(conversationID), now)
+				},
+			}
+			store.client.AddHook(hook)
+
+			responses, err := store.ListResponsesByConversation(ctx, conversationID,
+				ListOptions{Order: tc.order, Limit: limit, After: "resp_page_2"})
+			require.NoError(t, err)
+			require.NoError(t, injectedErr)
+			assert.True(t, hook.fired.Load(), "the mutation must land right before the window read")
+			assert.Equal(t, tc.wantPage, responseIDsOf(responses),
+				"a rank shift before the cursor must neither skip nor repeat a live response")
+		})
+	}
+}
+
+// TestListCursorRankIsNeverAStandaloneCommand pins the property directly:
+// no cursor read, in either direction or with either cursor kind, resolves the
+// rank as a command of its own.
+func TestListCursorRankIsNeverAStandaloneCommand(t *testing.T) {
+	store := newConversationIndexStore(t)
+	ctx := context.Background()
+	const conversationID = "conv_cursor_atomic"
+
+	seedPageResponses(t, store, conversationID, 5)
+	require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+	observer := &cursorRankObserverHook{}
+	store.client.AddHook(observer)
+
+	for _, opts := range []ListOptions{
+		{Order: "asc", Limit: 2, After: "resp_page_1"},
+		{Order: "asc", Limit: 2, Before: "resp_page_3"},
+		{Order: "desc", Limit: 2, After: "resp_page_3"},
+		{Order: "desc", Limit: 2, Before: "resp_page_1"},
+	} {
+		_, err := store.ListResponsesByConversation(ctx, conversationID, opts)
+		require.NoError(t, err)
+	}
+	assert.Zero(t, observer.fired.Load(),
+		"cursor rank must be resolved inside the window script, never as a separate command")
 }

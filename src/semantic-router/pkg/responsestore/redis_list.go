@@ -11,18 +11,67 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// readIndexWindowScript snapshots each ZSET member together with its
-// generation witness. The ZSET and HASH share a Redis Cluster hash tag, so a
-// later conditional prune can prove it is still removing the same generation
-// this window observed.
+// readIndexWindowScript resolves a page's cursor, reads its rank window, and
+// snapshots each member's generation witness in one atomic step.
+//
+// All three happen inside a single script because a cursor's rank is only
+// meaningful against the membership it was measured in. Resolving ZRANK in one
+// command and reading ZRANGE in the next let any member inserted or removed
+// *before* the cursor in between shift every later rank: a removal made the
+// saved window start one past the cursor's true successor and skipped a live
+// response, and an insertion made it start on the cursor itself and returned
+// the response the caller already held. Redis executes a script without
+// interleaving other commands, so the rank, the range, and the witnesses here
+// all describe one membership.
+//
+// KEYS[1] is the conversation ZSET and KEYS[2] its witness HASH; they share a
+// Redis Cluster hash tag. ARGV: [1] "1" for ascending rank order, [2] cursor
+// mode — "none", "after", or "before" — [3] the cursor member, [4] the window
+// width in ranks.
+//
+// Replies with a status word, then the rank span the window covered, then
+// (member, witness) pairs. "missing" means the cursor is not a current member;
+// "empty" means nothing lies in the requested direction. The span is reported
+// because it is not always the requested width — a Before window clamps at
+// rank 0 — and the listing loop compares members returned against it to prove
+// the index exhausted.
 var readIndexWindowScript = redis.NewScript(`
-local members
-if ARGV[3] == "1" then
-	members = redis.call("ZRANGE", KEYS[1], ARGV[1], ARGV[2])
+local ascending = ARGV[1] == "1"
+local mode = ARGV[2]
+local cursor = ARGV[3]
+local width = tonumber(ARGV[4])
+
+local start, stop
+if mode == "none" then
+	start, stop = 0, width - 1
 else
-	members = redis.call("ZREVRANGE", KEYS[1], ARGV[1], ARGV[2])
+	local rank
+	if ascending then
+		rank = redis.call("ZRANK", KEYS[1], cursor)
+	else
+		rank = redis.call("ZREVRANK", KEYS[1], cursor)
+	end
+	if not rank then
+		return {"missing", 0}
+	end
+	if mode == "after" then
+		start, stop = rank + 1, rank + width
+	else
+		stop = rank - 1
+		start = math.max(0, stop - width + 1)
+	end
 end
-local result = {}
+if stop < start then
+	return {"empty", 0}
+end
+
+local members
+if ascending then
+	members = redis.call("ZRANGE", KEYS[1], start, stop)
+else
+	members = redis.call("ZREVRANGE", KEYS[1], start, stop)
+end
+local result = {"ready", stop - start + 1}
 for _, response_id in ipairs(members) do
 	table.insert(result, response_id)
 	table.insert(result, redis.call("HGET", KEYS[2], response_id) or "")
@@ -160,12 +209,11 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		return nil, err
 	}
 
-	stride := opts.Limit
-	contendedRounds := 0
+	walk := indexWalk{stride: opts.Limit}
 	for {
 		// opts, never a rewritten anchor: the window origin is fixed for the
 		// life of the call and only its width changes.
-		page, collectErr := s.collectIndexedPage(ctx, conversationID, opts, stride, allowBlankCleanup)
+		page, collectErr := s.collectIndexedPage(ctx, conversationID, opts, walk.stride, allowBlankCleanup)
 
 		if responses, complete := selectCompleteIndexedPage(conversationID, opts, page, collectErr); complete {
 			return responses, nil
@@ -185,17 +233,8 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		// membership recreated between this page's payload read and its
 		// conditional prune is only observed by re-reading the same window.
 		if page.pruneCandidates > 0 {
-			if page.membershipsRemoved == 0 {
-				contendedRounds++
-				if contendedRounds >= listIndexMaxContentionRounds {
-					return nil, fmt.Errorf("%w: conversation %s did not advance after %d cleanup attempts",
-						ErrIndexContended, conversationID, contendedRounds)
-				}
-				continue
-			}
-			contendedRounds = 0
-			if len(page.responses) == 0 {
-				stride = growListStride(stride)
+			if err := walk.notePruneRound(conversationID, page); err != nil {
+				return nil, err
 			}
 			continue
 		}
@@ -210,11 +249,52 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		// A full window that still underfills the page is holding members this
 		// read may not remove and cannot return. Only a wider one reaches past
 		// them, and the width is bounded.
-		if stride >= listIndexScanMaxStride {
-			return nil, blockedTraversalError(conversationID, stride, page.readFailures)
+		if err := walk.widen(conversationID); err != nil {
+			return nil, err
 		}
-		stride = growListStride(stride)
 	}
+}
+
+// indexWalk is the state one listIndexedResponses call carries between
+// rounds: how wide the next window is, and how many consecutive rounds have
+// identified stale members without managing to remove any.
+type indexWalk struct {
+	stride          int
+	contendedRounds int
+}
+
+// notePruneRound records the outcome of a round that found prunable members.
+// A round that removed nothing is contention — a writer claimed the generation
+// after the snapshot — and is re-read; too many in a row become
+// ErrIndexContended rather than an underfilled page a paginator would read as
+// terminal. A round that removed something is durable progress; if it also
+// yielded no responses the run is dead and the next window grows so a mass
+// expiry costs round trips proportional to listIndexScanMaxStride rather than
+// to the caller's Limit.
+func (w *indexWalk) notePruneRound(conversationID string, page collectedIndexedPage) error {
+	if page.membershipsRemoved == 0 {
+		w.contendedRounds++
+		if w.contendedRounds >= listIndexMaxContentionRounds {
+			return fmt.Errorf("%w: conversation %s did not advance after %d cleanup attempts",
+				ErrIndexContended, conversationID, w.contendedRounds)
+		}
+		return nil
+	}
+	w.contendedRounds = 0
+	if len(page.responses) == 0 {
+		w.stride = growListStride(w.stride)
+	}
+	return nil
+}
+
+// widen grows the next window past members this read may not remove, or
+// reports that the widest bounded window has already been tried.
+func (w *indexWalk) widen(conversationID string) error {
+	if w.stride >= listIndexScanMaxStride {
+		return blockedTraversalError(conversationID, w.stride)
+	}
+	w.stride = growListStride(w.stride)
+	return nil
 }
 
 // growListStride widens the next bounded window after one that returned no
@@ -228,15 +308,8 @@ func growListStride(stride int) int {
 }
 
 // blockedTraversalError reports a run of unreadable-but-unremovable members
-// longer than the widest bounded window may see past. readFailures separates
-// the two causes an operator would act on differently: blank-witness
-// memberships waiting on finalization, and payloads Redis would not serve.
-func blockedTraversalError(conversationID string, width, readFailures int) error {
-	if readFailures > 0 {
-		return fmt.Errorf(
-			"%w: conversation %s left %d indexed payload(s) unreadable across a %d-member window; check Redis health before retrying",
-			ErrIndexTraversalBlocked, conversationID, readFailures, width)
-	}
+// longer than the widest bounded window may see past.
+func blockedTraversalError(conversationID string, width int) error {
 	return fmt.Errorf(
 		"%w: conversation %s still holds unreadable memberships this read may not remove across a %d-member window; run FinalizeConversationIndex to clear them",
 		ErrIndexTraversalBlocked, conversationID, width)
@@ -286,9 +359,8 @@ type collectedIndexedPage struct {
 	membersRead int
 
 	// readFailures counts members whose payload could not be read at all, as
-	// distinct from being proven absent. Reported only for diagnosis: a
-	// widening window from a fixed anchor re-reads them, so they are never
-	// stepped over.
+	// distinct from being proven absent. Reported for diagnosis: a widening
+	// window from a fixed anchor re-reads them rather than stepping over them.
 	readFailures int
 
 	window listWindowRead
@@ -384,9 +456,9 @@ func (s *RedisStore) collectIndexedPage(
 // operator-authorized finalization sweep resolves it after old writers drain.
 // readFailed distinguishes a payload this page could not read from one it read
 // and found unusable. A Redis failure says nothing about whether the response
-// is still there, so a traversal must stop rather than step over it; a payload
-// that decoded badly was genuinely observed and can never be returned, so
-// skipping it costs nothing a retry would recover.
+// is still there, so a traversal must not step over it; a payload that decoded
+// badly was genuinely observed and can never be returned, so skipping it costs
+// nothing a retry would recover.
 func evaluateIndexedResponse(
 	conversationID string,
 	witness responseGenerationWitness,
@@ -471,29 +543,86 @@ func normalizeResponseListOptions(opts ListOptions) (normalizedListOptions, erro
 // ZRANGE 0 -1. normalized.Limit remains the caller's return limit; the
 // cleanup loop passes its independently capped internal stride as windowSize.
 //
-// Cursors are resolved via ZRANK (ascending order) or ZREVRANK (descending
-// order), i.e. rank in the order actually being read, and the window is
-// then read with the matching ZRANGE/ZREVRANGE. A cursor naming a response
-// ID that is not currently a member of the index (evicted, wrong
-// conversation, typo'd by the caller) yields an empty page rather than an
-// error: the same behavior as an ordinary page with nothing left to return.
+// The cursor's rank, the window, and every member's witness come from one
+// readIndexWindowScript call, so they describe a single membership — see the
+// script for why resolving the rank separately could skip or repeat a live
+// response. A cursor naming a response ID that is not currently a member
+// (evicted, wrong conversation, typo'd by the caller) yields an empty page
+// rather than an error: the same behavior as an ordinary page with nothing
+// left to return.
 func (s *RedisStore) listIndexedResponseIDs(
 	ctx context.Context,
 	conversationID string,
 	normalized normalizedListOptions,
 	windowSize int,
 ) ([]responseGenerationWitness, listWindowRead, error) {
-	indexKey := s.conversationIndexKey(conversationID)
-	ascending := normalized.Order == "asc"
-
-	start, end, resolution, err := s.resolveListWindow(ctx, indexKey, ascending, normalized, windowSize)
-	if err != nil || resolution != listWindowReady {
-		return nil, listWindowRead{resolution: resolution}, err
+	direction := 0
+	if normalized.Order == "asc" {
+		direction = 1
+	}
+	mode, cursor := "none", ""
+	switch {
+	case normalized.After != "":
+		mode, cursor = "after", normalized.After
+	case normalized.Before != "":
+		mode, cursor = "before", normalized.Before
 	}
 
-	window := listWindowRead{resolution: resolution, width: int(end - start + 1)}
-	witnesses, err := s.readIndexRange(ctx, conversationID, ascending, start, end)
+	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
+	result, err := readIndexWindowScript.Run(ctx, s.client, keys, direction, mode, cursor, windowSize).Result()
+	if err != nil {
+		return nil, listWindowRead{}, fmt.Errorf("failed to read conversation index window: %w", err)
+	}
+	return decodeIndexWindow(result)
+}
+
+// decodeIndexWindow unpacks readIndexWindowScript's reply: a status word, the
+// rank span covered, then (member, witness) pairs.
+func decodeIndexWindow(result interface{}) ([]responseGenerationWitness, listWindowRead, error) {
+	items, ok := result.([]interface{})
+	if !ok || len(items) < 2 || len(items)%2 != 0 {
+		return nil, listWindowRead{}, fmt.Errorf("unexpected conversation index window result: %#v", result)
+	}
+	status, statusOK := items[0].(string)
+	width, widthOK := items[1].(int64)
+	if !statusOK || !widthOK {
+		return nil, listWindowRead{}, fmt.Errorf("unexpected conversation index window header types %T/%T", items[0], items[1])
+	}
+
+	resolution, err := parseWindowResolution(status)
+	if err != nil {
+		return nil, listWindowRead{}, err
+	}
+	window := listWindowRead{resolution: resolution, width: int(width)}
+
+	witnesses, err := decodeWindowMembers(items[2:])
 	return witnesses, window, err
+}
+
+func parseWindowResolution(status string) (listWindowResolution, error) {
+	switch status {
+	case "ready":
+		return listWindowReady, nil
+	case "empty":
+		return listWindowEmpty, nil
+	case "missing":
+		return listWindowCursorMissing, nil
+	default:
+		return 0, fmt.Errorf("unexpected conversation index window status %q", status)
+	}
+}
+
+func decodeWindowMembers(pairs []interface{}) ([]responseGenerationWitness, error) {
+	witnesses := make([]responseGenerationWitness, 0, len(pairs)/2)
+	for i := 0; i < len(pairs); i += 2 {
+		responseID, idOK := pairs[i].(string)
+		generation, generationOK := pairs[i+1].(string)
+		if !idOK || !generationOK {
+			return nil, fmt.Errorf("unexpected conversation index window member types %T/%T", pairs[i], pairs[i+1])
+		}
+		witnesses = append(witnesses, responseGenerationWitness{responseID: responseID, generation: generation})
+	}
+	return witnesses, nil
 }
 
 // listWindowRead describes the bounded window one read actually covered: how
@@ -510,15 +639,15 @@ type listWindowRead struct {
 	width      int
 }
 
-// listWindowResolution says why resolveListWindow did or did not produce a
-// rank window. The states are kept distinct because an exhausted index and an
+// listWindowResolution says why readIndexWindowScript did or did not produce
+// a rank window. The states are kept distinct because an exhausted index and an
 // unresolvable cursor both used to arrive as "no members", and the listing
 // loop has to tell them apart before an empty result may be reported as
 // end-of-list.
 type listWindowResolution uint8
 
 const (
-	// listWindowReady means [start, end] is a real window to read.
+	// listWindowReady means a real window was read.
 	listWindowReady listWindowResolution = iota
 	// listWindowEmpty means the index holds nothing further in this direction.
 	listWindowEmpty
@@ -529,97 +658,3 @@ const (
 	// different facts about the index, not because they are handled apart.
 	listWindowCursorMissing
 )
-
-// rankInIndex resolves a cursor response ID's rank in the given order (asc:
-// ZRANK, desc: ZREVRANK). ok=false, not an error, means the cursor is not a
-// current index member — the documented behavior for both After and Before.
-func (s *RedisStore) rankInIndex(ctx context.Context, indexKey string, ascending bool, member string) (rank int64, ok bool, err error) {
-	var cmd *redis.IntCmd
-	if ascending {
-		cmd = s.client.ZRank(ctx, indexKey, member)
-	} else {
-		cmd = s.client.ZRevRank(ctx, indexKey, member)
-	}
-
-	r, err := cmd.Result()
-	if err != nil {
-		if errors.Is(err, redis.Nil) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("failed to rank conversation index cursor %s: %w", member, err)
-	}
-
-	return r, true, nil
-}
-
-// resolveListWindow computes the inclusive [start, end] rank window to read
-// for one page, honoring an After or Before cursor. ok=false means the page
-// is empty (cursor not found, or the window has nothing in it) without that
-// being an error.
-func (s *RedisStore) resolveListWindow(
-	ctx context.Context,
-	indexKey string,
-	ascending bool,
-	normalized normalizedListOptions,
-	windowSize int,
-) (start, end int64, resolution listWindowResolution, err error) {
-	limit := int64(windowSize)
-
-	switch {
-	case normalized.After != "":
-		r, found, rankErr := s.rankInIndex(ctx, indexKey, ascending, normalized.After)
-		if rankErr != nil {
-			return 0, 0, listWindowEmpty, rankErr
-		}
-		if !found {
-			return 0, 0, listWindowCursorMissing, nil
-		}
-		start, end = r+1, r+limit
-	case normalized.Before != "":
-		r, found, rankErr := s.rankInIndex(ctx, indexKey, ascending, normalized.Before)
-		if rankErr != nil {
-			return 0, 0, listWindowEmpty, rankErr
-		}
-		if !found {
-			return 0, 0, listWindowCursorMissing, nil
-		}
-		end = r - 1
-		start = max(0, end-limit+1)
-	default:
-		start, end = 0, limit-1
-	}
-
-	if end < start {
-		return 0, 0, listWindowEmpty, nil
-	}
-
-	return start, end, listWindowReady, nil
-}
-
-// readIndexRange reads one inclusive rank window [start, end] in the given
-// order (asc: ZRANGE, desc: ZREVRANGE).
-func (s *RedisStore) readIndexRange(ctx context.Context, conversationID string, ascending bool, start, end int64) ([]responseGenerationWitness, error) {
-	direction := 0
-	if ascending {
-		direction = 1
-	}
-	keys := []string{s.conversationIndexKey(conversationID), s.conversationIndexGenerationKey(conversationID)}
-	result, err := readIndexWindowScript.Run(ctx, s.client, keys, start, end, direction).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read conversation index window: %w", err)
-	}
-	items, ok := result.([]interface{})
-	if !ok || len(items)%2 != 0 {
-		return nil, fmt.Errorf("unexpected conversation index window result: %#v", result)
-	}
-	witnesses := make([]responseGenerationWitness, 0, len(items)/2)
-	for i := 0; i < len(items); i += 2 {
-		responseID, idOK := items[i].(string)
-		generation, generationOK := items[i+1].(string)
-		if !idOK || !generationOK {
-			return nil, fmt.Errorf("unexpected conversation index window member types %T/%T", items[i], items[i+1])
-		}
-		witnesses = append(witnesses, responseGenerationWitness{responseID: responseID, generation: generation})
-	}
-	return witnesses, nil
-}
