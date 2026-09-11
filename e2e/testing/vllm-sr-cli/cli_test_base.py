@@ -349,6 +349,7 @@ class CLITestBase(unittest.TestCase):
         api_key_env: str | None = None,
         api_only: bool = False,
         managed_storage: bool = False,
+        skip_processing: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace.
 
@@ -408,6 +409,11 @@ class CLITestBase(unittest.TestCase):
         }
         if api_only:
             config["global"] = _api_only_global_config()
+        if skip_processing:
+            global_config = config.setdefault("global", {})
+            global_config.setdefault("router", {})["skip_processing"] = {
+                "enabled": True
+            }
         if managed_storage:
             global_config = config.get("global")
             if not isinstance(global_config, dict):
