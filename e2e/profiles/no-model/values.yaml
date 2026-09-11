@@ -3,7 +3,7 @@ config:
   listeners: []
   providers:
     defaults:
-      default_model: stub-model
+      model: stub-model
     models:
       - name: stub-model
         backend_refs:
