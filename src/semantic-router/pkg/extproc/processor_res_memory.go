@@ -17,19 +17,12 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	ctx *RequestContext,
 	response *llmprotocol.Response,
 ) {
-	r.scheduleResponseMemoryStoreText(ctx, extractSemanticAssistantResponseText(response))
-}
-
-func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
-	ctx *RequestContext,
-	currentAssistantResponse string,
-) {
-	autoStoreEnabled := extractAutoStore(ctx)
+	autoStoreEnabled, decisionAutoStoreSet := extractAutoStore(ctx)
 	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
 		autoStoreEnabled = requestAutoStore
-	} else if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
+	} else if !decisionAutoStoreSet && r.Config != nil {
 		logging.Infof("extractAutoStore: Falling back to router config, AutoStore=%v", r.Config.Memory.AutoStore)
-		autoStoreEnabled = true
+		autoStoreEnabled = r.Config.Memory.AutoStore
 	}
 	logging.Infof(
 		"Memory store check: MemoryExtractor=%v, autoStore=%v, responseJailbreakPassed=%v",
@@ -59,6 +52,16 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		r.recordMemoryPersistenceOutcome(ctx, "skipped", "memory_info_unavailable", false, nil)
 		return
 	}
+	var retained []*responseapi.StoredResponse
+	if ctx.ResponseObjectState != nil {
+		retained = ctx.ResponseObjectState.ConversationHistory
+	}
+	// Inspect bounded structure and lengths before admission. Rejected snapshots
+	// must not occupy capacity while workers are blocked. No text is copied here.
+	if err := validateMemorySnapshotBudget(context.Background(), ctx.SemanticRequest.Messages, retained, response); err != nil {
+		r.recordMemoryPersistenceOutcome(ctx, "skipped", "history_too_large", true, err)
+		return
+	}
 	receipt := r.snapshotMemoryPersistenceReceipt(ctx)
 	if !receipt.reserve() {
 		receipt.record("rejected", "receipt_queue_full", true, nil)
@@ -69,16 +72,12 @@ func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
 		return
 	}
 	defer reservation.Abort(memory.PersistenceOutcome{Status: "extraction_failed", Reason: "snapshot_failed", FailOpen: true}, nil)
-	var retained []*responseapi.StoredResponse
-	if ctx.ResponseObjectState != nil {
-		retained = ctx.ResponseObjectState.ConversationHistory
-	}
-	if err := validateMemoryHistoryBudget(reservation.Context(), ctx.SemanticRequest.Messages, retained); err != nil {
-		reservation.Abort(memory.PersistenceOutcome{Status: "skipped", Reason: "history_too_large", FailOpen: true}, err)
+	if reservation.Context().Err() != nil {
 		return
 	}
 	// Snapshot while the request still owns its mutable state. Preparation is
 	// admitted and bounded; protocol encoding remains in the worker.
+	currentAssistantResponse := extractSemanticAssistantResponseText(response)
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	sessionID, userID, history, infoErr := extractMemoryInfo(ctx)
 	if infoErr != nil {

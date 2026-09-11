@@ -80,6 +80,48 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
         ):
             self.case._wait_for_terminal_receipt({"_replay_id": "request-replay"})
 
+    def test_oversized_history_e2e_requires_only_the_skipped_terminal(self):
+        self.case.responses_url = "http://router/v1/responses"
+        self.case.test_user = "test-user"
+        self.case.timeout = 5
+        model_response = Mock(
+            status_code=receipts.HTTP_OK,
+            headers={"x-vsr-replay-id": "oversized-replay"},
+        )
+        model_response.json.return_value = {
+            "output": [
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Model output"}],
+                }
+            ]
+        }
+        terminal = outcome("skipped", reason="history_too_large")
+        for scheduled in (False, True):
+            with self.subTest(scheduled=scheduled):
+                replay_response = Mock(status_code=receipts.HTTP_OK)
+                replay_response.json.return_value = {
+                    "id": "oversized-replay",
+                    "outcomes": (
+                        [outcome("scheduled", "scheduled")] if scheduled else []
+                    )
+                    + [terminal],
+                }
+                expected = (
+                    self.assertRaises(AssertionError) if scheduled else nullcontext()
+                )
+                with (
+                    patch.object(
+                        receipts.requests, "post", return_value=model_response
+                    ),
+                    patch.object(
+                        receipts.requests, "get", return_value=replay_response
+                    ),
+                    expected,
+                ):
+                    self.case.test_04_oversized_history_skips_persistence_and_delivers_response()
+
     def test_missing_terminal_receipt_times_out_with_request_diagnostics(self):
         response = Mock(status_code=receipts.HTTP_OK)
         response.json.return_value = {

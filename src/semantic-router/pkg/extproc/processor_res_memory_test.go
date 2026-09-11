@@ -126,7 +126,7 @@ func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
 		memoryPersistence: runner,
 	}
 
-	// No per-decision plugin → extractAutoStore returns false
+	// No per-decision plugin → extractAutoStore reports an omitted value
 	// Router AutoStore=true -> fallback kicks in -> function does NOT return early
 	// The goroutine runs but extractMemoryInfo fails gracefully (no ResponseObjectState)
 	reqCtx := &RequestContext{
@@ -191,7 +191,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenBothAutoStoresDisabled(t *testin
 		MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}),
 	}
 
-	// extractAutoStore returns false + router AutoStore=false -> autoStoreEnabled stays false -> skip
+	// No decision override + router AutoStore=false -> autoStoreEnabled stays false -> skip
 	reqCtx := &RequestContext{
 		RequestID: "req-both-disabled",
 	}
@@ -300,19 +300,25 @@ func TestScheduleResponseMemoryStore_RejectedWriteIsItsOwnMetricStatus(t *testin
 }
 
 func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
+	on, off := true, false
 	for _, tc := range []struct {
-		name            string
-		control         string
-		configAutoStore bool
-		mutateRequest   bool
-		wantStored      bool
+		name              string
+		control           string
+		configAutoStore   bool
+		mutateRequest     bool
+		wantStored        bool
+		decisionAutoStore *bool
 	}{
-		{"explicit_false", `,"auto_store":false`, true, false, false},
-		{"explicit_true", `,"auto_store":true`, false, false, true},
-		{"omitted_enabled", "", true, false, true},
-		{"omitted_disabled", "", false, false, false},
-		{"false_snapshot", `,"auto_store":false`, true, true, false},
-		{"true_snapshot", `,"auto_store":true`, false, true, true},
+		{"explicit_false", `,"auto_store":false`, true, false, false, nil},
+		{"explicit_true", `,"auto_store":true`, false, false, true, nil},
+		{"omitted_enabled", "", true, false, true, nil},
+		{"omitted_disabled", "", false, false, false, nil},
+		{"false_snapshot", `,"auto_store":false`, true, true, false, nil},
+		{"true_snapshot", `,"auto_store":true`, false, true, true, nil},
+		{"decision_false_overrides_global_true", "", true, false, false, &off},
+		{"decision_true_overrides_global_false", "", false, false, true, &on},
+		{"request_true_overrides_decision_false", `,"auto_store":true`, false, true, true, &off},
+		{"request_false_overrides_decision_true", `,"auto_store":false`, true, true, false, &on},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
@@ -331,6 +337,11 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 				memoryPersistence: runner,
 			}
 			ctx := persistenceRegressionContext(tc.name)
+			payload, err := config.NewStructuredPayload(config.MemoryPluginConfig{Enabled: true, AutoStore: tc.decisionAutoStore})
+			require.NoError(t, err)
+			ctx.VSRSelectedDecision = &config.Decision{
+				Name: tc.name, Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: payload}},
+			}
 			ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 			ctx.RouterReplayID = tc.name
 			body := []byte(fmt.Sprintf(`{"model":"test-model","input":"Explain how to deploy a backend service in eu-central-1."%s}`, tc.control))
@@ -346,7 +357,17 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 			require.NoError(t, err)
 			require.Nil(t, request.AutoStore, "router controls must be removed from the provider request")
 
-			router.scheduleResponseMemoryStoreText(ctx, "Deploy the service using a regional cluster and a load balancer.")
+			ctx.TargetFormat = ctx.SourceFormat
+			const responseText = "Deploy the service using a regional cluster and a load balancer."
+			responseBody, err := router.encodeClientResponse(*memoryTestResponse(responseText), ctx)
+			require.NoError(t, err)
+			response := router.handleNonStreamingResponseBody(responseBody, ctx, 0)
+			require.NotNil(t, response.GetResponseBody(), "auto_store policy must preserve response delivery")
+			deliveredBody := responseBody
+			if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
+				deliveredBody = mutation.GetBody()
+			}
+			assert.Contains(t, string(deliveredBody), responseText)
 			require.NoError(t, runner.RetireAndWait(5*time.Second))
 			require.NoError(t, recorder.DrainOutcomes())
 			record, found := recorder.GetRecord(tc.name)
@@ -370,6 +391,10 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 			assert.Equal(t, "false", terminal.Metadata["fail_open"])
 		})
 	}
+}
+
+func (r *OpenAIRouter) scheduleResponseMemoryStoreText(ctx *RequestContext, text string) {
+	r.scheduleSemanticResponseMemoryStore(ctx, memoryTestResponse(text))
 }
 
 func memoryTestResponse(text string) *llmprotocol.Response {

@@ -70,8 +70,10 @@ func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.
 	reqCtx.RouterReplayRecorder = recorder
 	originalMetric := metrics.PluginExecutionTotal.WithLabelValues("memory_persistence", requestDecisionStateKey(reqCtx), "completed")
 	before := testutil.ToFloat64(originalMetric)
-	router.scheduleResponseMemoryStoreText(reqCtx, "Deploy the service using a regional cluster and a load balancer.")
+	response := memoryTestResponse("Deploy the service using a regional cluster and a load balancer.")
+	router.scheduleSemanticResponseMemoryStore(reqCtx, response)
 
+	response.Output[0].Content[0].Text = "changed conversation content"
 	mutatePersistenceRequest(reqCtx, replacement)
 	unblock()
 	require.NoError(t, runner.RetireAndWait(5*time.Second))

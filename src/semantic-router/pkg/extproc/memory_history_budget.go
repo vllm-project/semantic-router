@@ -9,7 +9,7 @@ import (
 )
 
 // These limits apply to persistence preparation, independently of ingress body
-// limits. Oversized history is rejected intact, preserving session stride.
+// limits. Oversized snapshots are rejected intact, preserving session stride.
 const (
 	maxMemorySnapshotMessages = 256
 	maxMemorySnapshotBytes    = 1 << 20
@@ -40,10 +40,13 @@ func (b *memoryHistoryBudget) strings(values ...string) bool {
 	return true
 }
 
-// validateMemoryHistoryBudget walks only bounded structure and string lengths;
-// it runs after admission and before cloning, JSON decoding, or text joining.
-func validateMemoryHistoryBudget(jobCtx context.Context, messages []llmprotocol.Message, retained []*responseapi.StoredResponse) error {
+// validateMemorySnapshotBudget walks only bounded structure and string lengths
+// before admission, cloning, JSON decoding, text joining, or think-tag stripping.
+func validateMemorySnapshotBudget(jobCtx context.Context, messages []llmprotocol.Message, retained []*responseapi.StoredResponse, response *llmprotocol.Response) error {
 	b := memoryHistoryBudget{maxMemorySnapshotBytes, maxMemorySnapshotNodes, maxMemorySnapshotMessages}
+	if !b.assistantResponse(response) {
+		return errMemoryHistoryTooLarge
+	}
 	if !takeMemoryBudget(&b.messages, len(messages)) {
 		return errMemoryHistoryTooLarge
 	}
@@ -92,6 +95,31 @@ func validateMemoryHistoryBudget(jobCtx context.Context, messages []llmprotocol.
 		}
 	}
 	return jobCtx.Err()
+}
+
+// Count the same primary assistant text consumed by semanticAssistantContent.
+// Charge raw bytes so stripping think tags cannot hide unbounded preparation.
+func (b *memoryHistoryBudget) assistantResponse(response *llmprotocol.Response) bool {
+	if response == nil {
+		return true
+	}
+	if !takeMemoryBudget(&b.nodes, len(response.Output)) {
+		return false
+	}
+	for _, item := range response.Output {
+		if item.Role != llmprotocol.RoleAssistant {
+			continue
+		}
+		if !takeMemoryBudget(&b.nodes, len(item.Content)) {
+			return false
+		}
+		for _, content := range item.Content {
+			if (content.Kind == llmprotocol.ContentText || content.Kind == llmprotocol.ContentRefusal) && !b.strings(content.Text) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (b *memoryHistoryBudget) contents(contents []llmprotocol.Content, depth int) bool {

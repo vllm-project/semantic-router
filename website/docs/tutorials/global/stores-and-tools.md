@@ -135,6 +135,11 @@ non-positive value uses the 1 MiB default.
 
 #### Write path bounds
 
+Automatic persistence resolves `auto_store` in this order: the Responses request
+override, the selected decision's memory plugin, then `global.stores.memory`.
+An explicit `false` disables automatic persistence at that precedence level;
+only an omitted value falls back to the next level.
+
 Response handling does not wait for Memory persistence to complete. Identity
 checks and capacity reservation precede bounded history snapshots; encoding and
 writes run in the background. Other response-path Replay operations remain
@@ -151,12 +156,16 @@ Configure `global.stores.memory.persistence`:
 
 Omit a field or set it to `0` to take the default.
 
-History is limited to 256 messages/items across request and retained Responses
-history, 1 MiB of payload, 4096 structural nodes, and 32 nested content levels.
+Each persistence attempt has a shared 1 MiB payload budget for request history,
+retained Responses history, and the current assistant response. Assistant text
+is counted before think-tag stripping. History is also limited to 256
+messages/items and 32 nested content levels; history and the current response
+share a 4096-node structural limit. Bounded length checks run before reserving
+persistence capacity; text assembly and history copying run only after admission.
 Exceeding a limit skips persistence with `skipped` / `history_too_large` and
-`fail_open=true`, preserving the model response without truncating history.
-Missing user identity skips preparation. Background contexts retain only span
-context and tracestate.
+`fail_open=true`, without occupying persistence capacity or truncating the model
+response or history. Missing user identity skips preparation. Background contexts
+retain only span context and tracestate.
 
 For requests with a Router Replay record, accepted attempts reserve capacity for
 `scheduled` and one terminal receipt, protecting both from queue saturation.
