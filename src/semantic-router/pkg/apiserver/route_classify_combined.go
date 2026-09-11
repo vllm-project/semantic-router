@@ -33,10 +33,12 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "text cannot be empty")
 		return
 	}
+	service, release := s.acquireClassificationService()
+	defer release()
 
 	start := time.Now()
 
-	intentResp, err := s.classificationSvc.ClassifyIntent(r.Context(), services.IntentRequest{
+	intentResp, err := service.ClassifyIntent(r.Context(), services.IntentRequest{
 		Text:    req.Text,
 		Options: req.IntentOptions,
 	})
@@ -45,7 +47,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		return
 	}
 
-	piiResp, err := s.classificationSvc.DetectPII(r.Context(), services.PIIRequest{
+	piiResp, err := service.DetectPII(r.Context(), services.PIIRequest{
 		Text:    req.Text,
 		Options: req.PIIOptions,
 	})
@@ -54,7 +56,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		return
 	}
 
-	securityResp, err := s.classificationSvc.CheckSecurity(r.Context(), services.SecurityRequest{
+	securityResp, err := service.CheckSecurity(r.Context(), services.SecurityRequest{
 		Text:    req.Text,
 		Options: req.SecurityOptions,
 	})
