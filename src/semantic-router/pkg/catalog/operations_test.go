@@ -52,3 +52,19 @@ func TestResolveProtocolOperationPathDoesNotApplyProviderOverrides(t *testing.T)
 		t.Fatalf("protocol create path = %q, err = %v", path, err)
 	}
 }
+
+func TestResolveOperationPathComposesIBMWatsonxGatewayRoot(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	path, err := registry.ResolveOperationPath("ibm-watsonx", "", "create", "/ml/gateway/v1")
+	if err != nil || path != "/ml/gateway/v1/chat/completions" {
+		t.Fatalf("gateway create path = %q, err = %v", path, err)
+	}
+	path, err = registry.ResolveOperationPath("ibm-watsonx", "", "list_models", "/ml/gateway/v1")
+	if err != nil || path != "/ml/gateway/v1/models" {
+		t.Fatalf("gateway list_models path = %q, err = %v", path, err)
+	}
+}
