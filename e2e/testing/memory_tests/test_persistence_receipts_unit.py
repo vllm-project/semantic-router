@@ -1,8 +1,11 @@
 """Offline regressions for the request-correlated persistence E2E assertions."""
 
+import json
 import unittest
 from contextlib import nullcontext
+from pathlib import Path
 from unittest.mock import Mock, patch
+from urllib.parse import urlsplit
 
 from memory_tests import test_persistence_receipts as receipts
 
@@ -22,8 +25,25 @@ def outcome(status, phase="terminal", reason="persist_error"):
 class PersistenceReceiptAssertionsTest(unittest.TestCase):
     def setUp(self):
         self.case = receipts.MemoryPersistenceReceiptTest()
-        self.case.replay_url = "http://router/v1/router_replay"
+        self.case.replay_url = "http://router/api/v1/observability/replays"
         self.case.metrics_url = "http://router/metrics"
+
+    def test_default_replay_endpoint_matches_management_api_contract(self):
+        with (
+            patch.object(receipts.MemoryFeaturesTest, "setUp"),
+            patch.object(self.case, "_resolve_metrics_url"),
+            patch.dict(receipts.os.environ, {}, clear=True),
+        ):
+            self.case.setUp()
+
+        repository_root = Path(__file__).resolve().parents[3]
+        contract_path = (
+            repository_root / "website/static/openapi/apiserver/apiserver.openapi.json"
+        )
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        record_path = urlsplit(self.case.replay_url).path + "/{id}"
+        self.assertIn(record_path, contract["paths"])
+        self.assertIn("get", contract["paths"][record_path])
 
     def test_terminal_receipt_is_read_from_the_response_replay_id(self):
         terminal = outcome("timeout", reason="persist_timeout")
@@ -38,7 +58,7 @@ class PersistenceReceiptAssertionsTest(unittest.TestCase):
             )
         self.assertEqual(actual, terminal)
         get.assert_called_once_with(
-            "http://router/v1/router_replay/request-replay", timeout=10
+            "http://router/api/v1/observability/replays/request-replay", timeout=10
         )
 
     def test_wrong_replay_id_is_rejected(self):

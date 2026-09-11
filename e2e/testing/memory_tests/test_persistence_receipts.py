@@ -33,7 +33,7 @@ class MemoryPersistenceReceiptTest(MemoryFeaturesTest):
         super().setUp()
         self.metrics_url = self._resolve_metrics_url()
         self.replay_url = os.environ.get(
-            "ROUTER_REPLAY_URL", "http://localhost:8080/v1/router_replay"
+            "ROUTER_REPLAY_URL", "http://localhost:8080/api/v1/observability/replays"
         ).rstrip("/")
         self.container_runtime = os.environ.get("CONTAINER_RUNTIME", "docker")
 
