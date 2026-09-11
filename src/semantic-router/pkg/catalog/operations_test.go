@@ -52,3 +52,22 @@ func TestResolveProtocolOperationPathDoesNotApplyProviderOverrides(t *testing.T)
 		t.Fatalf("protocol create path = %q, err = %v", path, err)
 	}
 }
+
+func TestResolveOperationPathComposesDatabricksWorkspaceRoots(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	path, err := registry.ResolveOperationPath("databricks", "", "create", "/serving-endpoints")
+	if err != nil || path != "/serving-endpoints/chat/completions" {
+		t.Fatalf("model serving root path = %q, err = %v", path, err)
+	}
+	path, err = registry.ResolveOperationPath("databricks", "", "create", "/ai-gateway/mlflow/v1")
+	if err != nil || path != "/ai-gateway/mlflow/v1/chat/completions" {
+		t.Fatalf("ai gateway root path = %q, err = %v", path, err)
+	}
+	if _, err := registry.ResolveOperationPath("databricks", "", "list_models", "/serving-endpoints"); err == nil {
+		t.Fatal("undeclared list_models operation was accepted")
+	}
+}
