@@ -3085,7 +3085,7 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 		},
 	}
 
-	// Case 1: fast-model sets both request and stream idle timeout
+	// Case 1: fast-model sets both request and stream idle timeout in config; only rq-timeout is injected as header
 	var headers1 []*core.HeaderValueOption
 	r.appendReliabilityHeaders(&headers1, "fast-model")
 	headerMap1 := make(map[string]string)
@@ -3094,9 +3094,6 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 	}
 	if headerMap1["x-envoy-upstream-rq-timeout-ms"] != "2000" {
 		t.Fatalf("fast-model: expected x-envoy-upstream-rq-timeout-ms=2000, got %q", headerMap1["x-envoy-upstream-rq-timeout-ms"])
-	}
-	if headerMap1["x-envoy-upstream-stream-idle-timeout-ms"] != "2000" {
-		t.Fatalf("fast-model: expected x-envoy-upstream-stream-idle-timeout-ms=2000, got %q", headerMap1["x-envoy-upstream-stream-idle-timeout-ms"])
 	}
 
 	// Case 2: slow-model sets only request timeout
@@ -3109,9 +3106,6 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 	if headerMap2["x-envoy-upstream-rq-timeout-ms"] != "15000" {
 		t.Fatalf("slow-model: expected x-envoy-upstream-rq-timeout-ms=15000, got %q", headerMap2["x-envoy-upstream-rq-timeout-ms"])
 	}
-	if _, ok := headerMap2["x-envoy-upstream-stream-idle-timeout-ms"]; ok {
-		t.Fatalf("slow-model: unexpected stream idle timeout header: %v", headerMap2["x-envoy-upstream-stream-idle-timeout-ms"])
-	}
 
 	// Case 3: unbounded-model sets request timeout 0
 	var headers3 []*core.HeaderValueOption
@@ -3122,9 +3116,6 @@ func TestAppendReliabilityHeaders(t *testing.T) {
 	}
 	if headerMap3["x-envoy-upstream-rq-timeout-ms"] != "0" {
 		t.Fatalf("unbounded-model: expected x-envoy-upstream-rq-timeout-ms=0, got %q", headerMap3["x-envoy-upstream-rq-timeout-ms"])
-	}
-	if headerMap3["x-envoy-upstream-stream-idle-timeout-ms"] != "15000" {
-		t.Fatalf("unbounded-model: expected x-envoy-upstream-stream-idle-timeout-ms=15000, got %q", headerMap3["x-envoy-upstream-stream-idle-timeout-ms"])
 	}
 
 	// Case 4: model without reliability settings sets no timeout headers

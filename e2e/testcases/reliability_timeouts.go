@@ -52,6 +52,7 @@ func init() {
 const (
 	timeoutProbeFastModel        = "timeout-probe-fast"
 	timeoutProbeSlowModel        = "timeout-probe-slow"
+	timeoutProbeStallModel       = "timeout-probe-stall"
 	timeoutProbeUnreachableModel = "timeout-probe-unreachable"
 
 	// Expected timeouts configured in e2e/profiles/ai-gateway/values.yaml
@@ -232,7 +233,7 @@ func testReliabilityStalledStreams(ctx context.Context, client *kubernetes.Clien
 	defer stop()
 
 	stalledPrompt := "__mock_frame_stall_15s__ hello stalled stream probe"
-	resp, start, err := sendStalledStreamRequest(ctx, localPort, timeoutProbeFastModel, stalledPrompt)
+	resp, start, err := sendStalledStreamRequest(ctx, localPort, timeoutProbeStallModel, stalledPrompt)
 	if err != nil {
 		return fmt.Errorf("failed to initiate stalled stream request: %w", err)
 	}
@@ -382,8 +383,9 @@ func fetchMetricsBody(ctx context.Context, client *kubernetes.Clientset, opts pk
 
 // verifyTimeoutMetrics verifies that the router's Prometheus /metrics endpoint records
 // timeout errors in llm_request_errors_total:
-// - delta == 2 for timeout-probe-fast (1 from deadline timeout 504, 1 from stalled stream idle timeout)
+// - delta == 1 for timeout-probe-fast (from deadline timeout 504)
 // - delta == 0 for timeout-probe-slow (completed within deadline and client abort does not record timeout)
+// - delta == 1 for timeout-probe-stall (from stalled stream idle timeout)
 // - delta == 1 for timeout-probe-unreachable (from connect timeout 503)
 func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, initialBody string) error {
 	if client == nil || opts.RestConfig == nil {
@@ -404,8 +406,8 @@ func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opt
 	initialFast := parseRequestErrorCount(initialBody, timeoutProbeFastModel, "timeout")
 	finalFast := parseRequestErrorCount(finalBody, timeoutProbeFastModel, "timeout")
 	deltaFast := finalFast - initialFast
-	if deltaFast != 2 {
-		return fmt.Errorf("expected 2 timeout errors for model %q (1 from deadline, 1 from stalled stream), got delta %.0f (before=%.0f, after=%.0f)",
+	if deltaFast != 1 {
+		return fmt.Errorf("expected 1 timeout error for model %q (from deadline), got delta %.0f (before=%.0f, after=%.0f)",
 			timeoutProbeFastModel, deltaFast, initialFast, finalFast)
 	}
 
@@ -415,6 +417,14 @@ func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opt
 	if deltaSlow != 0 {
 		return fmt.Errorf("expected 0 timeout errors for slow model %q within deadline and on client abort, got delta %.0f (before=%.0f, after=%.0f)",
 			timeoutProbeSlowModel, deltaSlow, initialSlow, finalSlow)
+	}
+
+	initialStall := parseRequestErrorCount(initialBody, timeoutProbeStallModel, "timeout")
+	finalStall := parseRequestErrorCount(finalBody, timeoutProbeStallModel, "timeout")
+	deltaStall := finalStall - initialStall
+	if deltaStall != 1 {
+		return fmt.Errorf("expected 1 timeout error for model %q (from stalled stream idle timeout), got delta %.0f (before=%.0f, after=%.0f)",
+			timeoutProbeStallModel, deltaStall, initialStall, finalStall)
 	}
 
 	initialUnreachable := parseRequestErrorCount(initialBody, timeoutProbeUnreachableModel, "timeout")
@@ -430,6 +440,7 @@ func verifyTimeoutMetrics(ctx context.Context, client *kubernetes.Clientset, opt
 			"timeout_metrics_verified":  true,
 			"fast_timeout_delta":        deltaFast,
 			"slow_timeout_delta":        deltaSlow,
+			"stall_timeout_delta":       deltaStall,
 			"unreachable_timeout_delta": deltaUnreachable,
 		})
 	}

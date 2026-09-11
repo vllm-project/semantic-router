@@ -542,15 +542,6 @@ func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueO
 			}})
 		}
 	}
-	if rel.StreamIdleTimeout != "" {
-		if dur, err := time.ParseDuration(rel.StreamIdleTimeout); err == nil && dur > 0 {
-			timeoutMs := dur.Milliseconds()
-			*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-				Key:      "x-envoy-upstream-stream-idle-timeout-ms",
-				RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
-			}})
-		}
-	}
 }
 
 func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength int) {

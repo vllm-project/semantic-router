@@ -46,6 +46,18 @@ config:
           - name: local-vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+      - name: timeout-probe-stall
+        reasoning:
+          family: qwen3
+        provider_model_id: timeout-probe-stall
+        reliability:
+          request_timeout: 15s
+          stream_idle_timeout: 2s
+          connect_timeout: 2s
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
       - name: timeout-probe-unreachable
         reasoning:
           family: qwen3
@@ -820,6 +832,7 @@ config:
       - name: general-expert
       - name: timeout-probe-fast
       - name: timeout-probe-slow
+      - name: timeout-probe-stall
       - name: timeout-probe-unreachable
   entrypoints:
     - model_names: ["vllm-sr/e2e-recipe-probe"]

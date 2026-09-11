@@ -163,6 +163,7 @@ func TestParseRequestErrorCount(t *testing.T) {
 # TYPE llm_request_errors_total counter
 llm_request_errors_total{model="timeout-probe-fast",reason="timeout"} 1
 llm_request_errors_total{model="timeout-probe-slow",reason="timeout"} 0
+llm_request_errors_total{model="timeout-probe-stall",reason="timeout"} 1
 llm_request_errors_total{model="timeout-probe-unreachable",reason="timeout"} 1
 llm_request_errors_total{model="other-model",reason="invalid_request"} 5
 `
@@ -176,6 +177,11 @@ llm_request_errors_total{model="other-model",reason="invalid_request"} 5
 	slowCount := parseRequestErrorCount(metricsExposition, "timeout-probe-slow", "timeout")
 	if slowCount != 0 {
 		t.Errorf("expected slow timeout count 0, got %v", slowCount)
+	}
+
+	stallCount := parseRequestErrorCount(metricsExposition, "timeout-probe-stall", "timeout")
+	if stallCount != 1 {
+		t.Errorf("expected stall timeout count 1, got %v", stallCount)
 	}
 
 	unreachableTimeout := parseRequestErrorCount(metricsExposition, "timeout-probe-unreachable", "timeout")
