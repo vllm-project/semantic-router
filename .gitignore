@@ -146,7 +146,6 @@ router-runtime.json
 
 # Local agent harness artifacts
 .agent-harness/
-.codebuddy/
 
 # Dashboard frontend (React + TypeScript + Vite)
 dashboard/frontend/node_modules/
