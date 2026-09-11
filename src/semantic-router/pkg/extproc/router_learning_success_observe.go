@@ -21,7 +21,7 @@ func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 	}
 	selCtx := firstNonNilSelectionContext(decision.selectionContext, input.selCtx)
 	candidates := r.learningCandidateModels(selCtx, input.ctx, cfg.EffectiveCandidateSet())
-	models := successEstimateModelNames(candidates)
+	models := successEstimateCandidateNames(candidates)
 	if len(models) == 0 {
 		return
 	}
@@ -49,7 +49,7 @@ func (r *OpenAIRouter) attachSuccessEstimateObserveDiagnostics(
 	diag.successEstimates = estimates
 }
 
-func successEstimateModelNames(refs []config.ModelRef) []string {
+func successEstimateCandidateNames(refs []config.ModelRef) []string {
 	if len(refs) == 0 {
 		return nil
 	}
@@ -60,13 +60,22 @@ func successEstimateModelNames(refs []config.ModelRef) []string {
 		if model == "" {
 			continue
 		}
-		if _, ok := seen[model]; ok {
+		lora := strings.TrimSpace(ref.LoRAName)
+		key := model + "\x00" + lora
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		seen[model] = struct{}{}
-		names = append(names, model)
+		seen[key] = struct{}{}
+		names = append(names, routedCandidateName(ref))
 	}
 	return names
+}
+
+func routedCandidateName(ref config.ModelRef) string {
+	if name := strings.TrimSpace(ref.LoRAName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(ref.Model)
 }
 
 func successEstimateObserveConfig(

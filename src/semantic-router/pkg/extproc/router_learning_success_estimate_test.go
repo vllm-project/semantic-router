@@ -288,6 +288,126 @@ func TestSuccessEstimateObservePathKeepsFreshEvidenceWhenHorizonDisabled(t *test
 	}
 }
 
+func TestSuccessEstimateCandidateNamesKeepLoRAIdentity(t *testing.T) {
+	got := successEstimateCandidateNames([]config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "cheap"},
+		{Model: " "},
+	})
+	want := []string{"math-lora", "code-lora", "cheap"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
+	}
+}
+
+func TestSuccessEstimateLooksUpSingleAdapterIdentity(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 7)
+	recordScopedExperience(rt, "adaptive", 2, "frontier", routerLearningOutcomeFailed, 9)
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, []string{"math-lora"}, "")
+
+	got := estimateOneCandidateSuccess(snap, "math-lora", successEstimateConfig{Now: snap.takenAt})
+	if got.CandidateModel != "math-lora" || got.SampleCount != 7 || got.EvidenceScope != successEvidenceScopeDecision {
+		t.Fatalf("expected adapter evidence, not the base model row, got %#v", got)
+	}
+}
+
+func TestSuccessEstimateKeepsDistinctAdaptersOnSharedBase(t *testing.T) {
+	rt := newRouterLearningRuntime(nil, nil, nil)
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 7)
+	recordScopedExperience(rt, "adaptive", 2, "code-lora", routerLearningOutcomeFailed, 5)
+	candidates := successEstimateCandidateNames([]config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+	})
+	snap := rt.freezeEvidenceSnapshot("adaptive", 2, candidates, "")
+	got := estimateCandidateSuccess(snap, candidates, successEstimateConfig{Now: snap.takenAt})
+	byModel := estimatesByModel(got)
+	if len(byModel) != 2 {
+		t.Fatalf("expected one estimate per adapter, got %#v", got)
+	}
+	if mathEst := byModel["math-lora"]; mathEst.SampleCount != 7 || mathEst.CandidateModel != "math-lora" {
+		t.Fatalf("expected math-lora evidence, got %#v", mathEst)
+	}
+	if codeEst := byModel["code-lora"]; codeEst.SampleCount != 5 || codeEst.CandidateModel != "code-lora" {
+		t.Fatalf("expected code-lora evidence, got %#v", codeEst)
+	}
+}
+
+func TestSuccessEstimateObservePathLooksUpSingleAdapterIdentity(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	selCtx.CandidateModels = []config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+	}
+	baseResult.SelectedModel = "math-lora"
+	baseResult.LoRAName = "math-lora"
+	baseResult.AllScores = map[string]float64{"math-lora": 1}
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"math-lora",
+		routerLearningOutcomeGoodFit,
+		10,
+	)
+	router.routerLearningRuntimeState().recordModelExperience(
+		"adaptive",
+		2,
+		"frontier",
+		routerLearningOutcomeFailed,
+		4,
+	)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
+		t.Fatalf("adapter observe path must not change the selected adapter, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	got := observeEstimateByModel(t, ctx, "math-lora")
+	if got.Status != successEstimateUnsupported || got.SampleCount != 10 || got.Probability != 0 {
+		t.Fatalf("expected adapter evidence on the observe path, got %#v", got)
+	}
+	policy, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation)
+	if !ok || policy.Details.Adaptation == nil {
+		t.Fatalf("expected adaptation diagnostics, got %#v", ctx.VSRLearningPolicies)
+	}
+	if _, ok := estimatesByModel(policy.Details.Adaptation.successEstimates)["frontier"]; ok {
+		t.Fatalf("adapter observe diagnostics must not collapse onto the base model, got %#v", policy.Details.Adaptation.successEstimates)
+	}
+}
+
+func TestSuccessEstimateObservePathKeepsDistinctAdaptersOnSharedBase(t *testing.T) {
+	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
+	selCtx.CandidateModels = []config.ModelRef{
+		{Model: "frontier", LoRAName: "math-lora"},
+		{Model: "frontier", LoRAName: "code-lora"},
+	}
+	baseResult.SelectedModel = "math-lora"
+	baseResult.LoRAName = "math-lora"
+	baseResult.AllScores = map[string]float64{"math-lora": 1, "code-lora": 0.4}
+	rt := router.routerLearningRuntimeState()
+	recordScopedExperience(rt, "adaptive", 2, "math-lora", routerLearningOutcomeGoodFit, 10)
+	recordScopedExperience(rt, "adaptive", 2, "code-lora", routerLearningOutcomeFailed, 6)
+
+	_, result, selected, applied := router.applyRouterLearning(selCtx, baseResult, &selCtx.CandidateModels[0], ctx)
+	if applied || selected == nil || selected.Model != "frontier" || selected.LoRAName != "math-lora" || result.SelectedModel != "math-lora" {
+		t.Fatalf("shared-base adapter observe path must not change selection, result=%#v selected=%#v applied=%v", result, selected, applied)
+	}
+	mathEst := observeEstimateByModel(t, ctx, "math-lora")
+	codeEst := observeEstimateByModel(t, ctx, "code-lora")
+	if mathEst.SampleCount != 10 || mathEst.Status != successEstimateUnsupported {
+		t.Fatalf("expected math-lora observe estimate, got %#v", mathEst)
+	}
+	if codeEst.SampleCount != 6 || codeEst.Status != successEstimateUnsupported {
+		t.Fatalf("expected code-lora observe estimate, got %#v", codeEst)
+	}
+}
+
 func successEstimateObserveFixture() (*OpenAIRouter, *RequestContext, *selection.SelectionContext, *selection.SelectionResult) {
 	router, ctx, selCtx, baseResult := successEstimateObserveFixtureWithoutExperience()
 	router.routerLearningRuntimeState().recordModelExperience(

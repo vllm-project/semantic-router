@@ -286,6 +286,11 @@ func setCoreEnums(root *jsonschema.Schema) {
 		routerconfig.RouterLearningCandidateSetTier,
 		routerconfig.RouterLearningCandidateSetGlobal,
 	})
+	setDefinitionPropertyEnum(root, "RouterLearningSuccessConfig", "outcome", []string{
+		"",
+		routerconfig.RouterLearningSuccessOutcomeRequestCompletion,
+	})
+	setDefinitionPropertyMinimum(root, "RouterLearningSuccessConfig", "stale_after_seconds", 0)
 	setDefinitionPropertyEnum(root, "DecisionAction", "type", []string{routerconfig.DecisionActionRoute})
 
 	for _, field := range []string{"idle_timeout_seconds", "min_turns_before_switch", "switch_margin", "stability_weight"} {
