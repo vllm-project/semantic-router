@@ -24,17 +24,71 @@ const (
 	RemoteClassifierContractScore = "score.v1"
 )
 
-const defaultRemoteClassifierDeadlineMs = 5000
+const RemoteClassifierDeadlineMs = 5000
+
+// RemoteClassifierCircuitBreakerConfig controls per-backend circuit breaker
+// behaviour. When Enabled is true, consecutive failures trip the breaker open,
+// skipping requests for the configured duration. A single half-open probe then
+// tests whether the backend has recovered. The breaker only decides whether to
+// place the call; a skipped call still surfaces as the existing
+// unresolved/timeout error so decision-tree Unknown, rules.on_unknown, and
+// prompt-guard on_error keep their current meaning.
+//
+// All fields are optional. A zero or nil config leaves the breaker disabled.
+type RemoteClassifierCircuitBreakerConfig struct {
+	// Enabled switches the breaker on for this remote backend instance.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// ConsecutiveFailures is the number of sequential failures that trip
+	// the breaker open. Defaults to 5.
+	ConsecutiveFailures *int `yaml:"consecutive_failures,omitempty" json:"consecutive_failures,omitempty"`
+	// OpenIntervalMs is how long the breaker stays open before transitioning
+	// to half-open. Defaults to 30000 (30 seconds).
+	OpenIntervalMs *int `yaml:"open_interval_ms,omitempty" json:"open_interval_ms,omitempty"`
+	// HalfOpenMaxRequests is the number of probe requests allowed in the
+	// half-open state. Defaults to 1.
+	HalfOpenMaxRequests *int `yaml:"half_open_max_requests,omitempty" json:"half_open_max_requests,omitempty"`
+}
+
+// EffectiveConsecutiveFailures returns the configured value or the default.
+func (c *RemoteClassifierCircuitBreakerConfig) EffectiveConsecutiveFailures() int {
+	if c == nil || c.ConsecutiveFailures == nil {
+		return defaultCircuitBreakerConsecutiveFailures
+	}
+	return *c.ConsecutiveFailures
+}
+
+// EffectiveOpenInterval returns the configured open duration or the default.
+func (c *RemoteClassifierCircuitBreakerConfig) EffectiveOpenInterval() int {
+	if c == nil || c.OpenIntervalMs == nil {
+		return defaultCircuitBreakerOpenIntervalMs
+	}
+	return *c.OpenIntervalMs
+}
+
+// EffectiveHalfOpenMaxRequests returns the configured probe count or the default.
+func (c *RemoteClassifierCircuitBreakerConfig) EffectiveHalfOpenMaxRequests() int {
+	if c == nil || c.HalfOpenMaxRequests == nil {
+		return defaultCircuitBreakerHalfOpenMaxRequests
+	}
+	return *c.HalfOpenMaxRequests
+}
+
+const (
+	defaultCircuitBreakerConsecutiveFailures   = 10
+	defaultCircuitBreakerOpenIntervalMs        = 30000
+	defaultCircuitBreakerHalfOpenMaxRequests   = 1
+)
 
 // RemoteClassifierBackend is the shared remote attachment contract for
 // built-in classifier modules. A nil backend means that the module uses its
 // existing local implementation. DeadlineMs is a pointer so omitted and
 // an explicitly invalid zero value cannot be confused during validation.
 type RemoteClassifierBackend struct {
-	Protocol   string `yaml:"protocol" json:"protocol"`
-	Contract   string `yaml:"contract,omitempty" json:"contract,omitempty"`
-	Model      string `yaml:"model" json:"model"`
-	DeadlineMs *int   `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
+	Protocol        string                              `yaml:"protocol" json:"protocol"`
+	Contract        string                              `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Model           string                              `yaml:"model" json:"model"`
+	DeadlineMs      *int                                `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
+	CircuitBreaker  *RemoteClassifierCircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
 }
 
 // UnmarshalYAML rejects stale or misspelled deadline fields instead of letting
@@ -51,9 +105,9 @@ func (b *RemoteClassifierBackend) UnmarshalYAML(unmarshal func(interface{}) erro
 			return fmt.Errorf("backend contains a non-string field name %v", key)
 		}
 		switch name {
-		case "protocol", "contract", "model", "deadline_ms":
+		case "protocol", "contract", "model", "deadline_ms", "circuit_breaker":
 		default:
-			return fmt.Errorf("backend: unsupported field %q (use deadline_ms for the request deadline)", name)
+			return fmt.Errorf("backend: unsupported field %q (use deadline_ms for the request deadline, circuit_breaker for circuit breaker config)", name)
 		}
 	}
 	type backendAlias RemoteClassifierBackend
@@ -78,7 +132,7 @@ func (b *RemoteClassifierBackend) EffectiveContract(defaultContract string) stri
 // EffectiveDeadlineMs returns the shared HTTP classifier deadline default.
 func (b *RemoteClassifierBackend) EffectiveDeadlineMs() int {
 	if b == nil || b.DeadlineMs == nil {
-		return defaultRemoteClassifierDeadlineMs
+		return RemoteClassifierDeadlineMs
 	}
 	return *b.DeadlineMs
 }

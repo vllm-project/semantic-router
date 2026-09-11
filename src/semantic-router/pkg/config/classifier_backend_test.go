@@ -176,8 +176,8 @@ func TestRemoteClassifierBackendYAMLDefaultsRemainOmitted(t *testing.T) {
 	if got := cfg.Backend.EffectiveContract(RemoteClassifierContractLabelDistribution); got != RemoteClassifierContractLabelDistribution {
 		t.Fatalf("omitted contract = %q, want %q", got, RemoteClassifierContractLabelDistribution)
 	}
-	if got := cfg.Backend.EffectiveDeadlineMs(); got != defaultRemoteClassifierDeadlineMs {
-		t.Fatalf("omitted deadline = %d, want %d", got, defaultRemoteClassifierDeadlineMs)
+	if got := cfg.Backend.EffectiveDeadlineMs(); got != RemoteClassifierDeadlineMs {
+		t.Fatalf("omitted deadline = %d, want %d", got, RemoteClassifierDeadlineMs)
 	}
 	encoded, err := yaml.Marshal(cfg)
 	if err != nil {
