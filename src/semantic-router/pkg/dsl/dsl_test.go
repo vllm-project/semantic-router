@@ -2936,6 +2936,46 @@ ROUTE test {
 	}
 }
 
+func TestModelMaxCompletionTokensCompileAndRoundTrip(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b" (reasoning = false, max_completion_tokens = 256)
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	tokens := cfg.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if tokens == nil || *tokens != 256 {
+		t.Errorf("max_completion_tokens = %v", tokens)
+	}
+
+	decompiled, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(decompiled, "max_completion_tokens = 256") {
+		t.Fatalf("decompiled DSL omitted max_completion_tokens:\n%s", decompiled)
+	}
+
+	yamlBytes, err := EmitYAMLFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("emit error: %v", err)
+	}
+	rt, err := config.ParseRoutingYAMLBytes(yamlBytes)
+	if err != nil {
+		t.Fatalf("ParseRoutingYAMLBytes failed: %v", err)
+	}
+	rtTokens := rt.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if rtTokens == nil || *rtTokens != 256 {
+		t.Errorf("round-trip max_completion_tokens = %v", rtTokens)
+	}
+}
+
 // ---------- P2-14: No GLOBAL Block ----------
 
 func TestCompileWithoutGlobal(t *testing.T) {

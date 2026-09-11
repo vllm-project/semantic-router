@@ -82,6 +82,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
 			)
 		}
+		r.applyDispatchOutputTokenLimit(request, dispatch, ctx)
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	ctx.SemanticRequest = request
@@ -282,7 +283,11 @@ func (r *OpenAIRouter) prepareProviderRequest(
 	}
 	changed = decisionChanged || changed
 	paramsChanged, err := r.applyDispatchRequestParams(request, ctx)
-	return paramsChanged || changed, err
+	if err != nil {
+		return false, err
+	}
+	limitChanged := r.applyDispatchOutputTokenLimit(request, dispatch, ctx)
+	return paramsChanged || limitChanged || changed, nil
 }
 
 func (r *OpenAIRouter) applyDispatchDecision(

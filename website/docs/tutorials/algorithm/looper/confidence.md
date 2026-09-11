@@ -132,8 +132,16 @@ Confidence executions create a `looper.execute` trace span with one
 `looper.attempt` child for each dispatched candidate or verifier call. Router
 Replay stores the corresponding bounded, content-free attempt records under
 `route_diagnostics.looper`, including status, threshold outcome, token usage,
-latency, and the final attempt ordinal. Prompts, responses, reasoning, endpoint
-URLs, credentials, and raw errors are never included in this structure.
+latency, the final attempt ordinal, and each attempt's effective completion-token
+limit. Prompts, responses, reasoning, endpoint URLs, credentials, and raw errors
+are never included in this structure.
+
+Set `routing.decisions[].modelRefs[].max_completion_tokens` when candidates
+should have different completion ceilings. Provider dispatch applies that
+optional ModelRef bound with the client request, `request_params.max_tokens_limit`,
+and any algorithm/stage cap as strictest-wins. Confidence has no separate token
+or reasoning mutation path; each internal hop reuses the shared dispatch seam
+and records its own effective limit on the attempt.
 
 The first detailed-attempt implementation covers Confidence. Other Looper
 algorithms continue to expose their existing aggregate diagnostics until they

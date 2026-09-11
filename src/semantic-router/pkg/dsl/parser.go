@@ -516,6 +516,11 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 			} else if v.Float != nil {
 				m.Weight = *v.Float
 			}
+		case "max_completion_tokens":
+			if v.Int != nil {
+				tokens := *v.Int
+				m.MaxCompletionTokens = &tokens
+			}
 		}
 	}
 	return m

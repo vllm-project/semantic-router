@@ -398,6 +398,16 @@ const (
 	// Value: decision name (e.g., "remom_low_effort")
 	VSRLooperDecision = "x-vsr-looper-decision"
 
+	// VSRLooperClientMaxOutputTokens carries the original client completion-token
+	// ceiling across authenticated Looper internal hops.
+	//nolint:gosec
+	VSRLooperClientMaxOutputTokens = "x-vsr-looper-client-max-output-tokens"
+
+	// VSRLooperStageMaxOutputTokens carries an algorithm/stage completion-token
+	// ceiling across authenticated Looper internal hops.
+	//nolint:gosec
+	VSRLooperStageMaxOutputTokens = "x-vsr-looper-stage-max-output-tokens"
+
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
 )

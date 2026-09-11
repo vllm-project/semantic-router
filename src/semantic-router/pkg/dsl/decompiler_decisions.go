@@ -61,6 +61,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %s", strconv.FormatFloat(model.Weight, 'f', -1, 64)))
 	}
+	if model.MaxCompletionTokens != nil {
+		opts = append(opts, fmt.Sprintf("max_completion_tokens = %d", *model.MaxCompletionTokens))
+	}
 	return strings.Join(opts, ", ")
 }
 

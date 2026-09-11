@@ -16,14 +16,12 @@ import (
 func (c *Client) setInternalRequestHeaders(
 	header http.Header,
 	ctx context.Context,
-	iteration int,
-	decisionName string,
-	fusionDepth int,
+	options CallOptions,
 ) {
 	header.Set(headers.VSRInternalAuth, internalauth.Token())
 	header.Set(headers.VSRLooperRequest, "true")
-	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
-	depth := fusionDepth
+	header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", options.Iteration))
+	depth := options.FusionDepth
 	if depth <= 0 {
 		depth = fusionDepthFromContext(ctx)
 	}
@@ -33,19 +31,26 @@ func (c *Client) setInternalRequestHeaders(
 	if recipe := routingRecipeFromContext(ctx); recipe != "" {
 		header.Set(headers.VSRSelectedRecipe, string(recipe))
 	}
-	if decisionName != "" {
-		header.Set(headers.VSRLooperDecision, decisionName)
+	if options.DecisionName != "" {
+		header.Set(headers.VSRLooperDecision, options.DecisionName)
 	}
+	setOptionalInt64Header(header, headers.VSRLooperClientMaxOutputTokens, options.ClientMaxOutputTokens)
+	setOptionalInt64Header(header, headers.VSRLooperStageMaxOutputTokens, options.StageMaxOutputTokens)
+}
+
+func setOptionalInt64Header(header http.Header, name string, value *int64) {
+	if value == nil || *value < 1 {
+		return
+	}
+	header.Set(name, fmt.Sprintf("%d", *value))
 }
 
 func (c *Client) requestHeaders(
 	ctx context.Context,
-	iteration int,
-	decisionName string,
-	fusionDepth int,
+	options CallOptions,
 	accessKey string,
 ) http.Header {
-	header := make(http.Header, len(c.headers)+5)
+	header := make(http.Header, len(c.headers)+7)
 	header.Set("Content-Type", "application/json")
 	for name, value := range c.headers {
 		header.Set(name, value)
@@ -58,6 +63,6 @@ func (c *Client) requestHeaders(
 	if accessKey != "" {
 		header.Set("Authorization", "Bearer "+accessKey)
 	}
-	c.setInternalRequestHeaders(header, ctx, iteration, decisionName, fusionDepth)
+	c.setInternalRequestHeaders(header, ctx, options)
 	return header
 }

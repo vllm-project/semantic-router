@@ -116,6 +116,45 @@ func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
 	}
 }
 
+func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
+	smallLimit := 256
+	largeLimit := 1024
+	original := &openai.ChatCompletionNewParams{
+		MaxCompletionTokens: openai.Int(8000),
+	}
+	stage := &openai.ChatCompletionNewParams{
+		MaxCompletionTokens: openai.Int(8000),
+	}
+	req := &Request{
+		OriginalRequest: original,
+		ModelRefs: []config.ModelRef{
+			{Model: "small", MaxCompletionTokens: &smallLimit},
+			{Model: "large", MaxCompletionTokens: &largeLimit},
+		},
+	}
+	small := composeAttemptOutputTokenLimit(req, stage, "small")
+	if small.Effective == nil || *small.Effective != 256 || small.Source != "model_ref" {
+		t.Fatalf("small compose = %+v, want 256 from model_ref", small)
+	}
+	large := composeAttemptOutputTokenLimit(req, stage, "large")
+	if large.Effective == nil || *large.Effective != 1024 || large.Source != "model_ref" {
+		t.Fatalf("large compose = %+v, want 1024 from model_ref", large)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitStageCannotWidenClient(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(128)}
+	stage := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(2048)}
+	result := composeAttemptOutputTokenLimit(
+		&Request{OriginalRequest: original},
+		stage,
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 128 || result.Source != "client" {
+		t.Fatalf("compose = %+v, want client 128", result)
+	}
+}
+
 func TestBoundExecutionTracePreservesDroppedUsage(t *testing.T) {
 	trace := ExecutionTrace{Version: ExecutionTraceVersion, Algorithm: "confidence"}
 	for ordinal := 1; ordinal <= maxTraceAttempts+1; ordinal++ {

@@ -281,6 +281,7 @@ export interface DecisionModelRef {
   reasoning_effort?: string
   lora_name?: string
   weight?: number
+  max_completion_tokens?: number
 }
 
 export interface DecisionPluginConfig {

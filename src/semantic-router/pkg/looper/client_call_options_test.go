@@ -44,6 +44,12 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		if got := request.Header.Get("Authorization"); got != "Bearer secret-a" {
 			t.Errorf("Authorization = %q, want Bearer secret-a", got)
 		}
+		if got := request.Header.Get(headers.VSRLooperClientMaxOutputTokens); got != "256" {
+			t.Errorf("%s = %q, want 256", headers.VSRLooperClientMaxOutputTokens, got)
+		}
+		if got := request.Header.Get(headers.VSRLooperStageMaxOutputTokens); got != "128" {
+			t.Errorf("%s = %q, want 128", headers.VSRLooperStageMaxOutputTokens, got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"id":      "chatcmpl-options",
@@ -69,10 +75,12 @@ func TestCallModelWithOptionsUsesRequestScopedMetadata(t *testing.T) {
 		request,
 		ModelTarget{Name: "model-a", AccessKey: "secret-a"},
 		CallOptions{
-			DecisionName: "decision-a",
-			Iteration:    2,
-			FusionDepth:  1,
-			Mode:         ResponseJSON,
+			DecisionName:          "decision-a",
+			Iteration:             2,
+			FusionDepth:           1,
+			Mode:                  ResponseJSON,
+			ClientMaxOutputTokens: looperTestInt64(256),
+			StageMaxOutputTokens:  looperTestInt64(128),
 		},
 	)
 	if err != nil {
@@ -90,14 +98,51 @@ func TestRequestHeadersUsesContextFusionDepthAsFallback(t *testing.T) {
 	client := NewClient(&config.LooperConfig{})
 	ctx := contextWithFusionDepth(context.Background(), 1)
 
-	header := client.requestHeaders(ctx, 1, "decision-a", 0, "")
+	header := client.requestHeaders(ctx, CallOptions{DecisionName: "decision-a", Iteration: 1}, "")
 	if got := header.Get(headers.VSRFusionDepth); got != "1" {
 		t.Fatalf("context %s = %q, want 1", headers.VSRFusionDepth, got)
 	}
 
-	header = client.requestHeaders(ctx, 1, "decision-a", 2, "")
+	header = client.requestHeaders(ctx, CallOptions{DecisionName: "decision-a", Iteration: 1, FusionDepth: 2}, "")
 	if got := header.Get(headers.VSRFusionDepth); got != "2" {
 		t.Fatalf("explicit %s = %q, want 2", headers.VSRFusionDepth, got)
+	}
+}
+
+func TestRequestHeadersCarriesPositiveOutputTokenBounds(t *testing.T) {
+	client := NewClient(&config.LooperConfig{})
+	header := client.requestHeaders(
+		context.Background(),
+		CallOptions{
+			DecisionName:          "decision-a",
+			Iteration:             1,
+			ClientMaxOutputTokens: looperTestInt64(256),
+			StageMaxOutputTokens:  looperTestInt64(64),
+		},
+		"",
+	)
+	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "256" {
+		t.Fatalf("%s = %q, want 256", headers.VSRLooperClientMaxOutputTokens, got)
+	}
+	if got := header.Get(headers.VSRLooperStageMaxOutputTokens); got != "64" {
+		t.Fatalf("%s = %q, want 64", headers.VSRLooperStageMaxOutputTokens, got)
+	}
+
+	header = client.requestHeaders(
+		context.Background(),
+		CallOptions{
+			DecisionName:          "decision-a",
+			Iteration:             1,
+			ClientMaxOutputTokens: looperTestInt64(0),
+			StageMaxOutputTokens:  looperTestInt64(-8),
+		},
+		"",
+	)
+	if got := header.Get(headers.VSRLooperClientMaxOutputTokens); got != "" {
+		t.Fatalf("non-positive client bound header = %q", got)
+	}
+	if got := header.Get(headers.VSRLooperStageMaxOutputTokens); got != "" {
+		t.Fatalf("non-positive stage bound header = %q", got)
 	}
 }
 
@@ -241,4 +286,8 @@ func TestCallModelWithOptionsValidatesRequiredFields(t *testing.T) {
 			}
 		})
 	}
+}
+
+func looperTestInt64(value int64) *int64 {
+	return &value
 }

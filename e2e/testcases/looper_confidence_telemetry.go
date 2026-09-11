@@ -47,7 +47,13 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	}
 	defer stop()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperConfidenceTraceProbe, 30*time.Second)
+	response, err := sendLocalChatJSON(ctx, localPort, map[string]interface{}{
+		"model":                 "MoM",
+		"max_completion_tokens": 8000,
+		"messages": []map[string]string{
+			{"role": "user", "content": looperConfidenceTraceProbe},
+		},
+	}, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("confidence telemetry request: %w", err)
 	}
@@ -78,8 +84,12 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	var replay struct {
 		RouteDiagnostics struct {
 			Looper struct {
-				Attempts            []struct{} `json:"attempts"`
-				FinalAttemptOrdinal int        `json:"final_attempt_ordinal"`
+				Attempts []struct {
+					Model                          string `json:"model"`
+					EffectiveMaxOutputTokens       *int64 `json:"effective_max_output_tokens"`
+					EffectiveMaxOutputTokensSource string `json:"effective_max_output_tokens_source"`
+				} `json:"attempts"`
+				FinalAttemptOrdinal int `json:"final_attempt_ordinal"`
 			} `json:"looper"`
 		} `json:"route_diagnostics"`
 	}
@@ -88,6 +98,26 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	}
 	if len(replay.RouteDiagnostics.Looper.Attempts) != 2 || replay.RouteDiagnostics.Looper.FinalAttemptOrdinal != 2 {
 		return fmt.Errorf("confidence replay attempts=%d final=%d, want 2 and 2", len(replay.RouteDiagnostics.Looper.Attempts), replay.RouteDiagnostics.Looper.FinalAttemptOrdinal)
+	}
+	wantLimits := map[string]int64{
+		"confidence-model-low":  256,
+		"confidence-model-high": 1024,
+	}
+	for _, attempt := range replay.RouteDiagnostics.Looper.Attempts {
+		want, ok := wantLimits[attempt.Model]
+		if !ok {
+			return fmt.Errorf("unexpected confidence attempt model %q", attempt.Model)
+		}
+		if attempt.EffectiveMaxOutputTokens == nil || *attempt.EffectiveMaxOutputTokens != want {
+			return fmt.Errorf("attempt %s effective_max_output_tokens=%v, want %d", attempt.Model, attempt.EffectiveMaxOutputTokens, want)
+		}
+		if attempt.EffectiveMaxOutputTokensSource != "model_ref" {
+			return fmt.Errorf("attempt %s effective_max_output_tokens_source=%q, want model_ref", attempt.Model, attempt.EffectiveMaxOutputTokensSource)
+		}
+		delete(wantLimits, attempt.Model)
+	}
+	if len(wantLimits) != 0 {
+		return fmt.Errorf("confidence replay missing model attempts: %v", wantLimits)
 	}
 	if strings.Contains(string(replayResponse.Body), "private-low-confidence-candidate") {
 		return fmt.Errorf("confidence replay leaked candidate content")

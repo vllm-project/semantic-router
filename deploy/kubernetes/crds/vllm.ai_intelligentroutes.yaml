@@ -87,6 +87,11 @@ spec:
                               to use (must exist in the model's LoRAs)
                             maxLength: 100
                             type: string
+                          maxCompletionTokens:
+                            description: MaxCompletionTokens is an optional per-model
+                              completion-token ceiling.
+                            minimum: 1
+                            type: integer
                           model:
                             description: Model is the name of the model (must exist
                               in IntelligentPool)

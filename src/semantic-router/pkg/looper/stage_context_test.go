@@ -141,3 +141,16 @@ func TestWorkflowsRejectsOversizedGeneratedStageBeforeBackendDispatch(t *testing
 		t.Fatalf("backend received %d calls after context gate rejection", got)
 	}
 }
+
+func TestAttachOutputTokenBoundsSnapshotsClientAndStage(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	stage := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(64)}
+	options := CallOptions{}
+	attachOutputTokenBounds(&options, &Request{OriginalRequest: original}, stage)
+	if options.ClientMaxOutputTokens == nil || *options.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want 256", options.ClientMaxOutputTokens)
+	}
+	if options.StageMaxOutputTokens == nil || *options.StageMaxOutputTokens != 64 {
+		t.Fatalf("stage bound = %v, want 64", options.StageMaxOutputTokens)
+	}
+}

@@ -103,6 +103,9 @@ export default function ConfigPageDecisionsSection({
       ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
       ref.lora_name ? `LoRA: ${ref.lora_name}` : null,
       typeof ref.weight === 'number' ? `Weight: ${ref.weight}` : null,
+      typeof ref.max_completion_tokens === 'number'
+        ? `Max completion tokens: ${ref.max_completion_tokens}`
+        : null,
     ].filter((value): value is string => Boolean(value))
 
     const details = [

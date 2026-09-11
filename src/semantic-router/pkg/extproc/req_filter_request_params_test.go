@@ -49,7 +49,7 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !changed || request.Sampling.FrequencyPenalty != nil || request.Sampling.MaxOutputTokens == nil ||
-		*request.Sampling.MaxOutputTokens != 500 || request.CandidateCount == nil || *request.CandidateCount != 1 {
+		*request.Sampling.MaxOutputTokens != 9000 || request.CandidateCount == nil || *request.CandidateCount != 1 {
 		t.Fatalf("semantic request params = %+v, changed=%v", request, changed)
 	}
 }

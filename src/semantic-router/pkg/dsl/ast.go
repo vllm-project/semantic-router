@@ -574,14 +574,15 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 
 // ModelRef represents a model reference in a ROUTE.
 type ModelRef struct {
-	Model     string
-	Reasoning *bool
-	Mode      string
-	Effort    string
-	LoRA      string
-	ParamSize string
-	Weight    float64
-	Pos       Position
+	Model               string
+	Reasoning           *bool
+	Mode                string
+	Effort              string
+	LoRA                string
+	ParamSize           string
+	Weight              float64
+	MaxCompletionTokens *int
+	Pos                 Position
 }
 
 // ---------- Algorithm Specification ----------

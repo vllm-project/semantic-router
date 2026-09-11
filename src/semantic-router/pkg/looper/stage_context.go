@@ -78,6 +78,7 @@ func (l *BaseLooper) dispatchModel(
 	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
 		return nil, err
 	}
+	attachOutputTokenBounds(&options, baseReq, stageReq)
 	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
 }
 
@@ -102,16 +103,18 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	if baseReq != nil {
 		decisionName = baseReq.DecisionName
 	}
+	options := CallOptions{
+		DecisionName: decisionName,
+		Iteration:    iteration,
+		Mode:         responseMode(streaming),
+		Logprobs:     logprobsConfig,
+	}
+	attachOutputTokenBounds(&options, baseReq, stageReq)
 	response, err := l.client.CallModelWithOptions(
 		attemptCtx,
 		*stageReq,
 		ModelTarget{Name: modelName, AccessKey: accessKey},
-		CallOptions{
-			DecisionName: decisionName,
-			Iteration:    iteration,
-			Mode:         responseMode(streaming),
-			Logprobs:     logprobsConfig,
-		},
+		options,
 	)
 	if err != nil && attempt != nil {
 		attempt.finish(attemptResult{err: err, reason: attemptReasonFromError(err)})
@@ -260,4 +263,31 @@ func serializedMessagesTokenEstimate(messages []openai.ChatCompletionMessagePara
 		return 0, err
 	}
 	return contextcompression.EstimateTokens(string(encoded)), nil
+}
+
+func attachOutputTokenBounds(options *CallOptions, req *Request, stageReq *openai.ChatCompletionNewParams) {
+	if options == nil {
+		return
+	}
+	if options.ClientMaxOutputTokens == nil && req != nil {
+		options.ClientMaxOutputTokens = chatParamsMaxOutputTokens(req.OriginalRequest)
+	}
+	if options.StageMaxOutputTokens == nil {
+		options.StageMaxOutputTokens = chatParamsMaxOutputTokens(stageReq)
+	}
+}
+
+func chatParamsMaxOutputTokens(req *openai.ChatCompletionNewParams) *int64 {
+	if req == nil {
+		return nil
+	}
+	if req.MaxCompletionTokens.Value > 0 {
+		value := req.MaxCompletionTokens.Value
+		return &value
+	}
+	if req.MaxTokens.Value > 0 {
+		value := req.MaxTokens.Value
+		return &value
+	}
+	return nil
 }

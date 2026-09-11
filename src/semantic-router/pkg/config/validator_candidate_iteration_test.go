@@ -115,6 +115,26 @@ func TestValidateCandidateIterationRejectsBlankModelName(t *testing.T) {
 	}
 }
 
+func TestValidateCandidateIterationRejectsNonPositiveMaxCompletionTokens(t *testing.T) {
+	tokens := 0
+	d := minimalDecision("route")
+	d.CandidateIterations = []CandidateIterationConfig{
+		{
+			Variable: "c",
+			Source:   "models",
+			Models:   []ModelRef{{Model: "small-model", MaxCompletionTokens: &tokens}},
+			Outputs:  []CandidateIterationOutputConfig{{Type: "model", Value: "c"}},
+		},
+	}
+	err := validateDecisionCandidateIterations(d)
+	if err == nil {
+		t.Fatal("expected error for non-positive max_completion_tokens, got nil")
+	}
+	if !strings.Contains(err.Error(), "max_completion_tokens must be >= 1 when set") {
+		t.Fatalf("error message = %q", err.Error())
+	}
+}
+
 func TestValidateCandidateIterationRejectsUnsupportedOutputType(t *testing.T) {
 	d := minimalDecision("route")
 	d.CandidateIterations = []CandidateIterationConfig{

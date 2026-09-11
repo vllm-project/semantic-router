@@ -184,8 +184,7 @@ func (c *Client) callModel(
 	iteration int,
 	logprobsCfg *LogprobsConfig,
 	accessKey string,
-	decisionName string,
-	fusionDepth int,
+	options CallOptions,
 ) (*ModelResponse, error) {
 	// Clone and modify the request with the target model
 	modifiedReq := cloneRequest(req)
@@ -219,7 +218,7 @@ func (c *Client) callModel(
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
 	endpoint := c.resolveEndpoint()
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
-		"decision":  decisionName,
+		"decision":  options.DecisionName,
 		"model_ref": modelName,
 		"endpoint":  endpoint,
 		"streaming": streaming,
@@ -233,7 +232,7 @@ func (c *Client) callModel(
 		GotFirstResponseByte: func() { recordAttemptFirstByte(ctx) },
 	})
 	start := time.Now()
-	headers := c.requestHeaders(ctx, iteration, decisionName, fusionDepth, accessKey)
+	headers := c.requestHeaders(ctx, options, accessKey)
 	var respBody []byte
 	if c.connector != nil {
 		respBody, err = c.callModelThroughConnector(ctx, body, headers)
@@ -255,7 +254,7 @@ func (c *Client) callModel(
 		return nil, err
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
-	c.logModelCallCompleted(decisionName, result)
+	c.logModelCallCompleted(options.DecisionName, result)
 	return result, nil
 }
 

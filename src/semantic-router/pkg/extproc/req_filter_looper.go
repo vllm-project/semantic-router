@@ -26,6 +26,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -180,16 +181,17 @@ func (r *OpenAIRouter) buildLooperRequest(
 			openAIRequest, err = parseOpenAIRequest(encoded.Body)
 			if err == nil {
 				looperReq := &looper.Request{
-					OriginalRequest:    openAIRequest,
-					BaseContextTokens:  reqCtx.VSRContextTokenCount,
-					ModelRefs:          modelRefs,
-					ModelParams:        r.getModelParams(),
-					Algorithm:          decision.Algorithm,
-					IsStreaming:        streaming,
-					DecisionName:       decision.Name,
-					RecipeName:         reqCtx.Routing.RecipeName(),
-					OutputContract:     decision.OutputContract,
-					OutputContractSpec: decision.OutputContractSpec,
+					OriginalRequest:       openAIRequest,
+					BaseContextTokens:     reqCtx.VSRContextTokenCount,
+					ModelRefs:             modelRefs,
+					ModelParams:           r.getModelParams(),
+					Algorithm:             decision.Algorithm,
+					IsStreaming:           streaming,
+					DecisionName:          decision.Name,
+					RecipeName:            reqCtx.Routing.RecipeName(),
+					OutputContract:        decision.OutputContract,
+					OutputContractSpec:    decision.OutputContractSpec,
+					PluginMaxOutputTokens: pluginMaxOutputTokens(decision),
 				}
 				return looperReq, nil
 			}
@@ -293,4 +295,15 @@ func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper
 		CompletionTokens: replayIntPtr(completionTokens),
 		TotalTokens:      replayIntPtr(totalTokens),
 	})
+}
+
+func pluginMaxOutputTokens(decision *config.Decision) *int64 {
+	if decision == nil {
+		return nil
+	}
+	params := decision.GetRequestParamsConfig()
+	if params == nil {
+		return nil
+	}
+	return outputtokens.FromInt(params.MaxTokensLimit)
 }

@@ -20,6 +20,7 @@ class ModelRef(BaseModel):
     reasoning_effort: str | None = None  # Model-specific reasoning effort level.
     lora_name: str | None = None  # LoRA adapter name (if using LoRA)
     weight: float | None = None
+    max_completion_tokens: int | None = Field(default=None, ge=1)
 
 
 class HybridWeightsConfig(BaseModel):
