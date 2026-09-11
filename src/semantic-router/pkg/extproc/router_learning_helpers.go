@@ -62,7 +62,7 @@ func routingLearningStateKey(ctx *RequestContext) string {
 		return ""
 	}
 	sessionID := ctx.VSRLearningSessionID
-	if sessionID == "" {
+	if sessionID == "" || protectionMode(ctx) == config.DecisionAdaptationModeObserve {
 		sessionID = ctx.SessionID
 	}
 	if sessionID == "" {

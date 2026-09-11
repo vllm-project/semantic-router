@@ -180,6 +180,9 @@ func (r *OpenAIRouter) selectWithSelector(
 	if learningErr != nil {
 		return nil, string(method), learningErr
 	}
+	if ctx.VSRProgressGateError != nil {
+		return nil, string(method), ctx.VSRProgressGateError
+	}
 	ctx.VSRSelectionReasoning = selectionReasoningForDiagnostics(
 		method,
 		result.Reasoning,

@@ -109,7 +109,8 @@ func TestSwitchGateTraceCarriesEvidenceAndVerdict(t *testing.T) {
 		Enforced: true,
 	}
 
-	trace := switchGateTrace(decision, evidence, in, 4)
+	in.Evidence = evidence
+	trace := switchGateTrace(decision, in, 4)
 	if trace.EvidenceVersion != selection.ProgressEvidenceVersion ||
 		trace.Decision != selection.GateDecisionSuppress ||
 		trace.Reason != selection.GateReasonCooldown {
@@ -240,7 +241,7 @@ func TestSwitchGateVerdictAllowsOnSustainedRegression(t *testing.T) {
 			TurnIndex: i,
 			Model:     "model-a",
 			Category:  category,
-		}, now.Add(time.Duration(i)*time.Second))
+		}, now.Add(time.Duration(i-4)*time.Second))
 	}
 
 	cfg := config.RouterLearningProtectionConfig{
@@ -396,7 +397,7 @@ func TestSwitchGateVerdictHardConstraintShortCircuits(t *testing.T) {
 			TurnIndex: i,
 			Model:     "model-a",
 			Category:  sessiontelemetry.TurnNoProgress,
-		}, now.Add(time.Duration(i)*time.Second))
+		}, now.Add(time.Duration(i-4)*time.Second))
 	}
 
 	cfg := config.RouterLearningProtectionConfig{

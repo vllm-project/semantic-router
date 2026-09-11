@@ -35,7 +35,7 @@ func gateReplayContext(t *testing.T, sessionID string) (*OpenAIRouter, *RequestC
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
-	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
 	ctx := &RequestContext{SessionID: sessionID}
 	learningCtx := &selection.SelectionContext{
 		SessionID: sessionID,
@@ -143,7 +143,7 @@ func TestProgressGateMultiTurnReplayRecordsEveryVerdict(t *testing.T) {
 	cfg := gateReplayConfig(selection.GateModeEnforce)
 	selector := selection.NewSessionAwareSelector(selection.DefaultSessionAwareConfig())
 	sessionKey := routingSessionStateKey(ctx)
-	base := time.Now()
+	base := time.Now().Add(-10 * time.Second)
 
 	turns := []struct {
 		record        sessiontelemetry.TurnOutcomeCategory

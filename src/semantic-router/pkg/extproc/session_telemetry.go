@@ -40,11 +40,11 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 }
 
 func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
+	recordSessionTurnOutcome(ctx, usage, pricing)
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
-	recordSessionTurnOutcome(ctx, usage)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
 	// its own Chat fingerprint or Responses lineage without creating an owner.

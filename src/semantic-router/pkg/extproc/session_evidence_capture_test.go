@@ -78,6 +78,7 @@ func TestClassifyTurnOutcomeAttributionMatchesCategory(t *testing.T) {
 		RequestModel:       "model-a",
 		UpstreamStatusCode: 503,
 	}
+	configureProgressEvidence(ctx, config.ProgressGateConfig{Enabled: true, WindowSize: 8, WindowTTLSeconds: 900}, time.Now())
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{completionTokens: 5, completionTokensReported: true})
 
 	window := sessiontelemetry.RecentTurnOutcomes(routingSessionStateKey(ctx), time.Now())
@@ -92,6 +93,7 @@ func TestClassifyTurnOutcomeAttributionMatchesCategory(t *testing.T) {
 func TestRecordSessionTurnOutcomeSkipsUnresolvableSession(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	ctx := &RequestContext{RequestModel: "model-a", UpstreamStatusCode: 200}
+	configureProgressEvidence(ctx, config.ProgressGateConfig{Enabled: true, WindowSize: 8, WindowTTLSeconds: 900}, time.Now())
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{completionTokens: 5, completionTokensReported: true})
 
 	if window := sessiontelemetry.RecentTurnOutcomes(routingSessionStateKey(ctx), time.Now()); len(window) != 0 {
@@ -133,6 +135,7 @@ func TestRecordIngestedTurnOutcomeSharesSessionKeyWithCapture(t *testing.T) {
 		UpstreamStatusCode: 200,
 	}
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: recipe})
+	configureProgressEvidence(ctx, config.ProgressGateConfig{Enabled: true, WindowSize: 8, WindowTTLSeconds: 900}, time.Now())
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{completionTokens: 20, completionTokensReported: true})
 
 	recordIngestedTurnOutcome(routerreplay.RoutingRecord{
@@ -140,7 +143,7 @@ func TestRecordIngestedTurnOutcomeSharesSessionKeyWithCapture(t *testing.T) {
 		Recipe:    recipe,
 		TurnIndex: 1,
 		Timestamp: time.Now().Add(-time.Minute),
-	}, "model-a", routerLearningOutcomeUnderpowered, 0.9)
+	}, "model-a", routerLearningOutcomeUnderpowered, 0.9, true)
 
 	key := config.RoutingNamespaceKey(config.RecipeName(recipe), sessionID)
 	window := sessiontelemetry.RecentTurnOutcomes(key, time.Now())
@@ -159,6 +162,18 @@ func TestRecordIngestedTurnOutcomeSharesSessionKeyWithCapture(t *testing.T) {
 	}
 }
 
+func TestIngestedScoreAvailability(t *testing.T) {
+	for _, provided := range []bool{false, true} {
+		sessiontelemetry.ResetRouterSessionMemoryForTesting()
+		record := routerreplay.RoutingRecord{RequestID: "score", SessionID: "score", Timestamp: time.Now()}
+		recordIngestedTurnOutcome(record, "model-a", routerLearningOutcomeGoodFit, 0, provided)
+		window := sessiontelemetry.RecentTurnOutcomes(config.RoutingNamespaceKey("", "score"), time.Now())
+		if len(window) != 1 || window[0].ConfidenceKnown != provided {
+			t.Fatalf("score presence=%t, window=%+v", provided, window)
+		}
+	}
+}
+
 func TestRecordIngestedTurnOutcomeSkipsUnmappedVerdict(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	record := routerreplay.RoutingRecord{
@@ -166,7 +181,7 @@ func TestRecordIngestedTurnOutcomeSkipsUnmappedVerdict(t *testing.T) {
 		Recipe:    "balance",
 		Timestamp: time.Now(),
 	}
-	recordIngestedTurnOutcome(record, "model-a", routerLearningOutcomeOverprovisioned, 0.2)
+	recordIngestedTurnOutcome(record, "model-a", routerLearningOutcomeOverprovisioned, 0.2, true)
 
 	key := config.RoutingNamespaceKey(config.RecipeName("balance"), "cost-only")
 	if window := sessiontelemetry.RecentTurnOutcomes(key, time.Now()); len(window) != 0 {
