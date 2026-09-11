@@ -584,13 +584,37 @@
     "message": "无需重训即可截断嵌入向量到任意维度 — 按请求平衡精度与速度。"
   },
   "homepage.install.label": {
-    "message": "快速上手"
+    "message": "安装"
   },
   "homepage.install.title.human": {
     "message": "一条命令，本地跑起来"
   },
+  "homepage.install.title.agent": {
+    "message": "把安装和配置交给 Agent"
+  },
+  "homepage.install.audience.aria": {
+    "message": "选择安装方式"
+  },
+  "homepage.install.audience.human": {
+    "message": "面向用户"
+  },
+  "homepage.install.audience.agent": {
+    "message": "面向 Agent"
+  },
   "homepage.install.primaryCta": {
-    "message": "查看完整安装指南"
+    "message": "安装指南"
+  },
+  "homepage.install.agentCta": {
+    "message": "查看 Agent Skill"
+  },
+  "homepage.install.secondaryCta": {
+    "message": "打开快速上手"
+  },
+  "homepage.install.docsCta": {
+    "message": "阅读文档"
+  },
+  "homepage.install.copy.aria": {
+    "message": "复制到剪贴板"
   },
   "homepage.install.copy.copied": {
     "message": "已复制"

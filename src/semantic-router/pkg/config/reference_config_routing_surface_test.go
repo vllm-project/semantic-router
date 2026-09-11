@@ -2,40 +2,15 @@ package config
 
 import "reflect"
 
-var referenceSignalKeyByType = map[string]string{
-	SignalTypeAuthz:         "role_bindings",
-	SignalTypeComplexity:    "complexity",
-	SignalTypeContext:       "context",
-	SignalTypeDomain:        "domains",
-	SignalTypeEmbedding:     "embeddings",
-	SignalTypeFactCheck:     "fact_check",
-	SignalTypeJailbreak:     "jailbreak",
-	SignalTypeHallucination: "hallucination",
-	SignalTypeKeyword:       "keywords",
-	SignalTypeLanguage:      "language",
-	SignalTypeModality:      "modality",
-	SignalTypePII:           "pii",
-	SignalTypePreference:    "preferences",
-	SignalTypeReask:         "reasks",
-	SignalTypeStructure:     "structure",
-	SignalTypeConversation:  "conversation",
-	SignalTypeKB:            "kb",
-	SignalTypeUserFeedback:  "user_feedbacks",
-	SignalTypeEvent:         "events",
-	SignalTypeMetadata:      "metadata",
-	SignalTypeClassifier:    "classifiers",
-	SignalTypeInputModality: "input_modality",
-}
-
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
 	signals := mustMapAt(t, root, "routing", "signals")
 	for _, signalType := range SupportedSignalTypes() {
-		key, ok := referenceSignalKeyByType[signalType]
+		entry, ok := LookupSignalCatalog(signalType)
 		if !ok {
-			t.Fatalf("missing canonical signal key mapping for %q", signalType)
+			t.Fatalf("missing canonical signal catalog entry for %q", signalType)
 		}
-		if len(mustSliceAt(t, signals, key)) == 0 {
-			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, key)
+		if len(mustSliceAt(t, signals, entry.Collection)) == 0 {
+			t.Fatalf("config/config.yaml must include at least one %s signal under routing.signals.%s", signalType, entry.Collection)
 		}
 	}
 

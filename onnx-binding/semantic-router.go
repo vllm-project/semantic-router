@@ -130,6 +130,10 @@ extern int detect_pii(const char* classifier_name, const char* text, PIIResultFF
 extern void free_classification_result(ClassificationResultFFI* result);
 extern void free_pii_result(PIIResultFFI* result);
 
+static inline void release_classification_result(ClassificationResultFFI result) {
+    free_classification_result(&result);
+}
+
 // ============================================================================
 // Multi-Modal Embedding Types & Functions
 // ============================================================================
@@ -648,20 +652,10 @@ func ClassifyMmBert32KJailbreak(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection and
-// returns the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to a
-// confidence-based estimate.
+// ClassifyMmBert32KJailbreakWithProbs classifies text for jailbreak detection
+// and returns the full probability distribution.
 func ClassifyMmBert32KJailbreakWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyMmBert32KFeedback classifies text for feedback detection
@@ -669,10 +663,10 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
-// ClassifyMmBert32KFeedbackWithProbs classifies text using the mmBERT-32K
-// feedback detector and returns the full class probability distribution.
+// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection
+// and returns the full probability distribution.
 func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
-	return classifyWithClassifierWithProbs("feedback", text)
+	return classifyWithClassifierProbabilities("feedback", text)
 }
 
 // ClassifyMmBert32KPII detects PII entities in text
@@ -717,6 +711,17 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 }
 
 func classifyWithClassifier(name, text string) (ClassResult, error) {
+	result, err := classifyWithClassifierProbabilities(name, text)
+	if err != nil {
+		return ClassResult{Class: -1, Confidence: 0}, err
+	}
+	return ClassResult{
+		Class:      result.Class,
+		Confidence: result.Confidence,
+	}, nil
+}
+
+func classifyWithClassifierProbabilities(name, text string) (ClassResultWithProbs, error) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	cText := C.CString(text)
@@ -724,38 +729,18 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 
 	var result C.ClassificationResultFFI
 	status := C.classify_text(cName, cText, &result)
+	defer C.release_classification_result(result)
 
-	if status != 0 || result.error {
-		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
-	}
-
-	defer C.free_classification_result(&result)
-
-	return ClassResult{
-		Class:      int(result.class_id),
-		Confidence: float32(result.confidence),
-	}, nil
-}
-
-func classifyWithClassifierWithProbs(name, text string) (ClassResultWithProbs, error) {
-	cName := C.CString(name)
-	defer C.free(unsafe.Pointer(cName))
-	cText := C.CString(text)
-	defer C.free(unsafe.Pointer(cText))
-
-	var result C.ClassificationResultFFI
-	status := C.classify_text(cName, cText, &result) //nolint:gocritic // Cgo writes the result through an out-parameter.
 	if status != 0 || result.error {
 		return ClassResultWithProbs{}, fmt.Errorf("%s classification failed", name)
 	}
 
-	defer C.free_classification_result(&result) //nolint:gocritic // Cgo frees the result through a pointer.
-
-	probabilities := make([]float32, int(result.num_classes))
-	if result.probabilities != nil && result.num_classes > 0 {
-		cProbabilities := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
-		for i, probability := range cProbabilities {
-			probabilities[i] = float32(probability)
+	numClasses := int(result.num_classes)
+	probabilities := make([]float32, numClasses)
+	if result.probabilities != nil && numClasses > 0 {
+		cProbabilities := unsafe.Slice(result.probabilities, numClasses)
+		for index, probability := range cProbabilities {
+			probabilities[index] = float32(probability)
 		}
 	}
 
@@ -763,28 +748,13 @@ func classifyWithClassifierWithProbs(name, text string) (ClassResultWithProbs, e
 		Class:         int(result.class_id),
 		Confidence:    float32(result.confidence),
 		Probabilities: probabilities,
-		NumClasses:    int(result.num_classes),
+		NumClasses:    numClasses,
 	}, nil
 }
 
 // ClassifyTextWithProbabilities classifies text with the generic classifier.
-// The ONNX FFI currently exposes the winning class and confidence; callers
-// receive a sparse probability vector with the winning score populated.
 func ClassifyTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("generic", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	probabilities := make([]float32, result.Class+1)
-	if result.Class >= 0 {
-		probabilities[result.Class] = result.Confidence
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: probabilities,
-		NumClasses:    len(probabilities),
-	}, nil
+	return classifyWithClassifierProbabilities("generic", text)
 }
 
 // ============================================================================
@@ -894,15 +864,7 @@ func ClassifyModernBertText(text string) (ClassResult, error) {
 
 // ClassifyModernBertTextWithProbabilities classifies with probabilities
 func ClassifyModernBertTextWithProbabilities(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("modernbert", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("modernbert", text)
 }
 
 // ClassifyModernBertJailbreakText classifies for jailbreak
@@ -911,19 +873,9 @@ func ClassifyModernBertJailbreakText(text string) (ClassResult, error) {
 }
 
 // ClassifyModernBertJailbreakTextWithProbs classifies for jailbreak and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// the full probability distribution.
 func ClassifyModernBertJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyJailbreakText classifies for jailbreak (legacy)
@@ -931,20 +883,10 @@ func ClassifyJailbreakText(text string) (ClassResult, error) {
 	return classifyWithClassifier("jailbreak", text)
 }
 
-// ClassifyJailbreakTextWithProbs classifies for jailbreak (legacy) and returns
-// the full probability distribution. The ONNX backend does not yet extract
-// per-class probabilities, so Probabilities is empty and callers fall back to
-// a confidence-based estimate.
+// ClassifyJailbreakTextWithProbs classifies for jailbreak and returns the full
+// probability distribution.
 func ClassifyJailbreakTextWithProbs(text string) (ClassResultWithProbs, error) {
-	result, err := classifyWithClassifier("jailbreak", text)
-	if err != nil {
-		return ClassResultWithProbs{}, err
-	}
-	return ClassResultWithProbs{
-		Class:         result.Class,
-		Confidence:    result.Confidence,
-		Probabilities: []float32{}, // TODO: implement probability extraction
-	}, nil
+	return classifyWithClassifierProbabilities("jailbreak", text)
 }
 
 // ClassifyCandleBertTokens classifies tokens
@@ -1107,9 +1049,9 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 }
 
 // ClassifyFeedbackTextWithProbs classifies text for feedback detection and
-// returns the full class probability distribution.
+// returns the full probability distribution.
 func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
-	return classifyWithClassifierWithProbs("feedback", text)
+	return classifyWithClassifierProbabilities("feedback", text)
 }
 
 // ============================================================================

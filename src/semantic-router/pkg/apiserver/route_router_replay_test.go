@@ -62,20 +62,20 @@ func TestRouterReplayManagementRouteRequiresAuthAndRedactsViewerPayload(t *testi
 	server := &ClassificationAPIServer{config: cfg, runtimeRegistry: registry}
 	mux := server.setupRoutes()
 
-	anonymous := serveReplayManagementRequest(mux, "/v1/router_replay/replay-1", "")
+	anonymous := serveReplayManagementRequest(mux, "/api/v1/observability/replays/replay-1", "")
 	assertReplayStatus(t, anonymous, http.StatusUnauthorized, "anonymous")
 	if runtime.calls != 0 {
 		t.Fatalf("runtime calls after anonymous request = %d, want 0", runtime.calls)
 	}
 
-	viewerPath := "/v1/router_replay/replay-1?source=dashboard"
+	viewerPath := "/api/v1/observability/replays/replay-1?source=dashboard"
 	viewer := serveReplayManagementRequest(mux, viewerPath, viewerToken)
 	assertViewerReplayResponse(t, viewer, runtime, viewerPath)
 
-	operator := serveReplayManagementRequest(mux, "/v1/router_replay/replay-1", operatorToken)
+	operator := serveReplayManagementRequest(mux, "/api/v1/observability/replays/replay-1", operatorToken)
 	assertDetailedReplayResponse(t, operator, runtime.response.Body, "operator")
 
-	admin := serveReplayManagementRequest(mux, "/v1/router_replay/replay-1", adminToken)
+	admin := serveReplayManagementRequest(mux, "/api/v1/observability/replays/replay-1", adminToken)
 	assertDetailedReplayResponse(t, admin, runtime.response.Body, "admin")
 }
 
@@ -154,17 +154,17 @@ func TestRouterReplayViewerRedactionCoversListDetailAndTrajectory(t *testing.T) 
 	}{
 		{
 			name: "list with details",
-			path: "/v1/router_replay?showDetails=true",
+			path: "/api/v1/observability/replays?showDetails=true",
 			body: `{"object":"router_replay.list","data":[{"id":"replay-1","decision":"safe-decision","request_body":"private-canary","prompt":"private-canary","pii_entities":["private-canary"],"hallucination_spans":["private-canary"],"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"}}],"session_policy":{"note":"private-canary"},"route_diagnostics":{"selected_model":"model-a","annotations":{"note":"private-canary"}}}]}`,
 		},
 		{
 			name: "detail",
-			path: "/v1/router_replay/replay-1",
+			path: "/api/v1/observability/replays/replay-1",
 			body: `{"id":"replay-1","decision":"safe-decision","response_body":"private-canary","tool_definitions":"private-canary","hallucination_span_details":[{"text":"private-canary","explanation":"private-canary","severity":2}],"route_diagnostics":{"selected_model":"model-a","signal_errors":{"signal":"private-canary"}},"learning":{"protection":{"method":"protection","reason":"private-canary"}}}`,
 		},
 		{
 			name: "trajectory",
-			path: "/v1/router_replay/trajectory?session_id=session-1",
+			path: "/api/v1/observability/replays/trajectory?session_id=session-1",
 			body: `{"object":"router_replay.trajectory","session_id":"session-1","messages":[{"role":"user","content":"private-canary"},{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"private-canary"}}]},{"role":"tool","content":"private-canary","tool_call_id":"call-1"}]}`,
 		},
 	}
@@ -203,7 +203,7 @@ func TestRouterReplayManagementRouteReturnsNotFoundWithoutRuntime(t *testing.T) 
 	recorder := httptest.NewRecorder()
 	server.setupRoutes().ServeHTTP(
 		recorder,
-		httptest.NewRequest(http.MethodGet, "/v1/router_replay", nil),
+		httptest.NewRequest(http.MethodGet, "/api/v1/observability/replays", nil),
 	)
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", recorder.Code, recorder.Body.String())

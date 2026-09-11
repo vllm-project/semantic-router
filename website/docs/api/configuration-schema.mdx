@@ -1,0 +1,40 @@
+---
+title: Configuration Schema Reference
+sidebar_label: Configuration Schema
+description: Search the canonical vLLM Semantic Router configuration contract.
+hide_table_of_contents: true
+---
+
+import ConfigurationSchemaReference from "@site/src/components/ConfigurationSchemaReference";
+
+# Configuration Schema Reference
+
+This is the schema shipped by the current documentation release. Use the
+Dashboard reference when you need the contract reported by a running Router.
+
+<ConfigurationSchemaReference />
+
+## Progressive discovery
+
+The Router API and CLI expose the same contract without requiring clients or
+agents to load the full schema first:
+
+```bash
+vllm-sr config schema
+vllm-sr config schema --section global.router.learning
+vllm-sr config schema --surface algorithm:multi_factor
+vllm-sr config schema --full
+```
+
+Against a running Router, `GET /api/v1/config/schema` returns the compact index.
+Use `view=section&path=...` or `view=surface&kind=...&name=...` to expand one
+branch, and `view=full` for the complete schema.
+
+Section views preserve their real shape: list sections such as `listeners`,
+`entrypoints`, and `recipes` expose their item fields, while `version` is shown
+as the fixed scalar value. Bootstrap-only Dashboard state such as `setup.mode`
+is deliberately outside this steady-state Router contract.
+
+For API discovery beyond configuration, use the generated
+[Router OpenAPI Reference](./openapi). Agents query both contracts directly from
+the Router; the Website and Dashboard only visualize them.

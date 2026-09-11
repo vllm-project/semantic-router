@@ -45,20 +45,23 @@
   domain: frontier_reasoning
   tags: [core]
   source: https://agi.safe.ai/
-  default_profile: no-tools
+  default_profile: text-only
   profiles:
-    - id: no-tools
-      display_name: No tools
-      description: Text-only evaluation without browsing, code execution, or retrieval tools.
+    - id: text-only
+      display_name: Text-only
+      description: The 2,158-question May 2025 text-only subset, evaluated without browsing, code execution, or retrieval tools.
+    - id: independent-text-only
+      display_name: Independent text-only run
+      description: Independently measured pass@1 over the same 2,158-question text-only subset for the exact model variant and reasoning effort.
+    - id: published-no-tools
+      display_name: Published without tools
+      description: Published evaluation without tools whose modality subset is not explicitly the frozen 2,158 text-only questions; visible as evidence but excluded from Intelligence 1.0.
     - id: with-tools
       display_name: With tools
       description: Evaluation where the model may use tools; visible as evidence but excluded from the default index.
     - id: published-unspecified
       display_name: Published setup unspecified
       description: Published result whose tool policy is not stated; visible but excluded from the default index.
-    - id: independent-standard
-      display_name: Independent standard run
-      description: Independently measured HLE result for the named model variant and reasoning effort.
   metrics:
     - id: accuracy
       unit: proportion
