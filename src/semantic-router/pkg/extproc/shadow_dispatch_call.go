@@ -187,6 +187,17 @@ func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 			result[key] = value
 		}
 	}
+	// prepareShadowCall permits these client-supplied routing inputs only after
+	// resolving a same-format Dynamo target. Apply them after static headers so
+	// Dynamo's documented header-over-body routing semantics remain intact.
+	for key, value := range job.dynamoHeaders {
+		for existing := range result {
+			if strings.EqualFold(existing, key) {
+				delete(result, existing)
+			}
+		}
+		result[key] = value
+	}
 	result[headers.RequestID] = job.shadowRequestID
 	return result
 }
