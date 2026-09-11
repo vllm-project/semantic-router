@@ -1759,6 +1759,7 @@ global:
           progress_gate:
             enabled: false
             mode: observe
+            calibration_id: "" # External profile name@version; required for enforce.
             window_size: 8
             window_ttl_seconds: 900
             min_window_outcomes: 3

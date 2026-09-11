@@ -495,6 +495,7 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 				[]string{
 					"enabled",
 					"mode",
+					"calibration_id",
 					"window_size",
 					"window_ttl_seconds",
 					"min_window_outcomes",

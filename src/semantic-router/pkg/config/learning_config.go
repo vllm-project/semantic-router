@@ -101,16 +101,68 @@ type RouterLearningProtectionTuning struct {
 // ProgressGateTuning gates session model switches on recent-window progress
 // evidence. Omitting the section leaves existing session behaviour unchanged.
 type ProgressGateTuning struct {
-	Enabled *bool  `yaml:"enabled,omitempty"`
-	Mode    string `yaml:"mode,omitempty"` // observe | enforce
+	Enabled       *bool  `yaml:"enabled,omitempty"`
+	Mode          string `yaml:"mode,omitempty" jsonschema:"enum=observe,enum=enforce"`
+	CalibrationID string `yaml:"calibration_id,omitempty"`
 
-	WindowSize                *int     `yaml:"window_size,omitempty"`
-	WindowTTLSeconds          *int     `yaml:"window_ttl_seconds,omitempty"`
-	MinWindowOutcomes         *int     `yaml:"min_window_outcomes,omitempty"`
-	MinConsecutiveRegressions *int     `yaml:"min_consecutive_regressions,omitempty"`
-	MinConsecutiveRecoveries  *int     `yaml:"min_consecutive_recoveries,omitempty"`
-	CooldownSeconds           *float64 `yaml:"cooldown_seconds,omitempty"`
-	MaxSwitchesPerWindow      *int     `yaml:"max_switches_per_window,omitempty"`
+	WindowSize                *int     `yaml:"window_size,omitempty" jsonschema:"minimum=1,maximum=256"`
+	WindowTTLSeconds          *int     `yaml:"window_ttl_seconds,omitempty" jsonschema:"minimum=1,maximum=86400"`
+	MinWindowOutcomes         *int     `yaml:"min_window_outcomes,omitempty" jsonschema:"minimum=0"`
+	MinConsecutiveRegressions *int     `yaml:"min_consecutive_regressions,omitempty" jsonschema:"minimum=0"`
+	MinConsecutiveRecoveries  *int     `yaml:"min_consecutive_recoveries,omitempty" jsonschema:"minimum=0"`
+	CooldownSeconds           *float64 `yaml:"cooldown_seconds,omitempty" jsonschema:"minimum=0"`
+	MaxSwitchesPerWindow      *int     `yaml:"max_switches_per_window,omitempty" jsonschema:"minimum=0,maximum=256"`
+}
+
+// ProgressGateConfig is the resolved policy shared by validation and execution.
+type ProgressGateConfig struct {
+	Enabled                   bool
+	Mode                      string
+	CalibrationID             string
+	WindowSize                int
+	WindowTTLSeconds          int
+	MinWindowOutcomes         int
+	MinConsecutiveRegressions int
+	MinConsecutiveRecoveries  int
+	CooldownSeconds           float64
+	MaxSwitchesPerWindow      int
+}
+
+func (tuning *ProgressGateTuning) EffectiveConfig() ProgressGateConfig {
+	cfg := ProgressGateConfig{
+		Mode: "observe", WindowSize: 8, WindowTTLSeconds: 900,
+		MinWindowOutcomes: 3, MinConsecutiveRegressions: 2,
+		MinConsecutiveRecoveries: 2, CooldownSeconds: 120, MaxSwitchesPerWindow: 2,
+	}
+	if tuning == nil {
+		return cfg
+	}
+	if tuning.Enabled != nil {
+		cfg.Enabled = *tuning.Enabled
+	}
+	if mode := strings.TrimSpace(tuning.Mode); mode != "" {
+		cfg.Mode = mode
+	}
+	cfg.CalibrationID = strings.TrimSpace(tuning.CalibrationID)
+	for _, field := range []struct {
+		from *int
+		to   *int
+	}{
+		{tuning.WindowSize, &cfg.WindowSize},
+		{tuning.WindowTTLSeconds, &cfg.WindowTTLSeconds},
+		{tuning.MinWindowOutcomes, &cfg.MinWindowOutcomes},
+		{tuning.MinConsecutiveRegressions, &cfg.MinConsecutiveRegressions},
+		{tuning.MinConsecutiveRecoveries, &cfg.MinConsecutiveRecoveries},
+		{tuning.MaxSwitchesPerWindow, &cfg.MaxSwitchesPerWindow},
+	} {
+		if field.from != nil {
+			*field.to = *field.from
+		}
+	}
+	if tuning.CooldownSeconds != nil {
+		cfg.CooldownSeconds = *tuning.CooldownSeconds
+	}
+	return cfg
 }
 
 // DecisionAdaptationsConfig lets one matched decision control globally enabled
