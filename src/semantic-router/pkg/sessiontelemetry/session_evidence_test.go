@@ -9,13 +9,8 @@ import (
 	"time"
 )
 
-// fixedBase anchors every test to a deterministic relative timeline. It tracks
-// the current time (truncated for readable timestamps) because
-// RecordTurnOutcome rejects outcomes older than the window TTL against the
-// store clock: a hardcoded calendar date would start failing once it aged past
-// that bound. All assertions use offsets from fixedBase, so the absolute value
-// never matters.
-var fixedBase = time.Now().Truncate(time.Minute)
+// The relative timelines stay in the past; future evidence is rejected.
+var fixedBase = time.Now().Add(-12 * time.Minute).Truncate(time.Minute)
 
 func outcomeAt(base time.Time, offsetMinutes int, turn int, category TurnOutcomeCategory, attributable bool) TurnOutcome {
 	return TurnOutcome{

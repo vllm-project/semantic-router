@@ -202,6 +202,15 @@ func persistRouterSessionState(sessionID string) {
 		return
 	}
 	defer release()
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	st := s.sessions[sessionID]
+	gateConfigured := st != nil && st.outcomeWindowSize > 0
+	s.mu.Unlock()
+	if gateConfigured {
+		st.outcomeSaveMu.Lock()
+		defer st.outcomeSaveMu.Unlock()
+	}
 	snapshot, ok := GetRouterSessionSnapshot(sessionID, time.Now())
 	if !ok {
 		return
@@ -244,6 +253,10 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 	s := globalRouterSessionMemory
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if st := s.sessions[snapshot.SessionID]; st != nil &&
+		(st.outcomeWindowSize > 0 || snapshot.OutcomeWindowSize > 0) {
+		return
+	}
 	modelTurns := cloneIntMap(snapshot.ModelTurns)
 	if modelTurns == nil {
 		modelTurns = make(map[string]int)
@@ -256,6 +269,8 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		lastSeen:                        snapshot.LastSeen,
 		lastSwitchAt:                    snapshot.LastSwitchAt,
 		switchTimestamps:                cloneInt64Slice(snapshot.SwitchTimestamps),
+		outcomeWindowSize:               snapshot.OutcomeWindowSize,
+		outcomeWindowTTL:                time.Duration(snapshot.OutcomeWindowTTLSeconds) * time.Second,
 		turnCount:                       snapshot.TurnCount,
 		switchCount:                     snapshot.SwitchCount,
 		modelTurns:                      modelTurns,
