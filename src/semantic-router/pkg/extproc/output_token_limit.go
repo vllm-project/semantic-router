@@ -102,10 +102,17 @@ func (r *OpenAIRouter) outputTokenLimitSources(
 }
 
 func outputTokenLimitBlocked(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return false
 	}
-	params := ctx.VSRSelectedDecision.GetRequestParamsConfig()
+	return decisionBlocksOutputTokenLimit(ctx.VSRSelectedDecision)
+}
+
+func decisionBlocksOutputTokenLimit(decision *config.Decision) bool {
+	if decision == nil {
+		return false
+	}
+	params := decision.GetRequestParamsConfig()
 	if params == nil {
 		return false
 	}

@@ -73,6 +73,11 @@ type Request struct {
 	// that provider dispatch enforces.
 	PluginMaxOutputTokens *int64
 
+	// ClientMaxOutputTokensBlocked is true when request_params.blocked_params
+	// includes a max-token field. Attempt Replay must drop the client source
+	// the same way provider dispatch does.
+	ClientMaxOutputTokensBlocked bool
+
 	// Fusion carries optional call-level configuration for direct Looper
 	// callers. A recipe-owned Fusion algorithm accepts only its trace-visibility
 	// fields; an algorithm-free internal call may use the complete configuration.

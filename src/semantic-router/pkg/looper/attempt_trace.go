@@ -529,13 +529,21 @@ func composeAttemptOutputTokenLimit(
 	sources := outputtokens.Sources{
 		AlgorithmStage: stageOverrideMaxOutputTokens(nil, stageReq),
 	}
+	blocked := false
 	if req != nil {
-		sources.Client = chatParamsMaxOutputTokens(req.OriginalRequest)
+		blocked = req.ClientMaxOutputTokensBlocked
+		if !blocked {
+			sources.Client = chatParamsMaxOutputTokens(req.OriginalRequest)
+		}
 		sources.Plugin = outputtokens.Clone(req.PluginMaxOutputTokens)
 		sources.ModelRef = modelRefMaxCompletionTokens(req.ModelRefs, model)
 		sources.AlgorithmStage = stageOverrideMaxOutputTokens(req.OriginalRequest, stageReq)
 	}
-	return outputtokens.Compose(sources)
+	result := outputtokens.Compose(sources)
+	if blocked && sources.Client == nil && result.Effective == nil {
+		result.Fallback = outputtokens.FallbackBlockedParam
+	}
+	return result
 }
 
 func modelRefMaxCompletionTokens(refs []config.ModelRef, model string) *int64 {

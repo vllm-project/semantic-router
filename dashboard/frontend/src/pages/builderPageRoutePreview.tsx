@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 
-import { getAlgorithmFieldSchema, serializeFields } from '@/lib/dslMutations'
-import type { ASTAlgoSpec, ASTModelRef, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
+import { astModelToInput, getAlgorithmFieldSchema, serializeFields } from '@/lib/dslMutations'
+import type { ASTAlgoSpec, ASTPluginRef, DSLFieldObject } from '@/types/dsl'
 import type { RouteAlgoInput, RouteModelInput, RoutePluginInput } from '@/lib/dslMutations'
 
 import styles from './BuilderPage.module.css'
@@ -36,6 +36,13 @@ function generateRouteDslPreview(
         if (m.effort) attrs.push(`effort = "${m.effort}"`)
         if (m.paramSize) attrs.push(`param_size = "${m.paramSize}"`)
         if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
+        if (
+          typeof m.maxCompletionTokens === 'number' &&
+          Number.isSafeInteger(m.maxCompletionTokens) &&
+          m.maxCompletionTokens >= 1
+        ) {
+          attrs.push(`max_completion_tokens = ${m.maxCompletionTokens}`)
+        }
         const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
         return `"${m.model}"${attrStr}`
       })
@@ -106,6 +113,21 @@ function validateRouteInput(
       message: 'No model specified — route needs at least one MODEL',
     })
   }
+  models.forEach((model, index) => {
+    if (model.maxCompletionTokens === undefined || model.maxCompletionTokens === null) {
+      return
+    }
+    if (
+      typeof model.maxCompletionTokens !== 'number' ||
+      !Number.isSafeInteger(model.maxCompletionTokens) ||
+      model.maxCompletionTokens < 1
+    ) {
+      issues.push({
+        level: 'error',
+        message: `model ${model.model.trim() || `#${index + 1}`} max_completion_tokens must be a finite integer >= 1`,
+      })
+    }
+  })
 
   // Algorithm field validation
   if (algorithm?.algoType) {
@@ -415,18 +437,6 @@ const RouteDslPreviewPanel: React.FC<{
 // ===================================================================
 // Route Editor Form (editable)
 // ===================================================================
-
-function astModelToInput(m: ASTModelRef): RouteModelInput {
-  return {
-    model: m.model,
-    reasoning: m.reasoning,
-    effort: m.effort,
-    lora: m.lora,
-    paramSize: m.paramSize,
-    weight: m.weight,
-    reasoningFamily: m.reasoningFamily,
-  }
-}
 
 function astAlgoToInput(a?: ASTAlgoSpec): RouteAlgoInput | undefined {
   if (!a) return undefined

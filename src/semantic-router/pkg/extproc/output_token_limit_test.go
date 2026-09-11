@@ -285,6 +285,27 @@ func TestBuildReplayRouteDiagnosticsCopiesOutputTokenLimit(t *testing.T) {
 	}
 }
 
+func TestBuildLooperRequestForwardsBlockedClientTokenLimit(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	tokens := 1024
+	decision := outputTokenRequestParamsDecision(t, model, map[string]interface{}{
+		"blocked_params": []string{"max_tokens"},
+	})
+	decision.ModelRefs[0].MaxCompletionTokens = &tokens
+	request := testNeutralRequest(model, "hello")
+	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+
+	looperReq, errResp := router.buildLooperRequest(request, decision, ctx)
+	if errResp != nil {
+		t.Fatalf("buildLooperRequest error response: %+v", errResp)
+	}
+	if looperReq == nil || !looperReq.ClientMaxOutputTokensBlocked {
+		t.Fatalf("looper request = %+v, want ClientMaxOutputTokensBlocked", looperReq)
+	}
+}
+
 func TestParseLooperOutputTokenBoundHeadersIgnoresNonPositive(t *testing.T) {
 	ctx := &RequestContext{
 		LooperRequest: true,

@@ -181,17 +181,18 @@ func (r *OpenAIRouter) buildLooperRequest(
 			openAIRequest, err = parseOpenAIRequest(encoded.Body)
 			if err == nil {
 				looperReq := &looper.Request{
-					OriginalRequest:       openAIRequest,
-					BaseContextTokens:     reqCtx.VSRContextTokenCount,
-					ModelRefs:             modelRefs,
-					ModelParams:           r.getModelParams(),
-					Algorithm:             decision.Algorithm,
-					IsStreaming:           streaming,
-					DecisionName:          decision.Name,
-					RecipeName:            reqCtx.Routing.RecipeName(),
-					OutputContract:        decision.OutputContract,
-					OutputContractSpec:    decision.OutputContractSpec,
-					PluginMaxOutputTokens: pluginMaxOutputTokens(decision),
+					OriginalRequest:              openAIRequest,
+					BaseContextTokens:            reqCtx.VSRContextTokenCount,
+					ModelRefs:                    modelRefs,
+					ModelParams:                  r.getModelParams(),
+					Algorithm:                    decision.Algorithm,
+					IsStreaming:                  streaming,
+					DecisionName:                 decision.Name,
+					RecipeName:                   reqCtx.Routing.RecipeName(),
+					OutputContract:               decision.OutputContract,
+					OutputContractSpec:           decision.OutputContractSpec,
+					PluginMaxOutputTokens:        pluginMaxOutputTokens(decision),
+					ClientMaxOutputTokensBlocked: decisionBlocksOutputTokenLimit(decision),
 				}
 				return looperReq, nil
 			}

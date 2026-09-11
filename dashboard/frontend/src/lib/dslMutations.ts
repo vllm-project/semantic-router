@@ -9,7 +9,7 @@
  * After each mutation, the caller should call parseAST() to refresh the AST.
  */
 
-import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
+import type { ASTModelRef, BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
 // ---------- Block finding ----------
 
@@ -488,6 +488,7 @@ export interface RouteModelInput {
   paramSize?: string
   weight?: number
   reasoningFamily?: string
+  maxCompletionTokens?: number
 }
 
 export interface RouteAlgoInput {
@@ -507,6 +508,23 @@ export interface RouteInput {
   models: RouteModelInput[]
   algorithm?: RouteAlgoInput
   plugins: RoutePluginInput[]
+}
+
+export function astModelToInput(model: ASTModelRef): RouteModelInput {
+  return {
+    model: model.model,
+    reasoning: model.reasoning,
+    effort: model.effort,
+    lora: model.lora,
+    paramSize: model.paramSize,
+    weight: model.weight,
+    reasoningFamily: model.reasoningFamily,
+    maxCompletionTokens: model.maxCompletionTokens,
+  }
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
 }
 
 function serializeRouteBody(input: RouteInput): string {
@@ -532,6 +550,9 @@ function serializeRouteBody(input: RouteInput): string {
       if (m.paramSize) attrs.push(`param_size = "${m.paramSize}"`)
       if (m.weight !== undefined) attrs.push(`weight = ${m.weight}`)
       if (m.reasoningFamily) attrs.push(`reasoning_family = "${m.reasoningFamily}"`)
+      if (isPositiveInt(m.maxCompletionTokens)) {
+        attrs.push(`max_completion_tokens = ${m.maxCompletionTokens}`)
+      }
       const attrStr = attrs.length > 0 ? ` (${attrs.join(', ')})` : ''
       return `"${m.model}"${attrStr}`
     })

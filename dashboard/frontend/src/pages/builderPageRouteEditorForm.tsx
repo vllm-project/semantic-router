@@ -363,6 +363,35 @@ const RouteEditorForm: React.FC<{
                     placeholder="—"
                   />
                 </div>
+                <div className={styles.modelAttrField}>
+                  <span className={styles.modelAttrLabel}>
+                    max_completion_tokens:
+                  </span>
+                  <input
+                    className={styles.fieldInput}
+                    style={{
+                      width: "80px",
+                      fontSize: "var(--text-xs)",
+                      padding: "0.25rem 0.5rem",
+                    }}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={
+                      m.maxCompletionTokens !== undefined
+                        ? m.maxCompletionTokens
+                        : ""
+                    }
+                    onChange={(e) =>
+                      updateModel(idx, {
+                        maxCompletionTokens: e.target.value
+                          ? Number(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    placeholder="—"
+                  />
+                </div>
               </div>
             </div>
           ))}
