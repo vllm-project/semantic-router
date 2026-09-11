@@ -3510,7 +3510,35 @@ providers:
     monochrome: true
   conformance:
     status: unverified
-  models: []
+  models:
+  - catalog: writer/palmyra-x6
+    relationship: first_party
+    id: palmyra-x6
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      completion_per_1m: 8.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-11'
+      source: https://dev.writer.com/home/models
+  - catalog: writer/palmyra-x5
+    relationship: first_party
+    id: palmyra-x5
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.6
+      completion_per_1m: 6.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-11'
+      source: https://dev.writer.com/home/models
 - id: xai
   display_name: xAI
   description: Grok models through an OpenAI-style API.
@@ -7762,6 +7790,82 @@ models:
   - moe
   - agentic
   - efficient
+- id: writer/palmyra-x6
+  display_name: Palmyra X6
+  description: Writer's flagship agentic Palmyra model for long-horizon enterprise workflows, sub-agents, and MCP tool use.
+  kind: physical
+  publisher: Writer
+  presentation:
+    logo: monogram
+    monogram: W
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://dev.writer.com/home/models
+  family: palmyra-x6
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Writer
+    status: claimed
+    verified_at: '2026-09-11'
+    source: https://dev.writer.com/home/models
+  tags:
+  - proprietary
+  - agentic
+  - enterprise
+  released_at: '2026-08-13'
+- id: writer/palmyra-x5
+  display_name: Palmyra X5
+  description: Writer's general-purpose Palmyra model with a 1M token context window, adaptive reasoning, and vision input.
+  kind: physical
+  publisher: Writer
+  presentation:
+    logo: monogram
+    monogram: W
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://dev.writer.com/home/models
+  family: palmyra-x5
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 8192
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Writer
+    status: claimed
+    verified_at: '2026-09-11'
+    source: https://dev.writer.com/home/models
+  tags:
+  - proprietary
+  - multimodal
+  - enterprise
+  released_at: '2025-04-28'
 - id: xai/grok-4.6
   display_name: Grok 4.6
   description: xAI frontier reasoning model with image input and tool support.
@@ -9341,6 +9445,10 @@ benchmarks:
     display_name: Prompt-level loose accuracy
     description: Prompt-level loose accuracy on IFBench, with model-side reasoning and generation settings retained on the
       record.
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published IFBench result whose accuracy level (prompt or instruction, loose or strict) is not stated
+      by the source; kept separate from prompt-level loose records.
   metrics:
   - id: accuracy
     unit: proportion
@@ -9469,6 +9577,10 @@ benchmarks:
   - id: published-standard
     display_name: Published standard
     description: Accuracy on MATH using the source-published evaluation setup.
+  - id: published-hard-subset
+    display_name: Published hard subset
+    description: Vendor-published result labeled MATH-Hard by the source; the hard-subset definition and harness are not stated
+      by the source and it is never compared with full-set MATH records.
   - id: rmcb-eacl-2026-valid-output-test
     display_name: RMCB EACL 2026 valid-output test
     description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and generation
@@ -9622,6 +9734,10 @@ benchmarks:
   source: https://github.com/suzgunmirac/BIG-Bench-Hard
   default_profile: rmcb-eacl-2026-valid-output-test
   profiles:
+  - id: published-standard
+    display_name: Published standard
+    description: Vendor-published BIG-Bench Hard accuracy; prompt format, shot count, and harness are retained on the evaluation
+      record when the source states them.
   - id: rmcb-eacl-2026-valid-output-test
     display_name: RMCB EACL 2026 valid-output test
     description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision
@@ -9740,6 +9856,140 @@ benchmarks:
     description: Vendor-published AdvanceIF accuracy with the evaluated model variant retained on the record.
   metrics:
   - id: accuracy
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: idavidrein/gpqa@1.0.0
+  display_name: GPQA
+  domain: scientific_reasoning
+  source: https://arxiv.org/abs/2311.12022
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published subset unspecified
+    description: Vendor-published GPQA accuracy whose subset (main, extended, or diamond) is not stated by the source; kept
+      separate from GPQA Diamond records and excluded from the default index.
+  metrics:
+  - id: accuracy
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: openai/mrcr@1.0.0
+  display_name: OpenAI MRCR
+  domain: long_context
+  source: https://huggingface.co/datasets/openai/mrcr
+  default_profile: published-8-needle
+  profiles:
+  - id: published-8-needle
+    display_name: Published 8-needle
+    description: Vendor-published score on the 8-needle OpenAI MRCR task; the context-length bins covered are not stated by
+      the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: bigcode/bigcodebench@1.0.0
+  display_name: BigCodeBench
+  domain: software_engineering
+  source: https://bigcode-bench.github.io/
+  default_profile: published-full-instruct
+  profiles:
+  - id: published-full-instruct
+    display_name: Published Full Instruct
+    description: Vendor-published Pass@1 on the BigCodeBench Full split, Instruct variant; calibration and decoding settings
+      are not stated by the source.
+  metrics:
+  - id: pass_at_1
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: unattributed/finance-agent@1.0.0
+  display_name: Finance Agent (owner and version unstated)
+  domain: financial_reasoning
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published result labeled only "Finance Agent" by the source; benchmark owner, version, and run setup
+      are not stated, so it is never merged with Vals Finance Agent records.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: afterquery/financeqa@1.0.0
+  display_name: FinanceQA
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/AfterQuery/FinanceQA
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published FinanceQA score; grader, prompt protocol, and dataset revision are not stated by the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: patronusai/financebench@1.0.0
+  display_name: FinanceBench
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/PatronusAI/financebench
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published FinanceBench score; retrieval configuration, grader, and dataset revision are not stated
+      by the source.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: gorilla/bfcl-core@1.0.0
+  display_name: BFCL Core
+  domain: agentic_systems
+  source: https://gorilla.cs.berkeley.edu/leaderboard.html
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published score labeled "BFCL Core" by the source; the BFCL version and the category composition behind
+      "Core" are not stated by the source and are not defined by the public leaderboard.
+  metrics:
+  - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: scale/mcp-atlas@1.0.0
+  display_name: MCP Atlas
+  domain: agentic_systems
+  source: https://labs.scale.com/leaderboard/mcp_atlas
+  default_profile: published-unspecified
+  profiles:
+  - id: published-unspecified
+    display_name: Published setup unspecified
+    description: Vendor-published MCP Atlas score; leaderboard revision, tool-call budget, and judge configuration are not
+      stated by the source.
+  metrics:
+  - id: score
     unit: proportion
     direction: higher_is_better
     range:
@@ -34083,6 +34333,304 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
     redistributable: true
+- id: writer/palmyra-x6-model-catalog-finance-agent@1.0.0
+  model: writer/palmyra-x6
+  benchmark: unattributed/finance-agent@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: Finance Agent
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.753
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-model-catalog-financeqa@1.0.0
+  model: writer/palmyra-x6
+  benchmark: afterquery/financeqa@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: FinanceQA
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.673
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-model-catalog-financebench@1.0.0
+  model: writer/palmyra-x6
+  benchmark: patronusai/financebench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X6
+    source_model_slug: palmyra-x6
+    source_kind: official_model_card
+    source_label: FinanceBench
+    benchmark_revision: unspecified_by_source
+    harness: raw model, not WRITER Agent, per source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.855
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-bfcl-core@1.0.0
+  model: writer/palmyra-x6
+  benchmark: gorilla/bfcl-core@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: BFCL Core
+    source_document: arXiv:2608.16620v1
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.785
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-ifbench@1.0.0
+  model: writer/palmyra-x6
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: IFBench
+    source_document: arXiv:2608.16620v1
+    reported_in: Figure 2 bar label
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.737
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x6-technical-report-mcp-atlas@1.0.0
+  model: writer/palmyra-x6
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra x6
+    source_model_slug: palmyra-x6
+    source_kind: official_technical_report
+    source_label: MCP-Atlas
+    source_document: arXiv:2608.16620v1
+    reported_in: Figure 2 bar label
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.771
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2608.16620
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+  model: writer/palmyra-x5
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: MMLU_PRO
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.6502
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-gpqa@1.0.0
+  model: writer/palmyra-x5
+  benchmark: idavidrein/gpqa@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: GPQA
+    dataset_subset: unspecified_by_source
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.472
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-bbh@1.0.0
+  model: writer/palmyra-x5
+  benchmark: maveriq/bigbenchhard@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: BBH (Big-Bench Hard)
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.7099
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-model-catalog-math-hard@1.0.0
+  model: writer/palmyra-x5
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-hard-subset
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_model_card
+    source_label: MATH_HARD
+    dataset_subset: hard subset as labeled by source, definition unspecified_by_source
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    accuracy: 0.7157
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://dev.writer.com/home/models
+    redistributable: true
+- id: writer/palmyra-x5-launch-openai-mrcr-8-needle@1.0.0
+  model: writer/palmyra-x5
+  benchmark: openai/mrcr@1.0.0
+  benchmark_profile: published-8-needle
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_launch_evaluation
+    source_label: OpenAI MRCR 8-needle
+    needles: 8
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    score: 0.191
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://writer.com/blog/long-context-palmyra-x5/
+    redistributable: true
+- id: writer/palmyra-x5-launch-bigcodebench-full-instruct@1.0.0
+  model: writer/palmyra-x5
+  benchmark: bigcode/bigcodebench@1.0.0
+  benchmark_profile: published-full-instruct
+  reasoning_effort: unspecified
+  subject:
+    variant: Palmyra X5
+    source_model_slug: palmyra-x5
+    source_kind: official_launch_evaluation
+    source_label: BigCodeBench (Full, Instruct)
+    dataset_split: full
+    dataset_variant: instruct
+    benchmark_revision: unspecified_by_source
+    harness: unspecified_by_source
+    tool_policy: unspecified_by_source
+    context_length: unspecified_by_source
+    endpoint: unspecified_by_source
+  metrics:
+    pass_at_1: 0.487
+  status: available
+  observed_at: '2026-09-11'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://writer.com/blog/long-context-palmyra-x5/
+    redistributable: true
 - id: independent/grok-4-3-non-reasoning-critpt@1.0.0
   model: xai/grok-4.3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -47207,6 +47755,28 @@ index_results:
   - thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
   domains:
     agentic_systems: 64.7
+- model: writer/palmyra-x5
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 65.02
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6502
+    normalized: 0.6502
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 65.02
 - model: xai/grok-4.6
   reasoning_effort: low
   index: vllm-sr/reasoning@1.0.0

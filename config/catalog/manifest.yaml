@@ -124,6 +124,11 @@ inventory:
         representative_models:
           - thinking-machines/inkling
           - thinking-machines/inkling-small
+      - publisher: Writer
+        min_representatives: 2
+        representative_models:
+          - writer/palmyra-x6
+          - writer/palmyra-x5
       - publisher: Xiaomi
         representative_models:
           - xiaomi/mimo-v2.5-pro

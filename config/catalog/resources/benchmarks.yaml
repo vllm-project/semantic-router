@@ -632,6 +632,9 @@
     - id: prompt-loose
       display_name: Prompt-level loose accuracy
       description: Prompt-level loose accuracy on IFBench, with model-side reasoning and generation settings retained on the record.
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published IFBench result whose accuracy level (prompt or instruction, loose or strict) is not stated by the source; kept separate from prompt-level loose records.
   metrics:
     - id: accuracy
       unit: proportion
@@ -744,6 +747,9 @@
     - id: published-standard
       display_name: Published standard
       description: Accuracy on MATH using the source-published evaluation setup.
+    - id: published-hard-subset
+      display_name: Published hard subset
+      description: Vendor-published result labeled MATH-Hard by the source; the hard-subset definition and harness are not stated by the source and it is never compared with full-set MATH records.
     - id: rmcb-eacl-2026-valid-output-test
       display_name: RMCB EACL 2026 valid-output test
       description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and generation settings remain on the evaluation record.
@@ -873,6 +879,9 @@
   source: https://github.com/suzgunmirac/BIG-Bench-Hard
   default_profile: rmcb-eacl-2026-valid-output-test
   profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published BIG-Bench Hard accuracy; prompt format, shot count, and harness are retained on the evaluation record when the source states them.
     - id: rmcb-eacl-2026-valid-output-test
       display_name: RMCB EACL 2026 valid-output test
       description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision remain on the evaluation record.
@@ -976,6 +985,117 @@
       description: Vendor-published AdvanceIF accuracy with the evaluated model variant retained on the record.
   metrics:
     - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: idavidrein/gpqa@1.0.0
+  display_name: GPQA
+  domain: scientific_reasoning
+  source: https://arxiv.org/abs/2311.12022
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published subset unspecified
+      description: Vendor-published GPQA accuracy whose subset (main, extended, or diamond) is not stated by the source; kept separate from GPQA Diamond records and excluded from the default index.
+  metrics:
+    - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: openai/mrcr@1.0.0
+  display_name: OpenAI MRCR
+  domain: long_context
+  source: https://huggingface.co/datasets/openai/mrcr
+  default_profile: published-8-needle
+  profiles:
+    - id: published-8-needle
+      display_name: Published 8-needle
+      description: Vendor-published score on the 8-needle OpenAI MRCR task; the context-length bins covered are not stated by the source.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: bigcode/bigcodebench@1.0.0
+  display_name: BigCodeBench
+  domain: software_engineering
+  source: https://bigcode-bench.github.io/
+  default_profile: published-full-instruct
+  profiles:
+    - id: published-full-instruct
+      display_name: Published Full Instruct
+      description: Vendor-published Pass@1 on the BigCodeBench Full split, Instruct variant; calibration and decoding settings are not stated by the source.
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: unattributed/finance-agent@1.0.0
+  display_name: Finance Agent (owner and version unstated)
+  domain: financial_reasoning
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published result labeled only "Finance Agent" by the source; benchmark owner, version, and run setup are not stated, so it is never merged with Vals Finance Agent records.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: afterquery/financeqa@1.0.0
+  display_name: FinanceQA
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/AfterQuery/FinanceQA
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published FinanceQA score; grader, prompt protocol, and dataset revision are not stated by the source.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: patronusai/financebench@1.0.0
+  display_name: FinanceBench
+  domain: financial_reasoning
+  source: https://huggingface.co/datasets/PatronusAI/financebench
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published FinanceBench score; retrieval configuration, grader, and dataset revision are not stated by the source.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: gorilla/bfcl-core@1.0.0
+  display_name: BFCL Core
+  domain: agentic_systems
+  source: https://gorilla.cs.berkeley.edu/leaderboard.html
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published score labeled "BFCL Core" by the source; the BFCL version and the category composition behind "Core" are not stated by the source and are not defined by the public leaderboard.
+  metrics:
+    - id: score
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: scale/mcp-atlas@1.0.0
+  display_name: MCP Atlas
+  domain: agentic_systems
+  source: https://labs.scale.com/leaderboard/mcp_atlas
+  default_profile: published-unspecified
+  profiles:
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published MCP Atlas score; leaderboard revision, tool-call budget, and judge configuration are not stated by the source.
+  metrics:
+    - id: score
       unit: proportion
       direction: higher_is_better
       range: [0, 1]

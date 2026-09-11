@@ -21,4 +21,32 @@ presentation:
   monochrome: true
 conformance:
   status: unverified
-models: []
+models:
+- catalog: writer/palmyra-x6
+  relationship: first_party
+  id: palmyra-x6
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 2.0
+    completion_per_1m: 8.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://dev.writer.com/home/models
+- catalog: writer/palmyra-x5
+  relationship: first_party
+  id: palmyra-x5
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.6
+    completion_per_1m: 6.0
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://dev.writer.com/home/models

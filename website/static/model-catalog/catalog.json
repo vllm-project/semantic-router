@@ -1177,6 +1177,11 @@
           "description": "Prompt-level loose accuracy on IFBench, with model-side reasoning and generation settings retained on the record.",
           "display_name": "Prompt-level loose accuracy",
           "id": "prompt-loose"
+        },
+        {
+          "description": "Vendor-published IFBench result whose accuracy level (prompt or instruction, loose or strict) is not stated by the source; kept separate from prompt-level loose records.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
         }
       ],
       "source": "https://github.com/allenai/IFBench"
@@ -1377,6 +1382,11 @@
           "description": "Accuracy on MATH using the source-published evaluation setup.",
           "display_name": "Published standard",
           "id": "published-standard"
+        },
+        {
+          "description": "Vendor-published result labeled MATH-Hard by the source; the hard-subset definition and harness are not stated by the source and it is never compared with full-set MATH records.",
+          "display_name": "Published hard subset",
+          "id": "published-hard-subset"
         },
         {
           "description": "Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and generation settings remain on the evaluation record.",
@@ -1609,6 +1619,11 @@
       ],
       "profiles": [
         {
+          "description": "Vendor-published BIG-Bench Hard accuracy; prompt format, shot count, and harness are retained on the evaluation record when the source states them.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        },
+        {
           "description": "Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision remain on the evaluation record.",
           "display_name": "RMCB EACL 2026 valid-output test",
           "id": "rmcb-eacl-2026-valid-output-test"
@@ -1790,6 +1805,205 @@
         }
       ],
       "source": "https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "GPQA",
+      "domain": "scientific_reasoning",
+      "id": "idavidrein/gpqa@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published GPQA accuracy whose subset (main, extended, or diamond) is not stated by the source; kept separate from GPQA Diamond records and excluded from the default index.",
+          "display_name": "Published subset unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://arxiv.org/abs/2311.12022"
+    },
+    {
+      "default_profile": "published-8-needle",
+      "display_name": "OpenAI MRCR",
+      "domain": "long_context",
+      "id": "openai/mrcr@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published score on the 8-needle OpenAI MRCR task; the context-length bins covered are not stated by the source.",
+          "display_name": "Published 8-needle",
+          "id": "published-8-needle"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/openai/mrcr"
+    },
+    {
+      "default_profile": "published-full-instruct",
+      "display_name": "BigCodeBench",
+      "domain": "software_engineering",
+      "id": "bigcode/bigcodebench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "pass_at_1",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published Pass@1 on the BigCodeBench Full split, Instruct variant; calibration and decoding settings are not stated by the source.",
+          "display_name": "Published Full Instruct",
+          "id": "published-full-instruct"
+        }
+      ],
+      "source": "https://bigcode-bench.github.io/"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "Finance Agent (owner and version unstated)",
+      "domain": "financial_reasoning",
+      "id": "unattributed/finance-agent@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published result labeled only \"Finance Agent\" by the source; benchmark owner, version, and run setup are not stated, so it is never merged with Vals Finance Agent records.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ]
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "FinanceQA",
+      "domain": "financial_reasoning",
+      "id": "afterquery/financeqa@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published FinanceQA score; grader, prompt protocol, and dataset revision are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/AfterQuery/FinanceQA"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "FinanceBench",
+      "domain": "financial_reasoning",
+      "id": "patronusai/financebench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published FinanceBench score; retrieval configuration, grader, and dataset revision are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/PatronusAI/financebench"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "BFCL Core",
+      "domain": "agentic_systems",
+      "id": "gorilla/bfcl-core@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published score labeled \"BFCL Core\" by the source; the BFCL version and the category composition behind \"Core\" are not stated by the source and are not defined by the public leaderboard.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://gorilla.cs.berkeley.edu/leaderboard.html"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "MCP Atlas",
+      "domain": "agentic_systems",
+      "id": "scale/mcp-atlas@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published MCP Atlas score; leaderboard revision, tool-call budget, and judge configuration are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://labs.scale.com/leaderboard/mcp_atlas"
     },
     {
       "default_profile": "operator",
@@ -32759,6 +32973,364 @@
         "run_kind": "independent",
         "source_model": "Inkling Small",
         "source_model_slug": "thinkingmachines-inkling-small-medium"
+      }
+    },
+    {
+      "benchmark": "unattributed/finance-agent@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-finance-agent@1.0.0",
+      "metrics": {
+        "score": 0.753
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "Finance Agent",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "afterquery/financeqa@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-financeqa@1.0.0",
+      "metrics": {
+        "score": 0.673
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "FinanceQA",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "patronusai/financebench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-financebench@1.0.0",
+      "metrics": {
+        "score": 0.855
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "FinanceBench",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "gorilla/bfcl-core@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-bfcl-core@1.0.0",
+      "metrics": {
+        "score": 0.785
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "BFCL Core",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.737
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "reported_in": "Figure 2 bar label",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "IFBench",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.771
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "reported_in": "Figure 2 bar label",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "MCP-Atlas",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.6502
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "MMLU_PRO",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-gpqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.472
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_subset": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "maveriq/bigbenchhard@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-bbh@1.0.0",
+      "metrics": {
+        "accuracy": 0.7099
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "BBH (Big-Bench Hard)",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-hard-subset",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-math-hard@1.0.0",
+      "metrics": {
+        "accuracy": 0.7157
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_subset": "hard subset as labeled by source, definition unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "MATH_HARD",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "openai/mrcr@1.0.0",
+      "benchmark_profile": "published-8-needle",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://writer.com/blog/long-context-palmyra-x5/",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-launch-openai-mrcr-8-needle@1.0.0",
+      "metrics": {
+        "score": 0.191
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "needles": 8,
+        "source_kind": "official_launch_evaluation",
+        "source_label": "OpenAI MRCR 8-needle",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "bigcode/bigcodebench@1.0.0",
+      "benchmark_profile": "published-full-instruct",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://writer.com/blog/long-context-palmyra-x5/",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-launch-bigcodebench-full-instruct@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.487
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_split": "full",
+        "dataset_variant": "instruct",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_launch_evaluation",
+        "source_label": "BigCodeBench (Full, Instruct)",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
       }
     },
     {
@@ -80145,6 +80717,635 @@
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.6502,
+          "status": "available",
+          "value": 0.6502,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 65.02
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [
+        "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 65.02,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "no-tools"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.6502,
+          "status": "available",
+          "value": 0.6502,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [
+        "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "xai/grok-4.6",
       "provenance": [],
       "reasoning_effort": "low",
@@ -90799,6 +92000,104 @@
     {
       "capabilities": [
         "chat",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Writer's flagship agentic Palmyra model for long-horizon enterprise workflows, sub-agents, and MCP tool use.",
+      "display_name": "Palmyra X6",
+      "distribution": {
+        "source": "https://dev.writer.com/home/models",
+        "type": "proprietary_api"
+      },
+      "family": "palmyra-x6",
+      "id": "writer/palmyra-x6",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 8192
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "W"
+      },
+      "publisher": "Writer",
+      "released_at": "2026-08-13",
+      "tags": [
+        "proprietary",
+        "agentic",
+        "enterprise"
+      ],
+      "verification": {
+        "authority": "Writer",
+        "source": "https://dev.writer.com/home/models",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Writer's general-purpose Palmyra model with a 1M token context window, adaptive reasoning, and vision input.",
+      "display_name": "Palmyra X5",
+      "distribution": {
+        "source": "https://dev.writer.com/home/models",
+        "type": "proprietary_api"
+      },
+      "family": "palmyra-x5",
+      "id": "writer/palmyra-x5",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 8192
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "W"
+      },
+      "publisher": "Writer",
+      "released_at": "2025-04-28",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "enterprise"
+      ],
+      "verification": {
+        "authority": "Writer",
+        "source": "https://dev.writer.com/home/models",
+        "status": "claimed",
+        "verified_at": "2026-09-11"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -96519,7 +97818,46 @@
       "description": "Palmyra enterprise models through the Writer chat API.",
       "display_name": "Writer",
       "id": "writer",
-      "models": [],
+      "models": [
+        {
+          "catalog": "writer/palmyra-x6",
+          "id": "palmyra-x6",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 8.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://dev.writer.com/home/models",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        },
+        {
+          "catalog": "writer/palmyra-x5",
+          "id": "palmyra-x5",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 6.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.6
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://dev.writer.com/home/models",
+            "status": "claimed",
+            "verified_at": "2026-09-11"
+          }
+        }
+      ],
       "path_overrides": {
         "openai/chat-completions@1#create": "/v1/chat"
       },
