@@ -198,6 +198,44 @@ func TestEvaluatePIISignalSharesToolResultCacheAcrossRules(t *testing.T) {
 	}
 }
 
+func TestEvaluatePIISignalKeepsLegacyCacheCompleteWhenToolBudgetIsExhausted(t *testing.T) {
+	classifier, _, mockModel := newTestPIIClassifier()
+	classifier.Config.PIIRules = []config.PIIRule{
+		{Name: "tool_pii", Source: config.PIISourceToolResult, Threshold: 0.7},
+		{Name: "legacy_pii", Threshold: 0.7},
+	}
+
+	// Put the overlapping content after the tool budget is exhausted. The
+	// legacy rule must still scan it fully even though the tool-result rule only
+	// receives an incomplete cache entry for the same bytes.
+	sharedText := "shared customer@example.com"
+	toolTexts := make([]string, maxPIIToolResultInferenceCalls+1)
+	for i := range toolTexts[:maxPIIToolResultInferenceCalls] {
+		toolTexts[i] = fmt.Sprintf("tool result block %04d", i)
+	}
+	toolTexts[maxPIIToolResultInferenceCalls] = sharedText
+	mockModel.setMockResponse(sharedText, []candle_binding.TokenEntity{
+		piiEntity("EMAIL", "customer@example.com", 7, 24, 0.99),
+	}, nil)
+
+	results := newPIISignalTestResults()
+	var mu sync.Mutex
+	classifier.evaluatePIISignal(context.Background(), results, &mu, sharedText, nil, toolTexts, false)
+
+	if got := mockModel.callCount[sharedText]; got != 1 {
+		t.Fatalf("overlapping content was classified %d times, want one legacy scan", got)
+	}
+	if !containsString(results.MatchedPIIRules, "legacy_pii") {
+		t.Fatalf("matched PII rules = %#v, want legacy_pii", results.MatchedPIIRules)
+	}
+	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
+		t.Fatalf("tool PII error = %q, want %q", got, piiEvaluationIncompleteCode)
+	}
+	if _, exists := results.SignalErrors["pii:legacy_pii"]; exists {
+		t.Fatalf("legacy PII scan unexpectedly reported an error: %#v", results.SignalErrors)
+	}
+}
+
 func TestEvaluatePIISignalReportsFailedToolResultScan(t *testing.T) {
 	classifier, _, mockModel := newTestPIIClassifier()
 	classifier.Config.PIIRules = []config.PIIRule{

@@ -25,6 +25,22 @@ type cachedPIIContent struct {
 	incomplete bool
 }
 
+// piiCacheKey keeps detector results isolated by the rule source. The same
+// bytes can be selected by a tool-result rule and a legacy prompt/history rule,
+// but those scans have different completeness guarantees: tool results are
+// request-budgeted while legacy content is not.
+type piiCacheKey struct {
+	source  string
+	content string
+}
+
+func piiCacheSource(source string) string {
+	if source == config.PIISourceToolResult {
+		return config.PIISourceToolResult
+	}
+	return "legacy"
+}
+
 const (
 	piiEvaluationIncompleteCode = "pii_evaluation_incomplete"
 	// A tool-result request can contain many independently chunked content
@@ -51,19 +67,16 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	// Step 1: Collect the union of unique content pieces selected by all PII
 	// rules. A source-scoped rule controls which request content enters the
 	// shared cache; this keeps tool-result scanning opt-in.
-	contentSeen := make(map[string]struct{})
-	toolResultContentSeen := make(map[string]struct{})
-	var uniqueContents []string
+	contentSeen := make(map[piiCacheKey]struct{})
+	var uniqueContents []piiCacheKey
 	for _, rule := range c.Config.PIIRules {
 		for _, content := range collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts) {
-			if rule.Source == config.PIISourceToolResult {
-				toolResultContentSeen[content] = struct{}{}
-			}
-			if _, ok := contentSeen[content]; ok {
+			key := piiCacheKey{source: piiCacheSource(rule.Source), content: content}
+			if _, ok := contentSeen[key]; ok {
 				continue
 			}
-			contentSeen[content] = struct{}{}
-			uniqueContents = append(uniqueContents, content)
+			contentSeen[key] = struct{}{}
+			uniqueContents = append(uniqueContents, key)
 		}
 	}
 
@@ -71,17 +84,16 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	// Entity types are returned as "LABEL_{class_id}" and translated by
 	// PIIMapping. Tool-result content uses a request-scoped inference budget;
 	// legacy prompt/history content retains its existing behavior.
-	piiCache := make(map[string]cachedPIIContent, len(uniqueContents))
+	piiCache := make(map[piiCacheKey]cachedPIIContent, len(uniqueContents))
 	toolResultBudget := piiToolResultScanBudget{remainingInferenceCalls: maxPIIToolResultInferenceCalls}
-	for _, content := range uniqueContents {
+	for _, key := range uniqueContents {
 		cached := cachedPIIContent{}
-		_, isToolResult := toolResultContentSeen[content]
-		if isToolResult {
+		if key.source == config.PIISourceToolResult {
 			// Tool results can be much larger than the request text and can
 			// contain thousands of blocks. Stream chunks directly into the
 			// bounded inference loop so the request does not first materialize
 			// every chunk in memory.
-			fullyScanned := forEachUniquePIISignalChunk(content, func(chunk string) bool {
+			fullyScanned := forEachUniquePIISignalChunk(key.content, func(chunk string) bool {
 				if !toolResultBudget.consumeInferenceCall() {
 					return false
 				}
@@ -91,14 +103,14 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 			})
 			cached.incomplete = !fullyScanned
 		} else {
-			chunks := piiSignalChunks(content)
+			chunks := piiSignalChunks(key.content)
 			cached.results = make([]cachedPIIResult, 0, len(chunks))
 			for _, chunk := range chunks {
 				tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)
 				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
 			}
 		}
-		piiCache[content] = cached
+		piiCache[key] = cached
 	}
 
 	// Step 3: Evaluate each rule concurrently using the cached token results.
@@ -124,7 +136,7 @@ func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResul
 	logging.Debugf("[Signal Computation] PII signal evaluation completed in %v", elapsed)
 }
 
-func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[string]cachedPIIContent, start time.Time, results *SignalResults, mu *sync.Mutex) {
+func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool, piiCache map[piiCacheKey]cachedPIIContent, start time.Time, results *SignalResults, mu *sync.Mutex) {
 	ruleContents := collectPIIRuleContentsForSource(rule, piiText, nonUserMessages, toolResultTexts)
 	if len(ruleContents) == 0 {
 		if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete {
@@ -133,7 +145,7 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		return
 	}
 
-	entityTypes, status := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Threshold, piiCache)
+	entityTypes, status := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Source, rule.Threshold, piiCache)
 	if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete && status == piiScanClean {
 		status = piiScanIncomplete
 	}

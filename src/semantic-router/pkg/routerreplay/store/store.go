@@ -93,7 +93,12 @@ type ToolTraceStep struct {
 	Text       string `json:"text,omitempty"`
 	ToolName   string `json:"tool_name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
-	Arguments  string `json:"arguments,omitempty"`
+	// Status preserves whether a tool result completed successfully after its
+	// payload has been removed from replay storage.
+	Status string `json:"status,omitempty"`
+	// ContentRedacted makes payload removal explicit to replay consumers.
+	ContentRedacted bool   `json:"content_redacted,omitempty"`
+	Arguments       string `json:"arguments,omitempty"`
 	// RawArguments preserves the original arguments JSON.
 	// Currently identical to Arguments because no normalization is performed,
 	// but retained for fidelity in case future processing diverges.

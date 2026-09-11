@@ -307,13 +307,13 @@ func collectPIIRuleContentsForSource(
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.
-func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName string, threshold float32, piiCache map[string]cachedPIIContent) (map[string]bool, piiScanStatus) {
+func (c *Classifier) collectPIIEntityTypes(ruleContents []string, ruleName, source string, threshold float32, piiCache map[piiCacheKey]cachedPIIContent) (map[string]bool, piiScanStatus) {
 	entityTypes := make(map[string]bool)
 	successCount := 0
 	failureCount := 0
 	incompleteCount := 0
 	for _, content := range ruleContents {
-		cachedContent, ok := piiCache[content]
+		cachedContent, ok := piiCache[piiCacheKey{source: piiCacheSource(source), content: content}]
 		if !ok {
 			logging.Errorf("[Signal Computation] PII rule %q: content missing from inference cache", ruleName)
 			failureCount++
