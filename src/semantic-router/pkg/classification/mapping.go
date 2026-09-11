@@ -115,7 +115,37 @@ func LoadPIIMapping(path string) (*PIIMapping, error) {
 		return nil, fmt.Errorf("failed to parse PII mapping JSON: %w", err)
 	}
 
+	// The same guard the jailbreak mapping carries: a configured label equal
+	// to the on_error: block sentinel (PIIClassificationErrorType) would make a
+	// genuine detection of that label indistinguishable from a classify
+	// failure, and the PII signal now decides error-driven matches on exactly
+	// that distinction. A remote token_spans.v1 backend can only return labels
+	// the mapping declares, so rejecting it here closes the wire path too.
+	if mapping.hasLabel(PIIClassificationErrorType) {
+		return nil, fmt.Errorf(
+			"PII mapping %s: label %q is reserved for the on_error: block sentinel and cannot be a configured label",
+			path, PIIClassificationErrorType)
+	}
+
 	return &mapping, nil
+}
+
+// hasLabel reports whether either direction of the mapping resolves the given
+// label. Both are probed because TranslatePIIType reads IdxToLabel while the
+// token_spans decoder builds its known set from LabelToIdx as well.
+func (pm *PIIMapping) hasLabel(label string) bool {
+	if pm == nil {
+		return false
+	}
+	if _, ok := pm.LabelToIdx[label]; ok {
+		return true
+	}
+	for _, known := range pm.IdxToLabel {
+		if known == label {
+			return true
+		}
+	}
+	return false
 }
 
 // LoadJailbreakMapping loads the jailbreak mapping from a JSON file

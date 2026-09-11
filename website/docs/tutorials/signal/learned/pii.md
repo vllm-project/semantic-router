@@ -66,9 +66,18 @@ outside the text, overlaps itself, carries an unknown or outside label, has a
 score out of range, has conflicting alias values, or when the body is not a span
 list. A declared `truncated_at` keeps the spans before the cut and marks the
 rest of the content as unscored. What a rejected or partial response does to a
-PII rule is `on_error`: `allow` (default) treats that content as not matching,
-`block` matches it as `classification_error`, so unverified text cannot pass as
-clean.
+PII rule is `on_error`: `allow` (default) treats the unread content as not
+matching, `block` matches it as `classification_error`, so unverified text
+cannot pass as clean.
+
+Spans returned before a declared cut are real detections under both policies. A
+rule that matched on one of them stays a genuine match even when the rest of
+its content was never read, so a decision using `rules.on_unknown: no_match`
+still sees it; only a match that exists solely because the scan failed is
+unknown to the decision engine. The detection API says the same thing with
+`scan_incomplete: true` beside its entities, so `has_pii: false` after a
+truncation reads as "nothing in the part that was read" rather than as a clean
+scan.
 
 ```yaml
 global:
