@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -62,5 +63,19 @@ func TestLegacyAdapterPartitionsSemanticEntriesByCompatibilityFingerprint(t *tes
 	}
 	if lookup("") {
 		t.Fatal("missing compatibility fingerprint must miss")
+	}
+}
+
+func TestSemanticPartitionKeyStaysWithinMilvusFieldWidth(t *testing.T) {
+	identity := CacheIdentity{
+		Partition: CachePartition{
+			Recipe:    strings.Repeat("r", 200),
+			Decision:  strings.Repeat("d", 200),
+			Namespace: strings.Repeat("n", 200),
+		},
+		CompatibilityFingerprint: strings.Repeat("f", 64),
+	}
+	if got := len(identity.SemanticPartitionKey()); got != 64 {
+		t.Fatalf("semantic partition key length = %d, want 64", got)
 	}
 }

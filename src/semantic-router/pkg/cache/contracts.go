@@ -65,7 +65,7 @@ type CacheIdentity struct {
 }
 
 func (i CacheIdentity) SemanticPartitionKey() string {
-	return joinPartitionParts(i.Partition.Key(), i.CompatibilityFingerprint)
+	return CombineFingerprints("semantic", i.Partition.Key(), i.CompatibilityFingerprint)
 }
 
 type TTLPolicy struct {
