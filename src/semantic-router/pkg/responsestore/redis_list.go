@@ -29,12 +29,19 @@ import (
 // mode — "none", "after", or "before" — [3] the cursor member, [4] the window
 // width in ranks.
 //
-// Replies with a status word, then the rank span the window covered, then
-// (member, witness) pairs. "missing" means the cursor is not a current member;
-// "empty" means nothing lies in the requested direction. The span is reported
-// because it is not always the requested width — a Before window clamps at
-// rank 0 — and the listing loop compares members returned against it to prove
-// the index exhausted.
+// Replies with a status word, an exhaustion flag, then (member, witness)
+// pairs. "missing" means the cursor is not a current member; "empty" means
+// nothing lies in the requested direction at all.
+//
+// The exhaustion flag is computed here rather than inferred in Go, because
+// the two directions prove it differently and only the script sees the rank
+// geometry. A forward window never clamps: it is exhausted when ZRANGE hands
+// back fewer members than asked for. A Before window is the reverse: every
+// rank in [0, cursor-1] exists, so it always comes back full, and the only
+// evidence that nothing precedes it is that its start clamped at rank 0.
+// Reporting the clamped span and comparing counts against it read that clamp
+// as a full window with more behind it, and a cursor near the start could
+// never return its few preceding responses.
 var readIndexWindowScript = redis.NewScript(`
 local ascending = ARGV[1] == "1"
 local mode = ARGV[2]
@@ -71,7 +78,13 @@ if ascending then
 else
 	members = redis.call("ZREVRANGE", KEYS[1], start, stop)
 end
-local result = {"ready", stop - start + 1}
+local exhausted
+if mode == "before" then
+	exhausted = start == 0
+else
+	exhausted = #members < width
+end
+local result = {"ready", exhausted and 1 or 0}
 for _, response_id in ipairs(members) do
 	table.insert(result, response_id)
 	table.insert(result, redis.call("HGET", KEYS[2], response_id) or "")
@@ -194,9 +207,10 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // too long to see past reports ErrIndexTraversalBlocked — never exhaustion.
 //
 // An underfilled page may only be returned once it is *proven* complete: the
-// window must have come back with fewer members than the rank span it covered,
-// which is the one observation that shows nothing lies beyond it. A full window
-// that underfills the page is evidence of the opposite, and widens instead.
+// window script must report the index exhausted in the direction being read —
+// a forward window that came back short, or a Before window that clamped at
+// rank 0. A full, unclamped window that underfills the page is evidence of the
+// opposite, and widens instead.
 //
 // No page is returned at all — full or proven complete — if any member of the
 // window could not be read. A Redis failure says nothing about whether that
@@ -253,10 +267,10 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 			continue
 		}
 
-		// Fewer members than ranks covered: nothing lies beyond this window, so
-		// whatever it yielded is the whole remainder. This is the only proof
-		// that lets an underfilled page be returned rather than widened.
-		if page.membersRead < page.window.width {
+		// The script proved nothing lies beyond this window, so whatever it
+		// yielded is the whole remainder. This is the only condition under
+		// which an underfilled page is returned rather than widened.
+		if page.window.exhausted {
 			return page.responses, nil
 		}
 
@@ -370,7 +384,6 @@ type collectedIndexedPage struct {
 	membershipsRemoved int
 
 	// membersRead is how many index members the window actually returned.
-	// Compared against window.width it is what proves directional exhaustion.
 	membersRead int
 
 	// readFailures counts members whose payload could not be read at all, as
@@ -599,16 +612,16 @@ func (s *RedisStore) listIndexedResponseIDs(
 	return decodeIndexWindow(result)
 }
 
-// decodeIndexWindow unpacks readIndexWindowScript's reply: a status word, the
-// rank span covered, then (member, witness) pairs.
+// decodeIndexWindow unpacks readIndexWindowScript's reply: a status word, an
+// exhaustion flag, then (member, witness) pairs.
 func decodeIndexWindow(result interface{}) ([]responseGenerationWitness, listWindowRead, error) {
 	items, ok := result.([]interface{})
 	if !ok || len(items) < 2 || len(items)%2 != 0 {
 		return nil, listWindowRead{}, fmt.Errorf("unexpected conversation index window result: %#v", result)
 	}
 	status, statusOK := items[0].(string)
-	width, widthOK := items[1].(int64)
-	if !statusOK || !widthOK {
+	exhausted, exhaustedOK := items[1].(int64)
+	if !statusOK || !exhaustedOK {
 		return nil, listWindowRead{}, fmt.Errorf("unexpected conversation index window header types %T/%T", items[0], items[1])
 	}
 
@@ -616,7 +629,7 @@ func decodeIndexWindow(result interface{}) ([]responseGenerationWitness, listWin
 	if err != nil {
 		return nil, listWindowRead{}, err
 	}
-	window := listWindowRead{resolution: resolution, width: int(width)}
+	window := listWindowRead{resolution: resolution, exhausted: exhausted == 1}
 
 	witnesses, err := decodeWindowMembers(items[2:])
 	return witnesses, window, err
@@ -649,17 +662,16 @@ func decodeWindowMembers(pairs []interface{}) ([]responseGenerationWitness, erro
 }
 
 // listWindowRead describes the bounded window one read actually covered: how
-// it resolved, and how many ranks it spanned.
+// it resolved, and whether the script proved that nothing lies beyond it in
+// the direction being read.
 //
-// The span is load-bearing rather than incidental. It is not always the
-// requested stride — a Before window clamps at rank 0 — so comparing members
-// returned against the stride would misread a clamped window as a short one.
-// Compared against the span, a short result is exactly the proof that nothing
-// lies beyond the window, which is the only condition under which an
-// underfilled page may be returned instead of widened.
+// Exhaustion is a fact about rank geometry that the script establishes and
+// Go only consumes — see readIndexWindowScript for why the two directions
+// prove it differently. It is the only condition under which an underfilled
+// page may be returned rather than widened.
 type listWindowRead struct {
 	resolution listWindowResolution
-	width      int
+	exhausted  bool
 }
 
 // listWindowResolution says why readIndexWindowScript did or did not produce
