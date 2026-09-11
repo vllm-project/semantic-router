@@ -668,6 +668,12 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text using the mmBERT-32K
+// feedback detector and returns the full probability distribution.
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierWithProbs("feedback", text)
+}
+
 // ClassifyMmBert32KPII detects PII entities in text
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cName := C.CString("pii")
@@ -710,6 +716,22 @@ func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 }
 
 func classifyWithClassifier(name, text string) (ClassResult, error) {
+	result, err := classifyWithClassifierResult(name, text, false)
+	if err != nil {
+		return ClassResult{Class: -1, Confidence: 0}, err
+	}
+
+	return ClassResult{
+		Class:      result.Class,
+		Confidence: result.Confidence,
+	}, nil
+}
+
+func classifyWithClassifierWithProbs(name, text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierResult(name, text, true)
+}
+
+func classifyWithClassifierResult(name, text string, includeProbabilities bool) (ClassResultWithProbs, error) {
 	cName := C.CString(name)
 	defer C.free(unsafe.Pointer(cName))
 	cText := C.CString(text)
@@ -719,14 +741,24 @@ func classifyWithClassifier(name, text string) (ClassResult, error) {
 	status := C.classify_text(cName, cText, &result)
 
 	if status != 0 || result.error {
-		return ClassResult{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
+		return ClassResultWithProbs{Class: -1, Confidence: 0}, fmt.Errorf("%s classification failed", name)
 	}
 
 	defer C.free_classification_result(&result)
 
-	return ClassResult{
-		Class:      int(result.class_id),
-		Confidence: float32(result.confidence),
+	var probabilities []float32
+	if includeProbabilities && result.probabilities != nil && result.num_classes > 0 {
+		probabilities = make([]float32, int(result.num_classes))
+		cProbabilities := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, probability := range cProbabilities {
+			probabilities[i] = float32(probability)
+		}
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class_id),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
 	}, nil
 }
 
@@ -1066,6 +1098,12 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies text for feedback detection
 func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyFeedbackTextWithProbs classifies text for feedback detection and
+// returns the full probability distribution.
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	return classifyWithClassifierWithProbs("feedback", text)
 }
 
 // ============================================================================
