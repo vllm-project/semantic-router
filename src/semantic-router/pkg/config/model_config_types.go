@@ -304,7 +304,7 @@ type HallucinationModelConfig struct {
 	MinSpanLength          int     `yaml:"min_span_length,omitempty"`
 	MinSpanConfidence      float32 `yaml:"min_span_confidence,omitempty"`
 	ContextWindowSize      int     `yaml:"context_window_size,omitempty"`
-	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering,omitempty"`
+	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering"`
 	NLIEntailmentThreshold float32 `yaml:"nli_entailment_threshold,omitempty"`
 }
 

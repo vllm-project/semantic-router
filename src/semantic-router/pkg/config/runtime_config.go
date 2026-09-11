@@ -215,7 +215,7 @@ type ResponseCacheStoreConfig struct {
 	Enabled             bool          `yaml:"enabled"`
 	SimilarityThreshold *float32      `yaml:"similarity_threshold,omitempty"`
 	MaxEntries          int           `yaml:"max_entries,omitempty"`
-	TTLSeconds          int           `yaml:"ttl_seconds,omitempty"`
+	TTLSeconds          int           `yaml:"ttl_seconds"`
 	EvictionPolicy      string        `yaml:"eviction_policy,omitempty"`
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
 	Valkey              *ValkeyConfig `yaml:"valkey,omitempty"`
@@ -385,7 +385,7 @@ type ResponseAPIRedisConfig struct {
 type RouterReplayConfig struct {
 	Enabled      bool                        `json:"enabled" yaml:"enabled"`
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
-	TTLSeconds   int                         `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
+	TTLSeconds   int                         `json:"ttl_seconds" yaml:"ttl_seconds"`
 	AsyncWrites  bool                        `json:"async_writes,omitempty" yaml:"async_writes,omitempty"`
 	Redis        *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
 	Postgres     *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
