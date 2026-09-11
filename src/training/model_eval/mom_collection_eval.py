@@ -31,7 +31,6 @@ import re
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,7 +38,6 @@ import requests
 import seaborn as sns
 import torch
 from datasets import Dataset, load_dataset
-from transformers import AutoConfig
 from peft import PeftModel
 from seqeval.metrics import accuracy_score as seqe_accuracy_score
 from seqeval.metrics import classification_report as seq_classification_report
@@ -52,8 +50,6 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 from transformers import (
-    AutoModelForSequenceClassification,
-    AutoModelForTokenClassification,
     AutoTokenizer,
     ModernBertConfig,
     ModernBertForSequenceClassification,
@@ -65,7 +61,6 @@ try:
 except ImportError:
     from constants import BASE_MODEL_ID, LANGUAGE_CODES, MODEL_REGISTRY
 import warnings
-from sklearn.metrics._classification import _check_targets
 
 # suppress prf warnings
 warnings.filterwarnings(
@@ -212,7 +207,7 @@ def load_eval_data(model_name: str, args) -> Dataset:
             for split in ["test", "validation", "eval", "train"]:
                 try:
                     ds = retry_operation(
-                        lambda: load_custom_ds(split),
+                        lambda split=split: load_custom_ds(split),
                         max_retries=args.max_retries,
                     )
                     logger.info(
@@ -281,7 +276,7 @@ def load_eval_data(model_name: str, args) -> Dataset:
             ds = ds.filter(lambda x: x["category"] in config["labels"])
             if args.limit:
                 ds = ds.select(range(min(len(ds), args.limit)))
-            l2id = {l: i for i, l in enumerate(config["labels"])}
+            l2id = {label: i for i, label in enumerate(config["labels"])}
             ds = ds.map(lambda x: {"label": l2id[x["category"]]})
             ds = ds.rename_column("question", "text")
             return ds
@@ -340,7 +335,7 @@ def load_eval_data(model_name: str, args) -> Dataset:
                 ds = ds.remove_columns(["label"])
             ds = ds.rename_column(config["label_col"], "label")
 
-        label2id = {l: i for i, l in enumerate(config["labels"])}
+        label2id = {label: i for i, label in enumerate(config["labels"])}
 
         def map_to_int(example):
             label = example["label"]
@@ -391,8 +386,8 @@ def load_model_and_tokenizer(model_name: str, args):
 
         # Build config from base model
         clean_labels = config_reg["labels"]
-        id2label = {i: str(l) for i, l in enumerate(clean_labels)}
-        label2id = {str(l): i for i, l in enumerate(clean_labels)}
+        id2label = {i: str(label) for i, label in enumerate(clean_labels)}
+        label2id = {str(label): i for i, label in enumerate(clean_labels)}
 
         hf_config = ModernBertConfig.from_pretrained(
             BASE_MODEL_ID,
@@ -424,7 +419,18 @@ def load_model_and_tokenizer(model_name: str, args):
         raise
 
 
-def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
+def batch_row_count(batch: dict) -> int:
+    """Return the number of rows in a slice of a HuggingFace ``Dataset``.
+
+    Slicing a ``Dataset`` gives back a dict of column name -> list of values,
+    not a list of rows, so ``len(batch)`` is the column count. Every column
+    carries one entry per row, so any column's length is the row count. This
+    also gives the right answer for a short final batch.
+    """
+    return len(next(iter(batch.values())))
+
+
+def evaluate_single_model(model_name: str, args) -> tuple[str, dict]:
     """Evaluate a single model with comprehensive error handling."""
     config = MODEL_REGISTRY[model_name]
     logger = logging.getLogger("MoMEval")
@@ -472,7 +478,7 @@ def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
                         pred_ids = torch.argmax(out.logits, dim=-1).cpu().tolist()
 
                     for idx, (p_seq, true_labels) in enumerate(
-                        zip(pred_ids, batch["labels"])
+                        zip(pred_ids, batch["labels"], strict=False)
                     ):
                         word_ids = inputs.word_ids(batch_index=idx)
                         p_labels = []
@@ -494,14 +500,12 @@ def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
                             logger.warning(
                                 f"Length mismatch sample {i+idx}: pred={len(p_labels)}, gt={len(true_labels)} → truncating"
                             )
-                        p_labels = p_labels[:min_len]
-                        true_labels = true_labels[:min_len]
-
-                        all_preds.append(p_labels)
-                        all_truths.append(true_labels)
+                        all_preds.append(p_labels[:min_len])
+                        all_truths.append(true_labels[:min_len])
 
                 batch_time = (time.time() - start) * 1000
-                lats.extend([batch_time / len(batch)] * len(batch))
+                rows = batch_row_count(batch)
+                lats.extend([batch_time / rows] * rows)
 
             except torch.cuda.OutOfMemoryError:
                 logger.error(
@@ -532,7 +536,7 @@ def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
         if config["type"] == "text_classification":
             unique_labels = sorted(set(all_truths) | set(all_preds))
             stats["accuracy"] = float(accuracy_score(all_truths, all_preds))
-            p, r, f1, sup = precision_recall_fscore_support(
+            p, r, f1, _sup = precision_recall_fscore_support(
                 all_truths,
                 all_preds,
                 labels=unique_labels,
@@ -558,7 +562,7 @@ def evaluate_single_model(model_name: str, args) -> Tuple[str, Dict]:
         else:
             # Align sequence lengths
             aligned_t, aligned_p = [], []
-            for t, p in zip(all_truths, all_preds):
+            for t, p in zip(all_truths, all_preds, strict=False):
                 m_len = min(len(t), len(p))
                 aligned_t.append(t[:m_len])
                 aligned_p.append(p[:m_len])

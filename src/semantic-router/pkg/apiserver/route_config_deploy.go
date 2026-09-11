@@ -52,6 +52,10 @@ type RouterConfigUpdateRequest struct {
 	DSL string `json:"dsl,omitempty"`
 }
 
+type routerConfigRollbackRequest struct {
+	Version string `json:"version"`
+}
+
 // RouterConfigUpdateResponse is the JSON response for a router config mutation.
 type RouterConfigUpdateResponse struct {
 	Status        string `json:"status"`
@@ -259,9 +263,7 @@ func (s *ClassificationAPIServer) syncRollbackRuntime(
 }
 
 func (s *ClassificationAPIServer) parseRollbackVersion(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var req struct {
-		Version string `json:"version"`
-	}
+	var req routerConfigRollbackRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return "", false

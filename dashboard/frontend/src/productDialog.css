@@ -1,6 +1,6 @@
 /* Shared material and interaction contract for every product dialog. */
 :root {
-  --product-dialog-content-width: 980px;
+  --product-dialog-content-width: 1120px;
   --product-dialog-border: rgba(255, 255, 255, 0.72);
   --product-dialog-overlay: rgba(3, 3, 4, 0.48);
   --product-dialog-surface:
@@ -57,6 +57,21 @@
   border-radius: 9px;
   background-color: rgba(9, 10, 12, 0.82);
   color: rgba(255, 255, 255, 0.9);
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true'] select {
+  appearance: none;
+  color-scheme: dark;
+  padding-right: 2.35rem !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.75rem center !important;
+  background-size: 0.9rem !important;
+}
+
+:where([role='dialog'], [role='alertdialog'])[aria-modal='true'] select :where(option, optgroup) {
+  background: #111216;
+  color: #f5f5f7;
 }
 
 :where([role='dialog'], [role='alertdialog'])[aria-modal='true']
