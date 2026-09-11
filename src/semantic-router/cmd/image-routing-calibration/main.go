@@ -236,7 +236,7 @@ func main() {
 		fatal("calibration set: %v", err)
 	}
 	rules := loadRules(rulesReal)
-	if err := validateRules(rules); err != nil {
+	if err = validateRules(rules); err != nil {
 		fatal("rules: %v", err)
 	}
 	set := loadSet(casesReal, rules)
@@ -248,10 +248,10 @@ func main() {
 		inputs = append(inputs, label.ImageFile)
 	}
 	inputs = append(inputs, casesRel, rulesRel)
-	if err := bindToCommit(*fixtureRoot, inputs); err != nil {
+	if err = bindToCommit(*fixtureRoot, inputs); err != nil {
 		fatal("%v", err)
 	}
-	if err := candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
+	if err = candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
 		fatal("initialize multimodal model: %v", err)
 	}
 	classifier, err := classification.NewEmbeddingClassifier(rules, config.HNSWConfig{
@@ -482,7 +482,7 @@ func resolveInput(root, path string) (realPath, repoRel string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("resolve repository root %q: %w", root, err)
 	}
-	realPath, err = filepath.EvalSymlinks(absolutePath(path))
+	realPath, err = filepath.EvalSymlinks(uncleanedAbsolute(path))
 	if err != nil {
 		return "", "", fmt.Errorf("resolve %q: %w", path, err)
 	}
@@ -900,6 +900,21 @@ func absolutePath(path string) string {
 		fatal("resolve %q: %v", path, err)
 	}
 	return resolved
+}
+
+// uncleanedAbsolute anchors a relative path to the working directory
+// WITHOUT lexical cleaning, so filepath.EvalSymlinks sees "alias/.." as
+// written and resolves alias before applying "..": filepath.Abs would drop
+// the pair first and hide a symlink that leaves the checkout.
+func uncleanedAbsolute(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		fatal("working directory: %v", err)
+	}
+	return cwd + string(filepath.Separator) + path
 }
 
 func fileSHA(path string) string {
