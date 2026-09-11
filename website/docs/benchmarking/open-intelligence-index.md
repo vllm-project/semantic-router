@@ -19,7 +19,7 @@ Intelligence 1.0
 │   └── MMLU-Pro           100%
 ├── Reasoning               40%
 │   ├── GPQA Diamond        50%
-│   └── Humanity's Last Exam 50%
+│   └── HLE 1.0 text-only   50%
 ├── Coding                  20%
 │   ├── LiveCodeBench v6    50%
 │   └── SciCode             50%
@@ -31,7 +31,7 @@ Intelligence 1.0
 | --- | --- | --- | --- |
 | General | MMLU-Pro | Accuracy | [repository](https://github.com/TIGER-AI-Lab/MMLU-Pro) · [paper](https://arxiv.org/abs/2406.01574) · [data](https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro) |
 | Reasoning | GPQA Diamond | Accuracy | [repository](https://github.com/idavidrein/gpqa) · [paper](https://arxiv.org/abs/2311.12022) · [data](https://huggingface.co/datasets/idavidrein/gpqa) |
-| Reasoning | Humanity's Last Exam | Accuracy, no tools | [repository](https://github.com/centerforaisafety/HLE) · [paper](https://arxiv.org/abs/2501.14249) · [data](https://huggingface.co/datasets/cais/hle) |
+| Reasoning | HLE 1.0 text-only | Accuracy over the frozen 2,158-question text-only subset | [repository](https://github.com/centerforaisafety/HLE) · [paper](https://arxiv.org/abs/2501.14249) · [data](https://huggingface.co/datasets/cais/hle) |
 | Coding | LiveCodeBench v6 | Pass@1, code generation | [repository](https://github.com/LiveCodeBench/LiveCodeBench) · [paper](https://arxiv.org/abs/2403.07974) · [data](https://huggingface.co/datasets/livecodebench/code_generation_lite) |
 | Coding | SciCode | Executable subproblem score | [repository](https://github.com/scicode-bench/SciCode) · [paper](https://arxiv.org/abs/2407.13168) · [data](https://huggingface.co/datasets/SciCode1/SciCode) |
 | Agentic | Terminal-Bench 2.1 | Resolved rate | [tasks](https://github.com/harbor-framework/terminal-bench-2) · [dataset](https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1) · [runner](https://github.com/harbor-framework/harbor) |
@@ -40,6 +40,9 @@ The benchmark inputs, runners, and scoring paths are public. Every admitted
 record still identifies the exact version, profile, model checkpoint, reasoning
 effort, harness, tools, run conditions, date, and source. Agentic results compare
 frozen model-and-agent systems, not model names in isolation.
+For HLE, a published `no-tools` label does not establish that multimodal items
+were excluded. Those records stay visible but only explicit runs over the frozen
+2,158 text-only questions enter Intelligence 1.0.
 
 ## Score and missing data
 

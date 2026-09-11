@@ -63,16 +63,15 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
 
-	if req.Options == nil {
-		req.Options = &services.IntentOptions{}
-	}
-	req.Options.EvaluateAllSignals = true
 	if r.URL.Query().Get("trace") == "true" {
+		if req.Options == nil {
+			req.Options = &services.IntentOptions{}
+		}
 		req.Options.Trace = true
 	}
 	response, err := s.classificationSvc.ClassifyIntentForEval(r.Context(), req)

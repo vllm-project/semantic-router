@@ -145,7 +145,7 @@ func closeReplayRecorders(
 // Ensure OpenAIRouter implements the ext_proc calls.
 var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
-const routerReplayAPIBasePath = "/v1/router_replay"
+const routerReplayAPIBasePath = "/api/v1/observability/replays"
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON
 // body. When responsePath is non-empty, the v0.4 keystone headers

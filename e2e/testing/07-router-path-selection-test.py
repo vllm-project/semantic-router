@@ -23,10 +23,9 @@ PREREQUISITES:
 NOTE: For full Envoy/ExtProc routing stack tests, see 08-envoy-routing-test.py
 """
 
-import json
-import sys
 import time
 import unittest
+from http import HTTPStatus
 
 import requests
 
@@ -35,9 +34,12 @@ from test_base import SemanticRouterTestBase
 
 # Constants
 CLASSIFICATION_API_URL = "http://localhost:8080"  # Direct classifier API
-INTENT_ENDPOINT = "/api/v1/classify/intent"
-BATCH_ENDPOINT = "/api/v1/classify/batch"
+INTENT_ENDPOINT = "/api/v1/diagnostics/classify/intent"
+BATCH_ENDPOINT = "/api/v1/diagnostics/classify/batch"
 ROUTER_METRICS_URL = "http://localhost:9190/metrics"
+FAST_BATCH_TARGET_MS = 100
+EFFICIENT_BATCH_TARGET_MS = 150
+PARALLEL_TARGET_MS = 200
 
 # Test queries for classification
 TEST_QUERIES = [
@@ -68,7 +70,7 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
                 f"{CLASSIFICATION_API_URL}/health", timeout=5
             )
 
-            if health_response.status_code != 200:
+            if health_response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     f"Classification API health check failed: {health_response.status_code}"
                 )
@@ -85,7 +87,7 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
         # Check router metrics
         try:
             metrics_response = requests.get(ROUTER_METRICS_URL, timeout=2)
-            if metrics_response.status_code != 200:
+            if metrics_response.status_code != HTTPStatus.OK:
                 self.skipTest("Router metrics endpoint not responding")
 
             self.print_response_info(metrics_response, {"Service": "Router Metrics"})
@@ -137,7 +139,7 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
             },
         )
 
-        passed = response.status_code == 200 and category != "unknown"
+        passed = response.status_code == HTTPStatus.OK and category != "unknown"
         self.print_test_result(
             passed=passed,
             message=f"Single task processed successfully in {elapsed_ms:.1f}ms",
@@ -174,7 +176,6 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
 
         response_json = response.json()
         results = response_json.get("results", [])
-        total_count = response_json.get("total_count", 0)
 
         # Calculate per-item latency
         per_item_latency = elapsed_ms / len(batch_queries) if batch_queries else 0
@@ -187,14 +188,16 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
                 "Total Latency (ms)": f"{elapsed_ms:.1f}",
                 "Per-Item Latency (ms)": f"{per_item_latency:.1f}",
                 "Expected Path": "LoRA (batch ≥4)",
-                "Parallel Efficiency": "✅" if per_item_latency < 100 else "⚠️",
+                "Parallel Efficiency": (
+                    "✅" if per_item_latency < FAST_BATCH_TARGET_MS else "⚠️"
+                ),
             },
         )
 
         passed = (
-            response.status_code == 200
+            response.status_code == HTTPStatus.OK
             and len(results) == len(batch_queries)
-            and per_item_latency < 150  # Should be efficient
+            and per_item_latency < EFFICIENT_BATCH_TARGET_MS
         )
 
         self.print_test_result(
@@ -250,11 +253,13 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
                 "Tasks": "Multiple (intent+PII+security)",
                 "Total Latency (ms)": f"{elapsed_ms:.1f}",
                 "Expected Path": "LoRA (multi-task parallel)",
-                "Parallel Processing": "✅" if elapsed_ms < 200 else "⚠️",
+                "Parallel Processing": (
+                    "✅" if elapsed_ms < PARALLEL_TARGET_MS else "⚠️"
+                ),
             },
         )
 
-        passed = response.status_code == 200 and len(results) > 0
+        passed = response.status_code == HTTPStatus.OK and len(results) > 0
 
         self.print_test_result(
             passed=passed,
@@ -329,10 +334,13 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
         print(f"  LoRA Path: {large_per_item:.1f}ms per item")
         print(f"  Efficiency Gain: {efficiency_gain_pct:+.1f}%")
         print(
-            f"  Expected: LoRA should be faster for larger batches (parallel processing)"
+            "  Expected: LoRA should be faster for larger batches (parallel processing)"
         )
 
-        passed = small_response.status_code == 200 and large_response.status_code == 200
+        passed = (
+            small_response.status_code == HTTPStatus.OK
+            and large_response.status_code == HTTPStatus.OK
+        )
 
         self.print_test_result(
             passed=passed,
@@ -363,7 +371,7 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
         metrics_indicators = {
             "Unified Classifier Metrics": has_unified_metrics,
             "Batch Classification Metrics": has_batch_classification,
-            "Metrics Endpoint": response.status_code == 200,
+            "Metrics Endpoint": response.status_code == HTTPStatus.OK,
         }
 
         self.print_response_info(
@@ -388,7 +396,7 @@ class RouterPathSelectionTest(SemanticRouterTestBase):
         category = classification.get("category", "unknown")
 
         successful_classification = (
-            classify_response.status_code == 200 and category != "unknown"
+            classify_response.status_code == HTTPStatus.OK and category != "unknown"
         )
 
         print("\n✅ LoRA Model Loading Verification:")

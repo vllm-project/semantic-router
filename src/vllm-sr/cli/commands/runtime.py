@@ -14,7 +14,7 @@ from cli.bootstrap import (
 )
 from cli.commands.common import exit_with_logged_error
 from cli.commands.runtime_config_mutation import (
-    ALGORITHM_TYPES,
+    ALGORITHM_OVERRIDE_TYPES,
 )
 from cli.commands.runtime_config_mutation import (
     inject_algorithm_into_config as _inject_algorithm_into_config,
@@ -322,11 +322,14 @@ def _execute_serve(
 )
 @click.option(
     "--algorithm",
-    type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
+    type=click.Choice(ALGORITHM_OVERRIDE_TYPES, case_sensitive=False),
     default=None,
-    help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
-    "workflows, latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
-    "Cross-request learning uses global.router.learning.adaptation/protection.",
+    help=(
+        "Request-time base algorithm override for payload-safe algorithms: "
+        f"{', '.join(ALGORITHM_OVERRIDE_TYPES)}. Algorithms that require an "
+        "authored payload remain available in config.yaml. Cross-request learning "
+        "uses global.router.learning.adaptation/protection."
+    ),
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(

@@ -8,18 +8,45 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
+// CanonicalConfigVersion identifies the steady-state public configuration
+// contract accepted by the Router and published through configschema.
+const CanonicalConfigVersion = "v0.3"
+
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version     string                `yaml:"version,omitempty"`
-	Listeners   []Listener            `yaml:"listeners,omitempty"`
-	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
-	Evaluation  *CanonicalEvaluation  `yaml:"evaluation,omitempty"`
-	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	// Version selects the canonical configuration contract understood by the Router.
+	Version string `yaml:"version,omitempty"`
+	// Listeners expose named public request entry points through Envoy.
+	Listeners []Listener `yaml:"listeners,omitempty"`
+	// Providers define model endpoints, credentials, and provider defaults.
+	Providers CanonicalProviders `yaml:"providers,omitempty"`
+	// Evaluation defines operator-owned benchmarks, indices, and model measurements.
+	Evaluation *CanonicalEvaluation `yaml:"evaluation,omitempty"`
+	// Routing contains model cards, signals, projections, decisions, and routing strategy.
+	Routing CanonicalRouting `yaml:"routing,omitempty"`
+	// Entrypoints map public model names to isolated routing recipes.
 	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
-	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
+	// Recipes package the routing policy and plugins used by an entrypoint.
+	Recipes []CanonicalRecipe `yaml:"recipes,omitempty"`
+	// Global contains shared Router services, model assets, learning, and protection settings.
+	Global *CanonicalGlobal `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
+}
+
+// CanonicalConfigDocument is the complete product configuration document. Its
+// canonical Router payload is embedded so every consumer shares the same Go
+// field contract, while setup remains explicit control-plane metadata rather
+// than Router runtime state.
+type CanonicalConfigDocument struct {
+	CanonicalConfig `yaml:",inline"`
+	Setup           *CanonicalSetup `yaml:"setup,omitempty"`
+}
+
+// CanonicalSetup is the product bootstrap state. The Dashboard removes this
+// block when setup is activated.
+type CanonicalSetup struct {
+	Mode bool `yaml:"mode,omitempty"`
 }
 
 // CanonicalEvaluation is the single operator-owned evaluation surface. It
@@ -198,8 +225,8 @@ func validateCanonicalVersion(canonical *CanonicalConfig) error {
 	if canonical == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
-	if canonical.Version != "" && canonical.Version != "v0.3" {
-		return fmt.Errorf("unsupported config version %q: v0.3 is required", canonical.Version)
+	if canonical.Version != "" && canonical.Version != CanonicalConfigVersion {
+		return fmt.Errorf("unsupported config version %q: %s is required", canonical.Version, CanonicalConfigVersion)
 	}
 	return nil
 }

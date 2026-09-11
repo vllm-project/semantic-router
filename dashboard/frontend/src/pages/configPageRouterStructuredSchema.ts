@@ -1,6 +1,6 @@
 import type { EditFormData } from '../components/EditModal'
 import { EMBEDDING_MODELS_STRUCTURED_FIELDS } from './configPageEmbeddingStructuredSchema'
-import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
+import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import {
   boolean,
   number,
@@ -207,6 +207,60 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
         enabled: boolean('Enabled'),
         max_bytes: number('Max Bytes', { min: 1 }),
         timeout_sec: number('Timeout Seconds', { min: 0 }),
+      }),
+    },
+    skip_processing: {
+      label: 'Skip Processing Header',
+      description:
+        'Allow callers to opt out of semantic-router processing with the supported header.',
+      schema: object('Skip Processing Header', {
+        enabled: boolean('Enabled'),
+      }),
+    },
+  },
+  learning: {
+    adaptation: {
+      label: 'Online Adaptation',
+      description: 'How online evidence updates model selection.',
+      schema: object('Online Adaptation', {
+        enabled: boolean('Enabled'),
+        candidate_set: select('Candidate Set', ['decision', 'tier', 'global']),
+        strategy: text('Strategy'),
+      }),
+    },
+    protection: {
+      label: 'Model-switch Protection',
+      description: 'Identity and stability controls that protect multi-turn continuity.',
+      schema: object('Model-switch Protection', {
+        enabled: boolean('Enabled'),
+        scope: select('Scope', ['conversation', 'session']),
+        identity: object('Identity', {
+          headers: object('Headers', {
+            session: text('Session Header'),
+            conversation: text('Conversation Header'),
+          }),
+        }),
+        tuning: object('Tuning', {
+          idle_timeout_seconds: number('Idle Timeout Seconds', { min: 0 }),
+          min_turns_before_switch: number('Minimum Turns Before Switch', { min: 0 }),
+          switch_margin: number('Switch Margin', { min: 0 }),
+          stability_weight: number('Stability Weight', { min: 0 }),
+        }),
+      }),
+    },
+    state_store: {
+      label: 'Learning State Store',
+      description: 'Shared state used to enforce protection across router replicas.',
+      schema: object('Learning State Store', {
+        backend: select('Backend', ['local', 'redis']),
+        ttl_seconds: number('TTL Seconds', { min: 0 }),
+        timeout_ms: number('Timeout Milliseconds', { min: 0 }),
+        redis: object('Redis', {
+          address: text('Address'),
+          password: password('Password'),
+          database: number('Database', { min: 0 }),
+          key_prefix: text('Key Prefix'),
+        }),
       }),
     },
   },
@@ -694,6 +748,8 @@ export function normalizeRouterStructuredValue(
       }
       return { ...record }
     }
+    case 'json':
+      return value
     case 'object': {
       const record = asRecord(value)
       if (!record) throw new Error(`${path} must be an object.`)
