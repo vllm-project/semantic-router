@@ -155,6 +155,25 @@ func TestComposeAttemptOutputTokenLimitStageCannotWidenClient(t *testing.T) {
 	}
 }
 
+func TestComposeAttemptOutputTokenLimitOmitsInheritedStageBound(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	modelLimit := 1024
+	result := composeAttemptOutputTokenLimit(
+		&Request{
+			OriginalRequest: original,
+			ModelRefs: []config.ModelRef{{
+				Model:               "model-a",
+				MaxCompletionTokens: &modelLimit,
+			}},
+		},
+		cloneRequest(original),
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 256 || result.Source != "client" {
+		t.Fatalf("compose = %+v, want client 256 without inherited stage", result)
+	}
+}
+
 func TestBoundExecutionTracePreservesDroppedUsage(t *testing.T) {
 	trace := ExecutionTrace{Version: ExecutionTraceVersion, Algorithm: "confidence"}
 	for ordinal := 1; ordinal <= maxTraceAttempts+1; ordinal++ {

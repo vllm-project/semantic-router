@@ -220,6 +220,37 @@ func TestPrepareProviderDispatchDoesNotReapplyLooperReasoning(t *testing.T) {
 	}
 }
 
+func TestPrepareProviderDispatchBlockedLooperClientLetsModelRefWin(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	decision := outputTokenRequestParamsDecision(t, model, map[string]interface{}{
+		"blocked_params": []string{"max_tokens"},
+	})
+	tokens := 1024
+	decision.ModelRefs[0].MaxCompletionTokens = &tokens
+	request := testNeutralRequest(model, "hello")
+	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.LooperRequest = true
+	ctx.Headers[headers.VSRLooperClientMaxOutputTokens] = "256"
+	ctx.ClientMaxOutputTokens = llmprotocol.Int64(256)
+	ctx.VSRSelectedDecision = decision
+
+	parseLooperOutputTokenBoundHeaders(ctx)
+	if ctx.AlgorithmStageMaxOutputTokens != nil {
+		t.Fatalf("missing stage header must not populate AlgorithmStage, got %v", ctx.AlgorithmStageMaxOutputTokens)
+	}
+
+	if _, err := router.prepareProviderDispatch(request, model, decision.Name, false, ctx); err != nil {
+		t.Fatalf("prepareProviderDispatch: %v", err)
+	}
+	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 1024 {
+		t.Fatalf("MaxOutputTokens = %v, want model_ref 1024 after blocked client", request.Sampling.MaxOutputTokens)
+	}
+	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
+		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
+	}
+}
+
 func TestParseLooperOutputTokenBoundHeaders(t *testing.T) {
 	ctx := &RequestContext{
 		LooperRequest: true,

@@ -6297,6 +6297,62 @@ func TestExplicitModelListRoundTripOmitsModelDirective(t *testing.T) {
 	}
 }
 
+func TestCandidateIterationCoverageKeepsDifferingMaxCompletionTokens(t *testing.T) {
+	routeLimit := 100
+	iterLimit := 200
+	useReasoning := false
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:     "switch_gate",
+				Priority: 1,
+				ModelRefs: []config.ModelRef{{
+					Model:                 "a",
+					MaxCompletionTokens:   &routeLimit,
+					ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning},
+				}},
+				CandidateIterations: []config.CandidateIterationConfig{{
+					Variable: "candidate",
+					Source:   "models",
+					Models: []config.ModelRef{{
+						Model:                 "a",
+						MaxCompletionTokens:   &iterLimit,
+						ModelReasoningControl: config.ModelReasoningControl{UseReasoning: &useReasoning},
+					}},
+					Outputs: []config.CandidateIterationOutputConfig{{
+						Type:  "model",
+						Value: "candidate",
+					}},
+				}},
+			}},
+		},
+	}
+
+	if candidateIterationsCoverModelRefs(cfg.Decisions[0]) {
+		t.Fatal("iteration with a different max_completion_tokens must not cover ModelRefs")
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, `MODEL "a"`) {
+		t.Fatalf("decompiled DSL dropped MODEL despite differing max_completion_tokens:\n%s", dslText)
+	}
+	if !strings.Contains(dslText, "max_completion_tokens = 100") {
+		t.Fatalf("decompiled DSL omitted route max_completion_tokens:\n%s", dslText)
+	}
+
+	recompiled, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
+	}
+	tokens := recompiled.Decisions[0].ModelRefs[0].MaxCompletionTokens
+	if tokens == nil || *tokens != 100 {
+		t.Fatalf("recompiled max_completion_tokens = %v, want 100", tokens)
+	}
+}
+
 func TestValidateContextOpenEndedRangeOverlapWarns(t *testing.T) {
 	input := `
 SIGNAL context short_context {

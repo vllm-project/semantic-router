@@ -154,3 +154,22 @@ func TestAttachOutputTokenBoundsSnapshotsClientAndStage(t *testing.T) {
 		t.Fatalf("stage bound = %v, want 64", options.StageMaxOutputTokens)
 	}
 }
+
+func TestAttachOutputTokenBoundsOmitsInheritedClientLimit(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	cloned := cloneRequest(original)
+	options := CallOptions{}
+	attachOutputTokenBounds(&options, &Request{OriginalRequest: original}, cloned)
+	if options.ClientMaxOutputTokens == nil || *options.ClientMaxOutputTokens != 256 {
+		t.Fatalf("client bound = %v, want 256", options.ClientMaxOutputTokens)
+	}
+	if options.StageMaxOutputTokens != nil {
+		t.Fatalf("inherited client limit must not be labeled as a stage bound, got %v", options.StageMaxOutputTokens)
+	}
+
+	sameRequest := CallOptions{}
+	attachOutputTokenBounds(&sameRequest, &Request{OriginalRequest: original}, original)
+	if sameRequest.StageMaxOutputTokens != nil {
+		t.Fatalf("same-pointer stage request must not set a stage bound, got %v", sameRequest.StageMaxOutputTokens)
+	}
+}

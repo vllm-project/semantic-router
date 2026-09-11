@@ -269,12 +269,31 @@ func attachOutputTokenBounds(options *CallOptions, req *Request, stageReq *opena
 	if options == nil {
 		return
 	}
-	if options.ClientMaxOutputTokens == nil && req != nil {
-		options.ClientMaxOutputTokens = chatParamsMaxOutputTokens(req.OriginalRequest)
+	var original *openai.ChatCompletionNewParams
+	if req != nil {
+		original = req.OriginalRequest
+		if options.ClientMaxOutputTokens == nil {
+			options.ClientMaxOutputTokens = chatParamsMaxOutputTokens(original)
+		}
 	}
 	if options.StageMaxOutputTokens == nil {
-		options.StageMaxOutputTokens = chatParamsMaxOutputTokens(stageReq)
+		options.StageMaxOutputTokens = stageOverrideMaxOutputTokens(original, stageReq)
 	}
+}
+
+func stageOverrideMaxOutputTokens(
+	original *openai.ChatCompletionNewParams,
+	stage *openai.ChatCompletionNewParams,
+) *int64 {
+	stageBound := chatParamsMaxOutputTokens(stage)
+	if stageBound == nil {
+		return nil
+	}
+	clientBound := chatParamsMaxOutputTokens(original)
+	if clientBound != nil && *clientBound == *stageBound {
+		return nil
+	}
+	return stageBound
 }
 
 func chatParamsMaxOutputTokens(req *openai.ChatCompletionNewParams) *int64 {

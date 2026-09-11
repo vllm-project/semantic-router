@@ -82,12 +82,16 @@ func candidateIterationsCoverModelRefs(dec config.Decision) bool {
 		return false
 	}
 	for i := range dec.ModelRefs {
-		if dec.ModelRefs[i].Model != iter.Models[i].Model ||
-			dec.ModelRefs[i].LoRAName != iter.Models[i].LoRAName {
+		if !modelRefCoverageEqual(dec.ModelRefs[i], iter.Models[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func modelRefCoverageEqual(left, right config.ModelRef) bool {
+	return left.Model == right.Model &&
+		candidateIterationModelRefOptions(&left) == candidateIterationModelRefOptions(&right)
 }
 
 func decompileRuleNode(node *config.RuleCombination) string {

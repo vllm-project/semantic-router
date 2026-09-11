@@ -527,12 +527,13 @@ func composeAttemptOutputTokenLimit(
 	model string,
 ) outputtokens.Result {
 	sources := outputtokens.Sources{
-		AlgorithmStage: chatParamsMaxOutputTokens(stageReq),
+		AlgorithmStage: stageOverrideMaxOutputTokens(nil, stageReq),
 	}
 	if req != nil {
 		sources.Client = chatParamsMaxOutputTokens(req.OriginalRequest)
 		sources.Plugin = outputtokens.Clone(req.PluginMaxOutputTokens)
 		sources.ModelRef = modelRefMaxCompletionTokens(req.ModelRefs, model)
+		sources.AlgorithmStage = stageOverrideMaxOutputTokens(req.OriginalRequest, stageReq)
 	}
 	return outputtokens.Compose(sources)
 }
