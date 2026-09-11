@@ -11,7 +11,7 @@ or start from a maintained routing recipe.
 | Serve a packaged virtual model | `config/recipes/built-in/` |
 | Configure a storage or service backend | `config/runtime/` |
 | Validate a managed asset | `config/schemas/` |
-| Discover the compact machine-readable contract index | `vllm-sr config schema` or `GET /config/router/schema` |
+| Discover the compact machine-readable contract index | `vllm-sr config schema` or `GET /api/v1/config/schema` |
 
 The website's [configuration guide](../website/docs/installation/configuration.md)
 is the reader-facing reference. `config/config.yaml` is intentionally exhaustive;
@@ -49,7 +49,7 @@ global: {}
 Validate a file before serving it:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 

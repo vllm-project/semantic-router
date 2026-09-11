@@ -9,9 +9,9 @@ from typing import Any
 from cli.terminal import echo, fields, heading, output_width, success
 
 
-def render_eval_summary(summary: str) -> None:
-    """Render an eval summary without changing its schema-tolerant contents."""
-    success("Evaluation complete")
+def render_route_preview_summary(summary: str) -> None:
+    """Render a routing-preview summary."""
+    success("Routing preview complete")
     echo()
     heading("Result")
     _render_summary_lines(summary)

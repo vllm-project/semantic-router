@@ -13,14 +13,14 @@ const schemaIndex = {
       title: 'Global configuration',
       description: 'Shared Router services and behavior.',
       required: false,
-      href: '/config/router/schema?view=section&path=global',
+      href: '/api/v1/config/schema?view=section&path=global',
     },
   ],
   surfaces: {
     algorithm: {
       count: 1,
       names: ['multi_factor'],
-      href_template: '/config/router/schema?view=surface&kind=algorithm&name={name}',
+      href_template: '/api/v1/config/schema?view=surface&kind=algorithm&name={name}',
     },
   },
 }

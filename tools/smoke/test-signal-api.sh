@@ -1,6 +1,6 @@
 #!/bin/bash
 # Signal API Test Script
-# Tests signal extraction via /api/v1/classify/intent endpoint
+# Tests signal extraction via /api/v1/diagnostics/classify/intent endpoint
 # Covers: Intent/Domain, Jailbreak, PII, and Multilingual signal matching
 
 ROUTER_URL="${ROUTER_URL:-http://localhost:8080}"
@@ -37,7 +37,7 @@ intent_correct=0
 intent_total=0
 for test in "${intent_tests[@]}"; do
     IFS='|' read -r query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/intent" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/intent" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -102,7 +102,7 @@ jb_correct=0
 jb_total=0
 for test in "${jailbreak_tests[@]}"; do
     IFS='|' read -r query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/security" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/security" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -155,7 +155,7 @@ declare -a pii_tests=(
 pii_detected=0
 pii_total=0
 for query in "${pii_tests[@]}"; do
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/pii" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/pii" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -306,7 +306,7 @@ ml_intent_correct=0
 ml_intent_total=0
 for test in "${multilingual_intent_tests[@]}"; do
     IFS='|' read -r lang query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/intent" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/intent" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -379,7 +379,7 @@ ml_jb_correct=0
 ml_jb_total=0
 for test in "${multilingual_jailbreak_tests[@]}"; do
     IFS='|' read -r lang query expected <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/security" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/security" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 
@@ -435,7 +435,7 @@ ml_pii_detected=0
 ml_pii_total=0
 for test in "${multilingual_pii_tests[@]}"; do
     IFS='|' read -r lang query <<< "$test"
-    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/classify/pii" \
+    resp=$(curl -s -X POST "$ROUTER_URL/api/v1/diagnostics/classify/pii" \
         -H "Content-Type: application/json" \
         -d "{\"text\": \"$query\"}" 2>/dev/null)
 

@@ -13,6 +13,13 @@ type ExportedRoute struct {
 	Path        string
 	Method      string
 	Description string
+	Contract    EndpointContract
+}
+
+// ExportedCapability is the documentation-facing capability definition.
+type ExportedCapability struct {
+	Name        string
+	Description string
 }
 
 // ExportedRoutes returns the route catalog metadata in registration order.
@@ -24,7 +31,17 @@ func ExportedRoutes() []ExportedRoute {
 			Path:        route.Path,
 			Method:      route.Method,
 			Description: route.Description,
+			Contract:    route.EndpointContract,
 		})
+	}
+	return out
+}
+
+// ExportedCapabilities returns capability metadata in discovery order.
+func ExportedCapabilities() []ExportedCapability {
+	out := make([]ExportedCapability, 0, len(capabilityRegistry))
+	for _, capability := range capabilityRegistry {
+		out = append(out, ExportedCapability(capability))
 	}
 	return out
 }

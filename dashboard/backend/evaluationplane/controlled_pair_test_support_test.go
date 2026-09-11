@@ -625,7 +625,7 @@ func controlledPairRoutingRecipeReport(
 		SelectionStatus: "error",
 	}
 	attestation.Entries = append(attestation.Entries, executionAttestationEntry{
-		RequestID: requestID, Operation: workerBrokerRouterEvaluate,
+		RequestID: requestID, Operation: workerBrokerRoutingPreview,
 		TrackID: "routing", CaseID: "case-1", AttemptID: "attempt-case-1",
 		RequestDigest:     digestString("controlled-pair-routing-request:" + manifest.RunID),
 		ResponseDigest:    digestString("controlled-pair-routing-response:" + manifest.RunID),

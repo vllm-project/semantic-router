@@ -28,7 +28,7 @@ func TestPIIDetectionPassesRequestContextToService(t *testing.T) {
 	fakeSvc := &evalCaptureClassificationService{}
 	server := &ClassificationAPIServer{classificationSvc: fakeSvc}
 	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/pii", strings.NewReader(`{"text":"hello"}`)).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/pii", strings.NewReader(`{"text":"hello"}`)).WithContext(ctx)
 	cancel()
 
 	server.handlePIIDetection(httptest.NewRecorder(), req)

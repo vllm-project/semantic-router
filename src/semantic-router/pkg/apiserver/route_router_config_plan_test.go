@@ -1,0 +1,69 @@
+//go:build !windows && cgo
+
+package apiserver
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+)
+
+func TestHandleConfigPlanValidatesWithoutMutation(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	candidate := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("planned_route"))
+	body, err := json.Marshal(routerConfigPlanRequest{
+		YAML: string(candidate),
+		Mode: routerConfigMutationReplace,
+	})
+	if err != nil {
+		t.Fatalf("marshal plan: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, apiConfigPlanPath, bytes.NewReader(body))
+	response := httptest.NewRecorder()
+	(&ClassificationAPIServer{configPath: configPath}).handleConfigPlan(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var plan routerConfigPlanResponse
+	if decodeErr := json.Unmarshal(response.Body.Bytes(), &plan); decodeErr != nil {
+		t.Fatalf("decode plan: %v", decodeErr)
+	}
+	if !plan.Valid || !plan.Changed || plan.Mode != routerConfigMutationReplace {
+		t.Fatalf("unexpected plan: %+v", plan)
+	}
+	if plan.CurrentETag != configDocumentETag(before) || plan.CandidateETag == "" {
+		t.Fatalf("unexpected plan ETags: %+v", plan)
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config after plan: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("config plan mutated the source document")
+	}
+}
+
+func TestHandleConfigPlanRejectsUnknownMode(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	body, err := json.Marshal(routerConfigPlanRequest{YAML: "version: v0.3\n", Mode: "patch"})
+	if err != nil {
+		t.Fatalf("marshal plan: %v", err)
+	}
+	request := httptest.NewRequest(http.MethodPost, apiConfigPlanPath, bytes.NewReader(body))
+	response := httptest.NewRecorder()
+
+	(&ClassificationAPIServer{configPath: configPath}).handleConfigPlan(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}

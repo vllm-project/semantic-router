@@ -1,4 +1,4 @@
-"""Stream and width contracts for eval terminal output."""
+"""Stream and width contracts for route-preview terminal output."""
 
 from __future__ import annotations
 
@@ -9,8 +9,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import requests
-from cli.commands.eval import eval as eval_command
+from cli.commands.route import preview as route_preview_command
 from click.testing import CliRunner
 
 CLI_ROOT = Path(__file__).resolve().parents[1]
@@ -73,7 +72,7 @@ def test_recipe_learning_json_is_pure_in_subprocess(tmp_path: Path) -> None:
 
     result = _run_cli_subprocess(
         tmp_path,
-        "eval",
+        "optimize",
         "recipe-learning",
         "--replay-file",
         str(replay_path),
@@ -89,7 +88,7 @@ def test_recipe_learning_json_is_pure_in_subprocess(tmp_path: Path) -> None:
 def test_recipe_learning_network_error_is_clean_and_redacted(tmp_path: Path) -> None:
     result = _run_cli_subprocess(
         tmp_path,
-        "eval",
+        "optimize",
         "recipe-learning",
         "--endpoint",
         "http://user:TOPSECRET@127.0.0.1:1",
@@ -105,10 +104,11 @@ def test_recipe_learning_network_error_is_clean_and_redacted(tmp_path: Path) -> 
     assert "***@127.0.0.1:1" in result.stderr
 
 
-def test_eval_network_error_is_clean_and_redacted(tmp_path: Path) -> None:
+def test_route_preview_network_error_is_clean_and_redacted(tmp_path: Path) -> None:
     result = _run_cli_subprocess(
         tmp_path,
-        "eval",
+        "route",
+        "preview",
         "--prompt",
         "hello",
         "--endpoint",
@@ -119,15 +119,19 @@ def test_eval_network_error_is_clean_and_redacted(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert result.stdout == ""
-    assert result.stderr.startswith("Error: Router is not running at")
+    assert result.stderr.startswith(
+        "Error: Router management credentials must use --token-env"
+    )
     assert "Traceback" not in result.stderr
     assert "EVALSECRET" not in result.stderr
-    assert "***@127.0.0.1:1" in result.stderr
+    assert "127.0.0.1" not in result.stderr
 
 
-def test_eval_readable_output_wraps_long_values(monkeypatch) -> None:
+def test_route_preview_readable_output_wraps_long_values(monkeypatch) -> None:
     mock_resp = MagicMock()
+    mock_resp.ok = True
     mock_resp.status_code = 200
+    mock_resp.headers = {}
     mock_resp.json.return_value = {
         "requested_model": "vllm-sr/a-very-long-mixture-of-model-entrypoint-name",
         "decision_result": {
@@ -144,25 +148,35 @@ def test_eval_readable_output_wraps_long_values(monkeypatch) -> None:
         },
         "signal_confidences": {},
     }
-    monkeypatch.setattr(requests, "post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        MagicMock(return_value=mock_resp),
+    )
     monkeypatch.setattr("cli.terminal.output_width", lambda: 48)
 
-    result = CliRunner().invoke(eval_command, ["--prompt", "hello"])
+    result = CliRunner().invoke(route_preview_command, ["--prompt", "hello"])
 
     assert result.exit_code == 0
     assert result.stderr == ""
     assert max(map(len, result.stdout.splitlines())) <= 48
 
 
-def test_eval_unknown_schema_fallback_wraps_on_narrow_terminal(monkeypatch) -> None:
+def test_route_preview_unknown_schema_fallback_wraps_on_narrow_terminal(
+    monkeypatch,
+) -> None:
     mock_resp = MagicMock()
+    mock_resp.ok = True
     mock_resp.status_code = 200
+    mock_resp.headers = {}
     mock_resp.json.return_value = {"unknown": "x" * 100}
-    monkeypatch.setattr(requests, "post", MagicMock(return_value=mock_resp))
+    monkeypatch.setattr(
+        "cli.router_management_client.requests.request",
+        MagicMock(return_value=mock_resp),
+    )
     monkeypatch.setattr("cli.terminal.output_width", lambda: 40)
     monkeypatch.setattr("cli.commands.eval_rendering.output_width", lambda: 40)
 
-    result = CliRunner().invoke(eval_command, ["--prompt", "hello"])
+    result = CliRunner().invoke(route_preview_command, ["--prompt", "hello"])
 
     assert result.exit_code == 0
     assert result.stderr == ""
