@@ -3345,6 +3345,9 @@
         },
         "reflection": {
           "$ref": "#/$defs/MemoryReflectionConfig"
+        },
+        "persistence": {
+          "$ref": "#/$defs/MemoryPersistenceConfig"
         }
       },
       "additionalProperties": false,
@@ -3362,6 +3365,24 @@
           "type": "integer"
         },
         "num_partitions": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryPersistenceConfig": {
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer"
+        },
+        "concurrency": {
+          "type": "integer"
+        },
+        "queue": {
+          "type": "integer"
+        },
+        "shutdown_grace_seconds": {
           "type": "integer"
         }
       },

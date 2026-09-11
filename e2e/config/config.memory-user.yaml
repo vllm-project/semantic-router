@@ -45,6 +45,12 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 256
+            capture_request_body: false
+            capture_response_body: false
         - type: memory
           configuration:
             enabled: false
@@ -63,6 +69,12 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 256
+            capture_request_body: false
+            capture_response_body: false
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful assistant. Memory access is disabled for this route.
@@ -85,6 +97,12 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 256
+            capture_request_body: false
+            capture_response_body: false
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful assistant with strict memory matching.
@@ -106,6 +124,12 @@ routing:
         - model: qwen3
           use_reasoning: false
       plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 256
+            capture_request_body: false
+            capture_response_body: false
         - type: system_prompt
           configuration:
             system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
@@ -121,10 +145,7 @@ global:
     router_replay:
       enabled: true
       store_backend: memory
-      max_records: 256
       async_writes: false
-      capture_request_body: false
-      capture_response_body: false
     response_api:
       enabled: true
       store_backend: memory

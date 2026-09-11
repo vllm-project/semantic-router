@@ -43,14 +43,20 @@ func streamResponseStageAnswer(t *testing.T, router *OpenAIRouter, ctx *RequestC
 	}
 }
 
-// assertStreamedOutcome checks the one outcome a streamed response leaves: the
-// verdict it observed, and that nothing enforced it.
+// assertStreamedOutcome checks the one outcome for the requested response-stage
+// signal, independently of asynchronous memory persistence receipts.
 func assertStreamedOutcome(t *testing.T, outcomes []routerreplay.Outcome, target, verdict string) {
 	t.Helper()
-	if len(outcomes) != 1 {
-		t.Fatalf("outcomes = %+v, want one per declared rule", outcomes)
+	var matches []routerreplay.Outcome
+	for _, outcome := range outcomes {
+		if outcome.Target == target {
+			matches = append(matches, outcome)
+		}
 	}
-	outcome := outcomes[0]
+	if len(matches) != 1 {
+		t.Fatalf("outcomes = %+v, want one for declared rule %q", outcomes, target)
+	}
+	outcome := matches[0]
 	if outcome.Target != target || outcome.Verdict != verdict {
 		t.Fatalf("outcome = %+v, want verdict %q under %s", outcome, verdict, target)
 	}

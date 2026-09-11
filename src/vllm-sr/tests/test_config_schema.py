@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from cli.config_schema import routing_surface_catalog, schema_document, surface_types
 from cli.config_schema.validation import validate_config_structure
 from cli.config_schema.views import schema_view
@@ -125,5 +126,30 @@ def test_reference_config_matches_generated_structure() -> None:
     repository_root = Path(__file__).resolve().parents[3]
     with (repository_root / "config" / "config.yaml").open(encoding="utf-8") as stream:
         config = safe_load_router_config(stream)
+
+    assert validate_config_structure(config) == []
+
+
+@pytest.mark.parametrize(
+    "persistence",
+    [
+        None,
+        {
+            "timeout_seconds": 10,
+            "concurrency": 2,
+            "queue": 8,
+            "shutdown_grace_seconds": 3,
+        },
+    ],
+)
+def test_memory_integration_config_matches_generated_structure(
+    persistence: dict[str, int] | None,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    config_path = repository_root / "e2e" / "config" / "config.memory-user.yaml"
+    with config_path.open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+    if persistence is not None:
+        config["global"]["stores"]["memory"]["persistence"] = persistence
 
     assert validate_config_structure(config) == []
