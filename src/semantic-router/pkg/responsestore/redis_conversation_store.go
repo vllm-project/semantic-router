@@ -243,9 +243,9 @@ func (s *RedisStore) runConversationCascadeIteration(
 		return cascadeIterationStalled, fmt.Errorf("failed to list responses for deletion: %w", err)
 	}
 	if len(candidates) > 0 {
-		stalled, err := s.drainConversationResponseBatch(ctx, conversationID, candidates, allowLegacyCleanup)
-		if err != nil {
-			return cascadeIterationStalled, err
+		stalled, drainErr := s.drainConversationResponseBatch(ctx, conversationID, candidates, allowLegacyCleanup)
+		if drainErr != nil {
+			return cascadeIterationStalled, drainErr
 		}
 		if stalled {
 			return cascadeIterationStalled, nil
