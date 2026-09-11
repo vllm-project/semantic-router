@@ -1,14 +1,17 @@
 package classification
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -40,7 +43,15 @@ type FeedbackDetector struct {
 	mapping      *FeedbackMapping
 	initialized  bool
 	useMmBERT32K bool // Track if mmBERT-32K is used for inference
+	gate         admission.Admissioner
 	mu           sync.RWMutex
+}
+
+// SetAdmissioner installs the deployment's admission gate for model inference.
+func (d *FeedbackDetector) SetAdmissioner(gate admission.Admissioner) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.gate = gate
 }
 
 // NewFeedbackDetector creates a new feedback detector
@@ -164,7 +175,7 @@ func (d *FeedbackDetector) Initialize() error {
 }
 
 // Classify determines user feedback type from follow-up message using the ML model
-func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
+func (d *FeedbackDetector) Classify(ctx context.Context, text string) (*FeedbackResult, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -180,13 +191,12 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		}, nil
 	}
 
-	var result candle.ClassResult
-	var err error
-	if d.useMmBERT32K {
-		result, err = candle.ClassifyMmBert32KFeedback(text)
-	} else {
-		result, err = candle.ClassifyFeedbackText(text)
-	}
+	result, err := admitModelInference(ctx, d.gate, admissionDeploymentFeedbackDetector, func() (candle.ClassResultWithProbs, error) {
+		if d.useMmBERT32K {
+			return candle.ClassifyMmBert32KFeedbackWithProbs(text)
+		}
+		return candle.ClassifyFeedbackTextWithProbs(text)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("feedback detection failed: %w", err)
 	}
@@ -197,19 +207,12 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		feedbackType = FeedbackLabelSatisfied // Default fallback
 	}
 
-	confidence := result.Confidence
-
 	// Apply threshold check
 	threshold := d.config.Threshold
 	if threshold <= 0 {
 		threshold = 0.5 // Default threshold
 	}
-
-	// If confidence is below threshold, mark as uncertain (default to satisfied)
-	if confidence < threshold {
-		feedbackType = FeedbackLabelSatisfied
-		confidence = 1.0 - confidence
-	}
+	feedbackType, confidence := d.applyThreshold(feedbackType, result, threshold)
 
 	logging.Debugf("Feedback detection: text_len=%d, feedback_type=%s, confidence=%.3f",
 		len(text), feedbackType, confidence)
@@ -219,6 +222,36 @@ func (d *FeedbackDetector) Classify(text string) (*FeedbackResult, error) {
 		Confidence:   confidence,
 		Class:        result.Class,
 	}, nil
+}
+
+// applyThreshold decides what a prediction below the configured threshold is
+// reported as.
+//
+// A prediction the model is not confident about is treated as uncertain and
+// reported as satisfied, so the confidence beside that label has to be
+// P(satisfied). The detector has four classes, so 1 - confidence is the mass on
+// the other three and overstates satisfaction by whatever the two rejected
+// classes hold. The satisfied index comes from the same loaded mapping the label
+// above is read through. When that mapping names no satisfied class, or the model
+// returned no probability for it, the model's own prediction is kept, since a
+// satisfied reading nothing supports is the defect this replaces.
+func (d *FeedbackDetector) applyThreshold(
+	feedbackType string, result candle.ClassResultWithProbs, threshold float32,
+) (string, float32) {
+	if result.Confidence >= threshold {
+		return feedbackType, result.Confidence
+	}
+	for idx, label := range d.mapping.IdxToLabel {
+		if label != FeedbackLabelSatisfied {
+			continue
+		}
+		parsed, err := strconv.Atoi(idx)
+		if err != nil || parsed < 0 || parsed >= len(result.Probabilities) {
+			continue
+		}
+		return FeedbackLabelSatisfied, result.Probabilities[parsed]
+	}
+	return feedbackType, result.Confidence
 }
 
 // IsInitialized returns whether the detector is initialized

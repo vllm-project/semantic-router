@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"time"
@@ -26,7 +27,6 @@ type cachedPIIContent struct {
 
 const (
 	piiEvaluationIncompleteCode = "pii_evaluation_incomplete"
-	piiEvaluationFailedCode     = "pii_evaluation_failed"
 	// A tool-result request can contain many independently chunked content
 	// items. Bound the expensive detector fanout per request while preserving
 	// the already-scanned results for conservative on_unknown handling.
@@ -45,7 +45,7 @@ func (b *piiToolResultScanBudget) consumeInferenceCall() bool {
 	return true
 }
 
-func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
+func (c *Classifier) evaluatePIISignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, piiText string, nonUserMessages []string, toolResultTexts []string, toolResultScanIncomplete bool) {
 	start := time.Now()
 
 	// Step 1: Collect the union of unique content pieces selected by all PII
@@ -85,7 +85,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 				if !toolResultBudget.consumeInferenceCall() {
 					return false
 				}
-				tokenResult, err := c.piiInference.ClassifyTokens(chunk)
+				tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)
 				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
 				return true
 			})
@@ -94,7 +94,7 @@ func (c *Classifier) evaluatePIISignal(results *SignalResults, mu *sync.Mutex, p
 			chunks := piiSignalChunks(content)
 			cached.results = make([]cachedPIIResult, 0, len(chunks))
 			for _, chunk := range chunks {
-				tokenResult, err := c.piiInference.ClassifyTokens(chunk)
+				tokenResult, err := c.piiInference.ClassifyTokens(ctx, chunk)
 				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
 			}
 		}

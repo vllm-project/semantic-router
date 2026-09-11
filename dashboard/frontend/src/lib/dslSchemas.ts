@@ -1,5 +1,10 @@
 import { getPolicySignalFieldSchema } from './dslPolicySignalSchemas'
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import {
+  mergeRouterFieldSchemas,
+  pluginFieldsFromRouterSchema,
+  signalFieldsFromRouterSchema,
+} from './routerConfigSchema'
 import type { FieldSchema } from './dslSchemaTypes'
 export type { FieldSchema } from './dslSchemaTypes'
 
@@ -81,7 +86,7 @@ const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
   },
 ]
 
-export function getSignalFieldSchema(signalType: string): FieldSchema[] {
+function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
   const policyFields = getPolicySignalFieldSchema(signalType)
   if (policyFields) return policyFields
   switch (signalType) {
@@ -179,7 +184,17 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.70' },
       ]
     case 'language':
-      return [{ key: 'description', label: 'Description', type: 'string' }]
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        {
+          key: 'threshold',
+          label: 'Confidence Threshold',
+          type: 'number',
+          min: 0,
+          max: 1,
+          placeholder: '0.3',
+        },
+      ]
     case 'context':
       return [
         {
@@ -394,6 +409,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'target',
           label: 'Target',
           type: 'object',
+          required: true,
           description: 'Knowledge-base group or label to match.',
           fields: [
             {
@@ -410,10 +426,9 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
           key: 'match',
           label: 'Match Strategy',
           type: 'select',
-          options: ['best', 'all'],
+          options: ['best', 'threshold'],
           description: 'How to match against the KB',
         },
-        { key: 'description', label: 'Description', type: 'string' },
       ]
     case 'conversation':
       return [
@@ -484,6 +499,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
       ]
     case 'event':
       return [
+        { key: 'description', label: 'Description', type: 'string' },
         {
           key: 'event_types',
           label: 'Event Types',
@@ -504,7 +520,14 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
   }
 }
 
-export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
+export function getSignalFieldSchema(signalType: string): FieldSchema[] {
+  return mergeRouterFieldSchemas(
+    signalFieldsFromRouterSchema(signalType),
+    getCuratedSignalFieldSchema(signalType),
+  )
+}
+
+function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
   const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
@@ -825,6 +848,13 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
     default:
       return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
+}
+
+export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
+  return mergeRouterFieldSchemas(
+    pluginFieldsFromRouterSchema(pluginType),
+    getCuratedPluginFieldSchema(pluginType),
+  )
 }
 
 export {

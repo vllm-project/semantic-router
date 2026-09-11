@@ -204,7 +204,7 @@ func run(opt options) error {
 }
 
 func realNLI() looper.NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
+	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
 		r, err := candle.ClassifyNLI(premise, hypothesis)
 		if err != nil {
 			return 0, 0, err
@@ -217,7 +217,7 @@ func realNLI() looper.NLIClassifyFunc {
 // (seed, premise, hypothesis) but carrying no real signal. Mirrors the in-package
 // test placebo so arm D weights on noise, isolating the score's signal.
 func placeboNLI(seed uint64) looper.NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
+	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
@@ -275,7 +275,12 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 	out := make([]cachedResponse, 0, len(opt.panelModels))
 	for _, model := range opt.panelModels {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, model, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: model},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			return nil, fmt.Errorf("model %q: %w", model, err)
 		}
@@ -341,7 +346,12 @@ func produceArm(
 
 	if arm == "A" {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, opt.judge, false, 1, nil, "")
+		resp, err := client.CallModelWithOptions(
+			context.Background(),
+			*req,
+			looper.ModelTarget{Name: opt.judge},
+			looper.CallOptions{Iteration: 1},
+		)
 		if err != nil {
 			rec.Error = err.Error()
 			return rec

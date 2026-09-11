@@ -14,7 +14,7 @@ import (
 
 type RouterOutcomeRequest struct {
 	ReplayID  string            `json:"replay_id"`
-	Source    string            `json:"source"`
+	Source    string            `json:"source,omitempty"`
 	Target    string            `json:"target"`
 	TargetRef string            `json:"target_ref,omitempty"`
 	Verdict   string            `json:"verdict"`

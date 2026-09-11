@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,7 +38,7 @@ func TestEvaluatePIISignalUsesToolResultSourceOnly(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, userText, []string{"history payload"}, []string{toolText}, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, userText, []string{"history payload"}, []string{toolText}, false)
 
 	if !results.PIIDetected {
 		t.Fatal("expected PII in the tool result to be detected")
@@ -187,7 +188,7 @@ func TestEvaluatePIISignalSharesToolResultCacheAcrossRules(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText, toolText}, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, []string{toolText, toolText}, false)
 
 	if got := mockModel.callCount[toolText]; got != 1 {
 		t.Fatalf("shared tool result was classified %d times, want 1", got)
@@ -206,7 +207,7 @@ func TestEvaluatePIISignalReportsFailedToolResultScan(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool"}, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, []string{"unavailable tool"}, false)
 
 	if results.PIIDetected {
 		t.Fatal("failed PII inference must not report a PII match")
@@ -226,7 +227,7 @@ func TestEvaluatePIISignalReportsIncompleteToolResultScan(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{"unavailable tool", "clean tool"}, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, []string{"unavailable tool", "clean tool"}, false)
 
 	if got := results.SignalErrors["pii:tool_pii"]; got != piiEvaluationIncompleteCode {
 		t.Fatalf("PII error = %q, want %q", got, piiEvaluationIncompleteCode)
@@ -241,7 +242,7 @@ func TestEvaluatePIISignalReportsIncompleteToolResultExtractionWithoutText(t *te
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, nil, true)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, nil, true)
 
 	if results.PIIDetected {
 		t.Fatal("incomplete tool-result extraction must not report a PII match")
@@ -264,7 +265,7 @@ func TestEvaluatePIISignalPreservesPositiveMatchWhenToolResultExtractionIsIncomp
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText}, true)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, []string{toolText}, true)
 
 	if !results.PIIDetected {
 		t.Fatal("positive PII match must be preserved when another tool-result block is skipped")
@@ -291,7 +292,7 @@ func TestEvaluatePIISignalBoundsManyToolResultInferenceCalls(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, toolTexts, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, toolTexts, false)
 
 	if got := totalPIIInferenceCalls(mockModel); got != maxPIIToolResultInferenceCalls {
 		t.Fatalf("tool-result inference calls = %d, want %d", got, maxPIIToolResultInferenceCalls)
@@ -318,7 +319,7 @@ func TestEvaluatePIISignalBoundsOversizedToolResult(t *testing.T) {
 
 	results := newPIISignalTestResults()
 	var mu sync.Mutex
-	classifier.evaluatePIISignal(results, &mu, "current text", nil, []string{toolText}, false)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "current text", nil, []string{toolText}, false)
 
 	if got := totalPIIInferenceCalls(mockModel); got != maxPIIToolResultInferenceCalls {
 		t.Fatalf("oversized tool-result inference calls = %d, want %d", got, maxPIIToolResultInferenceCalls)

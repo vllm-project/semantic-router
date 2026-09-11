@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constants'
-import { parseConfigToTopology } from './topology/utils/topologyParser'
-import { extractSignals } from './topology/utils/topologySignalParser'
+import {
+  ALGORITHM_TYPES,
+  ALGORITHM_ICONS,
+  PLUGIN_ICONS,
+  PLUGIN_TYPES,
+  SIGNAL_TYPES,
+} from './topology/constants'
+import {
+  ALGORITHM_TYPES as ROUTER_ALGORITHM_TYPES,
+  PLUGIN_TYPES as ROUTER_PLUGIN_TYPES,
+  SIGNAL_TYPES as ROUTER_SIGNAL_TYPES,
+} from '../generated/routerConfigContract'
+import { groupSignalsByType, parseConfigToTopology } from './topology/utils/topologyParser'
 import type { ConfigData } from './topology/types'
 
 describe('topology v0.3 surface alignment', () => {
@@ -24,6 +34,21 @@ describe('topology v0.3 surface alignment', () => {
               temporal: true,
             },
           ],
+          metadata: [
+            {
+              name: 'tenant',
+              key: 'tenant',
+              predicate: { equals: 'research' },
+            },
+          ],
+          classifiers: [
+            {
+              name: 'risk',
+              type: 'local',
+              labels: ['SAFE', 'RISKY'],
+            },
+          ],
+          input_modality: [{ name: 'vision', modality: 'image' }],
         },
         decisions: [
           {
@@ -49,7 +74,7 @@ describe('topology v0.3 surface alignment', () => {
     const topology = parseConfigToTopology(config)
 
     expect(topology.signals.map((signal) => signal.type)).toEqual(
-      expect.arrayContaining(['conversation', 'event']),
+      expect.arrayContaining(['conversation', 'event', 'metadata', 'classifier', 'input_modality']),
     )
     expect(topology.decisions[0].algorithm?.type).toBe('multi_factor')
     expect(topology.decisions[0].algorithm?.multi_factor).toEqual({ latency_percentile: 95 })
@@ -57,7 +82,9 @@ describe('topology v0.3 surface alignment', () => {
   })
 
   it('declares display metadata for v0.3 topology surfaces', () => {
-    expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
+    expect(SIGNAL_TYPES).toEqual([...ROUTER_SIGNAL_TYPES, 'projection'])
+    expect(PLUGIN_TYPES).toEqual(ROUTER_PLUGIN_TYPES)
+    expect(ALGORITHM_TYPES).toEqual(ROUTER_ALGORITHM_TYPES)
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',
       workflows: 'FL',
@@ -69,14 +96,21 @@ describe('topology v0.3 surface alignment', () => {
     })
   })
 
+  it('initializes topology groups from the generated signal inventory', () => {
+    const groups = groupSignalsByType([])
+
+    expect(Object.keys(groups)).toEqual(SIGNAL_TYPES)
+    SIGNAL_TYPES.forEach((signalType) => expect(groups[signalType]).toEqual([]))
+  })
+
   it('preserves the PII source in topology signal config', () => {
-    const signals = extractSignals({
+    const topology = parseConfigToTopology({
       signals: {
         pii: [{ name: 'tool-data', threshold: 0.8, source: 'tool_result' }],
       },
     })
 
-    expect(signals).toContainEqual(
+    expect(topology.signals).toContainEqual(
       expect.objectContaining({
         type: 'pii',
         name: 'tool-data',

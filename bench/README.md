@@ -204,3 +204,16 @@ python -m pytest \
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design
 belongs with the runner that implements it.
+
+### Fault proxy streaming checks
+
+The fault proxy forwards SSE events as they arrive from upstream. Optional
+`--stream-frames` shaping forwards the first requested content events live and
+repeats them if needed before forwarding the terminal event. Events after the
+terminal event, including usage and `[DONE]`, are preserved. `--stream-interval-ms`
+adds pacing between forwarded events; it does not remove upstream delays.
+
+Run `make soak-test` and `python -m pytest bench/test_openai_fault_proxy.py -q`
+for buffered and streaming behavior coverage. The PR core-quality workflow runs
+both commands in **Soak behavior (PR head)** on the exact PR head commit and
+records that SHA in its job summary.

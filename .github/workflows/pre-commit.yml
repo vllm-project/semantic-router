@@ -17,6 +17,42 @@ permissions:
   contents: read
 
 jobs:
+  soak-behavior:
+    if: ${{ !inputs.docs_only }}
+    runs-on: ubuntu-latest
+    name: Soak behavior (PR head)
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Record tested commit
+        run: git rev-parse HEAD | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache-dependency-path: e2e/go.sum
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install proxy test dependencies
+        run: python -m pip install pytest==8.3.5
+
+      - name: Test buffered and streaming soak behavior
+        run: make soak-test
+
+      - name: Test fault proxy behavior
+        if: ${{ !cancelled() }}
+        run: python -m pytest bench/test_openai_fault_proxy.py -q
+
   docs-precommit:
     if: inputs.docs_only
     runs-on: ubuntu-latest

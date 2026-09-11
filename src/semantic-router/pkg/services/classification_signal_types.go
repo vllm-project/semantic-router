@@ -19,7 +19,7 @@ const (
 
 // IntentRequest represents a request for intent classification.
 type IntentRequest struct {
-	Text                string            `json:"text"`
+	Text                string            `json:"text,omitempty"`
 	Messages            []IntentMessage   `json:"messages,omitempty"`
 	Tools               []json.RawMessage `json:"tools,omitempty"`
 	Functions           []json.RawMessage `json:"functions,omitempty"`

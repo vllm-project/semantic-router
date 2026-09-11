@@ -18,6 +18,7 @@ const configResponse = {
       {
         name: 'test-model',
         provider_model_id: 'test-model',
+        reasoning: { family: 'qwen3.8' },
         backend_refs: [
           {
             name: 'endpoint1',
@@ -270,6 +271,83 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
+  test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/signals');
+    await page.getByRole('button', { name: 'Add Signal' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Add Signal' });
+    const signalType = modal.getByLabel('Signal type');
+    const signalOption = signalType.locator('option').first();
+    await expect(signalType).toHaveCSS('color-scheme', 'dark');
+    await expect(signalOption).toHaveCSS('color', 'rgb(245, 245, 247)');
+    await expect(signalOption).toHaveCSS('background-color', 'rgb(17, 18, 22)');
+
+    const checkbox = modal.getByLabel('Case Sensitive');
+    const [checkboxBox, checkboxControlBox] = await Promise.all([
+      checkbox.boundingBox(),
+      checkbox.locator('..').boundingBox(),
+    ]);
+    expect(checkboxBox).not.toBeNull();
+    expect(checkboxControlBox).not.toBeNull();
+    expect(checkboxBox!.width).toBeCloseTo(checkboxBox!.height, 0);
+    expect(checkboxBox!.width).toBeLessThanOrEqual(15);
+    expect(checkboxControlBox!.height).toBeGreaterThanOrEqual(39.5);
+
+    await checkbox.check();
+    await expect(checkbox).toBeChecked();
+    const checkmarkSize = await checkbox.evaluate((element) => {
+      const checkmark = window.getComputedStyle(element, '::before');
+      return {
+        width: Number.parseFloat(checkmark.width),
+        height: Number.parseFloat(checkmark.height),
+      };
+    });
+    expect(checkmarkSize.width).toBeLessThanOrEqual(4);
+    expect(checkmarkSize.height).toBeLessThanOrEqual(6);
+  });
+
+  test('uses the same hierarchy for projection editors', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/projections');
+    await page.getByRole('button', { name: 'Add Partition' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Add Projection Partition' });
+    await expect(modal.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(modal.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await expectInside(modal, modal.getByLabel('Semantics'));
+    await expectInside(modal, modal.getByRole('button', { name: 'Add member' }));
+  });
+
+  test('uses the shared hierarchy for signal and decision view and edit flows', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await mockConfigSurface(page);
+
+    await page.goto('/config/signals');
+    await page.getByRole('button', { name: 'View keyword-pricing' }).click();
+    const signalView = page.getByRole('dialog', { name: 'Signal: pricing' });
+    await expect(signalView.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(signalView.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await signalView.getByRole('button', { name: 'Close' }).first().click();
+
+    await page.getByRole('button', { name: 'Edit keyword-pricing' }).click();
+    const signalEdit = page.getByRole('dialog', { name: 'Edit Signal: pricing' });
+    await expect(signalEdit.getByRole('heading', { name: 'Identity' })).toBeVisible();
+    await expect(signalEdit.getByRole('heading', { name: 'Definition' })).toBeVisible();
+    await signalEdit.getByRole('button', { name: 'Close editor' }).click();
+
+    await page.goto('/config/decisions');
+    await page.getByRole('button', { name: 'View business-route' }).click();
+    const decisionView = page.getByRole('dialog', { name: 'Decision: business-route' });
+    for (const section of ['Identity', 'Routing policy', 'Selection & runtime', 'Output behavior']) {
+      await expect(decisionView.getByRole('heading', { name: section })).toBeVisible();
+    }
+  });
+
   test('keeps decision model references editor controls inside the modal layout', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await mockConfigSurface(page);
@@ -282,9 +360,11 @@ test.describe('Config surface layout regressions', () => {
     const form = modal.locator('form').first();
     await expect(modal).toBeVisible();
     await expect(form).toBeVisible();
+    const modelSelect = modal.getByRole('combobox', { name: 'Model', exact: true });
+    await modelSelect.selectOption('test-model');
 
     const controls = [
-      page.getByLabel('Model').first(),
+      modelSelect,
       page.getByLabel('Reasoning effort').first(),
       page.getByLabel('Use reasoning').first(),
       page.getByLabel('LoRA adapter').first(),
@@ -306,7 +386,7 @@ test.describe('Config surface layout regressions', () => {
     expect(viewport).not.toBeNull();
     const rightGutter = viewport!.width - modalBox!.x - modalBox!.width;
     const bottomGutter = viewport!.height - modalBox!.y - modalBox!.height;
-    expect(modalBox!.width).toBeLessThanOrEqual(980);
+    expect(modalBox!.width).toBeLessThanOrEqual(1120);
     expect(modalBox!.x).toBeCloseTo(rightGutter, 0);
     expect(modalBox!.y).toBeCloseTo(bottomGutter, 0);
 
@@ -316,6 +396,9 @@ test.describe('Config surface layout regressions', () => {
     await page.keyboard.press('Tab');
     await expect(closeButton).toBeFocused();
     await page.keyboard.press('Escape');
+    const discardDialog = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
+    await expect(discardDialog).toBeVisible();
+    await discardDialog.getByRole('button', { name: 'Discard changes' }).click();
     await expect(modal).toBeHidden();
     await expect(addDecisionButton).toBeFocused();
   });
