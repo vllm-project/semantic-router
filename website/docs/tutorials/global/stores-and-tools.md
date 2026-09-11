@@ -150,11 +150,13 @@ Configure `global.stores.memory.persistence`:
 | Field | Meaning | Default |
 | --- | --- | --- |
 | `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing | 30 |
-| `concurrency` | Worker slots, including preparation and writes | 8 |
-| `queue` | Reserved attempts waiting for a worker | 64 |
+| `concurrency` | Worker slots, including preparation and writes; 1–64 | 8 |
+| `queue` | Reserved attempts waiting for a worker; 1–1024 | 64 |
 | `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation | 5 |
 
-Omit a field or set it to `0` to take the default.
+Omit a field or set it to `0` to take the default. Negative values and values
+above these concurrency or queue limits are rejected during configuration
+validation, before workers or queue storage are allocated at startup or reload.
 
 Each persistence attempt has a shared 1 MiB payload budget for request history,
 retained Responses history, and the current assistant response. Assistant text

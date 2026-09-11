@@ -3374,16 +3374,22 @@
     "MemoryPersistenceConfig": {
       "properties": {
         "timeout_seconds": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "concurrency": {
-          "type": "integer"
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 0
         },
         "queue": {
-          "type": "integer"
+          "type": "integer",
+          "maximum": 1024,
+          "minimum": 0
         },
         "shutdown_grace_seconds": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
