@@ -76,6 +76,10 @@ type RequestContext struct {
 	ContextCompressionSkipReason  string
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
+	RoutingLatency                time.Duration
+	RequestCost                   float64
+	RequestCostCurrency           string
+	RequestCostPriced             bool
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
