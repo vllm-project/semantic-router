@@ -27,11 +27,10 @@ func init() {
 // attributes the decision to the remote call rather than merely agreeing with
 // it.
 //
-// Three requests: one where the mock returns a span, one where it returns
-// none, and one where it returns a 200 carrying an error member. The last is
-// the on_error contract: a response the token_spans decoder rejects is not a
-// clean "no PII" result, and with on_error: block it must close the request
-// exactly like a real detection.
+// Genuine detections select the higher-priority decision even though it uses
+// on_unknown: no_match. Error-only matches fall through to the fail-closed
+// decision with on_unknown: match. A partial response with a denied span must
+// take the genuine-detection route, not the error-only route.
 func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	localPort, stop, err := setupServiceConnection(ctx, client, opts)
 	if err != nil {
@@ -48,8 +47,24 @@ func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, op
 		{
 			name:             "remote span blocks",
 			prompt:           "__PII_SPAN__ EMAIL_ADDRESS alice@corp.example please summarise this thread",
-			expectedDecision: "block_pii_remote",
+			expectedDecision: "block_detected_pii_remote",
 			why:              "the backend returned an EMAIL_ADDRESS span and the rule allows no PII type",
+		},
+		{
+			name: "partial span remains a real detection",
+			// truncated_at 50 sits after the span (code points 27 to 45) and
+			// before the end of the prompt, so the span is valid for the part
+			// the provider saw. A value inside the span would make the whole
+			// response a contract violation instead of a declared truncation.
+			prompt:           "__PII_SPAN__ EMAIL_ADDRESS alice@corp.example __PII_TRUNCATED__ 50 unseen text",
+			expectedDecision: "block_detected_pii_remote",
+			why:              "a denied span before the cut is true, not unknown, despite on_error: block and on_unknown: no_match",
+		},
+		{
+			name:             "truncation without spans is error driven",
+			prompt:           "__PII_TRUNCATED__ 0 unseen text",
+			expectedDecision: "block_pii_remote",
+			why:              "with no denied span the error-only match obeys on_unknown and reaches the fail-closed decision",
 		},
 		{
 			name:             "no span routes normally",
@@ -94,6 +109,8 @@ func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, op
 			"remote_classifier": "mock-pii-spans /classify (token_spans.v1)",
 			"local_pii_model":   "none, so local token classification cannot produce a span",
 			"span_returned":     observed["remote span blocks"],
+			"partial_span":      observed["partial span remains a real detection"],
+			"empty_partial":     observed["truncation without spans is error driven"],
 			"no_span":           observed["no span routes normally"],
 			"rejected_response": observed["rejected response fails closed"],
 		})

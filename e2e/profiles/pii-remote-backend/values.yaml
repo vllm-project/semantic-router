@@ -32,11 +32,25 @@ config:
           include_history: false
           description: Deny every PII type, so any remote span blocks the request
     decisions:
+      - name: block_detected_pii_remote
+        description: Genuine PII stays a match even when the scan is incomplete
+        priority: 1100
+        rules:
+          operator: OR
+          on_unknown: no_match
+          conditions:
+            - type: pii
+              name: pii_deny_all
+        plugins:
+          - type: fast_response
+            configuration:
+              message: Your request contains personal information. Please remove any sensitive data and try again.
       - name: block_pii_remote
         description: Blocks when the remote token_spans.v1 backend returns a span, or fails while on_error is block
         priority: 1000
         rules:
           operator: OR
+          on_unknown: match
           conditions:
             - type: pii
               name: pii_deny_all

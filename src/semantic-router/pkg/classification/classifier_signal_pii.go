@@ -120,8 +120,10 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		// Part of the content was never scored (backend error or a declared
 		// truncation). Under on_error: block that is not a clean result.
 		logging.Errorf("[Signal Computation] PII rule %q: content not fully classified; failing closed", rule.Name)
+		// A denied entity already makes this rule true. Only a match created
+		// by the failure itself is unknown to the decision engine.
+		errorDrivenMatch = len(deniedEntities) == 0
 		deniedEntities = append(deniedEntities, PIIClassificationErrorType)
-		errorDrivenMatch = true
 		if !inferenceFailed {
 			// A declared truncation is not an inference error, but under block
 			// it still leaves the rule not fully evaluated, and the decision
