@@ -164,19 +164,31 @@ func validateProgressGateTuning(prefix string, cfg *ProgressGateTuning) error {
 	}); err != nil {
 		return err
 	}
-	if cfg.MinWindowOutcomes != nil && cfg.WindowSize != nil &&
-		*cfg.MinWindowOutcomes > *cfg.WindowSize {
-		return fmt.Errorf(
-			"%s.min_window_outcomes (%d) must not exceed %s.window_size (%d)",
-			prefix, *cfg.MinWindowOutcomes, prefix, *cfg.WindowSize,
-		)
+	effective := cfg.EffectiveConfig()
+	if effective.WindowSize < 1 || effective.WindowSize > 256 {
+		return fmt.Errorf("%s.window_size must be between 1 and 256", prefix)
 	}
-	if cfg.MinConsecutiveRegressions != nil && cfg.MinConsecutiveRecoveries != nil &&
-		*cfg.MinConsecutiveRegressions < *cfg.MinConsecutiveRecoveries {
-		return fmt.Errorf(
-			"%s.min_consecutive_regressions (%d) must be at least %s.min_consecutive_recoveries (%d) to keep hysteresis",
-			prefix, *cfg.MinConsecutiveRegressions, prefix, *cfg.MinConsecutiveRecoveries,
-		)
+	if effective.WindowTTLSeconds < 1 || effective.WindowTTLSeconds > 86400 {
+		return fmt.Errorf("%s.window_ttl_seconds must be between 1 and 86400", prefix)
+	}
+	if effective.MaxSwitchesPerWindow > 256 {
+		return fmt.Errorf("%s.max_switches_per_window must not exceed 256", prefix)
+	}
+	if effective.MinWindowOutcomes > effective.WindowSize ||
+		effective.MinConsecutiveRegressions > effective.WindowSize || effective.MinConsecutiveRecoveries > effective.WindowSize {
+		return fmt.Errorf("%s evidence thresholds must not exceed window_size", prefix)
+	}
+	if effective.MinConsecutiveRegressions < effective.MinConsecutiveRecoveries {
+		return fmt.Errorf("%s.min_consecutive_regressions must be at least min_consecutive_recoveries", prefix)
+	}
+	if effective.CalibrationID != "" {
+		name, version, ok := strings.Cut(effective.CalibrationID, "@")
+		if !ok || name == "" || version == "" || strings.ContainsAny(effective.CalibrationID, " \t\n\r") {
+			return fmt.Errorf("%s.calibration_id must identify an external profile as name@version", prefix)
+		}
+	}
+	if effective.Enabled && effective.Mode == "enforce" && effective.CalibrationID == "" {
+		return fmt.Errorf("%s.calibration_id is required in enforce mode", prefix)
 	}
 	return nil
 }
