@@ -123,6 +123,28 @@ sticky 逻辑应围绕这条链的窄 seam 工作：先完成正常 request-time
 - 不承诺 provider 一定命中 prompt cache；只验证 Router 没有无谓破坏前缀。
 - 不在 foundation API 未确认前直接把 `RequestContext.SessionID` 接成 sticky key。
 
+### 依赖状态审计（2026-09-11）
+
+截至本次审计，#3392 仍是 open/in-progress，负责该 foundation 的 PR #3391
+仍未合并到上游 `main`，且处于 review 迭代状态。因此下面这些名称只能作为
+待核对的设计方向，不能当作当前分支已经存在的公共 API：
+
+- 预期的 `pkg/sessiontools` `State`、`Store`/CAS、TTL 和 bounded local store；
+- `pkg/tools` 的 definition/catalog/policy/capability fingerprint helper；
+- `RequestContext.SessionProvenance`、服务端派生的 `ResolveStickyToolIdentity`；
+- `tool_selection.sticky` 与 `global.stores.tool_sessions` 的 disabled-by-default
+  配置契约。
+
+该 PR 的公开 review 还暴露了实现必须吸收的安全教训：过期 key 的清理需要防止
+ABA race；foundation 阶段在 runtime 尚未接入时必须拒绝 `sticky.enabled: true`，
+避免配置成功但请求路径静默 no-op；JSON fingerprint 不能把大整数解码成
+`float64`，应保留精确数字（例如 `Decoder.UseNumber`）并有回归测试。实现时先
+重新确认合并后的 API、测试和 reviewer 决策，不要从候选分支复制未审查代码。
+
+本地 fork 的 `origin/main` 只代表 fork 状态；本次核验时本地基线相对上游
+`vllm-project/main` 已落后 90 个提交。开始业务实现前应先按团队约定 fetch、
+审查差异并重新记录基线。
+
 ## 依赖和实现顺序
 
 父需求是 #2973；#3392 负责 bounded state、storage、fingerprint 和 trusted
@@ -149,6 +171,25 @@ identity foundation。当前 `main` 审计显示这些独立 seam 尚未可直�
 
 每一步都先做最小可验证改动；不要为了“顺手”重排 import、格式化无关文件或扩大
 热点模块职责。
+
+### Runtime 接入边界
+
+运行时合并应放在正常 request-time selection 和 allow/block policy 过滤之后、
+`commitToolSelection` 之前。这样历史 state 只能影响最终的有序候选集合，不能
+绕过现有授权或 mode 分支：
+
+- `mode=none` 先清空工具，sticky 不得把工具恢复回来；
+- `filtered`、`passthrough`、显式 non-auto、外部 gateway 和 looper 路径默认
+  保持现有 no-op/短路语义，除非契约明确允许参与；
+- semantic retrieval 与 `tool_selection` add/filter 都必须经过同一套重授权和
+  bounded merge；没有 decision 时保持原有短路行为；
+- store error、身份不可信或当前工具未授权时只回退本轮 stateless 结果，不写入
+  中间状态；所有清理和选择结束后才允许提交下一版 state。
+
+纯 reuse 且 retained definitions/order 未变化时不要无条件递增
+`request.Generation`，否则 provider codec 可能失去 `Envelope.CanReplay` 的
+字节稳定性；只有工具新增、删除、顺序或定义内容真正变化时才按现有 mutation
+规则递增。
 
 ## 代码风格与最小改动清单
 
