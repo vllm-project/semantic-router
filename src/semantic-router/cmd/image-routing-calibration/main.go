@@ -223,10 +223,14 @@ func main() {
 		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
 	}
 
-	// The rules and manifest are resolved through symlinks and bound to the
-	// checkout before they are read, and then read from exactly the path
-	// that was validated, so the file the report attributes to the commit is
-	// the file the run used.
+	root, err := canonicalRepoRoot(*fixtureRoot)
+	if err != nil {
+		fatal("fixture root: %v", err)
+	}
+	*fixtureRoot = root
+
+	// Resolve the rules and manifest before reading them. Their resolved paths
+	// are bound to the commit with the fixtures before inference begins.
 	rulesReal, rulesRel, err := resolveInput(*fixtureRoot, *rulesPath)
 	if err != nil {
 		fatal("rules: %v", err)
@@ -251,6 +255,11 @@ func main() {
 	if err = bindToCommit(*fixtureRoot, inputs); err != nil {
 		fatal("%v", err)
 	}
+	outputs, outputErr := validateOutputs(root, inputs, []string{*output, *markdown})
+	if outputErr != nil {
+		fatal("outputs: %v", outputErr)
+	}
+	*output, *markdown = outputs[0], outputs[1]
 	if err = candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
 		fatal("initialize multimodal model: %v", err)
 	}
@@ -303,9 +312,8 @@ func writeReports(report calibrationReport, output, markdown string) {
 	}
 }
 
-// shippedThresholdTolerance absorbs float32 storage of the YAML value and the
-// tool's two-decimal rounding of a separable midpoint; anything larger means
-// the shipped value is not the report's pick.
+// shippedThresholdTolerance allows four-decimal serialization and float32
+// storage only when the shipped value preserves the selected confusion matrix.
 const shippedThresholdTolerance = 5e-5
 
 // checkShippedThresholds is the trust gate behind -check: the checked-in
@@ -336,12 +344,12 @@ func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision 
 	for _, rule := range report.Rules {
 		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
 		status := "ok"
-		if diff := shipped - selected; diff > shippedThresholdTolerance || diff < -shippedThresholdTolerance {
+		if diff := shipped - selected; diff > shippedThresholdTolerance || diff < -shippedThresholdTolerance || !sameMatrix(rule.Shipped, rule.Selected) {
 			status = "MISMATCH"
 			code = 2
 		}
-		fmt.Printf("  %-32s shipped=%.4f selected=%.4f separable=%t F1=%.3f FP=%d FN=%d  %s\n",
-			rule.Name, shipped, selected, rule.Selected.Separable, rule.Selected.F1, rule.Selected.FP, rule.Selected.FN, status)
+		fmt.Printf("  %-32s shipped=%.8g selected=%.8g separable=%t F1=%.3f FP=%d FN=%d  %s\n",
+			rule.Name, shipped, selected, rule.Shipped.Separable, rule.Shipped.F1, rule.Shipped.FP, rule.Shipped.FN, status)
 	}
 	if code != 0 {
 		fmt.Println("  FAIL: a shipped threshold is not the report-selected value; rerun the calibration and ship what it selects")
@@ -596,7 +604,7 @@ func repoState(root string, outputs ...string) (string, bool) {
 	args := []string{"-C", root, "status", "--porcelain", "--", "."}
 	for _, output := range outputs {
 		if rel, relErr := filepath.Rel(absolutePath(root), absolutePath(output)); relErr == nil && !strings.HasPrefix(rel, "..") {
-			args = append(args, ":(exclude)"+filepath.ToSlash(rel))
+			args = append(args, ":(exclude,literal)"+filepath.ToSlash(rel))
 		}
 	}
 	status, err := exec.Command("git", args...).Output()
@@ -805,7 +813,7 @@ func compareF1(a, b thresholdResult) (better, tie bool) {
 }
 
 func roundTwoPlaces(value float64) float64 {
-	return float64(int(value*100+0.5)) / 100
+	return math.Round(value*100) / 100
 }
 
 func sameMatrix(a, b thresholdResult) bool {
