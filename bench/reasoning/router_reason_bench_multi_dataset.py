@@ -30,6 +30,15 @@ from tqdm import tqdm
 
 from .dataset_factory import DatasetFactory, list_available_datasets
 from .dataset_interface import DatasetInfo, Question, questions_to_dataframe
+from .router_accounting import (
+    cost_summary,
+    count_values,
+    metrics_delta,
+    response_accounting,
+    scrape_metrics,
+    split_summary,
+    value_summary,
+)
 
 # Robust answer extraction patterns for structured response parsing
 ANSWER_PATTERN_PRIMARY = re.compile(
@@ -178,6 +187,15 @@ def parse_args():
         help=(
             'JSON string passed as extra_body for AR mode (e.g., \'{"reasoning":{"effort":"medium"}}\'). '
             "If empty, AR modes are disabled."
+        ),
+    )
+    parser.add_argument(
+        "--router-metrics-url",
+        type=str,
+        default=os.environ.get("ROUTER_METRICS_URL", ""),
+        help=(
+            "Router Prometheus endpoint, e.g. http://127.0.0.1:9190/metrics. When set, "
+            "each router run also reports the cost and routing time the router recorded."
         ),
     )
     return parser.parse_args()
@@ -591,6 +609,51 @@ def normalize_answer(answer: str) -> str:
     return answer
 
 
+def call_model_detailed(
+    client: OpenAI,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+    extra_body: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Call the model, keeping router response headers and usage details."""
+    try:
+        raw = client.chat.completions.with_raw_response.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            extra_body=extra_body if extra_body else None,
+        )
+        response = raw.parse()
+        choice = response.choices[0]
+        # For reasoning models, content might be in reasoning_content instead of content
+        message = choice.message
+        text = message.content or getattr(message, "reasoning_content", None) or ""
+        usage = getattr(response, "usage", None)
+        return {
+            "text": text,
+            "success": True,
+            "prompt_tokens": getattr(usage, "prompt_tokens", None) if usage else None,
+            "completion_tokens": (
+                getattr(usage, "completion_tokens", None) if usage else None
+            ),
+            "total_tokens": getattr(usage, "total_tokens", None) if usage else None,
+            **response_accounting(raw.headers, usage, choice.finish_reason),
+        }
+    except Exception as e:
+        print(f"Model call failed: {e}")
+        return {
+            "text": "ERROR",
+            "success": False,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+            **response_accounting({}, None, None),
+        }
+
+
 def call_model(
     client: OpenAI,
     model: str,
@@ -600,25 +663,16 @@ def call_model(
     extra_body: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, bool, Optional[int], Optional[int], Optional[int]]:
     """Call model with given parameters."""
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-            temperature=temperature,
-            extra_body=extra_body if extra_body else None,
-        )
-        # For reasoning models, content might be in reasoning_content instead of content
-        message = response.choices[0].message
-        text = message.content or getattr(message, "reasoning_content", None) or ""
-        usage = getattr(response, "usage", None)
-        prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
-        completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
-        total_tokens = getattr(usage, "total_tokens", None) if usage else None
-        return text, True, prompt_tokens, completion_tokens, total_tokens
-    except Exception as e:
-        print(f"Model call failed: {e}")
-        return "ERROR", False, None, None, None
+    result = call_model_detailed(
+        client, model, prompt, max_tokens, temperature, extra_body
+    )
+    return (
+        result["text"],
+        result["success"],
+        result["prompt_tokens"],
+        result["completion_tokens"],
+        result["total_tokens"],
+    )
 
 
 def build_extra_body_for_model(
@@ -691,10 +745,11 @@ def process_question_single(
         extra_body = ar_extra_body
 
     start_time = time.time()
-    response_text, success, prompt_tokens, completion_tokens, total_tokens = call_model(
+    result = call_model_detailed(
         client, model, prompt, max_tokens, temperature, extra_body=extra_body
     )
     end_time = time.time()
+    response_text, success = result["text"], result["success"]
 
     predicted_answer = extract_answer(response_text, question) if success else None
 
@@ -733,9 +788,17 @@ def process_question_single(
         "is_correct": is_correct,
         "response_time": end_time - start_time,
         "success": success,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": total_tokens,
+        "prompt_tokens": result["prompt_tokens"],
+        "completion_tokens": result["completion_tokens"],
+        "total_tokens": result["total_tokens"],
+        "selected_model": result["selected_model"],
+        "finish_reason": result["finish_reason"],
+        "reasoning_tokens": result["reasoning_tokens"],
+        "cached_tokens": result["cached_tokens"],
+        "routing_latency_ms": result["routing_latency_ms"],
+        "cost": result["cost"],
+        "cost_currency": result["cost_currency"],
+        "cache_hit": result["cache_hit"],
     }
 
 
@@ -1011,7 +1074,76 @@ def analyze_results(results_df: pd.DataFrame) -> Dict[str, Any]:
         "successful_queries": int(len(valid)),
         "failed_queries": int(len(results_df) - len(valid)),
         "by_mode": by_mode,
+        **accounting_summary(valid),
     }
+
+
+def _column_values(frame: pd.DataFrame, name: str) -> List[Any]:
+    if name not in frame.columns:
+        return []
+    return [None if pd.isna(value) else value for value in frame[name]]
+
+
+def accounting_summary(valid: pd.DataFrame) -> Dict[str, Any]:
+    """Which model answered, what it cost, routing time, and truncated answers."""
+    if "selected_model" not in valid.columns:
+        return {}
+    finish_reasons = [str(v or "") for v in _column_values(valid, "finish_reason")]
+    reasoning = [
+        int(v) for v in _column_values(valid, "reasoning_tokens") if v is not None
+    ]
+    return {
+        **split_summary([str(v or "") for v in _column_values(valid, "selected_model")]),
+        "finish_reason_counts": count_values(finish_reasons),
+        "truncated_responses": finish_reasons.count("length"),
+        "reasoning_tokens_total": sum(reasoning) if reasoning else None,
+        "routing_latency_ms": value_summary(
+            float(v)
+            for v in _column_values(valid, "routing_latency_ms")
+            if v is not None
+        ),
+        "cost": cost_summary(
+            [None if v is None else float(v) for v in _column_values(valid, "cost")],
+            [str(v or "") for v in _column_values(valid, "cost_currency")],
+        ),
+        "cache_hits": sum(1 for v in _column_values(valid, "cache_hit") if v),
+    }
+
+
+def print_accounting(analysis: Dict[str, Any]) -> None:
+    if analysis.get("selected_model_counts"):
+        print(f"Routing split: {analysis['selected_model_counts']}")
+    if analysis.get("truncated_responses"):
+        print(
+            "⚠️  Cut off at max_tokens (finish_reason=length): "
+            f"{analysis['truncated_responses']}"
+        )
+    cost = analysis.get("cost") or {}
+    if cost.get("priced_requests"):
+        print(
+            f"Cost at configured prices: {cost['total']} "
+            f"over {cost['priced_requests']} priced requests"
+        )
+    routing = analysis.get("routing_latency_ms") or {}
+    if routing.get("samples"):
+        print(f"Routing time ms p50/p95: {routing['p50']} / {routing['p95']}")
+    router_metrics = analysis.get("router_metrics")
+    if router_metrics:
+        print(
+            f"Router /metrics: cost {router_metrics['cost_by_model']}, "
+            f"mean routing ms {router_metrics['routing_latency_ms_mean']}"
+        )
+
+
+def scrape_router_metrics(url: str) -> Optional[Dict[Any, float]]:
+    """Read router /metrics; it's optional, so a failure only prints a warning."""
+    if not url:
+        return None
+    try:
+        return scrape_metrics(url)
+    except Exception as e:
+        print(f"⚠️  Could not read router metrics from {url}: {e}")
+        return None
 
 
 def save_results(
@@ -1048,6 +1180,7 @@ def save_results(
     print(
         f"Avg Latency: {analysis['avg_response_time']:.2f}s | Avg Total Tokens: {analysis['avg_total_tokens']}"
     )
+    print_accounting(analysis)
     print("=" * 50 + "\n")
 
     if "category_metrics" in analysis:
@@ -1176,6 +1309,7 @@ def main():
             print(
                 f"Using max_tokens: {model_tokens} (dataset-optimized for fair comparison)"
             )
+            metrics_before = scrape_router_metrics(args.router_metrics_url)
             rt_df = evaluate_model_router_transparent(
                 questions=questions,
                 dataset=dataset,
@@ -1187,6 +1321,12 @@ def main():
                 temperature=args.temperature,
             )
             analysis = analyze_results(rt_df)
+            if metrics_before is not None:
+                metrics_after = scrape_router_metrics(args.router_metrics_url)
+                if metrics_after is not None:
+                    analysis["router_metrics"] = metrics_delta(
+                        metrics_before, metrics_after
+                    )
             save_results(
                 results_df=rt_df,
                 analysis=analysis,
