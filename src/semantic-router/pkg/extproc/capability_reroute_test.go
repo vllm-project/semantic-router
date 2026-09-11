@@ -20,6 +20,8 @@ func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
 					"transport-only": {APIFormat: "openai", Capabilities: []string{"tools", "streaming"}},
 					"unannotated":    {APIFormat: "openai"},
 					"image-declared": {APIFormat: "openai", Capabilities: []string{"image_input"}},
+					"mixed-declared": {APIFormat: "openai", Capabilities: []string{"image_input", "vision"}},
+					"unknown-only":   {APIFormat: "openai", Capabilities: []string{"vision"}},
 				},
 			},
 		},
@@ -40,5 +42,18 @@ func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
 	// Task-annotated model lacking the required task still gets filtered.
 	if got := router.qualifiedRerouteCandidate("image-declared", audioRequired); got != "" {
 		t.Fatalf("image-declared model must be rejected for an audio request, got format %q", got)
+	}
+	// A mixed known/unknown declaration keeps its valid task bits: the
+	// unrecognized "vision" word must not void the recognized image_input bit.
+	if got := router.qualifiedRerouteCandidate("mixed-declared", imageRequired); got == "" {
+		t.Fatal("mixed known/unknown declaration must stay eligible for an image request")
+	}
+	if got := router.qualifiedRerouteCandidate("mixed-declared", audioRequired); got != "" {
+		t.Fatalf("mixed known/unknown declaration must be rejected for audio, got format %q", got)
+	}
+	// A declaration with no recognized name carries no task bit and is treated
+	// like an unannotated model.
+	if got := router.qualifiedRerouteCandidate("unknown-only", imageRequired); got == "" {
+		t.Fatal("unknown-name-only declaration must stay eligible on wire expressibility, matching an unannotated model")
 	}
 }

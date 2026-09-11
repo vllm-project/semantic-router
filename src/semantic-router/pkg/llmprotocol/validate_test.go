@@ -23,6 +23,16 @@ func TestParseCapabilitiesRejectsUnknownNames(t *testing.T) {
 	}
 }
 
+func TestParseCapabilitiesPreservesKnownBitsOnUnknownName(t *testing.T) {
+	set, err := ParseCapabilities([]string{"image_input", "vision"})
+	if err == nil {
+		t.Fatal("unknown capability must still report an error")
+	}
+	if !set.Contains(Capabilities(CapabilityImageInput)) {
+		t.Fatalf("known task bit dropped alongside unknown name, got %v", set.Names())
+	}
+}
+
 func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 	all := Capabilities(
 		CapabilityText,

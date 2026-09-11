@@ -110,6 +110,12 @@ dispatch:
    task bit, so they are treated as unannotated for task filtering and the
    model stays eligible on wire expressibility; those capabilities are
    verified against wire codec expressibility, not the model declaration.
+4. **Partially recognized declaration** — a name outside the protocol
+   vocabulary (e.g. `vision`, `long_context`) contributes nothing to the
+   model's task bits, and it does not void any recognized names in the same
+   declaration. A card declaring `[image_input, vision]` is filtered on
+   `image_input` alone. A declaration with no recognized name at all carries
+   no task bit and is treated like an unannotated model.
 
 ## Validate the result
 

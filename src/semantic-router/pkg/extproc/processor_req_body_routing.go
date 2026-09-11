@@ -136,11 +136,11 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 }
 
 // declaredModelCapabilities parses a model's configured capability
-// declarations. A model with no declaration (or an unparsable one) is treated
-// as unannotated and stays eligible on wire expressibility alone; only the
-// task/modality subset of a declaration steers the declared filter (a
-// transport/accounting-only declaration carries no task bit and is treated
-// like an unannotated model).
+// declarations. A model with no declaration is unannotated and stays eligible
+// on wire expressibility alone; a declaration that is only partially
+// understood (recognized task bits plus unrecognized names) keeps its valid
+// task bits for the declared filter, with the unrecognized words treated like
+// an unannotated model (each contributes no task bit).
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -149,10 +149,10 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 	if !ok || len(params.Capabilities) == 0 {
 		return llmprotocol.CapabilitySet{}, false
 	}
-	declared, err := llmprotocol.ParseCapabilities(params.Capabilities)
-	if err != nil {
-		return llmprotocol.CapabilitySet{}, false
-	}
+	// ParseCapabilities preserves the recognized subset when it meets an
+	// unrecognized name, so the known task bits still steer filtering instead
+	// of dropping out with the whole declaration.
+	declared, _ := llmprotocol.ParseCapabilities(params.Capabilities)
 	return declared, true
 }
 
