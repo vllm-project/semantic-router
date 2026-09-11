@@ -1,9 +1,25 @@
 // topology/constants.ts - Constants and Color Schemes
 
 import { SignalType, PluginType, AlgorithmType } from './types'
+import {
+  ALGORITHM_TYPES as ROUTER_ALGORITHM_TYPES,
+  PLUGIN_TYPES as ROUTER_PLUGIN_TYPES,
+  SIGNAL_TYPES as ROUTER_SIGNAL_TYPES,
+} from '../../generated/routerConfigContract'
+
+function compactSurfaceIcon(value: string): string {
+  const words = value.split('_').filter(Boolean)
+  if (words.length > 1) return words.map((word) => word[0]?.toUpperCase()).join('')
+  return value.slice(0, 3).toUpperCase()
+}
+
+export const SIGNAL_TYPES: SignalType[] = [...ROUTER_SIGNAL_TYPES, 'projection']
+export const PLUGIN_TYPES: PluginType[] = [...ROUTER_PLUGIN_TYPES]
+export const ALGORITHM_TYPES: AlgorithmType[] = [...ROUTER_ALGORITHM_TYPES]
+const ALGORITHM_DISPLAY_TYPES: AlgorithmType[] = [...ALGORITHM_TYPES, 'concurrent', 'sequential']
 
 // ============== Signal Icons ==============
-export const SIGNAL_ICONS: Record<SignalType, string> = {
+const SIGNAL_ICON_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: 'KW',
   embedding: 'EMB',
   domain: 'DOM',
@@ -26,32 +42,17 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   projection: 'PRJ',
 }
 
+export const SIGNAL_ICONS = Object.fromEntries(
+  SIGNAL_TYPES.map((type) => [type, SIGNAL_ICON_OVERRIDES[type] || compactSurfaceIcon(type)]),
+) as Record<SignalType, string>
+
 // ============== Signal Colors (Gray Nodes, Alloy Paths) ==============
-export const SIGNAL_COLORS: Record<SignalType, { background: string; border: string }> = {
-  keyword: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  embedding: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  domain: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  fact_check: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  reask: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  preference: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  language: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  context: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  structure: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  complexity: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  modality: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  authz: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  jailbreak: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  hallucination: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  pii: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  kb: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  conversation: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  event: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  projection: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-}
+export const SIGNAL_COLORS = Object.fromEntries(
+  SIGNAL_TYPES.map((type) => [type, { background: '#4a5568', border: '#2d3748' }]),
+) as Record<SignalType, { background: string; border: string }>
 
 // ============== Signal Latency ==============
-export const SIGNAL_LATENCY: Record<SignalType, string> = {
+const SIGNAL_LATENCY_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: '<1ms',
   embedding: '10-50ms',
   domain: '10-50ms',
@@ -74,8 +75,12 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   projection: '<1ms',
 }
 
+export const SIGNAL_LATENCY = Object.fromEntries(
+  SIGNAL_TYPES.map((type) => [type, SIGNAL_LATENCY_OVERRIDES[type] || '~100ms']),
+) as Record<SignalType, string>
+
 // ============== Plugin Icons ==============
-export const PLUGIN_ICONS: Record<PluginType, string> = {
+const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   response_cache: 'RC',
   memory: 'MEM',
   system_prompt: 'SP',
@@ -92,26 +97,38 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   shadow_dispatch: 'SD',
 }
 
+export const PLUGIN_ICONS = Object.fromEntries(
+  PLUGIN_TYPES.map((type) => [type, PLUGIN_ICON_OVERRIDES[type] || compactSurfaceIcon(type)]),
+) as Record<PluginType, string>
+
 // ============== Plugin Colors (Graphite Theme) ==============
-export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-  memory: { background: '#3f6b73', border: '#2e4f55' },
-  system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
-  header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
-  router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
-  rag: { background: '#2f855a', border: '#276749' },
-  fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  request_params: { background: '#805ad5', border: '#6b46c1' },
-  response_jailbreak: { background: '#c05621', border: '#9c4221' },
-  tools: { background: '#5a6c7d', border: '#3d4a59' },
-  tool_selection: { background: '#4b6f7f', border: '#344f5c' },
-  context_compression: { background: '#606c7a', border: '#3d4a59' },
-  shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
-}
+const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; border: string }>> =
+  {
+    response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
+    memory: { background: '#3f6b73', border: '#2e4f55' },
+    system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
+    header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+    hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
+    router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
+    rag: { background: '#2f855a', border: '#276749' },
+    fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+    request_params: { background: '#805ad5', border: '#6b46c1' },
+    response_jailbreak: { background: '#c05621', border: '#9c4221' },
+    tools: { background: '#5a6c7d', border: '#3d4a59' },
+    tool_selection: { background: '#4b6f7f', border: '#344f5c' },
+    context_compression: { background: '#606c7a', border: '#3d4a59' },
+    shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
+  }
+
+export const PLUGIN_COLORS = Object.fromEntries(
+  PLUGIN_TYPES.map((type) => [
+    type,
+    PLUGIN_COLOR_OVERRIDES[type] || { background: '#607D8B', border: '#455A64' },
+  ]),
+) as Record<PluginType, { background: string; border: string }>
 
 // ============== Algorithm Icons ==============
-export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
+const ALGORITHM_ICON_OVERRIDES: Partial<Record<AlgorithmType, string>> = {
   confidence: 'CF',
   concurrent: 'CC',
   sequential: 'SEQ',
@@ -131,8 +148,17 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   multi_factor: 'MF',
 }
 
+export const ALGORITHM_ICONS = Object.fromEntries(
+  ALGORITHM_DISPLAY_TYPES.map((type) => [
+    type,
+    ALGORITHM_ICON_OVERRIDES[type] || compactSurfaceIcon(type),
+  ]),
+) as Record<AlgorithmType, string>
+
 // ============== Algorithm Colors (Graphite Theme) ==============
-export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; border: string }> = {
+const ALGORITHM_COLOR_OVERRIDES: Partial<
+  Record<AlgorithmType, { background: string; border: string }>
+> = {
   confidence: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   concurrent: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   sequential: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
@@ -151,6 +177,13 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   mlp: { background: '#586d7a', border: '#40515d' },
   multi_factor: { background: '#4e6f63', border: '#38534a' },
 }
+
+export const ALGORITHM_COLORS = Object.fromEntries(
+  ALGORITHM_DISPLAY_TYPES.map((type) => [
+    type,
+    ALGORITHM_COLOR_OVERRIDES[type] || { background: '#607D8B', border: '#455A64' },
+  ]),
+) as Record<AlgorithmType, { background: string; border: string }>
 
 // ============== Reasoning Effort Display (Graphite Theme) ==============
 export const REASONING_EFFORT_DISPLAY: Record<
@@ -293,43 +326,3 @@ export const TOPOLOGY_LAYER_LAYOUT = {
     },
   },
 } as const
-
-// ============== Signal Types Array ==============
-export const SIGNAL_TYPES: SignalType[] = [
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'hallucination',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-  'projection',
-]
-
-// ============== Plugin Types Array ==============
-export const PLUGIN_TYPES: PluginType[] = [
-  'response_cache',
-  'memory',
-  'system_prompt',
-  'header_mutation',
-  'hallucination',
-  'router_replay',
-  'rag',
-  'fast_response',
-  'request_params',
-  'response_jailbreak',
-  'tools',
-  'tool_selection',
-]
