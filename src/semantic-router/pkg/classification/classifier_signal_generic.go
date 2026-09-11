@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 const (
@@ -68,7 +67,7 @@ func (c *Classifier) evaluateGenericClassifierRule(
 ) {
 	start := time.Now()
 	result, err := classifier.Classify(ctx, text)
-	metrics.RecordSignalExtraction(
+	c.recordSignalExtraction(
 		config.SignalTypeClassifier,
 		rule.Name,
 		time.Since(start).Seconds(),
@@ -114,7 +113,7 @@ func (c *Classifier) evaluateGenericClassifierRule(
 			results.MatchedClassifierRules,
 			labelMatch,
 		)
-		metrics.RecordSignalMatch(config.SignalTypeClassifier, labelMatch)
+		c.recordSignalMatch(config.SignalTypeClassifier, labelMatch)
 	}
 }
 
