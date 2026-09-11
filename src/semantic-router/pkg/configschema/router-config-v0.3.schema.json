@@ -2447,6 +2447,9 @@
           },
           "type": "array"
         },
+        "analysis_mode": {
+          "type": "string"
+        },
         "analysis_overrides": {
           "items": {
             "$ref": "#/$defs/FusionModelOverride"
