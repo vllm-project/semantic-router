@@ -373,6 +373,57 @@ func TestRedisListCursors(t *testing.T) {
 		assert.Empty(t, list(t, ListOptions{Order: "asc", Limit: 2, Before: "resp_page_0"}))
 	})
 
+	// A Before window near the start clamps at rank 0, and every rank in
+	// [0, cursor-1] exists, so the window always comes back full. Counting
+	// members against the span it covered therefore never proved exhaustion:
+	// the loop widened the identical clamped window until it hit the stride
+	// cap and reported ErrIndexTraversalBlocked for a page that was simply
+	// short. The clamp itself is the proof that nothing precedes the window,
+	// and the script now says so explicitly. In descending order the newest
+	// member sits at revrank 0, so the same boundary is resp_page_4.
+	t.Run("before window clamped at the start boundary is exhausted, not blocked", func(t *testing.T) {
+		// The maintainer's case: a rank-1 cursor with Limit 2 has exactly one
+		// preceding response and must return it.
+		assert.Equal(t, []string{"resp_page_0"},
+			list(t, ListOptions{Order: "asc", Limit: 2, Before: "resp_page_1"}))
+		assert.Equal(t, []string{"resp_page_4"},
+			list(t, ListOptions{Order: "desc", Limit: 2, Before: "resp_page_3"}))
+
+		// The sharper case is a clamped window that is exactly full yet still
+		// underfills the page, because one of its members is a blank-witness
+		// tombstone the read may not remove before finalization. No count
+		// comparison can tell that window from an unclamped one: the explicit
+		// signal returns the page in a single read, whereas echoing the
+		// requested width converges only after a redundant widening round.
+		// Tombstones sit at both ends so each direction clamps against one.
+		const clamped = "conv_cursor_clamped"
+		now := time.Now().Unix()
+		seedLegacyIndexMember(t, store, clamped, "resp_clamped_tomb_low", now-1)
+		for i, id := range []string{"resp_clamped_live_0", "resp_clamped_live_1"} {
+			require.NoError(t, store.StoreResponse(ctx, &responseapi.StoredResponse{
+				ID: id, ConversationID: clamped, Status: "completed", CreatedAt: now + int64(i),
+			}))
+		}
+		seedLegacyIndexMember(t, store, clamped, "resp_clamped_tomb_high", now+2)
+		require.NoError(t, store.ensureConversationIndexResolved(ctx, clamped))
+		require.NoError(t, readIndexWindowScript.Load(ctx, store.client).Err())
+		observer := &listWindowObserverHook{}
+		store.client.AddHook(observer)
+
+		page := func(opts ListOptions) []string {
+			responses, err := store.ListResponsesByConversation(ctx, clamped, opts)
+			require.NoError(t, err)
+			return responseIDsOf(responses)
+		}
+		assert.Equal(t, []string{"resp_clamped_live_0"},
+			page(ListOptions{Order: "asc", Limit: 2, Before: "resp_clamped_live_1"}))
+		assert.Len(t, observer.snapshot(), 1, "a full clamped ascending window must prove exhaustion in one read")
+
+		assert.Equal(t, []string{"resp_clamped_live_1"},
+			page(ListOptions{Order: "desc", Limit: 2, Before: "resp_clamped_live_0"}))
+		assert.Len(t, observer.snapshot(), 2, "a full clamped descending window must prove exhaustion in one read")
+	})
+
 	t.Run("a cursor naming a non-member returns an empty page, not an error", func(t *testing.T) {
 		assert.Empty(t, list(t, ListOptions{Order: "asc", After: "resp_does_not_exist"}))
 		assert.Empty(t, list(t, ListOptions{Order: "asc", Before: "resp_does_not_exist"}))
