@@ -668,6 +668,22 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text for feedback detection and
+// returns the full probability distribution. The ONNX backend does not yet
+// extract per-class probabilities, so Probabilities is empty and callers fall
+// back to a confidence-based estimate.
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("feedback", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
+}
+
 // ClassifyMmBert32KPII detects PII entities in text
 func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	cName := C.CString("pii")
@@ -1066,6 +1082,22 @@ func InitFeedbackDetector(modelPath string, useCPU bool) error {
 // ClassifyFeedbackText classifies text for feedback detection
 func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return classifyWithClassifier("feedback", text)
+}
+
+// ClassifyFeedbackTextWithProbs classifies text for feedback detection and
+// returns the full probability distribution. The ONNX backend does not yet
+// extract per-class probabilities, so Probabilities is empty and callers fall
+// back to a confidence-based estimate.
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	result, err := classifyWithClassifier("feedback", text)
+	if err != nil {
+		return ClassResultWithProbs{}, err
+	}
+	return ClassResultWithProbs{
+		Class:         result.Class,
+		Confidence:    result.Confidence,
+		Probabilities: []float32{}, // TODO: implement probability extraction
+	}, nil
 }
 
 // ============================================================================
