@@ -55,7 +55,7 @@
 - id: nvidia/nemotron-3.5-lightning-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3.5-lightning
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: enabled
   subject:
     variant: NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
@@ -199,7 +199,7 @@
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: high
   subject:
     variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
@@ -360,7 +360,7 @@
 - id: independent/nvidia-nemotron-3-ultra-550b-a55b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-ultra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Ultra 550B A55B (Reasoning)
@@ -522,7 +522,7 @@
 - id: independent/nvidia-nemotron-3-super-120b-a12b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-super
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Super 120B A12B (Reasoning)
@@ -666,7 +666,7 @@
 - id: independent/nemotron-3-nano-omni-30b-a3b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: Nemotron 3 Nano Omni 30B A3B Reasoning
@@ -720,7 +720,7 @@
 - id: nvidia/nemotron-cascade-2-model-card-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: Nemotron-Cascade-2-30B-A3B
@@ -838,6 +838,25 @@
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
     redistributable: true
+- id: nvidia/nemotron-3-super-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_reproducibility_documentation
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.7825
+  status: available
+  observed_at: 2026-09-11
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://github.com/NVIDIA-NeMo/Nemotron/blob/907d408c67cb70e9f1ed28fb67702e7bd36e3239/docs/nemotron/super3/quantization.md
+    redistributable: true
 - id: mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
   model: nvidia/nemotron-3-nano-30b-a3b
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -915,7 +934,7 @@
 - id: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
   model: nvidia/nemotron-3-nano-30b-a3b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: enabled
   subject:
     source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)

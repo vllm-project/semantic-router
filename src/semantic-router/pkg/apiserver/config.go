@@ -37,7 +37,7 @@ type ClassificationAPIServer struct {
 	managementAuditEntries  []managementAuditEntry
 	managementAuditLastHash string
 	managementAuditSequence uint64
-	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
+	// learningOutcomePolicy gates POST /api/v1/observability/outcomes (idempotency + rate limit).
 	learningOutcomePolicyOnce sync.Once
 	learningOutcomePolicy     *learningOutcomeIngestPolicy
 }
@@ -205,6 +205,7 @@ type EndpointInfo struct {
 	Description string           `json:"description"`
 	Permission  RoutePermission  `json:"permission"`
 	Sensitivity RouteSensitivity `json:"sensitivity"`
+	EndpointContract
 }
 
 // TaskTypeInfo represents information about a task type
@@ -219,4 +220,5 @@ type EndpointMetadata struct {
 	Method      string
 	Description string
 	Parameters  []OpenAPIParameter
+	EndpointContract
 }

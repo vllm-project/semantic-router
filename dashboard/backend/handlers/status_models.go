@@ -22,7 +22,7 @@ func fetchRouterModelsInfo(routerAPIURL string, credentialProvider ...routerauth
 		return nil
 	}
 
-	resp, err := routerManagementGET(strings.TrimSuffix(routerAPIURL, "/")+"/info/models", 2*time.Second, credentialProvider...)
+	resp, err := routerManagementGET(strings.TrimSuffix(routerAPIURL, "/")+"/api/v1/inventory/models", 2*time.Second, credentialProvider...)
 	if err != nil {
 		return nil
 	}
