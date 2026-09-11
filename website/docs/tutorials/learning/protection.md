@@ -89,10 +89,9 @@ verification, or explicit outcome evidence.
 
 ## Progress Gate
 
-The switch rule above is a one-shot cost comparison. The progress gate adds a
-second, evidence-based approval stage: a proposed switch is only committed when
-the session's recent trajectory justifies it. This prevents thrashing from
-single noisy turns (one empty reply, one provider hiccup).
+The progress gate evaluates recent outcomes before accepting a model switch
+proposed by protection or rescue. It does not select a model, call a model or
+tool, or replace the request's authorization and routing policies.
 
 ### Configuration
 
@@ -100,66 +99,100 @@ single noisy turns (one empty reply, one provider hiccup).
 global:
   router:
     learning:
+      enabled: true
       protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers: {session: x-session-id, conversation: x-conversation-id}
         tuning:
           progress_gate:
-            enabled: true        # default false — zero behavior change
-            mode: observe        # observe | enforce
-            window_size: 8               # recent turns kept as evidence
-            window_ttl_seconds: 900      # evidence older than this expires
-            min_window_outcomes: 3       # attributable turns required
-            min_consecutive_regressions: 2  # escalation threshold
-            min_consecutive_recoveries: 2   # downgrade threshold
-            cooldown_seconds: 120        # min quiet period between switches
-            max_switches_per_window: 2   # oscillation guard
+            enabled: true
+            mode: observe
+            calibration_id: ""
+            window_size: 8
+            window_ttl_seconds: 900
+            min_window_outcomes: 3
+            min_consecutive_regressions: 2
+            min_consecutive_recoveries: 2
+            cooldown_seconds: 120
+            max_switches_per_window: 2
 ```
 
-Omitting the whole `progress_gate` section keeps the gate disabled. Any tuning
-field can be set alone; the rest inherit their packaged defaults.
+The gate is disabled when the section or `enabled` is omitted. `enabled` and
+`mode` are independent: `observe` records soft evidence decisions without
+applying them; `enforce` applies them. Neither mode relaxes hard constraints.
+The outer protection `apply`/`observe`/`bypass` modes remain separate.
 
-### How it decides
+`calibration_id` identifies the external profile that supplied the thresholds,
+using `name@version`. It is required when enabling `enforce`; an empty value in
+`observe` explicitly means uncalibrated defaults. For example,
+`team/session-policy@2026-09` is an identity, not a calibration result. The
+router neither trains a calibrator nor verifies the quality of that profile.
+Do not use the synthetic E2E fixture identity as a production calibration.
 
-Every turn's outcome is classified into a typed, content-minimal fact:
-`progress`, `no_progress`, `regression` (model-attributable), or
-`provider_error` / `tool_error` / `missing` (environment noise, never counted
-against the model). The gate keeps a bounded window of these facts per session
-and derives regression/recovery streaks, a progress trend, and evidence
-coverage.
+`window_size` accepts 1–256 samples; `window_ttl_seconds` accepts 1–86400 seconds.
+Threshold relationships are validated after omitted fields receive defaults.
+For example, reducing the window to two samples also requires reducing the
+default `min_window_outcomes: 3`. Evidence TTL is distinct from session idle
+expiry and the shared store's retention TTL. Retained history cannot be
+recreated by subsequently increasing the window.
 
-A switch proposal is suppressed, in priority order, when:
+### Evidence and decisions
+
+Response capture records positive output as `progress`, explicitly reported
+zero output as `no_progress`, and unavailable usage as `missing`. Positive
+output is a transport-level proxy, not a claim that the answer was correct.
+Authenticated, owned outcome ingest can refine a turn to `progress` or
+`regression`. Known provider failures remain non-attributable even if a later
+verdict says `failed`. `tool_error` is supported as a typed fact; the response
+path does not guess tool success from a tool message's presence.
+
+Facts are bounded by count and event time. Duplicate request/model samples
+merge; different models and unknown request identities do not. Ingest owns the
+quality verdict, capture owns measured usage, and known infrastructure failure
+provenance wins over both. Missing confidence, cost, or latency remains unknown,
+not a fabricated zero. Cost trends use configured pricing; latency trends use
+observed time to first token. These optional trends are exposed for replay,
+not used as an additional undocumented selection score.
 
 | Reason | Condition |
 | --- | --- |
-| `hard_constraint_conflict` | Tool loop or non-portable context — hard locks win over evidence |
-| `cold_start` | No observable outcomes yet |
-| `insufficient_evidence` | Fewer attributable outcomes than `min_window_outcomes`, or the streak/trend thresholds are not met |
-| `cooldown` | Last switch was less than `cooldown_seconds` ago |
-| `oscillation_guard` | Already switched `max_switches_per_window` times inside the evidence window |
+| `hard_constraint_conflict` | Active tool loop or non-portable context |
+| `cold_start` | No observable evidence, including a fully expired window |
+| `insufficient_evidence` | Too few attributable samples, or unmet streak/trend thresholds |
+| `cooldown` | Time since the last recorded model change is below the configured interval |
+| `oscillation_guard` | The age-bounded window already contains the configured maximum switches |
 
-Escalation (proposing a stronger model) requires the regression streak plus a
-non-positive trend; downgrading uses consecutive recoveries instead. Hard
-constraints stay authoritative in both modes: the gate can only suppress a
-switch, never force one.
+Escalation requires consecutive same-category negative outcomes and a
+non-positive progress trend; de-escalation requires consecutive recoveries.
+Known de-escalation is determined from the same quality index and exact
+candidate reasoning effort. Missing or incomparable quality evidence uses the
+conservative escalation path. Missing and non-attributable outcomes neither
+extend nor break a streak, but do not count toward attributable coverage.
 
-### Modes
+### Hard constraints and Replay
 
-`observe` evaluates the gate and records the full verdict in Router Replay but
-never changes the outcome — use it to measure the would-suppress rate before
-trusting `enforce`. `enforce` holds the current model when the verdict says
-suppress, but only after re-checking that the current model is still a valid
-candidate for the request; a suppression never invents a routing target.
+Before applying a proposal or restoring the current model, the integration
+rechecks the existing candidate boundary, configured backend, context limit,
+protocol capabilities, portability locks, and the selected algorithm's hard
+SLO/quality filters. The gate cannot introduce a candidate excluded by policy.
+If the current model is no longer eligible, a soft suppression cannot restore
+it. When no eligible outcome remains, the request fails closed through the
+existing selection error path.
 
-Both directions are gated: after switching to a stronger model, dropping back
-to a cheaper one also needs consecutive recovery evidence.
+Replay's `session_policy.switch_gate` contains the evidence version,
+`calibration_id`, evidence metrics and their availability, decision/reason,
+switch direction, candidate names, switch history, and actual application.
+`enforced` describes the gate mode; `applied`, `application_reason`, and
+`final_model` describe what happened. A hard lock can apply in either mode.
+A rejected rescue is retained in `rescue_switch_gate` alongside the eventual
+main-path decision. A non-switch does not invent a gate verdict.
 
-### Replay
-
-Every gated switch or suppression records a `switch_gate` section in Router
-Replay: evidence version, mode, decision, suppression reason, switch origin
-(escalation/downgrade), regression/recovery streaks, trend, window size,
-attributable and missing counts, cooldown timers, and the oscillation counter.
-Replay therefore explains every model change without access to the router's
-memory.
+The maintained `progress-gate` E2E profile exercises request capture, authenticated
+idempotent feedback, suppression, allowed switches, cooldown, oscillation, and
+Replay over HTTP. Its dedicated deployment leaves `router-replay` tests
+unchanged.
 
 ## Decision Boundaries
 
