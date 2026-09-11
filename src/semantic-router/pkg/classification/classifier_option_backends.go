@@ -41,12 +41,13 @@ func (b *classifierOptionBuilder) addRemoteCategoryClassifier(categoryMapping *C
 	timeout := time.Duration(backendCfg.EffectiveDeadlineMs()) * time.Millisecond
 	cbCfg := backendCfg.CircuitBreaker
 
-	innerBackend, err := newHTTPClassifierInference(external, categoryMapping, timeout)
+	httpBackend, err := newHTTPClassifierInference(external, categoryMapping, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to create category http_classify backend: %w", err)
 	}
+	var innerBackend SequenceClassifierBackend = httpBackend
 	if cbCfg != nil && cbCfg.Enabled {
-		innerBackend = newCircuitBreakingBackend(innerBackend, cbCfg, external.ModelName)
+		innerBackend = newCircuitBreakingBackend(httpBackend, cbCfg, external.ModelName)
 	}
 	cbWrappedBackend := &categoryHTTPBackend{backend: innerBackend}
 	b.options = append(b.options, withCategory(categoryMapping, nil, cbWrappedBackend))

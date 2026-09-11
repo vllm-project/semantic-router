@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 type fakeBackend struct {
@@ -44,6 +46,11 @@ func (f *fakeScoringBackend) Score(_ context.Context, _ string) (float64, error)
 	}
 }
 
+// connTransportError builds a connector error that isUnavailableError counts.
+func connTransportError() error {
+	return &connector.Error{Kind: connector.KindTransport, Operation: "http_classify", Retryable: true, Cause: errors.New("connection refused")}
+}
+
 func testCBConfig(enabled bool) *RemoteClassifierCircuitBreakerConfig {
 	threshold := 3
 	open := 100
@@ -62,7 +69,7 @@ func TestCircuitBreakerClosedToOpen(t *testing.T) {
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test-model")
 
 	for i := 0; i < 3; i++ {
-		fake.results <- resultOrError{err: errors.New("timeout")}
+		fake.results <- resultOrError{err: connTransportError()}
 		if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 			t.Fatalf("step %d: expected error", i)
 		}
@@ -83,7 +90,7 @@ func TestCircuitBreakerSuccessResets(t *testing.T) {
 	cfg := testCBConfig(true)
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test-model")
 
-	fake.results <- resultOrError{err: errors.New("timeout")}
+	fake.results <- resultOrError{err: connTransportError()}
 	if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 		t.Fatal("expected error")
 	}
@@ -105,7 +112,7 @@ func TestCircuitBreakerDisabled(t *testing.T) {
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test")
 
 	for i := 0; i < 10; i++ {
-		fake.results <- resultOrError{err: errors.New("timeout")}
+		fake.results <- resultOrError{err: connTransportError()}
 		if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 			t.Fatalf("expected error on call %d", i)
 		}
@@ -126,7 +133,7 @@ func TestCircuitBreakerHalfOpenToClosed(t *testing.T) {
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test")
 
 	for i := 0; i < 2; i++ {
-		fake.results <- resultOrError{err: errors.New("timeout")}
+		fake.results <- resultOrError{err: connTransportError()}
 		if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 			t.Fatalf("expected error %d", i)
 		}
@@ -143,7 +150,7 @@ func TestCircuitBreakerHalfOpenToClosed(t *testing.T) {
 		t.Fatalf("expected half-open probe to succeed, got %v", err)
 	}
 
-	fake.results <- resultOrError{err: errors.New("timeout")}
+	fake.results <- resultOrError{err: connTransportError()}
 	if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 		t.Fatal("expected error (breaker is closed but backend failed)")
 	}
@@ -162,14 +169,14 @@ func TestCircuitBreakerHalfOpenFails(t *testing.T) {
 	}
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test")
 
-	fake.results <- resultOrError{err: errors.New("timeout")}
+	fake.results <- resultOrError{err: connTransportError()}
 	if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 		t.Fatal("expected error")
 	}
 
 	time.Sleep(60 * time.Millisecond)
 
-	fake.results <- resultOrError{err: errors.New("timeout")}
+	fake.results <- resultOrError{err: connTransportError()}
 	if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 		t.Fatal("expected half-open probe failure")
 	}
@@ -187,12 +194,60 @@ func TestCircuitBreakerHalfOpenFails(t *testing.T) {
 	}
 }
 
+// TestCircuitBreakerCancellationNotCounted verifies that a cancelled context
+// error does not increment the circuit breaker failure count.
+func TestCircuitBreakerCancellationNotCounted(t *testing.T) {
+	fake := &fakeBackend{results: make(chan resultOrError, 10)}
+	cfg := testCBConfig(true)
+	wrapped := newCircuitBreakingBackend(fake, cfg, "test-model")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fake.results <- resultOrError{err: context.Canceled}
+	// This should pass through the error but NOT be counted as a breaker failure
+	_, err := wrapped.Classify(ctx, "text")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	// After one cancellation, the breaker should still be closed (0 failures toward threshold)
+	// Next call should fail from the backend (transport error) but first one didn't count
+	fake.results <- resultOrError{err: connTransportError()}
+	_, err = wrapped.Classify(context.Background(), "text")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Two more transport errors should still not be enough to open breaker (only 2 counted)
+	fake.results <- resultOrError{err: connTransportError()}
+	fake.results <- resultOrError{err: connTransportError()}
+	_, err = wrapped.Classify(context.Background(), "text")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	_, err = wrapped.Classify(context.Background(), "text")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Now 3 transport errors total = threshold reached, should open breaker
+	_, err = wrapped.Classify(context.Background(), "text")
+	if err == nil {
+		t.Fatal("expected circuit breaker open")
+	}
+	var cbErr *ErrCircuitBreakerOpen
+	if !errors.As(err, &cbErr) {
+		t.Fatalf("expected *ErrCircuitBreakerOpen, got %T: %v", err, err)
+	}
+}
+
 func TestCircuitBreakerNilConfig(t *testing.T) {
 	fake := &fakeBackend{results: make(chan resultOrError, 10)}
 	wrapped := newCircuitBreakingBackend(fake, nil, "test")
 
 	for i := 0; i < 10; i++ {
-		fake.results <- resultOrError{err: errors.New("timeout")}
+		fake.results <- resultOrError{err: connTransportError()}
 		if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
 			t.Fatalf("expected error on call %d", i)
 		}
@@ -203,7 +258,7 @@ func TestCircuitBreakerNilConfigScoringBackend(t *testing.T) {
 	fake := &fakeScoringBackend{results: make(chan scoreOrError, 10)}
 	wrapped := newCircuitBreakingBackendScoring(fake, nil, "test")
 
-	fake.results <- scoreOrError{err: errors.New("timeout")}
+	fake.results <- scoreOrError{err: connTransportError()}
 	if _, err := wrapped.Score(context.Background(), "text"); err == nil {
 		t.Fatal("expected error")
 	}

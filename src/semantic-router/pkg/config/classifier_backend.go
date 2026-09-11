@@ -164,6 +164,26 @@ func (b *RemoteClassifierBackend) Validate() error {
 	if b.DeadlineMs != nil && *b.DeadlineMs <= 0 {
 		return fmt.Errorf("backend.deadline_ms must be greater than zero, got %d", *b.DeadlineMs)
 	}
+	if err := b.validateCircuitBreaker(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateCircuitBreaker checks circuit breaker thresholds are positive when enabled.
+func (b *RemoteClassifierBackend) validateCircuitBreaker() error {
+	if b.CircuitBreaker == nil || !b.CircuitBreaker.Enabled {
+		return nil
+	}
+	if b.CircuitBreaker.ConsecutiveFailures != nil && *b.CircuitBreaker.ConsecutiveFailures <= 0 {
+		return fmt.Errorf("backend.circuit_breaker.consecutive_failures must be positive when enabled, got %d", *b.CircuitBreaker.ConsecutiveFailures)
+	}
+	if b.CircuitBreaker.OpenIntervalMs != nil && *b.CircuitBreaker.OpenIntervalMs <= 0 {
+		return fmt.Errorf("backend.circuit_breaker.open_interval_ms must be positive when enabled, got %d", *b.CircuitBreaker.OpenIntervalMs)
+	}
+	if b.CircuitBreaker.HalfOpenMaxRequests != nil && *b.CircuitBreaker.HalfOpenMaxRequests <= 0 {
+		return fmt.Errorf("backend.circuit_breaker.half_open_max_requests must be positive when enabled, got %d", *b.CircuitBreaker.HalfOpenMaxRequests)
+	}
 	return nil
 }
 

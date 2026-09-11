@@ -2,11 +2,13 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
 // circuitBreakerState represents the three states of the circuit breaker
@@ -158,8 +160,10 @@ func (b *circuitBreakingBackend) Classify(ctx context.Context, text string) (Seq
 
 	result, err := b.inner.Classify(ctx, text)
 	if err != nil {
-		b.cb.recordFailure()
-		recordCircuitBreakerFailure(b.name)
+		if isUnavailableError(err) {
+			b.cb.recordFailure()
+			recordCircuitBreakerFailure(b.name)
+		}
 		return SequenceClassificationResult{}, err
 	}
 	b.cb.recordSuccess()
@@ -195,10 +199,30 @@ func (b *circuitBreakingScoringBackend) Score(ctx context.Context, text string) 
 
 	score, err := b.inner.Score(ctx, text)
 	if err != nil {
-		b.cb.recordFailure()
-		recordCircuitBreakerFailure(b.name)
+		if isUnavailableError(err) {
+			b.cb.recordFailure()
+			recordCircuitBreakerFailure(b.name)
+		}
 		return 0, err
 	}
 	b.cb.recordSuccess()
 	return score, nil
+}
+
+// isUnavailableError reports whether err is a retry-exhausted connector error
+// indicating the backend is unreachable or returning a retryable status.
+// Cancellation and user-initiated context expiry are not counted.
+func isUnavailableError(err error) bool {
+	connErr := new(connector.Error)
+	if errors.As(err, &connErr) {
+		switch connErr.Kind {
+		case connector.KindTransport:
+			return true
+		case connector.KindStatus:
+			// Retryable status (5xx, 408, 429) indicate the backend is
+			// overloaded or down even after retry budget was exhausted.
+			return connErr.Retryable
+		}
+	}
+	return false
 }
