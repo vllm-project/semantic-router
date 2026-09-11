@@ -8,12 +8,22 @@ from pathlib import Path
 import yaml
 
 from cli.commands.runtime_paths import _write_runtime_config
+from cli.config_schema import routing_surface_catalog
 from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
-ALGORITHM_TYPES = [
+_ALGORITHM_SURFACES = tuple(routing_surface_catalog()["algorithms"])
+_CANONICAL_ALGORITHM_TYPES = frozenset(
+    surface["type"] for surface in _ALGORITHM_SURFACES
+)
+
+# `serve --algorithm` is a mutation convenience, not the canonical algorithm
+# inventory. Keep this explicit opt-in policy because some algorithms require
+# user-authored payloads that the CLI must not invent. The full Router surface
+# remains discoverable through `vllm-sr config schema`.
+ALGORITHM_OVERRIDE_TYPES = (
     "static",
     "router_dc",
     "automix",
@@ -25,7 +35,10 @@ ALGORITHM_TYPES = [
     "svm",
     "mlp",
     "multi_factor",
-]
+)
+
+if not set(ALGORITHM_OVERRIDE_TYPES).issubset(_CANONICAL_ALGORITHM_TYPES):
+    raise RuntimeError("CLI algorithm override policy is stale against Router schema")
 
 ALGORITHM_HINTS = {
     "router_dc": "  Tip: Ensure models have 'description' fields",
@@ -40,17 +53,10 @@ ALGORITHM_HINTS = {
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
 }
 
-ALGORITHM_CONFIG_BLOCKS = (
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "latency_aware",
-    "multi_factor",
+ALGORITHM_CONFIG_BLOCKS = tuple(
+    surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 )
 
 RETIRED_ALGORITHM_CONFIG_BLOCKS = (
@@ -63,12 +69,9 @@ RETIRED_ALGORITHM_CONFIG_BLOCKS = (
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
-    "router_dc": "router_dc",
-    "automix": "automix",
-    "hybrid": "hybrid",
-    "workflows": "workflows",
-    "latency_aware": "latency_aware",
-    "multi_factor": "multi_factor",
+    surface["type"]: surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
@@ -79,6 +82,7 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
     "workflows": {
         "template": "micro_agent",
     },
+    "multi_factor": {},
 }
 
 GPU_OVERRIDE_PREVIEW_LIMIT = 8
@@ -325,14 +329,14 @@ def _replace_algorithm_config(
         default_block = _default_algorithm_config_block(
             normalized_algorithm, decision_config
         )
-        if default_block:
+        if default_block is not None:
             algorithm_config[expected_block] = default_block
 
 
 def _default_algorithm_config_block(
     normalized_algorithm: str,
     decision_config: dict[str, object] | None,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     block = dict(DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm])
     if normalized_algorithm != "workflows":
         return block
@@ -351,7 +355,7 @@ def _default_algorithm_config_block(
         block["mode"] = "static"
         block["roles"] = [{"name": "worker", "models": [models[0]]}]
     else:
-        block = {}
+        return None
     return block
 
 

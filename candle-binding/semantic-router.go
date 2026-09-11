@@ -292,6 +292,7 @@ extern ModernBertClassificationResultWithProbs classify_modernbert_jailbreak_tex
 extern ClassificationResult classify_deberta_jailbreak_text(const char* text);
 extern ModernBertClassificationResult classify_fact_check_text(const char* text);
 extern ModernBertClassificationResult classify_feedback_text(const char* text);
+extern ModernBertClassificationResultWithProbs classify_feedback_text_with_probabilities(const char* text);
 
 // mmBERT-32K classification functions (32K context, YaRN RoPE scaling)
 extern ModernBertClassificationResult classify_mmbert_32k_intent(const char* text);
@@ -299,6 +300,7 @@ extern ModernBertClassificationResult classify_mmbert_32k_factcheck(const char* 
 extern ModernBertClassificationResult classify_mmbert_32k_jailbreak(const char* text);
 extern ModernBertClassificationResultWithProbs classify_mmbert_32k_jailbreak_with_probabilities(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_feedback(const char* text);
+extern ModernBertClassificationResultWithProbs classify_mmbert_32k_feedback_with_probabilities(const char* text);
 extern ModernBertTokenClassificationResult classify_mmbert_32k_pii_tokens(const char* text);
 extern ModernBertClassificationResult classify_mmbert_32k_modality(const char* text);
 
@@ -2712,6 +2714,38 @@ func ClassifyMmBert32KFeedback(text string) (ClassResult, error) {
 	}, nil
 }
 
+// ClassifyMmBert32KFeedbackWithProbs classifies text using the mmBERT-32K feedback
+// detector and returns the probability of every class, not only the winning one.
+// Returns: 0=SAT, 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyMmBert32KFeedbackWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_mmbert_32k_feedback_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify feedback with probabilities using mmBERT-32K")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
+	}, nil
+}
+
 // InitMmBert32KPIIClassifier initializes the mmBERT-32K PII detector
 // This model detects 17 types of PII entities using BIO tagging.
 // Reference: https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora
@@ -2921,6 +2955,38 @@ func ClassifyFeedbackText(text string) (ClassResult, error) {
 	return ClassResult{
 		Class:      int(result.class),
 		Confidence: float32(result.confidence),
+	}, nil
+}
+
+// ClassifyFeedbackTextWithProbs classifies the provided text and returns the
+// probability of every class, not only the winning one.
+// Returns: 0=SAT (satisfied), 1=NEED_CLARIFICATION, 2=WRONG_ANSWER, 3=WANT_DIFFERENT
+func ClassifyFeedbackTextWithProbs(text string) (ClassResultWithProbs, error) {
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	result := C.classify_feedback_text_with_probabilities(cText)
+
+	if result.class < 0 {
+		return ClassResultWithProbs{}, fmt.Errorf("failed to classify feedback text with probabilities")
+	}
+
+	// Convert C array to Go slice
+	probabilities := make([]float32, int(result.num_classes))
+	if result.probabilities != nil && result.num_classes > 0 {
+		probsSlice := (*[1 << 30]C.float)(unsafe.Pointer(result.probabilities))[:result.num_classes:result.num_classes]
+		for i, prob := range probsSlice {
+			probabilities[i] = float32(prob)
+		}
+		// Free the C-allocated memory
+		C.free_modernbert_probabilities(result.probabilities, result.num_classes)
+	}
+
+	return ClassResultWithProbs{
+		Class:         int(result.class),
+		Confidence:    float32(result.confidence),
+		Probabilities: probabilities,
+		NumClasses:    int(result.num_classes),
 	}, nil
 }
 

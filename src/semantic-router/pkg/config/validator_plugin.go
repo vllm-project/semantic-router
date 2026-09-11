@@ -5,21 +5,16 @@ import (
 	"strings"
 )
 
-var decisionPluginPayloadFactories = map[string]func() interface{}{
-	DecisionPluginResponseCache:      func() interface{} { return &ResponseCachePluginConfig{} },
-	DecisionPluginSystemPrompt:       func() interface{} { return &SystemPromptPluginConfig{} },
-	DecisionPluginHeaderMutation:     func() interface{} { return &HeaderMutationPluginConfig{} },
-	DecisionPluginHallucination:      func() interface{} { return &HallucinationPluginConfig{} },
-	DecisionPluginResponseJailbreak:  func() interface{} { return &ResponseJailbreakPluginConfig{} },
-	DecisionPluginRouterReplay:       func() interface{} { return &RouterReplayPluginConfig{} },
-	DecisionPluginMemory:             func() interface{} { return &MemoryPluginConfig{} },
-	DecisionPluginRAG:                func() interface{} { return &RAGPluginConfig{} },
-	DecisionPluginFastResponse:       func() interface{} { return &FastResponsePluginConfig{} },
-	DecisionPluginRequestParams:      func() interface{} { return &RequestParamsPluginConfig{} },
-	DecisionPluginTools:              func() interface{} { return &ToolsPluginConfig{} },
-	DecisionPluginToolSelection:      func() interface{} { return &ToolSelectionPluginConfig{} },
-	DecisionPluginContextCompression: func() interface{} { return &ContextCompressionPluginConfig{} },
-	DecisionPluginShadowDispatch:     func() interface{} { return &ShadowDispatchPluginConfig{} },
+// DecisionPluginSchemaSamples returns one fresh typed payload for every
+// supported plugin. The config-schema generator consumes this exact registry,
+// so validation and every schema consumer cannot acquire different plugin
+// inventories or payload shapes.
+func DecisionPluginSchemaSamples() map[string]interface{} {
+	samples := make(map[string]interface{}, len(decisionPluginRegistry))
+	for _, entry := range decisionPluginRegistry {
+		samples[entry.Catalog.Type] = entry.NewPayload()
+	}
+	return samples
 }
 
 func validateDecisionPluginPayload(
@@ -56,8 +51,8 @@ func validateDecisionPluginPayload(
 		)
 	}
 	normalizedType := NormalizeDecisionPluginType(plugin.Type)
-	factory := decisionPluginPayloadFactories[normalizedType]
-	if factory == nil {
+	target := newDecisionPluginPayload(normalizedType)
+	if target == nil {
 		return fmt.Errorf(
 			"decision %q plugins[%d]: unsupported plugin type %q",
 			decisionName,
@@ -65,7 +60,6 @@ func validateDecisionPluginPayload(
 			plugin.Type,
 		)
 	}
-	target := factory()
 	var err error
 	if normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||

@@ -634,12 +634,8 @@ func validateAlgorithmBlockContract(
 }
 
 func blocklessAlgorithmTypeSupported(normalizedType string) bool {
-	switch normalizedType {
-	case "static", "knn", "kmeans", "svm", "mlp":
-		return true
-	default:
-		return false
-	}
+	configField, supported := DecisionAlgorithmConfigField(normalizedType)
+	return supported && configField == ""
 }
 
 func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -671,47 +667,23 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 }
 
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 14)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
 		}
 	}
 
-	addBlock("confidence", algorithm.Confidence != nil)
-	addBlock("ratings", algorithm.Ratings != nil)
-	addBlock("remom", algorithm.ReMoM != nil)
-	addBlock("fusion", algorithm.Fusion != nil)
-	addBlock("workflows", algorithm.Workflows != nil)
 	addBlock("elo", algorithm.Elo != nil)
-	addBlock("router_dc", algorithm.RouterDC != nil)
-	addBlock("automix", algorithm.AutoMix != nil)
-	addBlock("hybrid", algorithm.Hybrid != nil)
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("latency_aware", algorithm.LatencyAware != nil)
-	addBlock("multi_factor", algorithm.MultiFactor != nil)
-	addBlock("prompt", algorithm.Prompt != nil)
 	addBlock("session_aware", algorithm.SessionAware != nil)
 	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {
-	expectedBlockByType := map[string]string{
-		"confidence":    "confidence",
-		"ratings":       "ratings",
-		"remom":         "remom",
-		"fusion":        "fusion",
-		"workflows":     "workflows",
-		"router_dc":     "router_dc",
-		"automix":       "automix",
-		"hybrid":        "hybrid",
-		"latency_aware": "latency_aware",
-		"multi_factor":  "multi_factor",
-		"prompt":        "prompt",
-	}
-	expectedBlock, ok := expectedBlockByType[normalizedType]
-	return expectedBlock, ok
+	expectedBlock, supported := DecisionAlgorithmConfigField(normalizedType)
+	return expectedBlock, supported && expectedBlock != ""
 }
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
