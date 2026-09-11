@@ -355,9 +355,9 @@ func TestBindToCommit_RequiresTrackedRegularFiles(t *testing.T) {
 // inside file while the OS reads one outside the checkout.
 func TestResolveInput_ResolvesSymlinksBeforeCleaning(t *testing.T) {
 	root := gitRepo(t)
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	cwd, cwdErr := os.Getwd()
+	if cwdErr != nil {
+		t.Fatal(cwdErr)
 	}
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "rules.yaml"), []byte("outside"), 0o644); err != nil {
