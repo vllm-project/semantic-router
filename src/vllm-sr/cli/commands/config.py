@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -11,7 +12,10 @@ import yaml
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
 from cli.config_migration import migrate_config_data
+from cli.config_schema import schema_document
+from cli.config_schema.views import parse_surface_selector, schema_view
 from cli.parser import ConfigParseError, load_config_file, parse_user_config
+from cli.router_management_client import RouterManagementClient
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 from cli.validator import (
@@ -20,6 +24,56 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+
+
+def config_schema_command(
+    endpoint: str | None = None,
+    *,
+    full: bool = False,
+    section: str | None = None,
+    surface: str | None = None,
+    timeout: float = 15,
+    token_env: str = "VSR_MGMT_TOKEN",
+) -> None:
+    """Print one progressive local or deployed Router contract view."""
+
+    selected = sum((full, section is not None, surface is not None))
+    if selected > 1:
+        raise ValueError("use only one of --full, --section, or --surface")
+    view = (
+        "full" if full else "section" if section else "surface" if surface else "index"
+    )
+    surface_kind = None
+    surface_name = None
+    if surface:
+        surface_kind, surface_name = parse_surface_selector(surface)
+
+    if endpoint:
+        document = (
+            RouterManagementClient(
+                endpoint,
+                timeout=timeout,
+                token_env=token_env,
+            )
+            .get_config_schema(
+                view=view,
+                path=section,
+                surface_kind=surface_kind,
+                surface_name=surface_name,
+            )
+            .payload
+        )
+        echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
+        return
+
+    document = schema_view(
+        schema_document(),
+        view=view,
+        path=section,
+        surface_kind=surface_kind,
+        surface_name=surface_name,
+    )
+    echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
 
 
 def config_command(config_type: str, config_path: str = "config.yaml"):

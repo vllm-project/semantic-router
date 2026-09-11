@@ -12,7 +12,7 @@ import (
 
 func TestHandleConfigValidate(t *testing.T) {
 	body := `{"yaml":"version: v0.3\nproviders:\n  defaults:\n    model: m1\n  models:\n    - name: m1\n      backend_refs:\n        - endpoint: 127.0.0.1:8000\nrouting:\n  modelCards:\n    - name: m1\n"}`
-	request := httptest.NewRequest("POST", "/config/router/validate", strings.NewReader(body))
+	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
 	response := httptest.NewRecorder()
 
 	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
@@ -25,9 +25,33 @@ func TestHandleConfigValidate(t *testing.T) {
 	}
 }
 
+func TestHandleConfigValidateRejectsUnknownFields(t *testing.T) {
+	body := `{"yaml":"version: v0.3\n","dsl":"ignored legacy payload"}`
+	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
+	response := httptest.NewRecorder()
+
+	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
+
+	if response.Code != 400 || !strings.Contains(response.Body.String(), "unknown field") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestHandleConfigValidateRejectsUnknownYAMLFields(t *testing.T) {
+	body := `{"yaml":"version: v0.3\nproviders:\n  defaults:\n    model: m1\nrouting:\n  modelCards:\n    - name: m1\n      descriptin: typo\n"}`
+	request := httptest.NewRequest("POST", "/api/v1/config/validate", strings.NewReader(body))
+	response := httptest.NewRecorder()
+
+	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
+
+	if response.Code != 422 || !strings.Contains(response.Body.String(), `unknown field \"descriptin\"`) {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestConfigValidateRouteRequiresReadPermission(t *testing.T) {
 	for _, route := range apiConfigRoutes() {
-		if route.Path == "/config/router/validate" && route.Method == "POST" {
+		if route.Path == "/api/v1/config/validate" && route.Method == "POST" {
 			if route.Permission != PermConfigRead {
 				t.Fatalf("permission = %q, want %q", route.Permission, PermConfigRead)
 			}
@@ -62,7 +86,7 @@ routing:
 	}
 	request := httptest.NewRequest(
 		"POST",
-		"/config/router/validate",
+		"/api/v1/config/validate",
 		strings.NewReader(string(body)),
 	)
 	request = request.WithContext(context.WithValue(
@@ -88,6 +112,43 @@ routing:
 		"api_key_env: VALIDATE_SECRET_CANARY",
 	) {
 		t.Fatalf("validation response did not preserve api_key_env: %s", response.Body.String())
+	}
+}
+
+func TestHandleConfigValidatePreservesCredentialEnvironmentReference(t *testing.T) {
+	yamlInput := `
+version: v0.3
+providers:
+  defaults:
+    model: m1
+  models:
+    - name: m1
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+          api_key: ${MODEL_API_KEY}
+routing:
+  modelCards:
+    - name: m1
+`
+	body, err := json.Marshal(RouterConfigUpdateRequest{YAML: yamlInput})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	request := httptest.NewRequest(
+		"POST",
+		"/api/v1/config/validate",
+		strings.NewReader(string(body)),
+	)
+	response := httptest.NewRecorder()
+
+	(&ClassificationAPIServer{}).handleConfigValidate(response, request)
+
+	if response.Code != 200 {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "api_key: ${MODEL_API_KEY}") {
+		t.Fatalf("validation response did not preserve credential reference: %s", response.Body.String())
 	}
 }
 

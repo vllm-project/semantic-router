@@ -26,6 +26,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "jinja2>=3.1.4",
     "requests>=2.31.0",
+    "jsonschema>=4.23.0",
     "pydantic>=2.0.0",
     "typing-extensions>=4.6.0",
     "huggingface_hub[cli]>=0.20.0",
@@ -47,8 +48,12 @@ Repository = "https://github.com/vllm-project/vllm-semantic-router"
 Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 
 [tool.setuptools]
-packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.evaluation"]
+packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.evaluation", "cli.config_schema"]
 include-package-data = false
+
+[tool.setuptools.cmdclass]
+build_py = "build_support.BuildPy"
+sdist = "build_support.SDist"
 
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]

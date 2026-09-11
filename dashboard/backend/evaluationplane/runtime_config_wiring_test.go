@@ -58,9 +58,9 @@ func TestDedicatedRouterCredentialIsServerBrokeredAndNeverWorkerVisible(t *testi
 	broker := newWorkerHTTPBroker(manifest, credentials)
 	broker.models[manifest.Target.Mixture.EntrypointModel] = manifest.Target.Mixture.RecipeName
 	broker.modelsValid = true
-	payload := json.RawMessage(`{"model":"virtual-entrypoint","messages":[{"role":"user","content":"route me"}],"evaluate_all_signals":true}`)
+	payload := json.RawMessage(`{"model":"virtual-entrypoint","messages":[{"role":"user","content":"route me"}]}`)
 	response := broker.execute(context.Background(), workerBrokerRequest{
-		ID: 1, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+		ID: 1, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 		CaseID: "case-1", AttemptID: "attempt-1", Payload: payload, TimeoutMS: 1_000,
 	})
 	if !response.Success || authorization != "Bearer router-evaluation-secret" {
