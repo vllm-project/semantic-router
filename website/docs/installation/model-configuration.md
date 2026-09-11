@@ -96,7 +96,7 @@ routing:
 ```
 
 The protocol capability vocabulary is defined by the `llmprotocol` package,
-and a declaration falls into one of three states for capability-aware
+and a declaration falls into one of the following states for capability-aware
 dispatch:
 
 1. **No declaration** — the model is unannotated and stays eligible on wire
