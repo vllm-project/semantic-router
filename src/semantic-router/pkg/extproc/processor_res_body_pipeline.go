@@ -46,17 +46,12 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
-	// decision carries a plugin; the plugins below then consume it.
-	assistantContent := semanticAssistantContent(semanticResponse)
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	// decision carries a plugin; the plugins below then consume it. Recorded
+	// before a block returns, so a blocked response leaves the same evidence in
+	// Router Replay as a delivered one.
+	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 
-	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
-	// Recorded before a block returns, so a blocked response leaves the same
-	// evidence in Router Replay as a delivered one.
-	r.recordRouterReplayResponseJailbreak(ctx)
-	r.recordRouterReplayHallucination(ctx)
-	if jailbreakResponse != nil {
+	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
@@ -74,6 +69,21 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 	return response
+}
+
+// observeResponseStageSignals scores the response-stage rules against the
+// answer and records the observation in Router Replay. Both response paths
+// share it, so a streamed response leaves the evidence a buffered one leaves.
+//
+// Only the buffered path goes on to enforce. A streamed answer exists as a
+// whole for the first time when its bytes are already with the client, so no
+// plugin can block or rewrite it and none runs; the observation is all that is
+// still possible, and the record says so.
+func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(

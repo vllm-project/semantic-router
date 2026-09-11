@@ -17,6 +17,9 @@ data:
     }
 
     FUSION_SYNTHESIZED_ANSWER = "unexpected-fusion-synthesized-answer"
+    FUSION_SEPARATE_ANSWER = "fusion-separate-answer"
+    FUSION_ONE_CALL_ANSWER = "fusion-one-call-answer"
+    FUSION_NONE_ANSWER = "fusion-none-answer"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format, *args):
@@ -80,6 +83,12 @@ data:
                         "unique_insights": [],
                         "blind_spots": [],
                     })
+                elif "Compare the panel responses" in prompt:
+                    content = FUSION_ONE_CALL_ANSWER
+                elif "Synthesize a final answer directly" in prompt:
+                    content = FUSION_NONE_ANSWER
+                elif "Structured analysis:" in prompt:
+                    content = FUSION_SEPARATE_ANSWER
                 self.send_json(200, {
                     "id": "chatcmpl-looper-e2e-fusion-judge",
                     "object": "chat.completion",
