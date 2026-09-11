@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"net/http"
+	"strings"
 )
 
 // APIOverviewResponse represents the response for GET /api/v1
@@ -27,10 +28,16 @@ var taskTypeRegistry = []TaskTypeInfo{
 // handleAPIOverview handles GET /api/v1 for API discovery
 func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *http.Request) {
 	// Build endpoints list from registry.
-	metadata := apiEndpointMetadata()
-	endpoints := make([]EndpointInfo, 0, len(metadata))
-	for _, endpoint := range metadata {
-		endpoints = append(endpoints, EndpointInfo(endpoint))
+	routes := apiRoutes()
+	endpoints := make([]EndpointInfo, 0, len(routes))
+	for _, route := range routes {
+		endpoints = append(endpoints, EndpointInfo{
+			Path:        route.Path,
+			Method:      route.Method,
+			Description: route.Description,
+			Permission:  route.Permission,
+			Sensitivity: route.Sensitivity,
+		})
 	}
 
 	response := APIOverviewResponse{
@@ -40,21 +47,49 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 		Endpoints:   endpoints,
 		TaskTypes:   taskTypeRegistry,
 		Links: map[string]string{
-			"documentation": "https://vllm-project.github.io/semantic-router/",
-			"openapi_spec":  "/openapi.json",
-			"swagger_ui":    "/docs",
-			"models_info":   "/info/models",
-			"health":        "/health",
-			"ready":         "/ready",
+			"documentation":     "https://vllm-project.github.io/semantic-router/",
+			"openapi_spec":      "/openapi.json",
+			"openapi_path":      "/openapi.json?path={path}",
+			"openapi_operation": "/openapi.json?path={path}&method={method}",
+			"swagger_ui":        "/docs",
+			"config_schema":     "/config/router/schema",
+			"models_info":       "/info/models",
+			"health":            "/health",
+			"ready":             "/ready",
 		},
 	}
 
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-// handleOpenAPISpec serves the OpenAPI 3.0 specification at /openapi.json
-func (s *ClassificationAPIServer) handleOpenAPISpec(w http.ResponseWriter, _ *http.Request) {
+// handleOpenAPISpec serves the complete OpenAPI 3.0 specification or a valid
+// path/operation subset for progressive agent discovery.
+func (s *ClassificationAPIServer) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 	spec := s.generateOpenAPISpec()
+	selectedPath := strings.TrimSpace(r.URL.Query().Get("path"))
+	selectedMethod := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("method")))
+
+	if selectedMethod != "" && selectedPath == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_OPENAPI_FILTER", "method requires path")
+		return
+	}
+	if selectedPath != "" {
+		path, ok := spec.Paths[selectedPath]
+		if !ok {
+			s.writeErrorResponse(w, http.StatusNotFound, "OPENAPI_PATH_NOT_FOUND", "requested API path is not registered")
+			return
+		}
+		if selectedMethod != "" {
+			operation := selectOpenAPIOperation(path, selectedMethod)
+			if operation == nil {
+				s.writeErrorResponse(w, http.StatusNotFound, "OPENAPI_OPERATION_NOT_FOUND", "requested method is not registered for this API path")
+				return
+			}
+			path = OpenAPIPath{}
+			assignOpenAPIOperation(&path, selectedMethod, operation)
+		}
+		spec.Paths = map[string]OpenAPIPath{selectedPath: path}
+	}
 	s.writeJSONResponse(w, http.StatusOK, spec)
 }
 
@@ -82,7 +117,7 @@ func (s *ClassificationAPIServer) handleSwaggerUI(w http.ResponseWriter, _ *http
     <script>
         window.onload = function() {
             window.ui = SwaggerUIBundle({
-                url: "/openapi.json",
+                url: "openapi.json",
                 dom_id: '#swagger-ui',
                 deepLinking: true,
                 presets: [

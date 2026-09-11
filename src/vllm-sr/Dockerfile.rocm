@@ -352,6 +352,7 @@ RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
