@@ -290,7 +290,7 @@ func gitRepo(t *testing.T) string {
 	root := t.TempDir()
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...) //nolint:gosec // test helper; fixed git subcommands
 		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -345,6 +345,46 @@ func TestBindToCommit_RequiresTrackedRegularFiles(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if err := bindToCommit(root, []string{"img/tracked.png", path}); err == nil {
 				t.Fatalf("%q accepted as a commit-bound input", path)
+			}
+		})
+	}
+}
+
+// The manifest and rules paths are resolved through symlinks before they
+// are validated and read, so "alias/../rules.yaml" cannot validate as an
+// inside file while the OS reads one outside the checkout.
+func TestResolveInput_ResolvesSymlinksBeforeCleaning(t *testing.T) {
+	root := gitRepo(t)
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "rules.yaml"), []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(outside), "rules.yaml"), []byte("outside-parent"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "alias")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	realPath, rel, err := resolveInput(root, filepath.Join(root, "img", "tracked.png"))
+	if err != nil || rel != "img/tracked.png" {
+		t.Fatalf("inside input: real=%q rel=%q err=%v", realPath, rel, err)
+	}
+	if got, _ := os.ReadFile(realPath); string(got) != "png" {
+		t.Fatalf("resolved path %q reads %q, want the tracked file", realPath, got)
+	}
+	// A symlink that stays inside the checkout resolves to the file that is
+	// actually read, and that tracked path is what gets validated.
+	if realPath, rel, err := resolveInput(root, filepath.Join(root, "img", "link.png")); err != nil || rel != "img/tracked.png" || filepath.Base(realPath) != "tracked.png" {
+		t.Fatalf("inside symlink: real=%q rel=%q err=%v", realPath, rel, err)
+	}
+	for name, path := range map[string]string{
+		"through symlink":       filepath.Join(root, "alias", "rules.yaml"),
+		"cleaned past symlink":  filepath.Join(root, "alias", "..", "rules.yaml"),
+		"absolute outside root": filepath.Join(outside, "rules.yaml"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if realPath, rel, err := resolveInput(root, path); err == nil {
+				t.Fatalf("%q accepted as %q (%s)", path, rel, realPath)
 			}
 		})
 	}

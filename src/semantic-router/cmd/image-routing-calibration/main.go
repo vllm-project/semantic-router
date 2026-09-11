@@ -223,11 +223,23 @@ func main() {
 		fatal("-model (or MULTIMODAL_MODEL_PATH), -artifact-revision, and -cases are required")
 	}
 
-	rules := loadRules(*rulesPath)
+	// The rules and manifest are resolved through symlinks and bound to the
+	// checkout before they are read, and then read from exactly the path
+	// that was validated, so the file the report attributes to the commit is
+	// the file the run used.
+	rulesReal, rulesRel, err := resolveInput(*fixtureRoot, *rulesPath)
+	if err != nil {
+		fatal("rules: %v", err)
+	}
+	casesReal, casesRel, err := resolveInput(*fixtureRoot, *casesPath)
+	if err != nil {
+		fatal("calibration set: %v", err)
+	}
+	rules := loadRules(rulesReal)
 	if err := validateRules(rules); err != nil {
 		fatal("rules: %v", err)
 	}
-	set := loadSet(*casesPath, rules)
+	set := loadSet(casesReal, rules)
 	fixtures := enumerateFixtures(set)
 	// Every input the report attributes to the commit must actually come from
 	// it: the fixtures, the excluded assets, the manifest, and the rules.
@@ -235,7 +247,7 @@ func main() {
 	for _, label := range set.Excluded {
 		inputs = append(inputs, label.ImageFile)
 	}
-	inputs = append(inputs, repoRelative(*fixtureRoot, *casesPath), repoRelative(*fixtureRoot, *rulesPath))
+	inputs = append(inputs, casesRel, rulesRel)
 	if err := bindToCommit(*fixtureRoot, inputs); err != nil {
 		fatal("%v", err)
 	}
@@ -459,15 +471,30 @@ func enumerateFixtures(set calibrationSet) []string {
 	return fixtures
 }
 
-// repoRelative converts a command-line path into the repo-relative form the
-// manifest uses, so the manifest and rules files can be bound to the commit
-// like every fixture.
-func repoRelative(root, path string) string {
-	rel, err := filepath.Rel(absolutePath(root), absolutePath(path))
+// resolveInput turns a command-line path into the file that will actually
+// be read (symlinks resolved) and its repo-relative spelling. Resolution
+// happens on the original path, before any lexical cleaning: cleaning
+// "alias/../rules.yaml" first would yield an inside path while the OS, if
+// alias is a symlink, reads a file elsewhere. The returned relative path is
+// validated by bindToCommit like every fixture.
+func resolveInput(root, path string) (realPath, repoRel string, err error) {
+	rootReal, err := filepath.EvalSymlinks(absolutePath(root))
 	if err != nil {
-		fatal("resolve %q against %q: %v", path, root, err)
+		return "", "", fmt.Errorf("resolve repository root %q: %w", root, err)
 	}
-	return filepath.ToSlash(rel)
+	realPath, err = filepath.EvalSymlinks(absolutePath(path))
+	if err != nil {
+		return "", "", fmt.Errorf("resolve %q: %w", path, err)
+	}
+	rel, err := filepath.Rel(rootReal, realPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("%q resolves to %s, outside the repository root", path, realPath)
+	}
+	repoRel = filepath.ToSlash(rel)
+	if err := checkCanonical(repoRel); err != nil {
+		return "", "", err
+	}
+	return realPath, repoRel, nil
 }
 
 // bindToCommit checks that every input path is a canonical repo-relative
@@ -479,22 +506,22 @@ func repoRelative(root, path string) string {
 func bindToCommit(root string, paths []string) error {
 	rootReal, err := filepath.EvalSymlinks(absolutePath(root))
 	if err != nil {
-		return fmt.Errorf("resolve repository root %q: %v", root, err)
+		return fmt.Errorf("resolve repository root %q: %w", root, err)
 	}
 	for _, path := range paths {
-		if err := checkCanonical(path); err != nil {
-			return err
+		if canonErr := checkCanonical(path); canonErr != nil {
+			return canonErr
 		}
-		real, err := filepath.EvalSymlinks(filepath.Join(rootReal, filepath.FromSlash(path)))
-		if err != nil {
-			return fmt.Errorf("input %q: %v", path, err)
+		realPath, resolveErr := filepath.EvalSymlinks(filepath.Join(rootReal, filepath.FromSlash(path)))
+		if resolveErr != nil {
+			return fmt.Errorf("input %q: %w", path, resolveErr)
 		}
-		if rel, err := filepath.Rel(rootReal, real); err != nil || filepath.ToSlash(rel) != path {
-			return fmt.Errorf("input %q resolves outside the repository or through a symlink (%s)", path, real)
+		if rel, relErr := filepath.Rel(rootReal, realPath); relErr != nil || filepath.ToSlash(rel) != path {
+			return fmt.Errorf("input %q resolves outside the repository or through a symlink (%s)", path, realPath)
 		}
-		info, err := os.Lstat(real)
-		if err != nil {
-			return fmt.Errorf("input %q: %v", path, err)
+		info, statErr := os.Lstat(realPath)
+		if statErr != nil {
+			return fmt.Errorf("input %q: %w", path, statErr)
 		}
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("input %q is not a regular file", path)
@@ -538,7 +565,7 @@ func trackedFiles(root string, paths []string) (map[string]string, error) {
 	args := append([]string{"-C", root, "ls-tree", "-z", "HEAD", "--"}, paths...)
 	out, err := exec.Command("git", args...).Output()
 	if err != nil {
-		return nil, fmt.Errorf("list tracked inputs at HEAD: %v", err)
+		return nil, fmt.Errorf("list tracked inputs at HEAD: %w", err)
 	}
 	tracked := map[string]string{}
 	for _, entry := range strings.Split(string(out), "\x00") {
