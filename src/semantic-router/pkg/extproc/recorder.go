@@ -98,6 +98,7 @@ func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse)
 // recordRoutingLatency records the routing latency metric
 func (r *OpenAIRouter) recordRoutingLatency(ctx *RequestContext) {
 	routingLatency := time.Since(ctx.ProcessingStartTime)
+	ctx.RoutingLatency = routingLatency
 	metrics.RecordModelRoutingLatency(routingLatency.Seconds())
 }
 
