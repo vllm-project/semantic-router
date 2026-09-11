@@ -2,6 +2,9 @@ package main
 
 import (
 	"math"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -245,6 +248,103 @@ func TestValidateRules_RejectsUnscorableRules(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if err := validateRules([]config.EmbeddingRule{good, rule}); err == nil {
 				t.Fatalf("rule %+v accepted", rule)
+			}
+		})
+	}
+}
+
+// A band that straddles zero must not be split by a synthetic 0 in the
+// sweep: (-0.25, 0.25] (width 0.50) ties (0.40, 0.775] (width 0.375) on F1
+// and must win on width, giving midpoint 0.
+func TestSelectThreshold_BandStraddlingZeroKeepsItsWidth(t *testing.T) {
+	fixtures, positive := scoredFixtures(map[string]float64{
+		"n1": -0.25, "p1": 0.25, "n2": 0.30, "n3": 0.40, "p2": 0.775, "p3": 0.80, "n4": 0.85,
+	}, "p1", "p2", "p3")
+	report := calibrate(t, fixtures, positive)
+
+	if report.Selected.Threshold != 0 || report.Selected.TP != 3 || report.Selected.FP != 3 || report.Selected.FN != 0 {
+		t.Fatalf("selected = %+v, want threshold 0 with TP 3 FP 3 FN 0", report.Selected)
+	}
+	for _, s := range report.Sweep {
+		if s.Threshold == 0 {
+			t.Fatal("sweep contains a synthetic 0 although no fixture scored 0")
+		}
+	}
+}
+
+func TestCheckCanonical(t *testing.T) {
+	for _, ok := range []string{"a.png", "dir/sub/a.jpg", "dir/x.png"} {
+		if err := checkCanonical(ok); err != nil {
+			t.Errorf("%q rejected: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", ".", "/abs/a.png", "../a.png", "dir/../a.png", "dir/..", "./a.png", "dir//a.png", "dir/", "a\\b.png"} {
+		if err := checkCanonical(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}
+
+func gitRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("init", "-q")
+	write("img/tracked.png", "png")
+	write(".gitignore", "ignored/\n")
+	run("add", ".")
+	run("commit", "-q", "-m", "fixtures")
+	write("img/untracked.png", "png")
+	write("ignored/model.png", "png")
+	if err := os.Symlink("tracked.png", filepath.Join(root, "img", "link.png")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	return root
+}
+
+// Only canonical paths naming tracked regular files of HEAD are inputs the
+// recorded commit can reproduce.
+func TestBindToCommit_RequiresTrackedRegularFiles(t *testing.T) {
+	root := gitRepo(t)
+	if err := bindToCommit(root, []string{"img/tracked.png", ".gitignore"}); err != nil {
+		t.Fatalf("tracked inputs rejected: %v", err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.png")
+	if err := os.WriteFile(outside, []byte("png"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	escape, err := filepath.Rel(root, outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{
+		"untracked":     "img/untracked.png",
+		"ignored":       "ignored/model.png",
+		"symlink":       "img/link.png",
+		"missing":       "img/missing.png",
+		"directory":     "img",
+		"escapes root":  filepath.ToSlash(escape),
+		"non-canonical": "img/../img/tracked.png",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := bindToCommit(root, []string{"img/tracked.png", path}); err == nil {
+				t.Fatalf("%q accepted as a commit-bound input", path)
 			}
 		})
 	}

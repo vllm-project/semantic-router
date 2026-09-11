@@ -228,7 +228,17 @@ func main() {
 		fatal("rules: %v", err)
 	}
 	set := loadSet(*casesPath, rules)
-	fixtures := enumerateFixtures(*fixtureRoot, set)
+	fixtures := enumerateFixtures(set)
+	// Every input the report attributes to the commit must actually come from
+	// it: the fixtures, the excluded assets, the manifest, and the rules.
+	inputs := append([]string{}, fixtures...)
+	for _, label := range set.Excluded {
+		inputs = append(inputs, label.ImageFile)
+	}
+	inputs = append(inputs, repoRelative(*fixtureRoot, *casesPath), repoRelative(*fixtureRoot, *rulesPath))
+	if err := bindToCommit(*fixtureRoot, inputs); err != nil {
+		fatal("%v", err)
+	}
 	if err := candle_binding.InitMultiModalEmbeddingModel(*modelPath, true); err != nil {
 		fatal("initialize multimodal model: %v", err)
 	}
@@ -431,26 +441,15 @@ func parseSet(data []byte, rules []config.EmbeddingRule) (calibrationSet, error)
 }
 
 // enumerateFixtures returns the scored fixtures (positives and negatives) as
-// repo-relative paths in sorted order. Every listed path, excluded ones
-// included, must exist on disk so a renamed or deleted asset cannot silently
-// drop a reviewed label.
-func enumerateFixtures(root string, set calibrationSet) []string {
+// repo-relative paths in sorted order. Existence and commit membership are
+// checked by bindToCommit, together with the excluded assets.
+func enumerateFixtures(set calibrationSet) []string {
 	seen := map[string]bool{}
-	require := func(path, kind string) {
-		if _, err := os.Stat(filepath.Join(root, path)); err != nil {
-			fatal("%s fixture %q: %v", kind, path, err)
-		}
-	}
 	for _, label := range set.Positives {
-		require(label.ImageFile, "positive")
 		seen[label.ImageFile] = true
 	}
 	for _, path := range set.Negatives {
-		require(path, "negative")
 		seen[path] = true
-	}
-	for _, label := range set.Excluded {
-		require(label.ImageFile, "excluded")
 	}
 	fixtures := make([]string, 0, len(seen))
 	for path := range seen {
@@ -458,6 +457,103 @@ func enumerateFixtures(root string, set calibrationSet) []string {
 	}
 	sort.Strings(fixtures)
 	return fixtures
+}
+
+// repoRelative converts a command-line path into the repo-relative form the
+// manifest uses, so the manifest and rules files can be bound to the commit
+// like every fixture.
+func repoRelative(root, path string) string {
+	rel, err := filepath.Rel(absolutePath(root), absolutePath(path))
+	if err != nil {
+		fatal("resolve %q against %q: %v", path, root, err)
+	}
+	return filepath.ToSlash(rel)
+}
+
+// bindToCommit checks that every input path is a canonical repo-relative
+// path naming a tracked regular file of the checkout at root, so the report
+// can attribute it to the recorded commit. A path that escapes the root,
+// goes through a symlink, or is merely present on disk (untracked or
+// ignored) is rejected: git status would not report such an input as dirty,
+// and the commit could not reproduce it.
+func bindToCommit(root string, paths []string) error {
+	rootReal, err := filepath.EvalSymlinks(absolutePath(root))
+	if err != nil {
+		return fmt.Errorf("resolve repository root %q: %v", root, err)
+	}
+	for _, path := range paths {
+		if err := checkCanonical(path); err != nil {
+			return err
+		}
+		real, err := filepath.EvalSymlinks(filepath.Join(rootReal, filepath.FromSlash(path)))
+		if err != nil {
+			return fmt.Errorf("input %q: %v", path, err)
+		}
+		if rel, err := filepath.Rel(rootReal, real); err != nil || filepath.ToSlash(rel) != path {
+			return fmt.Errorf("input %q resolves outside the repository or through a symlink (%s)", path, real)
+		}
+		info, err := os.Lstat(real)
+		if err != nil {
+			return fmt.Errorf("input %q: %v", path, err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("input %q is not a regular file", path)
+		}
+	}
+	tracked, err := trackedFiles(rootReal, paths)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if mode, ok := tracked[path]; !ok {
+			return fmt.Errorf("input %q is not tracked at the recorded commit (untracked or ignored files cannot be reproduced from it)", path)
+		} else if mode != "100644" && mode != "100755" {
+			return fmt.Errorf("input %q is tracked as mode %s, not a regular file", path, mode)
+		}
+	}
+	return nil
+}
+
+// checkCanonical accepts only clean, relative, forward-slash paths that stay
+// beneath the root, so one file has one spelling in the manifest.
+func checkCanonical(path string) error {
+	switch {
+	case path == "" || path == ".":
+		return fmt.Errorf("input path is empty")
+	case filepath.IsAbs(path) || strings.HasPrefix(path, "/"):
+		return fmt.Errorf("input %q must be relative to the repository root", path)
+	case strings.Contains(path, "\\"):
+		return fmt.Errorf("input %q must use forward slashes", path)
+	case path == ".." || strings.HasPrefix(path, "../") || strings.Contains(path, "/../") || strings.HasSuffix(path, "/.."):
+		return fmt.Errorf("input %q escapes the repository root", path)
+	case filepath.ToSlash(filepath.Clean(filepath.FromSlash(path))) != path:
+		return fmt.Errorf("input %q is not in canonical form (want %q)", path, filepath.ToSlash(filepath.Clean(filepath.FromSlash(path))))
+	}
+	return nil
+}
+
+// trackedFiles returns the git mode of every requested path that HEAD
+// tracks, keyed by repo-relative path.
+func trackedFiles(root string, paths []string) (map[string]string, error) {
+	args := append([]string{"-C", root, "ls-tree", "-z", "HEAD", "--"}, paths...)
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("list tracked inputs at HEAD: %v", err)
+	}
+	tracked := map[string]string{}
+	for _, entry := range strings.Split(string(out), "\x00") {
+		if entry == "" {
+			continue
+		}
+		// "<mode> <type> <hash>\t<path>"
+		meta, path, found := strings.Cut(entry, "\t")
+		fields := strings.Fields(meta)
+		if !found || len(fields) != 3 {
+			return nil, fmt.Errorf("unexpected ls-tree entry %q", entry)
+		}
+		tracked[path] = fields[0]
+	}
+	return tracked, nil
 }
 
 // repoState returns the HEAD commit of the checkout at root and whether the
@@ -561,10 +657,12 @@ func calibrateRule(rule config.EmbeddingRule, fixtures []fixtureReport) ruleRepo
 			}
 		}
 	}
-	// The sweep is built only from fixture scores (plus 0), never from the
-	// threshold currently shipped, so the recommendation cannot depend on the
-	// value being calibrated. The shipped value is evaluated separately below.
-	values := map[float64]bool{0: true}
+	// The sweep is built only from the distinct fixture scores, never from the
+	// threshold currently shipped (so the recommendation cannot depend on the
+	// value being calibrated) and never from a synthetic value such as 0
+	// (which would split a band that straddles it and skew the width
+	// tie-break). The shipped value is evaluated separately below.
+	values := map[float64]bool{}
 	for _, fixture := range fixtures {
 		values[fixture.Scores[rule.Name]] = true
 	}
