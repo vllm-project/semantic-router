@@ -22,6 +22,50 @@
   text-wrap: balance;
 }
 
+.audienceTabs {
+  display: grid;
+  width: fit-content;
+  margin: 0 auto 1rem;
+  padding: 0.22rem;
+  grid-template-columns: repeat(2, minmax(7.5rem, 1fr));
+  border: 1px solid var(--site-border);
+  border-radius: 0.72rem;
+  background: var(--site-surface-alt);
+}
+
+.audienceTab {
+  min-height: 2.3rem;
+  padding: 0.46rem 0.9rem;
+  border: 0;
+  border-radius: 0.52rem;
+  background: transparent;
+  color: var(--site-muted-bright);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  transition:
+    background var(--site-transition-fast),
+    color var(--site-transition-fast),
+    box-shadow var(--site-transition-fast);
+}
+
+.audienceTab:hover {
+  color: var(--site-text-strong);
+}
+
+.audienceTab:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+.audienceTabActive,
+.audienceTabActive:hover {
+  background: var(--site-bg);
+  color: var(--site-text-strong);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.16);
+}
+
 /* Carries the surface the install card used to have, so the command reads as a
  * deliberate object rather than a bare input. */
 .commandShell {
@@ -48,6 +92,11 @@
 .commandShell:hover {
   border-color: var(--site-hover-border);
   box-shadow: var(--site-hover-glow);
+}
+
+.commandShellAgent {
+  max-width: 58rem;
+  align-items: start;
 }
 
 .commandPrompt {
@@ -106,6 +155,12 @@
   scrollbar-width: thin;
 }
 
+.agentPrompt {
+  overflow: visible;
+  white-space: normal;
+  word-break: normal;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -146,6 +201,10 @@
     white-space: pre-wrap;
     word-break: break-all;
     font-size: 0.82rem;
+  }
+
+  .agentPrompt {
+    word-break: normal;
   }
 
   .actions {

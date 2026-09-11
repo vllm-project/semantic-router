@@ -85,7 +85,7 @@ func campaignRecordMatchesAttestedArm(record executionRecordEvidence, entry exec
 func campaignOperationOwnsTrack(operation string, trackID TrackID) bool {
 	switch trackID {
 	case "routing":
-		return operation == workerBrokerRouterEvaluate
+		return operation == workerBrokerRoutingPreview
 	case "model_pool":
 		return operation == workerBrokerArmChatCompletion
 	case "joint", "multimodal", "capacity":

@@ -1144,7 +1144,7 @@ class RouterReplayPluginConfig(BaseModel):
 
     The router_replay plugin captures routing decisions and payload snippets
     for later debugging and replay. Records are stored in memory and accessible
-    via the /v1/router_replay API endpoint.
+    via the /api/v1/observability/replays API endpoint.
     """
 
     enabled: bool = True

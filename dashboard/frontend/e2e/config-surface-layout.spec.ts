@@ -228,7 +228,7 @@ async function mockConfigSurface(page: Page) {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
   });
 
-  await page.route('**/api/router/config/kbs', async route => {
+  await page.route('**/api/router/api/v1/storage/knowledge-bases', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

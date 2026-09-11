@@ -224,9 +224,12 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
-		{method: http.MethodPost, path: "/api/router/v1/router/outcomes", expected: PermFeedbackSubmit},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay", expected: PermReplayRead},
-		{method: http.MethodGet, path: "/api/router/v1/router_replay/record-1", expected: PermReplayRead},
+		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
+		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigRead},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/knowledge-bases", expected: PermConfigWrite},
+		{method: http.MethodDelete, path: "/api/router/api/v1/storage/knowledge-bases/example", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/recipe", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/probes", expected: PermConfigRead},
 		{method: http.MethodGet, path: "/api/recipe/packages", expected: PermConfigRead},
@@ -334,7 +337,7 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 	readerRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		readerRecorder,
-		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/v1/router/outcomes", `{}`),
+		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
 	)
 	if readerRecorder.Code != http.StatusForbidden || nextCalled {
 		t.Fatalf("read role status = %d, next called = %v", readerRecorder.Code, nextCalled)
@@ -343,7 +346,7 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 	writerRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		writerRecorder,
-		newAuthenticatedRequest(t, svc, writer, http.MethodPost, "/api/router/v1/router/outcomes", `{}`),
+		newAuthenticatedRequest(t, svc, writer, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
 	)
 	if writerRecorder.Code != http.StatusNoContent || !nextCalled {
 		t.Fatalf("feedback role status = %d, next called = %v", writerRecorder.Code, nextCalled)

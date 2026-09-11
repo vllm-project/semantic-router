@@ -1,4 +1,4 @@
-"""Evaluation plane subcommands registered under ``vllm-sr eval``."""
+"""Reproducible benchmark harness commands."""
 
 from __future__ import annotations
 
@@ -22,6 +22,14 @@ from cli.evaluation.catalog import get_catalog
 from cli.evaluation.compare import compare_runs
 from cli.evaluation.constants import SCHEMA_VERSION
 from cli.evaluation.executor_contracts import BUILTIN_NORMALIZED_SUITE_EXECUTORS
+from cli.evaluation.intelligence_benchmarks import (
+    TERMINAL_BENCH_ATTEMPTS,
+    IntelligenceRunOptions,
+    build_intelligence_run_plan,
+    intelligence_benchmark_catalog,
+    run_intelligence_benchmarks,
+    select_intelligence_benchmarks,
+)
 from cli.evaluation.orchestrator import load_manifest, run_evaluation, validate_manifest
 from cli.evaluation.store import LocalArtifactStore
 from cli.evaluation.suite_catalog import NormalizedSuiteCatalog
@@ -464,7 +472,7 @@ def gate_command(run_id: str, store_path: Path, allow_unavailable: bool) -> None
         raise click.exceptions.Exit(2)
 
 
-EVALUATION_COMMANDS = (
+BENCHMARK_COMMANDS = (
     catalog_command,
     benchmarks_command,
     normalizers_command,
@@ -480,3 +488,132 @@ EVALUATION_COMMANDS = (
     compare_command,
     gate_command,
 )
+
+
+@click.group("intelligence")
+def intelligence() -> None:
+    """Plan and run the six fixed Intelligence 1.0 benchmarks."""
+
+
+@intelligence.command("list")
+def intelligence_list() -> None:
+    """Print the exact Intelligence 1.0 benchmark and source contracts."""
+
+    click.echo(_dump(intelligence_benchmark_catalog()))
+
+
+def _intelligence_options(command: Callable[..., Any]) -> Callable[..., Any]:
+    command = click.option(
+        "--terminal-attempts",
+        type=int,
+        default=TERMINAL_BENCH_ATTEMPTS,
+        show_default=True,
+    )(command)
+    command = click.option("--sample-limit", type=int)(command)
+    command = click.option("--reasoning-effort")(command)
+    command = click.option("--concurrency", type=int, default=8, show_default=True)(
+        command
+    )
+    command = click.option(
+        "--api-key-env", default="OPENAI_API_KEY", show_default=True
+    )(command)
+    command = click.option("--tokenizer", default="builtin", show_default=True)(command)
+    command = click.option(
+        "--output",
+        "output_root",
+        required=True,
+        type=click.Path(path_type=Path),
+    )(command)
+    command = click.option(
+        "--source-root",
+        required=True,
+        type=click.Path(path_type=Path, file_okay=False),
+        help="Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.",
+    )(command)
+    command = click.option("--base-url", required=True)(command)
+    command = click.option("--model", required=True)(command)
+    return click.option(
+        "--benchmark",
+        "benchmark_ids",
+        multiple=True,
+        default=("all",),
+        show_default=True,
+        help="Exact catalog benchmark ID; repeat it or use all.",
+    )(command)
+
+
+def _intelligence_run_options(
+    *,
+    model: str,
+    base_url: str,
+    source_root: Path,
+    output_root: Path,
+    tokenizer: str,
+    api_key_env: str,
+    concurrency: int,
+    reasoning_effort: str | None,
+    sample_limit: int | None,
+    terminal_attempts: int,
+) -> IntelligenceRunOptions:
+    return IntelligenceRunOptions(
+        model=model,
+        base_url=base_url,
+        source_root=source_root,
+        output_root=output_root,
+        tokenizer=tokenizer,
+        api_key_env=api_key_env,
+        concurrency=concurrency,
+        reasoning_effort=reasoning_effort,
+        sample_limit=sample_limit,
+        terminal_attempts=terminal_attempts,
+    )
+
+
+@intelligence.command("plan")
+@_intelligence_options
+@_user_errors
+def intelligence_plan(benchmark_ids: tuple[str, ...], **kwargs: Any) -> None:
+    """Emit secret-free commands and provenance without executing a benchmark."""
+
+    options = _intelligence_run_options(**kwargs)
+    selected = select_intelligence_benchmarks(benchmark_ids)
+    click.echo(
+        _dump(
+            {
+                "schema_version": "vllm-sr.intelligence-plan.v1",
+                "runs": [
+                    build_intelligence_run_plan(benchmark, options)
+                    for benchmark in selected
+                ],
+            }
+        )
+    )
+
+
+@intelligence.command("run")
+@_intelligence_options
+@_user_errors
+def intelligence_run(benchmark_ids: tuple[str, ...], **kwargs: Any) -> None:
+    """Execute fixed benchmark adapters and write private evidence receipts."""
+
+    options = _intelligence_run_options(**kwargs)
+    selected = select_intelligence_benchmarks(benchmark_ids)
+    click.echo(
+        "Running " + ", ".join(benchmark.name for benchmark in selected),
+        err=True,
+    )
+    result = run_intelligence_benchmarks(selected, options)
+    click.echo(_dump(result))
+    if not result["completed"]:
+        raise click.exceptions.Exit(2)
+
+
+@click.group()
+def benchmark() -> None:
+    """Install, run, compare, and gate reproducible benchmark workloads."""
+
+
+for benchmark_command in BENCHMARK_COMMANDS:
+    benchmark.add_command(benchmark_command)
+
+benchmark.add_command(intelligence)

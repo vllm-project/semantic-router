@@ -60,7 +60,7 @@ send_classification_request() {
     log "INFO" "Testing: $description"
     log "INFO" "Prompt: \"$text\""
 
-    local response=$(curl -s -X POST "http://$API_ROUTE/api/v1/classify/intent" \
+    local response=$(curl -s -X POST "http://$API_ROUTE/api/v1/diagnostics/classify/intent" \
         -H 'Content-Type: application/json' \
         -d "{\"text\": \"$text\"}" 2>&1)
 
@@ -312,11 +312,11 @@ test_load_generation() {
     for i in {1..10}; do
         # Alternate between coding and general
         if (( i % 2 == 0 )); then
-            curl -s -X POST "http://$API_ROUTE/api/v1/classify/intent" \
+            curl -s -X POST "http://$API_ROUTE/api/v1/diagnostics/classify/intent" \
                 -H 'Content-Type: application/json' \
                 -d '{"text": "Write a function to calculate fibonacci"}' > /dev/null &
         else
-            curl -s -X POST "http://$API_ROUTE/api/v1/classify/intent" \
+            curl -s -X POST "http://$API_ROUTE/api/v1/diagnostics/classify/intent" \
                 -H 'Content-Type: application/json' \
                 -d '{"text": "What is the capital of Spain?"}' > /dev/null &
         fi

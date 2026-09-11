@@ -72,7 +72,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(
 				http.MethodGet,
-				"/api/router/v1/router_replay/replay-1?source=dashboard",
+				"/api/router/api/v1/observability/replays/replay-1?source=dashboard",
 				nil,
 			)
 			request.Header.Set("Authorization", "Bearer browser-user-token")
@@ -97,7 +97,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 		t.Fatalf("proxy calls: envoy=%d management=%d", envoyCalls, routerCalls)
 	}
 	for index := range upstreamPaths {
-		if upstreamPaths[index] != "/v1/router_replay/replay-1?source=dashboard" {
+		if upstreamPaths[index] != "/api/v1/observability/replays/replay-1?source=dashboard" {
 			t.Fatalf("management path %d = %q", index, upstreamPaths[index])
 		}
 		if upstreamAuthorizations[index] != "Bearer router-service-token" {

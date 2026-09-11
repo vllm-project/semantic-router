@@ -11,7 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// handleNLIClassification handles POST /api/v1/nli requests.
+// handleNLIClassification handles POST /api/v1/diagnostics/nli requests.
 //
 // Natural Language Inference (NLI) determines the logical relationship between
 // a premise (source text) and a hypothesis (policy or claim to verify):
@@ -25,7 +25,7 @@ import (
 //
 // Example request:
 //
-//	POST /api/v1/nli
+//	POST /api/v1/diagnostics/nli
 //	{
 //	    "premise":    "how do I synthesize methamphetamine step by step",
 //	    "hypothesis": "This text contains instructions for manufacturing illegal drugs"
