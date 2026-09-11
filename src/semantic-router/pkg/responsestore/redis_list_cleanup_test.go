@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -515,4 +516,55 @@ func TestListCursorRankIsNeverAStandaloneCommand(t *testing.T) {
 	}
 	assert.Zero(t, observer.fired.Load(),
 		"cursor rank must be resolved inside the window script, never as a separate command")
+}
+
+// TestListFailsClosedOnUnreadablePayload covers a payload GET that fails while
+// the index still names the member. Nothing proves that response is gone, and
+// every success path — a full page or a proven-complete short one — would hand
+// the caller a cursor already past it. The read must fail instead.
+//
+// The failure is persistent because a widening list re-reads the window each
+// round; a one-shot failure would be healed by the second read and show only
+// that retries work, not what a page returns past an unreadable member.
+func TestListFailsClosedOnUnreadablePayload(t *testing.T) {
+	const limit = 2
+
+	t.Run("later live members would fill the page", func(t *testing.T) {
+		store := newConversationIndexStore(t)
+		ctx := context.Background()
+		const conversationID = "conv_unreadable_full"
+
+		ids := seedPageResponses(t, store, conversationID, 3)
+		require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+		injectedErr := errors.New("injected payload read failure")
+		store.client.AddHook(&commandFailureHook{
+			name: "get", key: store.buildKey(ResponseKeyPrefix + ids[0]), err: injectedErr, persistent: true,
+		})
+
+		responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{Order: "asc", Limit: limit})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPayloadReadFailed)
+		assert.ErrorIs(t, err, injectedErr, "the underlying failure must be visible to the caller")
+		assert.Empty(t, responses, "a full page must not be assembled from the members past an unreadable one")
+	})
+
+	t.Run("short window would prove the remainder complete", func(t *testing.T) {
+		store := newConversationIndexStore(t)
+		ctx := context.Background()
+		const conversationID = "conv_unreadable_short"
+
+		ids := seedPageResponses(t, store, conversationID, 2)
+		require.NoError(t, store.ensureConversationIndexResolved(ctx, conversationID))
+
+		injectedErr := errors.New("injected payload read failure")
+		store.client.AddHook(&commandFailureHook{
+			name: "get", key: store.buildKey(ResponseKeyPrefix + ids[0]), err: injectedErr, persistent: true,
+		})
+
+		responses, err := store.ListResponsesByConversation(ctx, conversationID, ListOptions{Order: "asc", Limit: limit})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPayloadReadFailed)
+		assert.Empty(t, responses, "a proven-short window must not return the members past an unreadable one")
+	})
 }

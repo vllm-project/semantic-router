@@ -72,11 +72,17 @@ func (h *beforeCommandHook) ProcessPipelineHook(next redis.ProcessPipelineHook) 
 // and the pipelined path (ProcessPipelineHook: the pipeline still runs for
 // real — go-redis has no per-command skip within one Exec — and only the
 // matched command's own result is overwritten afterward).
+//
+// persistent makes the failure repeat on every matching command instead of
+// once, for tests that need a member to stay unreadable across the several
+// re-reads a widening list performs — a one-shot failure would be healed by
+// the very next round and prove nothing about what the page returns past it.
 type commandFailureHook struct {
-	name string
-	key  string
-	err  error
-	used atomic.Bool
+	name       string
+	key        string
+	err        error
+	persistent bool
+	used       atomic.Bool
 }
 
 func (h *commandFailureHook) matches(cmd redis.Cmder) bool {
@@ -88,7 +94,14 @@ func (h *commandFailureHook) matches(cmd redis.Cmder) bool {
 		return false
 	}
 	key, ok := args[1].(string)
-	return ok && key == h.key && h.used.CompareAndSwap(false, true)
+	if !ok || key != h.key {
+		return false
+	}
+	if h.persistent {
+		h.used.Store(true)
+		return true
+	}
+	return h.used.CompareAndSwap(false, true)
 }
 
 func (h *commandFailureHook) DialHook(next redis.DialHook) redis.DialHook { return next }
