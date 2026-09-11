@@ -19,7 +19,8 @@ receipts as evidence. Do not invent a second DSL or scrape Dashboard state.
 4. Discover configuration progressively:
    - `vllm-sr config schema --endpoint <management-origin>`
    - add `--section <path>` or `--surface <kind:name>` for one contract;
-   - use `--full` only when a complete schema is necessary.
+   - add `--expanded` only when a self-contained section schema is necessary;
+   - use `--full` only when the complete schema is necessary.
 
 The management origin normally serves `/api/v1/**`, `/openapi.json`, and
 `/docs`. The routed inference origin separately serves OpenAI-compatible
@@ -32,7 +33,9 @@ For configuration changes, follow this exact order:
 1. Edit canonical YAML locally.
 2. Run local validation, then authoritative Router validation.
 3. Plan against current state without writing.
-4. Apply with the ETag returned by the plan.
+4. Apply a Router-hot-reloadable change with the ETag returned by the plan. If
+   planning reports `RESTART_REQUIRED`, activate the candidate through the
+   deployment workflow instead of the Router mutation API.
 5. Confirm readiness and active configuration.
 6. Preview representative routing cases without model calls.
 7. Probe the Envoy-routed endpoint with real model calls and assertions.
@@ -53,7 +56,8 @@ or model-pool changes.
   generation backend. Use it for fast route assertions.
 - `vllm-sr route probe` sends one real request through the routed inference
   listener and emits a JSON receipt containing selected route headers, latency,
-  response, and assertions.
+  response, and assertions. Assert the Router-selected model and the upstream
+  response model separately when the backend exposes a stable model field.
 - `vllm-sr benchmark` runs versioned routing workloads.
 - `vllm-sr benchmark intelligence` plans or runs the six fixed Intelligence
   1.0 model benchmarks against any physical or virtual model ID. A virtual

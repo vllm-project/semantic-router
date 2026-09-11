@@ -30,9 +30,13 @@ send a direct request to every physical backend before testing routing.
 1. Establish backend health and protocol compatibility.
 2. Measure serving latency, throughput, token usage, failure rate, and cost.
 3. Add the physical model and Model Card to candidate YAML.
-4. Run config validate and plan.
-5. Apply, then route-preview representative cases.
-6. Probe each direct model alias and every affected virtual model.
+4. Run config validation. Planning against a running Router will report
+   `RESTART_REQUIRED` because provider backends are rendered into Envoy.
+5. Ask before disruption, then activate the candidate through the deployment
+   workflow and wait for Router and Envoy readiness.
+6. Route-preview representative cases, then probe each direct model alias and
+   every affected virtual model. Assert selected-model and response-model
+   identity separately where the backend exposes a stable response model.
 7. Run the required full benchmarks.
 8. Optimize the Recipe only from comparable evidence.
 

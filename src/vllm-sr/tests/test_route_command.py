@@ -57,7 +57,12 @@ def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProce
 # Fixture: real in-process HTTP server
 
 
-def _make_handler(status: int, body: Any, content_type: str = "application/json"):
+def _make_handler(
+    status: int,
+    body: Any,
+    content_type: str = "application/json",
+    headers: dict[str, str] | None = None,
+):
     """Return a BaseHTTPRequestHandler subclass that always responds with the
     given status code and JSON-encoded body."""
     if isinstance(body, bytes):
@@ -75,6 +80,8 @@ def _make_handler(status: int, body: Any, content_type: str = "application/json"
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body_bytes)))
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body_bytes)
 
@@ -100,6 +107,7 @@ def router_server(request):
         params["status"],
         params["body"],
         params.get("content_type", "application/json"),
+        params.get("headers"),
     )
     server = HTTPServer(("127.0.0.1", 0), handler)  # port=0 → OS picks a free port
     port = server.server_address[1]
@@ -668,7 +676,10 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
         "x-vsr-selected-algorithm": "multi_factor",
         "x-vsr-selected-model": "qwen",
     }
-    response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+    response.json.return_value = {
+        "model": "Qwen/Qwen3.8-Flash-Next",
+        "choices": [{"message": {"content": "ok"}}],
+    }
     post = MagicMock(return_value=response)
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setenv("PROBE_TOKEN", "probe-secret")
@@ -688,8 +699,10 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
             "coding",
             "--expect-algorithm",
             "multi_factor",
-            "--expect-model",
+            "--expect-selected-model",
             "qwen",
+            "--expect-response-model",
+            "Qwen/Qwen3.8-Flash-Next",
         ],
     )
 
@@ -741,7 +754,7 @@ def test_route_probe_exits_two_when_an_assertion_fails(
             "hello",
             "--base-url",
             "http://localhost:8801",
-            "--expect-model",
+            "--expect-selected-model",
             "expected",
         ],
     )
@@ -750,9 +763,75 @@ def test_route_probe_exits_two_when_an_assertion_fails(
     assert json.loads(result.output)["passed"] is False
 
 
+def test_route_probe_exits_two_when_response_model_is_not_selected_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = MagicMock()
+    response.status_code = 200
+    response.headers = {"x-vsr-selected-model": "qwen"}
+    response.json.return_value = {"model": "smoke-model", "choices": []}
+    monkeypatch.setattr(requests, "post", MagicMock(return_value=response))
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        [
+            "--prompt",
+            "hello",
+            "--base-url",
+            "http://localhost:8801",
+            "--expect-selected-model",
+            "qwen",
+            "--expect-response-model",
+            "Qwen/Qwen3.8-Flash-Next",
+        ],
+    )
+
+    assert result.exit_code == 2
+    receipt = json.loads(result.output)
+    assert receipt["passed"] is False
+    assert receipt["assertions"][-1] == {
+        "actual": "smoke-model",
+        "expected": "Qwen/Qwen3.8-Flash-Next",
+        "field": "response.body.model",
+        "passed": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Integration tests: real HTTP server, no mocks
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "router_server",
+    [
+        {
+            "status": 200,
+            "headers": {"x-vsr-selected-model": "qwen"},
+            "body": {"model": "Qwen/Qwen3.8-Flash-Next", "choices": []},
+        }
+    ],
+    indirect=True,
+)
+def test_route_probe_integration_verifies_router_and_upstream_models(
+    router_server: str,
+) -> None:
+    result = CliRunner().invoke(
+        route_probe_command,
+        [
+            "--prompt",
+            "hello",
+            "--base-url",
+            router_server,
+            "--expect-selected-model",
+            "qwen",
+            "--expect-response-model",
+            "Qwen/Qwen3.8-Flash-Next",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.output)["passed"] is True
 
 
 @pytest.mark.parametrize(

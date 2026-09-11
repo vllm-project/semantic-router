@@ -49,8 +49,9 @@ boundaries take precedence over this skill.
    ```
 
    Use `vllm-sr config schema --surface KIND:NAME` for a selected signal,
-   projection, algorithm, or plugin. Query the narrowest path first; a broad
-   section can still be large because it contains every valid nested choice.
+   projection, algorithm, or plugin. Section requests return compact field
+   directories; follow their child paths and use `--expanded` only when a
+   self-contained section schema is required.
 5. Start from the running configuration when one exists by reading
    `vllm-sr config get`; otherwise create `config.yaml` with
    `vllm-sr config init`. Preserve fields outside the requested change.
@@ -66,7 +67,11 @@ boundaries take precedence over this skill.
    vllm-sr config plan --config config.yaml
    ```
 
-7. Review the plan. Apply only when it matches the user's requested scope:
+7. Review the plan. A `RESTART_REQUIRED` result means the candidate changes a
+   listener or provider backend topology rendered into Envoy. Do not call the
+   Router apply API for that candidate; follow the deployment workflow and ask
+   before disrupting a running stack. Apply a hot-reloadable candidate only
+   when it matches the user's requested scope:
 
    ```bash
    vllm-sr config apply --config config.yaml
@@ -89,9 +94,11 @@ boundaries take precedence over this skill.
 
    Preview proves the decision path without invoking a model. Probe sends a
    real request through Envoy and records end-to-end evidence. `--base-url`
-   accepts either the listener origin or its OpenAI `/v1` root. Use explicit
-   `--expect-*` assertions when the intended recipe, decision, algorithm, or
-   model is known.
+   accepts either the listener origin or its OpenAI `/v1` root. Use
+   `--expect-selected-model` to assert the Router receipt and, when the backend
+   exposes a stable top-level OpenAI `model`, `--expect-response-model` to prove
+   which upstream answered. These are different assertions; a selected-model
+   header alone does not prove data-plane delivery.
 9. For optimization, capture a baseline, make one coherent recipe change,
    validate and plan it, run representative previews and probes, and compare
    the requested quality, cost, latency, or safety objective. Keep a change
@@ -108,8 +115,9 @@ boundaries take precedence over this skill.
 - Ask before privileged actions, destructive changes, public exposure, or
   stopping unrelated services. Resolve exact container and file targets first.
 - Preserve existing user configuration and unrelated workloads.
-- Do not treat routing preview as model-quality evidence or an end-to-end probe
-  as proof that every routing branch is correct; use both where appropriate.
+- Do not treat routing preview as model-quality evidence, a selected-model
+  header as backend-delivery evidence, or one end-to-end probe as proof that
+  every routing branch is correct; use the applicable assertions and benchmarks.
 - Leave the user with the config path, active revision, validation result,
   routing evidence, and any remaining limitation.
 

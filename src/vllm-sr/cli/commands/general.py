@@ -10,9 +10,9 @@ import click
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import (
     config_command,
-    init_config_command,
     config_schema_command,
     import_config_from_source_command,
+    init_config_command,
     migrate_config_command,
 )
 from cli.commands.config_management import CONFIG_MANAGEMENT_COMMANDS
@@ -116,6 +116,11 @@ def config_router(config_path: str) -> None:
     metavar="KIND:NAME",
     help="Print one signal, algorithm, plugin, or projection contract.",
 )
+@click.option(
+    "--expanded",
+    is_flag=True,
+    help="Include the selected section's self-contained JSON Schema.",
+)
 @exit_with_logged_error(log)
 def config_schema(
     endpoint: str | None,
@@ -124,6 +129,7 @@ def config_schema(
     full: bool,
     section: str | None,
     surface: str | None,
+    expanded: bool,
 ) -> None:
     """Discover the canonical config contract progressively."""
 
@@ -132,6 +138,7 @@ def config_schema(
         full=full,
         section=section,
         surface=surface,
+        expanded=expanded,
         timeout=timeout,
         token_env=token_env,
     )

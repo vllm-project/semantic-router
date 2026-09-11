@@ -15,9 +15,9 @@ vllm-sr config schema --endpoint http://router-management:8080 \
   --surface algorithm:multi_factor
 ```
 
-Use `--full` only for offline tooling that genuinely needs the entire JSON
-Schema. Query the narrowest section needed because a parent section must carry
-every valid nested choice and can still be large.
+Section requests return compact field directories that link to child paths.
+Add `--expanded` only when tooling needs a self-contained schema for that
+section, and use `--full` only when it genuinely needs the entire JSON Schema.
 
 Read an active document with `vllm-sr config get`. In a fresh workspace, run
 `vllm-sr config init --output candidate.yaml` for a minimal canonical starter.
@@ -40,8 +40,11 @@ vllm-sr config apply --config candidate.yaml --mode replace \
 
 `plan` performs the same canonical parse, merge/replace, and hot-reload checks
 as mutation but writes nothing. `apply` plans again and uses the returned ETag
-as a compare-and-swap precondition. Prefer `replace` for a complete reviewed
-document; use `merge` only for an intentionally partial patch.
+as a compare-and-swap precondition. Listener and provider-backend topology is
+rendered into Envoy, so a plan that changes it returns `RESTART_REQUIRED` and
+must be activated through the deployment workflow; the Router apply API is for
+hot-reloadable state. Prefer `replace` for a complete reviewed document; use
+`merge` only for an intentionally partial patch.
 
 Inspect or recover state with:
 

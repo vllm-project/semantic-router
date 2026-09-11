@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -65,5 +66,39 @@ func TestHandleConfigPlanRejectsUnknownMode(t *testing.T) {
 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestHandleConfigPlanRejectsEnvoyTopologyMutation(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	candidateConfig := minimalDeployTestConfig("old_route")
+	candidateConfig.VLLMEndpoints[0].Port++
+	candidate := mustMarshalCanonicalConfigYAML(t, candidateConfig)
+	body, err := json.Marshal(routerConfigPlanRequest{
+		YAML: string(candidate),
+		Mode: routerConfigMutationReplace,
+	})
+	if err != nil {
+		t.Fatalf("marshal plan: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, apiConfigPlanPath, bytes.NewReader(body))
+	response := httptest.NewRecorder()
+	(&ClassificationAPIServer{configPath: configPath}).handleConfigPlan(response, request)
+
+	if response.Code != http.StatusConflict ||
+		!strings.Contains(response.Body.String(), "RESTART_REQUIRED") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read config after plan: %v", err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("restart-required plan mutated the source document")
 	}
 }
