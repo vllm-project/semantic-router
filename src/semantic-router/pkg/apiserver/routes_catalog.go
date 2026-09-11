@@ -420,7 +420,6 @@ func apiMemoryRoutes() []apiRoute {
 				Method:      "GET",
 				Description: "List long-term memories",
 				Parameters: []OpenAPIParameter{
-					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
 					queryParameter("type", "Comma-separated memory types: semantic, procedural, or episodic.", "string"),
 					queryParameter("limit", "Maximum results; defaults to 20 and is capped at 100.", "integer"),
 				},
@@ -434,7 +433,6 @@ func apiMemoryRoutes() []apiRoute {
 				Method:      "DELETE",
 				Description: "Delete memories by scope",
 				Parameters: []OpenAPIParameter{
-					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
 					queryParameter("type", "Comma-separated memory types to delete: semantic, procedural, or episodic.", "string"),
 				},
 			},
@@ -446,9 +444,6 @@ func apiMemoryRoutes() []apiRoute {
 				Path:        "/v1/memory/{id}",
 				Method:      "GET",
 				Description: "Read one long-term memory",
-				Parameters: []OpenAPIParameter{
-					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
-				},
 			},
 			routePolicy{Permission: PermDataRead, Sensitivity: SensitivityConfig},
 			(*ClassificationAPIServer).handleGetMemory,
@@ -458,9 +453,6 @@ func apiMemoryRoutes() []apiRoute {
 				Path:        "/v1/memory/{id}",
 				Method:      "DELETE",
 				Description: "Delete one long-term memory",
-				Parameters: []OpenAPIParameter{
-					queryParameter("user_id", "Development fallback identity when x-authz-user-id is unavailable.", "string"),
-				},
 			},
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionMemoryDelete},
 			(*ClassificationAPIServer).handleDeleteMemory,

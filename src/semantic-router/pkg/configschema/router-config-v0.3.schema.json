@@ -2447,6 +2447,9 @@
           },
           "type": "array"
         },
+        "analysis_mode": {
+          "type": "string"
+        },
         "analysis_overrides": {
           "items": {
             "$ref": "#/$defs/FusionModelOverride"
@@ -2721,6 +2724,9 @@
           "type": "string"
         },
         "user_groups_header": {
+          "type": "string"
+        },
+        "ingress": {
           "type": "string"
         }
       },
