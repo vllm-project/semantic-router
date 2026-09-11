@@ -64,6 +64,10 @@ type CacheIdentity struct {
 	SemanticQuery            string         `json:"-"`
 }
 
+func (i CacheIdentity) SemanticPartitionKey() string {
+	return joinPartitionParts(i.Partition.Key(), i.CompatibilityFingerprint)
+}
+
 type TTLPolicy struct {
 	UseDefault bool
 	NoStore    bool
