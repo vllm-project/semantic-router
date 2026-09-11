@@ -2,7 +2,7 @@ import type {
   BackendRefEntry,
   ConfigData,
   LoRAAdapter,
-  ModelEvaluationConfig,
+  EvaluationRecordConfig,
   ModelPricing,
   ModelReasoningConfig,
   ProviderReliability,
@@ -75,7 +75,7 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
     })
 }
 
-export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig[] {
+export function normalizeEvaluationRecords(value: unknown): EvaluationRecordConfig[] {
   if (!Array.isArray(value)) return []
 
   return value
@@ -117,6 +117,7 @@ export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig
             )
           : undefined
       return {
+        model: typeof entry.model === 'string' ? entry.model.trim() : '',
         benchmark: typeof entry.benchmark === 'string' ? entry.benchmark.trim() : '',
         benchmark_profile:
           typeof entry.benchmark_profile === 'string' && entry.benchmark_profile.trim()
@@ -136,7 +137,7 @@ export function normalizeModelEvaluations(value: unknown): ModelEvaluationConfig
         metadata: metadata && Object.keys(metadata).length > 0 ? metadata : undefined,
       }
     })
-    .filter((entry) => entry.benchmark && Object.keys(entry.metrics).length > 0)
+    .filter((entry) => entry.model && entry.benchmark && Object.keys(entry.metrics).length > 0)
 }
 
 export function modelReasoningFormData(reasoning?: ModelReasoningConfig): Record<string, string> {
@@ -223,7 +224,9 @@ function parseReasoningEffortFlags(value: unknown): Record<string, string> {
     value
       .split(',')
       .map((entry) => entry.split('=', 2).map((part) => part.trim()))
-      .filter((entry): entry is [string, string] => entry.length === 2 && Boolean(entry[0] && entry[1])),
+      .filter(
+        (entry): entry is [string, string] => entry.length === 2 && Boolean(entry[0] && entry[1]),
+      ),
   )
 }
 

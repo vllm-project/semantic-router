@@ -35,7 +35,7 @@ func cachedTestPanel() []*ModelResponse {
 // random-weight placebo arm in the fusioneval driver, isolating "does the score
 // help" from "does any weighting help".
 func placeboNLI(seed uint64) NLIClassifyFunc {
-	return func(premise, hypothesis string) (float32, float32, error) {
+	return func(_ context.Context, premise, hypothesis string) (float32, float32, error) {
 		h := fnv.New64a()
 		var b [8]byte
 		binary.LittleEndian.PutUint64(b[:], seed)
@@ -199,7 +199,7 @@ func TestFusionExecute_CachedPanel_ArmIsolation_BvsC(t *testing.T) {
 	bodyB, judgeB := runCachedPanelArm(t, p, nil, nil)
 
 	// Arm C: weight (grounding on, panel mode, policy defaults to weight).
-	highEntail := func(_, _ string) (float32, float32, error) { return 0.9, 0.05, nil }
+	highEntail := func(_ context.Context, _, _ string) (float32, float32, error) { return 0.9, 0.05, nil }
 	bodyC, judgeC := runCachedPanelArm(t, p, &config.FusionGroundingConfig{
 		Enabled:   true,
 		Reference: config.FusionGroundingReferencePanel,
@@ -236,7 +236,7 @@ func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
 		Reference: config.FusionGroundingReferencePanel,
 	}
 
-	realNLI := func(_, hypothesis string) (float32, float32, error) {
+	realNLI := func(_ context.Context, _, hypothesis string) (float32, float32, error) {
 		if strings.Contains(hypothesis, "bad") {
 			return 0.1, 0.8, nil
 		}
@@ -260,14 +260,14 @@ func TestFusionExecute_CachedPanel_PlaceboMechanism(t *testing.T) {
 // properties: reproducible for a fixed seed, and non-constant across inputs.
 func TestPlaceboNLI_DeterministicAndSpread(t *testing.T) {
 	nli := placeboNLI(42)
-	e1, c1, err := nli("premise one", "hypothesis one")
+	e1, c1, err := nli(context.Background(), "premise one", "hypothesis one")
 	require.NoError(t, err)
-	e2, c2, err := nli("premise one", "hypothesis one")
+	e2, c2, err := nli(context.Background(), "premise one", "hypothesis one")
 	require.NoError(t, err)
 	assert.Equal(t, e1, e2, "same inputs must yield identical scores")
 	assert.Equal(t, c1, c2)
 
-	e3, _, err := nli("premise one", "a different hypothesis")
+	e3, _, err := nli(context.Background(), "premise one", "a different hypothesis")
 	require.NoError(t, err)
 	assert.NotEqual(t, e1, e3, "different inputs must yield different scores")
 }

@@ -1971,11 +1971,12 @@ class LoRAAdapter(BaseModel):
     description: Optional[str] = None
 
 
-class ModelEvaluation(BaseModel):
-    """Small operator-authored benchmark result attached to one model card."""
+class EvaluationRecord(BaseModel):
+    """Small operator-authored benchmark result linked to one model card."""
 
     model_config = ConfigDict(extra="forbid")
 
+    model: str = Field(min_length=1)
     benchmark: str = Field(
         min_length=1,
         pattern=r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+@[0-9]+(?:\.[0-9]+\.[0-9]+)?$",
@@ -2012,6 +2013,142 @@ class ModelEvaluation(BaseModel):
             except ValueError as error:
                 raise ValueError("measured_at must use YYYY-MM-DD") from error
         return self
+
+
+EVALUATION_RESOURCE_ID_PATTERN = (
+    r"^[a-z0-9][a-z0-9._-]*(?:/[a-z0-9][a-z0-9._-]*)+" r"@[0-9]+(?:\.[0-9]+\.[0-9]+)?$"
+)
+
+
+class EvaluationBenchmarkProfile(BaseModel):
+    """One reproducible execution profile for an operator benchmark."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class EvaluationNormalizationPoint(BaseModel):
+    """One point in a piecewise-linear metric normalization."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    input: float
+    output: float = Field(ge=0, le=1)
+
+
+class EvaluationNormalization(BaseModel):
+    """Maps one benchmark metric onto the common [0, 1] utility scale."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[
+        "identity",
+        "one_minus",
+        "linear_clamp",
+        "piecewise_linear",
+        "logistic",
+        "lookup",
+    ] = "identity"
+    min: Optional[float] = None
+    max: Optional[float] = None
+    k: Optional[float] = None
+    x0: Optional[float] = None
+    points: List[EvaluationNormalizationPoint] = Field(default_factory=list)
+    values: Dict[str, float] = Field(default_factory=dict)
+
+
+class EvaluationBenchmarkMetric(BaseModel):
+    """Metric semantics owned by a versioned benchmark definition."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    unit: str = Field(min_length=1)
+    direction: Literal["higher_is_better", "lower_is_better"]
+    range: List[float] = Field(min_length=2, max_length=2)
+    normalization: Optional[EvaluationNormalization] = None
+
+    @field_validator("range")
+    @classmethod
+    def validate_range(cls, value: List[float]) -> List[float]:
+        if any(not math.isfinite(item) for item in value) or value[0] >= value[1]:
+            raise ValueError("range must contain two finite increasing values")
+        return value
+
+
+class EvaluationBenchmarkDefinition(BaseModel):
+    """Operator-owned, namespaced benchmark contract."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    domain: str = Field(min_length=1)
+    tags: List[str] = Field(default_factory=list)
+    source: Optional[str] = None
+    default_profile: str = Field(min_length=1)
+    profiles: List[EvaluationBenchmarkProfile] = Field(min_length=1)
+    metrics: List[EvaluationBenchmarkMetric] = Field(min_length=1)
+
+
+class EvaluationMissingPolicy(BaseModel):
+    """Completeness policy for a custom capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Literal["require_all", "reported_only", "require_coverage"]
+    minimum: Optional[float] = Field(default=None, gt=0, le=1)
+
+
+class EvaluationIndexComponent(BaseModel):
+    """One benchmark metric or nested index in an index DAG."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmark: Optional[str] = None
+    metric: Optional[str] = None
+    benchmark_profile: Optional[str] = None
+    benchmark_profiles: List[str] = Field(default_factory=list)
+    index: Optional[str] = None
+    weight: float = Field(gt=0)
+    normalization: EvaluationNormalization = Field(
+        default_factory=EvaluationNormalization
+    )
+
+    @model_validator(mode="after")
+    def validate_reference(self):
+        if (self.metric is None) == (self.index is None):
+            raise ValueError("component must reference exactly one metric or index")
+        return self
+
+
+class EvaluationIndexDefinition(BaseModel):
+    """Operator-owned, versioned capability or aggregate index."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(pattern=EVALUATION_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1)
+    description: Optional[str] = None
+    methodology: Optional[str] = None
+    aggregation: Literal["weighted_mean"]
+    scale: List[float] = Field(min_length=2, max_length=2)
+    missing: EvaluationMissingPolicy
+    domains: Dict[str, float] = Field(default_factory=dict)
+    components: List[EvaluationIndexComponent] = Field(min_length=1)
+
+
+class Evaluation(BaseModel):
+    """Unified benchmark definitions, index DAGs, and model measurements."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    benchmarks: List[EvaluationBenchmarkDefinition] = Field(default_factory=list)
+    indices: List[EvaluationIndexDefinition] = Field(default_factory=list)
+    records: List[EvaluationRecord] = Field(default_factory=list)
 
 
 class RoutingModelPresentation(BaseModel):
@@ -2058,7 +2195,6 @@ class RoutingModel(BaseModel):
     tags: Optional[List[str]] = None
     modalities: Optional[Dict[str, List[str]]] = None
     modality: Optional[str] = None
-    evaluations: List[ModelEvaluation] = Field(default_factory=list)
 
     @field_validator("released_at", "knowledge_cutoff", mode="before")
     @classmethod
@@ -2249,6 +2385,7 @@ class UserConfig(BaseModel):
     version: str
     listeners: List[Listener] = Field(default_factory=list)
     providers: Providers = Field(default_factory=Providers)
+    evaluation: Optional[Evaluation] = None
     routing: Routing = Field(default_factory=Routing)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)

@@ -1,3 +1,21 @@
+- id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
+  model: nvidia/nemotron-cascade-2-30b-a3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-2-30B-A3B
+    source_kind: official_model_card
+    evaluation_unit: subproblem
+  metrics:
+    score: 0.364
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B/blob/6327cdbcf907e1c7cec9cb29fb6e6cebdf8feaf7/README.md
+    redistributable: true
 - id: nvidia/nemotron-3.5-lightning-model-card-mmlu-pro@1.0.0
   model: nvidia/nemotron-3.5-lightning
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0
@@ -141,6 +159,24 @@
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4
+    source_kind: official_model_card
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.868
+  status: available
+  measured_at: 2026-06-03
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4/blob/7a3521b81a7294f7785eb7ae115a6186fc1220a8/.eval_results/mmlu_pro.yaml
     redistributable: true
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-ifbench@1.0.0
   model: nvidia/nemotron-3-ultra
@@ -766,4 +802,187 @@
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/Nemotron-Cascade-2-30B-A3B
+    redistributable: true
+- id: nvidia/nemotron-3-super-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.8373
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
+    redistributable: true
+- id: nvidia/nemotron-3-super-model-card-scicode@1.0.0
+  model: nvidia/nemotron-3-super
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: NVIDIA-Nemotron-3-Super-120B-A12B-BF16
+    source_kind: official_model_card
+    metric_variant: subtask
+  metrics:
+    score: 0.4205
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16/blob/2dc98e2afe4face0e4ce40972a915c45368bd34a/README.md
+    redistributable: true
+- id: mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: Nemotron-3-Nano-30B-A3B(BF16)
+    source_model_slug: nemotron-3-nano-30b-a3b-bf16
+    source_kind: official_benchmark_leaderboard
+  metrics:
+    accuracy: 0.783
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/datasets/TIGER-Lab/mmlu_pro_leaderboard_submission/blob/4623b7c68d2276218d487464b0608dc978f4b301/results.csv
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.756565656565657
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: nvidia/nemotron-3-ultra-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-ultra
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: high
+  subject:
+    source_model: NVIDIA Nemotron 3 Ultra 550B-A55B
+    source_kind: official_technical_report
+    evaluation_harness: NVIDIA NeMo Evaluator
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.890
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
+    redistributable: true
+- id: nvidia/nemotron-3-nano-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B-A3B
+    source_kind: official_model_card
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.683
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16/blob/bf77c3174f68ad409e1c2aa60daeb46e32d1c606/README.md
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    accuracy: 0.113994439295644
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-scicode@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+    evaluation_unit: subproblem
+    test_subproblems: 288
+  metrics:
+    score: 0.305555555555556
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    resolved: 0.0674157303370786
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: independent/nemotron-3-nano-30b-a3b-aime-2025@1.0.0
+  model: nvidia/nemotron-3-nano-30b-a3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: enabled
+  subject:
+    source_model: NVIDIA Nemotron 3 Nano 30B A3B (Reasoning)
+    source_model_slug: nvidia-nemotron-3-nano-30b-a3b-reasoning
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.91
+  status: available
+  observed_at: 2026-09-09
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
     redistributable: true

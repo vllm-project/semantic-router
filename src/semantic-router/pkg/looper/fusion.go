@@ -20,7 +20,11 @@ type FusionLooper struct {
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return &FusionLooper{BaseLooper: NewBaseLooper(cfg)}
+	return newFusionLooper(cfg, nil)
+}
+
+func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
 }
 
 type fusionExecutionConfig struct {
@@ -80,7 +84,6 @@ type FusionTrace struct {
 }
 
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
 	ctx = contextWithFusionDepth(ctx, 1)
 
 	cfg := l.resolveFusionExecutionConfig(req)
@@ -118,7 +121,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 	// Grounding (optional) ranks/filters the panel before the judge. It makes no
 	// model calls, so usage is summed from the full panel (the real cost paid).
-	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panel.responses)
+	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(ctx, req, cfg, panel.responses)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +179,18 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
-	return l.callModelWithContextGate(ctx, req, callReq, modelName, streaming, iteration, nil, accessKeyForModel(req, modelName))
+	return l.dispatchModel(
+		ctx,
+		req,
+		callReq,
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
+		CallOptions{
+			DecisionName: req.DecisionName,
+			Iteration:    iteration,
+			FusionDepth:  1,
+			Mode:         responseMode(streaming),
+		},
+	)
 }
 
 func accessKeyForModel(req *Request, modelName string) string {

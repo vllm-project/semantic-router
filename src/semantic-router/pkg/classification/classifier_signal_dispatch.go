@@ -31,6 +31,7 @@ func (c *Classifier) buildSignalDispatchers(
 	usedSignals map[string]bool,
 ) []signalDispatch {
 	dispatchers := c.buildPrimarySignalDispatchers(
+		requestFacts.Context,
 		results,
 		mu,
 		textForSignal,
@@ -68,6 +69,7 @@ func (c *Classifier) buildSignalDispatchers(
 }
 
 func (c *Classifier) buildPrimarySignalDispatchers(
+	ctx context.Context,
 	results *SignalResults,
 	mu *sync.Mutex,
 	textForSignal func(string) string,
@@ -95,12 +97,13 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(results, mu, textForSignal(config.SignalTypeFactCheck)) },
+			func() { c.evaluateFactCheckSignal(requestCtx, results, mu, textForSignal(config.SignalTypeFactCheck)) },
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() {
 				c.evaluateUserFeedbackSignal(
+					requestCtx,
 					results,
 					mu,
 					textForSignal(config.SignalTypeUserFeedback),

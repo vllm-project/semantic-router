@@ -55,8 +55,17 @@ func TestFinalizeRecordsLowSuccessRate(t *testing.T) {
 // high-cardinality round cannot panic after hours of completed soak rounds.
 func TestNewClientClampsHighCardIDs(t *testing.T) {
 	for _, in := range []int{0, -5} {
-		if got := NewClient("http://127.0.0.1:8801", "MoM", 10, in).highCardIDs; got != 1 {
+		if got := NewClient("http://127.0.0.1:8801", "MoM", 10, in, false).highCardIDs; got != 1 {
 			t.Errorf("NewClient(highCardIDs=%d).highCardIDs = %d, want 1", in, got)
 		}
+	}
+}
+
+func TestResponseModeName(t *testing.T) {
+	if got := responseModeName(false); got != "buffered" {
+		t.Errorf("responseModeName(false) = %q, want buffered", got)
+	}
+	if got := responseModeName(true); got != "streaming" {
+		t.Errorf("responseModeName(true) = %q, want streaming", got)
 	}
 }

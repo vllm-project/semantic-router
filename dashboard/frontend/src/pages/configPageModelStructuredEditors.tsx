@@ -5,7 +5,7 @@ import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type {
   BackendRefEntry,
   LoRAAdapter,
-  ModelEvaluationConfig,
+  EvaluationRecordConfig,
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
@@ -63,7 +63,8 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
   },
 ]
 
-interface EditableModelEvaluation {
+interface EditableEvaluationRecord {
+  model?: string
   benchmark?: string
   benchmark_profile?: string
   reasoning_effort?: string
@@ -73,7 +74,14 @@ interface EditableModelEvaluation {
   metadata?: Record<string, string>
 }
 
-const evaluationFields: ObjectEditorField<EditableModelEvaluation>[] = [
+const evaluationFields: ObjectEditorField<EditableEvaluationRecord>[] = [
+  {
+    key: 'model',
+    label: 'Model Card',
+    placeholder: 'organization/model-id',
+    required: true,
+    fullWidth: true,
+  },
   {
     key: 'benchmark',
     label: 'Benchmark',
@@ -462,19 +470,20 @@ export function ModelBackendRefsEditor({
   )
 }
 
-export function ModelEvaluationsEditor({
+export function EvaluationRecordsEditor({
   value,
   onChange,
   disabled,
   readOnly,
 }: StructuredModelFieldProps) {
-  const evaluations: EditableModelEvaluation[] = Array.isArray(value)
+  const evaluations: EditableEvaluationRecord[] = Array.isArray(value)
     ? value
         .filter(
-          (entry): entry is ModelEvaluationConfig =>
+          (entry): entry is EvaluationRecordConfig =>
             Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry),
         )
         .map((entry) => ({
+          model: entry.model,
           benchmark: entry.benchmark,
           benchmark_profile: entry.benchmark_profile,
           reasoning_effort: entry.reasoning_effort,
@@ -499,10 +508,13 @@ export function ModelEvaluationsEditor({
       value={evaluations}
       onChange={(nextValue) => onChange?.(nextValue)}
       fields={evaluationFields}
-      createItem={() => ({ benchmark: '', metrics: {} })}
-      addLabel="Add evaluation"
-      emptyLabel="No operator evaluations configured. Built-in evidence is supplied by the catalog."
-      itemLabel={(item, index) => item.benchmark?.trim() || `Evaluation ${index + 1}`}
+      createItem={() => ({ model: '', benchmark: '', metrics: {} })}
+      addLabel="Add record"
+      emptyLabel="No operator evaluation records configured. Built-in evidence is supplied by the catalog."
+      itemLabel={(item, index) =>
+        [item.model?.trim(), item.benchmark?.trim()].filter(Boolean).join(' · ') ||
+        `Record ${index + 1}`
+      }
       itemDescription={(item) =>
         item.metrics && Object.keys(item.metrics).length > 0
           ? `${Object.keys(item.metrics).length} metric${Object.keys(item.metrics).length === 1 ? '' : 's'}`
@@ -510,6 +522,7 @@ export function ModelEvaluationsEditor({
       }
       validateItem={(item) => {
         const errors: string[] = []
+        if (!item.model?.trim()) errors.push('Model Card is required.')
         if (!item.benchmark?.trim()) errors.push('Benchmark is required.')
         if (!item.metrics || Object.keys(item.metrics).length === 0) {
           errors.push('At least one metric is required.')

@@ -70,7 +70,9 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["automix"], "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "routing.decisions[].algorithm.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["hybrid"], "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "routing.decisions[].algorithm.hybrid")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["latency_aware"], "latency_aware"), reflect.TypeOf(LatencyAwareAlgorithmConfig{}), "routing.decisions[].algorithm.latency_aware")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor"), reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
+	multiFactor := mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor")
+	assertMapCoversStructFields(t, multiFactor, reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
+	assertMapCoversStructFields(t, mustMapAt(t, multiFactor, "quality"), reflect.TypeOf(QualityEvidenceConfig{}), "routing.decisions[].algorithm.multi_factor.quality")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["prompt"], "prompt"), reflect.TypeOf(PromptSelectionConfig{}), "routing.decisions[].algorithm.prompt")
 }
 

@@ -1,12 +1,15 @@
 package services
 
 import (
+	"context"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 func resolveIntentCategory(
+	ctx context.Context,
 	classifier *classification.Classifier,
 	decisionResult *decision.DecisionResult,
 	text string,
@@ -14,7 +17,7 @@ func resolveIntentCategory(
 	if decisionResult != nil && decisionResult.Decision != nil {
 		return decisionResult.Decision.Name, decisionResult.Confidence
 	}
-	category, confidence, _, err := classifier.ClassifyCategoryWithEntropy(text)
+	category, confidence, _, err := classifier.ClassifyCategoryWithEntropyContext(ctx, text)
 	if err != nil {
 		logging.Warnf(
 			"Classification fallback failed: %v, using default 'other' category",
