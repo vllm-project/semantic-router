@@ -112,10 +112,16 @@ dispatch:
    verified against wire codec expressibility, not the model declaration.
 4. **Partially recognized declaration** — a name outside the protocol
    vocabulary (e.g. `vision`, `long_context`) contributes nothing to the
-   model's task bits, and it does not void any recognized names in the same
+   model's task bits and does not void any recognized names in the same
    declaration. A card declaring `[image_input, vision]` is filtered on
-   `image_input` alone. A declaration with no recognized name at all carries
-   no task bit and is treated like an unannotated model.
+   `image_input` alone: it stays eligible for image requests and is rejected
+   for audio, which it never declared.
+5. **Unrecognized declaration** — a declaration whose names all fall outside
+   the protocol vocabulary cannot be verified against it. Such a model fails
+   closed: it is never chosen as a capability-reroute candidate, because the
+   router cannot honor capability words it does not recognize. This differs
+   from an unannotated model, which stays eligible on wire expressibility
+   alone.
 
 ## Validate the result
 

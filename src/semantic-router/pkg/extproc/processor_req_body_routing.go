@@ -138,18 +138,21 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 // declaredModelCapabilities parses a model's configured capability
 // declarations into three distinct states:
 //
-//  1. absent — no declaration at all; the model is unannotated and is judged
-//     on wire expressibility alone;
-//  2. partially understood — some names recognize to protocol capabilities,
-//     the rest are unknown; the recognized task bits keep steering the
-//     declared filter, the unknown names contribute no bit;
-//  3. invalid — a declaration that recognizes to nothing; per the documented
-//     contract that unrecognized declared capability names are treated as
-//     unannotated, it is handled exactly like an absent declaration (eligible
-//     on wire expressibility), never as a capability rejection.
+//  1. absent — no declaration at all; ok=false. The model is unannotated and
+//     is judged on wire expressibility alone.
+//  2. valid — at least one name recognizes to a protocol capability; the
+//     recognized task/modality bits steer the declared filter while
+//     unknown names contribute no bit. A transport/accounting-only
+//     declaration (tools, streaming, ...) recognizes fully yet carries no
+//     task bit, so it narrows nothing.
+//  3. invalid — a declaration whose names all fail to recognize; ok=true with
+//     an empty set. The operator asserted capability words the router cannot
+//     verify, so the model fails closed instead of being treated as
+//     unannotated: the declared filter must not grant eligibility that the
+//     operator never expressed.
 //
-// The second return value reports whether a declaration exists (states 2 and
-// 3); an absent declaration is the only way to get ok=false.
+// The distinction between 2 and 3 is observable to the caller on the returned
+// set: (non-empty, true) vs (empty, true).
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -159,12 +162,13 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 		return llmprotocol.CapabilitySet{}, false
 	}
 	// ParseCapabilities preserves the recognized subset when it meets an
-	// unrecognized name: for a partial declaration this keeps the valid task
-	// bits steering filtering; for an invalid one the returned subset is empty
-	// and the model falls out exactly like unannotated. The parse error is
-	// informational at the routing seam (the vocabulary boundary is a
-	// workgroup decision, not validated here); strict callers that must
-	// reject unknown names still get it from ParseCapabilities itself.
+	// unrecognized name, and reports an error naming them. For a valid
+	// declaration the subset carries the recognized bits; for an invalid one
+	// the subset is empty and the caller fails closed. The parse error itself
+	// is informational at this routing seam — the capability vocabulary
+	// boundary is a workgroup decision, not validated here — while strict
+	// callers that must reject unknown names still get it from
+	// ParseCapabilities directly.
 	declared, _ := llmprotocol.ParseCapabilities(params.Capabilities)
 	return declared, true
 }
@@ -234,9 +238,15 @@ func (r *OpenAIRouter) findQualifiedRerouteModel(
 // qualifiedRerouteCandidate reports the model's wire format when the model can
 // express every required capability, or "" when it cannot serve the request.
 // Expressibility is judged on the wire format's codec capability set first,
-// then narrowed by the model's declared task/modality capabilities when its
-// declaration carries any (a transport/accounting-only declaration does not
-// narrow).
+// then narrowed by the model's declared capabilities:
+//
+//   - absent declaration — unannotated, stays eligible on wire expressibility;
+//   - valid declaration (at least one recognized name) — off-spec task bits
+//     (image/audio/video/file in/out, hosted generation) narrow eligibility;
+//     a transport/accounting-only declaration neither narrows nor rejects;
+//   - invalid declaration (names all unrecognized) — fails closed and is never
+//     a qualified candidate, because the operator's asserted capabilities
+//     cannot be verified against the protocol vocabulary.
 func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
 	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
 	if err != nil {
@@ -246,6 +256,12 @@ func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmproto
 		return ""
 	}
 	if declared, ok := r.declaredModelCapabilities(model); ok {
+		if declared.Empty() {
+			// Invalid declaration: the operator asserted capability names the
+			// protocol cannot recognize. Fail closed — do not hand this model
+			// a task the declaration never verifiably expressed.
+			return ""
+		}
 		// Only task/modality annotations steer capability filtering. A model
 		// annotated with transport/accounting names alone (tools, reasoning,
 		// streaming, structured_json, ...) carries no task bit and stays

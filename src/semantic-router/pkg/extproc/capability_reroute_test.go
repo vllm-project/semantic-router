@@ -51,9 +51,10 @@ func TestQualifiedRerouteCandidateTransportOnlyDeclaration(t *testing.T) {
 	if got := router.qualifiedRerouteCandidate("mixed-declared", audioRequired); got != "" {
 		t.Fatalf("mixed known/unknown declaration must be rejected for audio, got format %q", got)
 	}
-	// A declaration with no recognized name carries no task bit and is treated
-	// like an unannotated model.
-	if got := router.qualifiedRerouteCandidate("unknown-only", imageRequired); got == "" {
-		t.Fatal("unknown-name-only declaration must stay eligible on wire expressibility, matching an unannotated model")
+	// An invalid declaration (names all unrecognized) fails closed: it is not
+	// treated like an unannotated model, because the operator asserted
+	// capability words the protocol cannot verify.
+	if got := router.qualifiedRerouteCandidate("unknown-only", imageRequired); got != "" {
+		t.Fatalf("invalid (all-unknown) declaration must fail closed, got format %q", got)
 	}
 }
