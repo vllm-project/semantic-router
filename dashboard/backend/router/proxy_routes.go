@@ -142,7 +142,7 @@ func serveRouterAPIProxy(
 		writeDisallowedRouterManagementResponse(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {
 		// Let the proxy transport negotiate decompression so replay JSON can
 		// be redacted safely for read-only Dashboard principals.
 		r.Header.Del("Accept-Encoding")
@@ -170,7 +170,7 @@ func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Requ
 
 func routerManagementProxyRouteAllowed(method, path string) bool {
 	if method == http.MethodGet &&
-		(path == "/api/router/v1/router_replay" || strings.HasPrefix(path, "/api/router/v1/router_replay/")) {
+		(path == "/api/router/api/v1/observability/replays" || strings.HasPrefix(path, "/api/router/api/v1/observability/replays/")) {
 		return true
 	}
 	switch path {
@@ -178,7 +178,7 @@ func routerManagementProxyRouteAllowed(method, path string) bool {
 		return method == http.MethodGet || method == http.MethodHead
 	case "/api/router/v1/models":
 		return method == http.MethodGet || method == http.MethodHead
-	case "/api/router/v1/router/outcomes":
+	case "/api/router/api/v1/observability/outcomes":
 		return method == http.MethodPost
 	case "/api/router/api/v1/response-cache/capabilities",
 		"/api/router/api/v1/response-cache/health",

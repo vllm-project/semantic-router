@@ -1,4 +1,4 @@
-"""HTTP client helpers for vllm-sr chat (OpenAI-compatible chat completions)."""
+"""HTTP helpers for ``vllm-sr request chat``."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ def resolve_chat_base_url(
     resolved_target = resolve_target(target)
     if resolved_target != DEFAULT_TARGET:
         raise ValueError(
-            "Non-Docker targets are not yet supported by `vllm-sr chat`. "
+            "Non-Docker targets are not yet supported by `vllm-sr request chat`. "
             "Use `curl` or another HTTP client to reach the routed endpoint."
         )
     host, port = resolve_listener_host_port(config_path)

@@ -12,7 +12,7 @@ once:
 vllm-sr status
 vllm-sr logs router
 vllm-sr logs envoy
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 The examples below are fragments. Add them to the corresponding section of a
@@ -32,7 +32,7 @@ container:
 
 ```bash
 test -r config.yaml
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Follow the field path in the validation error. Do not add missing fields to a
@@ -383,7 +383,7 @@ precision and recall at the chosen operating point.
 
 ```bash
 # Validate the source configuration.
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 
 # Identify the active local stack and component state.
 vllm-sr status

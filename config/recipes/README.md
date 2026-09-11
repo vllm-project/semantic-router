@@ -33,7 +33,7 @@ Read the Model Card first, start the required provider backends, then validate
 and serve the recipe's config:
 
 ```bash
-vllm-sr validate --config config/recipes/<name>/config.yaml
+vllm-sr config validate --config config/recipes/<name>/config.yaml
 vllm-sr serve --config config/recipes/<name>/config.yaml
 ```
 

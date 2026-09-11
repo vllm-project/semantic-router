@@ -8,7 +8,7 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import quote_plus
 
-SCHEMA_ENDPOINT = "/config/router/schema"
+SCHEMA_ENDPOINT = "/api/v1/config/schema"
 SUPPORTED_VIEWS = ("full", "index", "section", "surface")
 
 
