@@ -237,7 +237,7 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
-// MultiModalEncodeText encodes text using multi-modal model
+// MultiModalEncodeText encodes text using multi-modal model (mock)
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	return nil, ErrBackendUnavailable
 }
@@ -631,6 +631,43 @@ func InitFactCheckClassifier(modelPath string, useCPU bool) error {
 // ClassifyFactCheckText classifies text for fact checking
 func ClassifyFactCheckText(text string) (FactCheckResult, error) {
 	return FactCheckResult{}, ErrBackendUnavailable
+}
+
+// MLPDeviceType represents the device type for MLP
+type MLPDeviceType int
+
+const (
+	MLPDeviceCPU MLPDeviceType = iota
+	MLPDeviceCuda
+	MLPDeviceMetal
+)
+
+// MLPSelector is a mock for Candle MLP
+type MLPSelector struct{}
+
+// NewMLPSelector creates a new mock MLP selector
+func NewMLPSelector() *MLPSelector {
+	return &MLPSelector{}
+}
+
+// NewMLPSelectorWithDevice creates a new mock MLP selector with device
+func NewMLPSelectorWithDevice(deviceType MLPDeviceType) *MLPSelector {
+	return &MLPSelector{}
+}
+
+// MLPFromJSON creates a mock MLP from JSON
+func MLPFromJSON(json string) (*MLPSelector, error) {
+	return &MLPSelector{}, nil
+}
+
+// Select predicts using mock MLP
+func (m *MLPSelector) Select(features []float32) (string, error) {
+	return "mock-model", nil
+}
+
+// IsTrained checks if mock MLP is trained
+func (m *MLPSelector) IsTrained() bool {
+	return true
 }
 
 // FeedbackResult represents the result of feedback detection
