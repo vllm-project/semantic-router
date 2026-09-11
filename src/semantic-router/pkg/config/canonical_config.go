@@ -250,9 +250,15 @@ func canonicalProviderModelIndex(
 	models []CanonicalProviderModel,
 	cards map[string]RoutingModel,
 ) (map[string]CanonicalProviderModel, map[string]struct{}, error) {
+	type backendRefOwner struct {
+		modelName string
+		index     int
+	}
+
 	aliases := make(map[string]CanonicalProviderModel, len(models))
 	cardTargets := make(map[string]struct{}, len(models))
 	catalogBackedTargets := make(map[string]bool, len(models))
+	endpointOwners := make(map[string]backendRefOwner)
 	for index, model := range models {
 		cardID, err := validateCanonicalProviderModel(model, index, cards, aliases)
 		if err != nil {
@@ -264,6 +270,20 @@ func canonicalProviderModelIndex(
 				"providers.models[%d] makes model card %q ambiguous: it cannot represent both a catalog-backed and custom model",
 				index, cardID,
 			)
+		}
+		for backendIndex, backendRef := range canonicalBackendRefs(model) {
+			endpointName := canonicalEndpointName(model.Name, backendRef, backendIndex)
+			if owner, exists := endpointOwners[endpointName]; exists {
+				return nil, nil, fmt.Errorf(
+					"providers.models[%s].backend_refs[%d]: normalized endpoint name %q collides with providers.models[%s].backend_refs[%d]",
+					model.Name,
+					backendIndex,
+					endpointName,
+					owner.modelName,
+					owner.index,
+				)
+			}
+			endpointOwners[endpointName] = backendRefOwner{modelName: model.Name, index: backendIndex}
 		}
 		aliases[model.Name] = model
 		cardTargets[cardID] = struct{}{}
@@ -519,7 +539,11 @@ func canonicalEndpointName(modelName string, backendRef CanonicalBackendRef, ind
 			suffix = fmt.Sprintf("backend-%d", index+1)
 		}
 	}
-	return modelName + "_" + suffix
+	prefix := modelName + "_"
+	if modelName != "" && strings.HasPrefix(suffix, prefix) {
+		return suffix
+	}
+	return prefix + suffix
 }
 
 func defaultProtocol(protocol string) string {
