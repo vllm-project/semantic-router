@@ -197,6 +197,13 @@ func (s *RedisStore) ensureConversationResolvedForRead(ctx context.Context, conv
 // window must have come back with fewer members than the rank span it covered,
 // which is the one observation that shows nothing lies beyond it. A full window
 // that underfills the page is evidence of the opposite, and widens instead.
+//
+// No page is returned at all — full or proven complete — if any member of the
+// window could not be read. A Redis failure says nothing about whether that
+// response is live, and every success path hands the caller a cursor that has
+// already advanced past it. Because each round re-reads a superset of the last
+// window, the final window's failures are exactly the ones the returned page
+// would have stepped over, so that one check fails closed for the whole walk.
 func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID string, opts normalizedListOptions) ([]*responseapi.StoredResponse, error) {
 	// Blank-witness memberships may only be cleaned up once the store is
 	// finalized — the same rule cascade delete follows, for the same reason:
@@ -215,6 +222,13 @@ func (s *RedisStore) listIndexedResponses(ctx context.Context, conversationID st
 		// life of the call and only its width changes.
 		page, collectErr := s.collectIndexedPage(ctx, conversationID, opts, walk.stride, allowBlankCleanup)
 
+		// Checked before either success path: a full page and a proven-complete
+		// short page would both advance the caller's cursor past the member
+		// that could not be read.
+		if page.readFailures > 0 {
+			return nil, fmt.Errorf("%w: %d payload(s) in conversation %s; first failure: %w",
+				ErrPayloadReadFailed, page.readFailures, conversationID, page.firstReadErr)
+		}
 		if responses, complete := selectCompleteIndexedPage(conversationID, opts, page, collectErr); complete {
 			return responses, nil
 		}
@@ -308,7 +322,8 @@ func growListStride(stride int) int {
 }
 
 // blockedTraversalError reports a run of unreadable-but-unremovable members
-// longer than the widest bounded window may see past.
+// longer than the widest bounded window may see past. Read failures never
+// reach here: they fail the page before any widening is attempted.
 func blockedTraversalError(conversationID string, width int) error {
 	return fmt.Errorf(
 		"%w: conversation %s still holds unreadable memberships this read may not remove across a %d-member window; run FinalizeConversationIndex to clear them",
@@ -359,9 +374,12 @@ type collectedIndexedPage struct {
 	membersRead int
 
 	// readFailures counts members whose payload could not be read at all, as
-	// distinct from being proven absent. Reported for diagnosis: a widening
-	// window from a fixed anchor re-reads them rather than stepping over them.
+	// distinct from being proven absent. Any such member fails the page: it
+	// may be live, and every success path would hand back a cursor already
+	// past it. firstReadErr carries the first underlying failure for the
+	// error the caller sees.
 	readFailures int
+	firstReadErr error
 
 	window listWindowRead
 }
@@ -397,6 +415,7 @@ func (s *RedisStore) collectIndexedPage(
 	responses := make([]*responseapi.StoredResponse, 0, len(results))
 	toPrune := make([]responseGenerationWitness, 0, len(results))
 	readFailures := 0
+	var firstReadErr error
 	for i, result := range results {
 		witness := witnesses[i]
 		response, prune, readFailed := evaluateIndexedResponse(conversationID, witness, result, allowBlankCleanup)
@@ -405,6 +424,9 @@ func (s *RedisStore) collectIndexedPage(
 		}
 		if readFailed {
 			readFailures++
+			if firstReadErr == nil {
+				firstReadErr = result.err
+			}
 		}
 		if response != nil {
 			responses = append(responses, response)
@@ -416,6 +438,7 @@ func (s *RedisStore) collectIndexedPage(
 		pruneCandidates: len(toPrune),
 		membersRead:     len(witnesses),
 		readFailures:    readFailures,
+		firstReadErr:    firstReadErr,
 		window:          window,
 	}
 	page.membershipsRemoved, err = s.unindexResponseGenerations(ctx, conversationID, toPrune...)
@@ -456,9 +479,9 @@ func (s *RedisStore) collectIndexedPage(
 // operator-authorized finalization sweep resolves it after old writers drain.
 // readFailed distinguishes a payload this page could not read from one it read
 // and found unusable. A Redis failure says nothing about whether the response
-// is still there, so a traversal must not step over it; a payload that decoded
-// badly was genuinely observed and can never be returned, so skipping it costs
-// nothing a retry would recover.
+// is still there, so the page fails rather than return past it; a payload that
+// decoded badly was genuinely observed and can never be returned, so skipping
+// it costs nothing a retry would recover.
 func evaluateIndexedResponse(
 	conversationID string,
 	witness responseGenerationWitness,

@@ -36,4 +36,9 @@ var (
 	// more consecutive unreadable-but-unremovable memberships than one list
 	// call may step over. Retryable, but the durable remedy is finalization.
 	ErrIndexTraversalBlocked = errors.New("conversation index traversal blocked")
+
+	// ErrPayloadReadFailed is returned when a list could not read an indexed
+	// response's payload. Retryable: the member may well be live, so no page
+	// whose cursor would advance past it is returned.
+	ErrPayloadReadFailed = errors.New("indexed response payload could not be read")
 )
