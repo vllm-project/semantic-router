@@ -176,6 +176,7 @@ class FusionAlgorithmConfig(BaseModel):
 
     model: str | None = None
     analysis_models: list[str] | None = None
+    analysis_mode: Literal["separate", "one_call", "none"] = "separate"
     analysis_overrides: list[FusionModelOverrideConfig] | None = None
     max_concurrent: int | None = Field(default=None, ge=1)
     max_completion_tokens: int | None = Field(default=None, ge=1)
@@ -198,6 +199,11 @@ class FusionAlgorithmConfig(BaseModel):
             if model in seen:
                 raise ValueError(f"analysis override model {model!r} is duplicated")
             seen.add(model)
+
+        if self.analysis_mode != "separate" and (
+            self.analysis_template and self.analysis_template.strip()
+        ):
+            raise ValueError("analysis_template requires analysis_mode='separate'")
         return self
 
 
