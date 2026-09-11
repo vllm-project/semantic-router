@@ -28,7 +28,7 @@ or runtime behavior that differs from the built-in defaults.
 
 | Section | Owns |
 | --- | --- |
-| `version` | Canonical schema version. Use `v0.3`. |
+| `version` | Canonical schema version. Use `v0.3`. See [Schema version](#schema-version). |
 | `listeners` | Public Router listeners and timeouts. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
@@ -101,6 +101,41 @@ complexity rule's signal errors rather than dropped.
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
 decision, algorithm, plugin, and global block.
+
+## Schema version
+
+`version` declares the canonical contract the document is written for. The Router
+reads it before it interprets anything else, so a document written for a
+different contract fails at startup instead of being silently reinterpreted
+under the current one.
+
+| `version` | Behavior |
+| --- | --- |
+| `v0.3` | Accepted. The contract this build reads and writes. |
+| Absent | Accepted, with a startup warning, and interpreted as `v0.3`. |
+| Any other value | Rejected before the document is interpreted. |
+
+A rejected document fails with the offending field path and the set the running
+build accepts:
+
+```
+version: unsupported "v0.2", this build reads v0.3
+```
+
+`vllm-sr config validate`, `vllm-sr serve`, `POST /config/router/validate`, and
+the Dashboard and Operator config paths all apply the same gate, so a document
+that validates on one surface is one the Router will read on the others. Every
+canonical document those surfaces emit is stamped with the version they accept,
+so an exported configuration always loads back.
+
+### Contract bumps
+
+A release that changes the written contract keeps the outgoing one readable for
+one cycle. During that window the Router stamps new documents with the new
+version and still reads the previous one, so existing files keep loading and can
+be migrated incrementally rather than all at once. The error message always
+names the full set the running build reads, which is the authoritative answer
+for a given binary.
 
 ## Capability catalog
 

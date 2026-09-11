@@ -51,6 +51,17 @@ var configContractRequiredDocs = []docNeedles{
 			"Entrypoints and recipes",
 			"exhaustive canonical example",
 			"`config/fragments/`",
+			// The canonical version gate is a documented startup contract (issue #2469).
+			"## Schema version",
+			"### Contract bumps",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
+		needles: []string{
+			// Rejecting an unsupported contract is an operator-visible failure.
+			"### `version: unsupported \"...\"`",
+			"vllm-sr config migrate --config old-config.yaml",
 		},
 	},
 	{
