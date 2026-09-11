@@ -1093,7 +1093,9 @@ def accounting_summary(valid: pd.DataFrame) -> Dict[str, Any]:
         int(v) for v in _column_values(valid, "reasoning_tokens") if v is not None
     ]
     return {
-        **split_summary([str(v or "") for v in _column_values(valid, "selected_model")]),
+        **split_summary(
+            [str(v or "") for v in _column_values(valid, "selected_model")]
+        ),
         "finish_reason_counts": count_values(finish_reasons),
         "truncated_responses": finish_reasons.count("length"),
         "reasoning_tokens_total": sum(reasoning) if reasoning else None,
