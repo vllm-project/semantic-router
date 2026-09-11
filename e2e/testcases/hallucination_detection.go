@@ -143,7 +143,7 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 		Question:    testCase.Question,
 	}
 
-	response, err := sendHallucinationChatCompletion(ctx, localPort, testCase, 60*time.Second)
+	response, err := sendHallucinationChatCompletion(ctx, localPort, testCase, 60*time.Second, false)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -185,22 +185,24 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 const hallucinationToolCallID = "call-grounding-context"
 
 // sendHallucinationChatCompletion sends a factual question together with a tool
-// result carrying the grounding context. The tool message is what makes the
-// router run hallucination detection (HasToolsForFactCheck + tool context), and
-// the answer returned by the mock backend is then checked by the endpoint
-// detector.
+// result carrying the grounding context, buffered or streamed. The tool message
+// is what makes the router run hallucination detection (HasToolsForFactCheck +
+// tool context), and the answer returned by the mock backend is then checked by
+// the endpoint detector.
 func sendHallucinationChatCompletion(
 	ctx context.Context,
 	localPort string,
 	testCase HallucinationTestCase,
 	timeout time.Duration,
+	stream bool,
 ) (*localChatCompletionResponse, error) {
 	requestBody := map[string]interface{}{
 		// The auto model, not the backend model the decision routes to: a
 		// concrete model name bypasses every signal, decision and plugin by
 		// design (processor_req_body.go), so asking for one here would leave
 		// nothing to detect with.
-		"model": "MoM",
+		"model":  "MoM",
+		"stream": stream,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": testCase.Question},
 			{"role": "assistant", "tool_calls": []map[string]interface{}{{
@@ -227,6 +229,9 @@ func sendHallucinationChatCompletion(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-vsr-debug", "true")
+	if stream {
+		req.Header.Set("Accept", "text/event-stream")
+	}
 
 	resp, err := (&http.Client{Timeout: timeout}).Do(req)
 	if err != nil {
