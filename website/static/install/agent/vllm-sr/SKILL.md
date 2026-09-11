@@ -43,14 +43,22 @@ boundaries take precedence over this skill.
 
    ```bash
    vllm-sr config schema
-   vllm-sr config schema --section providers
-   vllm-sr config schema --section routing
+   vllm-sr config schema --section providers.models
+   vllm-sr config schema --section routing.modelCards
+   vllm-sr config schema --section routing.decisions.modelRefs
    ```
 
    Use `vllm-sr config schema --surface KIND:NAME` for a selected signal,
-   projection, algorithm, or plugin.
-5. Create or update canonical YAML. Keep credentials in environment variables
-   and store only environment references in the config.
+   projection, algorithm, or plugin. Query the narrowest path first; a broad
+   section can still be large because it contains every valid nested choice.
+5. Start from the running configuration when one exists by reading
+   `vllm-sr config get`; otherwise create `config.yaml` with
+   `vllm-sr config init`. Preserve fields outside the requested change.
+   A physical model must be present in `providers.models`, represented by a
+   matching `routing.modelCards` entry, and referenced from the applicable
+   `routing.decisions[].modelRefs` before it can receive routed traffic. Keep
+   credentials in environment variables and store only environment references
+   in the config.
 6. Validate locally, then ask the running Router to plan the exact mutation:
 
    ```bash
@@ -74,12 +82,14 @@ boundaries take precedence over this skill.
 
    vllm-sr route probe \
      --config config.yaml \
+     --base-url http://localhost:8899/v1 \
      --model vllm-sr/auto \
      --prompt 'Return exactly: route-ok'
    ```
 
    Preview proves the decision path without invoking a model. Probe sends a
-   real request through Envoy and records end-to-end evidence. Use explicit
+   real request through Envoy and records end-to-end evidence. `--base-url`
+   accepts either the listener origin or its OpenAI `/v1` root. Use explicit
    `--expect-*` assertions when the intended recipe, decision, algorithm, or
    model is known.
 9. For optimization, capture a baseline, make one coherent recipe change,

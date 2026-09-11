@@ -98,6 +98,7 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
 
     assert "name: vllm-sr" in skill
     assert "vllm-sr config schema" in skill
+    assert "vllm-sr config init" in skill
     assert "vllm-sr config validate --config config.yaml" in skill
     assert "vllm-sr config plan --config config.yaml" in skill
     assert "vllm-sr route preview" in skill

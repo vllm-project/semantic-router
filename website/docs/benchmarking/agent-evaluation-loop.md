@@ -69,7 +69,7 @@ Probe then sends a real request through Envoy and asserts the resulting route:
 
 ```bash
 vllm-sr route probe \
-  --base-url http://localhost:8899 \
+  --base-url http://localhost:8899/v1 \
   --model vllm-sr/auto \
   --prompt 'Implement a lock-free queue' \
   --expect-recipe balanced \
@@ -79,6 +79,8 @@ vllm-sr route probe \
 
 The probe emits a machine-readable receipt with HTTP status, latency, routing
 headers, response, and assertions. A failed assertion exits with code `2`.
+The base URL may be either the Envoy listener origin or the standard OpenAI
+root ending in `/v1`.
 Preview success proves decision behavior only; probe success proves one routed
 request only. Neither substitutes for a benchmark.
 

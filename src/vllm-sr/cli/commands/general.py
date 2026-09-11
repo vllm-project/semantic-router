@@ -10,6 +10,7 @@ import click
 from cli.commands.common import exit_with_logged_error
 from cli.commands.config import (
     config_command,
+    init_config_command,
     config_schema_command,
     import_config_from_source_command,
     migrate_config_command,
@@ -33,6 +34,7 @@ def config(ctx: click.Context) -> None:
     Examples:
         vllm-sr config envoy
         vllm-sr config router
+        vllm-sr config init --output config.yaml
         vllm-sr config envoy --config my-config.yaml
         vllm-sr config migrate --config old.yaml
         vllm-sr config import --from openclaw --source openclaw.json
@@ -40,6 +42,25 @@ def config(ctx: click.Context) -> None:
     if ctx.invoked_subcommand is not None:
         return
     click.echo(ctx.get_help())
+
+
+@config.command("init")
+@click.option(
+    "--output",
+    default="config.yaml",
+    show_default=True,
+    help="Path for the new canonical configuration template.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite the output file if it already exists.",
+)
+@exit_with_logged_error(log)
+def config_init(output: str, force: bool) -> None:
+    """Create a minimal canonical configuration template."""
+
+    init_config_command(output, force=force)
 
 
 @config.command("envoy")

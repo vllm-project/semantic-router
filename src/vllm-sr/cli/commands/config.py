@@ -24,6 +24,36 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+CONFIG_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[1] / "templates" / "config.template.yaml"
+)
+
+
+def init_config_command(
+    output_path: str = "config.yaml",
+    *,
+    force: bool = False,
+) -> Path:
+    """Write the packaged minimal canonical configuration template."""
+
+    destination = Path(output_path)
+    if destination.exists():
+        if destination.is_dir():
+            raise ValueError(f"Config output path is a directory: {destination}")
+        if not force:
+            raise ValueError(
+                f"Config file already exists: {destination}. Use --force to overwrite it."
+            )
+    try:
+        template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError("packaged config template is unavailable") from exc
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(template, encoding="utf-8")
+
+    success("Configuration template created")
+    fields((("Output", destination),))
+    return destination
 
 
 def config_schema_command(

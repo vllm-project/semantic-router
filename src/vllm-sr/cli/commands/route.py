@@ -8,12 +8,11 @@ import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any
-from urllib.parse import urljoin
 
 import click
 import requests
 
-from cli.chat_client import CHAT_COMPLETIONS_PATH, resolve_chat_base_url
+from cli.chat_client import chat_completions_url, resolve_chat_base_url
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_route_preview_summary
 from cli.router_management_client import RouterManagementClient
@@ -358,7 +357,10 @@ def _probe_assertions(
 @click.option(
     "--base-url",
     default=None,
-    help="Explicit Envoy-routed base URL; otherwise derive it from --config.",
+    help=(
+        "Explicit Envoy listener origin or OpenAI /v1 base URL; otherwise "
+        "derive it from --config."
+    ),
 )
 @click.option(
     "--api-key-env",
@@ -409,7 +411,7 @@ def probe(
         target=target,
         base_url=base_url,
     )
-    url = urljoin(base.rstrip("/") + "/", CHAT_COMPLETIONS_PATH.lstrip("/"))
+    url = chat_completions_url(base)
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if temperature is not None:
         payload["temperature"] = temperature

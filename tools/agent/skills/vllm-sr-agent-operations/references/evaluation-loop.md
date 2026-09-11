@@ -21,7 +21,7 @@ Probe sends a real OpenAI-compatible request through the inference listener:
 export OPENAI_API_KEY='...'
 
 vllm-sr route probe \
-  --base-url http://router-inference:8899 \
+  --base-url http://router-inference:8899/v1 \
   --model vllm-sr/auto \
   --prompt 'Implement a lock-free queue' \
   --expect-recipe balanced \
@@ -30,7 +30,8 @@ vllm-sr route probe \
 ```
 
 The JSON receipt includes status, latency, routing headers, body, and every
-assertion. Exit code `2` means an assertion failed.
+assertion. The base URL accepts either the listener origin or its OpenAI `/v1`
+root. Exit code `2` means an assertion failed.
 
 ## 3. Versioned workloads
 

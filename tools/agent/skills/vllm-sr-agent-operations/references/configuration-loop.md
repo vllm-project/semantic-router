@@ -8,13 +8,22 @@ editing, discover only the relevant schema surface:
 ```bash
 vllm-sr config schema --endpoint http://router-management:8080
 vllm-sr config schema --endpoint http://router-management:8080 \
-  --section routing
+  --section providers.models
+vllm-sr config schema --endpoint http://router-management:8080 \
+  --section routing.decisions.modelRefs
 vllm-sr config schema --endpoint http://router-management:8080 \
   --surface algorithm:multi_factor
 ```
 
 Use `--full` only for offline tooling that genuinely needs the entire JSON
-Schema.
+Schema. Query the narrowest section needed because a parent section must carry
+every valid nested choice and can still be large.
+
+Read an active document with `vllm-sr config get`. In a fresh workspace, run
+`vllm-sr config init --output candidate.yaml` for a minimal canonical starter.
+The same physical model name must occur under `providers.models`,
+`routing.modelCards`, and the applicable decision's `modelRefs`; a provider or
+Model Card alone does not make a model routable.
 
 ## Validate, plan, apply
 

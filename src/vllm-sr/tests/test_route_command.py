@@ -701,6 +701,30 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer probe-secret"
 
 
+def test_route_probe_accepts_openai_v1_base_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = MagicMock()
+    response.status_code = 200
+    response.headers = {}
+    response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+    post = MagicMock(return_value=response)
+    monkeypatch.setattr(requests, "post", post)
+
+    result = CliRunner().invoke(
+        route_probe_command,
+        [
+            "--prompt",
+            "hello",
+            "--base-url",
+            "http://localhost:8801/v1",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert post.call_args.args[0] == "http://localhost:8801/v1/chat/completions"
+
+
 def test_route_probe_exits_two_when_an_assertion_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

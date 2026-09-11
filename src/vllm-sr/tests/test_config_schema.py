@@ -114,6 +114,31 @@ def test_config_schema_command_uses_management_origin_and_auth_client(
     }
 
 
+def test_config_init_creates_valid_minimal_template_without_overwriting(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "nested" / "config.yaml"
+    runner = CliRunner()
+
+    created = runner.invoke(main, ["config", "init", "--output", str(output)])
+
+    assert created.exit_code == 0, created.output
+    config = safe_load_router_config(output.read_text(encoding="utf-8"))
+    assert validate_config_structure(config) == []
+    assert config["providers"]["models"][0]["name"] == (
+        config["routing"]["modelCards"][0]["name"]
+    )
+    assert config["routing"]["decisions"][0]["modelRefs"][0]["model"] == (
+        config["providers"]["models"][0]["name"]
+    )
+
+    original = output.read_text(encoding="utf-8")
+    refused = runner.invoke(main, ["config", "init", "--output", str(output)])
+    assert refused.exit_code != 0
+    assert "already exists" in refused.output
+    assert output.read_text(encoding="utf-8") == original
+
+
 def test_python_progressive_index_covers_every_surface_catalog() -> None:
     index = schema_view(schema_document())
 

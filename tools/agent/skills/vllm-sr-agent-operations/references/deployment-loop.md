@@ -6,10 +6,12 @@ Install a released CLI or build the repository's CLI through its documented
 development target. Confirm the runtime platform, container engine, available
 accelerators, ports, storage, and credential environment before serving.
 
-Generate a candidate config from the running schema rather than from memory.
-Define each provider, model, backend reference, Model Card, Entrypoint, Recipe,
-and listener explicitly. Custom physical models and virtual models use the
-same evaluation-record and routing-index contracts.
+Read an active config before editing it; use `vllm-sr config init` only for a
+fresh workspace. Discover exact fields from the running schema rather than
+from memory. Define each provider, model, backend reference, Model Card,
+Entrypoint, Recipe, and listener explicitly. A model joins a route only when a
+decision references it through `modelRefs`. Custom physical models and virtual
+models use the same evaluation-record and routing-index contracts.
 
 ## Serve
 
