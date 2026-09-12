@@ -8,12 +8,11 @@ import time
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any
-from urllib.parse import urljoin
 
 import click
 import requests
 
-from cli.chat_client import CHAT_COMPLETIONS_PATH, resolve_chat_base_url
+from cli.chat_client import chat_completions_url, resolve_chat_base_url
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_route_preview_summary
 from cli.router_management_client import RouterManagementClient
@@ -310,11 +309,13 @@ def _routing_receipt_headers(response: requests.Response) -> dict[str, str]:
 def _probe_assertions(
     *,
     response: requests.Response,
+    response_body: Any,
     expected_status: int,
     expected_recipe: str | None,
     expected_decision: str | None,
     expected_algorithm: str | None,
-    expected_model: str | None,
+    expected_selected_model: str | None,
+    expected_response_model: str | None,
 ) -> list[dict[str, Any]]:
     assertions: list[dict[str, Any]] = [
         {
@@ -328,7 +329,7 @@ def _probe_assertions(
         "x-vsr-selected-recipe": expected_recipe,
         "x-vsr-selected-decision": expected_decision,
         "x-vsr-selected-algorithm": expected_algorithm,
-        "x-vsr-selected-model": expected_model,
+        "x-vsr-selected-model": expected_selected_model,
     }
     for header, expected in expectations.items():
         if expected is None:
@@ -340,6 +341,18 @@ def _probe_assertions(
                 "expected": expected,
                 "actual": actual,
                 "passed": actual == expected,
+            }
+        )
+    if expected_response_model is not None:
+        actual = (
+            response_body.get("model", "") if isinstance(response_body, dict) else ""
+        )
+        assertions.append(
+            {
+                "field": "response.body.model",
+                "expected": expected_response_model,
+                "actual": actual,
+                "passed": actual == expected_response_model,
             }
         )
     return assertions
@@ -358,7 +371,10 @@ def _probe_assertions(
 @click.option(
     "--base-url",
     default=None,
-    help="Explicit Envoy-routed base URL; otherwise derive it from --config.",
+    help=(
+        "Explicit Envoy listener origin or OpenAI /v1 base URL; otherwise "
+        "derive it from --config."
+    ),
 )
 @click.option(
     "--api-key-env",
@@ -376,7 +392,16 @@ def _probe_assertions(
 @click.option("--expect-recipe", default=None)
 @click.option("--expect-decision", default=None)
 @click.option("--expect-algorithm", default=None)
-@click.option("--expect-model", default=None)
+@click.option(
+    "--expect-selected-model",
+    default=None,
+    help="Assert the Router's x-vsr-selected-model receipt header.",
+)
+@click.option(
+    "--expect-response-model",
+    default=None,
+    help="Assert the upstream OpenAI response body's top-level model field.",
+)
 @exit_with_logged_error(log)
 def probe(
     prompt: str | None,
@@ -393,7 +418,8 @@ def probe(
     expect_recipe: str | None,
     expect_decision: str | None,
     expect_algorithm: str | None,
-    expect_model: str | None,
+    expect_selected_model: str | None,
+    expect_response_model: str | None,
 ) -> None:
     """Send one real routed request and emit a machine-readable evidence receipt."""
 
@@ -409,7 +435,7 @@ def probe(
         target=target,
         base_url=base_url,
     )
-    url = urljoin(base.rstrip("/") + "/", CHAT_COMPLETIONS_PATH.lstrip("/"))
+    url = chat_completions_url(base)
     payload: dict[str, Any] = {"model": model, "messages": messages}
     if temperature is not None:
         payload["temperature"] = temperature
@@ -428,13 +454,16 @@ def probe(
             f"Failed to probe routed endpoint {redact_url(url)}: {exc}"
         ) from exc
     latency_ms = round((time.monotonic() - started) * 1000, 3)
+    response_body = _response_body(response)
     assertions = _probe_assertions(
         response=response,
+        response_body=response_body,
         expected_status=expect_status,
         expected_recipe=expect_recipe,
         expected_decision=expect_decision,
         expected_algorithm=expect_algorithm,
-        expected_model=expect_model,
+        expected_selected_model=expect_selected_model,
+        expected_response_model=expect_response_model,
     )
     passed = all(assertion["passed"] for assertion in assertions)
     receipt = {
@@ -449,7 +478,7 @@ def probe(
             "status": response.status_code,
             "latency_ms": latency_ms,
             "routing": _routing_receipt_headers(response),
-            "body": _response_body(response),
+            "body": response_body,
         },
         "assertions": assertions,
     }

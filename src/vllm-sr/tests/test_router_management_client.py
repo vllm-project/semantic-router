@@ -97,3 +97,27 @@ def test_management_client_discovers_one_config_schema_view(
         "kind": "algorithm",
         "name": "multi_factor",
     }
+
+
+def test_management_client_requests_expanded_section_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, dict[str, Any]]] = []
+
+    def request(method: str, url: str, **kwargs: Any) -> _Response:
+        calls.append((method, url, kwargs))
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", request)
+
+    RouterManagementClient("http://localhost:8080").get_config_schema(
+        view="section",
+        path="routing",
+        expanded=True,
+    )
+
+    assert calls[0][2]["params"] == {
+        "view": "section",
+        "path": "routing",
+        "expanded": "true",
+    }

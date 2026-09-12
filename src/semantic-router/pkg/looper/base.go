@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -34,23 +35,44 @@ var taggedToolCallPattern = regexp.MustCompile(`(?s)<tool_call>\s*(\{.*?\})\s*</
 // BaseLooper is a basic implementation that calls models sequentially
 // and aggregates their responses. This is the POC implementation.
 type BaseLooper struct {
+	client       *Client
+	clientCloser io.Closer
+	cfg          *config.LooperConfig
+}
+
+type clientBinding struct {
 	client *Client
-	cfg    *config.LooperConfig
+	closer io.Closer
+}
+
+func ownClient(client *Client) clientBinding {
+	return clientBinding{client: client, closer: client}
+}
+
+func borrowClient(client *Client) clientBinding {
+	return clientBinding{client: client}
 }
 
 // NewBaseLooper creates a new BaseLooper instance
 func NewBaseLooper(cfg *config.LooperConfig) *BaseLooper {
-	return newBaseLooper(cfg, nil)
+	return newBaseLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newBaseLooper(cfg *config.LooperConfig, client *Client) *BaseLooper {
-	if client == nil {
-		client = NewClient(cfg)
-	}
+func newBaseLooper(cfg *config.LooperConfig, binding clientBinding) *BaseLooper {
 	return &BaseLooper{
-		client: client,
-		cfg:    cfg,
+		client:       binding.client,
+		clientCloser: binding.closer,
+		cfg:          cfg,
 	}
+}
+
+// Close releases the client only when this Looper created it. Injected clients
+// remain owned by their caller, such as a Router generation.
+func (l *BaseLooper) Close() error {
+	if l == nil || l.clientCloser == nil {
+		return nil
+	}
+	return l.clientCloser.Close()
 }
 
 // Execute calls all models sequentially and aggregates the responses
