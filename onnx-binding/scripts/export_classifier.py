@@ -12,12 +12,18 @@ from pathlib import Path
 
 import numpy as np
 import onnx
+import onnxruntime as ort
 import torch
 import transformers
-from transformers import AutoConfig, AutoModelForSequenceClassification
-from transformers import AutoModelForTokenClassification, AutoTokenizer
-
 from onnx_artifacts import external_data_sha256, sha256, strip_debug_annotations
+from transformers import (
+    AutoConfig,
+    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoTokenizer,
+)
+
+MIN_VALIDATION_TOKENS = 2
 
 
 class ClassifierLogits(torch.nn.Module):
@@ -81,8 +87,6 @@ def task_probabilities(logits, multi_label):
 def verify_graph(
     reference, graph_path, seed_ids, tokenizer, lengths, token_task, multi_label, dtype
 ):
-    import onnxruntime as ort
-
     options = ort.SessionOptions()
     options.intra_op_num_threads = 8
     options.inter_op_num_threads = 1
@@ -176,7 +180,7 @@ def main():
     if len(set(config.id2label.values())) != config.num_labels:
         raise ValueError("Task labels must be unique")
     if any(
-        length < 2 or length > config.max_position_embeddings
+        length < MIN_VALIDATION_TOKENS or length > config.max_position_embeddings
         for length in args.validation_lengths
     ):
         raise ValueError("Validation lengths must fit the model's context")

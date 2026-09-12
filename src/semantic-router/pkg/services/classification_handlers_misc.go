@@ -85,6 +85,7 @@ type UserFeedbackOptions struct {
 
 // UserFeedbackResponse represents the response from user feedback classification
 type UserFeedbackResponse struct {
+	Abstained        bool    `json:"abstained,omitempty"`
 	FeedbackType     string  `json:"feedback_type"`
 	Label            string  `json:"label"`
 	Confidence       float64 `json:"confidence"`
@@ -131,6 +132,7 @@ func (s *ClassificationService) ClassifyUserFeedback(ctx context.Context, req Us
 	processingTime := time.Since(start).Milliseconds()
 
 	return &UserFeedbackResponse{
+		Abstained:        result.Abstained,
 		FeedbackType:     result.FeedbackType,
 		Label:            result.FeedbackType, // FeedbackType is the label
 		Confidence:       float64(result.Confidence),

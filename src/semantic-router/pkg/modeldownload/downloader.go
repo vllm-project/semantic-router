@@ -78,6 +78,12 @@ func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
 }
 
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := invalidateModelRevision(spec); err != nil {
+		return fmt.Errorf("invalidate model revision: %w", err)
+	}
 	logging.Infof("Downloading model: %s", spec.LocalPath)
 
 	args := buildDownloadArgs(spec)
@@ -111,6 +117,11 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		// A pinned runtime must not fall through the optional/gated skip path:
+		// that could let startup load old present bytes after a failed refresh.
+		if immutableModelRevision(spec) {
+			return fmt.Errorf("failed to download pinned model %s: %w", spec.RepoID, err)
+		}
 		if IsGatedModelError(err, spec.RepoID, config.HFToken) {
 			logging.Warnf("⚠️  Skipping model '%s' (repo: %s): %v", spec.LocalPath, spec.RepoID, err)
 			logging.Warnf("   This is expected if HF_TOKEN is not available (e.g., PRs from forks)")
@@ -120,6 +131,9 @@ func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, confi
 		return fmt.Errorf("failed to download model %s: %w", spec.RepoID, err)
 	}
 
+	if err := recordModelRevision(spec); err != nil {
+		return fmt.Errorf("record downloaded model revision: %w", err)
+	}
 	logging.Infof("Successfully downloaded model: %s", spec.LocalPath)
 
 	return nil

@@ -61,3 +61,11 @@ that case before using feedback to change the selected model.
 
 A prediction the detector is not confident about, one below the configured `threshold`, is reported as `satisfied` with the model's own probability for that class beside it. That number is often far below the threshold, because the model put its mass on a class the threshold rejected. Read the pair as uncertain, not as evidence the user was satisfied. See a complete example:
 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml).
+
+Models that declare `NO_FEEDBACK` in their label mapping can distinguish ordinary
+follow-up tasks from feedback. That result does not match any of the four
+feedback rules. For these models, a prediction below the detector's configured
+`threshold` is uncertain: it follows the decision's `on_unknown` policy instead
+of activating `satisfied`. The standalone classification API preserves the
+predicted label and probability and returns `abstained: true` for this case.
+Existing four-class models retain their earlier threshold behavior.

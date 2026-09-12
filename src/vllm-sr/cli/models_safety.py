@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+MIN_SAFETY_LABELS = 2
+
 
 def _labels_valid(labels: list[str]) -> bool:
     return (
@@ -57,7 +59,7 @@ class SafetyRule(BaseModel):
         self.labels = self.labels or ["safe", "unsafe"]
         self.unsafe_labels = self.unsafe_labels or ["unsafe"]
         if (
-            len(self.labels) < 2
+            len(self.labels) < MIN_SAFETY_LABELS
             or not _labels_valid(self.labels)
             or not _labels_valid(self.unsafe_labels)
         ):

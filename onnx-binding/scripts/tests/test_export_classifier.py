@@ -12,9 +12,11 @@ try:
     import onnxruntime  # noqa: F401 -- require an actual runtime for export tests
     import onnxscript  # noqa: F401 -- required by the dynamo exporter
     import torch
-    from transformers import ModernBertConfig
-    from transformers import ModernBertForSequenceClassification
-    from transformers import ModernBertForTokenClassification
+    from transformers import (
+        ModernBertConfig,
+        ModernBertForSequenceClassification,
+        ModernBertForTokenClassification,
+    )
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     exporter = importlib.import_module("export_classifier")
