@@ -939,6 +939,22 @@ const (
 	NLIError NLILabel = -1
 )
 
+// String preserves the label contract when the router selects ONNX bindings.
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	case NLIUnknown:
+		return "UNKNOWN"
+	default:
+		return "ERROR"
+	}
+}
+
 // ============================================================================
 // Hallucination Detection (stub - not implemented in onnx_binding)
 // ============================================================================
@@ -999,8 +1015,11 @@ func InitHallucinationModel(modelPath string, useCPU bool) error {
 // InitNLIModel initializes the NLI model
 // Note: Not yet implemented in onnx_binding
 func InitNLIModel(modelPath string, useCPU bool) error {
-	return fmt.Errorf("NLI model not yet implemented in onnx_binding")
+	return fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
+
+// IsNLIModelInitialized remains false while this backend has no NLI model.
+func IsNLIModelInitialized() bool { return false }
 
 // DetectHallucinations detects hallucinations in text
 // Note: Not yet implemented in onnx_binding
@@ -1017,7 +1036,7 @@ func DetectHallucinationsWithNLI(context, question, answer string, threshold flo
 // ClassifyNLI performs NLI classification
 // Note: Not yet implemented in onnx_binding
 func ClassifyNLI(premise, hypothesis string) (*NLIResult, error) {
-	return nil, fmt.Errorf("NLI classification not yet implemented in onnx_binding")
+	return nil, fmt.Errorf("%w: local NLI is not implemented", ErrBackendUnavailable)
 }
 
 // ============================================================================
