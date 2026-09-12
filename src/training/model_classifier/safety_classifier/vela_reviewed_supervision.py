@@ -172,7 +172,7 @@ def main():
             Path(__file__).read_bytes()
         ).hexdigest(),
         "source_files": file_receipts(
-            [str(args.aegis), str(args.culture)] + args.culture_hazard
+            [str(args.aegis), str(args.culture), *args.culture_hazard]
         ),
         "test_used": False,
         "files": {},

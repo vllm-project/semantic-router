@@ -9,7 +9,8 @@ def select_operating_point(
     rows, probabilities, labels, *, false_positive_budget=0.05, minimum_support=1
 ):
     """Fit one shared threshold; unobserved labels never count as known positives."""
-    import numpy as np
+    # Data-only tooling can import this module without numerical dependencies.
+    import numpy as np  # noqa: PLC0415
 
     if (
         not math.isfinite(false_positive_budget)

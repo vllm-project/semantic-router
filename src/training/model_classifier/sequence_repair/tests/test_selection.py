@@ -212,7 +212,7 @@ class BinarySelectionTests(unittest.TestCase):
                 json.dumps(
                     {
                         "label2id": {"safe": 0, "unsafe": 1},
-                        "pooling": "mean",
+                        "classifier_pooling": "mean",
                     }
                 )
             )
