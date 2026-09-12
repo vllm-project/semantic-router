@@ -1,8 +1,9 @@
 package dsl
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func (c *Compiler) compileSafetySignal(s *SignalDecl) {

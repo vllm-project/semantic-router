@@ -4,7 +4,8 @@ For the Vela generation, see the [application recipes](../vela-applications.md).
 They preserve historical recipes below while defining the new data, label,
 training and independent evaluation contracts.
 
-This pipeline trains a four-class classifier for a user's follow-up message:
+The historical pipeline below trains a four-class classifier for a user's
+follow-up message:
 
 | Label | Meaning |
 |---|---|
@@ -25,6 +26,22 @@ can resemble clarification or revision feedback. The development-only
 `vela_applicability` diagnostic reports these forced classifications without
 inventing a SAT label or an accuracy score. A previous assistant turn is a
 necessary routing gate, but does not by itself distinguish a new topic.
+
+Vela extends the same checkpoint with `NO_FEEDBACK=4`, preserving IDs 0–3.
+Its training combines reviewed ordinary user tasks with all four feedback
+intentions. A source `NEWTOPIC` tag alone is not a reliable negative label:
+some such utterances are actual thanks or corrections, so the included review
+receipt records exclusions. The model still cannot infer missing context.
+`vela_applicability` reports non-feedback accuracy only for the five-class
+contract; legacy four-class results retain their diagnostic-only interpretation.
+
+The weak-label projection preserves its historical `ascii-v2` quote policy by
+default. New corpora can select `--quote-policy structured-v3` to also remove
+curly or Chinese quotation spans and Markdown block quotes from keyword-based
+supervision. The original input remains intact. A pinned row/text-hash review
+retains genuine feedback outside quotations and excludes confirmed ambiguous
+projections; a quotation alone is not evidence that an example is mislabeled.
+This creates a new training corpus and never rewrites development or test gold.
 
 ## Install and Train
 
@@ -58,6 +75,10 @@ The helper defaults to an explicit 512-token budget, including special tokens.
 It rejects over-budget inputs instead of silently truncating them. Set
 `max_length` up to the checkpoint's real position capacity when using a verified
 long-context checkpoint; capacity alone does not establish feedback quality.
+It accepts either the exact legacy four-label mapping or the exact Vela
+five-label mapping. `NO_FEEDBACK` is returned as itself with all five scores,
+and is never converted to satisfaction. Router abstention policy remains
+separate from the model's predicted label and score.
 
 `classify_batch()` accepts a list of follow-up messages. Treat confidence as a
 model score, not a calibrated probability, unless calibration has been measured

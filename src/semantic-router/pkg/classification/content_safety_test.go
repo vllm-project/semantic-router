@@ -76,8 +76,8 @@ providers:
 					var body struct {
 						Inputs string `json:"inputs"`
 					}
-					if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Inputs != input {
-						t.Errorf("input changed before reaching model: %v", err)
+					if decodeErr := json.NewDecoder(r.Body).Decode(&body); decodeErr != nil || body.Inputs != input {
+						t.Errorf("input changed before reaching model: %v", decodeErr)
 					}
 					if binary && test.binaryFail || !binary && test.hazardFail {
 						http.Error(w, "unavailable", http.StatusServiceUnavailable)

@@ -66,8 +66,10 @@ func TestFeedbackAbstentionRespectsDecisionUnknownPolicy(t *testing.T) {
 		}
 		for _, policy := range []config.UnknownPolicy{"", config.RuleOnUnknownMatch} {
 			engine := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{{
-				Name: "route", Rules: config.RuleNode{Operator: "AND", OnUnknown: policy,
-					Conditions: []config.RuleNode{{Type: config.SignalTypeUserFeedback, Name: FeedbackLabelSatisfied}}},
+				Name: "route", Rules: config.RuleNode{
+					Operator: "AND", OnUnknown: policy,
+					Conditions: []config.RuleNode{{Type: config.SignalTypeUserFeedback, Name: FeedbackLabelSatisfied}},
+				},
 			}}, "")
 			result, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{SignalErrors: results.SignalErrors})
 			if err != nil {

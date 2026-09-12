@@ -14,7 +14,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from .data_contract import ID2LABEL, LABEL2ID
+from .data_contract import LABEL2ID
+from .vela_contract import VELA_LABEL2ID
 
 CASES = [
     ("What is the capital of Peru?", "秘鲁的首都是哪里？"),
@@ -80,19 +81,34 @@ def records():
     ]
 
 
-def summarize(predictions, thresholds=(0.5, 0.8, 0.95)):
+def summarize(predictions, thresholds=(0.5, 0.8, 0.95), *, five_class=False):
     if not predictions:
         raise ValueError("No applicability predictions")
     return {
         "rows": len(predictions),
         "semantic_scenarios": len({row["group_id"] for row in predictions}),
-        "accuracy": None,
-        "reason": "No-feedback is outside the four-class output taxonomy",
+        "accuracy": (
+            sum(row["prediction"] == "NO_FEEDBACK" for row in predictions)
+            / len(predictions)
+            if five_class
+            else None
+        ),
+        "reason": (
+            "All diagnostic rows have NO_FEEDBACK gold for the five-class contract"
+            if five_class
+            else "No-feedback is outside the four-class output taxonomy"
+        ),
         "predicted_labels": dict(Counter(row["prediction"] for row in predictions)),
         "thresholds": {
             str(threshold): {
                 "high_confidence_non_sat_fraction": sum(
                     row["prediction"] != "SAT" and row["confidence"] >= threshold
+                    for row in predictions
+                )
+                / len(predictions),
+                "high_confidence_feedback_fraction": sum(
+                    row["prediction"] != "NO_FEEDBACK"
+                    and row["confidence"] >= threshold
                     for row in predictions
                 )
                 / len(predictions),
@@ -125,8 +141,8 @@ def main():
         raise ValueError("Refusing to overwrite applicability evidence")
     adapter_path = Path(args.adapter) / "adapter_model.safetensors"
     adapter_sha256 = hashlib.sha256(adapter_path.read_bytes()).hexdigest()
-    model, tokenizer, labels, _ = load_model(args.base, args.contract, args.adapter)
-    if labels != LABEL2ID:
+    model, tokenizer, labels, ids = load_model(args.base, args.contract, args.adapter)
+    if labels not in (LABEL2ID, VELA_LABEL2ID):
         raise ValueError("Unexpected feedback label contract")
     if not 0 < args.max_length <= model.config.max_position_embeddings:
         raise ValueError("Invalid explicit token budget")
@@ -150,14 +166,14 @@ def main():
             {
                 **row,
                 "scores": scores,
-                "prediction": ID2LABEL[label_id],
+                "prediction": ids[label_id],
                 "confidence": scores[label_id],
             }
         )
     if hashlib.sha256(adapter_path.read_bytes()).hexdigest() != adapter_sha256:
         raise ValueError("Adapter changed during evaluation; use a frozen snapshot")
     payload = {
-        "summary": summarize(predictions),
+        "summary": summarize(predictions, five_class=labels == VELA_LABEL2ID),
         "predictions": predictions,
         "precision": "float32_cpu",
         "query_sha256": hashlib.sha256(
@@ -165,7 +181,7 @@ def main():
         ).hexdigest(),
         "adapter_sha256": adapter_sha256,
         "base": args.base,
-        "selection_use": "development diagnostic; no valid four-class gold labels",
+        "selection_use": "development diagnostic; gold is NO_FEEDBACK only for five-class models",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n")

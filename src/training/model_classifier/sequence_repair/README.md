@@ -103,9 +103,40 @@ overwritten. The default score is macro F1 across the complete label ontology.
 `source-macro-f1` averages that score equally across sources; `length-macro-f1`
 averages it across length buckets. A source lacking a class still has that class
 in the macro denominator, so inspect per-source accuracy and support as well.
+The explicit `source-present-macro-f1` option instead averages only labels with
+gold support within each source, then gives sources equal weight. It is useful
+when an expanded taxonomy has sources that observe different label subsets.
+Errors on observed labels still count, and all complete-ontology metrics remain
+in the report. Existing selection modes and sampling are unchanged.
 Source balancing samples a source first, optional length balancing then samples a
 length, and optional label balancing then samples a label. These flags do not
-copy rows or move groups between splits.
+copy rows or move groups between splits. An explicit `--source-weights`
+JSON object instead controls source probabilities; it must name every source
+remaining after context-budget filtering with a finite positive weight. It
+implies source sampling and still permits length/label balance within each
+source. For example, `--source-weights '{"natural": 9, "authored": 1}'` draws
+approximately 90% from `natural`. Without this flag, original sampling and RNG
+behavior are preserved. `sampling-step-*.json` and `sampling-final.json` record
+per-source draws, unique-row coverage, and label draws. These receipts expose
+repeated sampling of small sources; they are not quality metrics.
+
+### Optional token-budget microbatches
+
+`--microbatch-token-budget 32768` first samples the same
+`batch-size × accumulate` examples using the existing RNG, stably orders those
+examples by their measured length, and groups them so each padded microbatch
+fits the token budget. Every example contributes CE sum divided by the original
+optimizer-step example count. A 32K example therefore runs alone; shorter
+examples can share a forward pass. Optimizer steps, learning-rate schedule,
+sampling probabilities, and example coverage remain unchanged. The budget must
+fit the longest eligible training example; no training row is silently dropped.
+
+This explicit option changes batching and the dropout random-number trajectory;
+it is a new reproducible run, not byte-identical continuation of a prior run.
+Dropout-disabled FP32 ModernBERT tests check gradient equivalence against one
+complete batch. Steps record actual microbatch counts and maximum padded tokens;
+measure speed on the intended workload. Without the option, the original
+microbatch ordering and accumulation path remain unchanged.
 
 ## Measure long context
 

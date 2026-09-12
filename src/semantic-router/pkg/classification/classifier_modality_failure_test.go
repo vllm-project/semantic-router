@@ -26,8 +26,10 @@ func TestModalityClassifierFailureIsUnknownInsteadOfAR(t *testing.T) {
 	signals := &decision.SignalMatches{SignalErrors: results.SignalErrors}
 	for _, policy := range []config.UnknownPolicy{"", config.RuleOnUnknownMatch} {
 		engine := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{{
-			Name: "route", Rules: config.RuleNode{Operator: "AND", OnUnknown: policy,
-				Conditions: []config.RuleNode{{Type: config.SignalTypeModality, Name: "AR"}}},
+			Name: "route", Rules: config.RuleNode{
+				Operator: "AND", OnUnknown: policy,
+				Conditions: []config.RuleNode{{Type: config.SignalTypeModality, Name: "AR"}},
+			},
 		}}, "")
 		result, err := engine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {

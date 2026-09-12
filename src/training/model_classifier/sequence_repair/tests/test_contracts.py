@@ -150,6 +150,25 @@ class ContractTests(unittest.TestCase):
         }
         self.assertAlmostEqual(selection_score(metrics, "length-macro-f1"), 0.5)
 
+    def test_present_source_selection_does_not_penalize_unobserved_labels(self):
+        labels = {i: str(i) for i in range(5)}
+        metrics = {
+            "breakdowns": {
+                "source": {
+                    "legacy_four": classification_metrics(
+                        [0, 1, 2, 3], [0, 1, 2, 3], labels
+                    ),
+                    "new_negative": classification_metrics([4], [4], labels),
+                }
+            }
+        }
+        self.assertAlmostEqual(selection_score(metrics, "source-macro-f1"), 0.5)
+        self.assertAlmostEqual(selection_score(metrics, "source-present-macro-f1"), 1.0)
+        metrics["breakdowns"]["source"]["new_negative"] = classification_metrics(
+            [4], [0], labels
+        )
+        self.assertAlmostEqual(selection_score(metrics, "source-present-macro-f1"), 0.5)
+
     @unittest.skipUnless(
         importlib.util.find_spec("torch"),
         "Optional real tensor gradient test requires Torch",

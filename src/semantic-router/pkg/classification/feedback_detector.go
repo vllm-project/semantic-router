@@ -222,8 +222,10 @@ func (d *FeedbackDetector) resultForPrediction(result candle.ClassResultWithProb
 	// even when abstaining; uncertainty is not evidence of satisfaction.
 	for _, label := range d.mapping.IdxToLabel {
 		if label == FeedbackLabelNoFeedback {
-			return &FeedbackResult{FeedbackType: feedbackType, Confidence: result.Confidence,
-				Class: result.Class, Abstained: result.Confidence < threshold}, nil
+			return &FeedbackResult{
+				FeedbackType: feedbackType, Confidence: result.Confidence,
+				Class: result.Class, Abstained: result.Confidence < threshold,
+			}, nil
 		}
 	}
 	// Preserve the established threshold contract of older four-class models.

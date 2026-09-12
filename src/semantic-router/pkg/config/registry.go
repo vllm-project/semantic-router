@@ -6,6 +6,7 @@ import "strings"
 type ModelPurpose string
 
 const (
+	PurposeEncoder                ModelPurpose = "encoder"                 // Base encoder for task adaptation
 	PurposeDomainClassification   ModelPurpose = "domain-classification"   // Classify text into domains/categories
 	PurposePIIDetection           ModelPurpose = "pii-detection"           // Detect personally identifiable information
 	PurposeJailbreakDetection     ModelPurpose = "jailbreak-detection"     // Detect prompt injection/jailbreak attempts
@@ -68,6 +69,32 @@ type ModelSpec struct {
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
+	// Vela releases use immutable revisions. Legacy aliases below retain their
+	// original repositories so an explicit old configuration stays reproducible.
+	{
+		LocalPath:        "models/Vela-1.0-Encoder-307M",
+		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M",
+		Revision:         "5fe5bbb1a88b7fdcc93bb5b9d546c574564eb114",
+		Aliases:          []string{"Vela-1.0-Encoder-307M"},
+		Purpose:          PurposeEncoder,
+		Description:      "Vela text encoder continued from mmbert-32k-yarn with multilingual masked-language-model training. Intended for task adaptation; retrieval uses the separate Embedding checkpoint.",
+		ParameterSize:    "307M encoder",
+		EmbeddingDim:     768,
+		MaxContextLength: 32768,
+		Tags:             []string{"vela", "encoder", "multilingual", "long-context"},
+	},
+	{
+		LocalPath:        "models/Vela-1.0-Encoder-307M-FactCheck",
+		RepoID:           "llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck",
+		Revision:         "018af8146f129ff854ecbc410bb18e741264846a",
+		Aliases:          []string{"Vela-1.0-Encoder-307M-FactCheck"},
+		Purpose:          PurposeHallucinationSentinel,
+		Description:      "Vela classifier for whether a request needs factual verification. It does not verify truth. Supports 32K input; the model card reports length-specific quality and verification cost.",
+		ParameterSize:    "307M encoder + classifier",
+		NumClasses:       2,
+		MaxContextLength: 32768,
+		Tags:             []string{"vela", "factcheck", "classification", "multilingual", "long-context"},
+	},
 	// Domain/Intent Classification
 	{
 		LocalPath:           "models/mom-domain-classifier",

@@ -12,8 +12,10 @@ func validateSafetySignalContracts(cfg *RouterConfig) error {
 	}
 	seen := make(map[string]struct{}, len(cfg.SafetyRules))
 	for i, rule := range cfg.SafetyRules {
-		classifier := ClassifierSignalRule{Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier,
-			Model: rule.Model, Labels: rule.EffectiveLabels()}
+		classifier := ClassifierSignalRule{
+			Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier,
+			Model: rule.Model, Labels: rule.EffectiveLabels(),
+		}
 		if err := validateClassifierSignalIdentity(classifier, i, seen); err != nil {
 			return fmt.Errorf("routing.signals.safety: %w", err)
 		}
@@ -32,8 +34,10 @@ func validateSafetySignalContracts(cfg *RouterConfig) error {
 		if rule.Hazard == nil {
 			continue
 		}
-		hazard := ClassifierSignalRule{Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier,
-			Model: rule.Hazard.Model, Labels: rule.Hazard.Labels}
+		hazard := ClassifierSignalRule{
+			Name: rule.Name, Type: ClassifierSignalTypeSequenceClassifier,
+			Model: rule.Hazard.Model, Labels: rule.Hazard.Labels,
+		}
 		if err := validateSafetyClassifier(cfg, hazard, cfg.SafetyModels.Hazard); err != nil {
 			return fmt.Errorf("safety %q hazard: %w", rule.Name, err)
 		}

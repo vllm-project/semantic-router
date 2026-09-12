@@ -9,7 +9,7 @@ revisions, separate development and final results, and measured limitations.
 
 | Task | Ordered labels | Output |
 |---|---|---|
-| Feedback | `SAT`, `NEED_CLARIFICATION`, `WRONG_ANSWER`, `WANT_DIFFERENT` | Softmax |
+| Feedback | `SAT`, `NEED_CLARIFICATION`, `WRONG_ANSWER`, `WANT_DIFFERENT`, `NO_FEEDBACK` | Softmax |
 | PromptGuard | `benign`, `jailbreak` | Softmax |
 | Safety | `safe`, `unsafe` | Softmax |
 | Hazard | `violence`, `criminal_activity`, `sexual_content`, `child_exploitation`, `hate`, `harassment_abuse`, `regulated_substances`, `weapons`, `self_harm`, `privacy`, `specialized_advice`, `misinformation` | Independent sigmoid |
@@ -26,6 +26,16 @@ assistant explanation or a neutral factual statement is not positive feedback.
 Clarification asks to understand the existing answer; a different format or
 approach is a revision request. Ambiguous utterances cannot be made unambiguous
 by assigning a confident training label.
+
+Vela adds `NO_FEEDBACK` at ID 4 while preserving historical IDs 0–3. An ordinary
+new task or supplied material is not satisfaction. The legacy four-way
+checkpoints stay unchanged. The five-way recipe preserves their trained head
+rows when initializing its new class, then trains all five jointly; adding a
+softmax term changes probabilities and requires new development checks.
+`NO_FEEDBACK` does not match any of the four feedback rules. A low-confidence
+Vela result is an abstention, never a fabricated `SAT` prediction. The checkpoint
+still cannot recover context absent from its input, so mixed intentions and
+ambiguous references need separate reporting.
 
 PromptGuard detects instruction attacks, independently of content risk. A
 harmful request without an instruction attack can be `benign` for PromptGuard
@@ -56,6 +66,16 @@ the repository root. Download only the source files required by a builder.
   uses human excellent ratings and an explicit positive-answer filter from the
   [official test source](https://huggingface.co/datasets/McGill-NLP/feedbackQA).
   It measures SAT recall only; no FeedbackQA examples enter this training recipe.
+  The versioned `vela_weak_supervision_v2` training projection uses the source
+  turn state and user prose to exclude ordinary continuations, quoted/code
+  keywords and mixed intentions; the original weak development results remain
+  available as a separate diagnostic. Its explicit `structured-v3` quote policy
+  covers curly/Chinese quotations and Markdown block quotes, with reviewed
+  ID/text-hash exceptions; the default `ascii-v2` corpus remains reproducible.
+  `vela_no_feedback` materializes reviewed
+  source user turns from an explicit ID/text-hash receipt. This is a single
+  model-assisted review, not independent human annotation; source `NEWTOPIC`
+  alone is insufficient, and excluded ambiguous cases are recorded.
 - [PromptGuard builder](prompt_guard_fine_tuning_lora/vela_data.py) combines
   [LLMail](https://huggingface.co/datasets/microsoft/llmail-inject-challenge)
   attack annotations with paired
@@ -158,8 +178,8 @@ unique-row coverage, language draws and positive-label exposures. Select total
 steps using these counts and loss curves; repeated sampling is not an epoch.
 Pass the actual `--base-id` as well as `--base-revision` when using a new encoder.
 
-Both loops use FP32 parameters and loss, BF16 GPU autocast, and an explicit
-mean loss divided by accumulation steps. This avoids a Transformers loss-
+Both loops use FP32 parameters and loss, BF16 GPU autocast, and explicit
+normalization over the global batch. This avoids a Transformers loss-
 kwargs path that can over-scale ModernBERT updates during gradient accumulation.
 Dataset, group, ID and normalized-text checks run before training. Oversize
 training examples are recorded as rejected; evaluation fails instead of
@@ -181,7 +201,13 @@ Measure actual tokens, not characters or padding length. Evaluate 4K, 8K, 16K
 and 32K inputs at the head, middle and tail. A 32K encoder config states position
 capacity; training at 2K does not establish long-task accuracy. Mixed-length
 curricula can use `--length-balanced-sampling` with a 32768 budget and small
-microbatches. Keep short development retention in checkpoint selection.
+microbatches. The shared sequence loop also supports the explicit
+`--microbatch-token-budget 32768`: it samples the same global batch first,
+then groups examples by actual length so that each microbatch fits the padded
+token budget. Each example retains its global-batch loss weight. This changes
+dropout random-number consumption, so record a new recipe rather than claim
+an identical continuation of a previous run. Keep short development retention
+in checkpoint selection.
 Report full-context and chunked/windowed policies as separate systems.
 
 ## Freeze, evaluate, and export
@@ -211,12 +237,13 @@ selected category score. It does not automatically read a per-category
 calibration file; use separate explicit rules when categories need different
 operating thresholds.
 
-Feedback's four labels classify an applicable follow-up; none represents an
-ordinary new question. Run `user_feedback_classifier.vela_applicability` on its
-fixed development negatives and report high-confidence non-SAT predictions,
-not accuracy. Do not relabel these negatives as satisfied users. Conversation
-gating is required, and a high classifier confidence alone cannot detect a
-topic change or prove that a turn is feedback.
+Legacy Feedback's four labels classify an applicable follow-up; none represents
+an ordinary new question. Its `vela_applicability` result is a forced-label
+diagnostic. For the five-class Vela contract, report `NO_FEEDBACK` precision and
+recall, errors into any of the original four classes including SAT, and original
+four-class retention. Do not relabel ordinary queries as satisfied users.
+Conversation gating remains required, and ambiguous replies may still need
+context unavailable to the classifier.
 
 Final cards must distinguish source labels from human judgments, duplicated
 translations from independent groups, encoder capacity from measured task

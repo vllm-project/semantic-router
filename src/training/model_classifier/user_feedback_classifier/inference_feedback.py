@@ -19,9 +19,9 @@ import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 if __package__:
-    from .data_contract import ID2LABEL
+    from .vela_contract import checkpoint_labels
 else:
-    from data_contract import ID2LABEL
+    from vela_contract import checkpoint_labels
 
 DISPLAY_LIMIT = 45
 
@@ -30,7 +30,7 @@ DISPLAY_LIMIT = 45
 class FeedbackResult:
     """Result from feedback classification."""
 
-    label: str  # SAT, NEED_CLARIFICATION, WRONG_ANSWER, WANT_DIFFERENT
+    label: str  # Four feedback labels, plus NO_FEEDBACK for Vela.
     confidence: float
     is_satisfied: bool
     all_scores: dict[str, float]
@@ -56,6 +56,7 @@ class FeedbackDetector:
     - NEED_CLARIFICATION: User needs more explanation
     - WRONG_ANSWER: System provided incorrect information
     - WANT_DIFFERENT: User wants alternative options
+    - NO_FEEDBACK: Vela identifies no feedback intent in the supplied text
     """
 
     def __init__(
@@ -82,9 +83,9 @@ class FeedbackDetector:
         self.model.to(self.device)
         self.model.eval()
 
-        labels = {int(key): value for key, value in self.model.config.id2label.items()}
-        if labels != ID2LABEL:
-            raise ValueError("Feedback checkpoint has an incompatible label mapping")
+        self.id2label = checkpoint_labels(
+            self.model.config.id2label, self.model.config.label2id
+        )
         capacity = self.model.config.max_position_embeddings
         if (
             isinstance(max_length, bool)
@@ -114,11 +115,13 @@ class FeedbackDetector:
             probs = torch.softmax(outputs.logits, dim=-1)[0]
 
         # Get all scores
-        all_scores = {ID2LABEL[i]: probs[i].item() for i in range(len(ID2LABEL))}
+        all_scores = {
+            self.id2label[i]: probs[i].item() for i in range(len(self.id2label))
+        }
 
         # Get prediction
         pred_idx = probs.argmax().item()
-        label = ID2LABEL[pred_idx]
+        label = self.id2label[pred_idx]
         confidence = probs[pred_idx].item()
 
         return FeedbackResult(
@@ -143,10 +146,11 @@ class FeedbackDetector:
         for i in range(len(texts)):
             sample_probs = probs[i]
             all_scores = {
-                ID2LABEL[j]: sample_probs[j].item() for j in range(len(ID2LABEL))
+                self.id2label[j]: sample_probs[j].item()
+                for j in range(len(self.id2label))
             }
             pred_idx = sample_probs.argmax().item()
-            label = ID2LABEL[pred_idx]
+            label = self.id2label[pred_idx]
             confidence = sample_probs[pred_idx].item()
 
             results.append(

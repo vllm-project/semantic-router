@@ -25,6 +25,12 @@ class InferenceBudgetTest(unittest.TestCase):
         self.detector = object.__new__(FeedbackDetector)
         self.detector.device = "cpu"
         self.detector.max_length = 512
+        self.detector.id2label = {
+            0: "SAT",
+            1: "NEED_CLARIFICATION",
+            2: "WRONG_ANSWER",
+            3: "WANT_DIFFERENT",
+        }
         self.tokenizer_calls = []
         self.forward_calls = []
 
@@ -78,3 +84,18 @@ class InferenceBudgetTest(unittest.TestCase):
     def test_empty_batch_does_not_invoke_tokenizer(self):
         self.assertEqual(self.detector.classify_batch([]), [])
         self.assertEqual(self.tokenizer_calls, [])
+
+    def test_no_feedback_prediction_is_not_satisfaction(self):
+        self.detector.id2label[4] = "NO_FEEDBACK"
+        self.detector.model = lambda **inputs: SimpleNamespace(
+            logits=self.torch.tensor([[0.0, 0.0, 0.0, 0.0, 4.0]]).repeat(
+                len(inputs["input_ids"]), 1
+            )
+        )
+        result = self.detector.classify("Describe a weather station")
+        self.assertEqual(result.label, "NO_FEEDBACK")
+        self.assertFalse(result.is_satisfied)
+        self.assertEqual(len(result.all_scores), 5)
+        self.assertEqual(
+            self.detector.classify_batch(["A new topic"])[0].label, "NO_FEEDBACK"
+        )

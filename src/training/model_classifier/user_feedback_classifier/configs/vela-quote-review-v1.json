@@ -1,0 +1,56 @@
+{
+  "source": "microsoft/WildFeedback",
+  "revision": "8b1a3e530b949d6aacfad6ba8912e209a05bc846",
+  "review": "single model-assisted review of seven changed training rows; regex differences alone do not establish incorrect labels",
+  "items": [
+    {
+      "id": "wildfeedback:31124",
+      "label": "WRONG_ANSWER",
+      "text_sha256": "0c217add030a8a970cfd9c3da49ec0397e316a48997db74b62a1dd53976fc108",
+      "action": "retain",
+      "reason": "User explicitly reports a persisting syntax error outside the code string."
+    },
+    {
+      "id": "wildfeedback:118756",
+      "label": "WRONG_ANSWER",
+      "text_sha256": "32a8a02f000d7ff0dda814aff1bd2d34c8e74a998c8518c601cf6dfc7eee32cc",
+      "action": "retain",
+      "reason": "User complains that the assistant misunderstood the move instruction; the quoted response is supporting context."
+    },
+    {
+      "id": "wildfeedback:282142",
+      "label": "WANT_DIFFERENT",
+      "text_sha256": "e4a8c409c4b8eb34ce2c5b63823f9a4d60da3c79c901ffd4d0e792d8f34950be",
+      "action": "exclude",
+      "reason": "Entire rephrasing instruction is quoted; prior-answer revision versus supplied new task is ambiguous."
+    },
+    {
+      "id": "wildfeedback:411826",
+      "label": "NEED_CLARIFICATION",
+      "text_sha256": "6987112362aade3053ac04c94b8bcfd596b1e814222d4b068268416fbfc1c288",
+      "action": "exclude",
+      "reason": "Explanation instruction is inside a quoted assignment; user asks to write an answer rather than understand the preceding answer."
+    },
+    {
+      "id": "wildfeedback:792640",
+      "label": "NEED_CLARIFICATION",
+      "text_sha256": "b2db21ad7cdecb60fcdf6216db520326276bb905ea9feac8e436f50a1e79c5af",
+      "action": "exclude",
+      "reason": "User requests sentence editing; the explanation cue is in the quoted writing prompt."
+    },
+    {
+      "id": "wildfeedback:807910",
+      "label": "WRONG_ANSWER",
+      "text_sha256": "092424378cad178a520f903447f30ea14bee2952b661609fabada4f48ae4191f",
+      "action": "exclude",
+      "reason": "Mistake is part of fictional dialogue; the user asks for rewriting rather than reporting an erroneous answer."
+    },
+    {
+      "id": "wildfeedback:978064",
+      "label": "WRONG_ANSWER",
+      "text_sha256": "0f89b0c217d85835550ad9c493375d377f250ade0589aa7d75292e5619ad1d6e",
+      "action": "exclude",
+      "reason": "User asks about the tone of quoted prose; mistake is not a report of an erroneous answer."
+    }
+  ]
+}
