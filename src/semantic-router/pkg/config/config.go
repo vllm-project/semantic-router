@@ -141,15 +141,16 @@ type RouterConfig struct {
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
-	ConfigBaseDir  string                `yaml:"-"`
+	ConfigBaseDir  string                `yaml:"-" json:"-"`
 	// DocumentHash identifies the exact YAML document from which this immutable
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
-	DocumentHash string `yaml:"-"`
+	DocumentHash string `yaml:"-" json:"-"`
 	// SourceDocument is the exact YAML bytes that produced this snapshot.
 	// Compare-to-active binds to this verified in-memory document instead of a
-	// later desired-source write.
-	SourceDocument []byte `yaml:"-"`
+	// later desired-source write. It stays out of config JSON so inventory
+	// dumps cannot expose the original document, including plaintext secrets.
+	SourceDocument []byte `yaml:"-" json:"-"`
 	// EffectiveModelRegistry is the immutable catalog/config join used to
 	// materialize this runtime snapshot.
 	EffectiveModelRegistry *modelcatalog.EffectiveRegistry `yaml:"-" json:"-"`
