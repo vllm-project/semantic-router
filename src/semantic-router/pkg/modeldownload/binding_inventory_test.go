@@ -396,9 +396,9 @@ func TestRetiredStandaloneCompanionCannotBeDownloaded(t *testing.T) {
 				missingFile = "actual-weights.bin"
 			}
 			next.ModelBindings["domain_classifier"] = binding
-			specs, err := BuildModelSpecs(next)
-			if err != nil {
-				t.Fatal(err)
+			specs, specErr := BuildModelSpecs(next)
+			if specErr != nil {
+				t.Fatal(specErr)
 			}
 			if len(specs) != 1 || specs[0].LocalPath != retired || !specs[0].FilesOnly || specs[0].Revision != "" {
 				t.Fatalf("expected the standalone companion from the real planner, got %#v", specs)
@@ -432,14 +432,14 @@ func TestRetiredStandaloneCompanionCannotBeDownloaded(t *testing.T) {
 			if err := ValidateReloadArtifacts(current, next); err != nil {
 				t.Fatalf("preflight unexpectedly treated retired A as current B: %v", err)
 			}
-			missing, err := GetMissingModels(specs)
-			if err != nil || len(missing) != 1 || missing[0].LocalPath != retired {
-				t.Fatalf("missing companion not discovered: %#v, %v", missing, err)
+			missing, missingErr := GetMissingModels(specs)
+			if missingErr != nil || len(missing) != 1 || missing[0].LocalPath != retired {
+				t.Fatalf("missing companion not discovered: %#v, %v", missing, missingErr)
 			}
 			weights := filepath.Join(retired, "model.safetensors")
-			before, err := os.ReadFile(weights)
-			if err != nil {
-				t.Fatal(err)
+			before, beforeReadErr := os.ReadFile(weights)
+			if beforeReadErr != nil {
+				t.Fatal(beforeReadErr)
 			}
 			if err := EnsureModels(specs, DownloadConfig{}); err == nil {
 				t.Error("missing companion was allowed to download into the retired snapshot")
@@ -447,9 +447,9 @@ func TestRetiredStandaloneCompanionCannotBeDownloaded(t *testing.T) {
 			if _, err := os.Stat(invoked); !os.IsNotExist(err) {
 				t.Errorf("retired companion reached the download CLI: %v", err)
 			}
-			after, err := os.ReadFile(weights)
-			if err != nil {
-				t.Fatal(err)
+			after, afterReadErr := os.ReadFile(weights)
+			if afterReadErr != nil {
+				t.Fatal(afterReadErr)
 			}
 			if !bytes.Equal(before, after) {
 				t.Errorf("retired weights changed from %q to %q", before, after)
