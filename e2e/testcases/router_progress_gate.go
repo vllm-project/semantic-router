@@ -232,9 +232,9 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		if err = gateWait(ctx, 11*time.Second); err != nil {
 			return err
 		}
-		sixth, err := turn("session-gate-return", 6)
-		if err != nil {
-			return err
+		sixth, sixthErr := turn("session-gate-return", 6)
+		if sixthErr != nil {
+			return sixthErr
 		}
 		if err = checkObserve(sixth, a, 6); err != nil {
 			return err
@@ -245,9 +245,9 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		if err = gateWait(ctx, 11*time.Second); err != nil {
 			return err
 		}
-		seventh, err := turn("session-gate-next", 7)
-		if err != nil {
-			return err
+		seventh, seventhErr := turn("session-gate-next", 7)
+		if seventhErr != nil {
+			return seventhErr
 		}
 		if err = checkObserve(seventh, b, 7); err != nil {
 			return err
