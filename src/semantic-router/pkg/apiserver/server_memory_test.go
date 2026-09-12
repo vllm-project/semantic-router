@@ -179,7 +179,7 @@ func TestBuildConfigUpdaterPreservesLegacyGlobalFallback(t *testing.T) {
 	}
 }
 
-func TestBuildConfigUpdaterUsesRuntimeRegistryWithoutReplacingGlobalConfig(t *testing.T) {
+func TestBuildConfigUpdaterLeavesBorrowedGenerationPending(t *testing.T) {
 	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
 	initialRuntimeCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
 	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
@@ -193,11 +193,11 @@ func TestBuildConfigUpdaterUsesRuntimeRegistryWithoutReplacingGlobalConfig(t *te
 	updater := buildConfigUpdater(registry, nil)
 	updater(nextCfg)
 
-	if got := registry.CurrentConfig(); got != nextCfg {
-		t.Fatalf("registry.CurrentConfig() = %p, want %p", got, nextCfg)
+	if got := registry.CurrentConfig(); got != initialRuntimeCfg {
+		t.Fatalf("registry.CurrentConfig() = %p, want live generation %p", got, initialRuntimeCfg)
 	}
-	if got := classificationSvc.GetConfig(); got != nextCfg {
-		t.Fatalf("classificationSvc.GetConfig() = %p, want %p", got, nextCfg)
+	if got := classificationSvc.GetConfig(); got != initialRuntimeCfg {
+		t.Fatalf("classificationSvc.GetConfig() = %p, want live generation %p", got, initialRuntimeCfg)
 	}
 	if got := config.Get(); got != globalCfg {
 		t.Fatalf("config.Get() = %p, want unchanged global config %p", got, globalCfg)

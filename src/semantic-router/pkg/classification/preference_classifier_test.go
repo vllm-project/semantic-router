@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func prefBoolPtr(value bool) *bool {
@@ -14,15 +14,15 @@ func prefBoolPtr(value bool) *bool {
 }
 
 func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		lower := strings.ToLower(text)
 		switch {
 		case strings.Contains(lower, "bug") || strings.Contains(lower, "fix"):
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.2, 0.9}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.2, 0.9}}, nil
 		case strings.Contains(lower, "code"):
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.9, 0.1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.9, 0.1}}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.5, 0.5}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.5, 0.5}}, nil
 		}
 	})
 	defer reset()
@@ -58,16 +58,16 @@ func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		case "Fixes bugs":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0, 1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0, 1}}, nil
 		case "please write code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.1, 0.1}}, nil
 		}
 	})
 	defer reset()
@@ -107,8 +107,8 @@ func TestContrastivePreferenceClassifier_NoExamplesError(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
-		return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.2}}, nil
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
+		return &tasks.EmbeddingResult{Embedding: []float32{0.1, 0.2}}, nil
 	})
 	defer reset()
 
@@ -126,14 +126,14 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 }
 
 func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		case "please write code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.1, 0.1}}, nil
 		}
 	})
 	defer reset()
@@ -212,14 +212,14 @@ func TestPreferenceClassifier_ParsePreferenceOutput(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		case "please help with this task":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.6, 0.8}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.6, 0.8}}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.1, 0.1}}, nil
 		}
 	})
 	defer reset()
@@ -252,16 +252,16 @@ func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *te
 }
 
 func TestContrastivePreferenceClassifier_MarginThresholdRejectsAmbiguousWinner(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{1, 0}}, nil
 		case "Fixes bugs":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.98, 0.2}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.98, 0.2}}, nil
 		case "please help with implementation":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.99, 0.05}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.99, 0.05}}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return &tasks.EmbeddingResult{Embedding: []float32{0.1, 0.1}}, nil
 		}
 	})
 	defer reset()

@@ -9,6 +9,7 @@ import (
 func TestRecipeClassifiersIsolateMetadataSignals(t *testing.T) {
 	denied := "denied"
 	cfg := &config.RouterConfig{
+		Entrypoints: []config.EntrypointMapping{{ModelNames: []string{"vllm-sr/private"}, Recipe: "private"}, {ModelNames: []string{"vllm-sr/public"}, Recipe: "public"}},
 		Recipes: []config.RoutingRecipe{
 			{
 				Name: "private",
@@ -32,6 +33,7 @@ func TestRecipeClassifiersIsolateMetadataSignals(t *testing.T) {
 			{
 				Name: "public",
 				Profile: config.RoutingProfile{
+					Signals: config.Signals{KeywordRules: []config.KeywordRule{{Name: "urgent", Operator: "OR", Keywords: []string{"urgent"}}}},
 					Decisions: []config.Decision{{
 						Name: "public-route",
 						Rules: config.RuleNode{

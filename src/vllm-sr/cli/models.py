@@ -18,7 +18,6 @@ from pydantic import (
     model_validator,
 )
 
-from .config_schema import surface_types
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import (
     CLASSIFIER_TYPE_LLM,
@@ -26,10 +25,10 @@ from .config_contract import (
     ClassifierSignalType,
     UnknownPolicy,
 )
+from .config_schema import surface_types
 from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
-LOCAL_CLASSIFIER_LABEL_COUNT = 2
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
@@ -581,24 +580,18 @@ class ClassifierSignal(BaseModel):
         return self
 
     def _validate_local(self):
-        if not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError("local classifiers require at least two labels")
         if self.model or self.instructions:
             raise ValueError("local classifiers do not accept model or instructions")
 
     def _validate_llm(self):
-        if not self.model:
-            raise ValueError("llm classifiers require model")
         if not self.instructions:
             raise ValueError("llm classifiers require instructions")
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
 
     def _validate_sequence(self):
-        if not self.model:
-            raise ValueError("sequence_classifier classifiers require model")
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError(
                 "sequence_classifier classifiers require at least two labels"
@@ -2206,16 +2199,46 @@ class Providers(BaseModel):
         return self.defaults.reasoning_effort
 
 
+class ModelBinding(BaseModel):
+    """A recipe-owned use of a router model deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deployment: str
+    contract: str
+    adapter: str
+    head: Optional[str] = None
+    mapping_path: Optional[str] = None
+
+
+def _validate_unbound_classifier_selectors(profile):
+    for rule in profile.signals.classifiers or []:
+        if f"classifier.{rule.name}" in profile.model_bindings:
+            continue
+        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
+            raise ValueError("local classifiers require model_path or a model binding")
+        if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
+            raise ValueError(
+                f"{rule.type} classifiers require model or a model binding"
+            )
+    return profile
+
+
 class Routing(BaseModel):
     """Canonical routing block."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        return _validate_unbound_classifier_selectors(self)
 
 
 class Entrypoint(BaseModel):
@@ -2252,10 +2275,15 @@ class RecipeRouting(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        return _validate_unbound_classifier_selectors(self)
 
 
 class Recipe(BaseModel):

@@ -37,8 +37,8 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
-			cache_similarity, context_token_count, hallucination_span_details, recipe
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65)
+			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -47,6 +47,7 @@ const postgresCreateTableQueryTemplate = `
 			timestamp TIMESTAMP NOT NULL,
 			request_id VARCHAR(255),
 			recipe TEXT,
+ safety_evidence JSONB,
 			decision VARCHAR(255),
 			decision_tier INTEGER DEFAULT 0,
 			decision_priority INTEGER DEFAULT 0,
@@ -104,6 +105,7 @@ const postgresCreateTableQueryTemplate = `
 			created_at TIMESTAMP DEFAULT NOW()
 		);
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;
+ ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS safety_evidence JSONB;
 		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
@@ -525,7 +527,7 @@ func (p *PostgresStore) AppendOutcome(ctx context.Context, id string, outcome Ou
 }
 
 // UpdateHallucinationStatus updates hallucination detection results for a record.
-func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan) error {
+func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string, spanDetails []HallucinationSpan, score ...HallucinationScore) error {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
 		return err
@@ -541,18 +543,28 @@ func (p *PostgresStore) UpdateHallucinationStatus(ctx context.Context, id string
 		return fmt.Errorf("failed to marshal hallucination span details: %w", err)
 	}
 
+	availability := HallucinationScore{}
+	if len(score) > 0 {
+		availability = score[0]
+	}
+	scoreJSON, err := json.Marshal(map[string]interface{}{"hallucination_score_available": availability.Available, "hallucination_score_kind": availability.Kind})
+	if err != nil {
+		return err
+	}
+
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET hallucination_detected = $2,
 		    hallucination_confidence = $3,
 		    hallucination_spans = $4,
-		    hallucination_span_details = $5
+		    hallucination_span_details = $5,
+ safety_evidence = COALESCE(safety_evidence, '{}'::jsonb) || $6::jsonb
 		WHERE id = $1
 	`, p.tableName)
 
 	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, detected, confidence, spansJSON, spanDetailsJSON)
+		result, err := p.db.ExecContext(ctx, query, id, detected, confidence, spansJSON, spanDetailsJSON, scoreJSON)
 		if err != nil {
 			return fmt.Errorf("failed to update hallucination status: %w", err)
 		}

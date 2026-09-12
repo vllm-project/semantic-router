@@ -2,13 +2,25 @@ package classification
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // SignalMetrics contains performance and probability metrics for a single signal.
 type SignalMetrics struct {
-	ExecutionTimeMs float64 `json:"execution_time_ms"` // Execution time in milliseconds
-	Confidence      float64 `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
+	Method              string  `json:"method,omitempty"`
+	PolicyDefault       string  `json:"policy_default,omitempty"`
+	ExecutionTimeMs     float64 `json:"execution_time_ms"` // Execution time in milliseconds
+	Confidence          float64 `json:"confidence"`        // Confidence score (0.0-1.0), 0 if not applicable
+	ConfidenceAvailable *bool   `json:"confidence_available,omitempty"`
+}
+
+// DomainClassificationResult preserves one domain evaluation before routing
+// thresholds select matches. A failed evaluation has no available confidence.
+type DomainClassificationResult struct {
+	Category            string
+	Confidence          float64
+	ConfidenceAvailable bool
 }
 
 // SignalResults contains all evaluated signal results.
@@ -42,10 +54,15 @@ type SignalResults struct {
 	ProjectionScores          map[string]float64
 	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
 
+	// Nil means the domain evaluator did not run for this request.
+	DomainClassification *DomainClassificationResult
+
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
-	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
-	JailbreakType       string  // Type of the detected jailbreak (from highest-confidence detection)
-	JailbreakConfidence float32 // Confidence of the detected jailbreak
+	JailbreakDecision       *tasks.LabelDecision // Present for categorical verdicts without probabilities
+	JailbreakDetected       bool                 // Whether any jailbreak was detected (across all rules)
+	JailbreakType           string               // Type of the detected jailbreak (from highest-confidence detection)
+	JailbreakConfidence     float32              // Confidence of the detected jailbreak
+	JailbreakScoreAvailable bool
 
 	// PII detection metadata (populated when PII signal is evaluated)
 	PIIDetected bool     // Whether any PII was detected

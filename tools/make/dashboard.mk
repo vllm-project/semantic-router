@@ -121,10 +121,10 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 		fi
 	@echo "dashboard/backend go mod tidy check passed"
 
-dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
+dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_BACKEND_DIR) && \
-		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-python3}" go test ./...
+		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}" go test ./...
 
 dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
 	@python3 tools/ci/sync_evaluation_catalogs.py --check

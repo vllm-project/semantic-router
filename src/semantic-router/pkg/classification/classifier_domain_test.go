@@ -7,22 +7,22 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 type MockCategoryInference struct {
-	classifyResult          candle_binding.ClassResult
+	classifyResult          tasks.ClassResult
 	classifyError           error
-	classifyWithProbsResult candle_binding.ClassResultWithProbs
+	classifyWithProbsResult tasks.ClassResultWithProbs
 	classifyWithProbsError  error
 }
 
-func (m *MockCategoryInference) Classify(_ context.Context, _ string) (candle_binding.ClassResult, error) {
+func (m *MockCategoryInference) Classify(_ context.Context, _ string) (tasks.ClassResult, error) {
 	return m.classifyResult, m.classifyError
 }
 
-func (m *MockCategoryInference) ClassifyWithProbabilities(_ context.Context, _ string) (candle_binding.ClassResultWithProbs, error) {
+func (m *MockCategoryInference) ClassifyWithProbabilities(_ context.Context, _ string) (tasks.ClassResultWithProbs, error) {
 	return m.classifyWithProbsResult, m.classifyWithProbsError
 }
 
@@ -87,7 +87,7 @@ var _ = Describe("Domain signal: low entropy (confident)", func() {
 		}
 
 		mock := &MockCategoryInference{
-			classifyWithProbsResult: candle_binding.ClassResultWithProbs{
+			classifyWithProbsResult: tasks.ClassResultWithProbs{
 				Class: 12, Confidence: 0.91,
 				Probabilities: probs, NumClasses: 14,
 			},
@@ -114,7 +114,7 @@ var _ = Describe("Domain signal: high entropy (ambiguous)", func() {
 		}
 
 		mock := &MockCategoryInference{
-			classifyWithProbsResult: candle_binding.ClassResultWithProbs{
+			classifyWithProbsResult: tasks.ClassResultWithProbs{
 				Class: 4, Confidence: 0.40,
 				Probabilities: probs, NumClasses: 14,
 			},
@@ -134,7 +134,7 @@ var _ = Describe("Domain signal: BERT-base fallback", func() {
 	It("should fall back to Classify and return top-1 with SignalConfidences", func() {
 		mock := &MockCategoryInference{
 			classifyWithProbsError: errors.New("ModernBERT not initialized"),
-			classifyResult: candle_binding.ClassResult{
+			classifyResult: tasks.ClassResult{
 				Class: 4, Confidence: 0.87,
 			},
 		}
@@ -151,7 +151,7 @@ var _ = Describe("Domain signal: BERT-base fallback", func() {
 var _ = Describe("Domain signal: no probabilities (mmBERT-32K)", func() {
 	It("should use top-1 fallback with SignalConfidences", func() {
 		mock := &MockCategoryInference{
-			classifyWithProbsResult: candle_binding.ClassResultWithProbs{
+			classifyWithProbsResult: tasks.ClassResultWithProbs{
 				Class: 9, Confidence: 0.91,
 			},
 		}
@@ -168,7 +168,7 @@ var _ = Describe("Domain signal: no probabilities (mmBERT-32K)", func() {
 var _ = Describe("Domain signal: below threshold", func() {
 	It("should not match any domain", func() {
 		mock := &MockCategoryInference{
-			classifyWithProbsResult: candle_binding.ClassResultWithProbs{
+			classifyWithProbsResult: tasks.ClassResultWithProbs{
 				Class: 4, Confidence: 0.15,
 			},
 		}

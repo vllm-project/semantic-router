@@ -1021,6 +1021,15 @@ impl std::fmt::Debug for MultiModalEmbeddingModel {
 }
 
 impl MultiModalEmbeddingModel {
+    /// Report only encoders actually loaded by this instance.
+    pub fn supported_modalities(&self) -> Vec<&'static str> {
+        let mut modalities = vec!["text", "image"];
+        if self.audio_encoder.is_some() {
+            modalities.push("audio");
+        }
+        modalities
+    }
+
     /// Load model from a pretrained directory that contains `model.safetensors`
     /// and optionally `config.json`.
     pub fn load(model_path: &str, device: &Device) -> UnifiedResult<Self> {

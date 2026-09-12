@@ -10,7 +10,19 @@
   "sidebar.tutorialSidebar.category.Installation": {
     "message": "安装",
     "description": "The label for category Installation in sidebar tutorialSidebar"
-  },  
+  },
+  "sidebar.tutorialSidebar.category.Router Runtime": {
+    "message": "Router Runtime",
+    "description": "The label for category Router Runtime in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Run models": {
+    "message": "运行模型",
+    "description": "The label for category Run models in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Model guides": {
+    "message": "模型用法",
+    "description": "The label for category Model guides in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.Quickstart": {
     "message": "快速开始",
     "description": "The label for category Quickstart in sidebar tutorialSidebar"

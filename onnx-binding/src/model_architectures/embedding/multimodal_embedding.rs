@@ -13,6 +13,7 @@
 //! └── config.json OR onnx/config.json
 //! ```
 
+use crate::core::instance_options::{InstanceOptions, Provider};
 use crate::core::unified_error::{errors, UnifiedResult};
 use ndarray::Array1;
 use ort::session::Session;
@@ -96,6 +97,29 @@ pub struct MultiModalEmbeddingModel {
 
 impl MultiModalEmbeddingModel {
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
+        Self::load_impl(model_path, use_cpu, None)
+    }
+
+    pub fn load_with_options(options: &InstanceOptions) -> UnifiedResult<Self> {
+        options.validate()?;
+        if options.model_file.is_some() {
+            return Err(errors::config_error(
+                "model_file",
+                "multimodal adapters use named text/image/audio graphs",
+            ));
+        }
+        Self::load_impl(
+            &options.model_path,
+            options.provider == Provider::Cpu,
+            Some(options),
+        )
+    }
+
+    fn load_impl<P: AsRef<Path>>(
+        model_path: P,
+        use_cpu: bool,
+        options: Option<&InstanceOptions>,
+    ) -> UnifiedResult<Self> {
         let dir = model_path.as_ref();
         let model_path_str = dir.display().to_string();
 
@@ -119,8 +143,11 @@ impl MultiModalEmbeddingModel {
         if !tok_path.exists() {
             return Err(errors::file_not_found(&tok_path.display().to_string()));
         }
-        let tokenizer = Tokenizer::from_file(&tok_path)
+        let mut tokenizer = Tokenizer::from_file(&tok_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        if let Some(options) = options {
+            options.configure_tokenizer(&mut tokenizer, config.max_seq_len)?;
+        }
 
         let text_path = find_artifact("text_encoder.onnx").ok_or_else(|| {
             errors::file_not_found(&dir.join("text_encoder.onnx").display().to_string())
@@ -142,9 +169,13 @@ impl MultiModalEmbeddingModel {
             return Err(errors::file_not_found(&audio_path.display().to_string()));
         }
 
-        let text_session = Self::create_session(&text_path, use_cpu)?;
-        let image_session = Self::create_session(&image_path, use_cpu)?;
-        let audio_session = Self::create_session(&audio_path, use_cpu)?;
+        let load = |path: &Path| match options {
+            Some(options) => options.create_session(path),
+            None => Self::create_session(path, use_cpu),
+        };
+        let text_session = load(&text_path)?;
+        let image_session = load(&image_path)?;
+        let audio_session = load(&audio_path)?;
 
         println!(
             "INFO: Multi-modal ONNX model loaded from {}",
@@ -245,6 +276,18 @@ impl MultiModalEmbeddingModel {
             .map_err(|e| errors::ort_error(&e.to_string()))?
             .commit_from_file(onnx_path.as_ref())
             .map_err(|e| errors::model_load(&path_str, &e.to_string()))
+    }
+
+    pub fn finish_profiling(&self) -> UnifiedResult<Vec<String>> {
+        [&self.text_session, &self.image_session, &self.audio_session]
+            .into_iter()
+            .map(|session| {
+                session
+                    .lock()
+                    .end_profiling()
+                    .map_err(|e| errors::ort_error(&e.to_string()))
+            })
+            .collect()
     }
 
     pub fn config(&self) -> &MultiModalConfig {

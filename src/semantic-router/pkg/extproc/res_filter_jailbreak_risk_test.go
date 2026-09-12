@@ -124,3 +124,31 @@ func TestResponseJailbreakFilterThresholdsRiskNotArgmax(t *testing.T) {
 			ctx.ResponseJailbreakConfidence, jailbreakProb, benignProb)
 	}
 }
+
+func TestResponseJailbreakCategoricalGuardRetainsVerdictWithoutScore(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"role": "assistant", "content": "Safety: Unsafe\nCategories: Jailbreak"}}}})
+	}))
+	defer server.Close()
+	router, ctx := newResponseJailbreakRouter(t, server, .999)
+	_ = router.Classifier.Close()
+	cfg := router.Config
+	cfg.PromptGuard.Protocol = ""
+	cfg.PromptGuard.Backend = &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDecision, Model: "test-guardrail"}
+	classifier, err := classification.NewClassifier(cfg, nil, nil, &classification.JailbreakMapping{LabelToIdx: map[string]int{"jailbreak": 0, "benign": 1}, IdxToLabel: map[string]string{"0": "jailbreak", "1": "benign"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer classifier.Close()
+	router.Classifier = classifier
+	if response := router.performResponseJailbreakDetectionText(ctx, "attack"); response != nil {
+		t.Fatalf("unexpected header-action response: %+v", response)
+	}
+	if !ctx.ResponseJailbreakDetected || ctx.ResponseJailbreakType != "jailbreak" || ctx.ResponseJailbreakDecision == nil || ctx.ResponseJailbreakDecision.SourceLabel != "unsafe" {
+		t.Fatalf("lost categorical detection: %+v", ctx.ResponseJailbreakDecision)
+	}
+	if ctx.ResponseJailbreakConfidence != 0 || ctx.ResponseJailbreakDecision.Score != nil {
+		t.Fatal("fabricated response probability")
+	}
+}

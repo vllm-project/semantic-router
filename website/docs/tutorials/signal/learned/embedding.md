@@ -8,7 +8,7 @@ Define embedding rules under `routing.signals.embeddings`.
 It depends on the embedding model configured in
 `global.model_catalog.embeddings`.
 
-Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Remote Embedding Providers](../../global/remote-embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
+Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Runtime embeddings](../../../installation/runtime/embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
 
 ## Key Advantages
 

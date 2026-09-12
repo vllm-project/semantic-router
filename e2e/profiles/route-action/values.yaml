@@ -116,7 +116,10 @@ config:
           model_ref: ""
           model_id: ""
           variant: ""
-          protocol: http_classify
+          backend:
+            protocol: http_classify
+            contract: label_distribution.v1
+            model: unreachable-guardrail
           on_error: block
           threshold: 0.5
           positive_labels: [jailbreak]

@@ -42,11 +42,10 @@ func EnsureModelsForConfigWithProgressContext(
 			Phase:       "skipped",
 			ReadyModels: 0,
 			TotalModels: 0,
-			Message:     "No local models configured. Skipping model download.",
+			Message:     "No registered model artifacts require automatic download. Local artifacts are checked during provider preparation.",
 		})
 		logging.ComponentEvent("router", "required_models_check_skipped", map[string]interface{}{
-			"reason": "no_local_models_configured",
-			"mode":   "api_only",
+			"reason": "no_registered_artifacts_needed",
 		})
 		return nil
 	}

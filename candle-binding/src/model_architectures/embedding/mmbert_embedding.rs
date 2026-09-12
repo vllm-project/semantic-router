@@ -504,7 +504,14 @@ impl MmBertEncoder {
             xs = layer.forward(&xs, &pad_mask, window, block_size)?;
         }
 
-        xs.apply(&self.final_norm)
+        // Intermediate hidden_states in the maintained exporter are the raw
+        // layer residual. The terminal normalization belongs only to the full
+        // encoder output, not to a Matryoshka early exit.
+        if num_layers_to_run == self.layers.len() {
+            xs.apply(&self.final_norm)
+        } else {
+            Ok(xs)
+        }
     }
 
     fn num_layers(&self) -> usize {
@@ -1015,6 +1022,69 @@ mod tests {
             local_attention: 8, // window = 4 each side
             local_rope_theta: 160000.0,
         }
+    }
+
+    #[test]
+    fn test_early_exit_preserves_residual_and_full_depth_applies_final_norm() {
+        use std::collections::HashMap;
+        let device = Device::Cpu;
+        let mut config = tiny_attention_config();
+        config.num_hidden_layers = 2;
+        let hidden = config.hidden_size;
+        let mut weights = HashMap::new();
+        weights.insert(
+            "embeddings.tok_embeddings.weight".to_string(),
+            Tensor::arange(0f32, (config.vocab_size * hidden) as f32, &device)
+                .unwrap()
+                .reshape((config.vocab_size, hidden))
+                .unwrap(),
+        );
+        weights.insert(
+            "embeddings.norm.weight".to_string(),
+            Tensor::ones(hidden, DType::F32, &device).unwrap(),
+        );
+        weights.insert(
+            "final_norm.weight".to_string(),
+            (Tensor::ones(hidden, DType::F32, &device).unwrap() * 3.0).unwrap(),
+        );
+        for index in 0..2 {
+            for (name, rows, columns) in [
+                ("attn.Wqkv", 3 * hidden, hidden),
+                ("attn.Wo", hidden, hidden),
+                ("mlp.Wi", 2 * config.intermediate_size, hidden),
+                ("mlp.Wo", hidden, config.intermediate_size),
+            ] {
+                weights.insert(
+                    format!("layers.{index}.{name}.weight"),
+                    Tensor::zeros((rows, columns), DType::F32, &device).unwrap(),
+                );
+            }
+            weights.insert(
+                format!("layers.{index}.mlp_norm.weight"),
+                Tensor::ones(hidden, DType::F32, &device).unwrap(),
+            );
+        }
+        let encoder = MmBertEncoder::load(
+            VarBuilder::from_tensors(weights, DType::F32, &device),
+            &config,
+        )
+        .unwrap();
+        let ids = Tensor::new(&[[1u32, 2]], &device).unwrap();
+        let mask = Tensor::ones((1, 2), DType::U32, &device).unwrap();
+        // Zero attention/MLP projections make every block an exact residual
+        // identity. This isolates the location of terminal normalization.
+        let expected = ids
+            .apply(&encoder.word_embeddings)
+            .unwrap()
+            .apply(&encoder.norm)
+            .unwrap();
+        let early = encoder.forward_to_layer(&ids, &mask, 1).unwrap();
+        let full = encoder.forward(&ids, &mask).unwrap();
+        let terminal = expected.apply(&encoder.final_norm).unwrap();
+        let values = |tensor: &Tensor| tensor.flatten_all().unwrap().to_vec1::<f32>().unwrap();
+        assert_eq!(values(&early), values(&expected));
+        assert_eq!(values(&full), values(&terminal));
+        assert!((values(&full)[0] - values(&early)[0]).abs() > 1.0);
     }
 
     /// Build an attention block with deterministic random weights.

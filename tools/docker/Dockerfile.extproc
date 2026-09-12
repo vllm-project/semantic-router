@@ -1,7 +1,7 @@
 # Cross-compilation optimized Dockerfile for multi-arch builds (amd64 + arm64)
 # Runs on BUILDPLATFORM (amd64) and cross-compiles for TARGETARCH to avoid slow QEMU emulation.
-# Builds candle-binding for all platforms, onnx-binding and openvino-binding only for amd64.
-# At runtime, set AI_BINDING=candle (default), onnx, or openvino to choose the inference backend.
+# Builds Candle and independent ORT instances for both CPU architectures; OpenVINO stays amd64-only.
+# Task deployments select Candle or ORT per binding; AI_BINDING retains launcher compatibility.
 
 # ============================================================================
 # Stage 1: Build candle-binding Rust library (cross-compiled)
@@ -90,8 +90,7 @@ RUN echo "Building Rust library (CPU-only, no CUDA) for TARGETARCH=$TARGETARCH..
     find target -name "libcandle_semantic_router.so" -type f -exec sh -c 'nm -D "$1" | grep -c "T "' _ {} \;
 
 # ============================================================================
-# Stage 2: Build onnx-binding Rust library (amd64 only; skipped on arm64)
-# ONNX Runtime with download-binaries is enabled on amd64.
+# Stage 2: Build independent ORT instances and stage the matching CPU runtime
 # ============================================================================
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-cross-builder
@@ -136,38 +135,36 @@ WORKDIR /app
 COPY onnx-binding/Cargo.toml ./onnx-binding/
 COPY onnx-binding/Cargo.loc[k] ./onnx-binding/
 
-# Pre-build onnx dependencies (CPU-only, download-binaries fetches ONNX Runtime)
+# Dynamic loading keeps ORT independent of Candle and disables the legacy ABI.
 RUN cd onnx-binding && \
-    mkdir -p src && \
-    echo "pub fn _dummy() {}" > src/lib.rs && \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping ONNX dependency pre-build for arm64."; \
-        mkdir -p target/aarch64-unknown-linux-gnu/release; \
+        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
     else \
-        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
-        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
-        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
-    fi && \
-    rm -rf src
+        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
+    fi && rm -rf src
 
 COPY onnx-binding/src/ ./onnx-binding/src/
 
-RUN echo "Preparing ONNX binding for TARGETARCH=$TARGETARCH..." && \
-    cd onnx-binding && \
+RUN cd onnx-binding && \
+    find target -name "libonnx_semantic_router.so" -delete && \
+    find target -name "libonnx_semantic_router.a" -delete && \
+    touch src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping ONNX binding build for arm64."; \
-        mkdir -p target/aarch64-unknown-linux-gnu/release; \
+        OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu; \
     else \
-        find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
-        find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
-        OPENSSL_LIB_DIR="$(pkg-config --variable=libdir openssl 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)" \
-        OPENSSL_INCLUDE_DIR="$(pkg-config --variable=includedir openssl 2>/dev/null || echo /usr/include)" \
-        cargo build --release --no-default-features --target x86_64-unknown-linux-gnu; \
-        echo "=== Verifying ONNX library ==="; \
-        find target -name "libonnx_semantic_router.so" -type f -exec ls -la {} \;; \
-        echo "=== Checking for ONNX Runtime shared lib ==="; \
-        find target -name "libonnxruntime*" -type f -exec ls -la {} \;; \
+        OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target x86_64-unknown-linux-gnu; \
     fi
+
+# ort rc.10 uses ORT API 22. Stage the official matching shared CPU runtime.
+ARG ONNXRUNTIME_VERSION=1.22.0
+RUN case "$TARGETARCH" in arm64) ort_arch=aarch64 ;; amd64) ort_arch=x64 ;; *) exit 1 ;; esac && \
+    mkdir -p /app/onnx-runtime && \
+    curl --fail --location --retry 3 \
+        "https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-${ort_arch}-${ONNXRUNTIME_VERSION}.tgz" \
+        -o /tmp/onnxruntime.tgz && \
+    tar -xzf /tmp/onnxruntime.tgz --strip-components=1 -C /app/onnx-runtime && \
+    rm /tmp/onnxruntime.tgz
 
 # ============================================================================
 # Stage 3: Build ml-binding Rust library (Linfa ML algorithms, cross-compiled)
@@ -333,7 +330,7 @@ RUN mkdir -p /app/openvino-runtime && \
     fi
 
 # ============================================================================
-# Stage 5: Build Go application (candle on all platforms, onnx/openvino on amd64 only)
+# Stage 5: Build Go application (Candle + ORT; OpenVINO on amd64 only)
 # ============================================================================
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM golang:1.25 AS go-builder
@@ -353,9 +350,9 @@ WORKDIR /app
 # Copy Go module files first for better layer caching
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
-COPY src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum src/semantic-router/
-COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
+COPY candle-binding/go.mod candle-binding/*.go candle-binding/
+COPY onnx-binding/go.mod onnx-binding/
+COPY onnx-binding/instance/ onnx-binding/instance/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
@@ -386,14 +383,10 @@ RUN mkdir -p /app/candle-binding/target/release && \
 
 # Copy the built onnx Rust library from onnx-cross-builder
 COPY --from=onnx-cross-builder /app/onnx-binding/target/ /tmp/onnx-target/
+COPY --from=onnx-cross-builder /app/onnx-runtime/lib/ /app/onnx-runtime/
 RUN mkdir -p /app/onnx-binding/target/release && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping ONNX library copy for arm64."; \
-    else \
-        cp /tmp/onnx-target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /app/onnx-binding/target/release/ && \
-        (cp /tmp/onnx-target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.a /app/onnx-binding/target/release/ 2>/dev/null || true) && \
-        (find /tmp/onnx-target/x86_64-unknown-linux-gnu/release -name "libonnxruntime*.so*" -exec cp {} /app/onnx-binding/target/release/ \; 2>/dev/null || true); \
-    fi && \
+    if [ "$TARGETARCH" = "arm64" ]; then ort_target=aarch64-unknown-linux-gnu; else ort_target=x86_64-unknown-linux-gnu; fi && \
+    cp /tmp/onnx-target/$ort_target/release/libonnx_semantic_router.so /app/onnx-binding/target/release/ && \
     rm -rf /tmp/onnx-target
 
 # Copy ml-binding library (extract correct platform)
@@ -446,11 +439,16 @@ RUN echo "Verifying Rust libraries for TARGETARCH=$TARGETARCH..." && \
     ls -la /app/nlp-binding/target/release/libnlp_binding.* && \
     file /app/candle-binding/target/release/libcandle_semantic_router.so && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "ONNX binding is skipped on arm64."; \
+        file /app/onnx-binding/target/release/libonnx_semantic_router.so; \
     else \
         ls -la /app/onnx-binding/target/release/libonnx_semantic_router.* && \
         file /app/onnx-binding/target/release/libonnx_semantic_router.so; \
     fi
+
+COPY tools/docker/check-native-abi.sh /app/check-native-abi.sh
+RUN bash /app/check-native-abi.sh \
+    /app/candle-binding/target/release/libcandle_semantic_router.so \
+    /app/onnx-binding/target/release/libonnx_semantic_router.so
 
 # Build the candle router binary (default)
 RUN mkdir -p bin && cd src/semantic-router && \
@@ -473,28 +471,20 @@ RUN mkdir -p bin && cd src/semantic-router && \
 # Collect all shared libraries into a single staging directory for the final image
 RUN mkdir -p /app/lib && \
     cp /app/candle-binding/target/release/libcandle_semantic_router.so /app/lib/ && \
+    cp /app/onnx-binding/target/release/libonnx_semantic_router.so /app/lib/ && \
+    cp -a /app/onnx-runtime/libonnxruntime*.so* /app/lib/ && \
     cp /app/ml-binding/target/release/libml_semantic_router.so /app/lib/ && \
     cp /app/nlp-binding/target/release/libnlp_binding.so /app/lib/ && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping ONNX and OpenVINO runtime library staging on arm64."; \
+        echo "Skipping OpenVINO runtime library staging on arm64."; \
     else \
-        cp /app/onnx-binding/target/release/libonnx_semantic_router.so /app/lib/ && \
-        (cp /app/onnx-binding/target/release/libonnxruntime*.so* /app/lib/ 2>/dev/null || true) && \
         cp -a /app/openvino-binding/build/libopenvino_semantic_router.so* /app/lib/ && \
         cp -a /app/openvino-runtime/. /app/lib/; \
     fi && \
     echo "=== Libraries staged ===" && ls -la /app/lib/
 
-# Build the onnx router binary (uses go.onnx.mod which replaces candle-binding => onnx-binding)
-RUN cd src/semantic-router && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "Skipping onnx router build on arm64."; \
-    else \
-        echo "Building onnx binary for AMD64..." && \
-        CGO_CFLAGS="-I/app/onnx-binding" \
-        CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-        go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
-    fi
+# Keep the old launcher name as an alias of the same multi-provider process.
+RUN cp /app/bin/router-candle /app/bin/router-onnx
 
 # Build the OpenVINO router binary with the real CGO implementation enabled.
 RUN cd src/semantic-router && \
@@ -507,7 +497,7 @@ RUN cd src/semantic-router && \
     fi
 
 # ============================================================================
-# Final stage: runtime image (candle on all platforms, onnx + openvino on amd64 only)
+# Final stage: runtime image (Candle + ORT; OpenVINO on amd64 only)
 # ============================================================================
 FROM quay.io/centos/centos:stream10-development@sha256:556c6f559c63a24e52843778ed7ee0887be572f7df4219a971d2b2820bbb6675
 
@@ -523,7 +513,7 @@ RUN dnf update -y && \
 
 WORKDIR /app
 
-# Copy generated router binaries (arm64 has router-candle only)
+# Copy generated router binaries (OpenVINO remains amd64-only)
 COPY --from=go-builder /app/bin/ /app/
 
 # Copy all shared libraries (candle, onnx, onnxruntime, ml, nlp, openvino) from staged directory
@@ -533,6 +523,7 @@ COPY config/config.yaml /app/config/
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 
 ENV LD_LIBRARY_PATH=/app/lib
+ENV ORT_DYLIB_PATH=/app/lib/libonnxruntime.so
 ENV OPENVINO_TOKENIZERS_LIB=/app/lib/libopenvino_tokenizers.so
 
 ARG TARGETARCH
@@ -549,7 +540,7 @@ RUN if [ "$TARGETARCH" != "arm64" ]; then \
         test -z "$(ldd /app/lib/libopenvino_semantic_router.so | grep 'not found' || true)"; \
     fi
 
-# Default to candle binding; set AI_BINDING=onnx or openvino for alternative backends
+# Default launcher; Candle/ORT task providers are selected in model deployments
 ENV AI_BINDING=candle
 
 EXPOSE 50051

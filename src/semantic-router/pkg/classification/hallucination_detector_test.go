@@ -193,8 +193,8 @@ func TestHallucinationDetector_EmptyAnswerOK(t *testing.T) {
 	if result.HallucinationDetected {
 		t.Error("Empty answer should not be detected as hallucination")
 	}
-	if result.Confidence != 1.0 {
-		t.Errorf("Expected confidence 1.0 for empty answer, got %f", result.Confidence)
+	if result.ScoreAvailable {
+		t.Fatal("empty answer acquired a model score")
 	}
 }
 

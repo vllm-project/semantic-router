@@ -386,15 +386,8 @@ func initializeRuntimeDependencies(
 		Message: "Initializing embedding models and router dependencies...",
 	}, "Failed to write initialization startup status")
 
-	embeddingState, err := modelruntime.PrepareRouterRuntime(ctx, cfg, modelruntime.PrepareRouterRuntimeOptions{
-		Component:                  "router",
-		MaxParallelism:             modelruntime.DefaultParallelism(5),
-		OnEvent:                    logRuntimeLifecycleEvent,
-		InitModalityClassifierFunc: extproc.InitModalityClassifier,
-	})
-	if err != nil {
-		return embeddingState, err
-	}
+	embeddingState := modelruntime.EmbeddingRuntimeState{}
+
 	writeStartupState(writer, startupstatus.State{
 		Phase:             "initializing_models",
 		Ready:             false,
@@ -471,7 +464,7 @@ func initializeVectorStoreIfEnabled(
 	if err := cfg.VectorStore.Validate(); err != nil {
 		return fmt.Errorf("invalid vector store configuration: %w", err)
 	}
-	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg)
+	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg, runtimeRegistry.ModelPool())
 	if err != nil {
 		return fmt.Errorf("create vector store runtime: %w", err)
 	}

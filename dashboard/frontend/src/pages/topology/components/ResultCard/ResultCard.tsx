@@ -58,6 +58,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
               <span className={styles.label}>Decision:</span>
               <span className={styles.value}>
                 {result.matchedDecision || 'Default'}
+                {result.decisionConfidenceAvailable === false && ' · Score unavailable'}
               </span>
             </div>
             <div className={styles.compactItem}>
@@ -91,11 +92,11 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
                       {signal.value !== undefined && (
                         <span className={styles.signalMetric}>Value {formatValue(signal.value)}</span>
                       )}
-                      {(signal.score ?? signal.confidence) !== undefined && (
-                        <span className={styles.signalMetric}>
-                          Score {formatScore(signal.score ?? signal.confidence ?? 0)}
-                        </span>
-                      )}
+                      <span className={styles.signalMetric}>
+                        {signal.confidenceAvailable !== false && typeof (signal.score ?? signal.confidence) === 'number'
+                          ? `Score ${formatScore((signal.score ?? signal.confidence) as number)}`
+                          : 'Score unavailable'}
+                      </span>
                     </div>
                     {signal.reason && <div className={styles.signalReason}>{signal.reason}</div>}
                   </div>

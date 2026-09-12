@@ -39,21 +39,22 @@ type knowledgeBaseBindOptions struct {
 }
 
 type knowledgeBaseDocument struct {
-	Name             string                             `json:"name" yaml:"name"`
-	Type             string                             `json:"type" yaml:"type"`
-	Builtin          bool                               `json:"builtin" yaml:"builtin"`
-	Managed          bool                               `json:"managed" yaml:"managed"`
-	Editable         bool                               `json:"editable" yaml:"editable"`
-	Threshold        float32                            `json:"threshold" yaml:"threshold"`
-	LabelThresholds  map[string]float32                 `json:"label_thresholds,omitempty" yaml:"label_thresholds,omitempty"`
-	Description      string                             `json:"description,omitempty" yaml:"description,omitempty"`
-	Source           config.KnowledgeBaseSource         `json:"source" yaml:"source"`
-	Labels           []knowledgeBaseLabelPayload        `json:"labels,omitempty" yaml:"labels,omitempty"`
-	Groups           map[string][]string                `json:"groups,omitempty" yaml:"groups,omitempty"`
-	Metrics          []config.KnowledgeBaseMetricConfig `json:"metrics,omitempty" yaml:"metrics,omitempty"`
-	SignalReferences []knowledgeBaseSignalReference     `json:"signal_references,omitempty" yaml:"signal_references,omitempty"`
-	BindOptions      knowledgeBaseBindOptions           `json:"bind_options" yaml:"bind_options"`
-	LoadError        string                             `json:"load_error,omitempty" yaml:"load_error,omitempty"`
+	knowledgeBaseActivation `yaml:",inline"`
+	Name                    string                             `json:"name" yaml:"name"`
+	Type                    string                             `json:"type" yaml:"type"`
+	Builtin                 bool                               `json:"builtin" yaml:"builtin"`
+	Managed                 bool                               `json:"managed" yaml:"managed"`
+	Editable                bool                               `json:"editable" yaml:"editable"`
+	Threshold               float32                            `json:"threshold" yaml:"threshold"`
+	LabelThresholds         map[string]float32                 `json:"label_thresholds,omitempty" yaml:"label_thresholds,omitempty"`
+	Description             string                             `json:"description,omitempty" yaml:"description,omitempty"`
+	Source                  config.KnowledgeBaseSource         `json:"source" yaml:"source"`
+	Labels                  []knowledgeBaseLabelPayload        `json:"labels,omitempty" yaml:"labels,omitempty"`
+	Groups                  map[string][]string                `json:"groups,omitempty" yaml:"groups,omitempty"`
+	Metrics                 []config.KnowledgeBaseMetricConfig `json:"metrics,omitempty" yaml:"metrics,omitempty"`
+	SignalReferences        []knowledgeBaseSignalReference     `json:"signal_references,omitempty" yaml:"signal_references,omitempty"`
+	BindOptions             knowledgeBaseBindOptions           `json:"bind_options" yaml:"bind_options"`
+	LoadError               string                             `json:"load_error,omitempty" yaml:"load_error,omitempty"`
 }
 
 type knowledgeBaseListResponse struct {
@@ -71,8 +72,14 @@ type knowledgeBaseUpsertRequest struct {
 }
 
 type knowledgeBaseDeleteResponse struct {
-	Status string `json:"status" yaml:"status"`
-	Name   string `json:"name" yaml:"name"`
+	knowledgeBaseActivation `yaml:",inline"`
+	Status                  string `json:"status" yaml:"status"`
+	Name                    string `json:"name" yaml:"name"`
+}
+
+type knowledgeBaseActivation struct {
+	ActivationStatus     string `json:"activation_status,omitempty" yaml:"activation_status,omitempty"`
+	GeneratedRuntimeHash string `json:"generated_runtime_hash,omitempty" yaml:"generated_runtime_hash,omitempty"`
 }
 
 func normalizeKnowledgeBaseRequest(payload knowledgeBaseUpsertRequest) (knowledgeBaseUpsertRequest, error) {

@@ -195,6 +195,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing contains canonical v0.3 routing configuration under config.routing.<br />It is intentionally preserved as an object so the operator can pass through<br />the router-owned signal, projection, decision, and algorithm contract without<br />lagging behind every router schema addition. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_deployments` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelDeployments contains canonical global.model_catalog.deployments.<br />The router validates provider, device, precision and task compatibility. |  | Type: object <br />Optional: \{\} <br /> |
+| `model_admission` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | ModelAdmission contains canonical global.model_catalog.admission budgets.<br />Keys name deployments or the router's existing admission consumers. |  | Type: object <br />Optional: \{\} <br /> |
 | `embedding_models` _[EmbeddingModelsConfig](#embeddingmodelsconfig)_ | Embedding models configuration (qwen3, gemma, mmbert) |  | Optional: \{\} <br /> |
 | `response_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | Response cache configuration. |  | Optional: \{\} <br /> |
 | `semantic_cache` _[SemanticCacheConfig](#semanticcacheconfig)_ | SemanticCache is the deprecated response-cache field. |  | Optional: \{\} <br /> |
@@ -782,9 +784,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `backend` _[RemoteClassifierBackendConfig](#remoteclassifierbackendconfig)_ | Backend selects a named external classifier and its typed result contract. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
-| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Protocol. When both fields are omitted, the operator uses<br />mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol selects a remote HTTP backend's wire contract. Mutually<br />exclusive with Variant. Requires an external model configured via a<br />vllmEndpoints/externalModels entry with model_role="guardrail". |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
+| `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
 | `model_id` _string_ |  | models/mmbert32k-jailbreak-detector-merged | Optional: \{\} <br /> |
 | `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.7 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
@@ -939,11 +942,12 @@ _Appears in:_
 
 - [ComplexityModelConfig](#complexitymodelconfig)
 - [PIIModelConfig](#piimodelconfig)
+- [PromptGuardConfig](#promptguardconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify] <br /> |
-| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1] <br />Optional: \{\} <br /> |
+| `protocol` _string_ | Protocol is how the remote is called. |  | Enum: [http_classify http_chat] <br /> |
+| `contract` _string_ | Contract is the response shape the signal reads. Complexity reads two -<br />score.v1, one regression number interpreted through each rule's<br />boundaries, and label_distribution.v1, hard/easy/medium probabilities -<br />so the router requires it there rather than guessing per request. PII<br />reads token_spans.v1, entity spans with code-point offsets. Prompt guard<br />http_chat reads label_decision.v1, a verdict without invented probability. |  | Enum: [score.v1 label_distribution.v1 token_spans.v1 label_decision.v1] <br />Optional: \{\} <br /> |
 | `model` _string_ | Model is the name of an entry in the external model catalog. |  | MinLength: 1 <br /> |
 | `deadline_ms` _integer_ | DeadlineMs bounds one remote call. Defaults to the router's value. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 

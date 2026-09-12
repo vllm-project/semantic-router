@@ -133,12 +133,15 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
+	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 
 	if signals.JailbreakDetected {
 		ctx.JailbreakDetected = signals.JailbreakDetected
 		ctx.JailbreakType = signals.JailbreakType
 		ctx.JailbreakConfidence = signals.JailbreakConfidence
+		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
+		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
@@ -182,6 +185,17 @@ func cloneReplayStringMap(values map[string]string) map[string]string {
 		return nil
 	}
 	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneReplayBoolMap(values map[string]bool) map[string]bool {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]bool, len(values))
 	for key, value := range values {
 		cloned[key] = value
 	}

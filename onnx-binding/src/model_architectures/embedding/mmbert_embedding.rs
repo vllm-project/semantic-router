@@ -20,6 +20,7 @@
 //! - **Cross-platform**: Works on Linux, Windows, macOS
 //! - **Optimized inference**: Graph optimizations, operator fusion
 
+use crate::core::instance_options::{InstanceOptions, Provider};
 use crate::core::unified_error::{errors, UnifiedError, UnifiedResult};
 use crate::model_architectures::embedding::pooling::{
     l2_normalize, mean_pool_3d, truncate_dimension,
@@ -28,6 +29,7 @@ use half::f16;
 use ndarray::{Array1, Array2, Array3};
 use ort::session::Session;
 use ort::value::Tensor;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use tokenizers::Tokenizer;
@@ -276,14 +278,15 @@ pub struct MmBertEmbeddingModel {
     tokenizer: Arc<Tokenizer>,
     /// Model configuration
     config: MmBertEmbeddingConfig,
-    /// Matryoshka configuration
-    matryoshka_config: MatryoshkaConfig,
     /// Model path
     model_path: String,
-    /// Whether the model supports layer early exit (requires multiple ONNX files)
-    supports_layer_exit: bool,
-    /// Layer-specific sessions (for early exit support)
-    layer_sessions: Vec<Option<Session>>,
+    /// Layer represented by the primary graph; that graph is loaded only once.
+    primary_layer: usize,
+    /// Additional loaded exit graphs, indexed by their actual layer.
+    layer_sessions: BTreeMap<usize, Session>,
+    /// MIGraphX compiles a program for each shape. Fix its tensor shape to an
+    /// explicit deployment budget without padding the tokenizer's real usage.
+    execution_sequence_length: Option<usize>,
 }
 
 impl MmBertEmbeddingModel {
@@ -296,11 +299,40 @@ impl MmBertEmbeddingModel {
     /// # Returns
     /// * `UnifiedResult<Self>` - The loaded model or an error
     pub fn load<P: AsRef<Path>>(model_path: P, use_cpu: bool) -> UnifiedResult<Self> {
+        Self::load_impl(model_path, use_cpu, None)
+    }
+
+    pub fn load_with_options(options: &InstanceOptions) -> UnifiedResult<Self> {
+        options.validate()?;
+        Self::load_impl(
+            &options.model_path,
+            options.provider == Provider::Cpu,
+            Some(options),
+        )
+    }
+
+    fn load_impl<P: AsRef<Path>>(
+        model_path: P,
+        use_cpu: bool,
+        options: Option<&InstanceOptions>,
+    ) -> UnifiedResult<Self> {
         let model_path_str = model_path.as_ref().display().to_string();
         let model_dir = model_path.as_ref();
 
         // Load configuration
         let config = MmBertEmbeddingConfig::from_pretrained(&model_path)?;
+        let execution_sequence_length = match options {
+            Some(options) if options.provider == Provider::Migraphx => {
+                if options.max_input_tokens.is_none() {
+                    return Err(errors::config_error(
+                        "max_input_tokens",
+                        "owned MIGraphX embeddings require an explicit positive input token budget for their fixed execution shape",
+                    ));
+                }
+                Some(options.effective_limit(config.max_position_embeddings)?)
+            }
+            _ => None,
+        };
 
         // Resolve the early-exit layer list from the model's own manifest
         // (single source of truth) so it never drifts from what is shipped.
@@ -322,12 +354,26 @@ impl MmBertEmbeddingModel {
                 ))
             })?;
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+        if let Some(options) = options {
+            options.configure_tokenizer(&mut tokenizer, config.max_position_embeddings)?;
+        }
 
         // Find ONNX model candidates (priority order)
-        let onnx_candidates =
-            Self::find_onnx_models(&model_path, &matryoshka_config.layers, use_cpu)?;
+        let onnx_candidates = if options.is_some_and(|o| o.model_file.is_some()) {
+            vec![]
+        } else {
+            Self::find_onnx_models(
+                &model_path,
+                &matryoshka_config.layers,
+                use_cpu || options.is_some(),
+            )?
+        };
+        let onnx_candidates = match options {
+            Some(options) => vec![options.select_graph(onnx_candidates)?],
+            None => onnx_candidates,
+        };
 
         // Create ONNX Runtime session with fallback across candidates.
         // We intentionally prefer GPU-optimized model variants first.
@@ -335,7 +381,11 @@ impl MmBertEmbeddingModel {
         let mut selected_path: Option<std::path::PathBuf> = None;
         let mut last_error: Option<String> = None;
         for onnx_path in onnx_candidates {
-            match Self::create_session(&onnx_path, use_cpu) {
+            let loaded = match options {
+                Some(options) => options.create_session(&onnx_path),
+                None => Self::create_session(&onnx_path, use_cpu),
+            };
+            match loaded {
                 Ok(session) => {
                     selected_path = Some(onnx_path);
                     selected_session = Some(session);
@@ -360,22 +410,30 @@ impl MmBertEmbeddingModel {
                 return Err(errors::model_load(&model_path_str, &detail));
             }
         };
-        if let Some(path) = selected_path {
-            println!("INFO: Selected mmBERT ONNX file: {}", path.display());
-        }
+        let selected_path = selected_path.expect("a loaded session has a selected graph");
+        println!(
+            "INFO: Selected mmBERT ONNX file: {}",
+            selected_path.display()
+        );
 
         // Check for layer-specific ONNX files (for early exit support)
-        let (supports_layer_exit, layer_sessions) =
-            Self::load_layer_sessions(&model_path, use_cpu, &matryoshka_config.layers);
+        let (primary_layer, layer_sessions) = Self::load_layer_sessions(
+            &model_path,
+            use_cpu,
+            &matryoshka_config.layers,
+            options,
+            &selected_path,
+            config.num_hidden_layers,
+        )?;
 
         Ok(Self {
             session,
             tokenizer: Arc::new(tokenizer),
             config,
-            matryoshka_config,
             model_path: model_path_str,
-            supports_layer_exit,
+            primary_layer,
             layer_sessions,
+            execution_sequence_length,
         })
     }
 
@@ -516,7 +574,7 @@ impl MmBertEmbeddingModel {
                         .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                         .build()
                         .error_on_failure()])
-                    .and_then(|b| maybe_register_custom_ops(b))
+                    .and_then(maybe_register_custom_ops)
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                 {
                     Ok(session) => {
@@ -590,29 +648,108 @@ impl MmBertEmbeddingModel {
         Ok(session)
     }
 
+    /// Resolve the selected graph's layer once from the artifact contract.
+    fn primary_graph_layer(
+        model_dir: &Path,
+        selected_path: &Path,
+        canonical_path: &Path,
+        layers: &[usize],
+        full_depth: usize,
+    ) -> UnifiedResult<usize> {
+        let mut selected_layer = None;
+        let canonical_root = std::fs::canonicalize(model_dir)
+            .map_err(|_| errors::file_not_found(&model_dir.display().to_string()))?;
+        // Layer membership belongs to the artifact layout and manifest, not to
+        // one preferred graph filename. Check symlink targets as well so an
+        // alias cannot advertise a different layer from the graph it selects.
+        for (path, root) in [
+            (selected_path, model_dir),
+            (canonical_path, canonical_root.as_path()),
+        ] {
+            let Ok(relative) = path.strip_prefix(root) else {
+                continue;
+            };
+            let parent = relative.parent().unwrap_or(Path::new(""));
+            let directory_layer = if parent.parent() == Some(Path::new("onnx")) {
+                parent
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.strip_prefix("layer-"))
+            } else {
+                None
+            };
+            let flat_layer = if parent == Path::new("") || parent == Path::new("onnx") {
+                relative
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .and_then(|name| name.strip_prefix("model_layer_"))
+                    .and_then(|name| name.strip_suffix(".onnx"))
+            } else {
+                None
+            };
+            for name in [directory_layer, flat_layer].into_iter().flatten() {
+                let layer = name.parse::<usize>().map_err(|_| {
+                    errors::config_error(
+                        "primary_layer",
+                        "selected graph has an invalid layer name",
+                    )
+                })?;
+                if layer == 0 || !layers.contains(&layer) {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "selected graph's layer is absent from the artifact's available_layers",
+                    ));
+                }
+                if selected_layer.is_some_and(|previous| previous != layer) {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "selected graph has conflicting layer declarations",
+                    ));
+                }
+                selected_layer = Some(layer);
+            }
+        }
+        Ok(selected_layer.unwrap_or(full_depth))
+    }
+
     /// Load layer-specific ONNX sessions for early exit support.
     ///
-    /// Searches for layer models in multiple locations:
-    /// - model_path/model_layer_{N}.onnx  (legacy flat layout)
-    /// - model_path/onnx/model_layer_{N}.onnx
-    /// - model_path/onnx/layer-{N}/model_fa_fp16.onnx  (HuggingFace FA)
-    /// - model_path/onnx/layer-{N}/model.onnx           (HuggingFace default)
+    /// Searches the legacy flat model_layer_{N}.onnx layouts and
+    /// HuggingFace-style onnx/layer-{N}/ graph directories.
     fn load_layer_sessions<P: AsRef<Path>>(
         model_path: P,
         use_cpu: bool,
         layers: &[usize],
-    ) -> (bool, Vec<Option<Session>>) {
-        let mut sessions = Vec::new();
-        let mut any_loaded = false;
+        options: Option<&InstanceOptions>,
+        primary_path: &Path,
+        full_depth: usize,
+    ) -> UnifiedResult<(usize, BTreeMap<usize, Session>)> {
+        let mut sessions = BTreeMap::new();
+        let canonical_primary = std::fs::canonicalize(primary_path)
+            .map_err(|_| errors::file_not_found(&primary_path.display().to_string()))?;
         let model_dir = model_path.as_ref();
+        let primary_layer = Self::primary_graph_layer(
+            model_dir,
+            primary_path,
+            &canonical_primary,
+            layers,
+            full_depth,
+        )?;
         let onnx_dir = model_dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
-            .ok()
-            .filter(|s| !s.is_empty())
-            .is_some();
+        let has_fa = options.is_none()
+            && std::env::var("ORT_CK_FLASH_ATTN_LIB")
+                .ok()
+                .filter(|s| !s.is_empty())
+                .is_some();
 
         for layer in layers {
+            // The selected primary is the only graph for its layer. An
+            // automatically discovered variant must not replace an explicit
+            // head or allocate a second session for that same layer.
+            if *layer == primary_layer {
+                continue;
+            }
             let layer_filename = format!("model_layer_{}.onnx", layer);
             let hf_layer_dir = onnx_dir.join(format!("layer-{}", layer));
 
@@ -630,27 +767,38 @@ impl MmBertEmbeddingModel {
             let found = candidates.iter().find(|p| p.exists()).cloned();
 
             if let Some(ref layer_path) = found {
+                let canonical_path = std::fs::canonicalize(layer_path)
+                    .map_err(|_| errors::file_not_found(&layer_path.display().to_string()))?;
+                if canonical_path == canonical_primary {
+                    return Err(errors::config_error(
+                        "primary_layer",
+                        "another declared layer aliases the selected primary graph",
+                    ));
+                }
                 println!(
                     "INFO: Loading layer-{} from {}",
                     layer,
                     layer_path.display()
                 );
-                match Self::create_session(layer_path, use_cpu) {
+                let loaded = match options {
+                    Some(options) => options.create_session(layer_path),
+                    None => Self::create_session(layer_path, use_cpu),
+                };
+                match loaded {
                     Ok(session) => {
-                        sessions.push(Some(session));
-                        any_loaded = true;
+                        sessions.insert(*layer, session);
                     }
                     Err(e) => {
+                        if options.is_some() {
+                            return Err(e);
+                        }
                         println!("WARN: Failed to load layer-{}: {:?}", layer, e);
-                        sessions.push(None);
                     }
                 }
-            } else {
-                sessions.push(None);
             }
         }
 
-        (any_loaded, sessions)
+        Ok((primary_layer, sessions))
     }
 
     /// Get the model configuration
@@ -670,31 +818,16 @@ impl MmBertEmbeddingModel {
 
     /// Check if layer early exit is supported
     pub fn supports_layer_exit(&self) -> bool {
-        self.supports_layer_exit
+        self.primary_layer != self.config.num_hidden_layers || !self.layer_sessions.is_empty()
     }
 
     /// Get available early exit layers
     pub fn available_exit_layers(&self) -> Vec<usize> {
-        if self.supports_layer_exit {
-            self.matryoshka_config
-                .layers
-                .iter()
-                .enumerate()
-                .filter_map(|(i, &layer)| {
-                    if self
-                        .layer_sessions
-                        .get(i)
-                        .is_some_and(|s: &Option<Session>| s.is_some())
-                    {
-                        Some(layer)
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            vec![self.config.num_hidden_layers]
-        }
+        let mut layers: Vec<_> = self.layer_sessions.keys().copied().collect();
+        layers.push(self.primary_layer);
+        layers.sort_unstable();
+        layers.dedup();
+        layers
     }
 
     /// Generate embeddings with 2D Matryoshka support
@@ -729,6 +862,7 @@ impl MmBertEmbeddingModel {
         // Find max sequence length
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
         let max_len = max_len.min(self.config.max_position_embeddings);
+        let max_len = self.execution_sequence_length.unwrap_or(max_len);
 
         // Prepare input tensors
         let batch_size = texts.len();
@@ -739,7 +873,7 @@ impl MmBertEmbeddingModel {
             let seq_len = encoding.len().min(max_len);
             for j in 0..seq_len {
                 input_ids[i * max_len + j] = encoding.get_ids()[j] as i64;
-                attention_mask[i * max_len + j] = 1;
+                attention_mask[i * max_len + j] = encoding.get_attention_mask()[j] as i64;
             }
         }
 
@@ -779,27 +913,9 @@ impl MmBertEmbeddingModel {
         input_ids: &Array2<i64>,
         attention_mask: &Array2<i64>,
     ) -> UnifiedResult<Array2<f32>> {
-        // Select session based on target layer (inline to avoid borrow issues)
-        let session_idx = if let Some(layer) = target_layer {
-            if self.supports_layer_exit {
-                self.matryoshka_config
-                    .layers
-                    .iter()
-                    .position(|&l| l == layer)
-                    .filter(|&idx| self.layer_sessions.get(idx).is_some_and(|s| s.is_some()))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        // Get the appropriate session
-        let session = if let Some(idx) = session_idx {
-            self.layer_sessions[idx].as_mut().unwrap()
-        } else {
-            &mut self.session
-        };
+        let session = target_layer
+            .and_then(|layer| self.layer_sessions.get_mut(&layer))
+            .unwrap_or(&mut self.session);
         let batch_size = input_ids.shape()[0];
         let seq_len = input_ids.shape()[1];
 
@@ -906,6 +1022,21 @@ impl MmBertEmbeddingModel {
         Ok(embeddings.row(0).to_owned())
     }
 
+    pub fn finish_profiling(&mut self) -> UnifiedResult<Vec<String>> {
+        let mut paths = vec![self
+            .session
+            .end_profiling()
+            .map_err(|e| errors::ort_error(&e.to_string()))?];
+        for session in self.layer_sessions.values_mut() {
+            paths.push(
+                session
+                    .end_profiling()
+                    .map_err(|e| errors::ort_error(&e.to_string()))?,
+            );
+        }
+        Ok(paths)
+    }
+
     /// Get model information for debugging
     pub fn model_info(&self) -> String {
         format!(
@@ -913,7 +1044,7 @@ impl MmBertEmbeddingModel {
             self.model_path,
             self.config.hidden_size,
             self.config.num_hidden_layers,
-            self.supports_layer_exit,
+            self.supports_layer_exit(),
             self.available_exit_layers()
         )
     }

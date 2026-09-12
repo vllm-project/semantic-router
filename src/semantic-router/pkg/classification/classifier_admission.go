@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -63,17 +63,6 @@ func admitModelInference[T any](
 	return fn()
 }
 
-func admitNLI[T any](
-	ctx context.Context,
-	gate admission.Admissioner,
-	classify func(premise, hypothesis string) (T, error),
-	premise, hypothesis string,
-) (T, error) {
-	return admitModelInference(ctx, gate, admissionDeploymentHallucinationExplainer, func() (T, error) {
-		return classify(premise, hypothesis)
-	})
-}
-
 func isAdmissionError(err error) bool {
 	return errors.Is(err, admission.ErrQueueFull) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
@@ -103,16 +92,23 @@ type admittedCategoryInference struct {
 	deployment string
 }
 
-func (a admittedCategoryInference) Classify(ctx context.Context, text string) (candle_binding.ClassResult, error) {
-	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.ClassResult, error) {
+func (a admittedCategoryInference) Classify(ctx context.Context, text string) (tasks.ClassResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.ClassResult, error) {
 		return a.backend.Classify(ctx, text)
 	})
 }
 
-func (a admittedCategoryInference) ClassifyWithProbabilities(ctx context.Context, text string) (candle_binding.ClassResultWithProbs, error) {
-	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.ClassResultWithProbs, error) {
+func (a admittedCategoryInference) ClassifyWithProbabilities(ctx context.Context, text string) (tasks.ClassResultWithProbs, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.ClassResultWithProbs, error) {
 		return a.backend.ClassifyWithProbabilities(ctx, text)
 	})
+}
+
+func (a admittedCategoryInference) Close() error {
+	if closer, ok := a.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
 }
 
 func (a admittedCategoryInference) fallbackToTop1OnProbabilityError() bool {
@@ -125,8 +121,8 @@ type admittedPIIInference struct {
 	deployment string
 }
 
-func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (candle_binding.TokenClassificationResult, error) {
-	return admitModelInference(ctx, a.gate, a.deployment, func() (candle_binding.TokenClassificationResult, error) {
+func (a admittedPIIInference) ClassifyTokens(ctx context.Context, text string) (tasks.TokenClassificationResult, error) {
+	return admitModelInference(ctx, a.gate, a.deployment, func() (tasks.TokenClassificationResult, error) {
 		return a.backend.ClassifyTokens(ctx, text)
 	})
 }
@@ -153,25 +149,38 @@ func (c *Classifier) applyAdmissionGates() {
 		registry = buildAdmissionRegistry(c.Config)
 		c.admissionRegistry = registry
 	}
-	if c.jailbreakInference != nil {
+	if c.jailbreakInference != nil && !ownsModelAdmission(c.jailbreakInference) {
 		c.jailbreakInference = admittedSequenceClassifier{
 			backend:    c.jailbreakInference,
 			gate:       registry.For(admissionDeploymentPromptGuard),
 			deployment: admissionDeploymentPromptGuard,
 		}
 	}
-	if c.categoryInference != nil {
+	if c.categoryInference != nil && !ownsModelAdmission(c.categoryInference) {
 		c.categoryInference = admittedCategoryInference{
 			backend:    c.categoryInference,
 			gate:       registry.For(admissionDeploymentDomainClassifier),
 			deployment: admissionDeploymentDomainClassifier,
 		}
 	}
-	if c.piiInference != nil {
+	if c.piiInference != nil && !ownsModelAdmission(c.piiInference) {
 		c.piiInference = admittedPIIInference{
 			backend:    c.piiInference,
 			gate:       registry.For(admissionDeploymentPIIClassifier),
 			deployment: admissionDeploymentPIIClassifier,
 		}
+	}
+}
+
+// Owned handles admit at the physical resource so aliases cannot multiply its budget.
+func ownsModelAdmission(backend interface{}) bool {
+	if owned, ok := backend.(interface{ ownsAdmission() bool }); ok {
+		return owned.ownsAdmission()
+	}
+	switch backend.(type) {
+	case *ownedSequenceBackend, ownedCategoryBackend, *ownedTokenBackend, *ownedRemoteGuardDistribution, *ownedRemoteGuardDecision:
+		return true
+	default:
+		return false
 	}
 }

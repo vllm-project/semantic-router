@@ -3,13 +3,13 @@ package extproc
 import (
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 func TestSampleQueryWindowsKeepsBothEnds(t *testing.T) {
-	windows := make([]candle_binding.TextWindow, 47)
+	windows := make([]embedding.Window, 47)
 	for i := range windows {
-		windows[i] = candle_binding.TextWindow{Start: i * 10, End: i*10 + 10}
+		windows[i] = embedding.Window{Start: i * 10, End: i*10 + 10}
 	}
 
 	kept := sampleQueryWindows(windows, 8)
@@ -30,7 +30,7 @@ func TestSampleQueryWindowsKeepsBothEnds(t *testing.T) {
 }
 
 func TestSampleQueryWindowsBelowTheLimit(t *testing.T) {
-	windows := []candle_binding.TextWindow{{Start: 0, End: 10}, {Start: 5, End: 15}}
+	windows := []embedding.Window{{Start: 0, End: 10}, {Start: 5, End: 15}}
 	if kept := sampleQueryWindows(windows, 8); len(kept) != 2 {
 		t.Fatalf("kept %d windows, want both", len(kept))
 	}

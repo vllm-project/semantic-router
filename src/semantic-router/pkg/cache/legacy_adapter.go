@@ -4,15 +4,16 @@ import (
 	"context"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
 type LegacyBackendAdapter struct {
-	backend        CacheBackend
-	capabilities   BackendCapabilities
-	embeddingModel string
+	backend           CacheBackend
+	capabilities      BackendCapabilities
+	embeddingModel    string
+	embeddingProvider embedding.Provider
 }
 
 func NewLegacyBackendAdapter(
@@ -32,12 +33,23 @@ func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAd
 	return a
 }
 
-func (a *LegacyBackendAdapter) exceedsEmbeddingWindow(query string) bool {
-	if a.embeddingModel == "" {
+func (a *LegacyBackendAdapter) WithEmbeddingProvider(provider embedding.Provider) *LegacyBackendAdapter {
+	a.embeddingProvider = provider
+	return a
+}
+
+func (a *LegacyBackendAdapter) exceedsEmbeddingWindow(ctx context.Context, query string) bool {
+	provider, ok := a.embeddingProvider.(embedding.WindowProvider)
+	if !ok {
 		return false
 	}
-	exceeds, err := candle_binding.EmbeddingTextExceedsWindow(query, a.embeddingModel)
-	return err == nil && exceeds
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	windows, err := provider.Windows(ctx, query, 0)
+	// A failed tokenizer check cannot establish that a query fits. Exact
+	// cache operations remain independent of this conservative semantic guard.
+	return err != nil || len(windows) > 1
 }
 
 func (a *LegacyBackendAdapter) LookupExact(
@@ -90,7 +102,7 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	ctx context.Context,
 	lookup SemanticLookup,
 ) (CacheResult, error) {
-	if a.exceedsEmbeddingWindow(lookup.Identity.SemanticQuery) {
+	if a.exceedsEmbeddingWindow(ctx, lookup.Identity.SemanticQuery) {
 		return CacheResult{HitKind: HitKindMiss}, nil
 	}
 	result, err := a.backend.LookupSimilarWithThreshold(
@@ -123,7 +135,7 @@ func resultAge(result LookupResult) (time.Duration, bool) {
 }
 
 func (a *LegacyBackendAdapter) StoreSemantic(ctx context.Context, write CacheWrite) error {
-	if write.TTL.NoStore || a.exceedsEmbeddingWindow(write.Identity.SemanticQuery) {
+	if write.TTL.NoStore || a.exceedsEmbeddingWindow(ctx, write.Identity.SemanticQuery) {
 		return nil
 	}
 	return a.backend.AddEntry(

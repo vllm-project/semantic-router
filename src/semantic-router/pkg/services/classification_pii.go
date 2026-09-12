@@ -53,6 +53,8 @@ type PIIEntity struct {
 
 // DetectPII performs PII detection
 func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (*PIIResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	if blankText(req.Text) {

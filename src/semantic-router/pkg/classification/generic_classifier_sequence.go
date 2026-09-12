@@ -45,13 +45,23 @@ func (m *declaredLabelMapping) LabelCount() int {
 // sequenceLabelClassifier lets a rule reuse the backends jailbreak and
 // category already use, instead of a parallel remote path.
 type sequenceLabelClassifier struct {
-	backend *HTTPClassifierInference
+	backend SequenceClassifierBackend
 	labels  []string
 }
 
 func newSequenceLabelClassifier(
 	rule config.ClassifierSignalRule,
 	external *config.ExternalModelConfig,
+	models ...*classifierModelRuntime,
+) (labelClassifier, error) {
+	return newSequenceLabelClassifierForBinding("classifier."+rule.Name, rule, external, models...)
+}
+
+func newSequenceLabelClassifierForBinding(
+	consumerName string,
+	rule config.ClassifierSignalRule,
+	external *config.ExternalModelConfig,
+	models ...*classifierModelRuntime,
 ) (labelClassifier, error) {
 	if external == nil {
 		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
@@ -60,8 +70,14 @@ func newSequenceLabelClassifier(
 	if err != nil {
 		return nil, err
 	}
+	runtime := consumerModelRuntime(models)
+	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPClassify, Contract: config.RemoteClassifierContractLabelDistribution}
+	owned, err := prepareRemoteSequence(runtime, runtime.remoteSpec(consumerName, backendCfg), external, backend)
+	if err != nil {
+		return nil, err
+	}
 	return &sequenceLabelClassifier{
-		backend: backend,
+		backend: owned,
 		labels:  append([]string(nil), rule.Labels...),
 	}, nil
 }
@@ -85,5 +101,8 @@ func (c *sequenceLabelClassifier) Close() error {
 	if c == nil {
 		return nil
 	}
-	return c.backend.Close()
+	if closer, ok := c.backend.(interface{ Close() error }); ok {
+		return closer.Close()
+	}
+	return nil
 }

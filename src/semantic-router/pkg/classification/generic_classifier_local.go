@@ -3,71 +3,43 @@ package classification
 import (
 	"context"
 	"fmt"
-	"strings"
-	"sync"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-var localClassifierLifecycle struct {
-	sync.Mutex
-	signature string
-}
-
+// A generic rule owns a prepared sequence binding, independent of every other
+// rule and generation. Only provider-compatible physical weights are shared.
 type localLabelClassifier struct {
-	labels []string
+	labels  []string
+	backend *ownedSequenceBackend
 }
 
-func newLocalLabelClassifier(rule config.ClassifierSignalRule) (labelClassifier, error) {
-	modelPath := config.ResolveModelPath(rule.ModelPath)
-	signature := fmt.Sprintf("%s|%t|%s", modelPath, rule.UseCPU, strings.Join(rule.Labels, "\x00"))
+func newLocalLabelClassifier(rule config.ClassifierSignalRule, models ...*classifierModelRuntime) (labelClassifier, error) {
+	return newLocalLabelClassifierForBinding("classifier."+rule.Name, rule, models...)
+}
 
-	localClassifierLifecycle.Lock()
-	defer localClassifierLifecycle.Unlock()
-	switch {
-	case localClassifierLifecycle.signature == "":
-		if err := candle_binding.InitGenericClassifier(
-			modelPath,
-			len(rule.Labels),
-			rule.UseCPU,
-		); err != nil {
-			return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
-		}
-		localClassifierLifecycle.signature = signature
-	case localClassifierLifecycle.signature != signature:
-		return nil, fmt.Errorf(
-			"local classifier model or labels changed; restart the router to apply the new classifier",
-		)
+func newLocalLabelClassifierForBinding(consumerName string, rule config.ClassifierSignalRule, models ...*classifierModelRuntime) (labelClassifier, error) {
+	runtime := consumerModelRuntime(models)
+	spec := runtime.localSpec(consumerName, rule.ModelPath, "auto", config.RemoteClassifierContractLabelDistribution, rule.UseCPU)
+	backend := &ownedSequenceBackend{runtime: runtime.runtime, spec: spec, labels: append([]string(nil), rule.Labels...)}
+	if err := backend.Init(rule.ModelPath, rule.UseCPU, len(rule.Labels)); err != nil {
+		return nil, fmt.Errorf("initialize classifier %q: %w", rule.Name, err)
 	}
-	return &localLabelClassifier{labels: append([]string(nil), rule.Labels...)}, nil
+	return &localLabelClassifier{labels: append([]string(nil), rule.Labels...), backend: backend}, nil
 }
 
-func (c *localLabelClassifier) Classify(
-	_ context.Context,
-	input string,
-) (labelClassification, error) {
-	result, err := candle_binding.ClassifyTextWithProbabilities(input)
+func (c *localLabelClassifier) Classify(ctx context.Context, input string) (labelClassification, error) {
+	result, err := c.backend.Classify(ctx, input)
 	if err != nil {
 		return labelClassification{}, err
 	}
-	if result.Class < 0 || result.Class >= len(c.labels) {
-		return labelClassification{}, fmt.Errorf(
-			"class index %d is outside %d labels",
-			result.Class,
-			len(c.labels),
-		)
+	if len(result.Probabilities) != len(c.labels) {
+		return labelClassification{}, fmt.Errorf("model returned %d probabilities for %d labels", len(result.Probabilities), len(c.labels))
 	}
 	scores := make(map[string]float64, len(c.labels))
 	for index, label := range c.labels {
-		switch {
-		case index < len(result.Probabilities):
-			scores[label] = float64(result.Probabilities[index])
-		case index == result.Class:
-			scores[label] = float64(result.Confidence)
-		default:
-			scores[label] = 0
-		}
+		scores[label] = float64(result.Probabilities[index])
 	}
 	return labelClassification{Scores: scores}, nil
 }
+func (c *localLabelClassifier) Close() error { return c.backend.Close() }

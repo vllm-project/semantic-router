@@ -678,7 +678,7 @@ func TestEnvoyActivationVerifierPollsUntilReady(t *testing.T) {
 }
 
 func TestRecipeRuntimeMaterializeArgsForceSideEffectFreePackageMode(t *testing.T) {
-	args := recipeRuntimeMaterializeArgs("/state/raw.yaml", "/state/realized.yaml")
+	args := runtimeMaterializeArgs("/state/raw.yaml", "/state/realized.yaml", runtimeMaterialization{packageActivation: true})
 	if !slices.Contains(args, "--package-activation") {
 		t.Fatalf("runtime materialize args = %#v", args)
 	}

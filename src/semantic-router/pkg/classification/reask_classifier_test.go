@@ -4,18 +4,18 @@ import (
 	"math"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func stubReaskEmbeddings(t *testing.T, embeddings map[string][]float32) {
 	t.Helper()
 
-	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	restore := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		if embedding, ok := embeddings[text]; ok {
-			return &candle_binding.EmbeddingOutput{Embedding: embedding}, nil
+			return &tasks.EmbeddingResult{Embedding: embedding}, nil
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0, 1)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0, 1)}, nil
 	})
 	t.Cleanup(restore)
 }

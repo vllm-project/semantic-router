@@ -38,7 +38,7 @@ func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, 
 
 	// Use ModernBERT PII token classifier for entity detection
 	partial := false
-	tokenResult, err := c.piiInference.ClassifyTokens(ctx, text)
+	tokenResult, err := c.classifyPIITokens(ctx, text)
 	if err != nil {
 		// Same policy as the routing signal and scanPIIChunks: a declared
 		// truncation carries valid spans for the part the provider saw, and
@@ -130,7 +130,7 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 	partial := false
 
 	for _, span := range piiSignalChunkSpans(text) {
-		tokenResult, err := c.piiInference.ClassifyTokens(ctx, span.Text)
+		tokenResult, err := c.classifyPIITokens(ctx, span.Text)
 		if err != nil {
 			// A declared truncation carries valid spans for the part the
 			// provider saw. classifier.pii.on_error decides what the unseen
@@ -257,7 +257,7 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, cont
 		result.ContentIndex = i
 
 		// Use ModernBERT PII token classifier for detailed analysis
-		tokenResult, err := c.piiInference.ClassifyTokens(ctx, content)
+		tokenResult, err := c.classifyPIITokens(ctx, content)
 		if err != nil {
 			// As in scanPIIChunks: a truncation still carries valid spans, and
 			// on_error decides whether the unseen remainder voids them. Under

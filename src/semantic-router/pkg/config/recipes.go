@@ -38,10 +38,11 @@ func (s RoutingStrategy) Validate() error {
 // a recipe. Shared provider bindings, model assets, and runtime services stay
 // on RouterConfig.
 type RoutingProfile struct {
-	Signals     Signals
-	Projections Projections
-	Decisions   []Decision
-	Strategy    RoutingStrategy
+	ModelBindings map[string]ModelBinding
+	Signals       Signals
+	Projections   Projections
+	Decisions     []Decision
+	Strategy      RoutingStrategy
 }
 
 // RoutingRecipe gives an isolated routing profile a stable name and optional
@@ -151,10 +152,11 @@ func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	return &RoutingRecipe{
 		Name: DefaultRecipeName,
 		Profile: RoutingProfile{
-			Signals:     c.Signals,
-			Projections: c.Projections,
-			Decisions:   c.Decisions,
-			Strategy:    c.Strategy,
+			ModelBindings: cloneModelMap(c.ModelBindings),
+			Signals:       c.Signals,
+			Projections:   c.Projections,
+			Decisions:     c.Decisions,
+			Strategy:      c.Strategy,
 		},
 	}
 }
@@ -272,6 +274,7 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
+		ModelBindings:   cloneModelMap(recipe.Profile.ModelBindings),
 		Signals:         recipe.Profile.Signals,
 		Projections:     recipe.Profile.Projections,
 		Decisions:       recipe.Profile.Decisions,

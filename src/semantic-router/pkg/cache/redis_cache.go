@@ -15,14 +15,15 @@ import (
 	"github.com/redis/go-redis/v9"
 	"sigs.k8s.io/yaml"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // RedisCache provides a scalable semantic cache implementation using Redis with vector search
 type RedisCache struct {
+	embeddingProvider   embedding.Provider
 	client              *redis.Client
 	searchFn            func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error)
 	config              *config.RedisConfig
@@ -39,6 +40,7 @@ type RedisCache struct {
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
 type RedisCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -104,6 +106,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, embeddingModel), 0)),
 	}
 
 	releaseClient := func() { _ = redisClient.Close() }
@@ -233,44 +236,7 @@ func (c *RedisCache) initializeIndex() error {
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
-	if err := ctxErr(ctx); err != nil {
-		return nil, err
-	}
-	modelName := c.embeddingModel
-
-	switch modelName {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "mmbert":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "multimodal":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 func (c *RedisCache) embeddingDimension() int {

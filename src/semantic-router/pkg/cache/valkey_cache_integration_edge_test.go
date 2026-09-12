@@ -130,9 +130,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = true
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: cacheTestEmbeddingProvider(),
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail to connect to invalid host")
 	})
@@ -164,9 +165,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 		valkeyConfig.Development.AutoCreateIndex = false
 
 		_, err := NewValkeyCache(ValkeyCacheOptions{
-			Enabled:        true,
-			Config:         valkeyConfig,
-			EmbeddingModel: "bert",
+			EmbeddingProvider: cacheTestEmbeddingProvider(),
+			Enabled:           true,
+			Config:            valkeyConfig,
+			EmbeddingModel:    "bert",
 		})
 		assert.Error(t, err, "Should fail when index doesn't exist and auto-creation is disabled")
 		assert.Contains(t, err.Error(), "does not exist", "Error should mention index doesn't exist")

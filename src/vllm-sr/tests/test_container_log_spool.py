@@ -1,8 +1,10 @@
 import os
+import selectors
 import shutil
 import stat
 import subprocess
 import sys
+import time
 
 import pytest
 from cli.container_log_spool import (
@@ -104,6 +106,74 @@ def test_bounded_log_spool_relay_preserves_output_and_bounds_file(tmp_path):
     retained = spool_file.read_text(encoding="utf-8")
     assert "entry-039" in retained
     assert "[log record truncated]" in retained
+
+
+def test_bounded_log_spool_publishes_short_records_before_producer_exits(tmp_path):
+    spool_file = tmp_path / "current.log"
+    spool_file.touch(mode=0o600)
+    control_fifo = tmp_path / "control"
+    os.mkfifo(control_fifo, mode=0o600)
+    control = os.open(control_fifo, os.O_RDWR | os.O_NONBLOCK)
+    script = BOUNDED_LOG_SPOOL_SCRIPT.replace(
+        "/var/log/vllm-sr-producer/*.log", f"{tmp_path}/*.log", 1
+    )
+    service_script = (
+        'exec 0<"$1"; '
+        "printf 'stdout-ready\\n'; printf 'stderr-ready\\n' >&2; "
+        "IFS= read -r release; printf 'released:%s\\n' \"$release\""
+    )
+    process = subprocess.Popen(
+        [
+            "/bin/sh",
+            "-c",
+            script,
+            "vllm-sr-log-spool-test",
+            str(spool_file),
+            "1024",
+            "64",
+            "--",
+            "/bin/sh",
+            "-c",
+            service_script,
+            "producer",
+            str(control_fifo),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    received = b""
+    retained = ""
+    alive_before_release = False
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ)
+    try:
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            for key, _ in selector.select(timeout=0.02):
+                chunk = os.read(key.fileobj.fileno(), 65536)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                received += chunk
+            retained = spool_file.read_text(encoding="utf-8")
+            if all(
+                marker in received and marker.decode() in retained
+                for marker in (b"stdout-ready\n", b"stderr-ready\n")
+            ):
+                alive_before_release = process.poll() is None
+                break
+            if process.poll() is not None:
+                break
+    finally:
+        os.write(control, b"finish\n")
+        os.close(control)
+        selector.close()
+        tail, stderr = process.communicate(timeout=5)
+
+    assert alive_before_release, (received, retained, stderr)
+    assert "released:" not in retained
+    assert b"released:finish\n" in tail
+    assert process.returncode == 0, stderr
 
 
 def test_rootless_podman_retains_host_spool_group(monkeypatch):

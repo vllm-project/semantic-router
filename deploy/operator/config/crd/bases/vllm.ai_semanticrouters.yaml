@@ -1100,11 +1100,13 @@ spec:
                                   score.v1, one regression number interpreted through each rule's
                                   boundaries, and label_distribution.v1, hard/easy/medium probabilities -
                                   so the router requires it there rather than guessing per request. PII
-                                  reads token_spans.v1, entity spans with code-point offsets.
+                                  reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+                                  http_chat reads label_decision.v1, a verdict without invented probability.
                                 enum:
                                 - score.v1
                                 - label_distribution.v1
                                 - token_spans.v1
+                                - label_decision.v1
                                 type: string
                               deadline_ms:
                                 description: DeadlineMs bounds one remote call. Defaults
@@ -1120,6 +1122,7 @@ spec:
                                 description: Protocol is how the remote is called.
                                 enum:
                                 - http_classify
+                                - http_chat
                                 type: string
                             required:
                             - model
@@ -1176,11 +1179,13 @@ spec:
                               score.v1, one regression number interpreted through each rule's
                               boundaries, and label_distribution.v1, hard/easy/medium probabilities -
                               so the router requires it there rather than guessing per request. PII
-                              reads token_spans.v1, entity spans with code-point offsets.
+                              reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+                              http_chat reads label_decision.v1, a verdict without invented probability.
                             enum:
                             - score.v1
                             - label_distribution.v1
                             - token_spans.v1
+                            - label_decision.v1
                             type: string
                           deadline_ms:
                             description: DeadlineMs bounds one remote call. Defaults
@@ -1196,6 +1201,7 @@ spec:
                             description: Protocol is how the remote is called.
                             enum:
                             - http_classify
+                            - http_chat
                             type: string
                         required:
                         - model
@@ -1680,6 +1686,18 @@ spec:
                       - name
                       type: object
                     type: array
+                  model_admission:
+                    description: |-
+                      ModelAdmission contains canonical global.model_catalog.admission budgets.
+                      Keys name deployments or the router's existing admission consumers.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  model_deployments:
+                    description: |-
+                      ModelDeployments contains canonical global.model_catalog.deployments.
+                      The router validates provider, device, precision and task compatibility.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   observability:
                     description: Observability configuration
                     properties:
@@ -1737,6 +1755,44 @@ spec:
                   prompt_guard:
                     description: Prompt guard configuration
                     properties:
+                      backend:
+                        description: Backend selects a named external classifier and
+                          its typed result contract.
+                        properties:
+                          contract:
+                            description: |-
+                              Contract is the response shape the signal reads. Complexity reads two -
+                              score.v1, one regression number interpreted through each rule's
+                              boundaries, and label_distribution.v1, hard/easy/medium probabilities -
+                              so the router requires it there rather than guessing per request. PII
+                              reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+                              http_chat reads label_decision.v1, a verdict without invented probability.
+                            enum:
+                            - score.v1
+                            - label_distribution.v1
+                            - token_spans.v1
+                            - label_decision.v1
+                            type: string
+                          deadline_ms:
+                            description: DeadlineMs bounds one remote call. Defaults
+                              to the router's value.
+                            minimum: 1
+                            type: integer
+                          model:
+                            description: Model is the name of an entry in the external
+                              model catalog.
+                            minLength: 1
+                            type: string
+                          protocol:
+                            description: Protocol is how the remote is called.
+                            enum:
+                            - http_classify
+                            - http_chat
+                            type: string
+                        required:
+                        - model
+                        - protocol
+                        type: object
                       enabled:
                         default: true
                         type: boolean
@@ -1767,9 +1823,8 @@ spec:
                         type: array
                       protocol:
                         description: |-
-                          Protocol selects a remote HTTP backend's wire contract. Mutually
-                          exclusive with Variant. Requires an external model configured via a
-                          vllmEndpoints/externalModels entry with model_role="guardrail".
+                          Protocol is retired and rejected at admission. Configure Backend with
+                          the protocol, contract and explicit external model name instead.
                         enum:
                         - http_chat
                         - http_classify
@@ -1786,8 +1841,7 @@ spec:
                       variant:
                         description: |-
                           Variant selects a local Candle-backed model variant. It is mutually
-                          exclusive with Protocol. When both fields are omitted, the operator uses
-                          mmbert32k.
+                          exclusive with Backend. When both are omitted, the operator uses mmbert32k.
                         enum:
                         - candle
                         - mmbert32k

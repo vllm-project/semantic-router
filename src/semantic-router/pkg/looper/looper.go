@@ -31,6 +31,7 @@ import (
 
 // Request contains the input for looper execution
 type Request struct {
+	Grounding *GroundingBackends
 	// OriginalRequest is the OpenAI chat completion request from the client
 	OriginalRequest *openai.ChatCompletionNewParams
 

@@ -53,8 +53,8 @@ func TestBuildClassifierBuildsReachableRemotePIIBackend(t *testing.T) {
 	if admitted, ok := inference.(admittedPIIInference); ok {
 		inference = admitted.backend
 	}
-	if _, ok := inference.(*piiHTTPBackend); !ok {
-		t.Fatalf("piiInference = %T, want *piiHTTPBackend", inference)
+	if _, ok := inference.(*remoteTokenBinding); !ok {
+		t.Fatalf("piiInference = %T, want owned remote token binding", inference)
 	}
 	if !classifier.IsPIIEnabled() {
 		t.Fatal("PII must read as enabled with a mapping and a remote backend")

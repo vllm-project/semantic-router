@@ -1,10 +1,45 @@
 package classification
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestUnreachableDefaultDoesNotPrepareRoutingArtifacts(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "unprovisioned")
+	defaultProfile := config.RoutingProfile{
+		Signals:       config.Signals{ClassifierRules: []config.ClassifierSignalRule{{Name: "risk", Type: config.ClassifierSignalTypeLocal, ModelPath: missing, UseCPU: true, Labels: []string{"safe", "unsafe"}}}},
+		ModelBindings: map[string]config.ModelBinding{"classifier.risk": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}},
+	}
+	cfg := &config.RouterConfig{
+		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
+		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: defaultProfile}, {Name: "active"}},
+		Entrypoints:   []config.EntrypointMapping{{ModelNames: []string{"public"}, Recipe: "active"}},
+	}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"dormant": {Artifact: missing, Provider: "candle", Device: "cpu"}}
+	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("unreachable default tried to load routing model: %v", err)
+	}
+	t.Cleanup(func() { _ = classifiers.Close() })
+	if len(classifiers.Default().genericClassifiers) != 0 {
+		t.Fatal("unreachable routing model was prepared")
+	}
+	if initErr := classifiers.InitializeRuntime(); initErr != nil {
+		t.Fatal(initErr)
+	}
+	if len(cfg.Recipes[0].Profile.Signals.ClassifierRules) != 1 {
+		t.Fatal("preparation mutated the canonical recipe")
+	}
+	invalid := *cfg
+	invalid.ModelBindings = map[string]config.ModelBinding{"classifier.missing": {Deployment: "dormant", Adapter: "auto", Contract: config.RemoteClassifierContractLabelDistribution}}
+	invalid.Recipes = nil
+	if _, invalidErr := BuildRecipeClassifiers(&invalid, nil, nil, nil); invalidErr == nil {
+		t.Fatal("unreachable default bypassed canonical binding validation")
+	}
+}
 
 func TestRecipeClassifierReadinessSeparatesDefaultAPIFromInventory(t *testing.T) {
 	defaultClassifier := &Classifier{}

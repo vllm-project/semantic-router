@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -36,17 +37,18 @@ var (
 	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
 	buildReloadRouter        = buildOpenAIRouterFromConfig
 	replaceReloadConfig      = config.Replace
-	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-			Component:                  "extproc",
-			MaxParallelism:             modelruntime.DefaultParallelism(5),
-			OnEvent:                    logReloadRuntimeLifecycleEvent,
-			InitModalityClassifierFunc: InitModalityClassifier,
-		})
+	// Embeddings are prepared by buildRouterComponents with the service pool.
+	// The preparation seam stays injectable for lifecycle fault tests.
+	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.EmbeddingRuntimeState{}, nil
 	}
+
 	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
 		if router == nil {
 			return nil
+		}
+		if router.Embeddings != nil {
+			state = router.embeddingRuntimeState()
 		}
 		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
 			{
@@ -72,6 +74,7 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
+	modelPool  *binding.Pool
 	configPath string
 	service    *RouterService
 	server     *grpc.Server
@@ -92,7 +95,11 @@ func NewServer(
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
 ) (*Server, error) {
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
+	modelPool := binding.NewPool()
+	if runtimeRegistry != nil {
+		modelPool = runtimeRegistry.ModelPool()
+	}
+	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, modelPool)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +107,7 @@ func NewServer(
 	service := NewRouterService(router)
 	publishRouterState(router.Config, router, runtimeRegistry, service.current.Load().acquire)
 	return &Server{
+		modelPool:  modelPool,
 		configPath: configPath,
 		service:    service,
 		port:       port,
@@ -580,6 +588,9 @@ func (s *Server) reloadRouterFromConfig(
 	if s.lifecycle.isStopping() {
 		return errors.New("router server is shutting down")
 	}
+	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
+		return fmt.Errorf("model artifact reload preflight failed: %w", err)
+	}
 	if source == "file" {
 		if err := ensureReloadConfigModels(candidateCfg); err != nil {
 			return fmt.Errorf("model download preflight failed: %w", err)
@@ -591,7 +602,7 @@ func (s *Server) reloadRouterFromConfig(
 		return fmt.Errorf("runtime dependency init failed: %w", err)
 	}
 
-	newRouter, err := buildReloadRouter(candidateCfg)
+	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
 	if err != nil {
 		return err
 	}
@@ -616,6 +627,10 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	return nil
 }
+
+// CurrentConfig returns the published generation's configuration, including
+// while a Kubernetes candidate has been received but has not become ready.
+func (s *Server) CurrentConfig() *config.RouterConfig { return resolveServerConfig(s) }
 
 func (s *Server) configuredGRPCMaxMessageSize() int {
 	cfg := resolveServerConfig(s)
@@ -700,4 +715,19 @@ func publishRouterState(
 	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
 	selection.SetGlobalRegistry(router.ModelSelector)
+}
+
+func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	if s == nil || s.service == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	router := s.service.GetRouter()
+	if router == nil {
+		return modelruntime.EmbeddingRuntimeState{}
+	}
+	return router.embeddingRuntimeState()
+}
+
+func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
+	return modelruntime.EmbeddingState(r.Config, r.Embeddings)
 }

@@ -3,6 +3,8 @@
 package apiserver
 
 import (
+	"crypto/rand"
+	"fmt"
 	"path"
 	"path/filepath"
 	"sort"
@@ -49,6 +51,17 @@ func cleanKnowledgeBaseSourcePath(value string) string {
 
 func managedKnowledgeBaseSourcePath(name string) string {
 	return filepath.ToSlash(filepath.Join(knowledgeBaseRuntimeRoot, name)) + "/"
+}
+
+// Each published generation retains the exact files it was prepared against.
+// These revisions are retained until a separate offline cleanup can prove that
+// no running or rollback generation still references them.
+func newManagedKnowledgeBaseRevisionPath(name string) (string, error) {
+	var revision [16]byte
+	if _, err := rand.Read(revision[:]); err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(filepath.Join(knowledgeBaseRuntimeRoot, name, "revisions", fmt.Sprintf("%x", revision))) + "/", nil
 }
 
 func knowledgeBaseRuntimeStateBaseDir(baseDir string) string {

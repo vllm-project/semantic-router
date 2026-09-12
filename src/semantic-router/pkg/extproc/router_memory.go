@@ -10,18 +10,19 @@ import (
 	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.MemoryExtractor) {
+func createMemoryRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, *memory.MemoryExtractor) {
 	if !isMemoryEnabled(cfg) {
 		return nil, nil
 	}
 
 	// publishRouterState publishes the store after the candidate commits.
-	memoryStore, err := createMemoryStore(cfg)
+	memoryStore, err := createMemoryStore(cfg, sets...)
 	if err != nil {
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)
 		return nil, nil
@@ -62,7 +63,7 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 
 // createMemoryStore creates a memory store based on configuration.
 // Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.
-func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+func createMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	backend := cfg.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
@@ -73,11 +74,11 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 
 	switch backend {
 	case "valkey":
-		store, err = createValkeyMemoryStore(cfg)
+		store, err = createValkeyMemoryStore(cfg, sets...)
 	case "milvus":
-		store, err = createMilvusMemoryStore(cfg)
+		store, err = createMilvusMemoryStore(cfg, sets...)
 	case "qdrant":
-		store, err = createQdrantMemoryStore(cfg)
+		store, err = createQdrantMemoryStore(cfg, sets...)
 	default:
 		return nil, fmt.Errorf("unsupported memory backend: %q (supported: milvus, valkey, qdrant)", backend)
 	}
@@ -118,7 +119,7 @@ func wrapWithRedisCache(store memory.Store, cfg *config.RouterConfig, backend st
 }
 
 // createMilvusMemoryStore creates a MilvusStore backend.
-func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	milvusAddress := cfg.Memory.Milvus.Address
 	if milvusAddress == "" {
 		milvusAddress = "localhost:19530"
@@ -132,6 +133,13 @@ func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg)),
 		Dimension: cfg.Memory.Milvus.Dimension,
+	}
+	if len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		embeddingConfig.Provider = provider
 	}
 
 	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
@@ -173,7 +181,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 }
 
 // createValkeyMemoryStore creates a ValkeyStore backend.
-func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	vc := cfg.Memory.Valkey
 	if vc == nil {
 		return nil, fmt.Errorf("memory.valkey configuration is required when backend is 'valkey'")
@@ -194,6 +202,13 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
 		Dimension: vc.Dimension,
+	}
+	if len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		embeddingConfig.Provider = provider
 	}
 
 	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
@@ -297,7 +312,7 @@ func buildValkeyTLSConfig(vc *config.MemoryValkeyConfig) (*glideconfig.TlsConfig
 }
 
 // createQdrantMemoryStore creates a QdrantStore backend.
-func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	qc := cfg.Memory.Qdrant
 	if qc == nil {
 		return nil, fmt.Errorf("memory.qdrant configuration is required when backend is 'qdrant'")
@@ -321,6 +336,13 @@ func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
 		Dimension: qc.Dimension,
+	}
+	if len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
+		if err != nil {
+			return nil, err
+		}
+		embeddingConfig.Provider = provider
 	}
 
 	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",

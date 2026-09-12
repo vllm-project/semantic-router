@@ -553,6 +553,26 @@ impl TraditionalBertTokenClassifier {
 
     /// Classify tokens in text
     pub fn classify_tokens(&self, text: &str) -> Result<Vec<(String, usize, f32)>> {
+        let threshold = crate::core::config_loader::GlobalConfigLoader::load_router_config_safe()
+            .traditional_pii_detection_threshold;
+        Ok(self
+            .classify_tokens_with_offsets(text)?
+            .into_iter()
+            .filter(|(_, _, confidence, _, _)| *confidence > threshold)
+            .map(|(text, class, confidence, _, _)| (text, class, confidence))
+            .collect())
+    }
+
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
+    /// Full token predictions with original UTF-8 byte offsets. Thresholds and
+    /// entity policy belong to the task binding, not a process-global setting.
+    pub fn classify_tokens_with_offsets(
+        &self,
+        text: &str,
+    ) -> Result<Vec<crate::core::tokenization::TokenPrediction>> {
         // Tokenize input text
         let tokenization_result = self.tokenizer.tokenize(text)?;
         let token_ids = tokenization_result.token_ids;
@@ -589,15 +609,8 @@ impl TraditionalBertTokenClassifier {
                     .map(|(idx, &conf)| (idx, conf))
                     .unwrap_or((0, 0.0));
 
-                // Only include tokens with reasonable confidence (configurable threshold)
-                let pii_threshold = {
-                    use crate::core::config_loader::GlobalConfigLoader;
-                    GlobalConfigLoader::load_router_config_safe()
-                        .traditional_pii_detection_threshold
-                };
-                if confidence > pii_threshold {
-                    results.push((token.clone(), predicted_class, confidence));
-                }
+                let (start, end) = tokenization_result.offsets[i];
+                results.push((token.clone(), predicted_class, confidence, start, end));
             }
         }
 

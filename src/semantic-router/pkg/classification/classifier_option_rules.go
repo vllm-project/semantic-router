@@ -43,7 +43,7 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	if backendOverride == "" {
 		backendOverride = strings.ToLower(strings.TrimSpace(optConfig.Backend))
 	}
-	if backendOverride == "openvino" {
+	if backendOverride == "openvino" && b.usesLegacyOpenVINOEmbedding() {
 		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
 		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
 			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
@@ -66,19 +66,31 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 }
 
 func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
-	if b.cfg == nil || !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if b.cfg == nil {
+		return nil, fmt.Errorf("embedding config is required")
+	}
+	if b.usesLegacyOpenVINOEmbedding() {
 		return nil, nil
 	}
-	b.providerInitOnce.Do(func() {
-		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
-		if b.providerErr != nil {
-			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
-				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
-				"error":   b.providerErr.Error(),
-			})
+	if err := b.prepareEmbeddingSet(); err != nil {
+		return nil, err
+	}
+	if b.provider == nil {
+		return nil, fmt.Errorf("primary embedding provider was not prepared")
+	}
+	return b.provider, nil
+}
+
+func (b *classifierOptionBuilder) usesLegacyOpenVINOEmbedding() bool {
+	if b.cfg == nil || b.cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendOpenVINO {
+		return false
+	}
+	if b.models != nil {
+		if _, explicit := b.models.plan.Lookup(b.models.recipe, "embedding"); explicit {
+			return false
 		}
-	})
-	return b.provider, b.providerErr
+	}
+	return true
 }
 
 func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error) {
@@ -153,11 +165,18 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 	if err != nil {
 		return nil, err
 	}
+	var multimodal embedding.Provider
+	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
+		multimodal, err = b.embeddingProviderForModel("multimodal", 0, 0)
+		if err != nil {
+			return nil, err
+		}
+	}
 	complexityClassifier, err := NewComplexityClassifier(
 		b.cfg.ComplexityRules,
 		modelType,
 		b.cfg.ComplexityModel.WithDefaults().PrototypeScoring,
-		provider,
+		provider, multimodal,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "complexity_classifier_create_failed", map[string]interface{}{

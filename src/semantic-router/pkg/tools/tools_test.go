@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,7 +12,10 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -20,60 +24,51 @@ func TestTools(t *testing.T) {
 	RunSpecs(t, "Tools Suite")
 }
 
+var (
+	toolsEmbeddingProvider embedding.Provider
+	toolsEmbeddingModel    = "qwen3"
+)
+
 var _ = BeforeSuite(func() {
-	// Initialize BERT model once for all cache tests (Linux only)
-	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
+	modelPath := ""
+	for _, candidate := range []struct {
+		model string
+		path  string
+	}{
+		{model: "qwen3", path: "../../../../models/mom-embedding-pro"},
+		{model: "gemma", path: "../../../../models/mom-embedding-flash"},
+	} {
+		_, statErr := os.Stat(candidate.path)
+		if os.IsNotExist(statErr) {
+			continue
+		}
+		Expect(statErr).NotTo(HaveOccurred())
+		toolsEmbeddingModel = candidate.model
+		modelPath = candidate.path
+		break
+	}
+	if modelPath == "" {
+		GinkgoWriter.Println("Tools embedding models are absent; model-dependent cases will skip")
+		return
+	}
+
+	// The suite owns the model; each database borrows its prepared dimension view.
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingConfig.ModelType = toolsEmbeddingModel
+	cfg.EmbeddingConfig.TargetDimension = 768
+	cfg.Tools.Enabled = true
+	cfg.ModelBindings = map[string]config.ModelBinding{
+		"embedding": {Deployment: "tools-test", Contract: "embedding.v1", Adapter: toolsEmbeddingModel},
+	}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{
+		"tools-test": {Provider: "candle", Device: "cpu", Precision: "native", Artifact: modelPath},
+	}
+	set, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
 	Expect(err).NotTo(HaveOccurred())
-
-	// Initialize embedding models (ModelFactory) for tools tests
-	// Try to find Qwen3 or Gemma models in the models directory
-	qwen3Path := "../../../../models/mom-embedding-pro"
-	gemmaPath := "../../../../models/mom-embedding-flash"
-
-	// Check if at least one model exists
-	qwen3Exists := false
-	gemmaExists := false
-	if _, statErr := os.Stat(qwen3Path); statErr == nil {
-		qwen3Exists = true
-		GinkgoWriter.Printf("Found Qwen3 embedding model at %s\n", qwen3Path)
-	}
-	if _, statErr := os.Stat(gemmaPath); statErr == nil {
-		gemmaExists = true
-		GinkgoWriter.Printf("Found Gemma embedding model at %s\n", gemmaPath)
-	}
-
-	// Initialize ModelFactory if at least one model is available
-	if qwen3Exists || gemmaExists {
-		qwen3ToUse := ""
-		gemmaToUse := ""
-		if qwen3Exists {
-			qwen3ToUse = qwen3Path
-		}
-		if gemmaExists {
-			gemmaToUse = gemmaPath
-		}
-
-		GinkgoWriter.Printf("Initializing ModelFactory with Qwen3=%s, Gemma=%s\n", qwen3ToUse, gemmaToUse)
-		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
-		if err != nil {
-			// Log warning but don't fail - tests will skip if ModelFactory is not initialized
-			GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
-			GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
-		} else {
-			GinkgoWriter.Printf("ModelFactory initialized successfully\n")
-		}
-	} else {
-		GinkgoWriter.Printf("Warning: No embedding models found at %s or %s\n", qwen3Path, gemmaPath)
-		GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
-	}
+	DeferCleanup(func() { Expect(set.Close()).To(Succeed()) })
+	toolsEmbeddingProvider, err = set.Get("", 768, 0)
+	Expect(err).NotTo(HaveOccurred())
 })
-
-// Helper function to check if ModelFactory is initialized
-func isModelFactoryInitialized() bool {
-	// Try to get embedding models info to check if ModelFactory is initialized
-	_, err := candle_binding.GetEmbeddingModelsInfo()
-	return err == nil
-}
 
 var _ = Describe("ToolsDatabase", func() {
 	Describe("NewToolsDatabase", func() {
@@ -81,8 +76,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			Expect(db).NotTo(BeNil())
 			Expect(db.IsEnabled()).To(BeTrue())
@@ -90,8 +86,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db2 := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			Expect(db2).NotTo(BeNil())
 			Expect(db2.IsEnabled()).To(BeFalse())
@@ -147,15 +144,16 @@ var _ = Describe("ToolsDatabase", func() {
 		})
 
 		It("should load tools from file when enabled", func() {
-			if !isModelFactoryInitialized() {
-				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			if toolsEmbeddingProvider == nil {
+				Skip("Skipping test: embedding models are not available")
 			}
 
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			err := db.LoadToolsFromFile(toolFilePath)
 			Expect(err).NotTo(HaveOccurred())
@@ -172,8 +170,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			err := db.LoadToolsFromFile(toolFilePath)
 			Expect(err).NotTo(HaveOccurred())
@@ -184,8 +183,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			err := db.LoadToolsFromFile("/nonexistent/tools.json")
 			Expect(err).To(HaveOccurred())
@@ -198,8 +198,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			err := db.LoadToolsFromFile(badFile)
 			Expect(err).To(HaveOccurred())
@@ -209,15 +210,16 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("AddTool", func() {
 		It("should add tool when enabled", func() {
-			if !isModelFactoryInitialized() {
-				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			if toolsEmbeddingProvider == nil {
+				Skip("Skipping test: embedding models are not available")
 			}
 
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			tool := openai.ChatCompletionToolParam{
 				Type: "function",
@@ -237,8 +239,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			tool := openai.ChatCompletionToolParam{
 				Type: "function",
@@ -257,15 +260,16 @@ var _ = Describe("ToolsDatabase", func() {
 		var db *tools.ToolsDatabase
 
 		BeforeEach(func() {
-			if !isModelFactoryInitialized() {
-				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			if toolsEmbeddingProvider == nil {
+				Skip("Skipping test: embedding models are not available")
 			}
 
 			db = tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.2, // Lower threshold for more lenient matching
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			_ = db.AddTool(openai.ChatCompletionToolParam{
 				Type: "function",
@@ -307,8 +311,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db2 := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.7,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			results, err := db2.FindSimilarTools("weather", 2)
 			Expect(err).NotTo(HaveOccurred())
@@ -318,15 +323,16 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("GetAllTools", func() {
 		It("should return all tools when enabled", func() {
-			if !isModelFactoryInitialized() {
-				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			if toolsEmbeddingProvider == nil {
+				Skip("Skipping test: embedding models are not available")
 			}
 
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			_ = db.AddTool(openai.ChatCompletionToolParam{
 				Type: "function",
@@ -350,8 +356,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			allTools := db.GetAllTools()
 			Expect(allTools).To(BeEmpty())
@@ -360,15 +367,16 @@ var _ = Describe("ToolsDatabase", func() {
 
 	Describe("GetToolCount", func() {
 		It("should return correct count when enabled", func() {
-			if !isModelFactoryInitialized() {
-				Skip("Skipping test: ModelFactory not initialized (embedding models not available)")
+			if toolsEmbeddingProvider == nil {
+				Skip("Skipping test: embedding models are not available")
 			}
 
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             true,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			Expect(db.GetToolCount()).To(Equal(0))
 			_ = db.AddTool(openai.ChatCompletionToolParam{
@@ -385,8 +393,9 @@ var _ = Describe("ToolsDatabase", func() {
 			db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 				SimilarityThreshold: 0.8,
 				Enabled:             false,
-				ModelType:           "qwen3",
+				ModelType:           toolsEmbeddingModel,
 				TargetDimension:     768,
+				Provider:            toolsEmbeddingProvider,
 			})
 			Expect(db.GetToolCount()).To(Equal(0))
 		})

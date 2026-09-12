@@ -22,6 +22,7 @@ func TestNewLegacyClassifierFromConfigSkipsUnusedCoreSignalMappings(t *testing.T
 	classifier, err := NewLegacyClassifierFromConfig(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, classifier)
+	t.Cleanup(func() { require.NoError(t, classifier.Close()) })
 }
 
 func TestNewLegacyClassifierFromConfigRequiresUsedCoreSignalMappings(t *testing.T) {

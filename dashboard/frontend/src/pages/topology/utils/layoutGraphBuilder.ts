@@ -104,7 +104,7 @@ export function buildLayoutGraph(
 
   if (testResult?.matchedSignals?.length) {
     const existingGroupTypes = new Set(activeSignalTypes)
-    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number }[]>()
+    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number | null }[]>()
 
     testResult.matchedSignals.forEach(signal => {
       if (!existingGroupTypes.has(signal.type)) {
@@ -123,7 +123,7 @@ export function buildLayoutGraph(
       const syntheticSignals = signals.map(signal => ({
         type: signalType,
         name: signal.name,
-        description: `Detected by ML model (confidence: ${signal.confidence ? (signal.confidence * 100).toFixed(0) + '%' : 'N/A'})`,
+        description: `Matched signal (score: ${typeof signal.confidence === 'number' ? (signal.confidence * 100).toFixed(0) + '%' : 'unavailable'})`,
         latency: SIGNAL_LATENCY[signalType] || '~100ms',
         config: {},
         isDynamic: true,

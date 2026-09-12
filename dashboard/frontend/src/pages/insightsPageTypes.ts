@@ -111,7 +111,8 @@ export interface InsightsRecord {
   original_model?: string
   selected_model?: string
   reasoning_mode?: string
-  confidence_score?: number
+  confidence_score?: number | null
+  confidence_score_available?: boolean
   selection_method?: string
   signals: Signal
   projections?: string[]
@@ -119,6 +120,7 @@ export interface InsightsRecord {
   projection_trace?: ProjectionTrace
   signal_confidences?: Record<string, number>
   signal_values?: Record<string, number>
+  signal_error_matches?: Record<string, boolean>
   tool_trace?: ToolTrace
   request_body?: string
   response_body?: string
@@ -137,10 +139,12 @@ export interface InsightsRecord {
   pii_enabled?: boolean
   jailbreak_detected?: boolean
   jailbreak_type?: string
-  jailbreak_confidence?: number
+  jailbreak_confidence?: number | null
+  jailbreak_score_available?: boolean
   response_jailbreak_detected?: boolean
   response_jailbreak_type?: string
-  response_jailbreak_confidence?: number
+  response_jailbreak_confidence?: number | null
+  response_jailbreak_score_available?: boolean
   pii_detected?: boolean
   pii_entities?: string[]
   pii_blocked?: boolean

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -45,6 +46,9 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 		return false
 	}
 
+	if c.Config.PromptGuard.Backend != nil {
+		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
+	}
 	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		hasExternalConfig := externalCfg != nil &&
@@ -67,6 +71,9 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return err
 	}
 
+	if c.Config.PromptGuard.Backend != nil {
+		return nil
+	}
 	if c.Config.PromptGuard.Protocol != "" {
 		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
 		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
@@ -102,6 +109,9 @@ func (c *Classifier) CheckForJailbreak(ctx context.Context, text string) (bool, 
 
 // CheckForJailbreakWithThreshold analyzes the given text for jailbreak attempts with a custom threshold.
 func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, error) {
+	if jailbreakDecisionBackend(c.jailbreakInference) != nil {
+		return false, "", 0, tasks.ErrProbabilitiesUnavailable
+	}
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -164,7 +174,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 			continue
 		}
 
-		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(ctx, content, threshold)
+		verdict, err := c.contentJailbreakVerdict(ctx, content, threshold)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++
@@ -174,15 +184,16 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 
 		detection := JailbreakDetection{
 			Content:       content,
-			IsJailbreak:   isJailbreak,
-			JailbreakType: jailbreakType,
-			Confidence:    confidence,
+			IsJailbreak:   verdict.Detected,
+			JailbreakType: verdict.Label,
+			Confidence:    verdict.Confidence,
+			Decision:      verdict.Decision,
 			ContentIndex:  i,
 		}
 
 		detections = append(detections, detection)
 
-		if isJailbreak {
+		if verdict.Detected {
 			hasJailbreak = true
 		}
 	}

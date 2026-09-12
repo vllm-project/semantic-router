@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -100,15 +101,11 @@ func createMmBERT32KPIIInitializer() PIIInitializer {
 	return &MmBERT32KPIIInitializerImpl{}
 }
 
-type PIIInference interface {
-	ClassifyTokens(ctx context.Context, text string) (candle_binding.TokenClassificationResult, error)
-}
-
 type PIIInferenceImpl struct{}
 
-func (c *PIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
+func (c *PIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
 	// Auto-detecting inference - uses whichever classifier was initialized (LoRA or Traditional)
-	return candle_binding.ClassifyCandleBertTokens(text)
+	return nativeTokenResult(candle_binding.ClassifyCandleBertTokens(text))
 }
 
 // createPIIInference creates the PII inference (auto-detecting).
@@ -120,12 +117,12 @@ func createPIIInference() PIIInference {
 // Entity types are returned as "LABEL_{class_id}" by Rust and translated Go-side via PIIMapping.
 type MmBERT32KPIIInferenceImpl struct{}
 
-func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (candle_binding.TokenClassificationResult, error) {
+func (c *MmBERT32KPIIInferenceImpl) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
 	entities, err := candle_binding.ClassifyMmBert32KPII(text)
 	if err != nil {
-		return candle_binding.TokenClassificationResult{}, err
+		return tasks.TokenClassificationResult{}, err
 	}
-	return candle_binding.TokenClassificationResult{Entities: entities}, nil
+	return nativeTokenResult(candle_binding.TokenClassificationResult{Entities: entities}, nil)
 }
 
 // createMmBERT32KPIIInference creates mmBERT-32K PII inference.

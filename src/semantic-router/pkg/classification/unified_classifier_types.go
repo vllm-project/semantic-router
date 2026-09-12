@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 // UnifiedClassifierStats holds performance statistics.
@@ -25,14 +28,22 @@ type LoRAModelPaths struct {
 	Architecture string
 }
 
-// UnifiedClassifier provides true batch inference with a shared backbone.
+// UnifiedClassifier composes prepared task handles for independent per-input inference.
 type UnifiedClassifier struct {
-	initialized     bool
-	mu              sync.Mutex
-	stats           UnifiedClassifierStats
-	useLoRA         bool
-	loraModelPaths  *LoRAModelPaths
-	loraInitialized bool
+	lifecycle        sync.RWMutex
+	closed           bool
+	recipeClassifier *Classifier
+	models           *classifierModelRuntime
+	lora             *native.LoRABatch
+	intentLabels     []string
+	piiLabels        []string
+	securityLabels   []string
+	initialized      bool
+	mu               sync.Mutex
+	stats            UnifiedClassifierStats
+	useLoRA          bool
+	loraModelPaths   *LoRAModelPaths
+	loraInitialized  bool
 
 	// Test hooks let unit tests exercise concurrency behavior without real CGO calls.
 	testClassifyBatchWithLoRA func([]string) (*UnifiedBatchResults, error)
@@ -57,30 +68,24 @@ type IntentResult struct {
 
 // PIIResult represents PII detection result.
 type PIIResult struct {
-	PIITypes   []string `json:"pii_types,omitempty"`
-	Confidence float32  `json:"confidence"`
-	HasPII     bool     `json:"has_pii"`
+	ScoresAvailable *bool    `json:"scores_available,omitempty"`
+	PIITypes        []string `json:"pii_types,omitempty"`
+	Confidence      float32  `json:"confidence"`
+	HasPII          bool     `json:"has_pii"`
 }
 
 // SecurityResult represents security threat detection result.
 type SecurityResult struct {
-	ThreatType  string  `json:"threat_type"`
-	Confidence  float32 `json:"confidence"`
-	IsJailbreak bool    `json:"is_jailbreak"`
+	ScoresAvailable *bool                `json:"scores_available,omitempty"`
+	Decision        *tasks.LabelDecision `json:"decision,omitempty"`
+	ThreatType      string               `json:"threat_type"`
+	Confidence      float32              `json:"confidence"`
+	IsJailbreak     bool                 `json:"is_jailbreak"`
 }
 
-var (
-	globalUnifiedClassifier *UnifiedClassifier
-	unifiedOnce             sync.Once
-)
-
-// GetGlobalUnifiedClassifier returns the global unified classifier instance.
-func GetGlobalUnifiedClassifier() *UnifiedClassifier {
-	unifiedOnce.Do(func() {
-		globalUnifiedClassifier = &UnifiedClassifier{}
-	})
-	return globalUnifiedClassifier
-}
+// GetGlobalUnifiedClassifier is a deprecated constructor name. Every call now
+// returns an independent owner; callers must close it.
+func GetGlobalUnifiedClassifier() *UnifiedClassifier { return &UnifiedClassifier{} }
 
 func validateUnifiedClassifierLabels(intentLabels, piiLabels, securityLabels []string) error {
 	switch {
@@ -157,11 +162,13 @@ func (uc *UnifiedClassifier) GetStats() map[string]interface{} {
 	defer uc.mu.Unlock()
 
 	return map[string]interface{}{
-		"initialized":      uc.initialized,
-		"architecture":     "unified_modernbert_multi_head",
-		"supported_tasks":  []string{"intent", "pii", "security"},
-		"batch_support":    true,
-		"memory_efficient": true,
+		"initialized":     uc.initialized,
+		"architecture":    "prepared_task_composition",
+		"supported_tasks": []string{"intent", "pii", "security"},
+		"batch_support":   true,
+		"batch_execution": "per_input_tasks",
+		// Retain the diagnostic key without inventing a measured memory benefit.
+		"memory_efficient": nil,
 		"native_backend":   CurrentNativeBackendCapabilities(),
 		"performance":      uc.stats,
 	}

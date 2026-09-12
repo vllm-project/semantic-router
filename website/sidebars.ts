@@ -231,8 +231,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
-            'tutorials/global/safety-models-and-policy',
-            'tutorials/global/remote-embeddings',
           ],
         },
       ],
@@ -364,9 +362,26 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Runtime Reference',
+          label: 'Router Runtime',
+          link: { type: 'doc', id: 'installation/native-backends' },
           items: [
-            'installation/native-backends',
+            {
+              type: 'category',
+              label: 'Run models',
+              items: [
+                'installation/runtime/in-process',
+                'installation/runtime/external',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Model guides',
+              items: [
+                'installation/runtime/embeddings',
+                'installation/runtime/safety',
+              ],
+            },
+            'installation/runtime/lifecycle-diagnostics',
           ],
         },
       ],

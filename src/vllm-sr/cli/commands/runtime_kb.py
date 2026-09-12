@@ -343,3 +343,13 @@ def _sync_runtime_kb_store(
         _write_runtime_kb_bootstrap_state(config_path, bootstrapped)
 
     return True, changed or state_changed
+
+
+def _validate_runtime_kb_paths(config: dict[str, object]) -> None:
+    """Validate local KB paths while preserving their unmaterialized references."""
+    kb_configs = _configured_knowledge_bases(config)
+    for kb_config in kb_configs:
+        source_spec = _kb_source_spec(kb_config)
+        if source_spec is not None:
+            kb_name, _source, source_path = source_spec
+            _runtime_kb_relative_path(source_path, kb_name)

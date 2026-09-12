@@ -346,13 +346,14 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	var result TestQueryResult
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
 
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", Confidence: 1.0, Reason: "Modality signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", Confidence: 1.0, Reason: "Authorization signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", Confidence: 1.0, Reason: "Jailbreak signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", Confidence: 1.0, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", Confidence: 1.0, Reason: "Knowledge base signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", Confidence: 1.0, Reason: "Event signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", Confidence: 1.0, Reason: "Projection mapping matched"})
+	confidenceUnavailable := false
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "modality", Name: "AR", ConfidenceAvailable: &confidenceUnavailable, Reason: "Modality signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", ConfidenceAvailable: &confidenceUnavailable, Reason: "Authorization signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", ConfidenceAvailable: &confidenceUnavailable, Reason: "Jailbreak signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", ConfidenceAvailable: &confidenceUnavailable, Reason: "PII signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", ConfidenceAvailable: &confidenceUnavailable, Reason: "Knowledge base signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", ConfidenceAvailable: &confidenceUnavailable, Reason: "Event signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", ConfidenceAvailable: &confidenceUnavailable, Reason: "Projection mapping matched"})
 	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
 	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
@@ -710,3 +711,19 @@ func TestTestQueryResult_NonFallbackDecision(t *testing.T) {
 }
 
 // Note: contains helper function is defined in config_test.go
+
+func TestTopologyPreservesUnavailableGuardAndDecisionScores(t *testing.T) {
+	unavailable := false
+	response := &RouterEvalResponse{DecisionResult: &RouterEvalDecisionResult{DecisionName: "block", ConfidenceAvailable: &unavailable, MatchedSignals: &RouterMatchedSignals{Jailbreak: []string{"guard"}}}, SignalErrorMatches: map[string]bool{"jailbreak:guard": true}}
+	result := convertRouterResponse(TestQueryRequest{}, response, "missing-config.yaml")
+	data, err := json.Marshal(result)
+	require.NoError(t, err)
+	var wire map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &wire))
+	signal := wire["matchedSignals"].([]interface{})[0].(map[string]interface{})
+	assert.Nil(t, signal["confidence"])
+	assert.Equal(t, false, signal["confidenceAvailable"])
+	assert.Nil(t, wire["decisionConfidence"])
+	assert.Equal(t, false, wire["decisionConfidenceAvailable"])
+	assert.Equal(t, map[string]interface{}{"jailbreak:guard": true}, wire["signalErrorMatches"])
+}

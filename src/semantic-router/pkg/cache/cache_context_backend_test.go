@@ -40,9 +40,10 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cfg := &config.MilvusConfig{}
 		cfg.Collection.VectorField.Dimension = 384
 		cache := &MilvusCache{
-			enabled:        true,
-			config:         cfg,
-			embeddingModel: "bert",
+			enabled:           true,
+			config:            cfg,
+			embeddingModel:    "bert",
+			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, string, []float32) ([]client.SearchResult, error) {
 				return nil, errors.New("milvus unavailable")
 			},
@@ -51,9 +52,10 @@ var _ = DescribeTable("backend search cancellation wiring",
 	}),
 	Entry("Qdrant", func(ctx context.Context) (LookupResult, error) {
 		cache := &QdrantCache{
-			enabled:        true,
-			cfg:            &config.QdrantConfig{},
-			embeddingModel: "bert",
+			enabled:           true,
+			cfg:               &config.QdrantConfig{},
+			embeddingModel:    "bert",
+			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error) {
 				return nil, errors.New("qdrant unavailable")
 			},
@@ -65,9 +67,10 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cfg.Index.VectorField.Name = "embedding"
 		cfg.Search.TopK = 1
 		cache := &RedisCache{
-			enabled:        true,
-			config:         cfg,
-			embeddingModel: "bert",
+			enabled:           true,
+			config:            cfg,
+			embeddingModel:    "bert",
+			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, string, string, *redis.FTSearchOptions) (redis.FTSearchResult, error) {
 				return redis.FTSearchResult{}, errors.New("redis unavailable")
 			},
@@ -79,9 +82,10 @@ var _ = DescribeTable("backend search cancellation wiring",
 		cfg.Index.VectorField.Name = "embedding"
 		cfg.Search.TopK = 1
 		cache := &ValkeyCache{
-			enabled:        true,
-			config:         cfg,
-			embeddingModel: "bert",
+			enabled:           true,
+			config:            cfg,
+			embeddingModel:    "bert",
+			embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(context.Context, []string) (any, error) {
 				return nil, errors.New("valkey unavailable")
 			},

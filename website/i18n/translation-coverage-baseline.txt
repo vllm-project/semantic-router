@@ -1,5 +1,11 @@
 # Current documentation locale overrides.
 # Regenerate with: make docs-update-translation-baseline
+zh-Hans	installation/native-backends.md
+zh-Hans	installation/runtime/embeddings.md
+zh-Hans	installation/runtime/external.md
+zh-Hans	installation/runtime/in-process.md
+zh-Hans	installation/runtime/lifecycle-diagnostics.md
+zh-Hans	installation/runtime/safety.md
 zh-Hans	tutorials/learning/adaptations.md
 zh-Hans	tutorials/plugin/fast-response.md
 zh-Hans	tutorials/plugin/header-mutation.md

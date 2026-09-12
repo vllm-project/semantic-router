@@ -13,8 +13,8 @@ use std::time::Instant;
 
 /// Classifier backend enum to avoid Box<dyn Trait>
 enum ClassifierBackend {
-    Bert(HighPerformanceBertClassifier),
-    ModernBert(TraditionalModernBertClassifier),
+    Bert(Box<HighPerformanceBertClassifier>),
+    ModernBert(Box<TraditionalModernBertClassifier>),
 }
 
 /// Intent classifier with real model inference (merged LoRA models)
@@ -61,7 +61,7 @@ impl IntentLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::ModernBert(classifier)
+            ClassifierBackend::ModernBert(Box::new(classifier))
         } else {
             // Use standard BERT classifier
             let classifier = HighPerformanceBertClassifier::new(model_path, num_classes, use_cpu)
@@ -74,7 +74,7 @@ impl IntentLoRAClassifier {
                 );
                 candle_core::Error::from(unified_err)
             })?;
-            ClassifierBackend::Bert(classifier)
+            ClassifierBackend::Bert(Box::new(classifier))
         };
 
         // Load threshold from global config

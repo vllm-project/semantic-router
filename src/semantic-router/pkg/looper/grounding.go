@@ -38,19 +38,11 @@ type NLIClassifyFunc func(ctx context.Context, premise, hypothesis string) (enta
 // context, plus the detector's confidence.
 type HallucinationDetectFunc func(ctx context.Context, contextText, question, answer string) (unsupportedSpans []string, confidence float32, err error)
 
-// Backends are injected once at startup (see classification lifecycle) so the
-// candle/CGO dependency stays out of this package's import graph and the scoring
-// logic stays hermetically unit-testable.
-var (
-	groundingNLIClassify NLIClassifyFunc
-	groundingDetect      HallucinationDetectFunc
-)
-
-// SetGroundingBackends wires the NLI + hallucination detection backends used by
-// grounding-aware fusion. Safe to call again to replace them.
-func SetGroundingBackends(nli NLIClassifyFunc, detect HallucinationDetectFunc) {
-	groundingNLIClassify = nli
-	groundingDetect = detect
+// GroundingBackends belongs to the request's prepared recipe and generation.
+// Its model handles remain protected by the router's existing generation lease.
+type GroundingBackends struct {
+	NLI    NLIClassifyFunc
+	Detect HallucinationDetectFunc
 }
 
 // groundingScore captures the per-response groundedness outcome (parallel to the
@@ -84,15 +76,22 @@ func (l *FusionLooper) applyGrounding(
 		return panel, nil, "", nil
 	}
 
+	backends := req.Grounding
+	if backends == nil {
+		backends = l.grounding
+	}
+	if backends == nil {
+		backends = &GroundingBackends{}
+	}
 	question := extractOriginalContent(req.OriginalRequest)
 	contextText := extractGroundingContext(req.OriginalRequest)
 	useContext := resolveGroundingReference(cfg.GroundingReference, contextText)
 
 	if useContext {
-		scores, err = scoreByContext(ctx, contextText, question, panel, cfg)
+		scores, err = scoreByContext(ctx, contextText, question, panel, cfg, backends.Detect)
 		referenceMode = config.FusionGroundingReferenceContext
 	} else {
-		scores, err = scoreByPanel(ctx, panel, cfg)
+		scores, err = scoreByPanel(ctx, panel, cfg, backends.NLI)
 		referenceMode = config.FusionGroundingReferencePanel
 	}
 	if err != nil {
@@ -157,8 +156,8 @@ const (
 // it — the panel as its own mutual reference. It routes through the shared
 // peer-consistency verifier contract (issue #2857); the scoring math is
 // unchanged.
-func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
-	if groundingNLIClassify == nil {
+func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecutionConfig, nli NLIClassifyFunc) ([]groundingScore, error) {
+	if nli == nil {
 		return nil, fmt.Errorf("nli backend not configured")
 	}
 	penalty := cfg.GroundingNLIContradictionPenalty
@@ -166,7 +165,7 @@ func scoreByPanel(ctx context.Context, panel []*ModelResponse, cfg fusionExecuti
 		penalty = 1.0
 	}
 	candidates, idx := groundingVerifierCandidates(panel)
-	res, err := NewPeerConsistencyVerifier(groundingNLIClassify, penalty).
+	res, err := NewPeerConsistencyVerifier(nli, penalty).
 		Verify(ctx, &VerifierRequest{Candidates: candidates})
 	if err != nil {
 		return nil, err
@@ -271,12 +270,12 @@ func truncateRunes(s string, max int) string {
 // scoreByContext scores each response by its faithfulness to the provided context
 // (fewer unsupported spans => higher score). It routes through the shared
 // faithfulness verifier contract (issue #2857); scoring is unchanged.
-func scoreByContext(ctx context.Context, contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
-	if groundingDetect == nil {
+func scoreByContext(ctx context.Context, contextText, question string, panel []*ModelResponse, cfg fusionExecutionConfig, detect HallucinationDetectFunc) ([]groundingScore, error) {
+	if detect == nil {
 		return nil, fmt.Errorf("hallucination detector backend not configured")
 	}
 	candidates, idx := groundingVerifierCandidates(panel)
-	res, err := NewFaithfulnessVerifier(groundingDetect).
+	res, err := NewFaithfulnessVerifier(detect).
 		Verify(ctx, &VerifierRequest{Task: question, TrustedContext: contextText, Candidates: candidates})
 	if err != nil {
 		return nil, err

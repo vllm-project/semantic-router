@@ -3,9 +3,11 @@ package classification
 import (
 	"context"
 	"fmt"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -102,20 +104,6 @@ func createMmBERT32KJailbreakInitializer() JailbreakInitializer {
 	return &MmBERT32KJailbreakInitializerImpl{}
 }
 
-// SequenceClassificationResult is the classification-owned result contract
-// every SequenceClassifierBackend returns: the full class-probability
-// distribution, indexed the same way as JailbreakMapping. It deliberately
-// does not carry a pre-computed argmax class/confidence - deriveArgmax
-// derives that once in the policy layer (classifier_jailbreak_risk.go) from
-// Probabilities, so no backend implements its own argmax logic and every
-// backend (local Candle, mmBERT-32K, or a remote HTTP/generative model) is
-// scored identically. This type belongs to the classification package, not
-// candle_binding, so remote/generative backends never need to depend on a
-// Candle FFI DTO to satisfy the interface.
-type SequenceClassificationResult struct {
-	Probabilities []float32
-}
-
 // deriveArgmax returns the index and score of the highest-probability class
 // in a complete distribution. It is the single place argmax/confidence is
 // computed for jailbreak classification, so every SequenceClassifierBackend
@@ -132,23 +120,11 @@ func deriveArgmax(probabilities []float32) (int, float32) {
 	return bestIdx, bestScore
 }
 
-// SequenceClassifierBackend is implemented by every jailbreak classification
-// backend (local Candle, mmBERT-32K, or a remote model). It always returns the
-// complete class-probability distribution, never an argmax-only result, so
-// callers can read the probability of a specific class (e.g. jailbreak)
-// directly instead of the confidence of whichever class wins argmax. ctx
-// carries the caller's cancellation/deadline/tracing so a remote backend
-// (http_chat, http_classify) can be cancelled with the request instead of
-// always running to its own internal timeout.
-type SequenceClassifierBackend interface {
-	Classify(ctx context.Context, text string) (SequenceClassificationResult, error)
-}
-
 // candleResultToSequenceClassification drops the argmax fields Candle's FFI
 // layer computes and keeps only the probability distribution, so local
 // backends return the same classification-owned type as every other backend.
 func candleResultToSequenceClassification(result candle_binding.ClassResultWithProbs) SequenceClassificationResult {
-	return SequenceClassificationResult{Probabilities: result.Probabilities}
+	return SequenceClassificationResult{Probabilities: append([]float32(nil), result.Probabilities...)}
 }
 
 type JailbreakInferenceImpl struct{}
@@ -195,7 +171,35 @@ func createMmBERT32KJailbreakInference() SequenceClassifierBackend {
 // defaults set variant to mmbert32k explicitly (see
 // config.PromptGuardVariantCandle's doc comment). This fallback only fires
 // for configs built without going through canonical resolution.
-func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping) (SequenceClassifierBackend, error) {
+func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig, jailbreakMapping *JailbreakMapping, models ...*classifierModelRuntime) (SequenceClassifierBackend, error) {
+	if promptGuardCfg.Backend != nil {
+		backend := promptGuardCfg.Backend
+		contract := config.RemoteClassifierContractLabelDistribution
+		if backend.Protocol == config.RemoteClassifierProtocolHTTPChat {
+			contract = config.RemoteClassifierContractLabelDecision
+		}
+		external, err := config.ResolveRemoteClassifierBackend(routerCfg, backend, config.ModelRoleGuardrail, contract)
+		if err != nil {
+			return nil, err
+		}
+		switch backend.Protocol {
+		case config.RemoteClassifierProtocolHTTPClassify:
+			inference, err := newHTTPClassifierInference(external, jailbreakMapping, time.Duration(backend.EffectiveDeadlineMs())*time.Millisecond)
+			if err != nil {
+				return nil, err
+			}
+			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
+		case config.RemoteClassifierProtocolHTTPChat:
+			inference, err := NewVLLMJailbreakInference(external, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
+			if err != nil {
+				return nil, err
+			}
+			inference.timeout = time.Duration(backend.EffectiveDeadlineMs()) * time.Millisecond
+			return bindRemoteJailbreak(models, routerCfg, backend, external, jailbreakMapping, inference)
+		default:
+			return nil, fmt.Errorf("unsupported prompt guard adapter %q", backend.Protocol)
+		}
+	}
 	if promptGuardCfg.Protocol != "" {
 		externalCfg, err := findGuardrailExternalModel(routerCfg)
 		if err != nil {
@@ -250,9 +254,10 @@ func findGuardrailExternalModel(routerCfg *config.RouterConfig) (*config.Externa
 
 // JailbreakDetection represents the result of jailbreak analysis for a piece of content.
 type JailbreakDetection struct {
-	Content       string  `json:"content"`
-	IsJailbreak   bool    `json:"is_jailbreak"`
-	JailbreakType string  `json:"jailbreak_type"`
-	Confidence    float32 `json:"confidence"`
-	ContentIndex  int     `json:"content_index"`
+	Content       string               `json:"content"`
+	IsJailbreak   bool                 `json:"is_jailbreak"`
+	JailbreakType string               `json:"jailbreak_type"`
+	Confidence    *float32             `json:"confidence,omitempty"`
+	Decision      *tasks.LabelDecision `json:"decision,omitempty"`
+	ContentIndex  int                  `json:"content_index"`
 }

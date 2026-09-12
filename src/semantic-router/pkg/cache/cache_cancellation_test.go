@@ -17,6 +17,7 @@ var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 
 	newSeededBackend := func() CacheBackend {
 		backend, err := NewCacheBackend(CacheConfig{
+			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			BackendType:         InMemoryCacheType,
 			Enabled:             true,
 			SimilarityThreshold: threshold,

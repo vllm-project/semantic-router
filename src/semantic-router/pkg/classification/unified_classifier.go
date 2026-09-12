@@ -1,175 +1,95 @@
-//go:build !windows && cgo
-
 package classification
 
-/*
-#include <stdlib.h>
-#include <stdbool.h>
-
-// C structures matching Rust definitions
-typedef struct {
-    char* category;
-    float confidence;
-    float* probabilities;
-    int num_probabilities;
-} CIntentResult;
-
-typedef struct {
-    bool has_pii;
-    char** pii_types;
-    int num_pii_types;
-    float confidence;
-} CPIIResult;
-
-typedef struct {
-    bool is_jailbreak;
-    char* threat_type;
-    float confidence;
-} CSecurityResult;
-
-typedef struct {
-    CIntentResult* intent_results;
-    CPIIResult* pii_results;
-    CSecurityResult* security_results;
-    int batch_size;
-    bool error;
-    char* error_message;
-} UnifiedBatchResult;
-
-// C function declarations - Legacy low confidence functions
-bool init_unified_classifier_c(const char* modernbert_path, const char* intent_head_path,
-                               const char* pii_head_path, const char* security_head_path,
-                               const char** intent_labels, int intent_labels_count,
-                               const char** pii_labels, int pii_labels_count,
-                               const char** security_labels, int security_labels_count,
-                               bool use_cpu);
-UnifiedBatchResult classify_unified_batch(const char** texts, int num_texts);
-void free_unified_batch_result(UnifiedBatchResult result);
-void free_cstring(char* s);
-*/
-import "C"
-
 import (
+	"context"
 	"fmt"
 	"time"
-	"unsafe"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-// Initialize initializes the unified classifier with model paths and dynamic labels
-func (uc *UnifiedClassifier) Initialize(
-	modernbertPath, intentHeadPath, piiHeadPath, securityHeadPath string,
-	intentLabels, piiLabels, securityLabels []string,
-	useCPU bool,
-) error {
+// Initialize rejects the retired aggregate-result placeholder. Callers need
+// real prepared recipe tasks or maintained merged LoRA classifiers.
+func (uc *UnifiedClassifier) Initialize(modernbertPath, intentHeadPath, piiHeadPath, securityHeadPath string, intentLabels, piiLabels, securityLabels []string, useCPU bool) error {
 	uc.mu.Lock()
 	defer uc.mu.Unlock()
-
 	if uc.initialized {
 		return fmt.Errorf("unified classifier already initialized")
-	}
-	if !CurrentNativeBackendCapabilities().UnifiedBatchClassification {
-		return fmt.Errorf("native backend %q does not support unified batch classification", CurrentNativeBackendCapabilities().Name)
 	}
 	if err := validateUnifiedClassifierLabels(intentLabels, piiLabels, securityLabels); err != nil {
 		return err
 	}
-
-	// Convert Go strings to C strings for paths
-	cModernbertPath := C.CString(modernbertPath)
-	defer C.free(unsafe.Pointer(cModernbertPath))
-
-	cIntentHeadPath := C.CString(intentHeadPath)
-	defer C.free(unsafe.Pointer(cIntentHeadPath))
-
-	cPiiHeadPath := C.CString(piiHeadPath)
-	defer C.free(unsafe.Pointer(cPiiHeadPath))
-
-	cSecurityHeadPath := C.CString(securityHeadPath)
-	defer C.free(unsafe.Pointer(cSecurityHeadPath))
-
-	// Convert label slices to C string arrays
-	cIntentLabels := make([]*C.char, len(intentLabels))
-	for i, label := range intentLabels {
-		cIntentLabels[i] = C.CString(label)
-	}
-	defer func() {
-		for _, cStr := range cIntentLabels {
-			C.free(unsafe.Pointer(cStr))
-		}
-	}()
-
-	cPiiLabels := make([]*C.char, len(piiLabels))
-	for i, label := range piiLabels {
-		cPiiLabels[i] = C.CString(label)
-	}
-	defer func() {
-		for _, cStr := range cPiiLabels {
-			C.free(unsafe.Pointer(cStr))
-		}
-	}()
-
-	cSecurityLabels := make([]*C.char, len(securityLabels))
-	for i, label := range securityLabels {
-		cSecurityLabels[i] = C.CString(label)
-	}
-	defer func() {
-		for _, cStr := range cSecurityLabels {
-			C.free(unsafe.Pointer(cStr))
-		}
-	}()
-
-	// Initialize the unified classifier in Rust with dynamic labels
-	success := C.init_unified_classifier_c(
-		cModernbertPath,
-		cIntentHeadPath,
-		cPiiHeadPath,
-		cSecurityHeadPath,
-		(**C.char)(unsafe.Pointer(&cIntentLabels[0])),
-		C.int(len(intentLabels)),
-		(**C.char)(unsafe.Pointer(&cPiiLabels[0])),
-		C.int(len(piiLabels)),
-		(**C.char)(unsafe.Pointer(&cSecurityLabels[0])),
-		C.int(len(securityLabels)),
-		C._Bool(useCPU),
-	)
-
-	if !success {
-		return fmt.Errorf("failed to initialize unified classifier with labels")
-	}
-
-	uc.initialized = true
-	return nil
+	return fmt.Errorf("%w: traditional unified classifier did not implement per-input inference; configure real recipe task bindings", binding.ErrCapability)
 }
 
-// ClassifyBatch performs true batch inference on multiple texts
-// Automatically uses high-confidence LoRA models if available
+func NewUnifiedClassifierFromRecipe(classifier *Classifier) *UnifiedClassifier {
+	if classifier == nil || classifier.Config == nil || classifier.categoryInference == nil || classifier.piiInference == nil || classifier.jailbreakInference == nil || !classifier.IsCategoryEnabled() || !classifier.IsPIIEnabled() || !classifier.IsJailbreakEnabled() {
+		return nil
+	}
+	return &UnifiedClassifier{initialized: true, recipeClassifier: classifier}
+}
+
 func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults, error) {
+	return uc.ClassifyBatchContext(context.Background(), texts)
+}
+
+// ClassifyBatchContext returns an independent inference for every input. The
+// caller's generation lease owns any borrowed recipe classifier.
+func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty text batch")
 	}
-
-	// Record start time for performance monitoring
-	startTime := time.Now()
-
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	uc.lifecycle.RLock()
+	defer uc.lifecycle.RUnlock()
+	if uc.closed {
+		return nil, binding.ErrClosed
+	}
+	start := time.Now()
 	useLoRA, err := uc.classificationMode()
 	if err != nil {
 		return nil, err
 	}
-
-	// Choose implementation based on model type
 	var results *UnifiedBatchResults
 	if useLoRA {
-		if initErr := uc.ensureLoRAInitialized(); initErr != nil {
-			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", initErr)
+		if err = uc.ensureLoRAInitialized(); err != nil {
+			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", err)
 		}
-		results, err = uc.classifyBatchWithLoRA(texts)
+		results, err = uc.classifyBatchWithLoRAContext(ctx, texts)
 	} else {
-		results, err = uc.classifyBatchLegacy(texts)
+		results, err = uc.classifyBatchRecipe(ctx, texts)
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	uc.updateStats(len(texts), time.Since(startTime))
+	if err = validateUnifiedBatchResults(texts, results); err != nil {
+		return nil, err
+	}
+	uc.updateStats(len(texts), time.Since(start))
 	return results, nil
+}
+
+func (uc *UnifiedClassifier) Close() error {
+	if uc == nil {
+		return nil
+	}
+	uc.lifecycle.Lock()
+	defer uc.lifecycle.Unlock()
+	if uc.closed {
+		return nil
+	}
+	uc.closed = true
+	uc.mu.Lock()
+	uc.initialized = false
+	uc.mu.Unlock()
+	return uc.lora.Close()
+}
+
+func validateUnifiedBatchResults(texts []string, result *UnifiedBatchResults) error {
+	if result == nil || result.BatchSize != len(texts) || len(result.IntentResults) != len(texts) || len(result.PIIResults) != len(texts) || len(result.SecurityResults) != len(texts) {
+		return fmt.Errorf("unified task output does not match input batch size")
+	}
+	return nil
 }

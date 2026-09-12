@@ -239,9 +239,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 	response := service.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
-		"projection_route",
-		0.91,
-		12,
+		Classification{Category: "projection_route", Confidence: 0.91, ConfidenceAvailable: confidenceAvailability(true), ProcessingTimeMs: 12},
 		req,
 		service.classifier,
 		service.config,

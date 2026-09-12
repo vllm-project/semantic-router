@@ -47,14 +47,17 @@ func (c *Classifier) initializePreferenceClassifier() error {
 }
 
 func (c *Classifier) preferenceEmbeddingProvider() (embedding.Provider, error) {
-	if c == nil || c.Config == nil || !c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if c == nil || c.Config == nil || !c.Config.PreferenceModel.ContrastiveEnabled() {
 		return nil, nil
 	}
-	provider, err := embedding.NewProvider(c.Config.EmbeddingModels, embedding.ProviderOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create preference embedding provider: %w", err)
+	model := c.Config.PreferenceModel.EmbeddingModel
+	if model == "" {
+		model = "mmbert"
 	}
-	return provider, nil
+	if c.Config.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+		model = ""
+	}
+	return c.EmbeddingForModel(model, 0, 0)
 }
 
 func logPreferenceClassifierInitialized(

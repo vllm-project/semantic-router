@@ -1,18 +1,19 @@
 package classification
 
 import (
+	"context"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // ModalityClassificationResult holds the result of modality signal classification.
 type ModalityClassificationResult struct {
-	Modality   string  // "AR", "DIFFUSION", or "BOTH"
-	Confidence float32 // Confidence score (0.0-1.0)
-	Method     string  // Detection method used: "classifier", "keyword", or "hybrid"
+	Modality            string  // "AR", "DIFFUSION", or "BOTH"
+	Confidence          float32 // Internal policy strength; a model score only when ConfidenceAvailable.
+	ConfidenceAvailable bool
+	Method              string // Detection method used: "classifier", "keyword", or "hybrid"
 }
 
 // classifyModality determines the response modality for a text prompt.
@@ -20,7 +21,7 @@ type ModalityClassificationResult struct {
 //   - "classifier": ML-based (mmBERT-32K) errors if model not loaded
 //   - "keyword":    Configurable keyword matching requires keywords in config
 //   - "hybrid":     Classifier when available plus keyword confirmation/fallback
-func (c *Classifier) classifyModality(text string, detectionConfig *config.ModalityDetectionConfig) ModalityClassificationResult {
+func (c *Classifier) classifyModalityWithContext(ctx context.Context, text string, detectionConfig *config.ModalityDetectionConfig) ModalityClassificationResult {
 	if text == "" {
 		return ModalityClassificationResult{Modality: "AR", Confidence: 1.0, Method: "default"}
 	}
@@ -29,11 +30,11 @@ func (c *Classifier) classifyModality(text string, detectionConfig *config.Modal
 
 	switch method {
 	case config.ModalityDetectionClassifier:
-		return c.classifyModalityByClassifier(text, detectionConfig)
+		return c.classifyModalityByClassifier(ctx, text, detectionConfig)
 	case config.ModalityDetectionKeyword:
 		return c.classifyModalityByKeyword(text, detectionConfig)
 	case config.ModalityDetectionHybrid:
-		return c.classifyModalityHybrid(text, detectionConfig)
+		return c.classifyModalityHybrid(ctx, text, detectionConfig)
 	default:
 		logging.Errorf("[ModalitySignal] BUG: unknown detection method %q; defaulting to AR", method)
 		return ModalityClassificationResult{Modality: "AR", Confidence: 0.0, Method: "error/unknown-method"}
@@ -41,15 +42,16 @@ func (c *Classifier) classifyModality(text string, detectionConfig *config.Modal
 }
 
 // classifyModalityByClassifier uses the mmBERT-32K ML classifier exclusively.
-func (c *Classifier) classifyModalityByClassifier(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
-	result, err := candle_binding.ClassifyMmBert32KModality(text)
+func (c *Classifier) classifyModalityByClassifier(ctx context.Context, text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+	result, err := c.modalityInference.Classify(ctx, text)
 	if err == nil {
 		logging.Debugf("[ModalitySignal] Classifier: %s (confidence=%.3f) for prompt: %s",
 			result.Modality, result.Confidence, logging.ContentDescriptor(text))
 		return ModalityClassificationResult{
-			Modality:   result.Modality,
-			Confidence: result.Confidence,
-			Method:     "classifier",
+			Modality:            result.Modality,
+			Confidence:          result.Confidence,
+			ConfidenceAvailable: true,
+			Method:              "classifier",
 		}
 	}
 
@@ -97,24 +99,25 @@ func (c *Classifier) classifyModalityByKeyword(text string, cfg *config.Modality
 
 // classifyModalityHybrid uses the ML classifier as primary, with keyword matching as
 // fallback when unavailable or confirmation when classifier confidence is low.
-func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
+func (c *Classifier) classifyModalityHybrid(ctx context.Context, text string, cfg *config.ModalityDetectionConfig) ModalityClassificationResult {
 	confThreshold := cfg.GetConfidenceThreshold()
 
-	classifierResult, err := candle_binding.ClassifyMmBert32KModality(text)
+	classifierResult, err := c.modalityInference.Classify(ctx, text)
 	if err == nil && classifierResult.Confidence >= confThreshold {
 		logging.Debugf("[ModalitySignal] Hybrid(classifier): %s (confidence=%.3f, threshold=%.2f) for: %s",
 			classifierResult.Modality, classifierResult.Confidence, confThreshold, logging.ContentDescriptor(text))
 		return ModalityClassificationResult{
-			Modality:   classifierResult.Modality,
-			Confidence: classifierResult.Confidence,
-			Method:     "hybrid/classifier",
+			Modality:            classifierResult.Modality,
+			Confidence:          classifierResult.Confidence,
+			ConfidenceAvailable: true,
+			Method:              "hybrid/classifier",
 		}
 	}
 
 	if err == nil {
 		keywordResult := c.classifyModalityByKeyword(text, cfg)
 		if classifierResult.Modality == keywordResult.Modality {
-			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword=%.3f) for: %s",
+			logging.Infof("[ModalitySignal] Hybrid(agree): %s (classifier=%.3f, keyword_policy=%.3f) for: %s",
 				classifierResult.Modality, classifierResult.Confidence, keywordResult.Confidence, logging.ContentDescriptor(text))
 			return ModalityClassificationResult{
 				Modality:   classifierResult.Modality,
@@ -128,9 +131,10 @@ func (c *Classifier) classifyModalityHybrid(text string, cfg *config.ModalityDet
 			logging.Infof("[ModalitySignal] Hybrid(classifier-preferred): %s (classifier=%.3f vs keyword=%s) for: %s",
 				classifierResult.Modality, classifierResult.Confidence, keywordResult.Modality, logging.ContentDescriptor(text))
 			return ModalityClassificationResult{
-				Modality:   classifierResult.Modality,
-				Confidence: classifierResult.Confidence,
-				Method:     "hybrid/classifier-preferred",
+				Modality:            classifierResult.Modality,
+				Confidence:          classifierResult.Confidence,
+				ConfidenceAvailable: true,
+				Method:              "hybrid/classifier-preferred",
 			}
 		}
 
