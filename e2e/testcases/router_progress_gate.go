@@ -98,7 +98,7 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
-			data, _, err := gateHTTPRequest(ctx, client, http.MethodGet, management+"/v1/router_replay?showDetails=true&limit=30&session_id="+url.QueryEscape(sid), token, nil, nil)
+			data, _, err := gateHTTPRequest(ctx, client, http.MethodGet, management+"/api/v1/observability/replays?showDetails=true&limit=30&session_id="+url.QueryEscape(sid), token, nil, nil)
 			if err != nil {
 				return gateReplayRecord{}, err
 			}
@@ -131,7 +131,7 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 	feedback := func(record gateReplayRecord) error {
 		payload := map[string]any{"replay_id": record.ID, "target": "model", "target_ref": record.SelectedModel, "verdict": "underpowered", "score": 0.1}
 		for attempt := 0; attempt < 2; attempt++ {
-			body, err := post(management+"/v1/router/outcomes", payload, map[string]string{"Idempotency-Key": record.ID})
+			body, err := post(management+"/api/v1/observability/outcomes", payload, map[string]string{"Idempotency-Key": record.ID})
 			if err != nil {
 				return err
 			}
