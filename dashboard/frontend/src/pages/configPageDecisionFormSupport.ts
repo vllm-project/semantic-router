@@ -53,6 +53,20 @@ export const decisionRulesForSave = (
   return rules
 }
 
+export const decisionModelRefsForForm = (
+  values: DecisionConfig['modelRefs'] | undefined,
+): DecisionFormState['modelRefs'] =>
+  (values || []).map((ref) => ({
+    model: ref.model || '',
+    use_reasoning: !!ref.use_reasoning,
+    reasoning_description: ref.reasoning_description || '',
+    reasoning_mode: ref.reasoning_mode || '',
+    reasoning_effort: ref.reasoning_effort || '',
+    lora_name: ref.lora_name || '',
+    ...(typeof ref.weight === 'number' && Number.isFinite(ref.weight) ? { weight: ref.weight } : {}),
+    ...optionalLoadedNumber('max_completion_tokens', ref.max_completion_tokens),
+  }))
+
 export const decisionModelRefsForSave = (
   values: DecisionFormState['modelRefs'],
 ): DecisionConfig['modelRefs'] =>
@@ -73,6 +87,11 @@ export const decisionModelRefsForSave = (
         ...(typeof value?.weight === 'number' && Number.isFinite(value.weight)
           ? { weight: value.weight }
           : {}),
+        ...optionalPositiveInt(
+          'max_completion_tokens',
+          value?.max_completion_tokens,
+          `Model reference #${index + 1}`,
+        ),
       } as DecisionConfig['modelRefs'][number]
     })
 
@@ -82,6 +101,28 @@ const optionalText = <Key extends string>(
 ): Partial<Record<Key, string>> => {
   const normalized = (value || '').trim()
   return normalized ? ({ [key]: normalized } as Partial<Record<Key, string>>) : {}
+}
+
+const optionalLoadedNumber = <Key extends string>(
+  key: Key,
+  value: unknown,
+): Partial<Record<Key, number>> =>
+  typeof value === 'number' && Number.isFinite(value)
+    ? ({ [key]: value } as Partial<Record<Key, number>>)
+    : {}
+
+const optionalPositiveInt = <Key extends string>(
+  key: Key,
+  value: unknown,
+  path: string,
+): Partial<Record<Key, number>> => {
+  if (value === undefined || value === null || value === '') {
+    return {}
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${path} ${key} must be a finite integer >= 1.`)
+  }
+  return { [key]: value } as Partial<Record<Key, number>>
 }
 
 export const decisionPluginsForSave = (

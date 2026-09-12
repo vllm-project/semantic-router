@@ -175,7 +175,9 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 			}
 		case entry.Route != nil:
 			hasDirectRoutes = true
-			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+			route, routeErrs := rawToRoute(entry.Route)
+			prog.Routes = append(prog.Routes, route)
+			errs = append(errs, routeErrs...)
 		case entry.DecisionTree != nil:
 			treeCount++
 			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
@@ -373,11 +375,12 @@ func rawToSignal(r *rawSignalDecl) *SignalDecl {
 	}
 }
 
-func rawToRoute(r *rawRouteDecl) *RouteDecl {
+func rawToRoute(r *rawRouteDecl) (*RouteDecl, []error) {
 	route := &RouteDecl{
 		Name: unquoteIdent(r.Name),
 		Pos:  posFromLexer(r.Pos),
 	}
+	var errs []error
 
 	applyRouteOptions(route, r.Opts)
 
@@ -392,7 +395,9 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.When = toBoolExpr(item.When)
 		case item.Model != nil:
 			for _, m := range item.Model.Models {
-				route.Models = append(route.Models, rawToModelRef(m))
+				ref, modelErrs := rawToModelRef(m)
+				route.Models = append(route.Models, ref)
+				errs = append(errs, modelErrs...)
 			}
 		case item.Algorithm != nil:
 			route.Algorithm = rawToAlgo(item.Algorithm)
@@ -407,13 +412,15 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 				Pos:         posFromLexer(item.Action.Pos),
 			}
 		case item.CandidateFor != nil:
-			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
+			iter, iterErrs := rawToCandidateIteration(item.CandidateFor)
+			route.CandidateIterations = append(route.CandidateIterations, iter)
+			errs = append(errs, iterErrs...)
 		case item.Emit != nil:
 			route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
 		}
 	}
 
-	return route
+	return route, errs
 }
 
 func rawToModelDecl(r *rawModelDecl) *ModelDecl {
@@ -478,11 +485,12 @@ func rawToAlgo(r *rawAlgoSpec) *AlgoSpec {
 	}
 }
 
-func rawToModelRef(r *rawModelRef) *ModelRef {
+func rawToModelRef(r *rawModelRef) (*ModelRef, []error) {
 	m := &ModelRef{
 		Model: unquote(r.Model),
 		Pos:   posFromLexer(r.Pos),
 	}
+	var errs []error
 	for _, opt := range r.Options {
 		if opt.Value == nil {
 			continue
@@ -516,9 +524,49 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 			} else if v.Float != nil {
 				m.Weight = *v.Float
 			}
+		case "max_completion_tokens":
+			tokens, err := parseModelRefMaxCompletionTokens(m.Model, m.Pos, v)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			m.MaxCompletionTokens = tokens
 		}
 	}
-	return m
+	return m, errs
+}
+
+func parseModelRefMaxCompletionTokens(model string, pos Position, v *Val) (*int, error) {
+	if v != nil && v.Int != nil {
+		if *v.Int < 1 {
+			return nil, fmt.Errorf("%s: MODEL %q: max_completion_tokens must be >= 1 when set", pos, model)
+		}
+		tokens := *v.Int
+		return &tokens, nil
+	}
+	return nil, fmt.Errorf("%s: MODEL %q: max_completion_tokens must be a positive integer, got %s", pos, model, describeValKind(v))
+}
+
+func describeValKind(v *Val) string {
+	if v == nil {
+		return "nil"
+	}
+	switch {
+	case v.Str != nil, v.BareStr != nil:
+		return "string"
+	case v.Float != nil:
+		return "float"
+	case v.Int != nil:
+		return "integer"
+	case v.Bool != nil:
+		return "bool"
+	case v.ArrayVal != nil:
+		return "array"
+	case v.Object != nil:
+		return "object"
+	default:
+		return "value"
+	}
 }
 
 // ---------- Boolean Expression Conversion ----------

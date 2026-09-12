@@ -374,6 +374,42 @@ func registerValidateConfigStructureModelRefSpecs() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("missing required field 'use_reasoning'"))
 	})
+
+	It("accepts optional max_completion_tokens", func() {
+		tokens := 1024
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "ok",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						MaxCompletionTokens:   &tokens,
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
+					}},
+				}},
+			},
+		}
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects non-positive max_completion_tokens", func() {
+		tokens := 0
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						MaxCompletionTokens:   &tokens,
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
+					}},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("max_completion_tokens must be >= 1 when set"))
+	})
 }
 
 func registerValidateConfigStructureLoRASpecs() {

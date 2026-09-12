@@ -738,6 +738,7 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+          max_completion_tokens: 2048
       candidateIterations:
         - variable: candidate
           source: models
@@ -749,6 +750,7 @@ routing:
               reasoning_mode: enabled
               reasoning_description: Candidate iteration reference model for DSL authoring coverage.
               reasoning_effort: low
+              max_completion_tokens: 4096
           outputs:
             - type: model
               value: candidate

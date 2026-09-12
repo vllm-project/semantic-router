@@ -1387,6 +1387,11 @@ spec:
                                 description: LoRAName is the optional LoRA adapter
                                   name
                                 type: string
+                              max_completion_tokens:
+                                description: MaxCompletionTokens is an optional per-model
+                                  completion-token ceiling.
+                                minimum: 1
+                                type: integer
                               model:
                                 description: Model name to route to
                                 type: string

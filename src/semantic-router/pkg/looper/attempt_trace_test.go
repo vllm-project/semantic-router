@@ -29,6 +29,7 @@ import (
 	oteltrace "go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 )
 
 func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
@@ -113,6 +114,102 @@ func TestExecuteWithLatencyRecordsConfidenceAttemptTrace(t *testing.T) {
 	}
 	if children != 2 {
 		t.Fatalf("attempt spans = %d, want 2", children)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitUsesCurrentModelRef(t *testing.T) {
+	smallLimit := 256
+	largeLimit := 1024
+	original := &openai.ChatCompletionNewParams{
+		MaxCompletionTokens: openai.Int(8000),
+	}
+	stage := &openai.ChatCompletionNewParams{
+		MaxCompletionTokens: openai.Int(8000),
+	}
+	req := &Request{
+		OriginalRequest: original,
+		ModelRefs: []config.ModelRef{
+			{Model: "small", MaxCompletionTokens: &smallLimit},
+			{Model: "large", MaxCompletionTokens: &largeLimit},
+		},
+	}
+	small := composeAttemptOutputTokenLimit(req, stage, "small")
+	if small.Effective == nil || *small.Effective != 256 || small.Source != "model_ref" {
+		t.Fatalf("small compose = %+v, want 256 from model_ref", small)
+	}
+	large := composeAttemptOutputTokenLimit(req, stage, "large")
+	if large.Effective == nil || *large.Effective != 1024 || large.Source != "model_ref" {
+		t.Fatalf("large compose = %+v, want 1024 from model_ref", large)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitStageCannotWidenClient(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(128)}
+	stage := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(2048)}
+	result := composeAttemptOutputTokenLimit(
+		&Request{OriginalRequest: original},
+		stage,
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 128 || result.Source != "client" {
+		t.Fatalf("compose = %+v, want client 128", result)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitOmitsInheritedStageBound(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	modelLimit := 1024
+	result := composeAttemptOutputTokenLimit(
+		&Request{
+			OriginalRequest: original,
+			ModelRefs: []config.ModelRef{{
+				Model:               "model-a",
+				MaxCompletionTokens: &modelLimit,
+			}},
+		},
+		cloneRequest(original),
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 256 || result.Source != "client" {
+		t.Fatalf("compose = %+v, want client 256 without inherited stage", result)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitBlockedClientLetsModelRefWin(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	modelLimit := 1024
+	result := composeAttemptOutputTokenLimit(
+		&Request{
+			OriginalRequest:              original,
+			ClientMaxOutputTokensBlocked: true,
+			ModelRefs: []config.ModelRef{{
+				Model:               "model-a",
+				MaxCompletionTokens: &modelLimit,
+			}},
+		},
+		cloneRequest(original),
+		"model-a",
+	)
+	if result.Effective == nil || *result.Effective != 1024 || result.Source != outputtokens.SourceModelRef {
+		t.Fatalf("compose = %+v, want model_ref 1024 after blocked client", result)
+	}
+	if result.Fallback != "" {
+		t.Fatalf("fallback = %q, want empty when model_ref wins", result.Fallback)
+	}
+}
+
+func TestComposeAttemptOutputTokenLimitBlockedClientRecordsFallback(t *testing.T) {
+	original := &openai.ChatCompletionNewParams{MaxCompletionTokens: openai.Int(256)}
+	result := composeAttemptOutputTokenLimit(
+		&Request{
+			OriginalRequest:              original,
+			ClientMaxOutputTokensBlocked: true,
+		},
+		cloneRequest(original),
+		"model-a",
+	)
+	if result.Effective != nil || result.Source != "" || result.Fallback != outputtokens.FallbackBlockedParam {
+		t.Fatalf("compose = %+v, want blocked_param fallback", result)
 	}
 }
 

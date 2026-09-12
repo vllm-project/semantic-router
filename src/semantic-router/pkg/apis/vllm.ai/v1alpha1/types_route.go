@@ -368,6 +368,11 @@ type ModelRef struct {
 	// ReasoningEffort selects an effort value supported by the model family.
 	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
+
+	// MaxCompletionTokens is an optional per-model completion-token ceiling.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	MaxCompletionTokens *int `json:"maxCompletionTokens,omitempty" yaml:"maxCompletionTokens,omitempty"`
 }
 
 // DecisionPlugin defines a plugin configuration for a decision

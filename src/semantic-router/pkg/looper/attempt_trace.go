@@ -34,6 +34,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 )
 
 const (
@@ -88,6 +89,10 @@ type AttemptTrace struct {
 	EstimatedTokens *int64     `json:"estimated_tokens,omitempty"`
 	Usage           TokenUsage `json:"usage,omitempty"`
 
+	EffectiveMaxOutputTokens         *int64 `json:"effective_max_output_tokens,omitempty"`
+	EffectiveMaxOutputTokensSource   string `json:"effective_max_output_tokens_source,omitempty"`
+	EffectiveMaxOutputTokensFallback string `json:"effective_max_output_tokens_fallback,omitempty"`
+
 	EstimatedCost *float64 `json:"estimated_cost,omitempty"`
 	ActualCost    *float64 `json:"actual_cost,omitempty"`
 	Currency      string   `json:"currency,omitempty"`
@@ -117,6 +122,10 @@ type attemptSpec struct {
 	reservedTokens  *int64
 	estimatedTokens *int64
 	pricing         modelpricing.Rates
+
+	effectiveMaxOutputTokens         *int64
+	effectiveMaxOutputTokensSource   string
+	effectiveMaxOutputTokensFallback string
 }
 
 // attemptResult contains terminal observations used to finish an attempt.
@@ -193,6 +202,10 @@ func modelAttemptSpec(req *Request, stageReq *openai.ChatCompletionNewParams, st
 		}
 	}
 	spec.pricing = attemptPricing(req, model)
+	limit := composeAttemptOutputTokenLimit(req, stageReq, model)
+	spec.effectiveMaxOutputTokens = cloneInt64Ptr(limit.Effective)
+	spec.effectiveMaxOutputTokensSource = limit.Source
+	spec.effectiveMaxOutputTokensFallback = limit.Fallback
 	return spec
 }
 
@@ -246,7 +259,10 @@ func startAttempt(ctx context.Context, spec attemptSpec) (context.Context, *atte
 	record := AttemptTrace{
 		Ordinal: ordinal, Stage: spec.stage, Role: spec.role, Model: spec.model,
 		ReservedTokens: cloneInt64Ptr(spec.reservedTokens), EstimatedTokens: cloneInt64Ptr(spec.estimatedTokens),
-		EstimatedCost: estimatedAttemptCost(spec), Currency: attemptCurrency(spec),
+		EffectiveMaxOutputTokens:         cloneInt64Ptr(spec.effectiveMaxOutputTokens),
+		EffectiveMaxOutputTokensSource:   spec.effectiveMaxOutputTokensSource,
+		EffectiveMaxOutputTokensFallback: spec.effectiveMaxOutputTokensFallback,
+		EstimatedCost:                    estimatedAttemptCost(spec), Currency: attemptCurrency(spec),
 	}
 	handle := &attemptHandle{
 		tracker: tracker, ordinal: ordinal, startedAt: time.Now(), span: span,
@@ -503,6 +519,40 @@ func attemptCurrency(spec attemptSpec) string {
 		return ""
 	}
 	return spec.pricing.Currency
+}
+
+func composeAttemptOutputTokenLimit(
+	req *Request,
+	stageReq *openai.ChatCompletionNewParams,
+	model string,
+) outputtokens.Result {
+	sources := outputtokens.Sources{
+		AlgorithmStage: stageOverrideMaxOutputTokens(nil, stageReq),
+	}
+	blocked := false
+	if req != nil {
+		blocked = req.ClientMaxOutputTokensBlocked
+		if !blocked {
+			sources.Client = chatParamsMaxOutputTokens(req.OriginalRequest)
+		}
+		sources.Plugin = outputtokens.Clone(req.PluginMaxOutputTokens)
+		sources.ModelRef = modelRefMaxCompletionTokens(req.ModelRefs, model)
+		sources.AlgorithmStage = stageOverrideMaxOutputTokens(req.OriginalRequest, stageReq)
+	}
+	result := outputtokens.Compose(sources)
+	if blocked && sources.Client == nil && result.Effective == nil {
+		result.Fallback = outputtokens.FallbackBlockedParam
+	}
+	return result
+}
+
+func modelRefMaxCompletionTokens(refs []config.ModelRef, model string) *int64 {
+	for _, ref := range refs {
+		if ref.Model == model || ref.LoRAName == model {
+			return outputtokens.FromInt(ref.MaxCompletionTokens)
+		}
+	}
+	return nil
 }
 
 // estimatedAttemptCost prices the estimated input and reserved output tokens.

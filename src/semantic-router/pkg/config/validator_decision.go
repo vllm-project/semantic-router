@@ -266,12 +266,29 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		if err := validateModelRefReasoningControl(cfg, decision.Name, i, modelRef); err != nil {
 			return err
 		}
+		if err := validateModelRefMaxCompletionTokens(decision.Name, i, modelRef); err != nil {
+			return err
+		}
 		if modelRef.LoRAName == "" {
 			continue
 		}
 		if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
 			return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
 		}
+	}
+	return nil
+}
+
+func validateModelRefMaxCompletionTokens(decisionName string, index int, modelRef ModelRef) error {
+	if modelRef.MaxCompletionTokens == nil {
+		return nil
+	}
+	if *modelRef.MaxCompletionTokens < 1 {
+		return fmt.Errorf(
+			"decision '%s', modelRefs[%d]: max_completion_tokens must be >= 1 when set",
+			decisionName,
+			index,
+		)
 	}
 	return nil
 }
@@ -366,6 +383,13 @@ func validateDecisionCandidateIterationModels(models []ModelRef, context string)
 	for j, modelRef := range models {
 		if strings.TrimSpace(modelRef.Model) == "" {
 			return fmt.Errorf("%s, models[%d]: model name cannot be empty", context, j)
+		}
+		if modelRef.MaxCompletionTokens != nil && *modelRef.MaxCompletionTokens < 1 {
+			return fmt.Errorf(
+				"%s, models[%d]: max_completion_tokens must be >= 1 when set",
+				context,
+				j,
+			)
 		}
 	}
 	return nil

@@ -199,6 +199,7 @@ type ModelRef struct {
 	Model                 string  `yaml:"model"`
 	LoRAName              string  `yaml:"lora_name,omitempty"`
 	Weight                float64 `yaml:"weight,omitempty"`
+	MaxCompletionTokens   *int    `yaml:"max_completion_tokens,omitempty"`
 	ModelReasoningControl `yaml:",inline"`
 }
 

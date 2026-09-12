@@ -1394,6 +1394,11 @@ type ModelRefConfig struct {
 	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
+
+	// MaxCompletionTokens is an optional per-model completion-token ceiling.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	MaxCompletionTokens *int `json:"max_completion_tokens,omitempty" yaml:"max_completion_tokens,omitempty"`
 }
 
 // ToolsConfig defines tools configuration

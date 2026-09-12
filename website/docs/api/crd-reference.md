@@ -663,6 +663,7 @@ _Appears in:_
 | `use_reasoning` _boolean_ | UseReasoning enables reasoning mode for this model |  | Optional: \{\} <br /> |
 | `reasoning_mode` _string_ | ReasoningMode selects the model's reasoning activation mode when the<br />family supports more than a boolean switch. |  | Enum: [enabled disabled adaptive] <br />Optional: \{\} <br /> |
 | `reasoning_effort` _string_ | ReasoningEffort selects one of the model family's declared effort levels. |  | Optional: \{\} <br /> |
+| `max_completion_tokens` _integer_ | MaxCompletionTokens is an optional per-model completion-token ceiling. |  | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### ObservabilityConfig
 

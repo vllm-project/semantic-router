@@ -61,6 +61,9 @@ func candidateIterationModelRefOptions(model *config.ModelRef) string {
 	if model.Weight != 0 {
 		opts = append(opts, fmt.Sprintf("weight = %s", strconv.FormatFloat(model.Weight, 'f', -1, 64)))
 	}
+	if model.MaxCompletionTokens != nil {
+		opts = append(opts, fmt.Sprintf("max_completion_tokens = %d", *model.MaxCompletionTokens))
+	}
 	return strings.Join(opts, ", ")
 }
 
@@ -79,12 +82,16 @@ func candidateIterationsCoverModelRefs(dec config.Decision) bool {
 		return false
 	}
 	for i := range dec.ModelRefs {
-		if dec.ModelRefs[i].Model != iter.Models[i].Model ||
-			dec.ModelRefs[i].LoRAName != iter.Models[i].LoRAName {
+		if !modelRefCoverageEqual(dec.ModelRefs[i], iter.Models[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func modelRefCoverageEqual(left, right config.ModelRef) bool {
+	return left.Model == right.Model &&
+		candidateIterationModelRefOptions(&left) == candidateIterationModelRefOptions(&right)
 }
 
 func decompileRuleNode(node *config.RuleCombination) string {

@@ -96,8 +96,9 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 	// Convert model refs
 	for _, ms := range decision.ModelRefs {
 		modelRef := config.ModelRef{
-			Model:    ms.Model,
-			LoRAName: ms.LoRAName,
+			Model:               ms.Model,
+			LoRAName:            ms.LoRAName,
+			MaxCompletionTokens: ms.MaxCompletionTokens,
 			ModelReasoningControl: config.ModelReasoningControl{
 				UseReasoning:         &ms.UseReasoning,
 				ReasoningDescription: ms.ReasoningDescription,

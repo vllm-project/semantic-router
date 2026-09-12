@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -209,6 +210,74 @@ func assertPartialConfidenceTrace(t *testing.T, record store.Record) {
 	if attempt.Ordinal != 1 || attempt.Status != string(looper.AttemptStatusSucceeded) ||
 		attempt.Reason != string(looper.AttemptReasonUnusable) || attempt.Usage.TotalTokens != 7 {
 		t.Fatalf("replay Looper attempt = %+v", attempt)
+	}
+}
+
+func TestHandleConfidenceBlockedClientPersistsModelRefCeilingInReplay(t *testing.T) {
+	server := newConfidencePartialFailureServer(t)
+	defer server.Close()
+
+	replayConfig := config.DefaultRouterReplayPluginConfig()
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			Looper: config.LooperConfig{Endpoint: server.URL},
+			BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+				"small": {ParamSize: "1b"},
+				"large": {ParamSize: "10b"},
+			}},
+		},
+		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
+	}
+	tokens := 1024
+	decision := outputTokenRequestParamsDecision(t, "small", map[string]interface{}{
+		"blocked_params": []string{"max_tokens"},
+	})
+	decision.Name = "confidence-blocked-client"
+	decision.ModelRefs = []config.ModelRef{
+		{Model: "small", MaxCompletionTokens: &tokens},
+		{Model: "large"},
+	}
+	decision.Algorithm = &config.AlgorithmConfig{
+		Type: "confidence",
+		Confidence: &config.ConfidenceAlgorithmConfig{
+			ConfidenceMethod: "avg_logprob",
+			OnError:          "fail",
+		},
+	}
+	request := testNeutralRequest("router-entrypoint", "hello")
+	request.Sampling.MaxOutputTokens = llmprotocol.Int64(256)
+	ctx := &RequestContext{
+		RequestID:                "replay-blocked-client-modelref",
+		Headers:                  map[string]string{},
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
+		RouterReplayPluginConfig: &replayConfig,
+		VSRSelectedDecision:      decision,
+	}
+
+	if _, err := router.handleLooperExecution(context.Background(), request, decision, ctx); err != nil {
+		t.Fatalf("handleLooperExecution: %v", err)
+	}
+	record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	if !found {
+		t.Fatalf("replay record %q not found", ctx.RouterReplayID)
+	}
+	if record.RouteDiagnostics == nil || record.RouteDiagnostics.Looper == nil {
+		t.Fatalf("replay diagnostics missing Looper trace: %+v", record.RouteDiagnostics)
+	}
+	attempts := record.RouteDiagnostics.Looper.Attempts
+	if len(attempts) == 0 {
+		t.Fatalf("replay Looper attempts empty: %+v", record.RouteDiagnostics.Looper)
+	}
+	attempt := attempts[0]
+	if attempt.EffectiveMaxOutputTokens == nil || *attempt.EffectiveMaxOutputTokens != 1024 {
+		t.Fatalf("persisted effective = %v, want 1024", attempt.EffectiveMaxOutputTokens)
+	}
+	if attempt.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
+		t.Fatalf("persisted source = %q, want %s", attempt.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
+	}
+	if attempt.EffectiveMaxOutputTokensFallback != "" {
+		t.Fatalf("persisted fallback = %q, want empty when model_ref wins", attempt.EffectiveMaxOutputTokensFallback)
 	}
 }
 
