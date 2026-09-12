@@ -475,6 +475,7 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
             setInsertSiblingTarget(target)
             setContextMenu(null)
           }}
+          onClose={() => setContextMenu(null)}
           onUnwrap={handleUnwrap}
           onWrap={handleWrap}
         />
