@@ -29,7 +29,7 @@ type playgroundFeedbackStore interface {
 	BindPlaygroundReplay(context.Context, string, string, string) error
 	CompletePlaygroundReplay(context.Context, string, string) error
 	ValidatePlaygroundReplay(context.Context, string, string, string) error
-	ClaimPlaygroundReplay(context.Context, string, string, string, int, time.Duration) error
+	ClaimPlaygroundReplay(context.Context, string, string, string, int, time.Duration) (string, error)
 	FinishPlaygroundReplay(context.Context, string, string, bool) error
 }
 
@@ -154,15 +154,16 @@ func servePlaygroundOutcome(
 		writePlaygroundFeedbackError(w, *err)
 		return
 	}
-	if err := store.ClaimPlaygroundReplay(
+	idempotencyKey, claimErr := store.ClaimPlaygroundReplay(
 		r.Context(),
 		principal.SessionID,
 		payload.ReplayID,
 		payload.TargetRef,
 		playgroundFeedbackRateLimit,
 		playgroundFeedbackRateWindow,
-	); err != nil {
-		writePlaygroundFeedbackError(w, mapPlaygroundStoreError(err))
+	)
+	if claimErr != nil {
+		writePlaygroundFeedbackError(w, mapPlaygroundStoreError(claimErr))
 		return
 	}
 
@@ -172,6 +173,7 @@ func servePlaygroundOutcome(
 	}
 	r.Body = io.NopCloser(bytes.NewReader(rawBody))
 	r.ContentLength = int64(len(rawBody))
+	r.Header.Set("Idempotency-Key", idempotencyKey)
 	if err := routerauth.RewriteAuthorization(r, credentialProvider); err != nil {
 		_ = store.FinishPlaygroundReplay(context.Background(), principal.SessionID, payload.ReplayID, false)
 		writePlaygroundFeedbackError(w, playgroundFeedbackError{
@@ -246,7 +248,8 @@ func validateRouterReplayForFeedback(
 			status: http.StatusInternalServerError, code: "REPLAY_VERIFICATION_FAILED", message: "Could not verify the replay record.",
 		}
 	}
-	if err := routerauth.RewriteAuthorization(request, credentialProvider); err != nil {
+	authorizationErr := routerauth.RewriteAuthorization(request, credentialProvider)
+	if authorizationErr != nil {
 		return &playgroundFeedbackError{
 			status:  http.StatusServiceUnavailable,
 			code:    "ROUTER_CREDENTIAL_UNAVAILABLE",

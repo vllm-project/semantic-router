@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS playground_feedback_replays (
   replay_id TEXT PRIMARY KEY,
   session_id TEXT NOT NULL,
   target_ref TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
   state TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   completed_at INTEGER,

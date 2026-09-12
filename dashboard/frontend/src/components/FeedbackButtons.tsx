@@ -104,7 +104,6 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': crypto.randomUUID(),
         },
         body: JSON.stringify(body),
       })

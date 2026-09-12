@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -35,15 +37,16 @@ func (s *Service) BindPlaygroundReplay(ctx context.Context, sessionID, replayID,
 		return ErrPlaygroundReplayNotOwned
 	}
 	now := time.Now().Unix()
+	idempotencyKey := "playground-feedback-" + uuid.NewString()
 	result, err := s.store.db.ExecContext(ctx, `
 		INSERT INTO playground_feedback_replays(
-			replay_id, session_id, target_ref, state, created_at, expires_at
+			replay_id, session_id, target_ref, idempotency_key, state, created_at, expires_at
 		)
-		SELECT ?, id, ?, ?, ?, expires_at
+		SELECT ?, id, ?, ?, ?, ?, expires_at
 		FROM auth_sessions
 		WHERE id = ? AND revoked_at IS NULL AND expires_at > ?
 		ON CONFLICT(replay_id) DO NOTHING`,
-		replayID, targetRef, playgroundReplayStateInProgress, now, sessionID, now,
+		replayID, targetRef, idempotencyKey, playgroundReplayStateInProgress, now, sessionID, now,
 	)
 	if err != nil {
 		return fmt.Errorf("bind playground replay: %w", err)
@@ -85,52 +88,54 @@ func (s *Service) ValidatePlaygroundReplay(ctx context.Context, sessionID, repla
 	}
 	return validatePlaygroundReplayRow(
 		s.store.db.QueryRowContext(ctx, `
-			SELECT target_ref, state, expires_at
+			SELECT target_ref, idempotency_key, state, expires_at
 			FROM playground_feedback_replays
 			WHERE replay_id = ? AND session_id = ?`, strings.TrimSpace(replayID), strings.TrimSpace(sessionID)),
 		strings.TrimSpace(targetRef), time.Now().Unix(),
 	)
 }
 
-// ClaimPlaygroundReplay atomically reserves one completed replay for feedback
-// and enforces the rate limit against the login session rather than the user.
+// ClaimPlaygroundReplay atomically reserves one completed replay for feedback,
+// enforces the session rate limit, and returns the replay's stable Router idempotency key.
 func (s *Service) ClaimPlaygroundReplay(
 	ctx context.Context,
 	sessionID, replayID, targetRef string,
 	limit int,
 	window time.Duration,
-) error {
+) (string, error) {
 	if s == nil || s.store == nil {
-		return ErrPlaygroundReplayNotOwned
+		return "", ErrPlaygroundReplayNotOwned
 	}
 	tx, err := s.store.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin playground feedback claim: %w", err)
+		return "", fmt.Errorf("begin playground feedback claim: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Unix()
-	if err := validatePlaygroundReplayRow(
+	idempotencyKey, validationErr := readValidPlaygroundReplayRow(
 		tx.QueryRowContext(ctx, `
-			SELECT target_ref, state, expires_at
+			SELECT target_ref, idempotency_key, state, expires_at
 			FROM playground_feedback_replays
 			WHERE replay_id = ? AND session_id = ?`, strings.TrimSpace(replayID), strings.TrimSpace(sessionID)),
 		strings.TrimSpace(targetRef), now,
-	); err != nil {
-		return err
+	)
+	if validationErr != nil {
+		return "", validationErr
 	}
 
 	if limit > 0 && window > 0 {
 		var attempts int
-		if err := tx.QueryRowContext(ctx, `
+		countErr := tx.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM playground_feedback_replays
 			WHERE session_id = ? AND claimed_at >= ?`,
 			strings.TrimSpace(sessionID), now-int64(window.Seconds()),
-		).Scan(&attempts); err != nil {
-			return fmt.Errorf("count playground feedback attempts: %w", err)
+		).Scan(&attempts)
+		if countErr != nil {
+			return "", fmt.Errorf("count playground feedback attempts: %w", countErr)
 		}
 		if attempts >= limit {
-			return ErrPlaygroundFeedbackRateLimited
+			return "", ErrPlaygroundFeedbackRateLimited
 		}
 	}
 
@@ -142,19 +147,19 @@ func (s *Service) ClaimPlaygroundReplay(
 		strings.TrimSpace(sessionID), playgroundReplayStateCompleted,
 	)
 	if err != nil {
-		return fmt.Errorf("claim playground replay: %w", err)
+		return "", fmt.Errorf("claim playground replay: %w", err)
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("read playground replay claim result: %w", err)
+		return "", fmt.Errorf("read playground replay claim result: %w", err)
 	}
 	if rows != 1 {
-		return ErrPlaygroundReplayDuplicate
+		return "", ErrPlaygroundReplayDuplicate
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit playground feedback claim: %w", err)
+		return "", fmt.Errorf("commit playground feedback claim: %w", err)
 	}
-	return nil
+	return idempotencyKey, nil
 }
 
 // FinishPlaygroundReplay commits a successful submission or releases a failed
@@ -184,28 +189,36 @@ type playgroundReplayRow interface {
 }
 
 func validatePlaygroundReplayRow(row playgroundReplayRow, targetRef string, now int64) error {
-	var storedTarget, state string
+	_, err := readValidPlaygroundReplayRow(row, targetRef, now)
+	return err
+}
+
+func readValidPlaygroundReplayRow(row playgroundReplayRow, targetRef string, now int64) (string, error) {
+	var storedTarget, idempotencyKey, state string
 	var expiresAt int64
-	if err := row.Scan(&storedTarget, &state, &expiresAt); err != nil {
+	if err := row.Scan(&storedTarget, &idempotencyKey, &state, &expiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrPlaygroundReplayNotOwned
+			return "", ErrPlaygroundReplayNotOwned
 		}
-		return fmt.Errorf("read playground replay: %w", err)
+		return "", fmt.Errorf("read playground replay: %w", err)
 	}
 	if expiresAt <= now {
-		return ErrPlaygroundReplayExpired
+		return "", ErrPlaygroundReplayExpired
 	}
 	if storedTarget != targetRef {
-		return ErrPlaygroundReplayModelMismatch
+		return "", ErrPlaygroundReplayModelMismatch
 	}
 	switch state {
 	case playgroundReplayStateCompleted:
-		return nil
+		if idempotencyKey == "" {
+			return "", ErrPlaygroundReplayNotOwned
+		}
+		return idempotencyKey, nil
 	case playgroundReplayStateInProgress:
-		return ErrPlaygroundReplayInProgress
+		return "", ErrPlaygroundReplayInProgress
 	case playgroundReplayStateSubmitting, playgroundReplayStateConsumed:
-		return ErrPlaygroundReplayDuplicate
+		return "", ErrPlaygroundReplayDuplicate
 	default:
-		return ErrPlaygroundReplayNotOwned
+		return "", ErrPlaygroundReplayNotOwned
 	}
 }

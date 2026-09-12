@@ -42,7 +42,7 @@ func TestPlaygroundFeedbackReplayLifecycleIsSessionBound(t *testing.T) {
 	if err := svc.ValidatePlaygroundReplay(ctx, sessionID, "replay-1", "model-b"); !errors.Is(err, ErrPlaygroundReplayModelMismatch) {
 		t.Fatalf("model-mismatch validation error = %v", err)
 	}
-	if err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-1", "model-a", 60, time.Minute); err != nil {
+	if _, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-1", "model-a", 60, time.Minute); err != nil {
 		t.Fatalf("ClaimPlaygroundReplay() error = %v", err)
 	}
 	if err := svc.FinishPlaygroundReplay(ctx, sessionID, "replay-1", true); err != nil {
@@ -64,14 +64,27 @@ func TestPlaygroundFeedbackFailedSubmissionCanRetry(t *testing.T) {
 	if err := svc.CompletePlaygroundReplay(ctx, sessionID, "replay-retry"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-retry", "model-a", 60, time.Minute); err != nil {
+	firstKey, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-retry", "model-a", 60, time.Minute)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.FinishPlaygroundReplay(ctx, sessionID, "replay-retry", false); err != nil {
+	if firstKey == "" {
+		t.Fatal("first claim returned an empty idempotency key")
+	}
+	finishErr := svc.FinishPlaygroundReplay(ctx, sessionID, "replay-retry", false)
+	if finishErr != nil {
+		t.Fatal(finishErr)
+	}
+	validationErr := svc.ValidatePlaygroundReplay(ctx, sessionID, "replay-retry", "model-a")
+	if validationErr != nil {
+		t.Fatalf("released replay validation error = %v", validationErr)
+	}
+	secondKey, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-retry", "model-a", 60, time.Minute)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ValidatePlaygroundReplay(ctx, sessionID, "replay-retry", "model-a"); err != nil {
-		t.Fatalf("released replay validation error = %v", err)
+	if secondKey != firstKey {
+		t.Fatalf("retry idempotency key = %q, want %q", secondKey, firstKey)
 	}
 }
 
@@ -88,10 +101,10 @@ func TestPlaygroundFeedbackRateLimitUsesSession(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-first", "model-a", 1, time.Minute); err != nil {
+	if _, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-first", "model-a", 1, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-second", "model-a", 1, time.Minute); !errors.Is(err, ErrPlaygroundFeedbackRateLimited) {
+	if _, err := svc.ClaimPlaygroundReplay(ctx, sessionID, "replay-second", "model-a", 1, time.Minute); !errors.Is(err, ErrPlaygroundFeedbackRateLimited) {
 		t.Fatalf("second claim error = %v", err)
 	}
 }
