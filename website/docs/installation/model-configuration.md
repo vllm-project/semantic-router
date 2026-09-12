@@ -94,5 +94,5 @@ Model Card identities, and backend-pool compatibility before startup.
 ## Configure models used by Router tasks
 
 For classifiers, safety checks, and embeddings used inside the Router, start
-with [Router Runtime](native-backends.md). It covers in-process and external
+with [Router Runtime](native-backends). It covers in-process and external
 models, their configuration, and operations.
