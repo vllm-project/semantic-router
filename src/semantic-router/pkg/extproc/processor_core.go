@@ -189,6 +189,11 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		return false
 	}
 
+	// Exclude explicit cancellations: client cancellations and aborts are not timeouts
+	if errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled {
+		return false
+	}
+
 	// Direct timeout error signals
 	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
 		return true
@@ -209,7 +214,21 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 
 	// Mid-stream stall termination (stream idle timeout)
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
-		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && elapsed >= idleDur-300*time.Millisecond {
+		// Measure the actual idle gap since the last received response frame
+		var lastActivity time.Time
+		if !ctx.LastStreamChunkTime.IsZero() {
+			lastActivity = ctx.LastStreamChunkTime
+		} else if !ctx.ProcessingStartTime.IsZero() {
+			lastActivity = ctx.ProcessingStartTime
+		} else if !ctx.StartTime.IsZero() {
+			lastActivity = ctx.StartTime
+		}
+		var idleGap time.Duration
+		if !lastActivity.IsZero() {
+			idleGap = time.Since(lastActivity)
+		}
+
+		if idleDur, ok := parseDurationSafe(rel.StreamIdleTimeout); ok && idleGap >= idleDur-300*time.Millisecond {
 			return true
 		}
 		if reqDur, ok := parseDurationSafe(rel.RequestTimeout); ok && elapsed >= reqDur-300*time.Millisecond {

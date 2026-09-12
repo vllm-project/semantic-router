@@ -77,8 +77,9 @@ type RequestContext struct {
 	StartTime                     time.Time
 	ProcessingStartTime           time.Time
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header or stream parameter
-	IsStreamingResponse     bool // set from response Content-Type
+	ExpectStreamingResponse bool      // set from request Accept header or stream parameter
+	IsStreamingResponse     bool      // set from response Content-Type
+	LastStreamChunkTime     time.Time // timestamp of the most recent streaming body chunk
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler

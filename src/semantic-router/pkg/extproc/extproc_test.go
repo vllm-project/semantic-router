@@ -2974,13 +2974,15 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		t.Fatalf("expected timeout to increase on connect timeout: before=%v after=%v", before4, after4)
 	}
 
-	// Case 5: Stalled stream idle timeout exceeded (elapsed >= 2s) -> records timeout
+	// Case 5: Stalled stream idle timeout exceeded (idle gap >= 2s) -> records timeout
 	ctx5 := &RequestContext{
 		RequestModel:        "fast-model",
 		UpstreamStatusCode:  200,
 		IsStreamingResponse: true,
 		StreamingComplete:   false,
 		StartTime:           time.Now().Add(-2100 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-2100 * time.Millisecond),
+		LastStreamChunkTime: time.Now().Add(-2100 * time.Millisecond),
 	}
 	before5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
 	_ = r.handleProcessReceiveError(ctx5, io.EOF)
@@ -3000,6 +3002,40 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	after6 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
 	if after6 != before6 {
 		t.Fatalf("expected timeout NOT to increase on non-timeout client abort: before=%v after=%v", before6, after6)
+	}
+
+	// Case 7: Long-lived continuously active stream ending in client cancellation (total elapsed 5s < 15s request timeout, idle gap only 50ms << 2s idle timeout) -> does NOT record timeout
+	ctx7 := &RequestContext{
+		RequestModel:        "slow-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-5 * time.Second),
+		ProcessingStartTime: time.Now().Add(-5 * time.Second),
+		LastStreamChunkTime: time.Now().Add(-50 * time.Millisecond),
+	}
+	before7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	_ = r.handleProcessReceiveError(ctx7, status.Error(codes.Canceled, "client canceled active stream"))
+	after7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	if after7 != before7 {
+		t.Fatalf("expected timeout NOT to increase on long-lived active stream client cancellation: before=%v after=%v", before7, after7)
+	}
+
+	// Case 8: Long-lived continuously active stream ending in non-timeout reset (total elapsed 5s < 15s request timeout, idle gap only 50ms << 2s idle timeout) -> does NOT record timeout
+	ctx8 := &RequestContext{
+		RequestModel:        "slow-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-5 * time.Second),
+		ProcessingStartTime: time.Now().Add(-5 * time.Second),
+		LastStreamChunkTime: time.Now().Add(-50 * time.Millisecond),
+	}
+	before8 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	_ = r.handleProcessReceiveError(ctx8, io.EOF)
+	after8 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	if after8 != before8 {
+		t.Fatalf("expected timeout NOT to increase on long-lived active stream non-timeout reset: before=%v after=%v", before8, after8)
 	}
 }
 
