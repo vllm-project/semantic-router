@@ -109,6 +109,11 @@ inventory:
           - openai/gpt-6-astra
           - openai/gpt-5.6-sol
           - openai/gpt-5.5
+      - publisher: Shanghai AI Laboratory / Intern
+        representative_models:
+          - intern/intern-s2-preview-397b
+          - intern/intern-s2-preview-35b
+          - intern/intern-s1
       - publisher: StepFun
         representative_models:
           - stepfun/step-3.7-flash
