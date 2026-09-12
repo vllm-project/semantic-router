@@ -74,7 +74,7 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
-			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+			return fmt.Errorf("decision '%s': %s", decisionName, OnUnknownOnErrorConflictMessage)
 		}
 	}
 	if node.IsLeaf() {
@@ -87,6 +87,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 	}
 	return nil
 }
+
+const OnUnknownOnErrorConflictMessage = "condition on_error has no effect when rules.on_unknown is set; remove one of them"
 
 func ruleTreeSetsOnError(node *RuleNode) bool {
 	if node == nil {
