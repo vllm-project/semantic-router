@@ -5,32 +5,30 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestCacheScopeUserID_PrefersAuthHeaderOverFallback(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
+func TestCacheScopeUserIDUsesTrustedIdentity(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			headers.AuthzUserID:    "auth-user",
+			"x-authz-user-id":      "spoofed-header-user",
 			"x-vsr-e2e-cache-user": "other",
 		},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "trusted-user"},
 	}
-	assert.Equal(t, "auth-user", cacheScopeUserID(ctx))
+	assert.Equal(t, "trusted-user", cacheScopeUserID(ctx))
 }
 
-func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
+func TestCacheScopeUserIDDoesNotUseFallbackHeader(t *testing.T) {
 	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			"x-vsr-e2e-cache-user": "fallback-user",
-		},
-	}
-	assert.Equal(t, "fallback-user", cacheScopeUserID(ctx))
+	ctx := &RequestContext{Headers: map[string]string{
+		"x-vsr-e2e-cache-user": "fallback-user",
+	}}
+	assert.Empty(t, cacheScopeUserID(ctx))
 }
 
-func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
+func TestCacheScopeUserIDDoesNotUseBodyMetadata(t *testing.T) {
 	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
 	ctx := &RequestContext{
 		Headers: map[string]string{},
@@ -38,68 +36,34 @@ func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
 			"user_id": "body-user",
 		}},
 	}
-	assert.Equal(t, "body-user", cacheScopeUserID(ctx))
+	assert.Empty(t, cacheScopeUserID(ctx))
 }
 
-func TestCacheScopeUserID_AuthHeaderWinsOverBody(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
+func TestCacheScopeUserIDDoesNotUseRawHeaderWhenTypedIdentityMissing(t *testing.T) {
+	ctx := &RequestContext{Headers: map[string]string{
+		"x-authz-user-id": "header-user",
+	}}
+	assert.Empty(t, cacheScopeUserID(ctx))
+}
+
+func TestExtractUserIDUsesTypedIdentity(t *testing.T) {
+	ctx := &RequestContext{
+		Headers:         map[string]string{"x-authz-user-id": "spoofed"},
+		TrustedIdentity: authz.TrustedIdentity{UserID: "user_from_ingress"},
+	}
+	assert.Equal(t, "user_from_ingress", extractUserID(ctx))
+}
+
+func TestExtractUserIDDoesNotUseRawHeaderOrMetadata(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			headers.AuthzUserID: "hdr-user",
-		},
-		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
-			"user_id": "body-user",
-		}},
-	}
-	assert.Equal(t, "hdr-user", cacheScopeUserID(ctx))
-}
-
-// =============================================================================
-// extractUserID Tests (Common to both dev and prod builds)
-// =============================================================================
-
-func TestExtractUserID_AuthHeaderOnly(t *testing.T) {
-	// Auth header present, no metadata
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "user_from_auth",
-		},
-	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_from_auth", result)
-}
-
-func TestExtractUserID_AuthHeaderExactKey(t *testing.T) {
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "user_exact_key",
-		},
-	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_exact_key", result)
-}
-
-func TestExtractUserID_NoAuthHeaderNoMetadata(t *testing.T) {
-	// Neither auth header nor metadata present
-	ctx := &RequestContext{
-		Headers: map[string]string{},
-	}
-
-	result := extractUserID(ctx)
-	assert.Empty(t, result, "should return empty string when no user ID source available")
-}
-
-func TestExtractUserID_UnrelatedHeaderIgnored(t *testing.T) {
-	// Unrelated headers should not be used as user ID
-	ctx := &RequestContext{
-		Headers: map[string]string{
+			"x-authz-user-id":  "user_from_header",
 			"x-custom-user-id": "user_from_wrong_header",
 			"authorization":    "Bearer token123",
 		},
+		SemanticRequest: &llmprotocol.Request{Metadata: map[string]string{
+			"user_id": "user_from_metadata",
+		}},
 	}
-
-	result := extractUserID(ctx)
-	assert.Empty(t, result, "should not use unrelated headers as user ID")
+	assert.Empty(t, extractUserID(ctx))
 }

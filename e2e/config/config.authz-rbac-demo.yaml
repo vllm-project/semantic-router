@@ -107,6 +107,7 @@ global:
       identity:
         user_id_header: x-jwt-sub
         user_groups_header: x-jwt-groups
+        ingress: header-injection
   stores:
     response_cache:
       enabled: false

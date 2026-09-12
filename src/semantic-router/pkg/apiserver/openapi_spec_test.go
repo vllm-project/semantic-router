@@ -94,6 +94,34 @@ func TestOpenAPISpecDerivesPathParametersFromRoutes(t *testing.T) {
 	}
 }
 
+func TestOpenAPISpecDoesNotAdvertiseMemoryIdentityQueryParameter(t *testing.T) {
+	server := &ClassificationAPIServer{}
+	spec := server.generateOpenAPISpec()
+
+	tests := []struct {
+		name      string
+		operation *OpenAPIOperation
+	}{
+		{name: "list", operation: spec.Paths[apiStorageMemoriesPath].Get},
+		{name: "delete by scope", operation: spec.Paths[apiStorageMemoriesPath].Delete},
+		{name: "get", operation: spec.Paths[apiStorageMemoriesPath+"/{id}"].Get},
+		{name: "delete", operation: spec.Paths[apiStorageMemoriesPath+"/{id}"].Delete},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.operation == nil {
+				t.Fatal("memory operation is missing")
+			}
+			for _, parameter := range tc.operation.Parameters {
+				if parameter.In == "query" && parameter.Name == "user_id" {
+					t.Fatalf("memory operation still advertises obsolete identity query parameter: %+v", parameter)
+				}
+			}
+		})
+	}
+}
+
 func TestOpenAPISpecPublishesConfigSchemaProgressiveQuery(t *testing.T) {
 	server := &ClassificationAPIServer{}
 	operation := server.generateOpenAPISpec().Paths[configschema.SchemaEndpoint].Get

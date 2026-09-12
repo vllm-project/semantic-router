@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
@@ -58,23 +58,30 @@ func TestPopulateSessionTransitionFieldsUsesNeutralMessages(t *testing.T) {
 	}
 }
 
-func TestSessionIdentityPriority(t *testing.T) {
-	request := &llmprotocol.Request{Generation: 1, Metadata: map[string]string{"user_id": "semantic-user"}}
+func TestSessionIdentityUsesTypedIngressIdentity(t *testing.T) {
+	request := &llmprotocol.Request{
+		Generation: 1,
+		Metadata:   map[string]string{"user_id": "spoofed-body-user"},
+		Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}},
+		}},
+	}
 	ctx := &RequestContext{
-		Headers:         map[string]string{headers.XClaudeCodeSessionID: "client-session"},
+		Headers:         map[string]string{"x-session-id": "spoofed-session", "x-claude-code-session-id": "spoofed-anthropic"},
+		TrustedIdentity: authz.TrustedIdentity{SessionID: "client-session"},
 		SemanticRequest: request,
 	}
-	if got := deriveSessionIDFromAnthropicSignals(ctx); got != "client-session" {
-		t.Fatalf("transport session = %q", got)
-	}
-	delete(ctx.Headers, headers.XClaudeCodeSessionID)
-	if got := deriveSessionIDFromAnthropicSignals(ctx); got != "ant-md-semantic-user" {
-		t.Fatalf("semantic metadata session = %q", got)
-	}
-	ctx.Headers[headers.XSessionID] = "pinned"
 	populateSessionTransitionFields(ctx)
-	if ctx.SessionID != "pinned" {
-		t.Fatalf("pinned session = %q", ctx.SessionID)
+	if ctx.SessionID != "client-session" {
+		t.Fatalf("typed ingress session = %q", ctx.SessionID)
+	}
+
+	ctx.TrustedIdentity.SessionID = ""
+	ctx.SessionID = ""
+	populateSessionTransitionFields(ctx)
+	if strings.Contains(ctx.SessionID, "spoofed") || strings.Contains(ctx.SessionID, "body-user") {
+		t.Fatalf("untrusted identity influenced session = %q", ctx.SessionID)
 	}
 }
 

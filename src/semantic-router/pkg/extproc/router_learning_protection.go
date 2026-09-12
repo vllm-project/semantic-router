@@ -363,8 +363,12 @@ func (r *OpenAIRouter) protectionIdentity(
 	scope := cfg.EffectiveScope()
 	sessionHeader := cfg.HeaderName("session")
 	conversationHeader := cfg.HeaderName("conversation")
-	sessionID := strings.TrimSpace(headerValueCI(ctx, sessionHeader))
-	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
+	sessionID := ""
+	conversationID := ""
+	if ctx != nil {
+		sessionID = strings.TrimSpace(ctx.TrustedIdentity.SessionID)
+		conversationID = strings.TrimSpace(ctx.TrustedIdentity.ConversationID)
+	}
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}

@@ -24,10 +24,10 @@ const (
 
 	// XClaudeCodeSessionID is the per-conversation UUID the Claude Code CLI
 	// emits on every /v1/messages request belonging to the same chat thread.
-	// The router mirrors this into RequestContext.SessionID with priority
-	// below x-session-id (operator/SDK override) but above metadata.user_id
-	// and the message-fingerprint fallbacks. See the session identification API
-	// documentation for the full priority order.
+	// The router mirrors this into RequestContext.SessionID below x-session-id
+	// (operator/SDK override) and above the message-fingerprint fallbacks;
+	// protocol metadata is never an identity source. See the session
+	// identification API documentation for the full priority order.
 	XClaudeCodeSessionID = "x-claude-code-session-id"
 
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.

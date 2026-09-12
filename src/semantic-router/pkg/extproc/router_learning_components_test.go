@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -350,7 +351,7 @@ func TestRouterLearningProtectionMissingIdentityDoesNotSuppressAdaptationSamplin
 		routerLearningOutcomeUnderpowered,
 		1000,
 	)
-	ctx := &RequestContext{Headers: map[string]string{"x-session-id": "session-a"}}
+	ctx := &RequestContext{TrustedIdentity: authz.TrustedIdentity{SessionID: "session-a"}}
 	ctx.VSRSelectedDecision = &config.Decision{Name: "adaptive", Tier: 2}
 	selCtx := &selection.SelectionContext{
 		SessionID:    "session-a",

@@ -154,6 +154,8 @@ global:
   services:
     authz:
       fail_open: true
+      identity:
+        ingress: header-injection
   stores:
     response_cache:
       enabled: false

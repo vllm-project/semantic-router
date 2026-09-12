@@ -2731,6 +2731,9 @@
         },
         "user_groups_header": {
           "type": "string"
+        },
+        "ingress": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

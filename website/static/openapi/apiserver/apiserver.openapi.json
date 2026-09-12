@@ -6207,14 +6207,6 @@
         ],
         "parameters": [
           {
-            "name": "user_id",
-            "in": "query",
-            "description": "Development fallback identity when x-authz-user-id is unavailable.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "type",
             "in": "query",
             "description": "Comma-separated memory types: semantic, procedural, or episodic.",
@@ -6293,14 +6285,6 @@
           "storage"
         ],
         "parameters": [
-          {
-            "name": "user_id",
-            "in": "query",
-            "description": "Development fallback identity when x-authz-user-id is unavailable.",
-            "schema": {
-              "type": "string"
-            }
-          },
           {
             "name": "type",
             "in": "query",
@@ -6383,14 +6367,6 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "user_id",
-            "in": "query",
-            "description": "Development fallback identity when x-authz-user-id is unavailable.",
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "security": [
@@ -6460,14 +6436,6 @@
             "in": "path",
             "description": "id path parameter",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "user_id",
-            "in": "query",
-            "description": "Development fallback identity when x-authz-user-id is unavailable.",
             "schema": {
               "type": "string"
             }

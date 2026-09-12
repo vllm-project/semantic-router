@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -90,6 +91,10 @@ func routerLearningRequestContext(sessionID string, conversationID string) *Requ
 		Headers: map[string]string{
 			"x-session-id":      sessionID,
 			"x-conversation-id": conversationID,
+		},
+		TrustedIdentity: authz.TrustedIdentity{
+			SessionID:      sessionID,
+			ConversationID: conversationID,
 		},
 		SessionID: sessionID,
 	}

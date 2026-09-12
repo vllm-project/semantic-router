@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -50,6 +51,11 @@ type EnhancedHallucinationInfo struct {
 type RequestContext struct {
 	Headers   map[string]string
 	RequestID string
+	// TrustedIdentity is the only request-scoped source of authenticated user,
+	// group, tenant, team, and Router Learning continuity identity. It is
+	// derived once at ingress; downstream components must not re-read raw
+	// headers or protocol/query fallback fields for identity.
+	TrustedIdentity authz.TrustedIdentity
 	// IngressBodyBytes records only transport size. Source bytes live in the
 	// bounded, ephemeral protocol envelope and are never general-purpose state.
 	IngressBodyBytes  int

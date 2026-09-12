@@ -43,14 +43,14 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
-	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
+	signals, authzErr := classifier.EvaluateAllSignalsWithIdentity(classification.SignalEvaluationInput{
 		Text:                   signalInput.compressedText,
 		ContextText:            signalInput.allMessagesText,
 		CurrentUserText:        signalInput.currentUserText,
 		PriorUserMessages:      signalInput.priorUserMessages,
 		NonUserMessages:        nonUserMessages,
 		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
+		TrustedIdentity:        ctx.TrustedIdentity,
 		ImageURL:               ctx.RequestImageURL,
 		UncompressedText:       signalInput.evaluationText,
 		SkipCompressionSignals: signalInput.skipCompressionSignals,

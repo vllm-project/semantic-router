@@ -73,6 +73,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     identity: {
       user_id_header: 'x-authz-user-id',
       user_groups_header: 'x-authz-user-groups',
+      ingress: 'none',
     },
     providers: [],
   } satisfies AuthzConfig,

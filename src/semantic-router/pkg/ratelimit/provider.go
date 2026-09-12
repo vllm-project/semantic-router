@@ -46,7 +46,6 @@ type Context struct {
 	UserID     string
 	Groups     []string
 	Model      string
-	Headers    map[string]string
 	TokenCount int // estimated input tokens from classification
 }
 

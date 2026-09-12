@@ -271,6 +271,7 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
       schema: object('Identity Headers', {
         user_id_header: text('User ID Header'),
         user_groups_header: text('User Groups Header'),
+        ingress: select('Verified Identity Ingress', ['none', 'header-injection'], true),
       }),
     },
     providers: {
