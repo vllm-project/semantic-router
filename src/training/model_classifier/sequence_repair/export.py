@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .model import load_model
 from .runtime_mapping import RUNTIME_TASKS, write_runtime_mappings
+from .task_head import assert_task_head_preserved, verify_saved_task_head
 
 
 def main():
@@ -34,6 +35,7 @@ def main():
     torch.set_num_threads(8)
     model, tokenizer, labels, _ = load_model(args.base, args.contract, args.adapter)
     model.eval()
+    head = verify_saved_task_head(model, args.adapter / "adapter_model.safetensors")
     tokens = tokenizer(
         ["Numerical merge equivalence probe.", "用于核对合并数值的输入。"],
         padding=True,
@@ -43,6 +45,7 @@ def main():
         before = model(**tokens).logits
         merged = model.merge_and_unload(safe_merge=True)
         after = merged(**tokens).logits
+    assert_task_head_preserved(head, merged)
     torch.testing.assert_close(before, after, atol=2e-4, rtol=2e-4)
     if type(merged).__name__ != "ModernBertForSequenceClassification":
         raise ValueError(
@@ -54,6 +57,20 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     merged.save_pretrained(args.output, safe_serialization=True)
     tokenizer.save_pretrained(args.output)
+    restored = (
+        type(merged)
+        .from_pretrained(
+            args.output,
+            torch_dtype=torch.float32,
+            attn_implementation="sdpa",
+            reference_compile=False,
+        )
+        .eval()
+    )
+    assert_task_head_preserved(head, restored)
+    with torch.inference_mode():
+        reloaded_logits = restored(**tokens).logits
+    torch.testing.assert_close(after, reloaded_logits, atol=0, rtol=0)
     mapping_files = write_runtime_mappings(args.output, labels, args.runtime_task)
     receipt = {
         "base_model": args.base_id,
@@ -76,6 +93,8 @@ def main():
         "max_position_embeddings": merged.config.max_position_embeddings,
         "position_capacity_is_quality_evidence": False,
         "weight_dtype": "float32",
+        "task_head": head,
+        "task_head_preserved_after_merge_and_reload": True,
         "test_used_for_selection": False,
         "merge_probe_max_absolute_difference": float((before - after).abs().max()),
         "files": {

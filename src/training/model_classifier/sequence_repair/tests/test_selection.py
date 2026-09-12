@@ -274,6 +274,8 @@ class BinarySelectionTests(unittest.TestCase):
                         {0: "safe", 1: "unsafe"},
                     ),
                 ), patch.object(
+                    train, "task_head_scope", return_value={"fixture": True}
+                ), patch.object(
                     train, "evaluate_records", side_effect=EvaluationReachedError
                 ) as evaluate, patch(
                     "builtins.print"

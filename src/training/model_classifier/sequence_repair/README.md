@@ -203,6 +203,10 @@ python -m src.training.model_classifier.sequence_repair.complete_adapter \
 
 This operation copies the existing head without training and checks CPU FP32
 logits before and after completion. It refuses adapters that already own `head`.
+Legacy adapters retain their inherited frozen head until this explicit operation;
+completion does not demonstrate a quality improvement. Training receipts record
+the effective head tensors and their trainable scope. Each saved adapter checks
+that its trainable head tensors survived serialization with identical bytes.
 Use the same completed adapter for both sides of a base-migration comparison;
 otherwise changing the base may also replace the task head. Select a base using
 short and long development retention, and record the migration separately from
@@ -213,6 +217,8 @@ agreement before/after merging, preserves the standard architecture and label
 mapping, and writes a `candidate-lock.json` with hashes. Supply the selected run's
 receipt. The base revision must match that receipt and test selection must be
 explicitly false.
+Export also verifies the effective head tensors before and after merge and after
+reloading the serialized model, including inherited frozen head tensors.
 
 ```bash
 python -m src.training.model_classifier.sequence_repair.export \

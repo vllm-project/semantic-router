@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 
 from .model import load_model
+from .task_head import verify_saved_task_head
 
 
 def main():
@@ -47,6 +48,7 @@ def main():
         if path.is_file() and path.name not in {
             "adapter_config.json",
             "adapter_model.safetensors",
+            "task-head.json",
         }:
             shutil.copy2(path, args.output / path.name)
     config["modules_to_save"] = [*(config.get("modules_to_save") or []), "head"]
@@ -65,6 +67,8 @@ def main():
     if not bool(torch.isfinite(before).all() and torch.isfinite(after).all()):
         raise ValueError("Task-head completion produced non-finite logits")
     torch.testing.assert_close(before, after, rtol=1e-6, atol=1e-6)
+    scope = verify_saved_task_head(restored, args.output / "adapter_model.safetensors")
+    (args.output / "task-head.json").write_text(json.dumps(scope, indent=2) + "\n")
     receipt = {
         "operation": "Preserve the existing sequence task head in a legacy adapter; no training or encoder change",
         "source_adapter_sha256": hashlib.sha256(
@@ -76,6 +80,7 @@ def main():
         "base_model": config["base_model_name_or_path"],
         "base_revision": config.get("revision"),
         "head_tensors": list(head),
+        "task_head": scope,
         "maximum_absolute_logit_difference": float((before - after).abs().max()),
         "quality_evaluation": False,
     }

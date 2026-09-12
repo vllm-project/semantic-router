@@ -21,6 +21,7 @@ from .selection import (
     fit_binary_operating_point,
     validate_selection_options,
 )
+from .task_head import task_head_scope
 
 
 def microbatch_loss(logits, labels, accumulation_steps):
@@ -320,6 +321,7 @@ def main():
         ),
         "contract_sha256": hashlib.sha256(Path(args.contract).read_bytes()).hexdigest(),
         "classifier_pooling": model.config.classifier_pooling,
+        "task_head": task_head_scope(model),
         "problem_type": model.config.problem_type,
         "train_files": file_receipts(args.train),
         "dev_files": file_receipts(args.dev),

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .data import load_contract
+from .task_head import verify_saved_task_head
 
 
 def configuration_overrides(contract):
@@ -61,6 +62,8 @@ def save_adapter(model, tokenizer, destination, base_id, base_revision):
     model.peft_config["default"].base_model_name_or_path = base_id
     model.peft_config["default"].revision = base_revision
     model.save_pretrained(destination)
+    scope = verify_saved_task_head(model, destination / "adapter_model.safetensors")
+    (destination / "task-head.json").write_text(json.dumps(scope, indent=2) + "\n")
     tokenizer.save_pretrained(destination)
     (destination / "label_mapping.json").write_text(
         json.dumps(
