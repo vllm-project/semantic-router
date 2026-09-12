@@ -1,8 +1,9 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -13,9 +14,11 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -47,48 +50,40 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		router      *OpenAIRouter
 		cfg         *config.RouterConfig
 		testToolsDB []tools.ToolEntry
+		embeddings  *embedding.Set
 	)
 
-	BeforeEach(func() {
-		// Initialize BERT model for embeddings
-		err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Initialize embedding models (ModelFactory) for tools tests
-		qwen3Candidates := []string{
-			resolveExtprocTestPath("../../../../models/mom-embedding-pro"),
-			resolveExtprocTestPath("../../../../models/mom-embedding-ultra"),
-		}
-		gemmaCandidates := []string{
-			resolveExtprocTestPath("../../../../models/mom-embedding-flash"),
-		}
-		qwen3ToUse := ""
-		for _, candidate := range qwen3Candidates {
-			if extprocTestModelArtifactsAvailable(candidate) {
-				qwen3ToUse = candidate
-				break
-			}
-		}
-		gemmaToUse := ""
-		for _, candidate := range gemmaCandidates {
-			if extprocTestModelArtifactsAvailable(candidate) {
-				gemmaToUse = candidate
-				break
-			}
-		}
-
-		if qwen3ToUse == "" && gemmaToUse == "" {
-			Skip("Skipping tool selection tests: embedding models are not available")
-		}
-
-		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
+	createToolsRouter := func(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+		provider, err := toolsEmbeddingProvider(cfg, embeddings)
 		if err != nil {
-			Skip(fmt.Sprintf("Skipping tool selection tests: failed to initialize embedding models: %v", err))
+			return nil, err
+		}
+		prepared, err := createTestRouterWithToolsProvider(cfg, provider)
+		if err != nil {
+			return nil, err
+		}
+		GinkgoT().Cleanup(func() {
+			Expect(errors.Join(
+				prepared.ResponseAPIFilter.Close(),
+				prepared.Cache.Close(),
+				prepared.Classifier.Close(),
+			)).To(Succeed())
+		})
+		return prepared, nil
+	}
+
+	BeforeEach(func() {
+		model := "qwen3"
+		modelPath := resolveExtprocTestPath("../../../../models/mom-embedding-pro")
+		if !extprocTestModelArtifactsAvailable(modelPath) {
+			model = "gemma"
+			modelPath = resolveExtprocTestPath("../../../../models/mom-embedding-flash")
+			if !extprocTestModelArtifactsAvailable(modelPath) {
+				Skip("Skipping tool selection tests: embedding models are not available")
+			}
 		}
 
-		// Create temporary directory for tools database
-		tempDir, err = os.MkdirTemp("", "tool_selection_test")
-		Expect(err).NotTo(HaveOccurred())
+		tempDir = GinkgoT().TempDir()
 
 		toolsDBPath = filepath.Join(tempDir, "tools.json")
 
@@ -154,10 +149,21 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		cfg = CreateTestConfig()
 		// Disable PII detection for tool selection tests (not needed and avoids model loading issues)
 		cfg.PIIModel.ModelID = ""
-	})
+		cfg.EmbeddingConfig.ModelType = model
 
-	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		// Tools borrow a real generation-owned provider, just as router assembly does.
+		prepareCfg := &config.RouterConfig{}
+		prepareCfg.EmbeddingModels = cfg.EmbeddingModels
+		prepareCfg.Tools.Enabled = true
+		prepareCfg.ModelBindings = map[string]config.ModelBinding{
+			"embedding": {Deployment: "tools-test", Contract: "embedding.v1", Adapter: model},
+		}
+		prepareCfg.ModelDeployments = map[string]config.ModelDeployment{
+			"tools-test": {Provider: "candle", Device: "cpu", Precision: "native", Artifact: modelPath},
+		}
+		embeddings, err = modelruntime.PrepareOwnedEmbeddings(context.Background(), prepareCfg, native.New(nil))
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoT().Cleanup(func() { Expect(embeddings.Close()).To(Succeed()) })
 	})
 
 	Describe("Tools Database Loading", func() {
@@ -169,7 +175,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 				var err error
-				router, err = CreateTestRouter(cfg)
+				router, err = createToolsRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(router.ToolsDatabase).NotTo(BeNil())
 				Expect(router.ToolsDatabase.IsEnabled()).To(BeTrue())
@@ -195,7 +201,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.ToolsDBPath = "/nonexistent/tools.json"
 				cfg.Tools.TopK = 3
 
-				_, err := CreateTestRouter(cfg)
+				_, err := createToolsRouter(cfg)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -208,7 +214,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.ToolsDBPath = badJSONPath
 				cfg.Tools.TopK = 3
 
-				_, err = CreateTestRouter(cfg)
+				_, err = createToolsRouter(cfg)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -219,7 +225,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.ToolsDBPath = toolsDBPath
 
 				var err error
-				router, err = CreateTestRouter(cfg)
+				router, err = createToolsRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(router.ToolsDatabase).NotTo(BeNil())
 				Expect(router.ToolsDatabase.IsEnabled()).To(BeFalse())
@@ -235,7 +241,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -293,7 +299,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.TopK = 5
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -302,7 +308,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			// Recreate router with new threshold
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Use a very specific query to test high threshold
@@ -320,7 +326,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			// Recreate router with new threshold
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather", 5)
@@ -334,7 +340,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			// Recreate router with new threshold
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("xyzabc123", 5)
@@ -349,7 +355,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			// Recreate router with new threshold
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			selectedTools, err := router.ToolsDatabase.FindSimilarTools("weather forecast", 2)
@@ -373,7 +379,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			request = testNeutralRequest("test-model", "What's the weather?")
@@ -403,7 +409,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.FallbackToEmpty = true
 				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
-				testRouter, err := CreateTestRouter(cfg)
+				testRouter, err := createToolsRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = testRouter.handleToolSelection(request, "xyzabc nonsense", []string{}, &response, ctx)
@@ -431,7 +437,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				cfg.Tools.FallbackToEmpty = false
 				cfg.Tools.SimilarityThreshold = &[]float32{0.99}[0]
 
-				testRouter, err := CreateTestRouter(cfg)
+				testRouter, err := createToolsRouter(cfg)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Set initial tools
@@ -476,7 +482,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.FallbackToEmpty = true
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -544,7 +550,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.FallbackToEmpty = true
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			response = &ext_proc.ProcessingResponse{
@@ -585,7 +591,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 		It("should skip processing when tools database is disabled", func() {
 			cfg.Tools.Enabled = false
-			testRouter, err := CreateTestRouter(cfg)
+			testRouter, err := createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 
 			request := testNeutralRequest("test-model", "What's the weather?")
@@ -604,7 +610,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			cfg.Tools.SimilarityThreshold = &[]float32{0.2}[0]
 
 			var err error
-			router, err = CreateTestRouter(cfg)
+			router, err = createToolsRouter(cfg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
