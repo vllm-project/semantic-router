@@ -26,16 +26,12 @@ func init() {
 // routes to a model nothing defines. It clears the parse stage, so the only
 // thing that can reject it is config validation.
 //
-// The fragment carries its own modelCards deliberately. The unknown-model check
-// in the router config validator only runs when the merged document declares a
-// model surface, and the dashboard profile's router config
-// (e2e/profiles/dashboard/values.yaml) still uses the pre-v0.3 schema and
-// declares none. Without these modelCards the merged document validates, the
-// deploy succeeds, and this case would silently rewrite the active config
-// instead of asserting anything.
+// The fragment carries no modelCards of its own. The dashboard profile's
+// router config (e2e/profiles/dashboard/values.yaml) is canonical v0.3 and
+// declares the model surface in routing.modelCards, merge mode leaves that
+// node untouched, so the merged document always carries one and the
+// unknown-model check in the router config validator runs against it.
 const safeFailureFragment = `routing:
-  modelCards:
-    - name: base-model
   decisions:
     - name: e2e-safe-failure
       description: Deploy probe that must be rejected by config validation
