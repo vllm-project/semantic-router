@@ -4286,6 +4286,56 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ProgressGateTuning": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "enforce"
+          ]
+        },
+        "calibration_id": {
+          "type": "string"
+        },
+        "window_size": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 1
+        },
+        "window_ttl_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "min_window_outcomes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_recoveries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_switches_per_window": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ProjectionMapping": {
       "properties": {
         "name": {
@@ -5409,6 +5459,9 @@
         "stability_weight": {
           "type": "number",
           "minimum": 0
+        },
+        "progress_gate": {
+          "$ref": "#/$defs/ProgressGateTuning"
         }
       },
       "additionalProperties": false,

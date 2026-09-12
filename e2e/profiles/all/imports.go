@@ -23,6 +23,7 @@ import (
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
@@ -126,6 +127,11 @@ func init() {
 	register(
 		"response-jailbreak",
 		func() framework.Profile { return responsejailbreak.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"progress-gate",
+		func() framework.Profile { return progressgate.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})

@@ -41,6 +41,7 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 }
 
 func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
+	recordSessionTurnOutcome(ctx, usage, pricing)
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}

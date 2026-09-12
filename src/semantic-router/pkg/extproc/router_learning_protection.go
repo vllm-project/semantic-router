@@ -46,6 +46,7 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 	if input.ctx != nil {
 		input.ctx.VSRLearningSessionID = identity.memoryKey
 		input.ctx.VSRLearningConversationID = identity.conversationID
+		configureProgressEvidence(input.ctx, progressGateConfig(cfg.Tuning), time.Now())
 	}
 
 	preflight.enabled = true
@@ -135,21 +136,38 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return decision
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
-	if rescue, ok := r.protectionRescueDecision(input, learningCtx, preflight, proposal); ok {
+	if progressGateConfig(preflight.config.Tuning).Enabled {
+		learningCtx = r.progressEligibleContext(input.ctx, learningCtx)
+		if learningCtx == nil || len(learningCtx.CandidateModels) == 0 {
+			input.ctx.VSRProgressGateError = fmt.Errorf("%w: progress gate hard filters", selection.ErrNoEligibleCandidates)
+			return decision
+		}
+	}
+	rescue, rescued := r.protectionRescueDecision(input, learningCtx, preflight, proposal)
+	if rescued {
 		return rescue
 	}
 	if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
+		attachRejectedRescue(protected, rescue.selectionResult)
 		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal)
 	}
 
-	result, ok := r.selectProtectionResult(preflight.config, baseResult, learningCtx)
+	result, ok := r.selectProtectionResultForContext(preflight.config, baseResult, learningCtx, input.ctx)
 	if !ok {
 		decision.selectionContext = input.selCtx
 		decision.selectionResult = input.baseResult
 		decision.selectedModelRef = input.selectedModelRef
 		decision.policy = newProtectionPolicy(input.ctx, preflight.config, preflight.mode, routerLearningActionHoldCurrent, "protection_unavailable", preflight.scope)
+		attachRejectedRescue(decision.selectionResult, rescue.selectionResult)
+		decision.policy.Details.Protection.trace = protectionTraceFromResult(decision.selectionResult)
+		if progressGateConfig(preflight.config.Tuning).Enabled && input.ctx != nil {
+			if reason := r.progressCandidateReason(input.ctx, learningCtx, selectedModelName(input.baseResult)); reason != "" {
+				input.ctx.VSRProgressGateError = fmt.Errorf("%w: %s", selection.ErrNoEligibleCandidates, reason)
+			}
+		}
 		return decision
 	}
+	attachRejectedRescue(result, rescue.selectionResult)
 	return r.protectionDecisionFromResult(input, learningCtx, result, preflight, proposal)
 }
 
@@ -187,6 +205,28 @@ func (r *OpenAIRouter) protectionRescueDecision(
 		current,
 		proposalModel,
 	)
+	selector := selection.NewSessionAwareSelector(protectionSelectionConfig(preflight.config))
+	selector.InitializeFromConfig(r.Config.ModelConfig)
+	gateDecision, gateTrace, gateRan := r.switchGateVerdict(
+		preflight.config, input.ctx, learningCtx, current, proposalModel,
+		selector.IsDowngrade(learningCtx, current, proposalModel),
+	)
+	if gateRan {
+		gateTrace.Source = "rescue"
+		attachSwitchGateTrace(&result, gateTrace)
+		hardReason := progressHardLock(learningCtx)
+		if hardReason == "" {
+			hardReason = r.progressCandidateReason(input.ctx, learningCtx, proposalModel)
+		}
+		if hardReason != "" {
+			gateTrace.Decision, gateTrace.Reason = selection.GateDecisionSuppress, hardReason
+		}
+		if gateDecision.Suppressed() || hardReason != "" {
+			finishProgressTrace(gateTrace, current, true, "rescue_rejected")
+			return routerLearningDecision{selectionResult: &result}, false
+		}
+		finishProgressTrace(gateTrace, proposalModel, false, "proposal_accepted")
+	}
 	policy := protectionRescuePolicyFromSelectionResult(
 		&result,
 		preflight.identity,
@@ -258,6 +298,9 @@ func (r *OpenAIRouter) protectionDecisionFromResult(
 	baseModel := selectedModelName(input.baseResult)
 	proposalModel := selectedModelName(enteredResult)
 	if preflight.mode == config.DecisionAdaptationModeObserve {
+		if result.SessionPolicy != nil {
+			finishProgressTrace(result.SessionPolicy.SwitchGate, proposalModel, false, "protection_observe")
+		}
 		policy := protectionPolicyFromSelectionResult(
 			result,
 			preflight.identity,
@@ -330,10 +373,14 @@ func protectionMode(ctx *RequestContext) string {
 	return config.DecisionAdaptationModeApply
 }
 
-func (r *OpenAIRouter) selectProtectionResult(
+// selectProtectionResultForContext runs the session-aware selector and then
+// gates any proposed switch on recent-outcome evidence. The gate can only
+// suppress: a suppressed switch holds the current model and records why.
+func (r *OpenAIRouter) selectProtectionResultForContext(
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
 	learningCtx *selection.SelectionContext,
+	ctx *RequestContext,
 ) (*selection.SelectionResult, bool) {
 	selector := selection.NewSessionAwareSelector(protectionSelectionConfig(cfg))
 	selector.SetBaseSelector(learningSelectionResult{result: baseResult})
@@ -353,7 +400,77 @@ func (r *OpenAIRouter) selectProtectionResult(
 		logging.Warnf("[RouterLearning] protection produced invalid result: %v", err)
 		return nil, false
 	}
+	r.applySwitchGateToResult(cfg, ctx, learningCtx, selector, result)
 	return result, true
+}
+
+// applySwitchGateToResult gates a proposed switch and rewrites the result to
+// hold the current model when the gate enforces a suppression. The trace is
+// attached in both modes so replay explains allowed and suppressed switches
+// alike.
+func (r *OpenAIRouter) applySwitchGateToResult(
+	cfg config.RouterLearningProtectionConfig,
+	ctx *RequestContext,
+	learningCtx *selection.SelectionContext,
+	selector *selection.SessionAwareSelector,
+	result *selection.SelectionResult,
+) {
+	if result == nil {
+		return
+	}
+	currentModel := currentLearningModel(learningCtx)
+	proposedModel := selectedModelName(result)
+	downgrade := selector.IsDowngrade(learningCtx, currentModel, proposedModel)
+
+	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
+	if !ran {
+		return
+	}
+	attachSwitchGateTrace(result, trace)
+	hardReason := progressHardLock(learningCtx)
+	if hardReason == "" {
+		hardReason = r.progressCandidateReason(ctx, learningCtx, proposedModel)
+	}
+	if hardReason != "" {
+		trace.Decision, trace.Reason = selection.GateDecisionSuppress, hardReason
+	}
+	if !decision.Suppressed() && hardReason == "" {
+		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
+		return
+	}
+	if reason := r.progressCandidateReason(ctx, learningCtx, currentModel); reason != "" {
+		finishProgressTrace(trace, proposedModel, false, "current_ineligible:"+reason)
+		if hardReason != "" && ctx != nil {
+			ctx.VSRProgressGateError = fmt.Errorf("%w: %s", selection.ErrNoEligibleCandidates, hardReason)
+		}
+		return
+	}
+	if holdCurrentModelInResult(learningCtx, result, currentModel) {
+		finishProgressTrace(trace, currentModel, true, "switch_suppressed")
+		logSwitchGateSuppression(ctx, currentModel, proposedModel, decision)
+	}
+}
+
+// holdCurrentModelInResult rewrites result to keep currentModel, but only when
+// that model is still a valid candidate for this request.
+func holdCurrentModelInResult(
+	learningCtx *selection.SelectionContext,
+	result *selection.SelectionResult,
+	currentModel string,
+) bool {
+	if result == nil || currentModel == "" {
+		return false
+	}
+	if selectedModelRefFromResult(learningCtx, &selection.SelectionResult{SelectedModel: currentModel}) == nil {
+		return false
+	}
+	result.SelectedModel = currentModel
+	result.Reasoning = "router_learning protection: progress gate suppressed switch"
+	if result.SessionPolicy != nil {
+		result.SessionPolicy.SelectedModel = currentModel
+		result.SessionPolicy.DecisionReason = "progress_gate_suppressed"
+	}
+	return true
 }
 
 func (r *OpenAIRouter) protectionIdentity(

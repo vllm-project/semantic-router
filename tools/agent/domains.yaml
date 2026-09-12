@@ -555,6 +555,23 @@ profiles:
     paths:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
+  progress-gate:
+    owner: e2e
+    coverage_role: session-evidence-to-switch
+    selection: pr
+    paths:
+      - e2e/profiles/progress-gate/**
+      - e2e/testcases/router_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
+      - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
+      - src/semantic-router/pkg/extproc/router_learning_helpers.go
+      - src/semantic-router/pkg/extproc/session_evidence*.go
+      - src/semantic-router/pkg/selection/session_switch_gate*.go
+      - src/semantic-router/pkg/selection/session_progress_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/session_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/router_memory*.go
   router-replay:
     owner: e2e
     coverage_role: router-replay-management-boundary-and-restart-recovery

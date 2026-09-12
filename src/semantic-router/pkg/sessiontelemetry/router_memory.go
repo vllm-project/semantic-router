@@ -25,9 +25,13 @@ type RouterSessionSnapshot struct {
 	SessionID string
 	UserID    string
 
-	CurrentModel string
-	LastSeen     time.Time
-	IdleFor      time.Duration
+	CurrentModel            string
+	LastSeen                time.Time
+	IdleFor                 time.Duration
+	LastSwitchAt            time.Time `json:"last_switch_at,omitempty"`
+	SwitchTimestamps        []int64   `json:"switch_timestamps,omitempty"`
+	OutcomeWindowSize       int       `json:"outcome_window_size,omitempty"`
+	OutcomeWindowTTLSeconds int       `json:"outcome_window_ttl_seconds,omitempty"`
 
 	TurnCount   int
 	SwitchCount int
@@ -46,6 +50,8 @@ type RouterSessionSnapshot struct {
 	LastDecisionReason        string
 	LastCacheAccountingSource string
 	LastPolicy                map[string]interface{}
+
+	RecentOutcomes []TurnOutcome `json:"recent_outcomes,omitempty"`
 }
 
 // SessionDecisionParams records the pre-dispatch policy result for one session
@@ -84,6 +90,10 @@ type routerSessionState struct {
 
 	currentModel string
 	lastSeen     time.Time
+	lastSwitchAt time.Time
+	// switchTimestamps mirrors LastSwitchAt as a bounded series for the
+	// oscillation guard's window-scoped count.
+	switchTimestamps []int64
 
 	turnCount   int
 	switchCount int
@@ -102,6 +112,11 @@ type routerSessionState struct {
 	lastDecisionReason        string
 	lastCacheAccountingSource string
 	lastPolicy                map[string]interface{}
+
+	recentOutcomes    []TurnOutcome
+	outcomeWindowSize int
+	outcomeWindowTTL  time.Duration
+	outcomeSaveMu     sync.Mutex
 }
 
 type routerSessionMemoryStore struct {
@@ -143,6 +158,9 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	}
 	if previous != "" && previous != p.SelectedModel {
 		st.switchCount++
+		st.lastSwitchAt = now
+		_, windowTTL := st.windowPolicy()
+		st.switchTimestamps = pruneSwitchTimestamps(append(st.switchTimestamps, now.UnixMilli()), windowTTL, now)
 	}
 	st.currentModel = p.SelectedModel
 	st.lastSeen = now
@@ -228,6 +246,10 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		UserID:                          st.userID,
 		CurrentModel:                    st.currentModel,
 		LastSeen:                        st.lastSeen,
+		LastSwitchAt:                    st.lastSwitchAt,
+		SwitchTimestamps:                cloneInt64Slice(st.switchTimestamps),
+		OutcomeWindowSize:               st.outcomeWindowSize,
+		OutcomeWindowTTLSeconds:         int(st.outcomeWindowTTL / time.Second),
 		IdleFor:                         idleFor,
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
@@ -244,6 +266,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		LastDecisionReason:              st.lastDecisionReason,
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
+		RecentOutcomes:                  cloneTurnOutcomes(st.recentOutcomes),
 	}
 	s.mu.Unlock()
 	return snapshot, true
@@ -303,6 +326,47 @@ func cloneIntMap(in map[string]int) map[string]int {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneInt64Slice(in []int64) []int64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]int64, len(in))
+	copy(out, in)
+	return out
+}
+
+// pruneSwitchTimestamps keeps the model-change times newer than ttl. Callers
+// pass the append time so the series stays bounded without reads mutating it.
+func pruneSwitchTimestamps(timestamps []int64, ttl time.Duration, now time.Time) []int64 {
+	if len(timestamps) == 0 || ttl <= 0 || now.IsZero() {
+		return timestamps
+	}
+	cutoff := now.Add(-ttl).UnixMilli()
+	kept := timestamps[:0]
+	for _, ts := range timestamps {
+		if ts >= cutoff {
+			kept = append(kept, ts)
+		}
+	}
+	return kept
+}
+
+// CountRecentSwitches returns how many recorded model changes fall inside the
+// window ending at now. The gate feeds its configured window TTL.
+func CountRecentSwitches(timestamps []int64, window time.Duration, now time.Time) int {
+	if len(timestamps) == 0 || window <= 0 || now.IsZero() {
+		return 0
+	}
+	cutoff := now.Add(-window).UnixMilli()
+	count := 0
+	for _, ts := range timestamps {
+		if ts >= cutoff && ts <= now.UnixMilli() {
+			count++
+		}
+	}
+	return count
 }
 
 func clonePolicyMap(in map[string]interface{}) map[string]interface{} {

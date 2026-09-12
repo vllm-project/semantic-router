@@ -337,6 +337,25 @@ func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
 	return 0, false
 }
 
+// CandidateEligible rechecks hard filters without invoking on_no_candidates fallbacks.
+func (s *MultiFactorSelector) CandidateEligible(selCtx *SelectionContext, model string) bool {
+	if selCtx == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	kept, _ := s.applySLOFilter(selCtx.CandidateModels, selCtx)
+	signals := s.gatherSignals(kept, selCtx)
+	kept, signals, _ = s.applyQualityFloor(kept, signals)
+	kept, _, _, _ = s.applyQualityEvidencePolicy(kept, signals)
+	for _, ref := range kept {
+		if ref.Model == model {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *MultiFactorSelector) applySLOFilter(candidates []config.ModelRef, selCtx *SelectionContext) (kept, dropped []config.ModelRef) {
 	for _, c := range candidates {
 		if reason, drop := s.exceedsSLO(c.Model, selCtx); drop {
