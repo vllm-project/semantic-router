@@ -56,6 +56,27 @@ def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> dict[str,
     }
 
 
+def validate_setup_metadata(setup: Any) -> list[str]:
+    """Validate the CLI-owned envelope separately from the Router payload."""
+
+    if setup is None:
+        return []
+    if not isinstance(setup, dict):
+        return ["config.setup: must be an object"]
+
+    errors = []
+    for name, value in setup.items():
+        if name == "mode":
+            if not isinstance(value, bool):
+                errors.append("config.setup.mode: must be a boolean")
+        elif name in {"state", "created_by", "created_at"}:
+            if not isinstance(value, str):
+                errors.append(f"config.setup.{name}: must be a string")
+        else:
+            errors.append(f"config.setup.{name}: unknown setup metadata field")
+    return errors
+
+
 def _load_yaml_dict(config_path: Path) -> dict[str, Any]:
     if not config_path.exists():
         return {}
@@ -72,7 +93,7 @@ def is_setup_mode_config(config_path: str | Path) -> bool:
     data = _load_yaml_dict(Path(config_path))
     setup_data = data.get(SETUP_MODE_KEY)
     if isinstance(setup_data, dict):
-        return bool(setup_data.get("mode"))
+        return setup_data.get("mode") is True
     return False
 
 

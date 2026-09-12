@@ -11,6 +11,8 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/yaml"
+
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -89,8 +91,8 @@ func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL,
 		return nil, fmt.Errorf("config/all response is not valid JSON: %w", err)
 	}
 
-	if len(result) == 0 {
-		return nil, fmt.Errorf("config/all returned empty JSON object")
+	if err := assertDashboardCanonicalConfig(result); err != nil {
+		return nil, fmt.Errorf("config/all: %w", err)
 	}
 
 	return result, nil
@@ -129,5 +131,38 @@ func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL,
 		return 0, fmt.Errorf("config/yaml returned empty body")
 	}
 
+	var document map[string]interface{}
+	if err := yaml.Unmarshal(body, &document); err != nil {
+		return 0, fmt.Errorf("config/yaml is not valid YAML: %w", err)
+	}
+	if err := assertDashboardCanonicalConfig(document); err != nil {
+		return 0, fmt.Errorf("config/yaml: %w", err)
+	}
 	return len(body), nil
+}
+
+// Check the deployed document, not just whether the file endpoint returned bytes.
+// The Router's strict parser owns full validation; this assertion proves the
+// Dashboard is reading that canonical provider/routing document.
+func assertDashboardCanonicalConfig(document map[string]interface{}) error {
+	if document["version"] != "v0.3" {
+		return fmt.Errorf("expected canonical version v0.3, got %v", document["version"])
+	}
+	providers, ok := document["providers"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("canonical config must declare providers")
+	}
+	models, ok := providers["models"].([]interface{})
+	if !ok || len(models) == 0 {
+		return fmt.Errorf("canonical config must declare provider models")
+	}
+	routing, ok := document["routing"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("canonical config must declare routing")
+	}
+	decisions, ok := routing["decisions"].([]interface{})
+	if !ok || len(decisions) == 0 {
+		return fmt.Errorf("canonical config must declare routing decisions")
+	}
+	return nil
 }

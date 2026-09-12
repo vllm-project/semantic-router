@@ -75,7 +75,9 @@ spec:
   # NEW: Gateway Integration (Optional)
   # ====================
   # Reuse existing Gateway (Envoy Gateway, Istio) instead of deploying Envoy sidecar
-  # When configured, operator creates HTTPRoute and skips Envoy sidecar container
+  # The Operator skips its Envoy sidecar. Configure the Gateway-specific ExtProc
+  # policy targeting this Router Service on port 50051 and model backend routes
+  # separately. The Operator does not create an HTTPRoute.
   gateway:
     existingRef:
       name: istio-ingressgateway

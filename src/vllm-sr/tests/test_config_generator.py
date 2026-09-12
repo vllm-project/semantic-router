@@ -223,7 +223,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
     lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
@@ -430,7 +430,7 @@ routing:
         "retry_on": "connect-failure,refused-stream",
         "num_retries": 2,
     }
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["lb_policy"] == "LEAST_REQUEST"
     assert cluster["least_request_lb_config"]["choice_count"] == 2
     assert cluster["outlier_detection"]["consecutive_5xx"] == 5
@@ -486,7 +486,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["dns_lookup_family"] == "V4_ONLY"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
@@ -551,7 +551,7 @@ routing:
         router_api_host="localhost",
     )
 
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
     tls_context = cluster["transport_socket"]["typed_config"]
@@ -698,7 +698,7 @@ routing:
     )
 
     route = _model_route(rendered, "claude-sonnet-4.6")
-    assert route["route"]["cluster"] == "claude_sonnet_4.6_cluster"
+    assert route["route"]["cluster"] == "model_claude_2dsonnet_2d4_2e6_cluster"
     assert route["route"]["host_rewrite_literal"] == "domain.com"
 
     with pytest.raises(AssertionError):

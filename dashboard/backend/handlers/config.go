@@ -81,12 +81,12 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		configData, err := decodeYAMLTaggedBody[routerconfig.CanonicalConfig](r.Body)
+		configData, err := decodeYAMLTaggedBody[canonicalConfigTransport](r.Body)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
-		if validationErr := validateCanonicalEndpointRefs(configData); validationErr != nil {
+		if validationErr := validateCanonicalEndpointRefs(configData.CanonicalConfig); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}

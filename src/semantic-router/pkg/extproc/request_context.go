@@ -165,6 +165,9 @@ type RequestContext struct {
 	// request contracts. Loopers consume this exact set; broader Router Learning
 	// candidate sets must independently apply the same request contracts.
 	VSREligibleModelRefs []config.ModelRef
+	// VSRPolicyEligibleModelRefs is a selector's hard eligibility envelope.
+	// Unlike context-only filtering, it also constrains tier/global learning.
+	VSRPolicyEligibleModelRefs []config.ModelRef
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -276,8 +279,9 @@ type RequestContext struct {
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
 
 	// Looper context
-	LooperRequest   bool // True only for token-authenticated in-process looper requests
-	LooperIteration int  // The iteration number if this is a looper request
+	LooperRequest   bool                  // True only for token-authenticated in-process looper requests
+	LooperIteration int                   // The iteration number if this is a looper request
+	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.

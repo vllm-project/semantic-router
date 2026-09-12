@@ -8,6 +8,9 @@ import errno
 import os
 import resource
 import stat
+import sys
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +59,7 @@ _SCMP_ACT_ERRNO = 0x00050000
 _SCMP_CMP_MASKED_EQ = 7
 _CLONE_THREAD = 0x00010000
 _WORKER_TASK_HEADROOM = 256
+_PROBE_EXIT_TIMEOUT_SECONDS = 1.0
 _DENIED_SYSCALLS = (
     "execve",
     "execveat",
@@ -212,38 +216,84 @@ def _apply_resource_limits(policy: WorkerSandboxPolicy) -> None:
 
 
 def _worker_task_limit() -> int:
-    """Return a per-UID task ceiling that leaves bounded worker headroom.
+    """Measure the kernel's UID task threshold before sealing the sandbox.
 
-    Linux applies RLIMIT_NPROC to every task owned by the real UID, not just to
-    descendants of this worker. A fixed low ceiling therefore fails closed on
-    a busy shared host before the worker creates even one legitimate thread.
-    Count the UID's existing tasks before isolation and reserve a fixed amount
-    of additional capacity; seccomp separately prevents process creation.
+    RLIMIT_NPROC counts tasks outside the worker's PID namespace, so enumerating
+    /proc cannot supply its baseline. Probe the kernel with short-lived, joined
+    threads instead. No worker code runs here, and no probe thread survives to
+    bypass the later thread-inherited seccomp and Landlock restrictions.
+
+    Keep every probe within the inherited limits, then reserve bounded headroom
+    above the first working threshold. Concurrent activity by the same UID can
+    still consume that capacity; the kernel continues to enforce the ceiling.
     """
 
+    _require_single_worker_thread()
+    inherited = resource.getrlimit(resource.RLIMIT_NPROC)
+    ceiling = min(
+        (limit for limit in inherited if limit != resource.RLIM_INFINITY),
+        default=sys.maxsize,
+    )
+    if ceiling < 1:
+        raise SandboxUnavailableError("worker inherited task limit has no capacity")
+    lower = 0
+    upper = min(_WORKER_TASK_HEADROOM, ceiling)
     try:
-        real_uid = os.getuid()
-        current_tasks = 0
-        for process in Path("/proc").iterdir():
-            if not process.name.isdecimal():
-                continue
-            try:
-                status = (process / "status").read_text(encoding="utf-8")
-                owner_line = next(
-                    line for line in status.splitlines() if line.startswith("Uid:")
+        capacity_checked = False
+        while not _probe_worker_thread(upper, inherited[1]):
+            if upper == ceiling or (
+                not capacity_checked and not _probe_worker_thread(ceiling, inherited[1])
+            ):
+                raise SandboxUnavailableError(
+                    "worker cannot create a thread within its inherited task limit"
                 )
-                if int(owner_line.split()[1]) != real_uid:
-                    continue
-                current_tasks += sum(
-                    1 for task in (process / "task").iterdir() if task.name.isdecimal()
-                )
-            except (FileNotFoundError, PermissionError, StopIteration, ValueError):
-                continue
-    except OSError as exc:
-        raise SandboxUnavailableError("could not inspect worker task usage") from exc
-    if current_tasks < 1:
-        raise SandboxUnavailableError("could not determine worker task usage")
-    return current_tasks + _WORKER_TASK_HEADROOM
+            # Python also reports memory/cgroup failures as "can't start new
+            # thread". Require a successful control at the inherited ceiling.
+            capacity_checked = True
+            lower, upper = upper, min(upper * 2, ceiling)
+        while upper - lower > 1:
+            midpoint = (lower + upper) // 2
+            if _probe_worker_thread(midpoint, inherited[1]):
+                upper = midpoint
+            else:
+                lower = midpoint
+        _require_single_worker_thread()
+        return min(upper + _WORKER_TASK_HEADROOM, ceiling)
+    finally:
+        resource.setrlimit(resource.RLIMIT_NPROC, inherited)
+
+
+def _probe_worker_thread(soft_limit: int, hard_limit: int) -> bool:
+    resource.setrlimit(resource.RLIMIT_NPROC, (soft_limit, hard_limit))
+    probe = threading.Thread()
+    try:
+        probe.start()
+    except RuntimeError as exc:
+        if str(exc) != "can't start new thread":
+            raise
+        return False
+    _wait_for_probe_exit(probe)
+    return True
+
+
+def _require_single_worker_thread() -> None:
+    if len(os.listdir("/proc/self/task")) != 1:
+        raise SandboxUnavailableError("worker sandbox must start with one thread")
+
+
+def _wait_for_probe_exit(probe: threading.Thread) -> None:
+    deadline = time.monotonic() + _PROBE_EXIT_TIMEOUT_SECONDS
+    probe.join(timeout=_PROBE_EXIT_TIMEOUT_SECONDS)
+    if probe.is_alive():
+        raise SandboxUnavailableError("worker task probe did not terminate")
+    # CPython joins its thread-state lock, not pthread_join. Wait for the kernel
+    # task to disappear as well, so probes cannot inflate later measurements or
+    # remain alive when thread-inherited sandbox restrictions are installed.
+    task = Path("/proc/self/task") / str(probe.native_id)
+    while task.exists():
+        if time.monotonic() >= deadline:
+            raise SandboxUnavailableError("worker task probe did not exit the kernel")
+        time.sleep(0.001)
 
 
 def _landlock_syscalls() -> tuple[int, int, int]:

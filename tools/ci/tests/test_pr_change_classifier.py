@@ -58,6 +58,19 @@ class PRChangeClassifierTests(unittest.TestCase):
             ("quality", "security", "core-tests", "cli"),
         )
 
+    def test_python_selector_changes_keep_native_parity_gate(self) -> None:
+        for path in (
+            "src/training/model_selection/ml_model_selection/models.py",
+            "src/training/model_selection/ml_model_selection/tests/test_native_parity.py",
+            "src/training/model_selection/ml_model_selection/requirements-parity.txt",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("core-tests", classify([path]).selected_jobs)
+        self.assertNotIn(
+            "core-tests",
+            classify(["src/training/model_classifier/train.py"]).selected_jobs,
+        )
+
     def test_workflow_only_change_runs_only_its_reusable_workflow(self) -> None:
         fixtures = {
             ".github/workflows/performance-test.yml": "performance",

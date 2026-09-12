@@ -128,6 +128,8 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true; $(MAKE) stop-qdrant >/dev/null 2>&1 || true' EXIT; \
 	$(MAKE) check-go-mod-tidy; \
 	$(MAKE) rust-ci; \
+	python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt; \
+	$(MAKE) test-model-selection-parity; \
 	$(MAKE) helm-ci-validate HELM_NAMESPACE=test-namespace; \
 	python3 -m pip install -U "huggingface_hub[cli]" hf_transfer; \
 	$(MAKE) start-milvus; \

@@ -65,6 +65,25 @@ The Router creates a sparse local Model Card for `local-chat`. Add a matching
 window, capabilities, tags, or LoRAs. Add benchmark measurements independently
 under top-level `evaluation.records[]`.
 
+## Check task capabilities before dispatch
+
+The selected model must satisfy both the provider protocol's capabilities and
+its declared task capabilities. The same checks apply when the Router selects
+a fallback from the matched decision. A fallback cannot reintroduce a model
+that was excluded by the request's context-window check.
+
+Model Card capability metadata accepts protocol names such as `image_input`
+and `image_generation`. The catalog aliases `vision`, `audio`, and `video`
+describe image, audio, and video **input**, respectively; they do not grant
+media-generation support. `structured_output` maps to `structured_json`, and
+`tool_use` maps to `tools`. Descriptive labels such as `long_context` or `coding`
+do not erase recognized capability declarations alongside them.
+
+A model without any recognized capability declaration retains protocol-only
+compatibility. For an annotated model, a protocol that can encode a request
+does not override missing task capabilities. When no eligible decision model
+can serve the requested task, the Router returns `unsupported_capability`.
+
 ## Configure Models in the Dashboard
 
 Open **Build → Models → Add Model**. You can then:

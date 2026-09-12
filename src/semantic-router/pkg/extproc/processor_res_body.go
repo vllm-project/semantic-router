@@ -21,7 +21,7 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	// Decrement active request count for queue depth estimation.
 	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
-	if looperResponse := r.handleLooperResponseBody(v.ResponseBody.Body, ctx); looperResponse != nil {
+	if looperResponse := r.handleLooperResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx); looperResponse != nil {
 		return looperResponse, nil
 	}
 
@@ -61,19 +61,6 @@ func contextRecoveryFailClosed(ctx *RequestContext) bool {
 	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
 	return plugin != nil &&
 		plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed
-}
-
-func (r *OpenAIRouter) handleLooperResponseBody(
-	responseBody []byte,
-	ctx *RequestContext,
-) *ext_proc.ProcessingResponse {
-	if !ctx.LooperRequest {
-		return nil
-	}
-
-	logging.Debugf("[Looper] Capturing response body for router replay")
-	r.attachRouterReplayResponse(ctx, responseBody, true)
-	return buildResponseBodyContinueResponse(nil, nil)
 }
 
 func buildResponseBodyContinueResponse(

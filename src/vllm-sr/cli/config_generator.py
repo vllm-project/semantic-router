@@ -13,6 +13,21 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
+ENVOY_CONTAINER_LISTENER_ADDRESS_ENV = "VLLM_SR_ENVOY_CONTAINER_LISTENER_ADDRESS"
+
+
+def _model_cluster_id(model_name: str) -> str:
+    """Encode a model alias into a stable, injective Envoy resource identity.
+
+    Escape UTF-8 bytes, including the escape marker, so punctuation aliases
+    cannot collapse into the same cluster. The prefix separates model resources
+    from the fixed infrastructure clusters in the template.
+    """
+    return "model_" + "".join(
+        chr(byte) if chr(byte).isascii() and chr(byte).isalnum() else f"_{byte:02x}"
+        for byte in model_name.encode("utf-8")
+    )
+
 
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
     headers: dict[str, str] = {}
@@ -63,7 +78,9 @@ def generate_envoy_config_from_user_config(
             listeners.append(
                 {
                     "name": listener.name,
-                    "address": listener.address,
+                    "address": os.getenv(
+                        ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
+                    ),
                     "port": listener.port,
                     "timeout": (
                         listener.timeout if hasattr(listener, "timeout") else "300s"
@@ -96,11 +113,10 @@ def generate_envoy_config_from_user_config(
         has_https = backend_group.has_https
         uses_dns = backend_group.uses_dns
 
-        # Sanitize model name for cluster name (replace / with _)
         if not endpoints:
             continue
 
-        cluster_name = model.name.replace("/", "_").replace("-", "_")
+        cluster_name = _model_cluster_id(model.name)
 
         # Determine cluster type based on whether endpoints use domain names
         # Domain names → LOGICAL_DNS, IP addresses → STATIC

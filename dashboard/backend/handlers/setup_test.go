@@ -45,6 +45,29 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
+// Config transport tests own temporary files, never the host's running stack.
+// Lifecycle behavior is exercised separately with explicitly seeded containers.
+func isolateConfigMutationRuntime(t *testing.T) {
+	t.Helper()
+	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
+	for _, key := range []string{"TEST_ROUTER_CONTAINER", "TEST_ENVOY_CONTAINER", "TEST_DASHBOARD_CONTAINER"} {
+		t.Setenv(key, "")
+	}
+	t.Cleanup(func() {
+		calls, err := os.ReadFile(fakeDocker.logPath)
+		if err != nil && !os.IsNotExist(err) {
+			t.Errorf("read isolated runtime calls: %v", err)
+		}
+		for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
+			if call != "" && !strings.HasPrefix(call, "inspect ") {
+				t.Errorf("config transport attempted to mutate an unconfigured runtime: %s", call)
+			}
+		}
+	})
+}
+
 func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
 	var config setupConfigFile
 	err := yaml.Unmarshal([]byte(`
@@ -483,6 +506,7 @@ global:
 }
 
 func TestSetupActivateHandler(t *testing.T) {
+	isolateConfigMutationRuntime(t)
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
 
@@ -659,7 +683,7 @@ func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedConta
 	if !strings.Contains(envoyConfigText, "host.docker.internal") {
 		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
 	}
-	if !strings.Contains(envoyConfigText, "test_model_cluster") {
+	if !strings.Contains(envoyConfigText, "model_test_2dmodel_cluster") {
 		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
 	}
 }
