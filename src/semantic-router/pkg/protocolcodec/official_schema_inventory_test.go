@@ -12,6 +12,8 @@ import (
 // d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa.
 // Every field is either represented semantically or decoded into an explicit
 // unsupported_feature error; adding a silent JSON sink is not allowed.
+// "extensions" additionally covers fields the pinned revision publishes only on
+// its beta surface (betamessage.go) rather than the GA one — see #3417 and D1.
 func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -168,7 +170,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"container", "content", "id", "model", "role", "stop_details", "stop_reason",
 				"stop_sequence", "type", "usage",
 			),
-			extensions: fields("error"),
+			extensions: fields("context_management", "error"),
 		},
 	}
 
