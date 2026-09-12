@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -44,6 +45,8 @@ type OpenAIRouter struct {
 	Cache                 cache.CacheBackend
 	ResponseCache         *cache.ResponseCacheService
 	responseCacheMu       sync.Mutex
+	kvAddressRegistryStore kvtransfer.AddressRegistry
+	kvAddressRegistryMu    sync.Mutex
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
 	CompressionEmbedding  embedding.Provider
