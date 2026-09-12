@@ -42,7 +42,46 @@ func (p routerLearningPolicy) toReplayAdaptation() *routerreplay.LearningAdaptat
 		Seed: diag.sampling.seed,
 	}
 	out.Scores = replayCandidateScores(diag.scores)
+	out.SnapshotIdentity = strings.TrimSpace(diag.snapshotIdentity)
+	out.SuccessEstimates = replaySuccessEstimates(diag.successEstimates)
 	return out
+}
+
+func replaySuccessEstimates(estimates []successEstimate) map[string]routerreplay.LearningSuccessEstimate {
+	if len(estimates) == 0 {
+		return nil
+	}
+	out := make(map[string]routerreplay.LearningSuccessEstimate, len(estimates))
+	for _, estimate := range estimates {
+		model := strings.TrimSpace(estimate.CandidateModel)
+		if model == "" {
+			continue
+		}
+		row := routerreplay.LearningSuccessEstimate{
+			Status:             string(estimate.Status),
+			SampleCount:        estimate.SampleCount,
+			EvidenceScope:      strings.TrimSpace(estimate.EvidenceScope),
+			FreshnessSeconds:   estimate.FreshnessSeconds,
+			CalibrationVersion: strings.TrimSpace(estimate.CalibrationVersion),
+			FallbackReason:     strings.TrimSpace(estimate.FallbackReason),
+			Outcome:            strings.TrimSpace(estimate.Outcome),
+		}
+		if estimate.Status == successEstimateCalibrated {
+			row.Probability = replayCalibratedFloat(estimate.Probability)
+			row.Uncertainty = replayCalibratedFloat(estimate.Uncertainty)
+			row.Coverage = replayCalibratedFloat(estimate.Coverage)
+		}
+		out[model] = row
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func replayCalibratedFloat(value float64) *float64 {
+	rounded := roundLearningFloat(value)
+	return &rounded
 }
 
 func replayCandidateScores(scores []routerLearningCandidateScore) map[string]routerreplay.LearningCandidateScore {

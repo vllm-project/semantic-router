@@ -25,7 +25,13 @@ const (
 
 	// RouterLearningStrategyRoutingSampling is the default online model-choice algorithm.
 	RouterLearningStrategyRoutingSampling = "routing_sampling"
+
+	// RouterLearningSuccessOutcomeRequestCompletion is the phase-1 success
+	// identity for observe-mode estimates.
+	RouterLearningSuccessOutcomeRequestCompletion = "request_completion"
 )
+
+const routerLearningDefaultSuccessStaleAfterSeconds = 86400
 
 const (
 	routerLearningDefaultSessionHeader      = "x-session-id"
@@ -60,9 +66,18 @@ type RouterLearningRedisStateStoreConfig struct {
 
 // RouterLearningAdaptationConfig configures online model-choice learning.
 type RouterLearningAdaptationConfig struct {
-	Enabled      *bool  `yaml:"enabled,omitempty"`
-	CandidateSet string `yaml:"candidate_set,omitempty"`
-	Strategy     string `yaml:"strategy,omitempty"`
+	Enabled      *bool                       `yaml:"enabled,omitempty"`
+	CandidateSet string                      `yaml:"candidate_set,omitempty"`
+	Strategy     string                      `yaml:"strategy,omitempty"`
+	Success      RouterLearningSuccessConfig `yaml:"success,omitempty"`
+}
+
+// RouterLearningSuccessConfig is the observe-path success-estimate contract.
+// Decision-local values override these global defaults. Selection policy
+// fields such as target_probability belong to later success_constrained work.
+type RouterLearningSuccessConfig struct {
+	Outcome           string `yaml:"outcome,omitempty"`
+	StaleAfterSeconds *int   `yaml:"stale_after_seconds,omitempty"`
 }
 
 // RouterLearningProtectionConfig configures online stability protection.
@@ -106,10 +121,12 @@ type DecisionAdaptationsConfig struct {
 }
 
 // DecisionLearningAdaptationConfig controls decision-local model-choice
-// learning. Empty mode and candidate_set inherit the global learning defaults.
+// learning. Empty mode, candidate_set, and success inherit the global learning
+// defaults.
 type DecisionLearningAdaptationConfig struct {
-	Mode         string `yaml:"mode,omitempty"`
-	CandidateSet string `yaml:"candidate_set,omitempty"`
+	Mode         string                       `yaml:"mode,omitempty"`
+	CandidateSet string                       `yaml:"candidate_set,omitempty"`
+	Success      *RouterLearningSuccessConfig `yaml:"success,omitempty"`
 }
 
 // DecisionLearningProtectionConfig controls decision-local stability
@@ -136,6 +153,31 @@ func (cfg RouterLearningAdaptationConfig) EffectiveStrategy() string {
 		return RouterLearningStrategyRoutingSampling
 	}
 	return cfg.Strategy
+}
+
+func (cfg RouterLearningSuccessConfig) EffectiveOutcome() string {
+	if outcome := strings.TrimSpace(cfg.Outcome); outcome != "" {
+		return outcome
+	}
+	return RouterLearningSuccessOutcomeRequestCompletion
+}
+
+func (cfg RouterLearningSuccessConfig) EffectiveStaleAfterSeconds() int {
+	if cfg.StaleAfterSeconds == nil {
+		return routerLearningDefaultSuccessStaleAfterSeconds
+	}
+	return *cfg.StaleAfterSeconds
+}
+
+func (cfg RouterLearningSuccessConfig) Merge(override RouterLearningSuccessConfig) RouterLearningSuccessConfig {
+	if outcome := strings.TrimSpace(override.Outcome); outcome != "" {
+		cfg.Outcome = outcome
+	}
+	if override.StaleAfterSeconds != nil {
+		seconds := *override.StaleAfterSeconds
+		cfg.StaleAfterSeconds = &seconds
+	}
+	return cfg
 }
 
 func (cfg RouterLearningProtectionConfig) EffectiveEnabled() bool {
@@ -199,6 +241,13 @@ func (cfg DecisionAdaptationsConfig) AdaptationCandidateSet(globalCandidateSet s
 		return RouterLearningCandidateSetDecision
 	}
 	return globalCandidateSet
+}
+
+func (cfg DecisionAdaptationsConfig) AdaptationSuccess(global RouterLearningSuccessConfig) RouterLearningSuccessConfig {
+	if cfg.Adaptation == nil || cfg.Adaptation.Success == nil {
+		return global
+	}
+	return global.Merge(*cfg.Adaptation.Success)
 }
 
 func (cfg DecisionAdaptationsConfig) ProtectionMode() string {

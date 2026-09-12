@@ -1864,6 +1864,9 @@
             "tier",
             "global"
           ]
+        },
+        "success": {
+          "$ref": "#/$defs/RouterLearningSuccessConfig"
         }
       },
       "additionalProperties": false,
@@ -5323,6 +5326,9 @@
             "",
             "routing_sampling"
           ]
+        },
+        "success": {
+          "$ref": "#/$defs/RouterLearningSuccessConfig"
         }
       },
       "additionalProperties": false,
@@ -5476,6 +5482,23 @@
         },
         "redis": {
           "$ref": "#/$defs/RouterLearningRedisStateStoreConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningSuccessConfig": {
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "",
+            "request_completion"
+          ]
+        },
+        "stale_after_seconds": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,

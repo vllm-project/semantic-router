@@ -1742,6 +1742,9 @@ global:
         enabled: true
         candidate_set: decision
         strategy: routing_sampling
+        success:
+          outcome: request_completion
+          stale_after_seconds: 86400
       protection:
         enabled: true
         scope: conversation

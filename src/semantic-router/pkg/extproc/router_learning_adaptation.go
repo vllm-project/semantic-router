@@ -12,14 +12,16 @@ import (
 )
 
 type routerLearningAdaptationDiagnostics struct {
-	candidateSet  string
-	strategy      string
-	baseModel     string
-	proposalModel string
-	decision      string
-	decisionTier  int
-	sampling      routerLearningSamplingDiagnostics
-	scores        []routerLearningCandidateScore
+	candidateSet     string
+	strategy         string
+	baseModel        string
+	proposalModel    string
+	decision         string
+	decisionTier     int
+	sampling         routerLearningSamplingDiagnostics
+	scores           []routerLearningCandidateScore
+	snapshotIdentity string
+	successEstimates []successEstimate
 }
 
 type routerLearningSamplingDiagnostics struct {
@@ -219,6 +221,7 @@ func (r *OpenAIRouter) adaptationConfig(
 	cfg := r.Config.RouterLearning.Adaptation
 	if ctx.VSRSelectedDecision != nil {
 		cfg.CandidateSet = ctx.VSRSelectedDecision.Adaptations.AdaptationCandidateSet(cfg.EffectiveCandidateSet())
+		cfg.Success = ctx.VSRSelectedDecision.Adaptations.AdaptationSuccess(cfg.Success)
 	}
 	return cfg, r.Config.RouterLearning.Enabled && cfg.EffectiveEnabled()
 }
