@@ -185,5 +185,11 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return validateShadowDispatchPlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHistoryReset, DisplayName: "History Reset", Description: "Remove eligible prior turns after an accepted topic change."}, PluginOptions[HistoryResetPluginConfig]{
+			Strict: true,
+			Validate: func(at PluginAt, p *HistoryResetPluginConfig) error {
+				return validateHistoryResetPlugin(at.Decision, at.Index, at.Type, p)
+			},
+		}),
 	}
 }

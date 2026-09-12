@@ -75,6 +75,7 @@ func buildReplayRouteDiagnostics(
 		receipt := *ctx.preparedDispatchReceipt
 		diagnostics.PreparedDispatch = &receipt
 	}
+	diagnostics.HistoryReset = historyResetReplayDiagnostics(ctx)
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}

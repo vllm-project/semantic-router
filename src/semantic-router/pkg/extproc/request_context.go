@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/historyreset"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -452,7 +453,14 @@ type RequestContext struct {
 	// TopicContinuityResults indexes the same results by rule name. Values are
 	// plain structs, so reads are detached copies.
 	TopicContinuityResults map[string]topiccontinuity.Result
-	SemanticResponse       *llmprotocol.Response
+
+	// History reset state. HistoryResetTrigger is the seam a topic-continuity
+	// signal fills; the action treats an absent result as missing evidence.
+	HistoryResetPolicy      *config.HistoryResetPluginConfig
+	HistoryResetTrigger     *historyreset.TriggerResult
+	HistoryResetAction      *historyreset.Action
+	HistoryResetDiagnostics *historyreset.Diagnostics
+	SemanticResponse        *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would

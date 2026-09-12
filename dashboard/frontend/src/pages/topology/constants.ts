@@ -85,6 +85,7 @@ const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   memory: 'MEM',
   system_prompt: 'SP',
   header_mutation: 'HM',
+  history_reset: 'HR',
   hallucination: 'HAL',
   router_replay: 'RR',
   rag: 'RAG',
@@ -109,6 +110,7 @@ const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; b
     memory: { background: '#3f6b73', border: '#2e4f55' },
     system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
     header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+    history_reset: { background: '#4a5568', border: '#2d3748' },
     hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
     router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
     rag: { background: '#2f855a', border: '#276749' },

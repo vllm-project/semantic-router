@@ -44,6 +44,7 @@ const (
 	DecisionPluginContextCompression = "context_compression"
 	DecisionPluginPromptCache        = "prompt_cache"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"
+	DecisionPluginHistoryReset       = "history_reset"
 )
 
 // SignalReferenceQualifier describes how a signal can add a third component
