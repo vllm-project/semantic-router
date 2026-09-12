@@ -2429,6 +2429,12 @@ global:
         # affected content as not matching; block treats it as a match instead,
         # since an inference failure means the content could not be verified safe.
         on_error: allow
+        # circuit_breaker configures per-backend circuit breaker for remote
+        # classifier endpoints (requires protocol to be set). When enabled,
+        # consecutive failures trip the breaker open, skipping requests for
+        # the configured interval.
+        circuit_breaker:
+          enabled: false
       classifier:
         domain:
           # Omit to keep the historical behaviour of running whenever a model is

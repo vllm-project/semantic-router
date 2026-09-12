@@ -179,6 +179,10 @@ type PromptGuardConfig struct {
 	// model_role="guardrail".
 	Protocol string `yaml:"protocol,omitempty"`
 
+	// CircuitBreaker, when non-nil and enabled, per-instance circuit breaker
+	// for the remote guardrail backend.
+	CircuitBreaker *RemoteClassifierCircuitBreakerConfig `yaml:"circuit_breaker,omitempty"`
+
 	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
 	// every other pluggable classifier backend instead of being redeclared
 	// per struct.
