@@ -15,9 +15,17 @@ Use YAML when configuration belongs in source control or an existing deployment
 pipeline:
 
 ```bash
+vllm-sr config init --output config.yaml
 vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
+
+`config init` writes the packaged minimal canonical template and refuses to
+replace an existing file unless `--force` is explicit. When a Router is already
+running, start from `vllm-sr config get` instead so unrelated active settings
+are preserved. A model becomes a routing candidate only after the same model
+name appears in `providers.models`, `routing.modelCards`, and the applicable
+decision's `modelRefs`.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`

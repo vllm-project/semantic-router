@@ -429,12 +429,15 @@ def materialize_runtime_config(
     *,
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
+    replace_active: bool = False,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
     The CLI records the digest it last materialized. A Dashboard or package
     activation changes the active digest without changing that receipt, so a
     later ``serve`` preserves the active file and reports the divergence.
+    ``replace_active`` is the explicit deployment boundary for replacing that
+    drifted active document from the selected source config.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
@@ -455,6 +458,16 @@ def materialize_runtime_config(
         active_data = runtime_config_path.read_bytes()
         if active_data == effective_data:
             _write_provenance(provenance_path, source_data, active_data)
+            return runtime_config_path
+
+        if replace_active:
+            log.info(
+                "Replacing active runtime config %s from source config %s",
+                runtime_config_path,
+                source_config_path,
+            )
+            _atomic_write_private_bytes(runtime_config_path, effective_data)
+            _write_provenance(provenance_path, source_data, effective_data)
             return runtime_config_path
 
         try:
