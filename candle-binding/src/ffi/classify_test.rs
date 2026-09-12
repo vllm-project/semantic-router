@@ -42,7 +42,7 @@ fn test_classify_load_id2label_from_config(traditional_pii_token_model_path: Str
             }
 
             // Test specific label mappings for PII model
-            for (_, label) in id2label.iter() {
+            for label in id2label.values() {
                 assert!(!label.is_empty(), "Label should not be empty");
             }
 
