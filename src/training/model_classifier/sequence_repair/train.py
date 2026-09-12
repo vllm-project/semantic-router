@@ -311,6 +311,16 @@ def main():
         "initial_adapter_sha256": hashlib.sha256(
             (args.adapter / "adapter_model.safetensors").read_bytes()
         ).hexdigest(),
+        "initial_adapter_config_sha256": (
+            hashlib.sha256(
+                (args.adapter / "adapter_config.json").read_bytes()
+            ).hexdigest()
+            if (args.adapter / "adapter_config.json").is_file()
+            else None
+        ),
+        "contract_sha256": hashlib.sha256(Path(args.contract).read_bytes()).hexdigest(),
+        "classifier_pooling": model.config.classifier_pooling,
+        "problem_type": model.config.problem_type,
         "train_files": file_receipts(args.train),
         "dev_files": file_receipts(args.dev),
         "label2id": label_to_id,

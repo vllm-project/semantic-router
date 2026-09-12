@@ -1,6 +1,7 @@
 """Exact operating points, tied probabilities, and explicit checkpoint selection."""
 
 import copy
+import hashlib
 import io
 import json
 import math
@@ -187,7 +188,9 @@ class BinarySelectionTests(unittest.TestCase):
         parameter = SimpleNamespace(requires_grad=True, numel=lambda: 1)
         model = SimpleNamespace(
             config=SimpleNamespace(
-                problem_type="single_label_classification", max_position_embeddings=32
+                problem_type="single_label_classification",
+                classifier_pooling="cls",
+                max_position_embeddings=32,
             ),
             parameters=lambda: iter([parameter]),
             gradient_checkpointing_enable=Mock(),
@@ -204,6 +207,15 @@ class BinarySelectionTests(unittest.TestCase):
             adapter = root / "adapter"
             adapter.mkdir()
             (adapter / "adapter_model.safetensors").write_bytes(b"fixture")
+            contract = root / "contract.json"
+            contract.write_text(
+                json.dumps(
+                    {
+                        "label2id": {"safe": 0, "unsafe": 1},
+                        "pooling": "mean",
+                    }
+                )
+            )
             for partition in ["train", "dev"]:
                 (root / f"{partition}.jsonl").write_text(
                     "".join(
@@ -228,7 +240,7 @@ class BinarySelectionTests(unittest.TestCase):
                 "--adapter",
                 str(adapter),
                 "--contract",
-                "fixture-contract",
+                str(contract),
                 "--train",
                 str(root / "train.jsonl"),
                 "--dev",
@@ -243,6 +255,9 @@ class BinarySelectionTests(unittest.TestCase):
                 "0.1",
             ]
             for explicit in [None, "bfloat16", "float32"]:
+                adapter_config = adapter / "adapter_config.json"
+                if explicit is not None:
+                    adapter_config.write_text('{"r": 32}\n')
                 output = root / str(explicit)
                 argv = [*arguments, "--output", str(output)]
                 if explicit is not None:
@@ -271,6 +286,22 @@ class BinarySelectionTests(unittest.TestCase):
                 receipt = json.loads((output / "run.json").read_text())
                 self.assertEqual(receipt["evaluation_dtype"], expected)
                 self.assertIn("BF16 autocast", receipt["precision"])
+                self.assertEqual(
+                    receipt["contract_sha256"],
+                    hashlib.sha256(contract.read_bytes()).hexdigest(),
+                )
+                # Record the configuration of the constructed model, including
+                # its resolved default problem type, rather than copying input.
+                self.assertEqual(receipt["classifier_pooling"], "cls")
+                self.assertEqual(receipt["problem_type"], "single_label_classification")
+                self.assertEqual(
+                    receipt["initial_adapter_config_sha256"],
+                    (
+                        hashlib.sha256(adapter_config.read_bytes()).hexdigest()
+                        if explicit is not None
+                        else None
+                    ),
+                )
             with patch.dict(sys.modules, {"torch": fake_torch}), patch.object(
                 sys,
                 "argv",
