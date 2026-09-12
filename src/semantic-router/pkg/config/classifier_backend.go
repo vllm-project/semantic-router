@@ -73,10 +73,28 @@ func (c *RemoteClassifierCircuitBreakerConfig) EffectiveHalfOpenMaxRequests() in
 	return *c.HalfOpenMaxRequests
 }
 
+// Validate checks circuit breaker thresholds are positive when enabled.
+// Shared by RemoteClassifierBackend and PromptGuardConfig.
+func (c *RemoteClassifierCircuitBreakerConfig) Validate() error {
+	if c == nil || !c.Enabled {
+		return nil
+	}
+	if c.ConsecutiveFailures != nil && *c.ConsecutiveFailures <= 0 {
+		return fmt.Errorf("circuit_breaker.consecutive_failures must be positive when enabled, got %d", *c.ConsecutiveFailures)
+	}
+	if c.OpenIntervalMs != nil && *c.OpenIntervalMs <= 0 {
+		return fmt.Errorf("circuit_breaker.open_interval_ms must be positive when enabled, got %d", *c.OpenIntervalMs)
+	}
+	if c.HalfOpenMaxRequests != nil && *c.HalfOpenMaxRequests <= 0 {
+		return fmt.Errorf("circuit_breaker.half_open_max_requests must be positive when enabled, got %d", *c.HalfOpenMaxRequests)
+	}
+	return nil
+}
+
 const (
-	defaultCircuitBreakerConsecutiveFailures   = 10
-	defaultCircuitBreakerOpenIntervalMs        = 30000
-	defaultCircuitBreakerHalfOpenMaxRequests   = 1
+	defaultCircuitBreakerConsecutiveFailures = 10
+	defaultCircuitBreakerOpenIntervalMs      = 30000
+	defaultCircuitBreakerHalfOpenMaxRequests = 1
 )
 
 // RemoteClassifierBackend is the shared remote attachment contract for
@@ -84,11 +102,11 @@ const (
 // existing local implementation. DeadlineMs is a pointer so omitted and
 // an explicitly invalid zero value cannot be confused during validation.
 type RemoteClassifierBackend struct {
-	Protocol        string                              `yaml:"protocol" json:"protocol"`
-	Contract        string                              `yaml:"contract,omitempty" json:"contract,omitempty"`
-	Model           string                              `yaml:"model" json:"model"`
-	DeadlineMs      *int                                `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
-	CircuitBreaker  *RemoteClassifierCircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
+	Protocol       string                                `yaml:"protocol" json:"protocol"`
+	Contract       string                                `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Model          string                                `yaml:"model" json:"model"`
+	DeadlineMs     *int                                  `yaml:"deadline_ms,omitempty" json:"deadline_ms,omitempty"`
+	CircuitBreaker *RemoteClassifierCircuitBreakerConfig `yaml:"circuit_breaker,omitempty" json:"circuit_breaker,omitempty"`
 }
 
 // UnmarshalYAML rejects stale or misspelled deadline fields instead of letting
@@ -172,17 +190,8 @@ func (b *RemoteClassifierBackend) Validate() error {
 
 // validateCircuitBreaker checks circuit breaker thresholds are positive when enabled.
 func (b *RemoteClassifierBackend) validateCircuitBreaker() error {
-	if b.CircuitBreaker == nil || !b.CircuitBreaker.Enabled {
-		return nil
-	}
-	if b.CircuitBreaker.ConsecutiveFailures != nil && *b.CircuitBreaker.ConsecutiveFailures <= 0 {
-		return fmt.Errorf("backend.circuit_breaker.consecutive_failures must be positive when enabled, got %d", *b.CircuitBreaker.ConsecutiveFailures)
-	}
-	if b.CircuitBreaker.OpenIntervalMs != nil && *b.CircuitBreaker.OpenIntervalMs <= 0 {
-		return fmt.Errorf("backend.circuit_breaker.open_interval_ms must be positive when enabled, got %d", *b.CircuitBreaker.OpenIntervalMs)
-	}
-	if b.CircuitBreaker.HalfOpenMaxRequests != nil && *b.CircuitBreaker.HalfOpenMaxRequests <= 0 {
-		return fmt.Errorf("backend.circuit_breaker.half_open_max_requests must be positive when enabled, got %d", *b.CircuitBreaker.HalfOpenMaxRequests)
+	if err := b.CircuitBreaker.Validate(); err != nil {
+		return fmt.Errorf("backend.%w", err)
 	}
 	return nil
 }

@@ -16,3 +16,14 @@ func recordCircuitBreakerFailure(name string) {
 		"backend": name,
 	})
 }
+
+// recordCircuitBreakerTransition emits a structured log each time the circuit
+// breaker state machine changes state. The backend label stays bounded to the
+// finite set of configured remote backends.
+func recordCircuitBreakerTransition(name string, from, to circuitBreakerState) {
+	logging.ComponentEvent("classifier", "circuit_breaker_transition", map[string]interface{}{
+		"backend": name,
+		"from":    from.String(),
+		"to":      to.String(),
+	})
+}

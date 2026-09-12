@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 )
 
@@ -51,11 +53,23 @@ func connTransportError() error {
 	return &connector.Error{Kind: connector.KindTransport, Operation: "http_classify", Retryable: true, Cause: errors.New("connection refused")}
 }
 
-func testCBConfig(enabled bool) *RemoteClassifierCircuitBreakerConfig {
+// connCancelledError builds a connector error wrapping a caller cancellation,
+// which the connector produces with KindTransport and Retryable=false.
+func connCancelledError() error {
+	return &connector.Error{Kind: connector.KindTransport, Operation: "http_classify", Retryable: false, Cause: context.Canceled}
+}
+
+// connNonRetryableTransportError builds a connector transport failure that is
+// not retryable and therefore must not count toward the breaker.
+func connNonRetryableTransportError() error {
+	return &connector.Error{Kind: connector.KindTransport, Operation: "http_classify", Retryable: false, Cause: errors.New("connection reset")}
+}
+
+func testCBConfig(enabled bool) *config.RemoteClassifierCircuitBreakerConfig {
 	threshold := 3
 	open := 100
 	probes := 1
-	return &RemoteClassifierCircuitBreakerConfig{
+	return &config.RemoteClassifierCircuitBreakerConfig{
 		Enabled:             enabled,
 		ConsecutiveFailures: &threshold,
 		OpenIntervalMs:      &open,
@@ -124,7 +138,7 @@ func TestCircuitBreakerHalfOpenToClosed(t *testing.T) {
 	threshold := 2
 	openInterval := 50
 	probes := 1
-	cfg := &RemoteClassifierCircuitBreakerConfig{
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
 		Enabled:             true,
 		ConsecutiveFailures: &threshold,
 		OpenIntervalMs:      &openInterval,
@@ -161,7 +175,7 @@ func TestCircuitBreakerHalfOpenFails(t *testing.T) {
 	threshold := 1
 	openInterval := 50
 	probes := 1
-	cfg := &RemoteClassifierCircuitBreakerConfig{
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
 		Enabled:             true,
 		ConsecutiveFailures: &threshold,
 		OpenIntervalMs:      &openInterval,
@@ -185,7 +199,7 @@ func TestCircuitBreakerHalfOpenFails(t *testing.T) {
 		t.Fatal("expected circuit breaker open after failed probe")
 	}
 	var cbErr *ErrCircuitBreakerOpen
-	if err := wrapped.Classify(context.Background(), "text"); err != nil {
+	if _, err := wrapped.Classify(context.Background(), "text"); err != nil {
 		if !errors.As(err, &cbErr) {
 			t.Fatalf("expected *ErrCircuitBreakerOpen, got %T: %v", err, err)
 		}
@@ -194,51 +208,206 @@ func TestCircuitBreakerHalfOpenFails(t *testing.T) {
 	}
 }
 
-// TestCircuitBreakerCancellationNotCounted verifies that a cancelled context
-// error does not increment the circuit breaker failure count.
-func TestCircuitBreakerCancellationNotCounted(t *testing.T) {
+// TestCircuitBreakerConnectorCancellationNotCounted verifies that a retryable
+// connector error wrapping a cancelled context does not count toward the breaker
+// (the connector sets Retryable=false for cancelled contexts).
+func TestCircuitBreakerConnectorCancellationNotCounted(t *testing.T) {
 	fake := &fakeBackend{results: make(chan resultOrError, 10)}
 	cfg := testCBConfig(true)
 	wrapped := newCircuitBreakingBackend(fake, cfg, "test-model")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	fake.results <- resultOrError{err: context.Canceled}
-	// This should pass through the error but NOT be counted as a breaker failure
-	_, err := wrapped.Classify(ctx, "text")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
+	// Two connector-wrapped cancellations must not count toward threshold=3.
+	for i := 0; i < 2; i++ {
+		fake.results <- resultOrError{err: connCancelledError()}
+		_, err := wrapped.Classify(context.Background(), "text")
+		if err == nil {
+			t.Fatalf("step %d: expected error", i)
+		}
 	}
 
-	// After one cancellation, the breaker should still be closed (0 failures toward threshold)
-	// Next call should fail from the backend (transport error) but first one didn't count
-	fake.results <- resultOrError{err: connTransportError()}
-	_, err = wrapped.Classify(context.Background(), "text")
-	if err == nil {
-		t.Fatal("expected error")
+	// Three transport errors = threshold, should open breaker.
+	for i := 0; i < 3; i++ {
+		fake.results <- resultOrError{err: connTransportError()}
+		_, err := wrapped.Classify(context.Background(), "text")
+		if err == nil {
+			t.Fatalf("expected error on transport failure %d", i)
+		}
 	}
 
-	// Two more transport errors should still not be enough to open breaker (only 2 counted)
-	fake.results <- resultOrError{err: connTransportError()}
-	fake.results <- resultOrError{err: connTransportError()}
-	_, err = wrapped.Classify(context.Background(), "text")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	_, err = wrapped.Classify(context.Background(), "text")
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	// Now 3 transport errors total = threshold reached, should open breaker
-	_, err = wrapped.Classify(context.Background(), "text")
-	if err == nil {
-		t.Fatal("expected circuit breaker open")
-	}
+	// Next call should be rejected by the open breaker.
+	_, err := wrapped.Classify(context.Background(), "text")
 	var cbErr *ErrCircuitBreakerOpen
 	if !errors.As(err, &cbErr) {
-		t.Fatalf("expected *ErrCircuitBreakerOpen, got %T: %v", err, err)
+		t.Fatalf("expected *ErrCircuitBreakerOpen after open, got %T: %v", err, err)
+	}
+}
+
+// TestCircuitBreakerNonRetryableTransportNotCounted verifies that a
+// non-retryable transport failure (Retryable=false) does not count toward the
+// breaker (item 1).
+func TestCircuitBreakerNonRetryableTransportNotCounted(t *testing.T) {
+	fake := &fakeBackend{results: make(chan resultOrError, 10)}
+	cfg := testCBConfig(true)
+	wrapped := newCircuitBreakingBackend(fake, cfg, "test-model")
+
+	// Two non-retryable transport errors must not count toward threshold=3.
+	for i := 0; i < 2; i++ {
+		fake.results <- resultOrError{err: connNonRetryableTransportError()}
+		_, err := wrapped.Classify(context.Background(), "text")
+		if err == nil {
+			t.Fatalf("step %d: expected error", i)
+		}
+	}
+
+	// Three retryable transport errors = threshold, should open breaker.
+	for i := 0; i < 3; i++ {
+		fake.results <- resultOrError{err: connTransportError()}
+		_, err := wrapped.Classify(context.Background(), "text")
+		if err == nil {
+			t.Fatalf("expected error on transport failure %d", i)
+		}
+	}
+
+	_, err := wrapped.Classify(context.Background(), "text")
+	var cbErr *ErrCircuitBreakerOpen
+	if !errors.As(err, &cbErr) {
+		t.Fatalf("expected *ErrCircuitBreakerOpen after open, got %T: %v", err, err)
+	}
+}
+
+// TestHalfOpenNonCountedErrorProbeReleases verifies that an admitted half-open
+// probe returning a non-counted error (e.g. caller cancellation) does not leave
+// the breaker stuck in half-open (item 4). The probe slot must be released and
+// the half-open round must resolve, so subsequent requests are not skipped.
+func TestHalfOpenNonCountedErrorProbeReleases(t *testing.T) {
+	fake := &fakeBackend{results: make(chan resultOrError, 10)}
+	threshold := 1
+	openInterval := 50
+	probes := 1
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &threshold,
+		OpenIntervalMs:      &openInterval,
+		HalfOpenMaxRequests: &probes,
+	}
+	wrapped := newCircuitBreakingBackend(fake, cfg, "test")
+
+	// Trip the breaker.
+	fake.results <- resultOrError{err: connTransportError()}
+	if _, err := wrapped.Classify(context.Background(), "text"); err == nil {
+		t.Fatal("expected error")
+	}
+
+	// Wait for half-open interval.
+	time.Sleep(60 * time.Millisecond)
+
+	// Half-open probe returns a non-counted error (connector cancellation).
+	// This must NOT leave the breaker stuck — instead the slot is released
+	// and the half-open round resolves (no counted failures → closed).
+	fake.results <- resultOrError{err: connCancelledError()}
+	_, err := wrapped.Classify(context.Background(), "text")
+	if err == nil {
+		t.Fatal("expected error from cancelled half-open probe")
+	}
+
+	// The breaker should now be closed and admit the next request to the backend.
+	fake.results <- resultOrError{result: SequenceClassificationResult{Probabilities: []float32{0.9, 0.1}}}
+	if _, err := wrapped.Classify(context.Background(), "text"); err != nil {
+		t.Fatalf("expected success after half-open cancellation release, got %v", err)
+	}
+}
+
+// TestHalfOpenMaxProbesGreaterThanOne verifies that with maxProbes > 1 the
+// breaker remains half-open until all admitted probes resolve, reopening on
+// any failure (item 3).
+func TestHalfOpenMaxProbesGreaterThanOne(t *testing.T) {
+	threshold := 3
+	openInterval := 50
+	probes := 2
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &threshold,
+		OpenIntervalMs:      &openInterval,
+		HalfOpenMaxRequests: &probes,
+	}
+	cb := newCircuitBreaker("test", cfg)
+
+	// Trip breaker.
+	for i := 0; i < 3; i++ {
+		cb.recordFailure()
+	}
+	if got := cb.getState(); got != circuitBreakerOpen {
+		t.Fatalf("expected open after threshold, got %v", got)
+	}
+
+	// Wait for half-open interval.
+	time.Sleep(60 * time.Millisecond)
+
+	// Admit two probes.
+	if !cb.allow() {
+		t.Fatal("expected to admit probe 1")
+	}
+	if !cb.allow() {
+		t.Fatal("expected to admit probe 2")
+	}
+
+	// First probe succeeds — must NOT close the breaker (other probe unresolved).
+	cb.recordSuccess()
+	if got := cb.getState(); got != circuitBreakerHalfOpen {
+		t.Fatalf("expected half-open after first success (pending probe), got %v", got)
+	}
+
+	// Second probe fails — with maxProbes > 1 the breaker records the failure
+	// while keeping the leftover success as neutral. All unresolved now
+	// resolved, halfOpenFailed=true → open.
+	cb.recordFailure()
+	if got := cb.getState(); got != circuitBreakerOpen {
+		t.Fatalf("expected open after failure in half-open with maxProbes=2, got %v", got)
+	}
+
+	// Subsequent requests must be rejected.
+	if cb.allow() {
+		t.Fatal("expected reject after open from half-open failure")
+	}
+}
+
+// TestCircuitBreakerGaugeTransitions verifies the prometheus state gauge is
+// updated on each state transition (item 5).
+func TestCircuitBreakerGaugeTransitions(t *testing.T) {
+	threshold := 2
+	openInterval := 50
+	probes := 1
+	cfg := &config.RemoteClassifierCircuitBreakerConfig{
+		Enabled:             true,
+		ConsecutiveFailures: &threshold,
+		OpenIntervalMs:      &openInterval,
+		HalfOpenMaxRequests: &probes,
+	}
+	name := "gauge-test"
+
+	cb := newCircuitBreaker(name, cfg)
+	assertGauge(t, name, 0) // closed
+
+	cb.recordFailure()
+	assertGauge(t, name, 0) // still closed (failureCount=1 < threshold=2)
+
+	cb.recordFailure()
+	assertGauge(t, name, 1) // open
+
+	time.Sleep(60 * time.Millisecond)
+
+	cb.allow()              // open→half-open
+	assertGauge(t, name, 2) // half-open
+
+	cb.recordSuccess()      // half-open→closed
+	assertGauge(t, name, 0) // closed
+}
+
+func assertGauge(t *testing.T, name string, want float64) {
+	t.Helper()
+	got := testutil.ToFloat64(circuitBreakerStateGauge.WithLabelValues(name))
+	if got != want {
+		t.Errorf("gauge(%q) = %f, want %f", name, got, want)
 	}
 }
 

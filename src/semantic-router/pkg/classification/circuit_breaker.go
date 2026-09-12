@@ -21,6 +21,18 @@ const (
 	circuitBreakerHalfOpen circuitBreakerState = 2
 )
 
+// String returns a stable label for metrics and structured logs.
+func (s circuitBreakerState) String() string {
+	switch s {
+	case circuitBreakerOpen:
+		return "open"
+	case circuitBreakerHalfOpen:
+		return "half_open"
+	default:
+		return "closed"
+	}
+}
+
 // ErrCircuitBreakerOpen is returned when a call is skipped because the
 // circuit breaker is open. The typed error preserves the existing fail-closed
 // contract: decision-tree Unknown, rules.on_unknown, and prompt-guard on_error
@@ -39,22 +51,31 @@ func (e *ErrCircuitBreakerOpen) Error() string {
 type circuitBreaker struct {
 	mu sync.Mutex
 
-	threshold     int
-	openInterval  time.Duration
-	maxProbes     int
+	name         string
+	threshold    int
+	openInterval time.Duration
+	maxProbes    int
 
 	breakerState circuitBreakerState
 	failureCount int
 	openAt       time.Time
-	probeCount   int
+
+	// half-open probe accounting
+	admittedProbes   int
+	unresolvedProbes int
+	halfOpenFailed   bool
 }
 
-func newCircuitBreaker(cfg *config.RemoteClassifierCircuitBreakerConfig) *circuitBreaker {
-	return &circuitBreaker{
+func newCircuitBreaker(name string, cfg *config.RemoteClassifierCircuitBreakerConfig) *circuitBreaker {
+	cb := &circuitBreaker{
+		name:         name,
 		threshold:    cfg.EffectiveConsecutiveFailures(),
 		openInterval: time.Duration(cfg.EffectiveOpenInterval()) * time.Millisecond,
 		maxProbes:    cfg.EffectiveHalfOpenMaxRequests(),
+		breakerState: circuitBreakerClosed,
 	}
+	cb.recordStateLocked(circuitBreakerClosed)
+	return cb
 }
 
 // allow reports whether the caller may issue a request. It transitions
@@ -68,19 +89,29 @@ func (cb *circuitBreaker) allow() bool {
 		return true
 	case circuitBreakerOpen:
 		if time.Since(cb.openAt) >= cb.openInterval {
-			cb.breakerState = circuitBreakerHalfOpen
-			cb.probeCount = 0
+			cb.setHalfOpenLocked()
 		}
 	}
-	if cb.breakerState == circuitBreakerHalfOpen && cb.probeCount < cb.maxProbes {
-		cb.probeCount++
+	if cb.breakerState == circuitBreakerHalfOpen && cb.admittedProbes < cb.maxProbes {
+		cb.admittedProbes++
+		cb.unresolvedProbes++
 		return true
 	}
 	return false
 }
 
+func (cb *circuitBreaker) setHalfOpenLocked() {
+	from := cb.breakerState
+	cb.breakerState = circuitBreakerHalfOpen
+	cb.admittedProbes = 0
+	cb.unresolvedProbes = 0
+	cb.halfOpenFailed = false
+	cb.transitionLocked(from, circuitBreakerHalfOpen)
+}
+
 // recordFailure increments the failure count and trips the breaker when the
-// threshold is reached. In half-open a single failure returns to open.
+// threshold is reached. In half-open a failure is marked and the breaker
+// reopens once all admitted probes resolve.
 func (cb *circuitBreaker) recordFailure() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -92,25 +123,70 @@ func (cb *circuitBreaker) recordFailure() {
 			cb.tripLocked()
 		}
 	case circuitBreakerHalfOpen:
-		cb.tripLocked()
+		if cb.unresolvedProbes > 0 {
+			cb.unresolvedProbes--
+		}
+		cb.halfOpenFailed = true
+		cb.resolveHalfOpenLocked()
 	}
 }
 
 func (cb *circuitBreaker) tripLocked() {
+	from := cb.breakerState
 	cb.breakerState = circuitBreakerOpen
 	cb.openAt = time.Now()
 	cb.failureCount = 0
-	cb.probeCount = 0
+	cb.admittedProbes = 0
+	cb.unresolvedProbes = 0
+	cb.halfOpenFailed = false
+	cb.transitionLocked(from, circuitBreakerOpen)
 }
 
-// recordSuccess resets failures and transitions half-open→closed.
+// recordSuccess resets failures and transitions half-open→closed when all
+// admitted probes have resolved without failure.
 func (cb *circuitBreaker) recordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
 	cb.failureCount = 0
-	if cb.breakerState == circuitBreakerHalfOpen {
+	if cb.breakerState != circuitBreakerHalfOpen {
+		return
+	}
+	if cb.unresolvedProbes > 0 {
+		cb.unresolvedProbes--
+	}
+	cb.resolveHalfOpenLocked()
+}
+
+// releaseProbe releases an admitted half-open probe slot without counting it
+// as a success or failure. Used when an error is not counted toward breaker
+// state (e.g. caller cancellation). In closed/open state it is a no-op.
+func (cb *circuitBreaker) releaseProbe() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	if cb.breakerState != circuitBreakerHalfOpen {
+		return
+	}
+	if cb.unresolvedProbes > 0 {
+		cb.unresolvedProbes--
+	}
+	cb.resolveHalfOpenLocked()
+}
+
+// resolveHalfOpenLocked completes a half-open round when no unresolved probes
+// remain. If any probe failed, the breaker reopens; otherwise it closes.
+func (cb *circuitBreaker) resolveHalfOpenLocked() {
+	if cb.unresolvedProbes > 0 {
+		return
+	}
+	if cb.halfOpenFailed {
+		cb.tripLocked()
+	} else {
+		from := cb.breakerState
 		cb.breakerState = circuitBreakerClosed
+		cb.failureCount = 0
+		cb.transitionLocked(from, circuitBreakerClosed)
 	}
 }
 
@@ -126,6 +202,19 @@ func (cb *circuitBreaker) retryAfter() time.Time {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	return cb.openAt.Add(cb.openInterval)
+}
+
+// transitionLocked emits the observability surface for a single state-machine
+// transition. Callers must hold cb.mu.
+func (cb *circuitBreaker) transitionLocked(from, to circuitBreakerState) {
+	cb.recordStateLocked(to)
+	recordCircuitBreakerTransition(cb.name, from, to)
+}
+
+// recordStateLocked publishes the current state to the metrics gauge. Callers
+// must hold cb.mu.
+func (cb *circuitBreaker) recordStateLocked(state circuitBreakerState) {
+	circuitBreakerStateGauge.WithLabelValues(cb.name).Set(float64(state))
 }
 
 // circuitBreakingBackend wraps a SequenceClassifierBackend with a circuit
@@ -144,7 +233,7 @@ func newCircuitBreakingBackend(inner SequenceClassifierBackend, cfg *config.Remo
 	}
 	return &circuitBreakingBackend{
 		inner: inner,
-		cb:    newCircuitBreaker(cfg),
+		cb:    newCircuitBreaker(name, cfg),
 		name:  name,
 	}
 }
@@ -163,6 +252,8 @@ func (b *circuitBreakingBackend) Classify(ctx context.Context, text string) (Seq
 		if isUnavailableError(err) {
 			b.cb.recordFailure()
 			recordCircuitBreakerFailure(b.name)
+		} else {
+			b.cb.releaseProbe()
 		}
 		return SequenceClassificationResult{}, err
 	}
@@ -183,7 +274,7 @@ func newCircuitBreakingBackendScoring(inner ScoringBackend, cfg *config.RemoteCl
 	}
 	return &circuitBreakingScoringBackend{
 		inner: inner,
-		cb:    newCircuitBreaker(cfg),
+		cb:    newCircuitBreaker(name, cfg),
 		name:  name,
 	}
 }
@@ -202,6 +293,8 @@ func (b *circuitBreakingScoringBackend) Score(ctx context.Context, text string) 
 		if isUnavailableError(err) {
 			b.cb.recordFailure()
 			recordCircuitBreakerFailure(b.name)
+		} else {
+			b.cb.releaseProbe()
 		}
 		return 0, err
 	}
@@ -211,13 +304,20 @@ func (b *circuitBreakingScoringBackend) Score(ctx context.Context, text string) 
 
 // isUnavailableError reports whether err is a retry-exhausted connector error
 // indicating the backend is unreachable or returning a retryable status.
-// Cancellation and user-initiated context expiry are not counted.
+// Caller cancellation and other non-retryable errors are not counted.
 func isUnavailableError(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
 	connErr := new(connector.Error)
 	if errors.As(err, &connErr) {
 		switch connErr.Kind {
 		case connector.KindTransport:
-			return true
+			// Only retryable transport failures (connection refused, timeout
+			// after the retry budget, etc.) indicate the backend is down.
+			// Caller cancellation and non-retryable transport conditions
+			// carry Retryable=false and must not count toward the breaker.
+			return connErr.Retryable
 		case connector.KindStatus:
 			// Retryable status (5xx, 408, 429) indicate the backend is
 			// overloaded or down even after retry budget was exhausted.
