@@ -37,6 +37,16 @@
 4. Access gRPC API:
   kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }} 50051:50051
 
+5. Access the Dashboard:
+{{- if .Values.dashboard.enabled }}
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }}-dashboard {{ .Values.dashboard.service.port }}:{{ .Values.dashboard.service.port }}
+  echo "Visit http://localhost:{{ .Values.dashboard.service.port }}"
+{{- else }}
+  The Dashboard runs as its own Deployment and Service, and it is disabled by
+  default. Reinstall or upgrade with --set dashboard.enabled=true, then
+  port-forward svc/{{ include "semantic-router.fullname" . }}-dashboard on port {{ .Values.dashboard.service.port }}.
+{{- end }}
+
 {{- $config := (get .Values "config") | default (dict) -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
