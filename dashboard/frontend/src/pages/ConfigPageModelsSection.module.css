@@ -88,10 +88,17 @@
 }
 
 .liveVerification {
+  /* Fixed width, not min-width: idle/pending/verified/failed each render different-length
+   * text (status label, button label, and an inline error on failure). A content-driven
+   * width here changes per status and reflows every column to its right (e.g. Pricing) as
+   * the operator watches a verification run. Column layout, not this width, is what should
+   * flex if the Live column itself is ever resized. Matches the Live column's declared
+   * width in ConfigPageModelInventoryPanel.tsx (164px) minus the table cell's 1rem
+   * horizontal padding on each side (DataTable.module.css .td). */
   display: flex;
-  min-width: 145px;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  width: 132px;
+  gap: 0.3rem;
 }
 
 .liveVerificationHeading {
@@ -130,6 +137,8 @@
 
 .liveVerificationLabel {
   overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
   color: rgba(255, 255, 255, 0.76);
   font-size: 0.72rem;
   font-weight: 690;
@@ -172,14 +181,22 @@
 }
 
 .liveVerificationError {
+  /* Overrides the 220px max-width shared with .liveVerificationEvidence above: this span
+   * sits inside the fixed-width .liveVerification column (see comment there) and must not
+   * exceed it, or the failed state reflows the row the same way the button label does. */
+  max-width: 100%;
   color: #fecaca;
 }
 
 .liveVerificationButton {
+  /* Fixed width (not fit-content): "Check", "Checking…" and "Check again" render at
+   * different natural widths, and a fit-content button resizes with the label, reflowing
+   * the fixed-width .liveVerification column above it. */
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  width: fit-content;
+  width: 100%;
   min-height: 28px;
   padding: 0.28rem 0.58rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
