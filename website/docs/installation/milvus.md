@@ -131,7 +131,7 @@ routing:
 Run configuration validation before rollout:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## Network and transport security

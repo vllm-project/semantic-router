@@ -24,6 +24,7 @@ type ViewOptions struct {
 	Path        string
 	SurfaceKind string
 	SurfaceName string
+	Expanded    bool
 }
 
 // Representation is one cacheable schema response.
@@ -71,6 +72,34 @@ type schemaIndex struct {
 	Surfaces        map[string]surfaceIndex `json:"surfaces"`
 }
 
+type sectionField struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required"`
+	Description string `json:"description,omitempty"`
+	Href        string `json:"href"`
+	Const       any    `json:"const,omitempty"`
+	Default     any    `json:"default,omitempty"`
+	Enum        any    `json:"enum,omitempty"`
+	Minimum     any    `json:"minimum,omitempty"`
+	Maximum     any    `json:"maximum,omitempty"`
+}
+
+type sectionSummary struct {
+	View         map[string]any `json:"x-vllm-sr-view"`
+	Shape        string         `json:"shape"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description,omitempty"`
+	Fields       []sectionField `json:"fields"`
+	ExpandedHref string         `json:"expanded_href"`
+	Const        any            `json:"const,omitempty"`
+	Default      any            `json:"default,omitempty"`
+	Enum         any            `json:"enum,omitempty"`
+	Minimum      any            `json:"minimum,omitempty"`
+	Maximum      any            `json:"maximum,omitempty"`
+}
+
 // Render returns the requested full, index, section, or routing-surface view.
 func Render(options ViewOptions) (Representation, error) {
 	view := strings.ToLower(strings.TrimSpace(options.View))
@@ -92,8 +121,10 @@ func Render(options ViewOptions) (Representation, error) {
 	case ViewIndex:
 		payload, err = buildIndex(document)
 	case ViewSection:
-		contentType = "application/schema+json"
-		payload, err = buildSection(document, options.Path)
+		if options.Expanded {
+			contentType = "application/schema+json"
+		}
+		payload, err = buildSection(document, options.Path, options.Expanded)
 	case ViewSurface:
 		contentType = "application/schema+json"
 		payload, err = buildSurface(document, options.SurfaceKind, options.SurfaceName)
@@ -190,7 +221,7 @@ func buildIndex(document map[string]any) (schemaIndex, error) {
 		DefaultView:     ViewIndex,
 		Views: []viewDescriptor{
 			{Name: ViewIndex, Description: "Compact section and routing-surface directory.", Href: SchemaEndpoint + "?view=index"},
-			{Name: ViewSection, Description: "One config path with only its transitive schema definitions.", Href: SchemaEndpoint + "?view=section&path={path}"},
+			{Name: ViewSection, Description: "Compact field directory for one config path; request expanded=true for its self-contained JSON Schema.", Href: SchemaEndpoint + "?view=section&path={path}"},
 			{Name: ViewSurface, Description: "One signal, algorithm, plugin, or projection contract.", Href: SchemaEndpoint + "?view=surface&kind={kind}&name={name}"},
 			{Name: ViewFull, Description: "Complete canonical JSON Schema.", Href: SchemaEndpoint + "?view=full"},
 		},
@@ -199,7 +230,7 @@ func buildIndex(document map[string]any) (schemaIndex, error) {
 	}, nil
 }
 
-func buildSection(document map[string]any, path string) (map[string]any, error) {
+func buildSection(document map[string]any, path string, expanded bool) (any, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, &ViewError{Message: "section view requires a non-empty path"}
@@ -209,10 +240,15 @@ func buildSection(document map[string]any, path string) (map[string]any, error) 
 	if err != nil {
 		return nil, &ViewError{Message: err.Error()}
 	}
-	return focusedSchema(document, node, map[string]any{
-		"view": ViewSection,
-		"path": strings.Join(segments, "."),
-	})
+	normalizedPath := strings.Join(segments, ".")
+	if expanded {
+		return focusedSchema(document, node, map[string]any{
+			"view":   ViewSection,
+			"path":   normalizedPath,
+			"detail": "expanded",
+		})
+	}
+	return summarizeSection(document, node, normalizedPath)
 }
 
 func buildSurface(document map[string]any, kind, name string) (map[string]any, error) {
@@ -299,6 +335,124 @@ func schemaAtPath(document map[string]any, segments []string) (map[string]any, e
 		current = next
 	}
 	return current, nil
+}
+
+func summarizeSection(document, node map[string]any, path string) (sectionSummary, error) {
+	root, err := resolveSchemaNode(document, node)
+	if err != nil {
+		return sectionSummary{}, err
+	}
+	fieldRoot := root
+	if root["type"] == "array" {
+		items, _ := root["items"].(map[string]any)
+		fieldRoot, err = resolveSchemaNode(document, items)
+		if err != nil {
+			return sectionSummary{}, err
+		}
+	}
+
+	properties, _ := fieldRoot["properties"].(map[string]any)
+	names := make([]string, 0, len(properties))
+	for name := range properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	required := stringSet(fieldRoot["required"])
+	fields := make([]sectionField, 0, len(names))
+	for _, name := range names {
+		child, _ := properties[name].(map[string]any)
+		resolved, resolveErr := resolveSchemaNode(document, child)
+		if resolveErr != nil {
+			return sectionSummary{}, resolveErr
+		}
+		childPath := path + "." + name
+		field := sectionField{
+			Name:        name,
+			Path:        childPath,
+			Type:        schemaNodeType(document, child),
+			Required:    required[name],
+			Description: firstString(resolved, "description", firstString(child, "description", "")),
+			Href:        SchemaEndpoint + "?view=section&path=" + url.QueryEscape(childPath),
+		}
+		field.Const, field.Default, field.Enum, field.Minimum, field.Maximum = sectionConstraints(resolved)
+		fields = append(fields, field)
+	}
+
+	summary := sectionSummary{
+		View: map[string]any{
+			"view":   ViewSection,
+			"path":   path,
+			"detail": "summary",
+		},
+		Shape:        schemaNodeType(document, node),
+		Title:        firstString(fieldRoot, "title", firstString(root, "title", displayName(path))),
+		Description:  firstString(fieldRoot, "description", firstString(root, "description", "")),
+		Fields:       fields,
+		ExpandedHref: SchemaEndpoint + "?view=section&path=" + url.QueryEscape(path) + "&expanded=true",
+	}
+	summary.Const, summary.Default, summary.Enum, summary.Minimum, summary.Maximum = sectionConstraints(root)
+	return summary, nil
+}
+
+func schemaNodeType(document, node map[string]any) string {
+	resolved, err := resolveSchemaNode(document, node)
+	if err != nil {
+		return "value"
+	}
+	switch nodeType := resolved["type"].(type) {
+	case string:
+		if nodeType != "array" {
+			return nodeType
+		}
+		items, _ := resolved["items"].(map[string]any)
+		return "array<" + schemaNodeType(document, items) + ">"
+	case []any:
+		parts := make([]string, 0, len(nodeType))
+		for _, value := range nodeType {
+			if typed, ok := value.(string); ok {
+				parts = append(parts, typed)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, " | ")
+		}
+	}
+	for _, alternativesKey := range []string{"oneOf", "anyOf"} {
+		alternatives, _ := resolved[alternativesKey].([]any)
+		parts := make([]string, 0, len(alternatives))
+		seen := make(map[string]bool)
+		for _, rawAlternative := range alternatives {
+			alternative, _ := rawAlternative.(map[string]any)
+			part := schemaNodeType(document, alternative)
+			if !seen[part] {
+				seen[part] = true
+				parts = append(parts, part)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, " | ")
+		}
+	}
+	if value, ok := resolved["const"]; ok {
+		switch value.(type) {
+		case string:
+			return "string"
+		case bool:
+			return "boolean"
+		case float64, int:
+			return "number"
+		case nil:
+			return "null"
+		}
+	}
+	if _, ok := resolved["properties"].(map[string]any); ok {
+		return "object"
+	}
+	return "value"
+}
+
+func sectionConstraints(source map[string]any) (any, any, any, any, any) {
+	return source["const"], source["default"], source["enum"], source["minimum"], source["maximum"]
 }
 
 func resolveSchemaNode(document, node map[string]any) (map[string]any, error) {

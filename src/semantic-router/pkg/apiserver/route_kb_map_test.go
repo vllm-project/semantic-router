@@ -38,7 +38,7 @@ func TestHandleKnowledgeBaseMapMetadataEndpoint(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
 	stubKnowledgeBaseMapEmbeddings(t)
 
-	metadataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/metadata", nil)
+	metadataReq := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/privacy_kb/map/metadata", nil)
 	metadataReq.SetPathValue("name", "privacy_kb")
 	metadataRR := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapMetadata(metadataRR, metadataReq)
@@ -69,7 +69,7 @@ func TestHandleKnowledgeBaseMapDataEndpoint(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
 	stubKnowledgeBaseMapEmbeddings(t)
 
-	dataReq := httptest.NewRequest(http.MethodGet, "/config/kbs/privacy_kb/map/data.ndjson", nil)
+	dataReq := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/privacy_kb/map/data.ndjson", nil)
 	dataReq.SetPathValue("name", "privacy_kb")
 	dataRR := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapData(dataRR, dataReq)
@@ -96,7 +96,7 @@ func TestHandleKnowledgeBaseMapMissingKnowledgeBase(t *testing.T) {
 	apiServer, _, _ := newTestKnowledgeBaseAPIServer(t)
 	stubKnowledgeBaseMapEmbeddings(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/config/kbs/missing/map/metadata", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases/missing/map/metadata", nil)
 	req.SetPathValue("name", "missing")
 	rr := httptest.NewRecorder()
 	apiServer.handleGetKnowledgeBaseMapMetadata(rr, req)

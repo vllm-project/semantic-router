@@ -84,7 +84,7 @@ a deployment and review the exported YAML before serving it. See
 ## Validate the result
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 

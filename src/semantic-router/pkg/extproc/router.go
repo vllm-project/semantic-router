@@ -89,8 +89,11 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	routerLearningMu        sync.Mutex
-	routerLearningRuntime   *routerLearningRuntime
+	routerLearningMu      sync.Mutex
+	routerLearningRuntime *routerLearningRuntime
+	generation            *routerGeneration
+	// Process registers detached work before releasing its generation lease.
+	backgroundTasks         sync.WaitGroup
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
 
@@ -101,6 +104,7 @@ func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
+	r.backgroundTasks.Wait()
 	return r.resources.close()
 }
 
@@ -141,7 +145,7 @@ func closeReplayRecorders(
 // Ensure OpenAIRouter implements the ext_proc calls.
 var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
-const routerReplayAPIBasePath = "/v1/router_replay"
+const routerReplayAPIBasePath = "/api/v1/observability/replays"
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON
 // body. When responsePath is non-empty, the v0.4 keystone headers

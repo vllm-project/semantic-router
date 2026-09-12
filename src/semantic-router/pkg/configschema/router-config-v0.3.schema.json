@@ -2447,6 +2447,9 @@
           },
           "type": "array"
         },
+        "analysis_mode": {
+          "type": "string"
+        },
         "analysis_overrides": {
           "items": {
             "$ref": "#/$defs/FusionModelOverride"
@@ -6607,11 +6610,11 @@
   "x-vllm-sr": {
     "contract_version": "vllm-sr/config-schema/v1",
     "config_version": "v0.3",
-    "schema_endpoint": "/config/router/schema",
+    "schema_endpoint": "/api/v1/config/schema",
     "validation": {
       "structural": "json-schema-draft-2020-12",
       "semantic": "router",
-      "endpoint": "/config/router/validate"
+      "endpoint": "/api/v1/config/validate"
     },
     "signals": [
       {

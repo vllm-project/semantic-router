@@ -73,7 +73,7 @@
 - id: independent/grok-4-3-non-reasoning-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: Grok 4.3 (non-reasoning)
@@ -199,7 +199,7 @@
 - id: independent/grok-4-3-low-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Grok 4.3 (low)
@@ -289,7 +289,7 @@
 - id: independent/grok-4-3-medium-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Grok 4.3 (medium)
@@ -397,7 +397,7 @@
 - id: independent/grok-4-3-humanitys-last-exam@1.0.0
   model: xai/grok-4.3
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.3 (high)
@@ -581,7 +581,7 @@
 - id: independent/grok-4-6-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.6 (high)
@@ -743,7 +743,7 @@
 - id: independent/grok-4-6-low-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: Grok 4.6 (low)
@@ -905,7 +905,7 @@
 - id: independent/grok-4-6-medium-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: Grok 4.6 (medium)
@@ -1089,7 +1089,7 @@
 - id: independent/grok-4-6-xhigh-humanitys-last-exam@1.0.0
   model: xai/grok-4.6
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: Grok 4.6 (xhigh)
@@ -1251,7 +1251,7 @@
 - id: independent/grok-4-5-humanitys-last-exam@1.0.0
   model: xai/grok-4.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: Grok 4.5 (high)
