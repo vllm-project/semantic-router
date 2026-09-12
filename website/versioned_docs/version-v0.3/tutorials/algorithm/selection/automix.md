@@ -98,6 +98,7 @@ algorithm:
     use_logprob_verification: true    # Use logprobs for confidence
     enable_self_verification: false   # LLM-based entailment verification
     verification_samples: 5           # Samples for confidence (k in paper)
+    verification_temperature: 0.7     # Temperature for verification sampling
     use_pomdp_router: true            # Full POMDP routing (vs simple threshold)
     belief_particles: 100             # Number of POMDP particles
     cost_lambda: 0.5                  # POMDP cost-performance tradeoff
