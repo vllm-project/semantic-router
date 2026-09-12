@@ -83,6 +83,13 @@ ignore = [
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
+"bench/redteam/test_*.py" = ["PLR2004"]
+"bench/redteam/datasets.py" = [
+  "PLC0415",  # datasets is only needed for the Hub-backed prompt source
+]
+"bench/redteam/scorers.py" = [
+  "PLC0415",  # torch/transformers are only needed to score a local artifact
+]
 "tools/mock-vllm/tests/*.py" = ["PLR2004"]
 "tools/mock-vllm/app.py" = [
   "PLR0911",  # endpoint dispatch keeps one response path per request outcome
