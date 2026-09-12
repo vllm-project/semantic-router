@@ -78,7 +78,7 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // SA1019: keep rate-limited requeue semantics until the status flow moves to RequeueAfter
 	}
 
 	baseSR := semanticrouter.DeepCopy()
