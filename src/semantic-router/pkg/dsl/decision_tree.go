@@ -42,9 +42,9 @@ func rawDecisionTreeToRoutes(tree *rawDecisionTreeDecl, treeIndex int) ([]*Route
 	errs := make([]error, 0)
 
 	for i, branch := range branches {
-		route, err := decisionTreeBranchToRoute(tree, branch, i, basePriority-i, priorConditions)
-		if err != nil {
-			errs = append(errs, err)
+		route, branchErrs := decisionTreeBranchToRoute(tree, branch, i, basePriority-i, priorConditions)
+		errs = append(errs, branchErrs...)
+		if route == nil {
 			continue
 		}
 		routes = append(routes, route)
@@ -62,19 +62,20 @@ func decisionTreeBranchToRoute(
 	branchIndex int,
 	priority int,
 	priorConditions []BoolExpr,
-) (*RouteDecl, error) {
+) (*RouteDecl, []error) {
 	route := &RouteDecl{
 		Name:     generatedDecisionTreeBranchName(unquoteIdent(tree.Name), branchIndex),
 		Priority: priority,
 		Pos:      branch.pos,
 	}
+	var errs []error
 
 	for _, item := range branch.body {
-		applyDecisionTreeItemToRoute(route, item)
+		errs = append(errs, applyDecisionTreeItemToRoute(route, item)...)
 	}
 
 	if len(route.Models) == 0 {
-		return nil, fmt.Errorf("DECISION_TREE %q branch %d must declare at least one MODEL. Add MODEL \"<model_name>\" inside the branch body", unquoteIdent(tree.Name), branchIndex+1)
+		return nil, append(errs, fmt.Errorf("DECISION_TREE %q branch %d must declare at least one MODEL. Add MODEL \"<model_name>\" inside the branch body", unquoteIdent(tree.Name), branchIndex+1))
 	}
 
 	conditions := make([]BoolExpr, 0, len(priorConditions)+1)
@@ -89,10 +90,10 @@ func decisionTreeBranchToRoute(
 	}
 	route.When = andExprs(conditions)
 
-	return route, nil
+	return route, errs
 }
 
-func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) {
+func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) []error {
 	switch {
 	case item.Name != nil:
 		route.Name = unquoteIdent(*item.Name)
@@ -101,18 +102,25 @@ func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) {
 	case item.Tier != nil:
 		route.Tier = *item.Tier
 	case item.Model != nil:
+		var errs []error
 		for _, model := range item.Model.Models {
-			route.Models = append(route.Models, rawToModelRef(model))
+			ref, refErrs := rawToModelRef(model)
+			route.Models = append(route.Models, ref)
+			errs = append(errs, refErrs...)
 		}
+		return errs
 	case item.Algorithm != nil:
 		route.Algorithm = rawToAlgo(item.Algorithm)
 	case item.Plugin != nil:
 		route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 	case item.CandidateFor != nil:
-		route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
+		iter, iterErrs := rawToCandidateIteration(item.CandidateFor)
+		route.CandidateIterations = append(route.CandidateIterations, iter)
+		return iterErrs
 	case item.Emit != nil:
 		route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
 	}
+	return nil
 }
 
 func generatedDecisionTreeBranchName(treeName string, branchIndex int) string {

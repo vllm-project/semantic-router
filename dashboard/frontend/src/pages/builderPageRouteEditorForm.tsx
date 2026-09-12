@@ -24,6 +24,7 @@ import {
   astModelToInput,
   astPluginRefToInput,
   generateRouteDslPreview,
+  routeInputHasErrors,
   validateRouteInput,
 } from "./builderPageRoutePreview";
 import { ModelNameInput, ManualPluginAdder } from "./builderPageRouteSharedControls";
@@ -78,6 +79,9 @@ const RouteEditorForm: React.FC<{
   ]);
 
   const handleSave = useCallback(() => {
+    if (routeInputHasErrors(route.name, models, algorithm, plugins)) {
+      return;
+    }
     onUpdate({
       description: description.trim() || undefined,
       priority,
@@ -86,7 +90,7 @@ const RouteEditorForm: React.FC<{
       algorithm: algorithm?.algoType ? algorithm : undefined,
       plugins,
     });
-  }, [description, priority, whenExpr, models, algorithm, plugins, onUpdate]);
+  }, [route.name, description, priority, whenExpr, models, algorithm, plugins, onUpdate]);
 
   // Model helpers
   const addModel = useCallback(() => {
@@ -150,6 +154,7 @@ const RouteEditorForm: React.FC<{
     () => validateRouteInput(route.name, models, algorithm, plugins),
     [route.name, models, algorithm, plugins],
   );
+  const hasValidationErrors = validationIssues.some((issue) => issue.level === "error");
 
   // Get WASM diagnostics scoped to this route
   const diagnostics = useDSLStore((s) => s.diagnostics);
@@ -170,6 +175,12 @@ const RouteEditorForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSave}
+            disabled={hasValidationErrors}
+            title={
+              hasValidationErrors
+                ? "Fix validation errors before saving"
+                : undefined
+            }
             style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
           >
             Save

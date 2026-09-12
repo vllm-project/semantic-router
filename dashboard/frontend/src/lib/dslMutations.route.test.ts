@@ -55,11 +55,13 @@ describe('visual route editor ModelRef ceilings', () => {
     expect(withoutCeiling).toContain('"llama" (max_completion_tokens = 128)')
     expect(withoutCeiling).not.toMatch(/"qwen"[^\n]*max_completion_tokens/)
 
-    const droppedInvalid = updateRoute(source, 'math', {
-      priority: 10,
-      models: [{ model: 'qwen', maxCompletionTokens: 0 }],
-      plugins: [],
-    })
-    expect(droppedInvalid).not.toContain('max_completion_tokens')
+    expect(() =>
+      updateRoute(source, 'math', {
+        priority: 10,
+        models: [{ model: 'qwen', maxCompletionTokens: 0 }],
+        plugins: [],
+      }),
+    ).toThrow(/max_completion_tokens must be a finite integer >= 1/)
+    expect(source).toContain('max_completion_tokens = 64')
   })
 })

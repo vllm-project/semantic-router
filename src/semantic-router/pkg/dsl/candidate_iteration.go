@@ -14,12 +14,13 @@ func iterEmitsVariable(iter config.CandidateIterationConfig) bool {
 	return false
 }
 
-func rawToCandidateIteration(r *rawCandidateForDecl) *CandidateIterationDecl {
+func rawToCandidateIteration(r *rawCandidateForDecl) (*CandidateIterationDecl, []error) {
 	iter := &CandidateIterationDecl{
 		Variable: r.Var,
 		Source:   "decision.candidates",
 		Pos:      posFromLexer(r.Pos),
 	}
+	var errs []error
 	if r.Source != nil {
 		switch {
 		case r.Source.Ref != nil:
@@ -27,7 +28,9 @@ func rawToCandidateIteration(r *rawCandidateForDecl) *CandidateIterationDecl {
 		case r.Source.Models != nil:
 			iter.Source = "models"
 			for _, model := range r.Source.Models.Models {
-				iter.Models = append(iter.Models, rawToModelRef(model))
+				ref, refErrs := rawToModelRef(model)
+				iter.Models = append(iter.Models, ref)
+				errs = append(errs, refErrs...)
 			}
 		}
 	}
@@ -35,22 +38,26 @@ func rawToCandidateIteration(r *rawCandidateForDecl) *CandidateIterationDecl {
 		if item.Model == nil {
 			continue
 		}
-		iter.Outputs = append(iter.Outputs, rawToCandidateIterationModelOutput(item))
+		output, outputErrs := rawToCandidateIterationModelOutput(item)
+		iter.Outputs = append(iter.Outputs, output)
+		errs = append(errs, outputErrs...)
 	}
-	return iter
+	return iter, errs
 }
 
-func rawToCandidateIterationModelOutput(item *rawCandidateIterationItem) *CandidateIterationOutputDecl {
+func rawToCandidateIterationModelOutput(item *rawCandidateIterationItem) (*CandidateIterationOutputDecl, []error) {
 	output := &CandidateIterationOutputDecl{
 		Type: "model",
 		Pos:  posFromLexer(item.Pos),
 	}
+	var errs []error
 	for _, model := range item.Model.Models {
-		ref := rawToModelRef(model)
+		ref, refErrs := rawToModelRef(model)
 		output.Models = append(output.Models, ref)
+		errs = append(errs, refErrs...)
 		if output.Value == "" {
 			output.Value = ref.Model
 		}
 	}
-	return output
+	return output, errs
 }

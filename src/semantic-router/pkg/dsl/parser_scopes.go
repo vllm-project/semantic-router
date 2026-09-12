@@ -88,7 +88,9 @@ func (state *recipeParseState) appendEntry(entry *rawRecipeEntry) {
 		appendRawProjection(prog, entry.Projection)
 	case entry.Route != nil:
 		state.hasDirectRoutes = true
-		prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+		route, routeErrs := rawToRoute(entry.Route)
+		prog.Routes = append(prog.Routes, route)
+		state.errs = append(state.errs, routeErrs...)
 	case entry.DecisionTree != nil:
 		routes, errs := rawDecisionTreeToRoutes(entry.DecisionTree, state.treeCount)
 		state.treeCount++

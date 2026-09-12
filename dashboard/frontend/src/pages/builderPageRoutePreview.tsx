@@ -267,6 +267,15 @@ function validateRouteInput(
   return issues
 }
 
+function routeInputHasErrors(
+  routeName: string,
+  models: RouteModelInput[],
+  algorithm: RouteAlgoInput | undefined,
+  plugins: RoutePluginInput[],
+): boolean {
+  return validateRouteInput(routeName, models, algorithm, plugins).some((issue) => issue.level === 'error')
+}
+
 function extractWorkflowPlannerModel(fields: Record<string, unknown>): string {
   const dotted = fields['planner.model']
   if (typeof dotted === 'string') return dotted.trim()
@@ -453,5 +462,6 @@ export {
   astModelToInput,
   astPluginRefToInput,
   generateRouteDslPreview,
+  routeInputHasErrors,
   validateRouteInput,
 }

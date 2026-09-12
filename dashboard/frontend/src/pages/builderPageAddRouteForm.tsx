@@ -19,6 +19,7 @@ import { AlgorithmSchemaEditor, PluginSchemaEditor } from "./builderPageEntityFo
 import {
   RouteDslPreviewPanel,
   generateRouteDslPreview,
+  routeInputHasErrors,
   validateRouteInput,
 } from "./builderPageRoutePreview";
 import { ModelNameInput, ManualPluginAdder } from "./builderPageRouteSharedControls";
@@ -54,6 +55,9 @@ const AddRouteForm: React.FC<{
   const handleSubmit = useCallback(() => {
     const n = name.trim().replace(/\s+/g, "_");
     if (!n) return;
+    if (routeInputHasErrors(n, models, algorithm, plugins)) {
+      return;
+    }
     onAdd(n, {
       description: description.trim() || undefined,
       priority,
@@ -114,6 +118,7 @@ const AddRouteForm: React.FC<{
     () => validateRouteInput(name.trim(), models, algorithm, plugins),
     [name, models, algorithm, plugins],
   );
+  const hasValidationErrors = validationIssues.some((issue) => issue.level === "error");
 
   const activePluginNames = useMemo(
     () => new Set(plugins.map((p) => p.name)),
@@ -151,7 +156,12 @@ const AddRouteForm: React.FC<{
           <button
             className={styles.toolbarBtnPrimary}
             onClick={handleSubmit}
-            disabled={!name.trim()}
+            disabled={!name.trim() || hasValidationErrors}
+            title={
+              hasValidationErrors
+                ? "Fix validation errors before creating"
+                : undefined
+            }
           >
             Create
           </button>

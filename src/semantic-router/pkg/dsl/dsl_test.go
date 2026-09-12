@@ -2976,6 +2976,67 @@ ROUTE test {
 	}
 }
 
+func TestCompileRejectsInvalidModelRefMaxCompletionTokens(t *testing.T) {
+	cases := []struct {
+		name    string
+		option  string
+		wantSub string
+	}{
+		{name: "float", option: `max_completion_tokens = 512.0`, wantSub: "must be a positive integer, got float"},
+		{name: "string", option: `max_completion_tokens = "512"`, wantSub: "must be a positive integer, got string"},
+		{name: "zero", option: `max_completion_tokens = 0`, wantSub: "must be >= 1 when set"},
+		{name: "negative", option: `max_completion_tokens = -1`, wantSub: "must be >= 1 when set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Sprintf(`
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b" (%s)
+}
+`, tc.option)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatal("expected compile to reject invalid max_completion_tokens")
+			}
+			if !strings.Contains(fmt.Sprint(errs), tc.wantSub) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, tc.wantSub)
+			}
+		})
+	}
+}
+
+func TestCompileRejectsInvalidCandidateIterationMaxCompletionTokens(t *testing.T) {
+	cases := []struct {
+		name    string
+		option  string
+		wantSub string
+	}{
+		{name: "float", option: `max_completion_tokens = 512.0`, wantSub: "must be a positive integer, got float"},
+		{name: "zero", option: `max_completion_tokens = 0`, wantSub: "must be >= 1 when set"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			input := fmt.Sprintf(`
+ROUTE switch_gate {
+  FOR candidate IN ["m:1b" (%s)] {
+    MODEL candidate
+  }
+}
+`, tc.option)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatal("expected compile to reject invalid candidate-iteration max_completion_tokens")
+			}
+			if !strings.Contains(fmt.Sprint(errs), tc.wantSub) {
+				t.Fatalf("compile errors = %v, want substring %q", errs, tc.wantSub)
+			}
+		})
+	}
+}
+
 // ---------- P2-14: No GLOBAL Block ----------
 
 func TestCompileWithoutGlobal(t *testing.T) {
