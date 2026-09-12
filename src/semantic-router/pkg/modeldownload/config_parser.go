@@ -151,7 +151,8 @@ var onnxWeightExcludePatterns = []string{
 // provisioning paths have already been canonicalized upstream.
 func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]string {
 	excluded := make(map[string][]string)
-	if cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendCandle {
+	provider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	if provider != "candle" || cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendCandle {
 		return excluded
 	}
 

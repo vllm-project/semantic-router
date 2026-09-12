@@ -118,9 +118,9 @@ impl Qwen3GuardModel {
         prefix_len: usize,
     ) -> UnifiedResult<String> {
         let mut generated_text = String::new();
-        let mut total_tokens = prefix_len + tokens.len();
 
         for _step in 0..self.config.max_tokens {
+            let total_tokens = prefix_len + tokens.len();
             let context_size = 1;
             let start_pos = total_tokens - context_size;
             let ctxt = &tokens[tokens.len().saturating_sub(context_size)..];
@@ -149,7 +149,6 @@ impl Qwen3GuardModel {
             }
 
             tokens.push(next_token);
-            total_tokens += 1;
             if let Ok(piece) = self.tokenizer.decode(&[next_token], true) {
                 generated_text.push_str(&piece);
             }

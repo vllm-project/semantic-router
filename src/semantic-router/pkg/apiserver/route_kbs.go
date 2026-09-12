@@ -176,10 +176,13 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		return
 	}
 
-	removeTxn, err := stageManagedKnowledgeBaseRemoval(baseDir, existingKB.Source.Path, name)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
-		return
+	var removeTxn *managedKnowledgeBaseAssetsTxn
+	if s.runtimeRegistry == nil {
+		removeTxn, err = stageManagedKnowledgeBaseRemoval(baseDir, existingKB.Source.Path, name)
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
+			return
+		}
 	}
 	committed := false
 	defer rollbackManagedKnowledgeBaseRemoval(removeTxn, &committed)
@@ -246,6 +249,20 @@ func (s *ClassificationAPIServer) writableKnowledgeBaseConfig(w http.ResponseWri
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
 		return nil, false
 	}
+	if s.runtimeRegistry != nil {
+		// Callers hold the existing mutation guard. A second write must not
+		// derive its KB list from the old generation and discard the candidate.
+		paths := resolveConfigPersistencePaths(s.configPath)
+		candidateHash, err := configFileHash(paths.runtimePath)
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_HASH_ERROR", "Unable to verify the pending runtime configuration")
+			return nil, false
+		}
+		if activeHash := s.activeConfigDocumentHash(); activeHash == "" || activeHash != candidateHash {
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ACTIVATION_PENDING", "A saved configuration is awaiting activation. Wait for activation or restore the previous configuration before editing knowledge bases.")
+			return nil, false
+		}
+	}
 	return cfg, true
 }
 
@@ -263,6 +280,15 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("failed to read config: %v", err))
 		return err
+	}
+	if s.runtimeRegistry != nil {
+		revisionPath, revisionErr := newManagedKnowledgeBaseRevisionPath(kb.Name)
+		if revisionErr != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", revisionErr.Error())
+			return revisionErr
+		}
+		kb.Source = config.KnowledgeBaseSource{Path: revisionPath, Manifest: knowledgeBaseManifestName}
+		desired = desiredKnowledgeBases(desired, kb)
 	}
 
 	assetTxn, err := stageManagedKnowledgeBaseAssets(baseDir, kb.Source.Path, payload)

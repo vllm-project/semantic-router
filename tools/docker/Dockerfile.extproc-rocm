@@ -185,11 +185,11 @@ RUN bash /app/check-native-abi.sh \
     /app/candle-binding/target/release/libcandle_semantic_router.so \
     /app/onnx-binding/target/release/libonnx_semantic_router.so
 
-# Build candle router binary
+# Keep the ROCm default for implicit models in the multi-provider router.
 RUN mkdir -p bin && cd src/semantic-router && \
     CGO_CFLAGS="-I/app/candle-binding" \
     CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
-    go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd
+    go build -ldflags="-w -s -X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider=ort" -o ../../bin/router-candle ./cmd
 
 # Both launcher names execute the same multi-provider binary.
 RUN cp /app/bin/router-candle /app/bin/router-onnx

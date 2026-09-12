@@ -94,7 +94,8 @@ constants = [
     helper.make_tensor("one", TensorProto.FLOAT, [1], [1.0]),
     helper.make_tensor("two", TensorProto.FLOAT, [1], [2.0]),
 ]
-embedding_nodes = list(text_nodes) + [
+embedding_nodes = [
+    *text_nodes,
     helper.make_node("Unsqueeze", ["x"], ["x3"], axes=[2]),
     helper.make_node("Add", ["x3", "one"], ["plus_one"]),
     helper.make_node("Add", ["x3", "two"], ["plus_two"]),
@@ -114,11 +115,11 @@ save(
 save(
     "multimodal",
     "text_encoder.onnx",
-    embedding_nodes
-    + [
+    [
+        *embedding_nodes,
         helper.make_node(
             "ReduceMean", ["last_hidden_state"], ["embedding"], axes=[1], keepdims=0
-        )
+        ),
     ],
     text_inputs,
     "embedding",

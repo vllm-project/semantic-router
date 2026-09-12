@@ -1,0 +1,158 @@
+---
+title: Embeddings
+description: Choose local or remote embeddings and match consumer dimensions, layers, tokenizer windows, and modalities.
+---
+
+# Embeddings
+
+Embedding consumers share an execution provider while retaining their own
+vector and input requirements. A provider must satisfy every reachable
+consumer before the candidate configuration is published.
+
+## Choose a local model
+
+The semantic embedding catalog keeps the existing model selection:
+
+```yaml
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          target_layer: 22
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+```
+
+The catalog path must contain a compatible embedding checkpoint. A recipe can
+instead bind its primary embedding provider explicitly:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      local-embedding:
+        artifact: models/mmbert-embed-32k-2d-matryoshka
+        provider: candle
+        device: cpu
+        precision: native
+        input:
+          overflow: truncate
+routing:
+  model_bindings:
+    embedding:
+      deployment: local-embedding
+      contract: embedding.v1
+      adapter: mmbert
+```
+
+Candle supports BERT, Qwen3, Gemma, mmBERT, and the text branch of compatible
+multimodal checkpoints. ORT supports mmBERT and multimodal graphs. Select
+`provider: ort` only when the artifact contains the required graph files.
+An explicit primary binding replaces that primary's obsolete module path;
+other consumers selecting a distinct catalog model still need that model.
+
+## Dimensions, layers, and windows
+
+| Consumer | Requirement to preserve |
+| --- | --- |
+| Embedding/KB/reask/contrastive signals and embedding-based selectors | The trained or indexed embedding space and actual output dimension |
+| In-memory semantic cache with mmBERT | Existing layer 6, dimension 256 view |
+| Multimodal cache defaults | Existing dimension 384 view |
+| Persistent cache and vector stores | Their configured or loaded index/schema dimension |
+| Memory | Its configured family and dimension; mmBERT defaults to 256, multimodal to 384 |
+| Response-cache and RAG query windowing | Actual tokenizer windows with byte boundaries |
+| Image-based complexity | A provider with an actual image encoder |
+
+An output dimension alone does not identify an embedding space. Rebuild or
+migrate stored vectors and recalibrate thresholds when changing model,
+revision, layer, or provider.
+
+mmBERT layer/dimension requests use an owned view of the prepared model. The
+layer must actually be loaded and the dimension supported. ORT layer exports
+are discovered from their manifest/graphs; missing requested layers fail
+preparation. Its current layered loader also needs the primary full-depth
+graph in addition to a selected early-exit graph. It downloads external tensors
+from real ONNX references rather than assuming a `.data` filename.
+
+Embedding token limits come from the loaded model and the deployment's
+restriction, not the classification task's 512 cap. Multimodal text has its
+own text-encoder limit. Tokenizer windows use actual token boundaries and
+UTF-8 offsets; a zero window budget selects the prepared effective limit.
+This window API does not enable automatic `input.overflow: window` for a
+classifier that lacks such an adapter.
+
+## Use a remote text provider
+
+Set a token in the Router environment and merge this fragment:
+
+```bash
+export EMBEDDING_API_KEY="<provider-key>"
+```
+
+```yaml
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        embedding_config:
+          backend: openai_compatible
+          model_type: remote
+          preload_embeddings: false
+          target_dimension: 1536
+        endpoint:
+          base_url: https://embedding.example.com/v1
+          model: text-embedding-model
+          api_key_env: EMBEDDING_API_KEY
+          timeout_seconds: 10
+          max_retries: 2
+          max_response_bytes: 16777216
+          dimensions: 1536
+```
+
+The Router appends `/embeddings` unless that suffix is already present.
+`endpoint.dimensions` and `target_dimension` must agree when both are set.
+The response cap defaults to 16 MiB. Authentication is a bearer token, not
+arbitrary custom headers or a provider-specific body. Startup checks returned
+vectors for the expected dimension and valid values.
+
+Embedding signals keep their existing candidates and thresholds. In this
+remote mode, text consumers can use the shared provider, but the provider does
+not offer exact tokenizer windows, layer selection, image, or audio encoding.
+If a reachable consumer requires one of those capabilities, preparation fails
+before publication. It does not invent windows or quietly load the overridden
+primary local model. Use an explicitly supported local binding for a recipe
+that needs those capabilities, or change that recipe's consumers.
+
+Remote services see the text they embed. Their data-retention and logging
+policies apply. Changing providers can change matching behavior even when
+vector dimensions are identical.
+
+## Multimodal models
+
+A multimodal artifact must contain the encoders the consumer uses. The text,
+image, and audio capabilities are checked individually. Candle accepts image
+bytes through its owned encoder and audio feature tensors; ORT validates its
+image tensor layout/resize and audio mel input contract. The current ORT audio
+path uses the Whisper 3000-frame budget and reports explicit reject/truncate
+behavior. Do not infer an encoder from the catalog name alone.
+
+Remote OpenAI-compatible embedding execution currently supports text only.
+A successful text warmup does not prove image/audio support. See
+[Engines and hardware](engines-and-hardware.md#tasks-by-engine) for the
+implementation and hardware-evidence boundaries.
+
+## Inspect a running provider
+
+```bash
+curl -fsS http://localhost:8080/startup-status | jq '.embedding_provider'
+```
+
+Remote provider status exposes redacted metadata, including the key's environment
+variable name and whether it is present, never the token value. Use
+`POST /api/v1/diagnostics/embeddings` for actual text/image requests supported
+by the current provider; the [API reference](../../api/apiserver.md) describes
+the request shape. Diagnostics and stores borrow the current generation's
+provider until their operation finishes.

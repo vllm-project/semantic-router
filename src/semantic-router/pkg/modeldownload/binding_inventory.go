@@ -14,6 +14,9 @@ import (
 // and request-reachable recipes. Unregistered paths are supplied locally and
 // validated by actual provider preparation, not by the download registry.
 func BuildModelSpecs(cfg *config.RouterConfig) ([]ModelSpec, error) {
+	if provider, _ := config.DefaultModelExecution(true); provider != "candle" && provider != "ort" {
+		return nil, fmt.Errorf("unsupported build default model provider %q", provider)
+	}
 	plan, err := config.CompileModelBindings(cfg)
 	if err != nil {
 		return nil, err
@@ -89,13 +92,33 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		active["classifier."+rule.Name] = true
 	}
 	required := ExtractRequiredFilesByModel(&scoped)
-	// Default native embeddings remain Candle even when an ORT deployment is
-	// present in the same process. A build tag never selects model artifacts.
-	for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
-		required[path] = append(required[path], files...)
+	defaultProvider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	if defaultProvider == "candle" {
+		for path, files := range candleEmbeddingModelRequiredFiles(&scoped) {
+			required[path] = append(required[path], files...)
+		}
 	}
 	excludes := candleEmbeddingModelExcludePatterns(&scoped)
 	explicitPaths := map[string]bool{}
+	if defaultProvider == "ort" && scoped.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendCandle {
+		// Resolve implicit embeddings with the same provider artifact contract
+		// as explicit bindings. In particular, ROCm requires ONNX graphs and
+		// their external tensors rather than Candle safetensors.
+		for model, path := range paths {
+			if *path == "" {
+				continue
+			}
+			spec := config.ResolvedModelBinding{
+				Recipe: cfg.RoutingScope, Name: "embedding",
+				Binding:    config.ModelBinding{Adapter: model, Contract: "embedding.v1"},
+				Deployment: config.ModelDeployment{Provider: defaultProvider, Artifact: *path},
+			}
+			if err := i.addDeployment(cfg, spec); err != nil {
+				return err
+			}
+			explicitPaths[config.ResolveModelPath(*path)] = true
+		}
+	}
 	for name := range cfg.ModelBindings {
 		spec, ok := plan.Lookup(cfg.RoutingScope, name)
 		if !ok || !active[name] {
@@ -119,7 +142,7 @@ func (i *modelInventory) addScope(cfg *config.RouterConfig, plan *config.ModelBi
 		explicitPaths[config.ResolveModelPath(explicitEmbedding.Deployment.Artifact)] = true
 	}
 	for _, path := range filterDisabledOptionalModelPaths(&scoped, ExtractModelPaths(&scoped)) {
-		if explicitPaths[path] {
+		if explicitPaths[config.ResolveModelPath(path)] {
 			continue
 		}
 		if err := i.add(ModelSpec{LocalPath: config.ResolveModelPath(path), RequiredFiles: append(slices.Clone(DefaultRequiredFiles), required[path]...), ExcludePatterns: excludes[config.ResolveModelPath(path)]}); err != nil {

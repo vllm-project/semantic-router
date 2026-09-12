@@ -3,6 +3,9 @@
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
+CLASSIFICATION_MAX_TOKENS = 512
+DEVICE_SELECTOR_PARTS = 2
+
 
 def validate_model_runtime_references(config: UserConfig) -> list[ValidationError]:
     catalog = (config.global_ or {}).get("model_catalog", {})
@@ -135,7 +138,7 @@ def _binding_error(consumer, binding, deployment, profile=None):
     if (
         consumer != "embedding"
         and provider != "http"
-        and budget.get("max_tokens", 0) > 512
+        and budget.get("max_tokens", 0) > CLASSIFICATION_MAX_TOKENS
     ):
         return "Classification task supports at most 512 tokens; input.max_tokens is a deployment budget"
     return None
@@ -171,7 +174,11 @@ def _deployment_error(name, deployment, external_names):
         if device != "cpu":
             parts = device.split(":")
             allowed = {"migraphx"} if provider == "ort" else {"cuda", "metal"}
-            if len(parts) != 2 or parts[0] not in allowed or not parts[1].isdigit():
+            if (
+                len(parts) != DEVICE_SELECTOR_PARTS
+                or parts[0] not in allowed
+                or not parts[1].isdigit()
+            ):
                 return f"Device '{device}' is incompatible with provider '{provider}'"
         if (deployment.get("precision") or "native") not in {"native", "fp32", "fp16"}:
             return "Precision must be native, fp32 or fp16"

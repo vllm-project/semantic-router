@@ -162,6 +162,17 @@ Knowledge-base configuration:
 | `GET` | `/api/v1/storage/knowledge-bases/{name}/map/metadata` | Read generated map metadata |
 | `GET` | `/api/v1/storage/knowledge-bases/{name}/map/data.ndjson` | Stream map data as NDJSON |
 
+In a router process, create, update, and delete persist a candidate and return
+`202` with `activation_status: pending` and `generated_runtime_hash` while the
+replacement generation prepares. Poll `/api/v1/config/hash` until
+`active_runtime_hash` matches that candidate. A second KB mutation while pending
+returns `409` with `CONFIG_ACTIVATION_PENDING` and does not overwrite it.
+Updates use independent asset revision paths; deletion removes the candidate
+config entry while retaining files needed by old and rollback generations.
+Old revisions require offline cleanup after their configuration references
+have been retired. Standalone API servers report `activation_status: unknown`
+with their normal success status because no router generation registry is present.
+
 Router-managed storage and memory:
 
 | Resource | Base path | Operations |

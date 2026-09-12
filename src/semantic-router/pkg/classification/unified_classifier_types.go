@@ -162,11 +162,13 @@ func (uc *UnifiedClassifier) GetStats() map[string]interface{} {
 	defer uc.mu.Unlock()
 
 	return map[string]interface{}{
-		"initialized":      uc.initialized,
-		"architecture":     "unified_modernbert_multi_head",
-		"supported_tasks":  []string{"intent", "pii", "security"},
-		"batch_support":    true,
-		"memory_efficient": true,
+		"initialized":     uc.initialized,
+		"architecture":    "prepared_task_composition",
+		"supported_tasks": []string{"intent", "pii", "security"},
+		"batch_support":   true,
+		"batch_execution": "per_input_tasks",
+		// Retain the diagnostic key without inventing a measured memory benefit.
+		"memory_efficient": nil,
 		"native_backend":   CurrentNativeBackendCapabilities(),
 		"performance":      uc.stats,
 	}

@@ -41,6 +41,9 @@ func findSpecByPath(specs []ModelSpec, localPath string) (ModelSpec, bool) {
 
 func requireCandleEmbeddingRuntime(t *testing.T) {
 	t.Helper()
+	if provider, _ := config.DefaultModelExecution(true); provider != "candle" {
+		t.Skip("Candle implicit embedding defaults are tested in the Candle build")
+	}
 }
 
 // TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer guards #2172:

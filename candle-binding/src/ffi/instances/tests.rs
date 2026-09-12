@@ -371,3 +371,104 @@ fn headless_backbone_binds_head_only_artifacts_in_either_order() {
         assert!(token.tokens("hello world").is_ok());
     }
 }
+
+fn update_fixture_config(dir: &TempDir, update: impl FnOnce(&mut Value)) {
+    let path = dir.path().join("config.json");
+    let mut config: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    update(&mut config);
+    std::fs::write(path, config.to_string()).unwrap();
+}
+
+#[test]
+fn owned_headless_uses_declared_capacity_despite_training_metadata() {
+    let dir = fixture(&["safe", "unsafe"], 0);
+    update_fixture_config(&dir, |config| {
+        config["max_position_embeddings"] = json!(8);
+        config["position_embedding_type"] = json!("sans_pos");
+    });
+    std::fs::write(
+        dir.path().join("training_config.json"),
+        json!({
+            "rope_scaling_type": "yarn", "model_max_length": 32768,
+            "rope_original_max_position_embeddings": 8192
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let tokenizer_path = dir.path().join("tokenizer.json");
+    let mut tokenizer = Tokenizer::from_file(&tokenizer_path).unwrap();
+    tokenizer.with_padding(Some(tokenizers::PaddingParams {
+        strategy: tokenizers::PaddingStrategy::Fixed(1024),
+        ..Default::default()
+    }));
+    tokenizer.save(&tokenizer_path, false).unwrap();
+    let encoder = load(options(&dir), "backbone").unwrap();
+    assert_eq!(encoder.info.architectural_max_tokens, 8);
+    assert_eq!(encoder.info.max_input_tokens, 8);
+    // Binding must compare the real capacity, never an inflated variant hint.
+    for task in ["sequence", "token"] {
+        let head = bind_head(&encoder, dir.path().to_str().unwrap(), task).unwrap();
+        let result = if task == "sequence" {
+            value(head.sequence(&"hello ".repeat(20)).unwrap())
+        } else {
+            value(head.tokens(&"hello ".repeat(20)).unwrap())
+        };
+        assert_eq!(result["input"]["processed_tokens"], 8);
+        assert_eq!(result["input"]["input_tokens"], 22);
+        assert_eq!(result["input"]["truncated"], true);
+    }
+    update_fixture_config(&dir, |config| {
+        config["max_position_embeddings"] = json!(1024)
+    });
+    let encoder = load(options(&dir), "backbone").unwrap();
+    assert_eq!(encoder.info.architectural_max_tokens, 1024);
+    assert_eq!(encoder.info.max_input_tokens, 512);
+    let mut opts = options(&dir);
+    opts.max_input_tokens = 513;
+    assert!(load(opts, "backbone").is_err());
+}
+
+#[test]
+fn owned_load_and_head_binding_reject_budgets_below_actual_special_tokens() {
+    let dir = fixture(&["safe", "unsafe"], 0);
+    let mut opts = options(&dir);
+    opts.max_input_tokens = 1;
+    for task in ["sequence", "token", "embedding"] {
+        let error = load(opts.clone(), task).err().unwrap();
+        assert!(error.to_string().contains("2 special tokens"), "{error}");
+    }
+    let encoder = load(opts, "backbone").unwrap();
+    for task in ["sequence", "token"] {
+        let error = bind_head(&encoder, dir.path().to_str().unwrap(), task)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("2 special tokens"), "{error}");
+    }
+    let mut opts = options(&dir);
+    opts.max_input_tokens = 2;
+    let model = load(opts, "sequence").unwrap();
+    let result = value(model.sequence("hello world").unwrap());
+    assert_eq!(result["input"]["processed_tokens"], 2);
+    assert_eq!(result["input"]["truncated"], true);
+}
+
+#[test]
+fn owned_backbone_and_head_reject_unsupported_rope_scaling() {
+    let dir = fixture(&["safe", "unsafe"], 0);
+    let encoder = load(options(&dir), "backbone").unwrap();
+    update_fixture_config(&dir, |config| {
+        config["rope_scaling"] = json!({"rope_type":"yarn", "factor":4.0});
+    });
+    let error = load(options(&dir), "backbone").err().unwrap();
+    assert!(error
+        .to_string()
+        .contains("unsupported ModernBERT RoPE scaling"));
+    for task in ["sequence", "token"] {
+        let error = bind_head(&encoder, dir.path().to_str().unwrap(), task)
+            .err()
+            .unwrap();
+        assert!(error
+            .to_string()
+            .contains("unsupported ModernBERT RoPE scaling"));
+    }
+}

@@ -5550,8 +5550,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful response",
+          "201": {
+            "description": "Knowledge base created",
             "content": {
               "application/json": {
                 "schema": {
@@ -5560,8 +5560,59 @@
               }
             }
           },
+          "202": {
+            "description": "Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activation_status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "generated_runtime_hash": {
+                      "type": "string",
+                      "description": "Exact candidate runtime document hash, when available"
+                    }
+                  },
+                  "required": [
+                    "activation_status"
+                  ]
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, including CONFIG_ACTIVATION_PENDING when a saved candidate has not activated; no second KB mutation is persisted",
             "content": {
               "application/json": {
                 "schema": {
@@ -5822,8 +5873,59 @@
               }
             }
           },
+          "202": {
+            "description": "Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activation_status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "generated_runtime_hash": {
+                      "type": "string",
+                      "description": "Exact candidate runtime document hash, when available"
+                    }
+                  },
+                  "required": [
+                    "activation_status"
+                  ]
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, including CONFIG_ACTIVATION_PENDING when a saved candidate has not activated; no second KB mutation is persisted",
             "content": {
               "application/json": {
                 "schema": {
@@ -6010,8 +6112,59 @@
               }
             }
           },
+          "202": {
+            "description": "Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activation_status": {
+                      "type": "string",
+                      "enum": [
+                        "pending"
+                      ]
+                    },
+                    "generated_runtime_hash": {
+                      "type": "string",
+                      "description": "Exact candidate runtime document hash, when available"
+                    }
+                  },
+                  "required": [
+                    "activation_status"
+                  ]
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, including CONFIG_ACTIVATION_PENDING when a saved candidate has not activated; no second KB mutation is persisted",
             "content": {
               "application/json": {
                 "schema": {

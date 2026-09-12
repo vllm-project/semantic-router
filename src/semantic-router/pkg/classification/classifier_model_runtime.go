@@ -3,7 +3,6 @@ package classification
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -51,20 +50,7 @@ func (m *classifierModelRuntime) localSpec(name, artifact, adapter, contract str
 		}
 		return spec
 	}
-	provider := "candle"
-	device := "cpu"
-	if !useCPU {
-		device = "cuda:0"
-		if runtime.GOOS == "darwin" {
-			device = "metal:0"
-		}
-	}
-	if CurrentNativeBackendCapabilities().Name == "onnx" {
-		provider = "ort"
-		if !useCPU {
-			device = "migraphx:0"
-		}
-	}
+	provider, device := config.DefaultModelExecution(useCPU)
 	return config.ResolvedModelBinding{
 		Recipe: m.recipe, Name: name,
 		Binding:    config.ModelBinding{Deployment: name, Adapter: adapter, Contract: contract},

@@ -143,3 +143,56 @@ func TestOwnedNativeHeadlessBackboneOrderAndClose(t *testing.T) {
 		}
 	}
 }
+
+func TestOwnedNativeHeadlessRespectsDeclaredCapacity(t *testing.T) {
+	base := ownedFixturePart(t, 0, true)
+	headPath := ownedFixturePart(t, 1, false)
+	for _, path := range []string{base, headPath} {
+		file := filepath.Join(path, "config.json")
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]any
+		if err = json.Unmarshal(raw, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		cfg["max_position_embeddings"] = 8
+		cfg["position_embedding_type"] = "sans_pos"
+		raw, err = json.Marshal(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(file, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		training := []byte(`{"rope_scaling_type":"yarn","model_max_length":32768,"rope_original_max_position_embeddings":8192}`)
+		if err = os.WriteFile(filepath.Join(path, "training_config.json"), training, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backbone, err := LoadBackbone(InstanceOptions{ModelPath: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer backbone.Close()
+	info, err := backbone.Info()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ArchitecturalMaxTokens != 8 || info.MaxInputTokens != 8 {
+		t.Fatalf("training metadata enlarged actual capacity: %+v", info)
+	}
+	head, err := backbone.BindSequenceHead(headPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer head.Close()
+	result, err := head.Classify(strings.Repeat("hello ", 20))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Input.Truncated || result.Input.ProcessedTokens != 8 || result.Input.InputTokens != 20 {
+		t.Fatalf("actual input did not respect declared capacity: %+v", result.Input)
+	}
+}

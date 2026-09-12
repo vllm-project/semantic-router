@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -82,8 +83,30 @@ func buildOpenAPIOperation(route apiRoute) *OpenAPIOperation {
 		operation.Responses["413"] = openAPIErrorResponse("Request body too large")
 		operation.RequestBody = buildOpenAPIRequestBody(route.RequestBody)
 	}
+	addKnowledgeBaseActivationResponses(route, operation)
 
 	return operation
+}
+
+func addKnowledgeBaseActivationResponses(route apiRoute, operation *OpenAPIOperation) {
+	create := route.Path == apiStorageKnowledgeBasesPath && route.Method == http.MethodPost
+	change := route.Path == apiStorageKnowledgeBasesPath+"/{name}" &&
+		(route.Method == http.MethodPut || route.Method == http.MethodDelete)
+	if !create && !change {
+		return
+	}
+	if create {
+		delete(operation.Responses, "200")
+		operation.Responses["201"] = openAPIObjectResponse("Knowledge base created")
+	}
+	pending := openAPIObjectResponse("Saved candidate awaiting whole-generation publication; poll /api/v1/config/hash until active_runtime_hash matches generated_runtime_hash")
+	pending.Content["application/json"].Schema.Properties = map[string]OpenAPISchema{
+		"activation_status":      {Type: "string", Enum: []string{"pending"}},
+		"generated_runtime_hash": {Type: "string", Description: "Exact candidate runtime document hash, when available"},
+	}
+	pending.Content["application/json"].Schema.Required = []string{"activation_status"}
+	operation.Responses["202"] = pending
+	operation.Responses["409"] = openAPIErrorResponse("Conflict, including CONFIG_ACTIVATION_PENDING when a saved candidate has not activated; no second KB mutation is persisted")
 }
 
 func capabilityDescription(name string) string {

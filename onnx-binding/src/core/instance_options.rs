@@ -69,6 +69,18 @@ pub struct SessionEvidence {
     pub profile_prefix: Option<String>,
 }
 
+// ROCm/onnxruntime@2716b9b93a reads these after explicit provider options.
+// A model-cache override can load a compiled program whose cache key omits
+// precision. Reject these process-wide inputs instead of changing the caller's
+// environment or advertising execution facts the instance cannot guarantee.
+const MIGRAPHX_EXECUTION_OVERRIDES: [&str; 5] = [
+    "ORT_MIGRAPHX_FP16_ENABLE",
+    "ORT_MIGRAPHX_BF16_ENABLE",
+    "ORT_MIGRAPHX_FP8_ENABLE",
+    "ORT_MIGRAPHX_INT8_ENABLE",
+    "ORT_MIGRAPHX_MODEL_CACHE_PATH",
+];
+
 impl InstanceOptions {
     pub fn validate(&self) -> UnifiedResult<()> {
         if self.model_path.is_empty() || self.device_id < 0 {
@@ -96,6 +108,18 @@ impl InstanceOptions {
                 "profile_prefix",
                 "must be nonempty when supplied",
             ));
+        }
+        if self.provider == Provider::Migraphx {
+            for name in MIGRAPHX_EXECUTION_OVERRIDES {
+                if std::env::var_os(name).is_some_and(|value| !value.is_empty()) {
+                    return Err(errors::config_error(
+                        "provider",
+                        &format!(
+                            "owned MIGraphX execution forbids nonempty {name}; configure precision per instance and leave compiled-model caching disabled"
+                        ),
+                    ));
+                }
+            }
         }
         #[cfg(not(feature = "migraphx"))]
         if self.provider == Provider::Migraphx {
@@ -218,49 +242,6 @@ impl InstanceOptions {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cpu_precision_and_device_are_explicit() {
-        let mut options = InstanceOptions {
-            model_path: "unused".into(),
-            ..Default::default()
-        };
-        assert!(options.validate().is_ok());
-        options.device_id = 1;
-        assert!(options.validate().is_err());
-        options.device_id = 0;
-        options.precision = Precision::Fp16;
-        assert!(options.validate().is_err());
-    }
-
-    #[test]
-    fn task_limit_cannot_be_raised_by_a_deployment_budget() {
-        let options = InstanceOptions {
-            max_input_tokens: Some(513),
-            ..Default::default()
-        };
-        assert!(options.effective_limit(512).is_err());
-    }
-
-    #[cfg(not(feature = "migraphx"))]
-    #[test]
-    fn gpu_request_never_becomes_cpu_in_a_cpu_build() {
-        let options = InstanceOptions {
-            model_path: "unused".into(),
-            provider: Provider::Migraphx,
-            ..Default::default()
-        };
-        assert!(options
-            .validate()
-            .unwrap_err()
-            .to_string()
-            .contains("CPU fallback is forbidden"));
-    }
-}
-
 // ROCm's ORT 1.22.1 build changes the frozen upstream provider struct without
 // changing ORT_API_VERSION. Never pass ort-sys's upstream layout to this build.
 // Source: ROCm/onnxruntime@2716b9b93a, onnxruntime_c_api.h.
@@ -348,4 +329,98 @@ fn runtime_build_info() -> String {
     unsafe { std::ffi::CStr::from_ptr(pointer) }
         .to_string_lossy()
         .into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_precision_and_device_are_explicit() {
+        let mut options = InstanceOptions {
+            model_path: "unused".into(),
+            ..Default::default()
+        };
+        assert!(options.validate().is_ok());
+        options.device_id = 1;
+        assert!(options.validate().is_err());
+        options.device_id = 0;
+        options.precision = Precision::Fp16;
+        assert!(options.validate().is_err());
+    }
+
+    #[test]
+    fn task_limit_cannot_be_raised_by_a_deployment_budget() {
+        let options = InstanceOptions {
+            max_input_tokens: Some(513),
+            ..Default::default()
+        };
+        assert!(options.effective_limit(512).is_err());
+    }
+
+    #[test]
+    fn migraphx_environment_overrides_cannot_change_owned_execution() {
+        const CASE: &str = "CORE_ORT_EXECUTION_ENV_TEST_CASE";
+        const TEST: &str = "core::instance_options::tests::migraphx_environment_overrides_cannot_change_owned_execution";
+        if let Ok(name) = std::env::var(CASE) {
+            let original = std::env::var_os(&name).expect("child environment value");
+            let options = InstanceOptions {
+                model_path: "unused".into(),
+                provider: Provider::Migraphx,
+                ..Default::default()
+            };
+            let result = options.validate();
+            if original.is_empty() {
+                // A CPU-only build may still reject missing MIGraphX support.
+                assert!(!result.is_err_and(|error| error.to_string().contains(&name)));
+            } else {
+                let error = result.unwrap_err().to_string();
+                assert!(error.contains(&name) && error.contains("forbids nonempty"));
+            }
+            assert_eq!(std::env::var_os(&name).as_ref(), Some(&original));
+            assert!(InstanceOptions {
+                provider: Provider::Cpu,
+                ..options
+            }
+            .validate()
+            .is_ok());
+            return;
+        }
+
+        // Serialize isolated child processes: no environment mutation races
+        // with other tests, and the parent caller's values stay untouched.
+        for name in MIGRAPHX_EXECUTION_OVERRIDES {
+            let original = std::env::var_os(name);
+            for value in ["", "0", "1", "invalid-value"] {
+                let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+                child.args(["--exact", TEST, "--test-threads=1"]);
+                for variable in MIGRAPHX_EXECUTION_OVERRIDES {
+                    child.env_remove(variable);
+                }
+                let output = child.env(CASE, name).env(name, value).output().unwrap();
+                assert!(
+                    output.status.success(),
+                    "{name} case {value:?}: {} {}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            assert_eq!(std::env::var_os(name), original);
+        }
+    }
+
+    #[cfg(not(feature = "migraphx"))]
+    #[test]
+    fn gpu_request_never_becomes_cpu_in_a_cpu_build() {
+        let options = InstanceOptions {
+            model_path: "unused".into(),
+            provider: Provider::Migraphx,
+            ..Default::default()
+        };
+        assert!(options
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("CPU fallback is forbidden"));
+    }
 }

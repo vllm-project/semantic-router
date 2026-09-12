@@ -20,14 +20,8 @@ impl ModernBertBackbone {
         let config_path = format!("{path}/config.json");
         let variant = ModernBertVariant::detect_from_config(&config_path)?;
         let raw = std::fs::read_to_string(&config_path)?;
-        let mut config: Config = serde_json::from_str(
-            &TraditionalModernBertClassifier::normalize_config_json(&raw),
-        )?;
+        let mut config = TraditionalModernBertClassifier::parse_model_config(&raw)?;
         config.classifier_config = None;
-        if variant == ModernBertVariant::Extended32K {
-            config.max_position_embeddings =
-                config.max_position_embeddings.max(variant.max_length());
-        }
         let weights = format!("{path}/model.safetensors");
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights], DType::F32, device)? };
         let model = ModernBert::load(vb.clone(), &config)
@@ -63,9 +57,7 @@ fn load_head(
         Some("cls") => ClassifierPooling::CLS,
         _ => ClassifierPooling::MEAN,
     };
-    let config: Config = serde_json::from_str(
-        &TraditionalModernBertClassifier::normalize_config_json(&raw),
-    )?;
+    let config = TraditionalModernBertClassifier::parse_model_config(&raw)?;
     // Classifier metadata may differ; every backbone execution parameter must match.
     let mut actual = config.clone();
     let mut expected = source.clone();
@@ -85,20 +77,14 @@ fn load_head(
         tokenizer.get_vocab_size(true) <= config.vocab_size,
         "head tokenizer exceeds backbone vocabulary"
     );
-    let tokenizer = Box::new(crate::core::tokenization::UnifiedTokenizer::new(
+    let max_length = TraditionalModernBertClassifier::resolve_sequence_length(&config, None)?;
+    let tokenizer = TraditionalModernBertClassifier::tokenizer_for_config(
         tokenizer,
-        crate::core::tokenization::TokenizationConfig {
-            max_length: MAX_CLASSIFICATION_SEQ_LEN.min(variant.max_length()),
-            add_special_tokens: true,
-            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
-            truncation_direction: tokenizers::TruncationDirection::Right,
-            pad_token_id: config.pad_token_id,
-            pad_token: variant.pad_token().to_owned(),
-            tokenization_strategy: variant.tokenization_strategy(),
-            token_data_type: crate::core::tokenization::TokenDataType::U32,
-        },
+        &config,
+        variant,
         device.clone(),
-    )?);
+        max_length,
+    )?;
     let weights = format!("{path}/model.safetensors");
     let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights], DType::F32, device)? };
     let vb = if vb.contains_tensor("classifier.weight") {

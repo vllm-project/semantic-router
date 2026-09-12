@@ -16,7 +16,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use anyhow::{anyhow, bail, ensure, Result};
 use candle_core::Device;
 use serde::{Deserialize, Serialize};
-use tokenizers::Tokenizer;
+use tokenizers::{PostProcessor, Tokenizer};
 
 use crate::classifiers::lora::token_lora::LoRATokenClassifier;
 use crate::core::similarity::BertSimilarity;
@@ -152,6 +152,25 @@ fn device_name(device: &Device) -> &'static str {
     }
 }
 
+// The same postprocessor runs for budget accounting and the actual model input.
+// Reject undersized budgets before tokenizers can subtract special tokens.
+fn task_tokenizer(path: &str, max_input_tokens: usize) -> Result<Tokenizer> {
+    let mut tokenizer = Tokenizer::from_file(format!("{path}/tokenizer.json"))
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let special_tokens = tokenizer
+        .get_post_processor()
+        .map_or(0, |processor| processor.added_tokens(false));
+    ensure!(
+        max_input_tokens >= special_tokens,
+        "capability: input budget {max_input_tokens} is smaller than the tokenizer's {special_tokens} special tokens"
+    );
+    tokenizer
+        .with_truncation(None)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    tokenizer.with_padding(None);
+    Ok(tokenizer)
+}
+
 fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
     let device = resolve_device(&options.device)?;
     let generative = matches!(task, "guard" | "generative");
@@ -175,15 +194,28 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         "{}/config.json",
         options.model_path
     ))?)?;
+    let architectural_max_tokens = raw["max_position_embeddings"]
+        .as_u64()
+        .or_else(|| raw["text_max_position_embeddings"].as_u64())
+        .unwrap_or(512) as usize;
+    let limit = if task == "embedding" || generative {
+        architectural_max_tokens
+    } else {
+        architectural_max_tokens.min(512)
+    };
+    let max_input_tokens = if options.max_input_tokens == 0 {
+        limit
+    } else {
+        options.max_input_tokens
+    };
+    ensure!(
+        max_input_tokens > 0 && max_input_tokens <= limit,
+        "capability: input budget exceeds the task limit ({limit})"
+    );
     let tokenizer = if task == "backbone" {
         None
     } else {
-        let mut tokenizer = Tokenizer::from_file(format!("{}/tokenizer.json", options.model_path))
-            .map_err(|e| anyhow!(e.to_string()))?;
-        tokenizer
-            .with_truncation(None)
-            .map_err(|e| anyhow!(e.to_string()))?;
-        tokenizer.with_padding(None);
+        let tokenizer = task_tokenizer(&options.model_path, max_input_tokens)?;
         Some(tokenizer)
     };
     if options.model_type.is_empty() {
@@ -351,24 +383,6 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         }
         _ => bail!("capability: model type does not implement requested task"),
     };
-    let architectural_max_tokens = raw["max_position_embeddings"]
-        .as_u64()
-        .or_else(|| raw["text_max_position_embeddings"].as_u64())
-        .unwrap_or(512) as usize;
-    let limit = if task == "embedding" || generative {
-        architectural_max_tokens
-    } else {
-        architectural_max_tokens.min(512)
-    };
-    let max_input_tokens = if options.max_input_tokens == 0 {
-        limit
-    } else {
-        options.max_input_tokens
-    };
-    ensure!(
-        max_input_tokens > 0 && max_input_tokens <= limit,
-        "capability: input budget exceeds the task limit ({limit})"
-    );
     let overflow = if options.overflow.is_empty() {
         if generative {
             "reject".to_owned()
@@ -447,6 +461,7 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
 }
 
 fn bind_head(source: &Instance, path: &str, task: &str) -> Result<Arc<Instance>> {
+    let tokenizer = task_tokenizer(path, source.info.max_input_tokens)?;
     let model = match (&source.model, task) {
         (Model::Backbone(model), "sequence") => {
             Model::Sequence(model.bind_sequence_head(path)?.into())
@@ -473,12 +488,6 @@ fn bind_head(source: &Instance, path: &str, task: &str) -> Result<Arc<Instance>>
                 .ok_or_else(|| anyhow!("configuration: labels must have consecutive numeric IDs"))
         })
         .collect::<Result<Vec<_>>>()?;
-    let mut tokenizer = Tokenizer::from_file(format!("{path}/tokenizer.json"))
-        .map_err(|e| anyhow!(e.to_string()))?;
-    tokenizer
-        .with_truncation(None)
-        .map_err(|e| anyhow!(e.to_string()))?;
-    tokenizer.with_padding(None);
     Ok(Arc::new(Instance {
         model,
         info,

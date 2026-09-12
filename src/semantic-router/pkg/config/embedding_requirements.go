@@ -9,6 +9,8 @@ type EmbeddingRequirement struct {
 	Dimension, Layer int
 	Windows          bool
 	Modality         string
+	// SharedService distinguishes service-owned consumers from recipe classifiers.
+	SharedService bool
 	// LocalLayerHint preserves remote text embedding behavior: catalog layer
 	// optimization has historically applied only to local model execution.
 	LocalLayerHint bool
@@ -45,7 +47,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 		return result
 	}
 	if cfg.SemanticCache.Enabled {
-		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", Windows: true}
+		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", Windows: true, SharedService: true}
 		if cfg.SemanticCache.BackendType == "" || cfg.SemanticCache.BackendType == "memory" {
 			switch requirement.Model {
 			case "mmbert":
@@ -78,14 +80,14 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 		default:
 			dimension = 0
 		}
-		result = append(result, EmbeddingRequirement{Model: model, Consumer: "memory", Dimension: dimension})
+		result = append(result, EmbeddingRequirement{Model: model, Consumer: "memory", Dimension: dimension, SharedService: true})
 	}
 	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {
 		model := cfg.VectorStore.EmbeddingModel
 		if model == "" {
 			model = "bert"
 		}
-		result = append(result, EmbeddingRequirement{Model: model, Consumer: "vector store ingestion", Dimension: cfg.VectorStore.EmbeddingDimension})
+		result = append(result, EmbeddingRequirement{Model: model, Consumer: "vector store ingestion", Dimension: cfg.VectorStore.EmbeddingDimension, SharedService: true})
 	}
 	return result
 }

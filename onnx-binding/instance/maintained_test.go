@@ -108,5 +108,5 @@ func assertStrictGPUProfiles(t *testing.T, paths []string) {
 	if gpu == 0 {
 		t.Fatal("no profiled MIGraphX execution")
 	}
-	t.Logf("strict maintained profile: MIGraphX nodes=%d, CPU nodes=0", gpu)
+	t.Logf("strict maintained profile: MIGraphX kernel execution records=%d, CPU records=0", gpu)
 }

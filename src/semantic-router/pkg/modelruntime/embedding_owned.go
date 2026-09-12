@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	goruntime "runtime"
 	"strconv"
 	"strings"
 
@@ -55,6 +54,22 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 
 	needed := embeddingNeedsForScope(cfg, primary, sharedServices)
 	requirements := config.EmbeddingRequirements(cfg, primary, sharedServices)
+	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO && !hasExplicit {
+		// Legacy OpenVINO recipe classifiers initialize their own primary.
+		// Independent service providers still belong to this owned snapshot.
+		delete(needed, primary)
+		ownedRequirements := requirements[:0]
+		for _, requirement := range requirements {
+			if requirement.Model == primary && !requirement.SharedService {
+				continue
+			}
+			ownedRequirements = append(ownedRequirements, requirement)
+			if requirement.SharedService {
+				needed[requirement.Model] = true
+			}
+		}
+		requirements = ownedRequirements
+	}
 	if len(needed) == 0 {
 		return embedding.NewSet(providers, primary), nil
 	}
@@ -81,11 +96,6 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 		return embedding.NewSet(providers, primary, provider), nil
 	}
 
-	if cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO && !hasExplicit {
-		// Preserve the platform-specific OpenVINO initializer until that provider
-		// exposes owned handles. CPU/Candle and ORT use the instance path below.
-		return embedding.NewSet(providers, primary), nil
-	}
 	paths := resolveEmbeddingPaths(cfg)
 	models := map[string]string{"qwen3": paths.qwen3, "gemma": paths.gemma, "mmbert": paths.mmBert, "multimodal": paths.multiModal, "bert": paths.bert}
 	if semanticCacheNeedsBERT(cfg) || vectorStoreNeedsBERT(cfg) || memoryNeedsBERT(cfg) {
@@ -151,14 +161,8 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *n
 }
 
 func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, model, path string) config.ResolvedModelBinding {
-	device := "cpu"
-	if !cfg.EmbeddingModels.UseCPU {
-		device = "cuda:0"
-		if goruntime.GOOS == "darwin" {
-			device = "metal:0"
-		}
-	}
-	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: model}, Deployment: config.ModelDeployment{Artifact: path, Provider: "candle", Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}}, Admission: cfg.ModelAdmission["embedding:"+model]}
+	provider, device := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
+	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: model}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}}, Admission: cfg.ModelAdmission["embedding:"+model]}
 }
 
 // EmbeddingState describes the already warmed generation without another call.

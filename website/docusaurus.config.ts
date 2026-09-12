@@ -157,6 +157,14 @@ const config: Config = {
       {
         redirects: [
           {
+            from: '/docs/tutorials/global/safety-models-and-policy',
+            to: '/docs/installation/runtime/safety',
+          },
+          {
+            from: '/docs/tutorials/global/remote-embeddings',
+            to: '/docs/installation/runtime/embeddings',
+          },
+          {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },

@@ -19,6 +19,7 @@ RUST_CI_LIB_TESTS ?= \
 	core::tokenization_window::tests::test_window_ranges_edges \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
+	model_architectures::embedding::mmbert_embedding::tests::test_early_exit_preserves_residual_and_full_depth_applies_final_norm \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
 	model_architectures::traditional::candle_models::modernbert::tests::test_chunked_attention_matches_dense \
@@ -44,6 +45,8 @@ RUST_CI_LIB_TESTS ?= \
 	model_architectures::generative::qwen3_with_lora::chunked_attention_tests::test_cached_suffix_generation_matches_uncached \
 	model_architectures::traditional::base_model_test::test_self_attention_matches_dense_reference
 
+RUST_CI_LIB_TEST_GROUPS ?= ffi::instances::tests::
+
 test-rust-ci:
 	@$(LOG_TARGET)
 	@echo "Running CI-safe Rust lib unit tests (CPU-only, no model assets)"
@@ -56,6 +59,13 @@ test-rust-ci:
 		}; \
 		echo "Running $$test_filter"; \
 		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
+	done && \
+	for test_filter in $(RUST_CI_LIB_TEST_GROUPS); do \
+		echo "$$test_list" | grep -F "$$test_filter" >/dev/null || { \
+			echo "Configured Rust CI test group not found: $$test_filter"; \
+			exit 1; \
+		}; \
+		cargo test --release --no-default-features --lib "$$test_filter" -- --test-threads=1 --nocapture || exit 1; \
 	done
 
 # Test Rust unit tests (with release optimization for performance)
@@ -116,7 +126,30 @@ test-binding-minimal: $(if $(CI),rust-ci,rust) ## Run Go tests with minimal mode
 	@echo "Running candle-binding tests with minimal models (BERT, ModernBERT classifiers)..."
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 		cd candle-binding && CGO_ENABLED=1 go test -v -race \
-		-run "^Test(InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
+		-run "^Test(OwnedNative.*|InitModel|Tokenization|Embeddings|Similarity|FindMostSimilar|ModernBERTClassifiers|ModernBertClassifier_ConcurrentClassificationSafety|ModernBERTPIITokenClassification|UtilityFunctions|ErrorHandling|Concurrency|MultiModalEmbeddingInit|MultiModalEncodeText|MultiModalInputValidation)$$"
+
+# Tiny checked-in/generated tensors exercise the actual native libraries without
+# downloading checkpoints. CI uses the same API22 CPU runtime as the CPU image;
+# an explicit ORT_DYLIB_PATH selects an already installed compatible runtime.
+OWNED_TEST_ORT_VERSION ?= 1.22.0
+test-owned-native: $(if $(CI),rust-ci,rust) harness-venv-install ## Test owned native instances and classification assembly with real CPU tensors
+	@if [ -z "$${ORT_DYLIB_PATH:-}" ]; then \
+		"$(AGENT_PYTHON)" -m pip install --quiet "onnxruntime==$(OWNED_TEST_ORT_VERSION)"; \
+	fi
+	@set -e; \
+	if [ -z "$${ORT_DYLIB_PATH:-}" ]; then \
+		ORT_DYLIB_PATH="$$("$(AGENT_PYTHON)" -c 'import importlib.util, pathlib; root = pathlib.Path(importlib.util.find_spec("onnxruntime").origin).parent / "capi"; paths = list(root.glob("libonnxruntime.so.*")) + list(root.glob("libonnxruntime.*.dylib")); assert len(paths) == 1, paths; print(paths[0])')"; \
+		export ORT_DYLIB_PATH; \
+	fi; \
+	export LD_LIBRARY_PATH="$(CURDIR)/onnx-binding/target/release:$(CURDIR)/candle-binding/target/release:$(CURDIR)/ml-binding/target/release:$(CURDIR)/nlp-binding/target/release:$${LD_LIBRARY_PATH:-}"; \
+	cd onnx-binding; \
+	CGO_ENABLED=1 go test -race -count=1 ./instance; \
+	cd ../src/semantic-router; \
+	CORE_NATIVE_FIXTURES=1 CGO_ENABLED=1 go test -race -count=1 ./pkg/classification \
+		-run '^(TestNativeMappingCandidateKeepsPreviousModel|TestTwoLocalRulesOwnNativeModelsInOneRecipe|TestLegacyStartupUsesProjectedNativeMapping)$$'; \
+	CGO_ENABLED=1 go test -race -count=1 ./pkg/modelruntime ./pkg/modeldownload \
+		-ldflags='-X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider=ort' \
+		-run '^(TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride|TestImplicitEmbeddingProvisioningFollowsBuildProvider)$$'
 
 # The CK flash-attention graph rewriter is a Python script under onnx-binding;
 # its unit tests need onnx, which the agent venv does not carry by default.

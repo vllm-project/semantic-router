@@ -90,5 +90,5 @@ def test_prompt_guard_protocol_migration_rejects_ambiguity(scenario):
         catalog["modules"]["prompt_guard"][scenario] = (
             {"model": "named"} if scenario == "backend" else "mmbert32k"
         )
-    with pytest.raises(ValueError, match="prompt_guard.protocol"):
+    with pytest.raises(ValueError, match=r"prompt_guard\.protocol"):
         migrate_config_data(source)

@@ -13,55 +13,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, error) {
-	mappings := &classifierMappings{}
-	if !cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-		return mappings, nil
-	}
-	plan, err := config.CompileModelBindings(cfg)
-	if err != nil {
-		return nil, err
-	}
-	// Named recipes resolve their own mappings during classifier preparation.
-	// Only the reachable default's projected fallback is loaded here.
-	cfg, err = config.ProjectRecipeModelBindings(cfg.ConfigForRecipe(cfg.DefaultRecipe()), plan, config.DefaultRecipeName)
-	if err != nil {
-		return nil, err
-	}
-
-	if cfg.NeedsCategoryMappingForRouting() {
-		mappings.categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load category mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "category_mapping_loaded", map[string]interface{}{
-			"count": mappings.categoryMapping.GetCategoryCount(),
-		})
-	}
-
-	if cfg.NeedsPIIMappingForRouting() {
-		mappings.piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "pii_mapping_loaded", map[string]interface{}{
-			"count": mappings.piiMapping.GetPIITypeCount(),
-		})
-	}
-
-	if cfg.NeedsJailbreakMappingForRouting() {
-		mappings.jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "jailbreak_mapping_loaded", map[string]interface{}{
-			"count": mappings.jailbreakMapping.GetJailbreakTypeCount(),
-		})
-	}
-
-	return mappings, nil
-}
-
 func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, error) {
 	semanticCacheCfg := cfg.SemanticCache
 	cacheConfig := cache.CacheConfig{
@@ -191,14 +142,13 @@ func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (e
 
 func createRouterClassifier(
 	cfg *config.RouterConfig,
-	mappings *classifierMappings,
 	runtimeOptions ...classification.RecipeRuntimeOptions,
 ) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
 	classifiers, err := classification.BuildRecipeClassifiers(
 		cfg,
-		mappings.categoryMapping,
-		mappings.piiMapping,
-		mappings.jailbreakMapping,
+		nil,
+		nil,
+		nil,
 		runtimeOptions...,
 	)
 	if err != nil {

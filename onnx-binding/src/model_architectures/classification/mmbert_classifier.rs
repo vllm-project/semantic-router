@@ -10,7 +10,7 @@
 //! - CPU OpenVINO FP32: ~22ms
 //! - CPU ORT FP32: ~41ms
 
-use crate::core::instance_options::InstanceOptions;
+use crate::core::instance_options::{InstanceOptions, Provider};
 use crate::core::unified_error::{errors, UnifiedResult};
 use half::f16;
 use ndarray::Array2;
@@ -234,6 +234,10 @@ pub struct MmBertSequenceClassifier {
     config: MmBertClassifierConfig,
     model_path: String,
     max_sequence_length: usize,
+    // MIGraphX compiles for one shape. Padding execution tensors to the owned
+    // budget avoids recompiling every time a request's actual length changes.
+    // Tokenization, offsets and reported input usage remain unpadded.
+    execution_sequence_length: Option<usize>,
 }
 
 impl MmBertSequenceClassifier {
@@ -296,6 +300,7 @@ impl MmBertSequenceClassifier {
             config,
             model_path: model_path_str,
             max_sequence_length,
+            execution_sequence_length: None,
         })
     }
 
@@ -306,10 +311,11 @@ impl MmBertSequenceClassifier {
         let mut tokenizer =
             Tokenizer::from_file(Path::new(&options.model_path).join("tokenizer.json"))
                 .map_err(|e| errors::tokenization_error(&e.to_string()))?;
-        options.configure_tokenizer(
-            &mut tokenizer,
-            MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings),
-        )?;
+        // The owned Core task retains its 512-token cap while sharing the
+        // upstream tokenizer's special-token and artifact-padding safeguards.
+        let max_sequence_length = options
+            .effective_limit(MAX_CLASSIFICATION_SEQ_LEN.min(config.max_position_embeddings))?;
+        configure_classifier_tokenizer(&mut tokenizer, max_sequence_length)?;
         // Owned sessions select the standard graph deterministically. Legacy
         // environment-driven FA ranking must not change an instance's identity.
         let provider = ClassifierExecutionProvider::Cpu;
@@ -325,6 +331,9 @@ impl MmBertSequenceClassifier {
             tokenizer: Arc::new(tokenizer),
             config,
             model_path: options.model_path.clone(),
+            max_sequence_length,
+            execution_sequence_length: (options.provider == Provider::Migraphx)
+                .then_some(max_sequence_length),
         })
     }
 
@@ -495,7 +504,7 @@ impl MmBertSequenceClassifier {
                         .with_execution_providers([MIGraphXExecutionProvider::default()
                             .build()
                             .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
+                        .and_then(&maybe_register_custom_ops)
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -517,7 +526,7 @@ impl MmBertSequenceClassifier {
                             .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                             .build()
                             .error_on_failure()])
-                        .and_then(|b| maybe_register_custom_ops(b))
+                        .and_then(maybe_register_custom_ops)
                         .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                     {
                         Ok(session) => {
@@ -681,6 +690,7 @@ impl MmBertSequenceClassifier {
         let max_len = max_len
             .min(self.config.max_position_embeddings)
             .min(self.max_sequence_length);
+        let max_len = self.execution_sequence_length.unwrap_or(max_len);
 
         // Prepare input tensors
         let batch_size = texts.len();
@@ -1014,6 +1024,7 @@ pub struct MmBertTokenClassifier {
     config: MmBertClassifierConfig,
     model_path: String,
     max_sequence_length: usize,
+    execution_sequence_length: Option<usize>,
 }
 
 impl MmBertTokenClassifier {
@@ -1074,6 +1085,7 @@ impl MmBertTokenClassifier {
             config,
             model_path: model_path_str,
             max_sequence_length,
+            execution_sequence_length: None,
         })
     }
 
@@ -1085,6 +1097,8 @@ impl MmBertTokenClassifier {
             tokenizer: sequence.tokenizer,
             config: sequence.config,
             model_path: sequence.model_path,
+            max_sequence_length: sequence.max_sequence_length,
+            execution_sequence_length: sequence.execution_sequence_length,
         })
     }
 
@@ -1113,10 +1127,11 @@ impl MmBertTokenClassifier {
             .len()
             .min(self.config.max_position_embeddings)
             .min(self.max_sequence_length);
+        let execution_len = self.execution_sequence_length.unwrap_or(seq_len);
 
         // Prepare inputs
-        let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
-        let mut attention_mask = vec![0i64; seq_len];
+        let mut input_ids = vec![self.config.pad_token_id as i64; execution_len];
+        let mut attention_mask = vec![0i64; execution_len];
         let enc_attention_mask = encoding.get_attention_mask();
 
         for i in 0..seq_len {
@@ -1126,11 +1141,11 @@ impl MmBertTokenClassifier {
         }
 
         // Create tensors (batch size 1)
-        let input_ids_tensor = Tensor::from_array(([1, seq_len], input_ids))
+        let input_ids_tensor = Tensor::from_array(([1, execution_len], input_ids))
             .map_err(|e: ort::Error| errors::inference_error("create_input_ids", &e.to_string()))?;
 
-        let attention_mask_tensor =
-            Tensor::from_array(([1, seq_len], attention_mask)).map_err(|e: ort::Error| {
+        let attention_mask_tensor = Tensor::from_array(([1, execution_len], attention_mask))
+            .map_err(|e: ort::Error| {
                 errors::inference_error("create_attention_mask", &e.to_string())
             })?;
 
@@ -1143,11 +1158,12 @@ impl MmBertTokenClassifier {
             ])
             .map_err(|e: ort::Error| errors::inference_error("session_run", &e.to_string()))?;
 
-        // Extract token logits [1, seq_len, num_labels]
+        // Validate every execution row, including padding. BIO decoding stops
+        // at the original encoding's offsets and never emits padded entities.
         let token_logits = extract_token_logits_from_outputs(&outputs)?;
         // A sequence-classification export can have the same label count but
         // only one row. It must not silently become an empty/successful PII scan.
-        validate_classifier_logits(&token_logits, seq_len, self.config.num_labels)?;
+        validate_classifier_logits(&token_logits, execution_len, self.config.num_labels)?;
 
         // Convert to entities using BIO scheme
         let entities = bio_decode_entities(text, &encoding, &token_logits, &self.config)?;

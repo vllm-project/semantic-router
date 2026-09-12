@@ -27,12 +27,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-type classifierMappings struct {
-	categoryMapping  *classification.CategoryMapping
-	piiMapping       *classification.PIIMapping
-	jailbreakMapping *classification.JailbreakMapping
-}
-
 type routerComponents struct {
 	embeddings           *embedding.Set
 	modelRuntime         *native.Runtime
@@ -214,10 +208,6 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		components.looperClient = looperClient
 		components.resources.add(components.looperClient.Close)
 	}
-	mappings, err := loadClassifierMappings(cfg)
-	if err != nil {
-		return nil, rollbackResources(components.resources, err)
-	}
 
 	components.categoryDescriptions = cfg.GetCategoryDescriptions()
 	logging.ComponentDebugEvent("extproc", "category_descriptions_loaded", map[string]interface{}{
@@ -225,7 +215,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		"descriptions": components.categoryDescriptions,
 	})
 
-	if buildErr := components.buildEarlyResources(mappings); buildErr != nil {
+	if buildErr := components.buildEarlyResources(); buildErr != nil {
 		return nil, buildErr
 	}
 
@@ -275,7 +265,7 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	return components, nil
 }
 
-func (components *routerComponents) buildEarlyResources(mappings *classifierMappings) error {
+func (components *routerComponents) buildEarlyResources() error {
 	var err error
 	components.semanticCache, err = createSemanticCache(components.cfg, components.embeddings)
 	if err != nil {
@@ -290,7 +280,7 @@ func (components *routerComponents) buildEarlyResources(mappings *classifierMapp
 		return rollbackResources(components.resources, err)
 	}
 
-	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, mappings, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
+	components.recipeClassifiers, components.classifier, components.classificationSvc, err = createRouterClassifier(components.cfg, classification.RecipeRuntimeOptions{Runtime: components.modelRuntime, Embeddings: components.embeddings})
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}

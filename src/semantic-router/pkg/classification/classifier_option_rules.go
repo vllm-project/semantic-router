@@ -43,7 +43,7 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	if backendOverride == "" {
 		backendOverride = strings.ToLower(strings.TrimSpace(optConfig.Backend))
 	}
-	if backendOverride == "openvino" {
+	if backendOverride == "openvino" && b.usesLegacyOpenVINOEmbedding() {
 		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
 		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
 			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
@@ -69,7 +69,7 @@ func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provide
 	if b.cfg == nil {
 		return nil, fmt.Errorf("embedding config is required")
 	}
-	if b.cfg.EmbeddingModels.EmbeddingBackend() == config.EmbeddingBackendOpenVINO {
+	if b.usesLegacyOpenVINOEmbedding() {
 		return nil, nil
 	}
 	if err := b.prepareEmbeddingSet(); err != nil {
@@ -79,6 +79,18 @@ func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provide
 		return nil, fmt.Errorf("primary embedding provider was not prepared")
 	}
 	return b.provider, nil
+}
+
+func (b *classifierOptionBuilder) usesLegacyOpenVINOEmbedding() bool {
+	if b.cfg == nil || b.cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendOpenVINO {
+		return false
+	}
+	if b.models != nil {
+		if _, explicit := b.models.plan.Lookup(b.models.recipe, "embedding"); explicit {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error) {

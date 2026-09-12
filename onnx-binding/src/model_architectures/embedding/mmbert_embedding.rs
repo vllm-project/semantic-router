@@ -552,7 +552,7 @@ impl MmBertEmbeddingModel {
                         .with_arena_extend_strategy(ArenaExtendStrategy::SameAsRequested)
                         .build()
                         .error_on_failure()])
-                    .and_then(|b| maybe_register_custom_ops(b))
+                    .and_then(maybe_register_custom_ops)
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
                 {
                     Ok(session) => {
