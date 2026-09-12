@@ -3,7 +3,8 @@
 Both Docker and Podman are supported. Selection happens via:
 
 1. The `CONTAINER_RUNTIME` environment variable (``docker`` or ``podman``).
-2. Auto-detection: prefer ``docker`` if present, fall back to ``podman``.
+2. The runtime persisted by ``install.sh`` in ``runtime.env`` (#3370).
+3. Auto-detection: prefer ``docker`` if present, fall back to ``podman``.
 
 Once resolved the choice is cached for the lifetime of the process and used
 verbatim by every helper that shells out (``docker run`` / ``podman run`` etc.).
@@ -61,9 +62,54 @@ def resolve_container_cli_path(preferred_path: str | None = None) -> str | None:
     return docker_path
 
 
+def _persisted_runtime_env_path() -> str:
+    """Return the runtime.env location written by ``install.sh``.
+
+    ``install.sh`` derives its install root the same way:
+    ``${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}``.
+    """
+    install_root = os.getenv("VLLM_SR_INSTALL_ROOT") or os.path.join(
+        os.path.expanduser("~"), ".local", "share", "vllm-sr"
+    )
+    return os.path.join(install_root, "runtime.env")
+
+
+def _load_persisted_runtime(env_path: str) -> str | None:
+    """Read the ``CONTAINER_RUNTIME`` choice persisted by ``install.sh``.
+
+    The file is a hint rather than a hard contract: a missing or malformed
+    file yields ``None`` and callers fall back to auto-detection. A file
+    that exists but cannot be read logs a warning so a silently ignored
+    persisted selection stays diagnosable. Returns ``None`` when no value
+    is present.
+    """
+    try:
+        with open(env_path, encoding="utf-8") as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                if key.strip().upper() == CONTAINER_RUNTIME_ENV:
+                    return value.strip().lower() or None
+    except FileNotFoundError:
+        pass
+    except (OSError, UnicodeDecodeError) as exc:
+        log.warning(
+            f"Could not read persisted {CONTAINER_RUNTIME_ENV} from "
+            f"{env_path}: {exc}. Falling back to auto-detection."
+        )
+    return None
+
+
 @lru_cache(maxsize=1)
 def _detect_container_runtime():
-    """Detect a supported runtime, honoring the explicit ``CONTAINER_RUNTIME`` env."""
+    """Detect a supported runtime for local ``vllm-sr`` deployments.
+
+    Resolution order: the explicit ``CONTAINER_RUNTIME`` environment
+    variable, the runtime persisted by ``install.sh`` in ``runtime.env``
+    (#3370), then auto-detection (Docker first, Podman fallback).
+    """
     if sys.platform.startswith("win"):
         _exit_unsupported_runtime(
             "native Windows",
@@ -89,6 +135,31 @@ def _detect_container_runtime():
         _ensure_supported_runtime_daemon(explicit, runtime_path)
         log.info(f"Using container runtime from {CONTAINER_RUNTIME_ENV}: {explicit}")
         return explicit
+
+    persisted_env_path = _persisted_runtime_env_path()
+    persisted = _load_persisted_runtime(persisted_env_path)
+    if persisted:
+        if persisted not in SUPPORTED_CONTAINER_RUNTIMES:
+            log.warning(
+                f"Ignoring unsupported {CONTAINER_RUNTIME_ENV}={persisted} from "
+                f"{persisted_env_path}; supported values: "
+                f"{', '.join(SUPPORTED_CONTAINER_RUNTIMES)}."
+            )
+        else:
+            persisted_path = resolve_runtime_cli_path(persisted)
+            if not persisted_path:
+                log.warning(
+                    f"{persisted_env_path} persists "
+                    f"{CONTAINER_RUNTIME_ENV}={persisted}, but `{persisted}` "
+                    "was not found in PATH; falling back to auto-detection."
+                )
+            else:
+                _ensure_supported_runtime_daemon(persisted, persisted_path)
+                log.info(
+                    "Using container runtime persisted by install.sh "
+                    f"({persisted_env_path}): {persisted}"
+                )
+                return persisted
 
     docker_path = resolve_runtime_cli_path(CONTAINER_RUNTIME_DOCKER)
     if docker_path and not _docker_path_looks_like_podman(docker_path):
