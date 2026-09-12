@@ -12,6 +12,8 @@ func (c *Classifier) buildPolicySignalDispatchers(
 	textForSignal func(string) string,
 	priorUserMessages []string,
 	nonUserMessages []string,
+	toolResultTexts []string,
+	toolResultScanIncomplete bool,
 	convFacts ConversationFacts,
 	requestFacts RequestFacts,
 	usedSignals map[string]bool,
@@ -51,6 +53,8 @@ func (c *Classifier) buildPolicySignalDispatchers(
 					mu,
 					textForSignal(config.SignalTypePII),
 					historyForSignals(),
+					toolResultTexts,
+					toolResultScanIncomplete,
 				)
 			},
 		},

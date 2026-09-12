@@ -39,7 +39,7 @@ func TestPIISignal_DetectsSecretInPriorUserTurn(t *testing.T) {
 	var mu sync.Mutex
 
 	history := historyForHistoryAwareSignals(priorUserMessages, nonUserMessages)
-	classifier.evaluatePIISignal(context.Background(), results, &mu, currentTurn, history)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, currentTurn, history, nil, false)
 
 	if !results.PIIDetected {
 		t.Fatalf("SECURITY: PII in a prior user turn must be detected with include_history=true (issue #1961); got PIIDetected=false")

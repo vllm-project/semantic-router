@@ -174,6 +174,7 @@ type PIIRule struct {
 	Threshold       float32  `yaml:"threshold"`
 	PIITypesAllowed []string `yaml:"pii_types_allowed,omitempty"`
 	IncludeHistory  bool     `yaml:"include_history,omitempty"`
+	Source          string   `yaml:"source,omitempty"`
 	Description     string   `yaml:"description,omitempty"`
 }
 

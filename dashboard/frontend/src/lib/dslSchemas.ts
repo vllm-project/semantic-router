@@ -10,6 +10,13 @@ export type { FieldSchema } from './dslSchemaTypes'
 
 const PII_SIGNAL_FIELDS: FieldSchema[] = [
   {
+    key: 'source',
+    label: 'Source',
+    type: 'select',
+    options: ['tool_result'],
+    description: 'Inspect textual tool results instead of the legacy prompt/history scope',
+  },
+  {
     key: 'threshold',
     label: 'Threshold',
     type: 'number',

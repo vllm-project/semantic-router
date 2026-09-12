@@ -237,13 +237,12 @@ func buildReplayRoutingRecord(
 		record.ConversationID = state.ConversationID
 	}
 	if ctx.SemanticRequest != nil {
-		if requestBody, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest); err == nil {
+		replayRequest := replaySafeSemanticRequest(*ctx.SemanticRequest)
+		if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 			record.RequestBody = string(requestBody)
 		}
+		record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(&replayRequest)
 	}
-
-	// Extract structured fields from neutral IR before recorder truncation.
-	record.Prompt, record.ToolDefinitions = extractSemanticPromptAndTools(ctx.SemanticRequest)
 
 	return record
 }

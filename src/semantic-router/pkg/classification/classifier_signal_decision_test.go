@@ -1,9 +1,11 @@
 package classification
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestEvaluateDecisionWithEngineForDecisionsRestrictsCandidates(t *testing.T) {
@@ -78,5 +80,76 @@ func TestEvaluateDecisionWithEngineAppliesOnUnknown(t *testing.T) {
 	}
 	if signals.Diagnostics.AppliedUnknownPolicies["guarded"] != string(config.RuleOnUnknownFailRequest) {
 		t.Fatalf("applied policies = %v", signals.Diagnostics.AppliedUnknownPolicies)
+	}
+}
+
+func TestPIIToolResultMatchReachesDecisionEngine(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Strategy: "priority",
+			Decisions: []config.Decision{{
+				Name:  "safe-route",
+				Rules: config.RuleNode{Type: config.SignalTypePII, Name: "tool_data"},
+			}},
+		},
+	}}
+
+	result, err := classifier.EvaluateDecisionWithEngine(&SignalResults{
+		MatchedPIIRules: []string{"tool_data"},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionWithEngine() error = %v", err)
+	}
+	if result == nil || result.Decision.Name != "safe-route" {
+		t.Fatalf("result = %#v, want safe-route decision", result)
+	}
+}
+
+func TestPIIToolResultErrorCanMatchConfiguredUnknownPolicy(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Strategy: "priority",
+			Decisions: []config.Decision{{
+				Name: "fail-closed",
+				Rules: config.RuleNode{
+					Type:      config.SignalTypePII,
+					Name:      "tool_data",
+					OnUnknown: config.RuleOnUnknownMatch,
+				},
+			}},
+		},
+	}}
+
+	result, err := classifier.EvaluateDecisionWithEngine(&SignalResults{
+		SignalErrors: map[string]string{"pii:tool_data": piiEvaluationIncompleteCode},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionWithEngine() error = %v", err)
+	}
+	if result == nil || result.Decision.Name != "fail-closed" {
+		t.Fatalf("result = %#v, want fail-closed decision", result)
+	}
+}
+
+func TestPIIToolResultErrorCanFailRequestWithUnknownPolicy(t *testing.T) {
+	classifier := &Classifier{Config: &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Strategy: "priority",
+			Decisions: []config.Decision{{
+				Name: "strict-route",
+				Rules: config.RuleNode{
+					Type:      config.SignalTypePII,
+					Name:      "tool_data",
+					OnUnknown: config.RuleOnUnknownFailRequest,
+				},
+			}},
+		},
+	}}
+
+	_, err := classifier.EvaluateDecisionWithEngine(&SignalResults{
+		SignalErrors: map[string]string{"pii:tool_data": piiEvaluationFailedCode},
+	})
+	if !errors.Is(err, decision.ErrDecisionUnresolved) {
+		t.Fatalf("error = %v, want ErrDecisionUnresolved", err)
 	}
 }

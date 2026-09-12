@@ -291,7 +291,9 @@ func redactToolTraceMap(toolTrace map[string]any) bool {
 			continue
 		}
 		if stepType, _ := step["type"].(string); strings.TrimSpace(stepType) == "client_tool_result" {
-			step["status"] = ToolTraceResultStatus(step["text"])
+			if _, hasStatus := step["status"]; !hasStatus {
+				step["status"] = ToolTraceResultStatus(step["text"])
+			}
 			changed = true
 		}
 		for _, field := range []string{"text", "arguments", "raw_arguments", "output", "raw_output"} {

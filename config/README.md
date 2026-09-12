@@ -134,6 +134,10 @@ runtime dependency; they do not define routing behavior by themselves.
   portable while making its candidate-pool cardinality executable as soon as
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
+- PII rules keep the legacy prompt/history scope when `source` is omitted or
+  empty. Set `source: tool_result` explicitly to scan textual tool-result
+  content decoded from the request protocol; this source does not implicitly
+  include the prompt or conversation history.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response

@@ -57,7 +57,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx.UserContent = snapshot.UserContent
 	ctx.RequestImageURL = snapshot.FirstImageURL
 
-	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
+	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}

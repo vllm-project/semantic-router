@@ -234,7 +234,7 @@ func TestPIIInferenceErrorPopulatesSignalErrors(t *testing.T) {
 	results := &SignalResults{Metrics: &SignalMetricsCollection{}, SignalErrors: make(map[string]string)}
 	var mu sync.Mutex
 
-	classifier.evaluatePIISignal(context.Background(), results, &mu, "text", nil)
+	classifier.evaluatePIISignal(context.Background(), results, &mu, "text", nil, nil, false)
 
 	if results.SignalErrors["pii:no_pii"] != piiEvaluationFailedCode {
 		t.Fatalf("SignalErrors = %#v, want %q", results.SignalErrors, piiEvaluationFailedCode)

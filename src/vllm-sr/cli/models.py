@@ -425,9 +425,17 @@ class PIIRule(BaseModel):
 
     name: str
     threshold: float
+    # An empty source is the legacy prompt/history scope. Normalize it to None
+    # so old configs remain valid while tool-result rules survive CLI round trips.
+    source: Optional[Literal["tool_result"]] = None
     pii_types_allowed: Optional[List[str]] = None
     include_history: bool = False
     description: Optional[str] = None
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def normalize_source(cls, value: object) -> object:
+        return None if value == "" else value
 
 
 class ModalityRule(BaseModel):
