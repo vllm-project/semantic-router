@@ -67,9 +67,9 @@ func replaySuccessEstimates(estimates []successEstimate) map[string]routerreplay
 			Outcome:            strings.TrimSpace(estimate.Outcome),
 		}
 		if estimate.Status == successEstimateCalibrated {
-			row.Probability = roundLearningFloat(estimate.Probability)
-			row.Uncertainty = roundLearningFloat(estimate.Uncertainty)
-			row.Coverage = roundLearningFloat(estimate.Coverage)
+			row.Probability = replayCalibratedFloat(estimate.Probability)
+			row.Uncertainty = replayCalibratedFloat(estimate.Uncertainty)
+			row.Coverage = replayCalibratedFloat(estimate.Coverage)
 		}
 		out[model] = row
 	}
@@ -77,6 +77,11 @@ func replaySuccessEstimates(estimates []successEstimate) map[string]routerreplay
 		return nil
 	}
 	return out
+}
+
+func replayCalibratedFloat(value float64) *float64 {
+	rounded := roundLearningFloat(value)
+	return &rounded
 }
 
 func replayCandidateScores(scores []routerLearningCandidateScore) map[string]routerreplay.LearningCandidateScore {

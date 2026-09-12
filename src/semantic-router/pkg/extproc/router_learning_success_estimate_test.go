@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"sync"
 	"testing"
 	"time"
@@ -484,8 +485,64 @@ func assertObserveSuccessReplay(t *testing.T, policy routerLearningPolicy) {
 	if replay.SuccessEstimates["frontier"].Outcome != config.RouterLearningSuccessOutcomeRequestCompletion {
 		t.Fatalf("expected replay success outcome identity, got %#v", replay)
 	}
+	if replay.SuccessEstimates["frontier"].Probability != nil ||
+		replay.SuccessEstimates["frontier"].Uncertainty != nil ||
+		replay.SuccessEstimates["frontier"].Coverage != nil {
+		t.Fatalf("unsupported replay estimate must omit calibrated metrics, got %#v", replay)
+	}
 	if _, ok := policy.ToMap()["success_estimates"]; ok {
 		t.Fatalf("compact policy map must not carry detailed success estimates, got %#v", policy.ToMap())
+	}
+}
+
+func TestReplaySuccessEstimatesJSONDistinguishesCalibratedZeros(t *testing.T) {
+	replay := replaySuccessEstimates([]successEstimate{
+		{
+			CandidateModel:     "zero-calibrated",
+			Status:             successEstimateCalibrated,
+			SampleCount:        12,
+			CalibrationVersion: "2026-08-01T00:00:00Z",
+		},
+		{
+			CandidateModel: "unsupported",
+			Status:         successEstimateUnsupported,
+			SampleCount:    10,
+			FallbackReason: successFallbackMissingCalibration,
+		},
+	})
+
+	raw, err := json.Marshal(replay)
+	if err != nil {
+		t.Fatalf("marshal replay estimates: %v", err)
+	}
+	var payload map[string]map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal replay estimates %s: %v", raw, err)
+	}
+
+	calibrated := payload["zero-calibrated"]
+	if calibrated["status"] != string(successEstimateCalibrated) {
+		t.Fatalf("expected calibrated status, got %#v", calibrated)
+	}
+	for _, field := range []string{"probability", "uncertainty", "coverage"} {
+		value, ok := calibrated[field]
+		if !ok {
+			t.Fatalf("calibrated replay JSON omitted %s: %s", field, raw)
+		}
+		got, ok := value.(float64)
+		if !ok || got != 0 {
+			t.Fatalf("calibrated replay %s = %#v, want 0: %s", field, value, raw)
+		}
+	}
+
+	unsupported := payload["unsupported"]
+	if unsupported["status"] != string(successEstimateUnsupported) {
+		t.Fatalf("expected unsupported status, got %#v", unsupported)
+	}
+	for _, field := range []string{"probability", "uncertainty", "coverage"} {
+		if _, ok := unsupported[field]; ok {
+			t.Fatalf("unsupported replay JSON included %s: %s", field, raw)
+		}
 	}
 }
 

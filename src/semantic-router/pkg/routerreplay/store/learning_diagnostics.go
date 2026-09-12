@@ -36,18 +36,19 @@ type LearningAdaptationDiagnostics struct {
 }
 
 // LearningSuccessEstimate is the replay-facing typed success estimate.
-// Probability is present only when Status is calibrated.
+// Probability, Uncertainty, and Coverage are present only when Status is
+// calibrated, including valid zero values.
 type LearningSuccessEstimate struct {
-	Status             string  `json:"status,omitempty"`
-	Probability        float64 `json:"probability,omitempty"`
-	Uncertainty        float64 `json:"uncertainty,omitempty"`
-	Coverage           float64 `json:"coverage,omitempty"`
-	SampleCount        int     `json:"sample_count,omitempty"`
-	EvidenceScope      string  `json:"evidence_scope,omitempty"`
-	FreshnessSeconds   int64   `json:"freshness_seconds,omitempty"`
-	CalibrationVersion string  `json:"calibration_version,omitempty"`
-	FallbackReason     string  `json:"fallback_reason,omitempty"`
-	Outcome            string  `json:"outcome,omitempty"`
+	Status             string   `json:"status,omitempty"`
+	Probability        *float64 `json:"probability,omitempty"`
+	Uncertainty        *float64 `json:"uncertainty,omitempty"`
+	Coverage           *float64 `json:"coverage,omitempty"`
+	SampleCount        int      `json:"sample_count,omitempty"`
+	EvidenceScope      string   `json:"evidence_scope,omitempty"`
+	FreshnessSeconds   int64    `json:"freshness_seconds,omitempty"`
+	CalibrationVersion string   `json:"calibration_version,omitempty"`
+	FallbackReason     string   `json:"fallback_reason,omitempty"`
+	Outcome            string   `json:"outcome,omitempty"`
 }
 
 // LearningSamplingDiagnostics records whether routing_sampling used a random
