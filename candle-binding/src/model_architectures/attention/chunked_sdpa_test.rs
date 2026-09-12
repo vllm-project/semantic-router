@@ -50,6 +50,18 @@ fn dense_sdpa_reference(
     att.matmul(&v).unwrap() // (b, heads, seq, hd)
 }
 
+fn assert_all_finite(t: &Tensor, what: &str) {
+    let values = t
+        .to_dtype(DType::F32)
+        .unwrap()
+        .flatten_all()
+        .unwrap()
+        .to_vec1::<f32>()
+        .unwrap();
+    let bad = values.iter().filter(|v| !v.is_finite()).count();
+    assert_eq!(bad, 0, "{what}: {bad} non-finite values");
+}
+
 fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
     a.broadcast_sub(b)
         .unwrap()
@@ -519,6 +531,8 @@ fn test_chunked_sdpa_key_blocks_match_dense() {
                         let out =
                             chunked_sdpa_with_key_block(&q, &k, &v, pad_mask, &cfg, key_block)
                                 .unwrap();
+                        assert_all_finite(&reference, "reference");
+                        assert_all_finite(&out, "chunked");
                         let diff = max_abs_diff(&out, &reference);
                         assert!(
                             diff < 1e-4,
@@ -559,6 +573,8 @@ fn test_chunked_sdpa_key_blocks_match_dense_with_decode_offset() {
                     q_offset: offset,
                 };
                 let out = chunked_sdpa_with_key_block(&q, &k, &v, None, &cfg, key_block).unwrap();
+                assert_all_finite(&reference, "reference");
+                assert_all_finite(&out, "chunked");
                 let diff = max_abs_diff(&out, &reference);
                 assert!(
                     diff < 1e-4,
@@ -571,5 +587,78 @@ fn test_chunked_sdpa_key_blocks_match_dense_with_decode_offset() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn test_chunked_sdpa_all_masked_first_key_tile_stays_finite() {
+    let device = Device::Cpu;
+    let q = Tensor::zeros((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let v = Tensor::ones((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let cfg = ChunkedSdpaConfig {
+        block_size: 0,
+        window: Some(4),
+        causal: false,
+        scale: 1.0,
+        q_offset: 0,
+    };
+    let out = chunked_sdpa(&q, &q, &v, None, &cfg).unwrap();
+    assert_all_finite(&out, "windowed single query block");
+    let diff = max_abs_diff(&out, &v);
+    assert!(diff < 1e-6, "max|Δ|={}", diff);
+}
+
+#[test]
+fn test_chunked_sdpa_single_query_with_masked_first_keys_stays_finite() {
+    let device = Device::Cpu;
+    let q = Tensor::zeros((1, 1, 1, 1), DType::F32, &device).unwrap();
+    let k = Tensor::zeros((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let v = Tensor::ones((1, 1, 1024, 1), DType::F32, &device).unwrap();
+    let mut mask = vec![0f32; 1024];
+    for m in mask.iter_mut().take(512) {
+        *m = f32::NEG_INFINITY;
+    }
+    let pad = Tensor::from_vec(mask, (1, 1, 1, 1024), &device).unwrap();
+    let cfg = ChunkedSdpaConfig {
+        block_size: ATTN_QUERY_BLOCK,
+        window: None,
+        causal: false,
+        scale: 1.0,
+        q_offset: 0,
+    };
+    let out = chunked_sdpa(&q, &k, &v, Some(&pad), &cfg).unwrap();
+    assert_all_finite(&out, "masked first key tile");
+    let value = out.flatten_all().unwrap().to_vec1::<f32>().unwrap()[0];
+    assert!((value - 1.0).abs() < 1e-6, "got {value}");
+}
+
+#[test]
+fn test_chunked_sdpa_half_precision_accumulates_without_overflow() {
+    let device = Device::Cpu;
+    for dtype in [DType::F16, DType::BF16] {
+        let q = Tensor::zeros((1, 1, 1, 1), dtype, &device).unwrap();
+        let k = Tensor::zeros((1, 1, 512, 1), dtype, &device).unwrap();
+        let v = (Tensor::ones((1, 1, 512, 1), DType::F32, &device).unwrap() * 200.0)
+            .unwrap()
+            .to_dtype(dtype)
+            .unwrap();
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window: None,
+            causal: false,
+            scale: 1.0,
+            q_offset: 0,
+        };
+        let out = chunked_sdpa(&q, &k, &v, None, &cfg).unwrap();
+        assert_eq!(out.dtype(), dtype);
+        assert_all_finite(&out, "half precision output");
+        let value = out
+            .to_dtype(DType::F32)
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .to_vec1::<f32>()
+            .unwrap()[0];
+        assert!((value - 200.0).abs() < 1.0, "{dtype:?}: got {value}");
     }
 }
