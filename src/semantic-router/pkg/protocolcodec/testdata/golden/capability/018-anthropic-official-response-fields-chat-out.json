@@ -73,6 +73,45 @@
       }
     },
     {
+      "name": "context_management",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "index": 0,
+              "message": {
+                "content": "done",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 0,
+          "id": "msg_1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 1,
+            "completion_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "prompt_tokens": 2,
+            "prompt_tokens_details": {
+              "cached_tokens": 0
+            },
+            "total_tokens": 3
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "context_management",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "error",
       "outcome": {
         "status": "error",

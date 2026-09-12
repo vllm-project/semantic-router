@@ -239,6 +239,10 @@ type Request struct {
 	Store              *bool
 	AutoStore          *bool
 	Trusted            TrustedMetadata
+	// AnthropicContextManagement is the Anthropic Messages context_management
+	// directive, carried opaquely. Anthropic-only; it affects what the upstream
+	// bills for a turn.
+	AnthropicContextManagement json.RawMessage
 	// ChatTemplateKwargs carries provider-specific chat template arguments
 	// (e.g. vLLM enable_thinking) opaquely from decode to encode. It is not
 	// interpreted by the router.
