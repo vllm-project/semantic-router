@@ -62,13 +62,13 @@ Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
 
 ## Test routing
 
-`eval` reports which signals, decision, algorithm, and plugins matched without
+`route preview` reports which signals, decision, algorithm, and plugins matched without
 calling the selected model backend:
 
 ```bash
-vllm-sr eval --prompt "Explain inflation in plain English."
-vllm-sr eval --prompt "Explain inflation in plain English." --json
-vllm-sr eval \
+vllm-sr route preview --prompt "Explain inflation in plain English."
+vllm-sr route preview --prompt "Explain inflation in plain English." --json
+vllm-sr route preview \
   --model vllm-sr/mom-v1-blend \
   --prompt "Summarize this architecture plan." \
   --json
@@ -78,23 +78,23 @@ Use `--messages` for an OpenAI-style messages array and `--endpoint` when the
 Router management API is not at `http://localhost:8080`:
 
 ```bash
-vllm-sr eval \
+vllm-sr route preview \
   --messages '[{"role":"user","content":"Explain inflation."}]' \
   --endpoint http://localhost:8080
 ```
 
-`chat` sends a real one-shot completion through the routed listener. It uses
+`request chat` sends a real one-shot completion through the routed listener. It uses
 `vllm-sr/auto` unless `--model` is set:
 
 ```bash
-vllm-sr chat "Hello"
-vllm-sr chat --model my-virtual-model --json "Hello"
-vllm-sr chat --base-url https://gateway.example.com "Hello"
+vllm-sr request chat "Hello"
+vllm-sr request chat --model my-virtual-model --json "Hello"
+vllm-sr request chat --base-url https://gateway.example.com "Hello"
 ```
 
 `--base-url` must point to an OpenAI-compatible routed endpoint, such as an
 ingress or port-forwarded gateway. It is not the Router management API used by
-`eval` and `rag list`.
+`route preview` and `storage vector-stores`.
 
 ## Choose a configuration
 
@@ -104,7 +104,7 @@ from a [maintained Recipe](../../config/recipes/README.md), or fork a bundled
 virtual model.
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -163,7 +163,7 @@ For source-controlled deployments, validate and serve one complete user-owned
 configuration:
 
 ```bash
-vllm-sr validate --config my-models.yaml
+vllm-sr config validate --config my-models.yaml
 vllm-sr serve --config my-models.yaml
 ```
 
@@ -205,12 +205,12 @@ gateway, profile, and production guidance.
 
 ## Inspect vector stores
 
-`rag list` reads vector stores created through the Router's OpenAI-compatible
-Vector Stores API. It does not create, modify, or delete stores.
+`storage vector-stores` reads vector stores from the Router management API. It
+does not create, modify, or delete stores.
 
 ```bash
-vllm-sr rag list
-vllm-sr rag list --endpoint http://router.example.com:8080
+vllm-sr storage vector-stores
+vllm-sr storage vector-stores --endpoint http://router.example.com:8080
 ```
 
 The Router must be running with a vector-store backend enabled. `--endpoint`
@@ -246,9 +246,10 @@ vllm-sr stop
 
 ## Troubleshooting
 
-- `eval` and `rag list` use the Router management API, normally port `8080`.
-- `chat` uses the routed inference listener from `config.yaml`, normally port
-  `8899`.
+- `route preview` and `storage vector-stores` use the Router management API,
+  normally port `8080`.
+- `request chat` uses the routed inference listener from `config.yaml`, normally
+  port `8899`.
 - A healthy Router and Envoy do not prove that an external model backend can
   generate. Use Dashboard **Verify** or `chat` to test the backend path.
 - If a lifecycle command reports that the stack is busy, let the active

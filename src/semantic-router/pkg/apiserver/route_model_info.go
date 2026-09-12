@@ -11,7 +11,7 @@ func (s *ClassificationAPIServer) handleModelsInfo(w http.ResponseWriter, _ *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-// handleEmbeddingModelsInfo handles GET /api/v1/embeddings/models
+// handleEmbeddingModelsInfo handles GET /api/v1/inventory/embedding-models
 // Returns ONLY embedding models information
 func (s *ClassificationAPIServer) handleEmbeddingModelsInfo(w http.ResponseWriter, r *http.Request) {
 	embeddingModels := s.getEmbeddingModelsInfo(s.loadModelsRuntimeState())
@@ -53,7 +53,9 @@ type classifierModelAvailability struct {
 // buildModelsInfoResponse builds the models info response
 func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 	runtimeState := s.loadModelsRuntimeState()
-	models := s.getClassifierModelsInfo(s.classifierModelAvailability(), runtimeState)
+	cfg, service, release := s.acquireClassificationRuntime()
+	defer release()
+	models := s.getClassifierModelsInfo(cfg, classificationAvailabilityForService(service), runtimeState)
 
 	// Add embedding models information
 	embeddingModels := s.getEmbeddingModelsInfo(runtimeState)

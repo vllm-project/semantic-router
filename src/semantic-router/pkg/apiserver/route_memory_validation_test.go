@@ -23,7 +23,7 @@ func TestHandleListMemories_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=invalid_type", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=invalid_type", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -42,7 +42,7 @@ func TestHandleListMemories_InvalidTypeInMultiple(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id=user-alice&type=semantic,bogus", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&type=semantic,bogus", nil)
 	w := httptest.NewRecorder()
 
 	server.handleListMemories(w, req)
@@ -61,7 +61,7 @@ func TestHandleDeleteMemoriesByScope_InvalidType(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory?user_id=user-alice&type=fake", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories?user_id=user-alice&type=fake", nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)
@@ -93,7 +93,7 @@ func TestHandleListMemories_UserIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, payload := range injectionPayloads {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories", nil)
 		req.Header.Set("x-authz-user-id", payload)
 		w := httptest.NewRecorder()
 
@@ -123,7 +123,7 @@ func TestHandleListMemories_ValidUserIDFormats(t *testing.T) {
 	}
 
 	for _, userID := range validIDs {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id="+userID, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id="+userID, nil)
 		w := httptest.NewRecorder()
 
 		server.handleListMemories(w, req)
@@ -139,7 +139,7 @@ func TestHandleGetMemory_MemoryIDInjectionAttempt(t *testing.T) {
 	seedTestMemories(store)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/memory/{id}", server.handleGetMemory)
+	mux.HandleFunc("GET /api/v1/storage/memories/{id}", server.handleGetMemory)
 
 	injectionIDs := []string{
 		"mem-1%20||%20id!=",
@@ -148,7 +148,7 @@ func TestHandleGetMemory_MemoryIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, id := range injectionIDs {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory/"+id+"?user_id=user-alice", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories/"+id+"?user_id=user-alice", nil)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 
@@ -167,7 +167,7 @@ func TestHandleDeleteMemoriesByScope_UserIDInjection(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/memories", nil)
 	req.Header.Set("x-authz-user-id", `alice" || user_id != "`)
 	w := httptest.NewRecorder()
 

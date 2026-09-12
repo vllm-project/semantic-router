@@ -103,7 +103,7 @@ later endpoint choice inside `general-pool`.
 Create and validate a complete config before applying it:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Then deploy with the [Helm or Operator workflow](../configuration-workflows).

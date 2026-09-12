@@ -45,6 +45,8 @@ Examples:
   vllm-sr serve
   # User-owned single or multi-model topology
   vllm-sr serve --config my-models.yaml
+  # Explicitly replace Dashboard-edited runtime state from reviewed source YAML
+  vllm-sr serve --config my-models.yaml --replace-active-config
   # Deploy a user-owned config to Kubernetes
   vllm-sr serve --target k8s --config my-models.yaml --namespace my-ns
   # Runtime policy and image overrides

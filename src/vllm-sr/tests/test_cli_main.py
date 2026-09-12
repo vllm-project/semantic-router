@@ -15,6 +15,10 @@ if str(PROJECT_ROOT) not in sys.path:
 
 BootstrapResult = importlib.import_module("cli.bootstrap").BootstrapResult
 runtime_commands = importlib.import_module("cli.commands.runtime")
+runtime_config_mutation = importlib.import_module(
+    "cli.commands.runtime_config_mutation"
+)
+config_schema = importlib.import_module("cli.config_schema")
 serve_config = importlib.import_module("cli.commands.runtime_serve_config")
 main = importlib.import_module("cli.main").main
 recipe_package = importlib.import_module("cli.recipe_package")
@@ -43,14 +47,20 @@ def test_cli_help_lists_registered_commands():
     for command_name in (
         "serve",
         "config",
-        "validate",
+        "route",
+        "request",
+        "benchmark",
+        "optimize",
         "status",
         "logs",
         "stop",
         "dashboard",
-        "chat",
+        "recipe",
+        "storage",
     ):
         assert command_name in result.output
+    for retired_name in ("validate", "eval", "chat", "rag"):
+        assert f"  {retired_name} " not in result.output
     assert " init" not in result.output
 
 
@@ -144,6 +154,56 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
     assert "VLLM_SR_STATE_ROOT_DIR" not in captured["env_vars"]
 
 
+def test_serve_replace_active_config_reaches_runtime_materializer(
+    monkeypatch, tmp_path: Path
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+    )
+    bootstrap = BootstrapResult(
+        config_path=config_path,
+        output_dir=tmp_path / ".vllm-sr",
+        setup_mode=False,
+    )
+    captured: dict[str, object] = {}
+
+    class _StubBackend:
+        def deploy(self, **kwargs):
+            captured.update(kwargs)
+
+    def capture_materialization(source, effective, **kwargs):
+        captured["materialize_source"] = source
+        captured["materialize_effective"] = effective
+        captured["materialize_options"] = kwargs
+        return source
+
+    monkeypatch.setattr(
+        runtime_commands, "ensure_bootstrap_workspace", lambda _: bootstrap
+    )
+    monkeypatch.setattr(
+        runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
+    )
+    monkeypatch.setattr(
+        serve_config, "materialize_runtime_config", capture_materialization
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            "--config",
+            str(config_path),
+            "--replace-active-config",
+            "--image-pull-policy",
+            "never",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["materialize_options"]["replace_active"] is True
+
+
 def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     monkeypatch, tmp_path: Path
 ):
@@ -211,6 +271,28 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     assert not (tmp_path / ".vllm-sr").exists()
 
 
+def test_k8s_serve_rejects_replace_active_config(tmp_path: Path, caplog):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "serve",
+            "--target",
+            "k8s",
+            "--config",
+            str(config_path),
+            "--replace-active-config",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "supported only for local Docker deployments" in caplog.text
+
+
 def test_serve_help_describes_docker_only_runtime():
     runner = CliRunner()
 
@@ -218,6 +300,7 @@ def test_serve_help_describes_docker_only_runtime():
 
     assert result.exit_code == 0
     assert "Local Docker deployment" in result.output
+    assert "--replace-active-config" in result.output
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
@@ -327,7 +410,7 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
 
 
 def test_active_package_is_validated_before_source_materialization(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, caplog
 ):
     initial = yaml.safe_dump(
         {
@@ -399,6 +482,15 @@ def test_active_package_is_validated_before_source_materialization(
     assert result.exit_code == 0, result.output
     assert active.read_bytes() == initial
     assert Path(captured["runtime_config_file"]) == active
+
+    captured.clear()
+    rejected = CliRunner().invoke(
+        main,
+        ["serve", "--config", str(source), "--replace-active-config"],
+    )
+    assert rejected.exit_code != 0
+    assert captured == {}
+    assert "cannot replace an active Recipe package" in caplog.text
 
 
 def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
@@ -715,9 +807,23 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
         decision["algorithm"] for decision in rewritten["routing"]["decisions"]
     ]
     assert algorithms == [
-        {"type": "multi_factor"},
-        {"type": "multi_factor"},
+        {"type": "multi_factor", "multi_factor": {}},
+        {"type": "multi_factor", "multi_factor": {}},
     ]
+
+
+def test_algorithm_mutation_consumes_generated_router_payload_inventory():
+    algorithm_surfaces = config_schema.routing_surface_catalog()["algorithms"]
+    expected_blocks = {
+        surface["config_field"]
+        for surface in algorithm_surfaces
+        if surface.get("config_field")
+    }
+
+    assert set(runtime_config_mutation.ALGORITHM_CONFIG_BLOCKS) == expected_blocks
+    assert set(runtime_config_mutation.EXPECTED_CONFIG_BLOCK_BY_ALGORITHM) == {
+        surface["type"] for surface in algorithm_surfaces if surface.get("config_field")
+    }
 
 
 def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):

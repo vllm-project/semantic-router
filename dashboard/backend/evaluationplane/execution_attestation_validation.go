@@ -171,7 +171,7 @@ func validateBrokerMixtureBinding(mixture *ManifestMixture, entry executionAttes
 	switch entry.Operation {
 	case workerBrokerAgentTaskLedger, workerBrokerFaultRecoveryLedger, workerBrokerHardPolicyLedger, workerBrokerProductionExperimentLedger:
 		return nil
-	case workerBrokerRouterEvaluate, workerBrokerRoutedChatCompletion, workerBrokerArmChatCompletion:
+	case workerBrokerRoutingPreview, workerBrokerRoutedChatCompletion, workerBrokerArmChatCompletion:
 	default:
 		return fmt.Errorf("broker operation has no mixture binding contract")
 	}
@@ -234,7 +234,7 @@ func validateBrokerMixtureBinding(mixture *ManifestMixture, entry executionAttes
 		}
 		return nil
 	}
-	if entry.Operation == workerBrokerRouterEvaluate && entry.RoutingRecipeDecision != nil {
+	if entry.Operation == workerBrokerRoutingPreview && entry.RoutingRecipeDecision != nil {
 		switch entry.RoutingRecipeDecision.SelectionStatus {
 		case "abstained", "error", "unavailable":
 			if entry.SelectedModel != nil || entry.ArmID != nil {
@@ -386,7 +386,7 @@ func validateBrokerRecord(
 	expectedOperation := ""
 	switch record.TrackID {
 	case "routing":
-		expectedOperation = workerBrokerRouterEvaluate
+		expectedOperation = workerBrokerRoutingPreview
 	case "model_pool":
 		expectedOperation = workerBrokerArmChatCompletion
 	case "joint", "multimodal", "capacity":

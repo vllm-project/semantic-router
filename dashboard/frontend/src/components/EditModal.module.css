@@ -35,8 +35,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 76px;
-  padding: 1.25rem 1.5rem;
+  min-height: 68px;
+  padding: 1rem 1.25rem;
   background: rgba(9, 9, 10, 0.82);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -151,24 +151,56 @@
 .fields {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 1.5rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1.25rem;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 
-.field {
-  margin-bottom: 1.375rem;
+.fieldSection {
+  min-width: 0;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
-.field:last-child {
-  margin-bottom: 0;
+.sectionTitle {
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.55rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 720;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.8rem 1rem;
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.fieldFull {
+  grid-column: 1 / -1;
 }
 
 .label {
   display: block;
-  margin-bottom: 0.5rem;
+  margin: 0;
   color: var(--text-primary);
   font-size: 0.8125rem;
   font-weight: 680;
@@ -181,11 +213,17 @@
 }
 
 .description {
-  margin: -0.125rem 0 0.625rem;
+  margin: 0;
   color: var(--text-muted);
   font-size: 0.8125rem;
   font-style: normal;
   line-height: 1.5;
+}
+
+.control {
+  min-width: 0;
+  margin-top: auto;
+  padding-top: 0.15rem;
 }
 
 .input,
@@ -221,7 +259,7 @@
 }
 
 .textarea {
-  min-height: 7rem;
+  min-height: 5.75rem;
   font-family: var(--font-mono);
   font-size: 0.8125rem;
   line-height: 1.55;
@@ -256,15 +294,6 @@
   background: rgba(255, 255, 255, 0.055);
 }
 
-.multiselectOption input[type='checkbox'],
-.checkbox input[type='checkbox'] {
-  flex: 0 0 auto;
-  width: 1rem;
-  height: 1rem;
-  cursor: pointer;
-  accent-color: var(--text-primary);
-}
-
 .multiselectOption span,
 .checkbox span {
   color: var(--text-secondary);
@@ -276,6 +305,10 @@
   align-items: center;
   gap: 0.625rem;
   min-height: 40px;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
   user-select: none;
 }
@@ -285,7 +318,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 0.625rem;
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1.25rem;
   background: rgba(9, 9, 10, 0.94);
   border-top: 1px solid var(--border-subtle);
 }
@@ -393,6 +426,14 @@
 
   .fields {
     padding: 1rem;
+  }
+
+  .fieldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fieldFull {
+    grid-column: 1;
   }
 
   .actions {

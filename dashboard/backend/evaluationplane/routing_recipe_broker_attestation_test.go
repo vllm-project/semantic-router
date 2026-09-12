@@ -12,7 +12,7 @@ func TestRoutingRecipeBrokerNormalizesExactInputsEligibilityAndRanking(t *testin
 	observedAt := time.Date(2026, 8, 31, 10, 11, 12, 13, time.UTC)
 	selectedModel, selectedArmID, selectionStatus := "model-fast", "arm-fast", "selected"
 	entry := executionAttestationEntry{
-		RequestID: 7, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+		RequestID: 7, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 		CaseID: "case-1", AttemptID: "attempt-1", UpstreamAttempted: true, Success: true,
 		SelectedModel: &selectedModel, ArmID: &selectedArmID, SelectionStatus: &selectionStatus,
 	}
@@ -43,7 +43,7 @@ func TestRoutingRecipeBrokerNormalizesExactInputsEligibilityAndRanking(t *testin
 	}
 	snapshot := routingRecipeDecisionFromBrokerResponse(
 		manifest,
-		workerBrokerRequest{ID: 7, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-1"},
+		workerBrokerRequest{ID: 7, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-1"},
 		response,
 		entry,
 	)
@@ -96,7 +96,7 @@ func TestRoutingRecipeBrokerNormalizesExactInputsEligibilityAndRanking(t *testin
 
 func TestRoutingRecipeBrokerMapsFallbackAbstentionAndRequestFailureFailClosed(t *testing.T) {
 	manifest := routingRecipeBrokerTestManifest(t)
-	request := workerBrokerRequest{ID: 2, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-3"}
+	request := workerBrokerRequest{ID: 2, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-3"}
 	observedAt := time.Date(2026, 8, 31, 10, 11, 12, 0, time.UTC)
 
 	fallbackModel, fallbackArm, fallbackStatus := "model-strong", "arm-strong", "fallback"
@@ -193,7 +193,7 @@ func TestRoutingRecipeBrokerMapsFallbackAbstentionAndRequestFailureFailClosed(t 
 func TestRoutingRecipeBrokerPreservesRecommendationOrderAndInfeasibleSelection(t *testing.T) {
 	manifest := routingRecipeBrokerTestManifest(t)
 	request := workerBrokerRequest{
-		ID: 8, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-8",
+		ID: 8, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-8",
 	}
 	observedAt := time.Date(2026, 8, 31, 10, 11, 12, 0, time.UTC)
 	selectedModel, selectedArmID, selectionStatus := "model-strong", "arm-strong", "fallback"
@@ -268,13 +268,13 @@ func TestRoutingRecipeBrokerRejectsUnknownEligibilityAndManifestMismatch(t *test
 	observedAt := time.Date(2026, 8, 31, 10, 11, 12, 0, time.UTC)
 	selectedModel, selectedArmID, selectionStatus := "model-fast", "arm-fast", "selected"
 	entry := executionAttestationEntry{
-		RequestID: 5, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+		RequestID: 5, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 		CaseID: "case-5", AttemptID: "attempt-5", UpstreamAttempted: true, Success: true,
 		FetchedAt: &observedAt, SelectedModel: &selectedModel, ArmID: &selectedArmID, SelectionStatus: &selectionStatus,
 	}
 	entry.RoutingRecipeDecision = routingRecipeDecisionFromBrokerResponse(
 		manifest,
-		workerBrokerRequest{ID: 5, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-5"},
+		workerBrokerRequest{ID: 5, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-5"},
 		workerBrokerResponse{Success: true, FetchedAt: observedAt, Payload: map[string]any{
 			"recommended_models": []any{"foreign-model"},
 		}},
@@ -289,7 +289,7 @@ func TestRoutingRecipeBrokerRejectsUnknownEligibilityAndManifestMismatch(t *test
 
 	entry.RoutingRecipeDecision = routingRecipeDecisionFromBrokerResponse(
 		manifest,
-		workerBrokerRequest{ID: 5, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-5"},
+		workerBrokerRequest{ID: 5, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-5"},
 		workerBrokerResponse{Success: true, FetchedAt: observedAt, Payload: map[string]any{
 			"recommended_models": []any{"model-fast"},
 		}},
@@ -316,7 +316,7 @@ func TestRoutingRecipeDecisionMutationInvalidatesBrokerReceiptAndAttestation(t *
 	selectionMethod, decisionName := "static", "quality"
 	status := http.StatusOK
 	router := executionAttestationEntry{
-		RequestID: 2, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-2", AttemptID: "attempt-2",
+		RequestID: 2, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-2", AttemptID: "attempt-2",
 		RequestDigest: digestString("routing-request"), ResponseDigest: digestString("routing-response"),
 		UpstreamAttempted: true, Success: true, StatusCode: &status, LatencyMicroseconds: 10,
 		FetchedAt: &now, Headers: map[string]string{}, RequestedModel: &manifest.Target.Mixture.EntrypointModel,
@@ -325,7 +325,7 @@ func TestRoutingRecipeDecisionMutationInvalidatesBrokerReceiptAndAttestation(t *
 	}
 	router.RoutingRecipeDecision = routingRecipeDecisionFromBrokerResponse(
 		manifest,
-		workerBrokerRequest{ID: 2, Operation: workerBrokerRouterEvaluate, TrackID: "routing", CaseID: "case-2"},
+		workerBrokerRequest{ID: 2, Operation: workerBrokerRoutingPreview, TrackID: "routing", CaseID: "case-2"},
 		workerBrokerResponse{Success: true, FetchedAt: now, Payload: map[string]any{
 			"signal_confidences": map[string]any{"domain:reasoning": json.Number("0.9"), "projection:oracle-probability": json.Number("0.8")},
 			"recommended_models": []any{"model-fast"},
@@ -429,9 +429,8 @@ func TestRoutingRecipeWorkerCannotSupplyDecisionTimeOrOutcomeFields(t *testing.T
 	broker.models[manifest.Target.Mixture.EntrypointModel] = manifest.Target.Mixture.RecipeName
 	broker.modelsValid = true
 	base := map[string]any{
-		"model":                manifest.Target.Mixture.EntrypointModel,
-		"messages":             []any{map[string]any{"role": "user", "content": "route"}},
-		"evaluate_all_signals": true,
+		"model":    manifest.Target.Mixture.EntrypointModel,
+		"messages": []any{map[string]any{"role": "user", "content": "route"}},
 	}
 	for _, field := range []string{"observed_at", "ranked_arm_ids", "outcomes"} {
 		payload := make(map[string]any, len(base)+1)
@@ -443,7 +442,7 @@ func TestRoutingRecipeWorkerCannotSupplyDecisionTimeOrOutcomeFields(t *testing.T
 		if err != nil {
 			t.Fatalf("encode payload: %v", err)
 		}
-		if _, err := broker.validatedPayload(workerBrokerRouterEvaluate, encoded); err == nil {
+		if _, err := broker.validatedPayload(workerBrokerRoutingPreview, encoded); err == nil {
 			t.Fatalf("worker-controlled %s crossed the strict Router request contract", field)
 		}
 	}
@@ -472,19 +471,19 @@ func TestBrokerCaseRequestBindingRejectsPromptSubstitution(t *testing.T) {
 		t.Fatalf("digest forged messages: %v", digestErr)
 	}
 	model := "fixture-entrypoint"
-	requestDigest, digestErr := brokerRequestDigestForMessages(workerBrokerRouterEvaluate, model, forgedDigest, 0)
+	requestDigest, digestErr := brokerRequestDigestForMessages(workerBrokerRoutingPreview, model, forgedDigest, 0)
 	if digestErr != nil {
 		t.Fatalf("digest forged Router request: %v", digestErr)
 	}
 	entry := executionAttestationEntry{
-		Operation: workerBrokerRouterEvaluate, RequestedModel: &model, RequestDigest: requestDigest,
+		Operation: workerBrokerRoutingPreview, RequestedModel: &model, RequestDigest: requestDigest,
 	}
 	record := executionRecordEvidence{TrackID: "routing", CaseID: "case-1"}
 	cases := visibleCaseSet{MessageDigests: map[string]string{"case-1": plannedDigest}}
 	if err := validateBrokerCaseRequestBinding(entry, record, cases, 0); err == nil {
 		t.Fatal("worker-selected prompt was accepted for a server-sealed case id")
 	}
-	entry.RequestDigest, digestErr = brokerRequestDigestForMessages(workerBrokerRouterEvaluate, model, plannedDigest, 0)
+	entry.RequestDigest, digestErr = brokerRequestDigestForMessages(workerBrokerRoutingPreview, model, plannedDigest, 0)
 	if digestErr != nil {
 		t.Fatalf("digest planned Router request: %v", digestErr)
 	}

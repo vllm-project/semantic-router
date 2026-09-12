@@ -22,8 +22,8 @@ class RouterClient:
         self.endpoint = endpoint.rstrip("/")
 
     def eval_probe(self, query: str, trace: bool = True) -> dict:
-        """Send a single query to /api/v1/eval and return the full response."""
-        url = f"{self.endpoint}/api/v1/eval"
+        """Send a single query to /api/v1/routing/preview and return the full response."""
+        url = f"{self.endpoint}/api/v1/routing/preview"
         if trace:
             url += "?trace=true"
         body = json.dumps({"text": query}).encode()
@@ -38,12 +38,12 @@ class RouterClient:
 
     def get_config_hash(self) -> str:
         """Fetch the router's current config hash."""
-        url = f"{self.endpoint}/config/hash"
+        url = f"{self.endpoint}/api/v1/config/hash"
         try:
             req = request.Request(url, method="GET")
             with request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
-                return data.get("hash", "unknown")
+                return data.get("source_config_hash", "unknown")
         except Exception:
             return "unknown"
 

@@ -1,11 +1,37 @@
 import { describe, expect, it } from 'vitest'
 
+import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import type { FieldSchema } from '../lib/dslSchemas'
+import { routerConfigFieldAtPath } from '../lib/routerConfigSchema'
 import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
+import { getRouterStructuredFieldDefinition } from './configPageRouterStructuredFields'
+import {
+  routerStructuredFieldSchemaPath,
+  type RouterSystemKey,
+} from './configPageRouterSectionCatalog'
 import {
   normalizeRouterStructuredFields,
   normalizeRouterStructuredValue,
   ROUTER_STRUCTURED_FIELDS,
+  type RouterStructuredSchema,
 } from './configPageRouterStructuredSchema'
+
+function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: RouterStructuredSchema) {
+  if (generated.type === 'object') {
+    for (const child of generated.fields ?? []) {
+      const renderedChild = rendered.fields?.[child.key]
+      expect(renderedChild, `missing generated field ${child.key}`).toBeDefined()
+      expectGeneratedChildrenRendered(child, renderedChild!)
+    }
+  }
+  if (generated.type === 'object[]' && generated.fields) {
+    expect(rendered.item).toBeDefined()
+    expectGeneratedChildrenRendered(
+      { key: generated.key, label: generated.label, type: 'object', fields: generated.fields },
+      rendered.item!,
+    )
+  }
+}
 
 describe('router defaults structured schemas', () => {
   it('normalizes typed lists and objects while preserving advanced keys', () => {
@@ -263,5 +289,65 @@ describe('router defaults structured schemas', () => {
         }),
       }),
     )
+  })
+
+  it('surfaces every current canonical global capability from the generated schema', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: {
+        management_api: { bind_address: '127.0.0.1', port: 8080 },
+        startup_status: { store_backend: 'redis' },
+        complexity: { backend: { base_url: 'http://classifier' } },
+        knowledge_bases: [{ name: 'docs' }],
+        admission: { default: { max_concurrency: 8 } },
+      },
+      routerDefaults: null,
+      toolsData: [],
+      toolsLoading: false,
+      toolsError: null,
+    })
+
+    expect(cards.map((card) => card.key)).toEqual(
+      expect.arrayContaining([
+        'management_api',
+        'startup_status',
+        'complexity',
+        'knowledge_bases',
+        'admission',
+      ]),
+    )
+    expect(
+      cards.find((card) => card.key === 'management_api')?.editFields.map((field) => field.name),
+    ).toEqual(expect.arrayContaining(['bind_address', 'port', 'remote_exposure', 'auth']))
+    expect(
+      cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name),
+    ).toEqual(expect.arrayContaining(['prototype_scoring', 'backend']))
+
+    const knowledgeBases = cards.find((card) => card.key === 'knowledge_bases')
+    expect(knowledgeBases?.save({ items: [{ name: 'docs' }, { name: 'runbooks' }] })).toEqual({
+      model_catalog: { kbs: [{ name: 'docs' }, { name: 'runbooks' }] },
+    })
+    const admission = cards.find((card) => card.key === 'admission')
+    expect(admission?.save({ value: { default: { max_concurrency: 16 } } })).toEqual({
+      model_catalog: { admission: { default: { max_concurrency: 16 } } },
+    })
+
+    const renderedPaths = new Set(cards.map((card) => card.path.join('.')))
+    for (const section of ROUTER_CONFIG_EXTENSION.global_sections) {
+      expect(renderedPaths).toContain(section.path.join('.'))
+    }
+  })
+
+  it('recursively augments specialized controls with every generated nested field', () => {
+    for (const [key, fields] of Object.entries(ROUTER_STRUCTURED_FIELDS)) {
+      for (const name of Object.keys(fields ?? {})) {
+        const generated = routerConfigFieldAtPath(
+          routerStructuredFieldSchemaPath(key as RouterSystemKey, name),
+        )
+        if (!generated) continue
+        const rendered = getRouterStructuredFieldDefinition(key as RouterSystemKey, name).schema
+        expectGeneratedChildrenRendered(generated, rendered)
+      }
+    }
   })
 })

@@ -82,7 +82,82 @@ config:
           keywords:
             - __LOOPER_CONFIDENCE_TRACE_PROBE__
           case_sensitive: true
+        - name: looper_fusion_separate_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_SEPARATE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_one_call_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_ONE_CALL_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_none_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_NONE_PROBE__
+          case_sensitive: true
     decisions:
+      - name: looper_fusion_separate_decision
+        description: Preserve separate Fusion analysis as the compatibility default
+        priority: 123
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_separate_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: separate
+            include_analysis: false
+            include_intermediate_responses: false
+      - name: looper_fusion_one_call_decision
+        description: Combine Fusion comparison and final synthesis in one judge call
+        priority: 122
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_one_call_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: one_call
+            include_analysis: false
+            include_intermediate_responses: false
+      - name: looper_fusion_none_decision
+        description: Synthesize directly from the Fusion panel in one judge call
+        priority: 121
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_none_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+            analysis_mode: none
+            include_analysis: false
+            include_intermediate_responses: false
       - name: looper_ratings_decision
         description: Deterministic Ratings route for issue 2859 E2E coverage
         priority: 100
