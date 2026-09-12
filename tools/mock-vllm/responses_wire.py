@@ -319,7 +319,10 @@ def responses_in_progress_item(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def generate_responses_stream(
-    response: dict[str, Any], item_id: str, complete: bool = True
+    response: dict[str, Any],
+    item_id: str,
+    complete: bool = True,
+    stall_seconds: float = 0.0,
 ) -> Iterator[str]:
     output = response["output_text"]
     item = response["output"][0]
@@ -375,6 +378,8 @@ def generate_responses_stream(
     for sequence, (event, payload) in enumerate(events):
         if not complete and event == "response.output_text.done":
             return
+        if stall_seconds > 0 and sequence == 1:
+            time.sleep(stall_seconds)
         yield responses_sse(event, {"sequence_number": sequence, **payload})
 
 

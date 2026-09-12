@@ -304,6 +304,8 @@ func catalogReliability(value ProviderReliability) modelcatalog.Reliability {
 		Consecutive5xx: value.Consecutive5xx, BaseEjectionTime: value.BaseEjectionTime,
 		MaxEjectionPercent: value.MaxEjectionPercent, HealthCheckPath: value.HealthCheckPath,
 		HealthCheckInterval: value.HealthCheckInterval, HealthCheckTimeout: value.HealthCheckTimeout,
+		RequestTimeout: value.RequestTimeout, StreamIdleTimeout: value.StreamIdleTimeout,
+		ConnectTimeout: value.ConnectTimeout,
 	}
 }
 

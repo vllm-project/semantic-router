@@ -58,12 +58,30 @@ func evaluateResponseHeaderOutcome(
 }
 
 func recordResponseHeaderErrorMetrics(ctx *RequestContext, statusCode int) {
+	if statusCode == 408 || statusCode == 504 {
+		metrics.RecordRequestError(getModelFromCtx(ctx), "timeout")
+		if ctx != nil {
+			ctx.UpstreamErrorMetricRecorded = true
+		}
+		return
+	}
+	if statusCode == 503 {
+		// Defer 503 metric recording until response body is inspected,
+		// allowing connect timeouts to be classified as "timeout" instead of "upstream_5xx".
+		return
+	}
 	if statusCode >= 500 {
 		metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_5xx")
+		if ctx != nil {
+			ctx.UpstreamErrorMetricRecorded = true
+		}
 		return
 	}
 	if statusCode >= 400 {
 		metrics.RecordRequestError(getModelFromCtx(ctx), "upstream_4xx")
+		if ctx != nil {
+			ctx.UpstreamErrorMetricRecorded = true
+		}
 	}
 }
 

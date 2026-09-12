@@ -2718,10 +2718,10 @@ func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 
 	ctx := &RequestContext{RequestModel: "m"}
 
-	// 503 -> upstream_5xx
+	// 500 -> upstream_5xx
 	hdrs5xx := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{
-			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}}},
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "500"}}},
 		},
 	}
 
@@ -2744,6 +2744,34 @@ func TestUpstreamStatusIncrements4xx5xxCounters(t *testing.T) {
 	after4xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_4xx", "model": "m"})
 	if !(after4xx > before4xx) {
 		t.Fatalf("expected upstream_4xx to increase for model m: before=%v after=%v", before4xx, after4xx)
+	}
+
+	// 504 -> timeout (typed outcome instead of unlabeled upstream_5xx)
+	hdrs504 := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "504"}}},
+		},
+	}
+
+	beforeTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	_, _ = r.HandleResponseHeaders(hdrs504, ctx)
+	afterTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	if !(afterTimeout > beforeTimeout) {
+		t.Fatalf("expected timeout to increase for model m on 504: before=%v after=%v", beforeTimeout, afterTimeout)
+	}
+
+	// 408 -> timeout
+	hdrs408 := &ext_proc.ProcessingRequest_ResponseHeaders{
+		ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "408"}}},
+		},
+	}
+
+	beforeTimeout408 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	_, _ = r.HandleResponseHeaders(hdrs408, ctx)
+	afterTimeout408 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "m"})
+	if !(afterTimeout408 > beforeTimeout408) {
+		t.Fatalf("expected timeout to increase for model m on 408: before=%v after=%v", beforeTimeout408, afterTimeout408)
 	}
 }
 
@@ -2804,4 +2832,332 @@ func (m *MockResponseStore) Close() error {
 
 func (m *MockResponseStore) CheckConnection(ctx context.Context) error {
 	return nil
+}
+
+func TestHandleProcessReceiveErrorNonTimeoutAborts(t *testing.T) {
+	r := &OpenAIRouter{}
+
+	// Case 1: Stream ends before response headers received (UpstreamStatusCode == 0, clean EOF) -> does NOT record timeout
+	ctx1 := &RequestContext{RequestModel: "fast-model", UpstreamStatusCode: 0}
+	before1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	_ = r.handleProcessReceiveError(ctx1, io.EOF)
+	after1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	if after1 != before1 {
+		t.Fatalf("expected timeout NOT to increase on non-timeout stream EOF (upstream status 0): before=%v after=%v", before1, after1)
+	}
+
+	// Case 2: Incomplete streaming response aborted by clean EOF -> does NOT record timeout
+	ctx2 := &RequestContext{RequestModel: "stream-model", IsStreamingResponse: true, StreamingComplete: false, UpstreamStatusCode: 200}
+	before2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "stream-model"})
+	_ = r.handleProcessReceiveError(ctx2, io.EOF)
+	after2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "stream-model"})
+	if after2 != before2 {
+		t.Fatalf("expected timeout NOT to increase on incomplete stream EOF abort: before=%v after=%v", before2, after2)
+	}
+
+	// Case 3: Client cancellation with codes.Canceled -> does NOT record timeout
+	ctx3 := &RequestContext{RequestModel: "cancel-model", UpstreamStatusCode: 0}
+	before3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "cancel-model"})
+	_ = r.handleProcessReceiveError(ctx3, status.Error(codes.Canceled, "context canceled"))
+	after3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "cancel-model"})
+	if after3 != before3 {
+		t.Fatalf("expected timeout NOT to increase on codes.Canceled: before=%v after=%v", before3, after3)
+	}
+
+	// Case 4: Client cancellation with context.Canceled -> does NOT record timeout
+	ctx4 := &RequestContext{RequestModel: "ctx-cancel-model", UpstreamStatusCode: 0}
+	before4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ctx-cancel-model"})
+	_ = r.handleProcessReceiveError(ctx4, context.Canceled)
+	after4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ctx-cancel-model"})
+	if after4 != before4 {
+		t.Fatalf("expected timeout NOT to increase on context.Canceled: before=%v after=%v", before4, after4)
+	}
+
+	// Case 5: Gracefully completed non-streaming response -> does NOT record timeout
+	ctx5 := &RequestContext{RequestModel: "ok-model", UpstreamStatusCode: 200}
+	before5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-model"})
+	_ = r.handleProcessReceiveError(ctx5, io.EOF)
+	after5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-model"})
+	if after5 != before5 {
+		t.Fatalf("expected no timeout increase on graceful response completion: before=%v after=%v", before5, after5)
+	}
+
+	// Case 6: Gracefully completed streaming response -> does NOT record timeout
+	ctx6 := &RequestContext{RequestModel: "ok-stream-model", IsStreamingResponse: true, StreamingComplete: true, UpstreamStatusCode: 200}
+	before6 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-stream-model"})
+	_ = r.handleProcessReceiveError(ctx6, io.EOF)
+	after6 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ok-stream-model"})
+	if after6 != before6 {
+		t.Fatalf("expected no timeout increase on completed stream: before=%v after=%v", before6, after6)
+	}
+
+	// Case 7: Immediate response (e.g. cache hit / short-circuit) -> does NOT record timeout
+	ctx7 := &RequestContext{RequestModel: "immediate-model", ImmediateResponseEncoded: true, UpstreamStatusCode: 0}
+	before7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "immediate-model"})
+	_ = r.handleProcessReceiveError(ctx7, io.EOF)
+	after7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "immediate-model"})
+	if after7 != before7 {
+		t.Fatalf("expected no timeout increase on immediate response: before=%v after=%v", before7, after7)
+	}
+}
+
+func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
+	r := &OpenAIRouter{}
+
+	// Case 1: gRPC codes.DeadlineExceeded -> records timeout
+	ctx1 := &RequestContext{RequestModel: "deadline-model", UpstreamStatusCode: 0}
+	before1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "deadline-model"})
+	_ = r.handleProcessReceiveError(ctx1, status.Error(codes.DeadlineExceeded, "context deadline exceeded"))
+	after1 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "deadline-model"})
+	if after1 != before1+1 {
+		t.Fatalf("expected timeout to increase on codes.DeadlineExceeded: before=%v after=%v", before1, after1)
+	}
+
+	// Case 2: context.DeadlineExceeded -> records timeout
+	ctx2 := &RequestContext{RequestModel: "ctx-deadline-model", UpstreamStatusCode: 0}
+	before2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ctx-deadline-model"})
+	_ = r.handleProcessReceiveError(ctx2, context.DeadlineExceeded)
+	after2 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "ctx-deadline-model"})
+	if after2 != before2+1 {
+		t.Fatalf("expected timeout to increase on context.DeadlineExceeded: before=%v after=%v", before2, after2)
+	}
+
+	// Configure router with model reliability settings
+	r.Config = &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"fast-model": {
+					Reliability: config.ProviderReliability{
+						RequestTimeout:    "2s",
+						StreamIdleTimeout: "2s",
+						ConnectTimeout:    "2s",
+					},
+				},
+				"slow-model": {
+					Reliability: config.ProviderReliability{
+						RequestTimeout: "15s",
+						ConnectTimeout: "5s",
+					},
+				},
+				"unreachable-model": {
+					Reliability: config.ProviderReliability{
+						ConnectTimeout: "1s",
+					},
+				},
+			},
+		},
+	}
+
+	// Case 3: Request timeout exceeded (elapsed >= 2s) -> records timeout
+	ctx3 := &RequestContext{
+		RequestModel:        "fast-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-2 * time.Second),
+	}
+	before3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	_ = r.handleProcessReceiveError(ctx3, io.EOF)
+	after3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	if after3 != before3+1 {
+		t.Fatalf("expected timeout to increase on request timeout deadline: before=%v after=%v", before3, after3)
+	}
+
+	// Case 4: Connect timeout exceeded (elapsed >= 1s) -> records timeout
+	ctx4 := &RequestContext{
+		RequestModel:        "unreachable-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-1050 * time.Millisecond),
+	}
+	before4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	_ = r.handleProcessReceiveError(ctx4, io.EOF)
+	after4 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	if after4 != before4+1 {
+		t.Fatalf("expected timeout to increase on connect timeout: before=%v after=%v", before4, after4)
+	}
+
+	// Case 5: Stalled stream idle timeout exceeded (idle gap >= 2s) -> records timeout
+	ctx5 := &RequestContext{
+		RequestModel:        "fast-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-2100 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-2100 * time.Millisecond),
+		LastStreamChunkTime: time.Now().Add(-2100 * time.Millisecond),
+	}
+	before5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	_ = r.handleProcessReceiveError(ctx5, io.EOF)
+	after5 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
+	if after5 != before5+1 {
+		t.Fatalf("expected timeout to increase on stream idle timeout: before=%v after=%v", before5, after5)
+	}
+
+	// Case 6: Non-timeout client abort (elapsed 100ms << 15s deadline) -> does NOT record timeout
+	ctx6 := &RequestContext{
+		RequestModel:        "slow-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-100 * time.Millisecond),
+	}
+	before6 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	_ = r.handleProcessReceiveError(ctx6, status.Error(codes.Canceled, "client abort"))
+	after6 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	if after6 != before6 {
+		t.Fatalf("expected timeout NOT to increase on non-timeout client abort: before=%v after=%v", before6, after6)
+	}
+
+	// Case 7: Long-lived continuously active stream ending in client cancellation (total elapsed 5s < 15s request timeout, idle gap only 50ms << 2s idle timeout) -> does NOT record timeout
+	ctx7 := &RequestContext{
+		RequestModel:        "slow-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-5 * time.Second),
+		ProcessingStartTime: time.Now().Add(-5 * time.Second),
+		LastStreamChunkTime: time.Now().Add(-50 * time.Millisecond),
+	}
+	before7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	_ = r.handleProcessReceiveError(ctx7, status.Error(codes.Canceled, "client canceled active stream"))
+	after7 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	if after7 != before7 {
+		t.Fatalf("expected timeout NOT to increase on long-lived active stream client cancellation: before=%v after=%v", before7, after7)
+	}
+
+	// Case 8: Long-lived continuously active stream ending in non-timeout reset (total elapsed 5s < 15s request timeout, idle gap only 50ms << 2s idle timeout) -> does NOT record timeout
+	ctx8 := &RequestContext{
+		RequestModel:        "slow-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-5 * time.Second),
+		ProcessingStartTime: time.Now().Add(-5 * time.Second),
+		LastStreamChunkTime: time.Now().Add(-50 * time.Millisecond),
+	}
+	before8 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	_ = r.handleProcessReceiveError(ctx8, io.EOF)
+	after8 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "slow-model"})
+	if after8 != before8 {
+		t.Fatalf("expected timeout NOT to increase on long-lived active stream non-timeout reset: before=%v after=%v", before8, after8)
+	}
+}
+
+func TestConnectTimeout503RecordsTimeoutMetric(t *testing.T) {
+	r := &OpenAIRouter{}
+	ctx := &RequestContext{
+		RequestModel:       "unreachable-model",
+		UpstreamStatusCode: 503,
+		RequestID:          "req-503-connect-timeout",
+	}
+	beforeTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	before5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "unreachable-model"})
+
+	connectTimeoutBody := []byte("upstream connect error or disconnect/reset before headers. reset reason: connection timeout")
+	resp := r.handleUpstreamTransportError(connectTimeoutBody, ctx)
+	if resp == nil {
+		t.Fatal("expected non-nil response from handleUpstreamTransportError")
+	}
+
+	afterTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
+	after5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "unreachable-model"})
+
+	if afterTimeout != beforeTimeout+1 {
+		t.Fatalf("expected timeout metric to increment on 503 connect timeout: before=%v after=%v", beforeTimeout, afterTimeout)
+	}
+	if after5xx != before5xx {
+		t.Fatalf("expected upstream_5xx metric NOT to increment on 503 connect timeout: before=%v after=%v", before5xx, after5xx)
+	}
+}
+
+func TestConnectFailure503RecordsUpstream5xxMetric(t *testing.T) {
+	r := &OpenAIRouter{}
+	ctx := &RequestContext{
+		RequestModel:       "failed-model",
+		UpstreamStatusCode: 503,
+		RequestID:          "req-503-connect-failure",
+	}
+	beforeTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "failed-model"})
+	before5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "failed-model"})
+
+	connectFailureBody := []byte("upstream connect error or disconnect/reset before headers. reset reason: connection failure")
+	resp := r.handleUpstreamTransportError(connectFailureBody, ctx)
+	if resp == nil {
+		t.Fatal("expected non-nil response from handleUpstreamTransportError")
+	}
+
+	afterTimeout := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "failed-model"})
+	after5xx := getCounterValue("llm_request_errors_total", map[string]string{"reason": "upstream_5xx", "model": "failed-model"})
+
+	if afterTimeout != beforeTimeout {
+		t.Fatalf("expected timeout metric NOT to increment on connection failure 503: before=%v after=%v", beforeTimeout, afterTimeout)
+	}
+	if after5xx != before5xx+1 {
+		t.Fatalf("expected upstream_5xx metric to increment on connection failure 503: before=%v after=%v", before5xx, after5xx)
+	}
+}
+
+func TestAppendReliabilityHeaders(t *testing.T) {
+	r := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"fast-model": {
+						Reliability: config.ProviderReliability{
+							RequestTimeout:    "2s",
+							StreamIdleTimeout: "2s",
+						},
+					},
+					"slow-model": {
+						Reliability: config.ProviderReliability{
+							RequestTimeout: "15s",
+						},
+					},
+					"unbounded-model": {
+						Reliability: config.ProviderReliability{
+							RequestTimeout:    "0s",
+							StreamIdleTimeout: "15s",
+						},
+					},
+					"no-rel-model": {},
+				},
+			},
+		},
+	}
+
+	// Case 1: fast-model sets both request and stream idle timeout in config; only rq-timeout is injected as header
+	var headers1 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers1, "fast-model")
+	headerMap1 := make(map[string]string)
+	for _, h := range headers1 {
+		headerMap1[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap1["x-envoy-upstream-rq-timeout-ms"] != "2000" {
+		t.Fatalf("fast-model: expected x-envoy-upstream-rq-timeout-ms=2000, got %q", headerMap1["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 2: slow-model sets only request timeout
+	var headers2 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers2, "slow-model")
+	headerMap2 := make(map[string]string)
+	for _, h := range headers2 {
+		headerMap2[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap2["x-envoy-upstream-rq-timeout-ms"] != "15000" {
+		t.Fatalf("slow-model: expected x-envoy-upstream-rq-timeout-ms=15000, got %q", headerMap2["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 3: unbounded-model sets request timeout 0
+	var headers3 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers3, "unbounded-model")
+	headerMap3 := make(map[string]string)
+	for _, h := range headers3 {
+		headerMap3[h.Header.Key] = string(h.Header.RawValue)
+	}
+	if headerMap3["x-envoy-upstream-rq-timeout-ms"] != "0" {
+		t.Fatalf("unbounded-model: expected x-envoy-upstream-rq-timeout-ms=0, got %q", headerMap3["x-envoy-upstream-rq-timeout-ms"])
+	}
+
+	// Case 4: model without reliability settings sets no timeout headers
+	var headers4 []*core.HeaderValueOption
+	r.appendReliabilityHeaders(&headers4, "no-rel-model")
+	if len(headers4) != 0 {
+		t.Fatalf("no-rel-model: expected no headers, got %v", headers4)
+	}
 }

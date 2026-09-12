@@ -81,8 +81,9 @@ type RequestContext struct {
 	RequestCostCurrency           string
 	RequestCostPriced             bool
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header or stream parameter
-	IsStreamingResponse     bool // set from response Content-Type
+	ExpectStreamingResponse bool      // set from request Accept header or stream parameter
+	IsStreamingResponse     bool      // set from response Content-Type
+	LastStreamChunkTime     time.Time // timestamp of the most recent streaming body chunk
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
@@ -99,7 +100,8 @@ type RequestContext struct {
 	// the response-header phase. Zero means the status was never observed for
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
-	UpstreamStatusCode int
+	UpstreamStatusCode          int
+	UpstreamErrorMetricRecorded bool
 
 	// TTFT tracking
 	TTFTRecorded bool

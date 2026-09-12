@@ -20,7 +20,7 @@ static_resources:
           "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
           stat_prefix: ingress_http
           codec_type: AUTO
-          stream_idle_timeout: {{ listener.timeout | default('1200s') }}
+          stream_idle_timeout: {{ listener.timeout | default('300s') }}
           route_config:
             name: local_route
             virtual_hosts:
@@ -55,8 +55,8 @@ static_resources:
                 {% endif %}
                 route:
                   cluster: {{ model.cluster_name }}_cluster
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  idleTimeout: 1200s
+                  timeout: {{ model.reliability.get('request_timeout') if (model.reliability is defined and model.reliability and model.reliability.get('request_timeout')) else (listener.timeout | default('300s')) }}
+                  idleTimeout: {{ model.reliability.get('stream_idle_timeout') if (model.reliability is defined and model.reliability and model.reliability.get('stream_idle_timeout')) else (listener.timeout | default('300s')) }}
                   {% if model.reliability.retry_count | default(0) > 0 %}
                   retry_policy:
                     retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
@@ -78,6 +78,7 @@ static_resources:
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
+
               # Default route (no x-selected-model header)
               - match:
                   prefix: "/"
@@ -97,12 +98,8 @@ static_resources:
                   {% else %}
                   cluster: vllm_static_cluster
                   {% endif %}
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  {% if models and models[0].reliability.retry_count | default(0) > 0 %}
-                  retry_policy:
-                    retry_on: {{ models[0].reliability.retry_on | default('connect-failure,refused-stream') }}
-                    num_retries: {{ models[0].reliability.retry_count }}
-                  {% endif %}
+                  timeout: {{ listener.timeout | default('300s') }}
+                  idleTimeout: {{ listener.timeout | default('300s') }}
                   {% if models %}
                   # Rewrite Host header to match the endpoint Envoy selected.
                   {% if models[0].auto_host_rewrite %}
@@ -165,7 +162,7 @@ static_resources:
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
-              message_timeout: {{ listener.timeout | default('1200s') }}
+              message_timeout: {{ listener.timeout | default('300s') }}
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -227,7 +224,7 @@ static_resources:
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 10s
+    connect_timeout: {{ model.reliability.get('connect_timeout') if (model.reliability is defined and model.reliability and model.reliability.get('connect_timeout')) else '10s' }}
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
@@ -296,6 +293,7 @@ static_resources:
               filename: /etc/ssl/certs/ca-certificates.crt
     {% endif %}
   {% endfor %}
+
 
 # Runtime configuration
 layered_runtime:
