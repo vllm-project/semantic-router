@@ -75,7 +75,7 @@ repos:
         entry: .venv-agent/bin/yamllint --config-file=tools/linter/yaml/.yamllint
         language: system
         files: \.(yaml|yml)$
-        exclude: ^(node_modules/)
+        exclude: ^(node_modules/|src/semantic-router/pkg/config/testdata/dryrun/parse-error\.yaml$)
 
   # JavaScript and TypeScript specific hooks
   - repo: local
