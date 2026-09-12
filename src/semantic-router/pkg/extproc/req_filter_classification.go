@@ -178,6 +178,9 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
+	if result.SelectedCandidate != nil {
+		return result.SelectedCandidate
+	}
 	for i := range selCtx.CandidateModels {
 		if selCtx.CandidateModels[i].Model == result.SelectedModel {
 			return &selCtx.CandidateModels[i]

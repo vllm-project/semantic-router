@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
@@ -198,50 +199,59 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		confidence = 1.0
 	}
 
+	selectedEvidence := signals[bestIdx].evidence
+	if !signals[bestIdx].hasQ {
+		selectedEvidence = nil
+	}
 	reasoning := fmt.Sprintf(
-		"multi_factor: objective=%s weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_min_coverage=%.2f quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_floor_excluded=%d, quality_excluded=%d",
+		"multi_factor: objective=%s weights{q=%.2f l=%.2f c=%.2f L=%.2f} quality_index=%q quality_missing=%s quality_min_coverage=%.2f quality_disabled=%t latency_p%d, kept=%d, dropped=%d, quality_floor_excluded=%d, quality_excluded=%d; %s",
 		multiFactorObjectiveDescription(s.config.Objective),
 		s.config.Weights.Quality, s.config.Weights.Latency,
 		s.config.Weights.Cost, s.config.Weights.Load,
 		s.config.QualityIndex, s.config.QualityOnMissing, s.config.QualityMinCoverage, qualityDisabled,
 		s.config.LatencyPercentile, len(kept), len(dropped), qualityFloorExcluded, qualityExcluded,
+		evidenceDiagnostic(selectedEvidence),
 	)
 
 	logging.Infof("[MultiFactor] candidates=%d -> %s (score=%.4f confidence=%.2f, dropped_by_slo=%d)",
 		len(selCtx.CandidateModels), chosen.Model, bestScore, confidence, len(dropped))
 
 	return &SelectionResult{
-		SelectedModel: chosen.Model,
-		LoRAName:      chosen.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodMultiFactor,
-		Tier:          TierSupported,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
+		SelectedModel:     chosen.Model,
+		SelectedCandidate: &chosen,
+		LoRAName:          chosen.LoRAName,
+		Score:             bestScore,
+		Confidence:        confidence,
+		Method:            MethodMultiFactor,
+		Tier:              TierSupported,
+		Reasoning:         reasoning,
+		AllScores:         allScores,
 	}, nil
 }
 
 type signalSet struct {
-	model   string
-	quality float64
-	hasQ    bool
-	latency float64
-	hasLat  bool
-	cost    float64
-	hasCost bool
-	load    float64
+	model    string
+	scoreKey string
+	quality  float64
+	hasQ     bool
+	evidence *modelcatalog.IndexResult
+	latency  float64
+	hasLat   bool
+	cost     float64
+	hasCost  bool
+	load     float64
 }
 
 func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx *SelectionContext) []signalSet {
 	out := make([]signalSet, 0, len(candidates))
-	for _, c := range candidates {
-		sig := signalSet{model: c.Model}
+	for index, c := range candidates {
+		sig := signalSet{model: c.Model, scoreKey: candidateScoreKey(candidates, index)}
 		if params, ok := s.modelParams[c.Model]; ok {
 			if result, available := params.EvidenceResultAt(s.config.QualityIndex, c.ReasoningEffort); available &&
 				result.Coverage >= s.config.QualityMinCoverage {
 				sig.quality = *result.Score
 				sig.hasQ = true
+				sig.evidence = &result
 			}
 			if cost, available := estimatedRequestCost(params.Pricing, selCtx); available {
 				sig.cost = cost

@@ -43,6 +43,18 @@ func ValidateSelectionResult(selCtx *SelectionContext, result *SelectionResult) 
 	if selectedModel == "" {
 		return ErrSelectedModelRequired
 	}
+	if result.SelectedCandidate != nil {
+		candidate := *result.SelectedCandidate
+		if selectedModel != candidate.Model && (candidate.LoRAName == "" || selectedModel != candidate.LoRAName) {
+			return fmt.Errorf("%w: %q does not match selected candidate", ErrSelectedModelNotCandidate, result.SelectedModel)
+		}
+		for _, modelRef := range selCtx.CandidateModels {
+			if modelRef == candidate {
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: selected candidate is not declared", ErrSelectedModelNotCandidate)
+	}
 	for _, modelRef := range selCtx.CandidateModels {
 		if selectedModel == modelRef.Model || (modelRef.LoRAName != "" && selectedModel == modelRef.LoRAName) {
 			return nil
