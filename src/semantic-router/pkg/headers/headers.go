@@ -428,7 +428,7 @@ const (
 // VSR Cross-Model KV Transfer Request Headers (issue #2976)
 // Injected by the KVTransfer Coordinator on upstream dispatch when a model switch
 // is eligible for cross-model KV reuse. Consumed by the vLLM KVConnector plugin
-// on the target pod. See tools/agent/docs/plans/pl-0043-cross-model-kv-transfer.md.
+// on the target pod.
 const (
 	// VSRKVSourcePod is the gRPC address of the pod holding the source model's KV cache.
 	// Example: "10.0.1.5:8000"
