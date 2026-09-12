@@ -435,7 +435,7 @@ func (d *shadowDispatcher) submit(
 		engine:          deps.engine,
 		encode:          deps.encode,
 		request:         *ctx.SemanticRequest,
-		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope),
+		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) || len(deps.dynamoHeaders) > 0,
 		sourceFormat:    ctx.ProtocolEnvelope.Format,
 		dynamoHeaders:   deps.dynamoHeaders,
 		extraHeaders:    deps.extraHeaders,
