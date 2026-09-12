@@ -30,7 +30,7 @@ func reduceSealedRoutingRecipeReport(
 	decisions := make([]RoutingRecipeDecisionSnapshot, 0, len(expectedCaseIDs))
 	decisionByCase := make(map[string]RoutingRecipeDecisionSnapshot, len(expectedCaseIDs))
 	for _, entry := range attestation.Entries {
-		if entry.Operation != workerBrokerRouterEvaluate {
+		if entry.Operation != workerBrokerRoutingPreview {
 			continue
 		}
 		if entry.TrackID != "routing" || entry.RoutingRecipeDecision == nil || entry.FetchedAt == nil {

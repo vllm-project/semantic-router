@@ -13,31 +13,63 @@ func apiRouterReplayRoutes() []apiRoute {
 	policy := routePolicy{Permission: PermReplayRead, Sensitivity: SensitivityReplay}
 	return []apiRoute{
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay", Method: "GET", Description: "List Router Replay records"},
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath,
+				Method:      "GET",
+				Description: "List Router Replay records",
+				Parameters:  routerReplayListParameters(),
+			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay/", Method: "GET", Description: "List Router Replay records (trailing-slash compatibility)"},
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/aggregate",
+				Method:      "GET",
+				Description: "Aggregate Router Replay routing and cost metadata",
+				Parameters:  routerReplayFilterParameters(),
+			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay/aggregate", Method: "GET", Description: "Aggregate Router Replay routing and cost metadata"},
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/trajectory",
+				Method:      "GET",
+				Description: "Build a Router Replay session trajectory",
+				Parameters: []OpenAPIParameter{
+					requiredQueryParameter("session_id", "Logical session whose tool trajectory should be returned.", "string"),
+				},
+			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
 		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay/trajectory", Method: "GET", Description: "Build a Router Replay session trajectory"},
-			policy,
-			(*ClassificationAPIServer).handleRouterReplay,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/v1/router_replay/{id}", Method: "GET", Description: "Read one Router Replay record"},
+			EndpointMetadata{Path: apiObservabilityReplaysPath + "/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
 	}
+}
+
+func routerReplayFilterParameters() []OpenAPIParameter {
+	return []OpenAPIParameter{
+		queryParameter("search", "Case-insensitive text search across replay records.", "string"),
+		queryParameter("recipe", "Filter by recipe name.", "string"),
+		queryParameter("decision", "Filter by decision name.", "string"),
+		queryParameter("model", "Filter by selected model.", "string"),
+		queryParameter("session_id", "Filter by logical session identifier.", "string"),
+		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
+	}
+}
+
+func routerReplayListParameters() []OpenAPIParameter {
+	parameters := routerReplayFilterParameters()
+	return append(parameters,
+		queryParameter("limit", "Maximum records; defaults to 20 and is capped at 100.", "integer"),
+		queryParameter("offset", "Zero-based result offset.", "integer"),
+		queryParameter("showDetails", "Include full replay details when the principal has replay_detail permission.", "boolean"),
+	)
 }
 
 func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *http.Request) {

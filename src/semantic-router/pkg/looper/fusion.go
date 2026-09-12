@@ -20,12 +20,17 @@ type FusionLooper struct {
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return &FusionLooper{BaseLooper: NewBaseLooper(cfg)}
+	return newFusionLooper(cfg, nil)
+}
+
+func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
 }
 
 type fusionExecutionConfig struct {
 	Model                        string
 	AnalysisModels               []string
+	AnalysisMode                 string
 	AnalysisOverrides            map[string]config.FusionModelOverride
 	MaxConcurrent                int
 	MaxCompletionTokens          int
@@ -70,6 +75,7 @@ type FusionFailedModel struct {
 }
 
 type FusionTrace struct {
+	AnalysisMode   string                `json:"analysis_mode,omitempty"`
 	Analysis       *FusionAnalysis       `json:"analysis,omitempty"`
 	Responses      []FusionPanelResponse `json:"responses,omitempty"`
 	FailedModels   []FusionFailedModel   `json:"failed_models,omitempty"`
@@ -79,8 +85,32 @@ type FusionTrace struct {
 	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
 }
 
+type fusionPublicTrace struct {
+	Analysis       *FusionAnalysis       `json:"analysis,omitempty"`
+	Responses      []FusionPanelResponse `json:"responses,omitempty"`
+	FailedModels   []FusionFailedModel   `json:"failed_models,omitempty"`
+	JudgeModel     string                `json:"judge_model,omitempty"`
+	AnalysisModels []string              `json:"analysis_models,omitempty"`
+	PromptVersion  string                `json:"prompt_version,omitempty"`
+	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
+}
+
+func projectFusionPublicTrace(trace *FusionTrace) *fusionPublicTrace {
+	if trace == nil {
+		return nil
+	}
+	return &fusionPublicTrace{
+		Analysis:       trace.Analysis,
+		Responses:      trace.Responses,
+		FailedModels:   trace.FailedModels,
+		JudgeModel:     trace.JudgeModel,
+		AnalysisModels: trace.AnalysisModels,
+		PromptVersion:  trace.PromptVersion,
+		Grounding:      trace.Grounding,
+	}
+}
+
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	l.client.SetDecisionName(req.DecisionName)
 	ctx = contextWithFusionDepth(ctx, 1)
 
 	cfg := l.resolveFusionExecutionConfig(req)
@@ -101,6 +131,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"decision":        req.DecisionName,
 		"judge_model":     cfg.Model,
 		"analysis_models": len(cfg.AnalysisModels),
+		"analysis_mode":   cfg.AnalysisMode,
 		"streaming":       req.IsStreaming,
 	})
 
@@ -123,21 +154,20 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
-	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
-	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
+	judge, err := l.runFusionJudgeStages(ctx, req, cfg, groundedPanel, groundingScores)
 	if err != nil {
 		return nil, err
 	}
-	usage := panel.usage.Add(analysisResp, finalResp)
+	usage := panel.usage.Add(judge.analysisResponse, judge.finalResponse)
 
-	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, analysis, groundingMode, groundingScores)
+	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, judge.analysis, groundingMode, groundingScores)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
-	iterations := len(cfg.AnalysisModels) + 2
+	iterations := len(cfg.AnalysisModels) + judge.iterations
 
 	if req.IsStreaming {
-		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+		return l.formatFusionStreamingResponse(judge.finalResponse, modelsUsed, iterations, cfg, trace, usage)
 	}
-	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+	return l.formatFusionJSONResponse(judge.finalResponse, modelsUsed, iterations, cfg, trace, usage)
 }
 
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
@@ -176,7 +206,18 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
-	return l.callModelWithContextGate(ctx, req, callReq, modelName, streaming, iteration, nil, accessKeyForModel(req, modelName))
+	return l.dispatchModel(
+		ctx,
+		req,
+		callReq,
+		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
+		CallOptions{
+			DecisionName: req.DecisionName,
+			Iteration:    iteration,
+			FusionDepth:  1,
+			Mode:         responseMode(streaming),
+		},
+	)
 }
 
 func accessKeyForModel(req *Request, modelName string) string {
@@ -366,6 +407,7 @@ func buildFusionTrace(
 	groundingScores []groundingScore,
 ) *FusionTrace {
 	trace := &FusionTrace{
+		AnalysisMode:   config.EffectiveFusionAnalysisMode(cfg.AnalysisMode),
 		JudgeModel:     cfg.Model,
 		AnalysisModels: append([]string(nil), cfg.AnalysisModels...),
 		FailedModels:   failedModels,
@@ -441,7 +483,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		"usage": usage.Map(),
 	}
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
+		completion["fusion"] = projectFusionPublicTrace(trace)
 	}
 	body, err := json.Marshal(completion)
 	if err != nil {
@@ -476,7 +518,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["usage"] = usage.Map()
 	normalizeCompletionToolFinishReason(completion)
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
+		completion["fusion"] = projectFusionPublicTrace(trace)
 	}
 	body, err := json.Marshal(completion)
 	if err != nil {
@@ -538,7 +580,7 @@ func buildFusionStreamingSSE(
 	}
 	var extra map[string]interface{}
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		extra = map[string]interface{}{"fusion": trace}
+		extra = map[string]interface{}{"fusion": projectFusionPublicTrace(trace)}
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
 	for _, chunk := range splitIntoChunks(content, 50) {

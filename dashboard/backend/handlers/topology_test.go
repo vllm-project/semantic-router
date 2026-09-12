@@ -106,7 +106,7 @@ func setupMockRouterAPI(t *testing.T, response RouterEvalResponse) string {
 	t.Helper()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/eval" {
+		if r.URL.Path != "/api/v1/routing/preview" {
 			http.NotFound(w, r)
 			return
 		}
@@ -187,7 +187,7 @@ func TestCallRouterAPIForwardsSelectedEntrypointModel(t *testing.T) {
 
 	var received RouterIntentRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/v1/eval", r.URL.Path)
+		require.Equal(t, "/api/v1/routing/preview", r.URL.Path)
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(RouterEvalResponse{

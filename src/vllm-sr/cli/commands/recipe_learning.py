@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import click
-import requests
 import yaml
 
 from cli.commands.common import exit_with_logged_error
@@ -32,44 +29,18 @@ from cli.commands.recipe_learning_metrics import (
     update_experience_counts,
     update_metrics,
 )
-from cli.consts import DEFAULT_API_PORT
+from cli.router_management_client import (
+    OBSERVABILITY_REPLAYS_PATH,
+    RouterManagementClient,
+    default_management_base_url,
+)
 from cli.terminal import echo
-from cli.url_display import redact_url
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 _DEFAULT_REPLAY_LIMIT = 100
 _MAX_REPLAY_LIMIT = 500
-
-
-def default_replay_endpoint() -> str:
-    return f"http://localhost:{DEFAULT_API_PORT}/v1/router_replay"
-
-
-def normalize_replay_endpoint(endpoint: str, limit: int) -> str:
-    return candidate_replay_endpoints(endpoint, limit)[0]
-
-
-def candidate_replay_endpoints(endpoint: str, limit: int) -> list[str]:
-    endpoint = endpoint.strip()
-    if not endpoint:
-        endpoint = default_replay_endpoint()
-    if endpoint.endswith("/"):
-        endpoint = endpoint[:-1]
-    if not endpoint.endswith("/v1/router_replay"):
-        endpoint = urljoin(endpoint + "/", "v1/router_replay")
-
-    return [normalize_replay_endpoint_query(endpoint, limit)]
-
-
-def normalize_replay_endpoint_query(endpoint: str, limit: int) -> str:
-    parts = urlsplit(endpoint)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query.setdefault("limit", str(max(1, min(limit, _MAX_REPLAY_LIMIT))))
-    return urlunsplit(
-        (parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)
-    )
 
 
 def load_replay_records(
@@ -85,32 +56,12 @@ def load_replay_records(
 
 
 def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
-    errors: list[str] = []
-    token = os.getenv("VSR_MGMT_TOKEN", "").strip()
-    headers = {"Authorization": f"Bearer {token}"} if token else None
-    for url in candidate_replay_endpoints(endpoint, limit):
-        display_url = redact_url(url)
-        try:
-            response = requests.get(url, headers=headers, timeout=timeout)
-        except requests.ConnectionError:
-            errors.append(f"{display_url}: not reachable")
-            continue
-        except requests.Timeout:
-            errors.append(f"{display_url}: timed out after {timeout}s")
-            continue
-        except requests.RequestException:
-            errors.append(f"{display_url}: request failed")
-            continue
-        if response.status_code == requests.codes.ok:
-            return response.json()
-        errors.append(f"{display_url}: HTTP {response.status_code}")
-
-    tried = "; ".join(errors)
-    raise ValueError(
-        "Router replay endpoint is not reachable. Start vllm-sr serve, pass "
-        "--replay-file, or pass the Router management API /v1/router_replay URL. "
-        f"Set VSR_MGMT_TOKEN when management bearer auth is enabled. Tried: {tried}"
-    )
+    client = RouterManagementClient(endpoint or None, timeout=timeout)
+    return client.request(
+        "GET",
+        OBSERVABILITY_REPLAYS_PATH,
+        params={"limit": str(max(1, min(limit, _MAX_REPLAY_LIMIT)))},
+    ).payload
 
 
 def normalize_replay_payload(payload: Any) -> list[dict[str, Any]]:
@@ -275,8 +226,8 @@ def write_candidate_recipes(artifact: dict[str, Any], output_dir: Path) -> None:
     "--endpoint",
     default=None,
     help=(
-        "Router management API base URL or /v1/router_replay endpoint. "
-        f"Defaults to {default_replay_endpoint()} when --replay-file is omitted."
+        "Router management base URL (origin or /api/v1). "
+        f"Defaults to {default_management_base_url()} when --replay-file is omitted."
         " Uses VSR_MGMT_TOKEN for bearer auth when set."
     ),
 )

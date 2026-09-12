@@ -125,7 +125,7 @@ func createHTTPRoute(ctx context.Context, c client.Client, scheme *runtime.Schem
 							{
 								Path: &gatewayv1.HTTPPathMatch{
 									Type:  &pathPrefix,
-									Value: ptr.To("/api/v1/classify"),
+									Value: ptr.To("/api/v1/diagnostics/classify"),
 								},
 							},
 						},

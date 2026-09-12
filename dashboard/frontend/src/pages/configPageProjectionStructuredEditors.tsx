@@ -10,6 +10,7 @@ import {
   normalizeProjectionInputs,
   normalizeProjectionMembers,
   normalizeProjectionOutputs,
+  PROJECTION_INPUT_TYPES,
   projectionInputErrors,
   projectionOutputErrors,
 } from './configPageProjectionFormSupport'
@@ -21,35 +22,12 @@ interface StructuredProjectionFieldProps {
   readOnly?: boolean
 }
 
-const projectionInputTypes = [
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-  'kb_metric',
-  'projection',
-] as const
-
 const inputFields: ObjectEditorField<ProjectionScoreInput>[] = [
   {
     key: 'type',
     label: 'Input type',
     type: 'select',
-    options: projectionInputTypes,
+    options: PROJECTION_INPUT_TYPES,
     required: true,
   },
   {

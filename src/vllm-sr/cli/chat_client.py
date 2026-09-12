@@ -1,11 +1,10 @@
-"""HTTP client helpers for vllm-sr chat (OpenAI-compatible chat completions)."""
+"""HTTP helpers for ``vllm-sr request chat``."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
 
 import requests
 
@@ -62,7 +61,7 @@ def resolve_chat_base_url(
     resolved_target = resolve_target(target)
     if resolved_target != DEFAULT_TARGET:
         raise ValueError(
-            "Non-Docker targets are not yet supported by `vllm-sr chat`. "
+            "Non-Docker targets are not yet supported by `vllm-sr request chat`. "
             "Use `curl` or another HTTP client to reach the routed endpoint."
         )
     host, port = resolve_listener_host_port(config_path)
@@ -87,7 +86,14 @@ def build_chat_payload(
 
 
 def chat_completions_url(base: str) -> str:
-    return urljoin(base.rstrip("/") + "/", CHAT_COMPLETIONS_PATH.lstrip("/"))
+    """Resolve a chat-completions URL from an origin or OpenAI ``/v1`` root."""
+
+    normalized = normalize_base_url(base)
+    if normalized.endswith(CHAT_COMPLETIONS_PATH):
+        return normalized
+    if normalized.endswith("/v1"):
+        return normalized + "/chat/completions"
+    return normalized + CHAT_COMPLETIONS_PATH
 
 
 def extract_assistant_text(data: dict[str, Any]) -> str:

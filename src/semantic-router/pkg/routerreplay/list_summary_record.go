@@ -4,7 +4,7 @@ import "sort"
 
 // ListSummaryRecord returns a copy of rec with large captured fields cleared so
 // replay list responses are restricted in size.
-// Full payloads remain available via GET /v1/router_replay/{id}.
+// Full payloads remain available via GET /api/v1/observability/replays/{id}.
 func ListSummaryRecord(rec RoutingRecord) RoutingRecord {
 	out := rec
 	out.RequestBody = ""

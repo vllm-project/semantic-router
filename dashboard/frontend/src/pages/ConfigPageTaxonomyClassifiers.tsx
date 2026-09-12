@@ -72,7 +72,7 @@ export default function ConfigPageTaxonomyClassifiers({
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/router/config/kbs')
+      const response = await fetch('/api/router/api/v1/storage/knowledge-bases')
       if (!response.ok) {
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
@@ -172,7 +172,7 @@ export default function ConfigPageTaxonomyClassifiers({
       const currentDraft = classifierDraftFromRecord(selectedKnowledgeBase)
       const nextDraft = mutate(currentDraft)
       await persistKnowledgeBase(
-        `/api/router/config/kbs/${selectedKnowledgeBase.name}`,
+        `/api/router/api/v1/storage/knowledge-bases/${selectedKnowledgeBase.name}`,
         'PUT',
         nextDraft,
         selectedKnowledgeBase.name,
@@ -188,7 +188,7 @@ export default function ConfigPageTaxonomyClassifiers({
       knowledgeBaseEditorField(false),
       async (data) => {
         const nextName = data.draft.name.trim()
-        await persistKnowledgeBase('/api/router/config/kbs', 'POST', data.draft, nextName)
+        await persistKnowledgeBase('/api/router/api/v1/storage/knowledge-bases', 'POST', data.draft, nextName)
       },
       'add',
     )
@@ -202,7 +202,7 @@ export default function ConfigPageTaxonomyClassifiers({
         knowledgeBaseEditorField(true),
         async (data) => {
           await persistKnowledgeBase(
-            `/api/router/config/kbs/${knowledgeBase.name}`,
+            `/api/router/api/v1/storage/knowledge-bases/${knowledgeBase.name}`,
             'PUT',
             data.draft,
             knowledgeBase.name,
@@ -468,7 +468,7 @@ export default function ConfigPageTaxonomyClassifiers({
     try {
       if (deleteTarget.kind === 'knowledge-base') {
         const { knowledgeBase } = deleteTarget
-        const response = await fetch(`/api/router/config/kbs/${knowledgeBase.name}`, {
+        const response = await fetch(`/api/router/api/v1/storage/knowledge-bases/${knowledgeBase.name}`, {
           method: 'DELETE',
         })
         if (!response.ok) {
