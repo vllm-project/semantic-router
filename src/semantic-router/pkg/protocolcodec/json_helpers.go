@@ -586,6 +586,13 @@ func authoritative(value int64) llmprotocol.TokenCount {
 	return llmprotocol.TokenCount{Value: llmprotocol.Int64(value), Provenance: llmprotocol.UsageAuthoritative}
 }
 
+func optionalAuthoritative(value *int64) llmprotocol.TokenCount {
+	if value == nil {
+		return unknownCount()
+	}
+	return authoritative(*value)
+}
+
 func unknownCount() llmprotocol.TokenCount {
 	return llmprotocol.TokenCount{Provenance: llmprotocol.UsageUnknown}
 }

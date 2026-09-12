@@ -63,6 +63,36 @@ func recordModelUsageTokens(model string, usage responseUsageMetrics) {
 	}
 }
 
+func recordProviderPromptCacheUsage(model string, usage responseUsageMetrics) {
+	if model == "" {
+		return
+	}
+	state := "unavailable"
+	if usage.invalid {
+		state = "invalid"
+		if usage.invalidReason == "authoritative_usage_invalid" {
+			state = "unavailable"
+		}
+	} else {
+		readReported := usage.cachedPromptTokensReported
+		writeReported := usage.cacheWriteTokensReported
+		switch {
+		case readReported && writeReported:
+			state = "authoritative"
+		case readReported || writeReported:
+			state = "partial"
+		case usage.cachedPromptTokens > 0 || usage.cacheWriteTokens > 0:
+			state = "derived"
+		}
+	}
+	metrics.RecordModelPromptCacheUsage(
+		model,
+		float64(usage.cachedPromptTokens),
+		float64(usage.cacheWriteTokens),
+		state,
+	)
+}
+
 // =====================================================================
 // NON-STREAMING
 // =====================================================================
@@ -72,6 +102,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
+	recordProviderPromptCacheUsage(ctx.RequestModel, usage)
 	if usage.invalid {
 		usage = responseUsageMetrics{}
 	}

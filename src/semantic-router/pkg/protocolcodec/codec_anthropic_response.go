@@ -24,8 +24,8 @@ type anthropicResponseWire struct {
 type anthropicUsageWire struct {
 	InputTokens              int64                           `json:"input_tokens"`
 	OutputTokens             int64                           `json:"output_tokens"`
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens *int64                          `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     *int64                          `json:"cache_read_input_tokens"`
 	CacheCreation            anthropicCacheCreationUsageWire `json:"cache_creation"`
 	InferenceGeo             string                          `json:"inference_geo"`
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
@@ -130,7 +130,13 @@ func appendAnthropicResponseUsage(
 }
 
 func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
-	inputTotal := wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens
+	inputTotal := wire.InputTokens
+	if wire.CacheReadInputTokens != nil {
+		inputTotal += *wire.CacheReadInputTokens
+	}
+	if wire.CacheCreationInputTokens != nil {
+		inputTotal += *wire.CacheCreationInputTokens
+	}
 	reasoning := int64(0)
 	reasoning = wire.OutputTokensDetails.ThinkingTokens
 	other := wire.OutputTokens - reasoning
@@ -139,7 +145,7 @@ func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
 	}
 	return llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(wire.InputTokens), InputCacheRead: authoritative(wire.CacheReadInputTokens), InputCacheWrite: authoritative(wire.CacheCreationInputTokens),
+		InputUncached: authoritative(wire.InputTokens), InputCacheRead: optionalAuthoritative(wire.CacheReadInputTokens), InputCacheWrite: optionalAuthoritative(wire.CacheCreationInputTokens),
 		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
 		InputTotal: authoritative(inputTotal), OutputTotal: authoritative(wire.OutputTokens), Total: llmprotocol.TokenCount{Value: llmprotocol.Int64(inputTotal + wire.OutputTokens), Provenance: llmprotocol.UsageDerived},
 	}
@@ -204,7 +210,7 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 	cacheWrite := tokenValue(usage.InputCacheWrite)
 	*wire = anthropicUsageWire{
 		InputTokens: inputTokens, OutputTokens: tokenValue(usage.OutputTotal),
-		CacheCreationInputTokens: cacheWrite, CacheReadInputTokens: tokenValue(usage.InputCacheRead),
+		CacheCreationInputTokens: llmprotocol.Int64(cacheWrite), CacheReadInputTokens: llmprotocol.Int64(tokenValue(usage.InputCacheRead)),
 		CacheCreation:       anthropicCacheCreationUsageWire{Ephemeral5mInputTokens: cacheWrite},
 		InferenceGeo:        "global",
 		OutputTokensDetails: anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
@@ -216,8 +222,10 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 
 func newAnthropicUsageWire() *anthropicUsageWire {
 	return &anthropicUsageWire{
-		InferenceGeo: "global",
-		ServiceTier:  "standard",
+		CacheCreationInputTokens: llmprotocol.Int64(0),
+		CacheReadInputTokens:     llmprotocol.Int64(0),
+		InferenceGeo:             "global",
+		ServiceTier:              "standard",
 	}
 }
 

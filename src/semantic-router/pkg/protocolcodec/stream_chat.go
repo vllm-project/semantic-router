@@ -643,7 +643,7 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 	if streamUsageRequested(encoder.context) && event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		usageChunk := chatChunkWire{
 			ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
-			Usage: encodeChatUsage(*event.Usage),
+			Usage: encodeChatUsage(*event.Usage, encoder.context.Source),
 		}
 		usageFrame, err := encodeChatStreamFrame(encoder.context, usageChunk)
 		if err != nil {
