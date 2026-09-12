@@ -789,6 +789,9 @@
   source: https://huggingface.co/datasets/openlifescienceai/medmcqa
   default_profile: medmarks-v1-three-order-average
   profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Source-published MedMCQA multiple-choice accuracy using the evaluated model's documented setup.
     - id: medmarks-v1-three-order-average
       display_name: Medmarks v1 three-order average
       description: Validation accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds.
@@ -806,6 +809,9 @@
   source: https://huggingface.co/datasets/GBaker/MedQA-USMLE-4-options-hf
   default_profile: medmarks-v1-three-order-average
   profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Source-published MedQA USMLE four-option accuracy using the evaluated model's documented setup.
     - id: medmarks-v1-three-order-average
       display_name: Medmarks v1 three-order average
       description: Test accuracy averaged across the original answer order and the two published Medmarks v1 shuffle seeds.
@@ -876,11 +882,28 @@
   source: https://github.com/suzgunmirac/BIG-Bench-Hard
   default_profile: rmcb-eacl-2026-valid-output-test
   profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Source-published BIG-Bench Hard accuracy using the model card's documented standard setup.
     - id: rmcb-eacl-2026-valid-output-test
       display_name: RMCB EACL 2026 valid-output test
       description: Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision remain on the evaluation record.
   metrics:
     - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: bigcode-project/bigcodebench@1.0.0
+  display_name: BigCodeBench
+  domain: code_generation
+  source: https://github.com/bigcode-project/bigcodebench
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Source-published BigCodeBench pass@1 with the evaluated model variant retained on the record.
+  metrics:
+    - id: pass_at_1
       unit: proportion
       direction: higher_is_better
       range: [0, 1]

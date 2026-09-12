@@ -1,0 +1,112 @@
+- id: ai2/olmo-3-32b-base
+  display_name: OLMo 3 32B Base
+  description: Fully open 32B base language model from Ai2's OLMo 3 family.
+  kind: physical
+  publisher: Ai2 / OLMo
+  presentation:
+    logo: package:ai2
+    monogram: O
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B
+    license: Apache-2.0
+  family: olmo-3
+  parameter_size: 32B
+  revision: c2b61dae89a1ad10e4ad5653d0e46b590902607b
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Ai2
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3-1125-32B
+  tags:
+  - open_weights
+  - base_model
+  - long_context
+- id: ai2/olmo-3-1-32b-think
+  display_name: OLMo 3.1 32B Think
+  description: Fully open 32B reasoning model from Ai2's OLMo 3.1 family.
+  kind: physical
+  publisher: Ai2 / OLMo
+  presentation:
+    logo: package:ai2
+    monogram: O
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think
+    license: Apache-2.0
+  family: olmo-3
+  parameter_size: 32B
+  revision: 832c3f543499af8fe68b88359501de9cb7840544
+  knowledge_cutoff: '2024-12-01'
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+    max_output_tokens: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Ai2
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Think
+  tags:
+  - open_weights
+  - reasoning
+  - long_context
+- id: ai2/olmo-3-1-32b-instruct
+  display_name: OLMo 3.1 32B Instruct
+  description: Fully open 32B instruction-tuned model from Ai2's OLMo 3.1 family.
+  kind: physical
+  publisher: Ai2 / OLMo
+  presentation:
+    logo: package:ai2
+    monogram: O
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct
+    license: Apache-2.0
+  family: olmo-3
+  parameter_size: 32B
+  revision: ac0587e4a7744a551c059d8cd17ba220bc940dae
+  knowledge_cutoff: '2024-12-01'
+  lifecycle: active
+  limits:
+    context_window_size: 65536
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Ai2
+    status: claimed
+    verified_at: 2026-09-11
+    source: https://huggingface.co/allenai/Olmo-3.1-32B-Instruct
+  tags:
+  - open_weights
+  - instruction_tuned
+  - long_context
