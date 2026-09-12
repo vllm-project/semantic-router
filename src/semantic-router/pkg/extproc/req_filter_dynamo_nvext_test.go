@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -59,6 +60,28 @@ func TestValidateDynamoRoutingHeadersRejectsInvalidUnsignedValuesAndOversizedTen
 				t.Fatalf("error = %v, want code %q", err, test.code)
 			}
 		})
+	}
+}
+
+func TestResponsesRequestRejectsMalformedDynamoRoutingHeader(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		Headers: map[string]string{
+			headers.DynamoDPRank: "not-a-rank",
+		},
+	}
+	body := []byte(`{"model":"model-a","input":"hello"}`)
+
+	request, response := router.prepareProtocolRequest(body, ctx)
+	if request != nil {
+		t.Fatalf("request = %+v, want malformed Responses header rejection", request)
+	}
+	if response.GetImmediateResponse().GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+		t.Fatalf("response = %+v, want HTTP 400", response)
+	}
+	if ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "invalid_dynamo_routing_header" {
+		t.Fatalf("protocol error = %+v, want invalid_dynamo_routing_header", ctx.ImmediateProtocolError)
 	}
 }
 

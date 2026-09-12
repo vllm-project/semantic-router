@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
@@ -208,7 +210,11 @@ func (d *shadowDispatcher) waitIdle(timeout time.Duration) bool {
 // finalizeProviderDispatchResponse so the shadow starts from the same approved
 // neutral request the primary was rendered from. Nothing here can fail the
 // request.
-func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch *providerDispatch) {
+func (r *OpenAIRouter) dispatchShadowIfConfigured(
+	ctx *RequestContext,
+	dispatch *providerDispatch,
+	primaryResponse *ext_proc.ProcessingResponse,
+) {
 	if r == nil || r.ShadowDispatcher == nil || ctx == nil || dispatch == nil {
 		return
 	}
@@ -221,19 +227,39 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 		engine = nil
 	}
 	cfg := pluginCfg.WithDefaults()
+	var primaryMutation *ext_proc.HeaderMutation
+	if primaryResponse != nil {
+		primaryMutation = primaryResponse.GetRequestBody().GetResponse().GetHeaderMutation()
+	}
+	dynamoHeaders, err := snapshotEffectiveDynamoRoutingHeaders(ctx, primaryMutation)
+	if err != nil {
+		metrics.RecordShadowDispatch(
+			dispatch.decisionName,
+			metrics.ShadowDispatchResultDropped,
+			"invalid_dynamo_routing_header",
+		)
+		logging.ComponentWarnEvent("extproc", "shadow_dispatch_skipped", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   dispatch.decisionName,
+			"reason":     "invalid_dynamo_routing_header",
+		})
+		return
+	}
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
-		routerConfig: r.Config,
-		engine:       engine,
-		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		routerConfig:  r.Config,
+		engine:        engine,
+		encode:        r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders:  r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		dynamoHeaders: dynamoHeaders,
 	})
 }
 
 type shadowSubmitDeps struct {
-	routerConfig *config.RouterConfig
-	engine       *protocolcodec.Engine
-	encode       shadowRequestEncoder
-	extraHeaders map[string]string
+	routerConfig  *config.RouterConfig
+	engine        *protocolcodec.Engine
+	encode        shadowRequestEncoder
+	extraHeaders  map[string]string
+	dynamoHeaders map[string]string
 }
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
@@ -411,7 +437,7 @@ func (d *shadowDispatcher) submit(
 		request:         *ctx.SemanticRequest,
 		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope),
 		sourceFormat:    ctx.ProtocolEnvelope.Format,
-		dynamoHeaders:   snapshotDynamoRoutingHeaders(ctx),
+		dynamoHeaders:   deps.dynamoHeaders,
 		extraHeaders:    deps.extraHeaders,
 		decision:        decision,
 		recipe:          recipe,

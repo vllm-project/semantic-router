@@ -207,7 +207,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		r.dispatchShadowIfConfigured(ctx, dispatch, finalized)
 		return finalized, nil
 	}
 
@@ -247,7 +247,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	r.dispatchShadowIfConfigured(ctx, dispatch)
+	r.dispatchShadowIfConfigured(ctx, dispatch, response)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

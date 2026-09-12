@@ -642,6 +642,67 @@ func TestShadowDispatchPreservesDynamoHeaderOverBodyPrecedence(t *testing.T) {
 	}
 }
 
+func TestShadowDispatchUsesProfileEffectiveDynamoRoutingHeader(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+	primaryProfile := router.Config.ProviderProfiles["provider"]
+	primaryProfile.ExtraHeaders = map[string]string{
+		headers.DynamoTenantID: "profile-tenant",
+	}
+	router.Config.ProviderProfiles["provider"] = primaryProfile
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "client-tenant"
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	if got := backend.headers[0].Get(headers.DynamoTenantID); got != "profile-tenant" {
+		t.Fatalf("%s = %q, want profile-tenant", headers.DynamoTenantID, got)
+	}
+}
+
+func TestShadowDispatchUsesDecisionEffectiveDynamoRoutingHeaders(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	for index := range router.Config.VLLMEndpoints {
+		router.Config.VLLMEndpoints[index].Type = "dynamo"
+	}
+
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIChatV1
+		ctx.Headers[headers.DynamoTenantID] = "client-tenant"
+		ctx.Headers[headers.DynamoDPRank] = "3"
+		ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{
+			Type: config.DecisionPluginHeaderMutation,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"update": []map[string]string{{
+					"name": headers.DynamoDPRank, "value": "9",
+				}},
+				"delete": []string{headers.DynamoTenantID},
+			}),
+		}}
+	})
+	waitForShadow(t, router)
+
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+	}
+	wire := backend.headers[0]
+	if got := wire.Get(headers.DynamoDPRank); got != "9" {
+		t.Fatalf("%s = %q, want decision update 9", headers.DynamoDPRank, got)
+	}
+	if got := wire.Get(headers.DynamoTenantID); got != "" {
+		t.Fatalf("%s = %q, want decision deletion preserved", headers.DynamoTenantID, got)
+	}
+}
+
 func TestShadowDispatchWithoutReplayStillObserves(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
