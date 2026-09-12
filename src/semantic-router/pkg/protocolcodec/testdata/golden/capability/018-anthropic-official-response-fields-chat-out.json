@@ -338,6 +338,10 @@
             "action": "dropped"
           },
           {
+            "field": "usage.iterations",
+            "action": "dropped"
+          },
+          {
             "field": "usage.server_tool_use",
             "action": "dropped"
           },

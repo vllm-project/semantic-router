@@ -43,6 +43,7 @@
         "cache_read_input_tokens",
         "inference_geo",
         "input_tokens",
+        "iterations",
         "output_tokens",
         "output_tokens_details",
         "server_tool_use",
