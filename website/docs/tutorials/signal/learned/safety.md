@@ -64,7 +64,7 @@ Reference a rule in a decision and define the action there:
 ```yaml
 routing:
   decisions:
-    - name: refuse-unsafe
+    - name: handle-content-risk
       priority: 300
       rules:
         operator: AND
@@ -73,21 +73,20 @@ routing:
           - type: safety
             name: unsafe-content
       modelRefs:
-        - model: default-model
-      plugins:
-        - type: fast_response
-          configuration:
-            message: I cannot help with this unsafe request.
+        - model: safety-capable-model
 ```
 
-Replace `default-model` with an alias in `providers.models`. Safety signals
-extract scores; they do not refuse requests without a consuming decision.
+Replace `safety-capable-model` with an alias in `providers.models` whose backend
+handles content risks appropriately. A positive signal can include a person
+seeking help in a crisis; it does not imply malicious intent or justify a blanket
+refusal. Use category-specific decisions when a refusal is appropriate. Safety
+signals extract scores; the consuming decision chooses the response policy.
 Keep prompt-attack decisions alongside content-risk decisions and choose their
 relative priorities explicitly.
 
 A model error yields an unknown signal. `rules.on_unknown: fail_request`
 returns HTTP 503 when the decision remains unknown. A scored unsafe request
-selects the refusal policy. Diagnostics expose matched rule names in
+selects the configured handling route. Diagnostics expose matched rule names in
 `x-vsr-matched-safety`, the classification result, dashboard and replay record.
 
 See [shared model configuration](../../global/safety-models-and-policy.md)

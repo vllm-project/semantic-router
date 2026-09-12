@@ -101,10 +101,13 @@ may sum to more than one.
 
 The [content-safety fragment](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 shows two HTTP heads with a privacy-specific policy and a general unsafe policy.
-Replace `default-model` with a provider alias and configure the endpoint addresses.
+Replace `default-model` with a safety-capable provider alias and configure the endpoint addresses.
 Thresholds are examples, not universal calibration. `rules.on_unknown:
 fail_request` returns HTTP 503 when a required classification fails. A known
-unsafe result selects the configured `fast_response` policy.
+unsafe result selects the configured policy: the example refuses unsafe privacy
+abuse and routes other risks to the backend. General content risk can include a
+person in crisis who needs a supportive response, so it should not automatically
+trigger a blanket refusal.
 
 ### Native classifier context
 

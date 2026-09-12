@@ -1,4 +1,4 @@
-# Merge into a canonical config with default-model and two complete-label HTTP classifier endpoints.
+# Merge into a canonical config with a safety-capable default-model and two complete-label HTTP classifier endpoints.
 # Hazard is the independent sigmoid head; more than one risk can be present.
 version: v0.3
 global:
@@ -64,8 +64,8 @@ routing:
         message: I cannot help with this request involving unsafe use of personal
           information.
   - name: unsafe-content
-    description: Handle unsafe content independently of prompt injection or jailbreak
-      detection.
+    description: Route content risks to a safety-capable backend, including supportive
+      responses to people in crisis.
     priority: 300
     rules:
       operator: AND
@@ -75,7 +75,3 @@ routing:
         name: unsafe-content
     modelRefs:
     - model: default-model
-    plugins:
-    - type: fast_response
-      configuration:
-        message: I cannot help with this unsafe request.
