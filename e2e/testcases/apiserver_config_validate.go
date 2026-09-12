@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -56,7 +57,8 @@ func testAPIServerConfigValidate(
 	if err != nil {
 		return err
 	}
-	if err := assertValidValidateContract(validBody); err != nil {
+	err = assertValidValidateContract(validBody)
+	if err != nil {
 		return err
 	}
 
@@ -66,7 +68,8 @@ func testAPIServerConfigValidate(
 	if err != nil {
 		return err
 	}
-	if err := assertInvalidValidateContract(invalidBody); err != nil {
+	err = assertInvalidValidateContract(invalidBody)
+	if err != nil {
 		return err
 	}
 
