@@ -2,7 +2,7 @@
 title: 运维与故障排查
 description: 检查就绪状态、限制模型并发并更新运行中的模型。
 translation:
-  source_commit: "dc7f402642a8b8ecec8218e2086a4c6f186ea406"
+  source_commit: "69481b71f8497a1af826e93f8d3d984fc59e00d2"
   source_file: "docs/installation/runtime/lifecycle-diagnostics.md"
   outdated: false
 ---
@@ -68,6 +68,8 @@ global:
 
 `shed` 拒绝超出容量的请求，`wait` 等待队列空位，`fail_open` 在满载时绕过限制。`wait` 要求队列大小非零。不配置 admission 时，不施加并发准入限制。共享同一个模型的调用也共享其容量；请求期限包含排队时间。
 
+更改共享模型的并发与排队设置后，需要停止并重新启动 Router。此类热更新会被拒绝，当前配置继续提供服务。
+
 ## 更新运行中的模型 {#update-a-running-model}
 
 将新的模型 revision 放入新目录，更新配置，再通过 Dashboard 或现有管理流程重载。Router 在激活前准备新模型。准备失败时，当前配置继续运行；旧模型资源会在已有请求完成后释放。
@@ -75,3 +77,5 @@ global:
 Dashboard 更改可能已保存但尚未激活。对于返回 `202` 的更新，通过 Dashboard 轮询 `GET /api/router/api/v1/config/hash`，等待 `active_runtime_hash` 与该次更新的 `generated_runtime_hash` 相同。第一项更新尚未激活时，另一项写入会返回 `409`。
 
 知识库更新会保留旧资产版本，供仍在运行的读取使用。旧版本保留在磁盘上，目前不自动清理。请求和响应详情见[管理 API 参考](/zh-Hans/docs/api/apiserver)。
+
+`serve` 会保留通过 Dashboard 或 API 保存的配置。要改用本地文件，请运行 `vllm-sr serve --config config.yaml --replace-active-config`。
