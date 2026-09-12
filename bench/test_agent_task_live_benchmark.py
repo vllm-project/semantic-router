@@ -254,3 +254,99 @@ def test_router_diagnostics_validate_header_values():
         "invalid_router_header x-vsr-selected-confidence: 1 successful requests",
         "invalid_router_header x-vsr-context-token-count: 1 successful requests",
     ]
+
+
+def accounting_row(model, cost, routing_ms, finish, reasoning=0):
+    return {
+        "task": "a",
+        "success": True,
+        "status": 200,
+        "latency_ms": 10.0,
+        "answer_score": 1.0,
+        "scored_turn": True,
+        "model_switched": False,
+        "tool_loop_switch_violation": False,
+        "context_portability_violation": False,
+        "prompt_tokens": 10,
+        "completion_tokens": 2,
+        "cached_tokens": 0,
+        "phase": "final",
+        "selected_model": model,
+        "missing_terms": "",
+        "answer_excerpt": "",
+        "reasoning_tokens": reasoning,
+        "finish_reason": finish,
+        "routing_latency_ms": routing_ms,
+        "cost": cost,
+        "cost_currency": "USD" if cost is not None else "",
+    }
+
+
+def test_summary_reports_cost_routing_latency_and_truncation():
+    bench = load_benchmark_module()
+    rows = [
+        accounting_row("local", cost=0.0, routing_ms=0.4, finish="stop"),
+        accounting_row(
+            "cloud", cost=0.002, routing_ms=0.6, finish="length", reasoning=120
+        ),
+        accounting_row("cloud", cost=None, routing_ms=None, finish="stop"),
+    ]
+
+    summary = bench.summarize(rows, elapsed_seconds=1.0, label="router")
+
+    assert summary["selected_model_counts"] == {"cloud": 2, "local": 1}
+    assert summary["cost"]["total"] == {"USD": 0.002}
+    assert summary["cost"]["priced_requests"] == 2
+    assert summary["cost"]["unpriced_requests"] == 1
+    assert summary["routing_latency_ms"]["p50"] == 0.5
+    assert summary["truncated_requests"] == 1
+    assert summary["reasoning_tokens"] == 120
+
+
+def test_cost_summary_counts_priced_requests_per_currency():
+    bench = load_benchmark_module()
+    euro = accounting_row("eu", cost=0.01, routing_ms=0.5, finish="stop")
+    euro["cost_currency"] = "EUR"
+    rows = [
+        accounting_row("cloud", cost=0.002, routing_ms=0.5, finish="stop"),
+        accounting_row("cloud", cost=0.004, routing_ms=0.5, finish="stop"),
+        euro,
+        accounting_row("local", cost=None, routing_ms=None, finish="stop"),
+    ]
+
+    summary = bench.cost_summary(rows)
+
+    assert summary["total"] == {"EUR": 0.01, "USD": 0.006}
+    assert summary["priced_requests_by_currency"] == {"EUR": 1, "USD": 2}
+    assert summary["mean_per_priced_request"] == {"EUR": 0.01, "USD": 0.003}
+    assert summary["unpriced_requests"] == 1
+
+
+def test_router_metrics_delta_reports_cost_and_mean_routing_latency():
+    bench = load_benchmark_module()
+    before = bench.parse_metrics_text(
+        'llm_model_cost_total{currency="USD",model="cloud"} 0.5\n'
+        "llm_model_routing_latency_seconds_sum 1.0\n"
+        "llm_model_routing_latency_seconds_count 10\n"
+    )
+    after = bench.parse_metrics_text(
+        'llm_model_cost_total{currency="USD",model="cloud"} 0.75\n'
+        'llm_model_routing_latency_seconds_bucket{le="0.005"} 12\n'
+        "llm_model_routing_latency_seconds_sum 1.5\n"
+        "llm_model_routing_latency_seconds_count 14\n"
+    )
+
+    delta = bench.metrics_delta(before, after)
+
+    assert delta["cost_by_model"] == {"cloud": {"USD": 0.25}}
+    assert delta["routing_decisions"] == 4
+    assert delta["routing_latency_ms_mean"] == 125.0
+
+
+def test_accounting_headers_must_be_non_negative_numbers():
+    bench = load_benchmark_module()
+
+    assert bench.valid_router_header_value("x-vsr-cost", "0.000054")
+    assert bench.valid_router_header_value("x-vsr-routing-latency-ms", "0.412")
+    assert not bench.valid_router_header_value("x-vsr-cost", "-1")
+    assert not bench.valid_router_header_value("x-vsr-routing-latency-ms", "fast")

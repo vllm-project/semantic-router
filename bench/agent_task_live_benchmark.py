@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -26,7 +28,17 @@ VSR_HEADERS = (
     "x-vsr-replay-id",
     "x-vsr-context-token-count",
     "x-vsr-matched-conversation",
+    "x-vsr-routing-latency-ms",
+    "x-vsr-cost",
+    "x-vsr-cost-currency",
 )
+NON_NEGATIVE_NUMBER_HEADERS = ("x-vsr-routing-latency-ms", "x-vsr-cost")
+COST_METRIC = "llm_model_cost_total"
+ROUTING_LATENCY_METRIC = "llm_model_routing_latency_seconds"
+COST_BASIS = "configured pricing (x-vsr-cost), not a provider bill"
+METRIC_SAMPLE = re.compile(r"^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{([^}]*)\})?\s+(\S+)")
+METRIC_LABEL = re.compile(r'(\w+)="((?:[^"\\]|\\.)*)"')
+MetricSamples = dict[tuple[str, tuple[tuple[str, str], ...]], float]
 CORE_ROUTER_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
@@ -104,6 +116,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-context-portability-violations", type=int, default=-1)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--router-metrics-url",
+        default="",
+        help=(
+            "Router Prometheus endpoint, e.g. http://127.0.0.1:9190/metrics. When set, "
+            "the summary also reports the cost and routing time the router recorded."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -2079,11 +2099,14 @@ def dry_response(task: TaskSpec, turn_index: int) -> dict[str, Any]:
             "x-vsr-selected-confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{task.name}-{turn_index}",
             "x-vsr-context-token-count": "42",
+            "x-vsr-routing-latency-ms": "0.250",
+            "x-vsr-cost": "0.00001",
+            "x-vsr-cost-currency": "USD",
         },
         "json": {
             "id": f"dry_{task.name}_{turn_index}",
             "model": "dry-model",
-            "choices": [{"message": {"content": content}}],
+            "choices": [{"message": {"content": content}, "finish_reason": "stop"}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 10},
         },
         "payload": "",
@@ -2189,6 +2212,11 @@ def row_from_result(
         "prompt_tokens": usage_value(response_json, "prompt_tokens"),
         "completion_tokens": usage_value(response_json, "completion_tokens"),
         "cached_tokens": cached_tokens(response_json),
+        "reasoning_tokens": reasoning_tokens(response_json),
+        "finish_reason": finish_reason(response_json),
+        "routing_latency_ms": header_float(result, "x-vsr-routing-latency-ms"),
+        "cost": header_float(result, "x-vsr-cost"),
+        "cost_currency": (result.get("headers") or {}).get("x-vsr-cost-currency", ""),
         "answer_score": score,
         "missing_terms": ",".join(missing),
         "answer_excerpt": answer_excerpt(content),
@@ -2253,6 +2281,31 @@ def cached_tokens(response_json: dict[str, Any]) -> int:
     return int(details.get("cached_tokens") or 0)
 
 
+def reasoning_tokens(response_json: dict[str, Any]) -> int:
+    usage = response_json.get("usage") if isinstance(response_json, dict) else {}
+    details = (
+        usage.get("completion_tokens_details", {}) if isinstance(usage, dict) else {}
+    )
+    if not isinstance(details, dict):
+        return 0
+    return int(details.get("reasoning_tokens") or 0)
+
+
+def finish_reason(response_json: dict[str, Any]) -> str:
+    choices = response_json.get("choices")
+    if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+        return ""
+    return str(choices[0].get("finish_reason") or "")
+
+
+def header_float(result: dict[str, Any], header: str) -> float | None:
+    value = (result.get("headers") or {}).get(header, "")
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
 def summarize(
     rows: list[dict[str, Any]], elapsed_seconds: float, label: str
 ) -> dict[str, Any]:
@@ -2307,6 +2360,21 @@ def summarize(
         "cached_prompt_ratio": (
             round(cached / prompt_tokens, 4) if prompt_tokens else None
         ),
+        "reasoning_tokens": sum(int(row.get("reasoning_tokens") or 0) for row in rows),
+        "finish_reason_counts": counts(
+            row["finish_reason"] for row in rows if row.get("finish_reason")
+        ),
+        "truncated_requests": sum(
+            1 for row in rows if row.get("finish_reason") == "length"
+        ),
+        "routing_latency_ms": latency_summary(
+            [
+                float(row["routing_latency_ms"])
+                for row in rows
+                if row.get("routing_latency_ms") is not None
+            ]
+        ),
+        "cost": cost_summary(rows),
         "phase_counts": counts(row["phase"] for row in rows),
         "selected_model_counts": counts(
             row["selected_model"] for row in rows if row["selected_model"]
@@ -2364,6 +2432,12 @@ def valid_router_header_value(header: str, value: str) -> bool:
     if header == "x-vsr-context-token-count":
         try:
             parsed = int(value)
+        except ValueError:
+            return False
+        return parsed >= 0
+    if header in NON_NEGATIVE_NUMBER_HEADERS:
+        try:
+            parsed = float(value)
         except ValueError:
             return False
         return parsed >= 0
@@ -2467,6 +2541,86 @@ def percentile(ordered: list[float], pct: float) -> float:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
+def cost_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for row in rows:
+        if row.get("cost") is None:
+            continue
+        currency = row.get("cost_currency") or "unknown"
+        totals[currency] = totals.get(currency, 0.0) + float(row["cost"])
+        counts[currency] = counts.get(currency, 0) + 1
+    priced = sum(counts.values())
+    return {
+        "basis": COST_BASIS,
+        "total": {key: round(value, 8) for key, value in sorted(totals.items())},
+        "mean_per_priced_request": {
+            key: round(value / counts[key], 8) for key, value in sorted(totals.items())
+        },
+        "priced_requests_by_currency": dict(sorted(counts.items())),
+        "priced_requests": priced,
+        "unpriced_requests": len(rows) - priced,
+    }
+
+
+def parse_metrics_text(text: str) -> MetricSamples:
+    samples: MetricSamples = {}
+    for line in text.splitlines():
+        match = METRIC_SAMPLE.match(line)
+        if not match or not match.group(1).startswith(
+            (COST_METRIC, ROUTING_LATENCY_METRIC)
+        ):
+            continue
+        try:
+            value = float(match.group(3))
+        except ValueError:
+            continue
+        labels = tuple(sorted(METRIC_LABEL.findall(match.group(2) or "")))
+        samples[(match.group(1), labels)] = value
+    return samples
+
+
+def read_router_metrics(args: argparse.Namespace) -> MetricSamples | None:
+    """Scrape router /metrics; it's optional, so a failure only warns."""
+    if not args.router_metrics_url or args.dry_run:
+        return None
+    try:
+        with urllib.request.urlopen(
+            args.router_metrics_url, timeout=args.timeout
+        ) as response:
+            return parse_metrics_text(response.read().decode("utf-8", errors="replace"))
+    except Exception as exc:  # pragma: no cover - network errors vary by platform
+        print(f"warning: could not read router metrics: {exc}", file=sys.stderr)
+        return None
+
+
+def metrics_delta(before: MetricSamples, after: MetricSamples) -> dict[str, Any]:
+    """What the router recorded between two scrapes, including any other traffic."""
+    cost_by_model: dict[str, dict[str, float]] = {}
+    for (name, labels), value in after.items():
+        if name != COST_METRIC:
+            continue
+        spent = value - before.get((name, labels), 0.0)
+        if spent <= 0:
+            continue
+        label_map = dict(labels)
+        model_costs = cost_by_model.setdefault(label_map.get("model", ""), {})
+        model_costs[label_map.get("currency", "")] = round(spent, 8)
+
+    def diff(suffix: str) -> float:
+        key = (ROUTING_LATENCY_METRIC + suffix, ())
+        return after.get(key, 0.0) - before.get(key, 0.0)
+
+    decisions = diff("_count")
+    return {
+        "cost_by_model": dict(sorted(cost_by_model.items())),
+        "routing_decisions": int(decisions),
+        "routing_latency_ms_mean": (
+            round(diff("_sum") / decisions * 1000, 3) if decisions > 0 else None
+        ),
+    }
+
+
 def write_outputs(
     rows: list[dict[str, Any]], summary: dict[str, Any], output_dir: Path
 ) -> None:
@@ -2509,6 +2663,7 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
 
 def render_markdown(summary: dict[str, Any]) -> str:
     latency = summary["latency_ms"]
+    routing = summary.get("routing_latency_ms") or {}
     return "\n".join(
         [
             "# Live Agent Task Benchmark",
@@ -2526,6 +2681,11 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- missing router headers: {summary['missing_router_header_counts']}",
             f"- invalid router headers: {summary['invalid_router_header_counts']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
+            f"- selected models: {summary.get('selected_model_counts', {})}",
+            f"- routing latency p50/p95 ms: {routing.get('p50')} / {routing.get('p95')}",
+            f"- cost ({COST_BASIS}): {summary.get('cost', {}).get('total')}",
+            f"- truncated requests (finish_reason=length): {summary.get('truncated_requests')}",
+            f"- router metrics: {summary.get('router_metrics')}",
             f"- validation failures: {summary.get('validation_failures', [])}",
             "",
         ]
@@ -2633,7 +2793,11 @@ def namespace_with(args: argparse.Namespace, **overrides: Any) -> argparse.Names
 def main() -> int:
     args = parse_args()
     output_dir = args.output_dir or default_output_dir()
+    metrics_before = read_router_metrics(args)
     rows, summary = run_tasks(args)
+    metrics_after = read_router_metrics(args) if metrics_before is not None else None
+    if metrics_before is not None and metrics_after is not None:
+        summary["router_metrics"] = metrics_delta(metrics_before, metrics_after)
     attach_evidence_identity(summary, args)
 
     baseline_summary = None
