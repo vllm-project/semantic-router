@@ -116,7 +116,6 @@ type routerSessionState struct {
 	recentOutcomes    []TurnOutcome
 	outcomeWindowSize int
 	outcomeWindowTTL  time.Duration
-	outcomeSaveMu     sync.Mutex
 }
 
 type routerSessionMemoryStore struct {
