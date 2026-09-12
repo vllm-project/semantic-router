@@ -237,7 +237,7 @@ func InitMultiModalEmbeddingModel(modelPath string, useCPU bool) error {
 	return ErrBackendUnavailable
 }
 
-// MultiModalEncodeText encodes text using multi-modal model
+// MultiModalEncodeText encodes text using multi-modal model (mock)
 func MultiModalEncodeText(text string, targetDim int) (*MultiModalEmbeddingOutput, error) {
 	return nil, ErrBackendUnavailable
 }

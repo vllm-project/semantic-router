@@ -1,7 +1,7 @@
 //! FFI Tokenization Functions
 
-use crate::ffi::init::BERT_SIMILARITY;
 use crate::ffi::types::*;
+use crate::registry::get_registry;
 use std::ffi::{c_char, CStr};
 
 /// Tokenize text
@@ -25,18 +25,19 @@ pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> Tokeniz
         }
     };
 
-    let bert = match BERT_SIMILARITY.get() {
-        Some(b) => b.clone(),
-        None => {
-            eprintln!("BERT model not initialized");
-            return TokenizationResult {
-                token_ids: std::ptr::null_mut(),
-                token_count: 0,
-                tokens: std::ptr::null_mut(),
-                error: true,
-            };
-        }
-    };
+    let bert =
+        match get_registry().get::<crate::core::similarity::BertSimilarity>("bert_similarity") {
+            Some(b) => b.clone(),
+            None => {
+                eprintln!("BERT model not initialized");
+                return TokenizationResult {
+                    token_ids: std::ptr::null_mut(),
+                    token_count: 0,
+                    tokens: std::ptr::null_mut(),
+                    error: true,
+                };
+            }
+        };
 
     let max_length_opt = if max_length <= 0 {
         None
