@@ -40,10 +40,11 @@ Start with the compact section and routing-surface index bundled with the CLI:
 vllm-sr config schema
 ```
 
-Expand only what the current task needs:
+Follow only the field directory needed by the current task:
 
 ```bash
 vllm-sr config schema --section global.router.learning
+vllm-sr config schema --section global.router.learning --expanded
 vllm-sr config schema --surface signal:keyword
 vllm-sr config schema --surface algorithm:multi_factor
 vllm-sr config schema --full
@@ -58,8 +59,10 @@ vllm-sr config schema \
 
 `--endpoint` works with every progressive option. The Router endpoint is
 `GET /api/v1/config/schema`: omitting `view` returns the compact index; use
-`view=section&path=...` or `view=surface&kind=...&name=...` to expand one branch,
-and `view=full` for the complete JSON Schema.
+`view=section&path=...` for a compact field directory, add `expanded=true` for
+that section's self-contained schema, use
+`view=surface&kind=...&name=...` for one registered routing surface, and use
+`view=full` for the complete JSON Schema.
 
 The Dashboard proxies the deployed Router contract at
 `GET /api/router/config/schema`. If that Router endpoint is unavailable, it
@@ -135,8 +138,11 @@ An automation or deployment agent should:
 4. construct the smallest canonical document from schema fields and routing
    surface references;
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
-6. plan the mutation, then apply it with the returned `current_etag` in
-   `If-Match`;
+6. plan the mutation; apply a hot-reloadable change with the returned
+   `current_etag` in `If-Match`, or use the deployment workflow when listener
+   or provider topology returns `RESTART_REQUIRED` (for local Docker, use the
+   explicit `vllm-sr serve --config <candidate> --replace-active-config`
+   operation after approval);
 7. poll `activation_status` and probe the Envoy data plane before keeping the
    change.
 

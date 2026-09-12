@@ -107,6 +107,7 @@ class RouterManagementClient:
         path: str | None = None,
         surface_kind: str | None = None,
         surface_name: str | None = None,
+        expanded: bool = False,
     ) -> RouterResponse:
         params = {"view": view}
         if path:
@@ -115,6 +116,8 @@ class RouterManagementClient:
             params["kind"] = surface_kind
         if surface_name:
             params["name"] = surface_name
+        if expanded:
+            params["expanded"] = "true"
         return self.request("GET", CONFIG_SCHEMA_PATH, params=params)
 
     def validate_config(self, yaml_text: str) -> RouterResponse:

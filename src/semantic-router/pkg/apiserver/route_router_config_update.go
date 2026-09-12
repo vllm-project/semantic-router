@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -167,7 +168,80 @@ func validateHotReloadCompatibility(currentYAML []byte, nextYAML []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse next config for reload validation: %w", err)
 	}
-	return config.ValidateLocalClassifierReload(currentCfg, nextCfg)
+	return validateParsedHotReloadCompatibility(currentCfg, nextCfg)
+}
+
+func validateParsedHotReloadCompatibility(
+	currentCfg *config.RouterConfig,
+	nextCfg *config.RouterConfig,
+) error {
+	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(
+		envoyDeploymentProjectionFromConfig(currentCfg),
+		envoyDeploymentProjectionFromConfig(nextCfg),
+	) {
+		return fmt.Errorf(
+			"listener or provider backend topology changed; these fields are rendered into Envoy and cannot be activated by the Router hot-reload API; activate the candidate through the deployment workflow",
+		)
+	}
+	return nil
+}
+
+// envoyDeploymentProjection contains only canonical state rendered into the
+// Envoy listener, route, cluster, and backend-pool configuration. Router-owned
+// model metadata, evaluation evidence, and routing policy remain hot-reloadable.
+type envoyDeploymentProjection struct {
+	Listeners   []config.Listener
+	Endpoints   []envoyEndpointProjection
+	Reliability map[string]config.ProviderReliability
+}
+
+type envoyEndpointProjection struct {
+	Address      string
+	Port         int
+	Weight       int
+	Model        string
+	Protocol     string
+	BaseURL      string
+	ExtraHeaders map[string]string
+}
+
+func envoyDeploymentProjectionFromConfig(
+	cfg *config.RouterConfig,
+) envoyDeploymentProjection {
+	projection := envoyDeploymentProjection{}
+	if cfg == nil {
+		return projection
+	}
+	projection.Listeners = cfg.Listeners
+	if len(cfg.VLLMEndpoints) == 0 {
+		return projection
+	}
+	projection.Endpoints = make([]envoyEndpointProjection, 0, len(cfg.VLLMEndpoints))
+	projection.Reliability = make(map[string]config.ProviderReliability)
+	for _, endpoint := range cfg.VLLMEndpoints {
+		profile := cfg.ProviderProfiles[endpoint.ProviderProfileName]
+		var extraHeaders map[string]string
+		if len(profile.ExtraHeaders) > 0 {
+			extraHeaders = profile.ExtraHeaders
+		}
+		projection.Endpoints = append(projection.Endpoints, envoyEndpointProjection{
+			Address:      endpoint.Address,
+			Port:         endpoint.Port,
+			Weight:       endpoint.Weight,
+			Model:        endpoint.Model,
+			Protocol:     endpoint.Protocol,
+			BaseURL:      profile.BaseURL,
+			ExtraHeaders: extraHeaders,
+		})
+		if endpoint.Model == "" {
+			continue
+		}
+		projection.Reliability[endpoint.Model] = cfg.ModelConfig[endpoint.Model].Reliability
+	}
+	return projection
 }
 
 func normalizeRouterConfigDocument(doc map[string]any) ([]byte, error) {

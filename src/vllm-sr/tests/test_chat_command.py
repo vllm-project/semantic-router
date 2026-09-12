@@ -99,10 +99,29 @@ def test_extract_assistant_text_api_error():
         )
 
 
-def test_chat_completions_url():
-    u = chat_client.chat_completions_url("http://localhost:8899")
-    assert u.endswith("/v1/chat/completions")
-    assert u.startswith("http://localhost:8899")
+@pytest.mark.parametrize(
+    ("base_url", "expected"),
+    [
+        (
+            "http://localhost:8899",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "http://localhost:8899/v1/",
+            "http://localhost:8899/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/prefix/v1",
+            "https://router.example.test/prefix/v1/chat/completions",
+        ),
+        (
+            "https://router.example.test/v1/chat/completions",
+            "https://router.example.test/v1/chat/completions",
+        ),
+    ],
+)
+def test_chat_completions_url(base_url: str, expected: str):
+    assert chat_client.chat_completions_url(base_url) == expected
 
 
 def test_cli_chat_help_uses_namespaced_auto_model():
